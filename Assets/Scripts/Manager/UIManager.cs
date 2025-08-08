@@ -4,6 +4,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using DG.Tweening;
 using TMPro;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
@@ -674,13 +675,13 @@ namespace ARPG
             _fadeInOutBG.gameObject.SetActive(true);
             _fadeInOutBG.color = new Color(0f, 0f, 0f, 0f);
 
-            // _fadeInOutBG.DOColor(new Color(0f, 0f, 0f, 1f), inDuration);
+            _fadeInOutBG.DOColor(new Color(0f, 0f, 0f, 1f), inDuration);
         }
 
         public void FadeOut(float inDuration)
         {
             _fadeInOutBG.color = new Color(0f, 0f, 0f, 1f);
-            // _fadeInOutBG.DOColor(new Color(0f, 0f, 0f, 0f), inDuration).OnComplete(() => _fadeInOutBG.gameObject.SetActive(false));
+            _fadeInOutBG.DOColor(new Color(0f, 0f, 0f, 0f), inDuration).OnComplete(() => _fadeInOutBG.gameObject.SetActive(false));
         }
 
         public void FadeInOut(float inDuration)
@@ -689,7 +690,7 @@ namespace ARPG
             _fadeInOutBG.color = new Color(0f, 0f, 0f, 0f);
 
             float halfDuration = inDuration * 0.5f;
-            // _fadeInOutBG.DOColor(new Color(0f, 0f, 0f, 1f), halfDuration).OnComplete(() => FadeOut(halfDuration));
+            _fadeInOutBG.DOColor(new Color(0f, 0f, 0f, 1f), halfDuration).OnComplete(() => FadeOut(halfDuration));
         }
 
         public void MoveToNextFloor()
@@ -1176,7 +1177,7 @@ namespace ARPG
         //             }
 
         //             ISlotHandler originHandler = clickedSlot.ParentHandler;
-                    
+
         //             var mainInventory = Hub.s.uiman.Get<InventoryBaseUI>(AddressablePath.UIPrefab_Inventory);
         //             var toolbeltInventory = Hub.s.uiman.Get<InventoryBaseUI>(AddressablePath.UIPrefab_Toolbelt);
         //             var storageInventory = Hub.s.uiman.Get<InventoryBaseUI>(AddressablePath.UIPrefab_UnderGroundStorage);
@@ -1275,7 +1276,7 @@ namespace ARPG
         //         {
         //             clickedItem = discardSlot.GetCurrentItem();
         //         }
-                
+
         //         if (clickedSlot.Type == SlotUI.SlotType.Crafter)
         //         {
         //             if (dummyItem.ItemInfo.CannotBeCooked)
@@ -1414,7 +1415,6 @@ namespace ARPG
         private IEnumerator ShowTooltipCo(Vector3 inScreenPosition, Vector3 inScreenLeftPosition)
         {
             yield return null;
-
             //Vector2 pos = GetPositionTooltip(inScreenPosition, inScreenLeftPosition);
             //_tooltip!.SetPosition(pos);
         }
