@@ -4,6 +4,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using Cysharp.Threading.Tasks;
 using DG.Tweening;
 using TMPro;
 using UnityEngine;
@@ -616,50 +617,50 @@ namespace ARPG
             _saveCoroutine = StartCoroutine(ShowSaveText());
         }
 
-        // public async UniTask LoadingTitle(float inSecond)
-        // {
-        //     AsyncOperationHandle<Sprite> handle = Addressables.LoadAssetAsync<Sprite>("UI/TitleLogo");
-        //     Sprite titleImage = await handle.ToUniTask();
-        //     if (handle.Status != AsyncOperationStatus.Succeeded)
-        //     {
-        //         Debug.LogError("[UIManager] LoadingTitle - handle.Status fail");
-        //         Addressables.Release(handle);
-        //         return;
-        //     }
+        public async UniTask LoadingTitle(float inSecond)
+        {
+            AsyncOperationHandle<Sprite> handle = Addressables.LoadAssetAsync<Sprite>("UI/TitleLogo");
+            Sprite titleImage = await handle.ToUniTask();
+            if (handle.Status != AsyncOperationStatus.Succeeded)
+            {
+                Debug.LogError("[UIManager] LoadingTitle - handle.Status fail");
+                Addressables.Release(handle);
+                return;
+            }
 
-        //     if (titleImage == null)
-        //     {
-        //         Debug.LogError("[UIManager] LoadingTitle - titleImage is null");
-        //         return;
-        //     }
+            if (titleImage == null)
+            {
+                Debug.LogError("[UIManager] LoadingTitle - titleImage is null");
+                return;
+            }
 
-        //     _fadeInOutBG.sprite = titleImage;
-        //     _fadeInOutBG.gameObject.SetActive(true);
-        //     _fadeInOutBG.color = new Color(1f, 1f, 1f, 0f);
-        //     _fadeInOutBG.DOColor(new Color(1f, 1f, 1f, 1f), inSecond).SetEase(Ease.InQuart);
+            _fadeInOutBG.sprite = titleImage;
+            _fadeInOutBG.gameObject.SetActive(true);
+            _fadeInOutBG.color = new Color(1f, 1f, 1f, 0f);
+            _fadeInOutBG.DOColor(new Color(1f, 1f, 1f, 1f), inSecond).SetEase(Ease.InQuart);
 
-        //     await UniTask.Delay((int)inSecond * 1000);
+            await UniTask.Delay((int)inSecond * 1000);
 
-        //     _fadeInOutBG.color = new Color(1f, 1f, 1f, 1f);
-        //     _fadeInOutBG.DOColor(new Color(1f, 1f, 1f, 0f), inSecond);
+            _fadeInOutBG.color = new Color(1f, 1f, 1f, 1f);
+            _fadeInOutBG.DOColor(new Color(1f, 1f, 1f, 0f), inSecond);
 
-        //     await UniTask.Delay((int)inSecond * 1000);
+            await UniTask.Delay((int)inSecond * 1000);
 
-        //     _fadeInOutBG.gameObject.SetActive(false);
-        //     _fadeInOutBG.sprite = null;
+            _fadeInOutBG.gameObject.SetActive(false);
+            _fadeInOutBG.sprite = null;
 
-        //     Addressables.Release(handle);
-        // }
+            Addressables.Release(handle);
+        }
 
-        // public async UniTask DisplayVersion()
-        // {
-        //     _loadingText.text = $"Version(0.7.572)";
-        //     _loadingText.gameObject.SetActive(true);
+        public async UniTask DisplayVersion()
+        {
+            _loadingText.text = $"Version(0.7.572)";
+            _loadingText.gameObject.SetActive(true);
 
-        //     await UniTask.Delay(TimeSpan.FromSeconds(5f));
+            await UniTask.Delay(TimeSpan.FromSeconds(5f));
 
-        //     _loadingText.gameObject.SetActive(false);
-        // }
+            _loadingText.gameObject.SetActive(false);
+        }
 
         public IEnumerator LoadingEnd()
         {

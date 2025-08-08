@@ -41,16 +41,16 @@ namespace ARPG.Base
             // Hub.s.uiman.Close(_name, isDestroy);
         }
 
-        // public virtual bool UpdateInput(InputController.BsnInput inInput)
-        // {
-        //     if(IsBase == false && inInput.UI.CloseUI.WasReleasedThisFrame() == true)
-        //     {
-        //         Close();
-        //         return true;
-        //     }
+        public virtual bool UpdateInput(Input.ArpgInput inInput)
+        {
+            // if(IsBase == false && inInput.UI.CloseUI.WasReleasedThisFrame() == true)
+            // {
+            //     Close();
+            //     return true;
+            // }
 
-        //     return false;
-        // }
+            return false;
+        }
 
         public virtual bool OnPointerDown(PointerEventData inEventData)
         {
