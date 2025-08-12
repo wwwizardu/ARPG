@@ -9,14 +9,24 @@ namespace ARPG
         public int chunkX;
         public int chunkY;
         public int[,] tiles;
-        public bool isGenerated;
+        public bool isActive;
         
-        public MapChunk(int x, int y, int chunkSize)
+        public MapChunk(int chunkSize)
+        {
+            tiles = new int[chunkSize, chunkSize];
+            isActive = false;
+        }
+        
+        public void SetChunkPosition(int x, int y)
         {
             chunkX = x;
             chunkY = y;
-            tiles = new int[chunkSize, chunkSize];
-            isGenerated = false;
+            isActive = true;
+        }
+        
+        public void Deactivate()
+        {
+            isActive = false;
         }
     }
     
@@ -28,34 +38,67 @@ namespace ARPG
         public float noiseScale = 0.1f;
         public float terrainHeight = 10f;
         
-        private Dictionary<Vector2Int, MapChunk> _loadedChunks;
+        private Dictionary<Vector2Int, MapChunk> _activeChunks;
+        private Stack<MapChunk> _chunkPool;
         private System.Random _randomGenerator;
         private Vector2Int _currentPlayerChunk;
         private int _loadRadius = 1;
+        private const int POOL_SIZE = 20;
         
         void Start()
         {
-            _loadedChunks = new Dictionary<Vector2Int, MapChunk>();
+            _activeChunks = new Dictionary<Vector2Int, MapChunk>();
+            _chunkPool = new Stack<MapChunk>();
             _randomGenerator = new System.Random(mapSeed);
+            
+            InitializeChunkPool();
         }
         
-        public MapChunk GenerateChunk(int chunkX, int chunkY)
+        private void InitializeChunkPool()
+        {
+            for (int i = 0; i < POOL_SIZE; i++)
+            {
+                _chunkPool.Push(new MapChunk(chunkSize));
+            }
+        }
+        
+        public MapChunk GetOrCreateChunk(int chunkX, int chunkY)
         {
             Vector2Int chunkKey = new Vector2Int(chunkX, chunkY);
             
-            if (_loadedChunks.ContainsKey(chunkKey))
+            if (_activeChunks.ContainsKey(chunkKey))
             {
-                return _loadedChunks[chunkKey];
+                return _activeChunks[chunkKey];
             }
             
-            MapChunk newChunk = new MapChunk(chunkX, chunkY, chunkSize);
+            MapChunk chunk = GetChunkFromPool();
+            chunk.SetChunkPosition(chunkX, chunkY);
+            GenerateChunkData(chunk);
+            _activeChunks[chunkKey] = chunk;
             
+            return chunk;
+        }
+        
+        private MapChunk GetChunkFromPool()
+        {
+            if (_chunkPool.Count > 0)
+            {
+                return _chunkPool.Pop();
+            }
+            else
+            {
+                return new MapChunk(chunkSize);
+            }
+        }
+        
+        private void GenerateChunkData(MapChunk chunk)
+        {
             for (int x = 0; x < chunkSize; x++)
             {
                 for (int y = 0; y < chunkSize; y++)
                 {
-                    int worldX = chunkX * chunkSize + x;
-                    int worldY = chunkY * chunkSize + y;
+                    int worldX = chunk.chunkX * chunkSize + x;
+                    int worldY = chunk.chunkY * chunkSize + y;
                     
                     float noiseValue = Mathf.PerlinNoise(
                         (worldX + mapSeed) * noiseScale,
@@ -63,14 +106,9 @@ namespace ARPG
                     );
                     
                     int tileType = Mathf.FloorToInt(noiseValue * terrainHeight);
-                    newChunk.tiles[x, y] = tileType;
+                    chunk.tiles[x, y] = tileType;
                 }
             }
-            
-            newChunk.isGenerated = true;
-            _loadedChunks[chunkKey] = newChunk;
-            
-            return newChunk;
         }
         
         public int GetTileAt(int worldX, int worldY)
@@ -84,16 +122,20 @@ namespace ARPG
             if (localX < 0) { chunkX--; localX += chunkSize; }
             if (localY < 0) { chunkY--; localY += chunkSize; }
             
-            MapChunk chunk = GenerateChunk(chunkX, chunkY);
+            MapChunk chunk = GetOrCreateChunk(chunkX, chunkY);
             return chunk.tiles[localX, localY];
         }
         
-        public void UnloadChunk(int chunkX, int chunkY)
+        private void ReturnChunkToPool(int chunkX, int chunkY)
         {
             Vector2Int chunkKey = new Vector2Int(chunkX, chunkY);
-            if (_loadedChunks.ContainsKey(chunkKey))
+            if (_activeChunks.ContainsKey(chunkKey))
             {
-                _loadedChunks.Remove(chunkKey);
+                MapChunk chunk = _activeChunks[chunkKey];
+                _activeChunks.Remove(chunkKey);
+                
+                chunk.Deactivate();
+                _chunkPool.Push(chunk);
             }
         }
         
@@ -101,7 +143,13 @@ namespace ARPG
         {
             mapSeed = newSeed;
             _randomGenerator = new System.Random(mapSeed);
-            _loadedChunks.Clear();
+            
+            foreach (var chunk in _activeChunks.Values)
+            {
+                chunk.Deactivate();
+                _chunkPool.Push(chunk);
+            }
+            _activeChunks.Clear();
         }
         
         public void UpdateChunksAroundPlayer(Vector3 playerPosition)
@@ -134,9 +182,9 @@ namespace ARPG
                         _currentPlayerChunk.y + y
                     );
                     
-                    if (!_loadedChunks.ContainsKey(chunkPos))
+                    if (!_activeChunks.ContainsKey(chunkPos))
                     {
-                        GenerateChunk(chunkPos.x, chunkPos.y);
+                        GetOrCreateChunk(chunkPos.x, chunkPos.y);
                     }
                 }
             }
@@ -144,33 +192,38 @@ namespace ARPG
         
         private void UnloadDistantChunks()
         {
-            List<Vector2Int> chunksToUnload = new List<Vector2Int>();
+            List<Vector2Int> chunksToReturn = new List<Vector2Int>();
             
-            foreach (var chunkPair in _loadedChunks)
+            foreach (var chunkPair in _activeChunks)
             {
                 Vector2Int chunkPos = chunkPair.Key;
                 float distance = Vector2Int.Distance(chunkPos, _currentPlayerChunk);
                 
                 if (distance > _loadRadius + 1)
                 {
-                    chunksToUnload.Add(chunkPos);
+                    chunksToReturn.Add(chunkPos);
                 }
             }
             
-            foreach (var chunkPos in chunksToUnload)
+            foreach (var chunkPos in chunksToReturn)
             {
-                UnloadChunk(chunkPos.x, chunkPos.y);
+                ReturnChunkToPool(chunkPos.x, chunkPos.y);
             }
         }
         
-        public int GetLoadedChunkCount()
+        public int GetActiveChunkCount()
         {
-            return _loadedChunks.Count;
+            return _activeChunks.Count;
         }
         
-        public List<Vector2Int> GetLoadedChunkPositions()
+        public int GetPooledChunkCount()
         {
-            return new List<Vector2Int>(_loadedChunks.Keys);
+            return _chunkPool.Count;
+        }
+        
+        public List<Vector2Int> GetActiveChunkPositions()
+        {
+            return new List<Vector2Int>(_activeChunks.Keys);
         }
     }
 }
