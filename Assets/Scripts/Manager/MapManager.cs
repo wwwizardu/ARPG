@@ -1,7 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 
-namespace ARPG
+namespace ARPG.Map
 {
     [System.Serializable]
     public class MapChunkData

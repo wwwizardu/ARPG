@@ -4,7 +4,7 @@ namespace ARPG.Map
 {
     public class MapChunkObject : MonoBehaviour
     {
-        private MapchunkData _chunkData;
+        private MapChunkData _chunkData;
 
         public void Initialize(MapChunkData inChunkData)
         {
