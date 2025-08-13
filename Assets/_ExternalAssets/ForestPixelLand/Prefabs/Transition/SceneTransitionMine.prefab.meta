@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: e80827d9618eec84896ee08f5bc68ee4
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 315158
+  packageName: Pixel World - Forest and Village
+  packageVersion: 1.0
+  assetPath: Assets/ForestPixelLand/Prefabs/Transition/SceneTransitionMine.prefab
+  uploadId: 745488

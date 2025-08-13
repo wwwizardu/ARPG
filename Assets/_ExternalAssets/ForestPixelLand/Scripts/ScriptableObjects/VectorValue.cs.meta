@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: dbaac76857513054e801ac6d2c7e9fbe
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 315158
+  packageName: Pixel World - Forest and Village
+  packageVersion: 1.0
+  assetPath: Assets/ForestPixelLand/Scripts/ScriptableObjects/VectorValue.cs
+  uploadId: 745488

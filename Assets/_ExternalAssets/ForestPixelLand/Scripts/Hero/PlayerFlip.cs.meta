@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: b9a736442d4fae543a884455f23fbeb4
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 315158
+  packageName: Pixel World - Forest and Village
+  packageVersion: 1.0
+  assetPath: Assets/ForestPixelLand/Scripts/Hero/PlayerFlip.cs
+  uploadId: 745488

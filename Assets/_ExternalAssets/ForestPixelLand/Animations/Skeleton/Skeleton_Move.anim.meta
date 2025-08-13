@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 385dd5f70f43ec242915cc9c4bb0f7f3
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 315158
+  packageName: Pixel World - Forest and Village
+  packageVersion: 1.0
+  assetPath: Assets/ForestPixelLand/Animations/Skeleton/Skeleton_Move.anim
+  uploadId: 745488

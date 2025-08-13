@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: cbe179d09a6b61d41bf520a74b57940a
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 315158
+  packageName: Pixel World - Forest and Village
+  packageVersion: 1.0
+  assetPath: Assets/ForestPixelLand/Animations/Wolf/Wolf_Move.anim
+  uploadId: 745488

@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 040d93a4a1dfb8b448bf5ad8f50c1090
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 315158
+  packageName: Pixel World - Forest and Village
+  packageVersion: 1.0
+  assetPath: Assets/ForestPixelLand/ProjectSettings/InputManager.asset
+  uploadId: 745488

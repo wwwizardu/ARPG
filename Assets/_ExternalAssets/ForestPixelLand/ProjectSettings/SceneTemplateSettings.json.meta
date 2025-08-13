@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: d46cba22e3b1cfe4d91e435634ece0dc
+TextScriptImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 315158
+  packageName: Pixel World - Forest and Village
+  packageVersion: 1.0
+  assetPath: Assets/ForestPixelLand/ProjectSettings/SceneTemplateSettings.json
+  uploadId: 745488

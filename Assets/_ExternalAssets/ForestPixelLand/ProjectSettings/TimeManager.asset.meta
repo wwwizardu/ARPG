@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 5f507e0582ae1f44a80f169c43a4ffdf
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 315158
+  packageName: Pixel World - Forest and Village
+  packageVersion: 1.0
+  assetPath: Assets/ForestPixelLand/ProjectSettings/TimeManager.asset
+  uploadId: 745488

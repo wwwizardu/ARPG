@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 7748075c6d8d61f4db5b3ffa65806606
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 315158
+  packageName: Pixel World - Forest and Village
+  packageVersion: 1.0
+  assetPath: Assets/ForestPixelLand/Animations/Guard/Guard.controller
+  uploadId: 745488
