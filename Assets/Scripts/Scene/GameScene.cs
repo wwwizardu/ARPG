@@ -1,9 +1,9 @@
 using UnityEngine;
 using System.Collections;
 
-namespace ARPG.Base
+namespace ARPG.Scene
 {
-    public class GameScene : SceneBase
+    public class GameScene : Base.SceneBase
     {
         [SerializeField] private CameraController _cameraController;
 
