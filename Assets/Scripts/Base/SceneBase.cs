@@ -1,19 +1,26 @@
+using System.Collections;
 using UnityEngine;
 
 namespace ARPG.Base
 {
     public class SceneBase : MonoBehaviour
     {
-        // Start is called once before the first execution of Update after the MonoBehaviour is created
-        void Start()
+        private Coroutine _initializeCoroutine;
+
+        protected void Start()
         {
+            if (_initializeCoroutine != null)
+            {
+                StopCoroutine(_initializeCoroutine);
+            }
+
+            _initializeCoroutine = StartCoroutine(OnInitialize());
 
         }
 
-        // Update is called once per frame
-        void Update()
+        protected virtual IEnumerator OnInitialize()
         {
-
+            yield return null; // Placeholder for initialization logic
         }
     }
 }
