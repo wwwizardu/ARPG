@@ -1,35 +1,9 @@
 using UnityEngine;
 using System.Collections.Generic;
+using Cysharp.Threading.Tasks;
 
 namespace ARPG.Map
 {
-    [System.Serializable]
-    public class MapChunkData
-    {
-        public int chunkX;
-        public int chunkY;
-        public int[,] tiles;
-        public bool isActive;
-        
-        public MapChunkData(int chunkSize)
-        {
-            tiles = new int[chunkSize, chunkSize];
-            isActive = false;
-        }
-        
-        public void SetChunkPosition(int x, int y)
-        {
-            chunkX = x;
-            chunkY = y;
-            isActive = true;
-        }
-        
-        public void Deactivate()
-        {
-            isActive = false;
-        }
-    }
-    
     public class MapManager : MonoBehaviour
     {
         [Header("Map Settings")]
@@ -38,6 +12,12 @@ namespace ARPG.Map
         public float noiseScale = 0.1f;
         public float terrainHeight = 10f;
         
+        [Header("Map Bounds")]
+        public int minChunkX = -50;
+        public int maxChunkX = 50;
+        public int minChunkY = -50;
+        public int maxChunkY = 50;
+        
         private Dictionary<Vector2Int, MapChunkData> _activeChunks;
         private Stack<MapChunkData> _chunkPool;
         private System.Random _randomGenerator;
@@ -45,7 +25,7 @@ namespace ARPG.Map
         private int _loadRadius = 1;
         private const int POOL_SIZE = 20;
         
-        void Start()
+        public void Initialize()
         {
             _activeChunks = new Dictionary<Vector2Int, MapChunkData>();
             _chunkPool = new Stack<MapChunkData>();
@@ -64,6 +44,12 @@ namespace ARPG.Map
         
         public MapChunkData GetOrCreateChunk(int chunkX, int chunkY)
         {
+            if (chunkX < minChunkX || chunkX > maxChunkX || 
+                chunkY < minChunkY || chunkY > maxChunkY)
+            {
+                return null;
+            }
+            
             Vector2Int chunkKey = new Vector2Int(chunkX, chunkY);
             
             if (_activeChunks.ContainsKey(chunkKey))
@@ -105,8 +91,11 @@ namespace ARPG.Map
                         (worldY + mapSeed) * noiseScale
                     );
                     
-                    int tileType = Mathf.FloorToInt(noiseValue * terrainHeight);
-                    chunk.tiles[x, y] = tileType;
+                    GlobalEnum.TileType tileType = noiseValue > 0.4f ? 
+                        GlobalEnum.TileType.Glass : GlobalEnum.TileType.Ground;
+                    
+                    int currentTile = chunk.tiles[x, y];
+                    chunk.tiles[x, y] = (int)((currentTile & 0xFFFFFFF0) | ((int)tileType & 0xF));
                 }
             }
         }
@@ -123,7 +112,17 @@ namespace ARPG.Map
             if (localY < 0) { chunkY--; localY += chunkSize; }
             
             MapChunkData chunk = GetOrCreateChunk(chunkX, chunkY);
+            if (chunk == null) return -1; // 맵 범위 밖
+            
             return chunk.tiles[localX, localY];
+        }
+        
+        public GlobalEnum.TileType GetTileTypeAt(int worldX, int worldY)
+        {
+            int tileData = GetTileAt(worldX, worldY);
+            if (tileData == -1) return GlobalEnum.TileType.Ground; // 기본값
+            
+            return (GlobalEnum.TileType)(tileData & 0xF);
         }
         
         private void ReturnChunkToPool(int chunkX, int chunkY)

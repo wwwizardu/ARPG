@@ -84,6 +84,7 @@ The project uses Unity's Input System with comprehensive action mappings:
 - Input actions are configured in `InputSystem_Actions.inputactions`
 - All control schemes support cross-platform input (Keyboard/Mouse, Gamepad, Touch, XR)
 - UI navigation is fully mapped for accessibility across all input methods
+- Member variables should have an underscore (_) prefix.
 
 ## Best Practices for This Project
 
