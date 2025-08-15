@@ -105,18 +105,6 @@ namespace ARPG.Map
             _activeChunks.Clear();
         }
         
-        public void UpdateChunksAroundPlayer(Vector3 playerPosition)
-        {
-            Vector2Int playerChunk = WorldPositionToChunk(playerPosition);
-            
-            if (playerChunk != _currentPlayerChunk)
-            {
-                _currentPlayerChunk = playerChunk;
-                LoadChunksAroundPlayer();
-                UnloadDistantChunks();
-            }
-        }
-        
         private Vector2Int WorldPositionToChunk(Vector3 worldPosition)
         {
             int chunkX = Mathf.FloorToInt(worldPosition.x / chunkSize);
@@ -137,7 +125,11 @@ namespace ARPG.Map
                     
                     if (!_activeChunks.ContainsKey(chunkPos))
                     {
-                        GetOrCreateChunk(chunkPos.x, chunkPos.y);
+                        MapChunkData chunk = GetOrCreateChunk(chunkPos.x, chunkPos.y);
+                        if (chunk != null)
+                        {
+                            RenderChunkToTilemap(chunk);
+                        }
                     }
                 }
             }

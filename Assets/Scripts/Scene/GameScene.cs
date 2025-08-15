@@ -16,7 +16,7 @@ namespace ARPG.Scene
                 yield return null; // Wait until AR is initialized
             }
 
-            //AR.s.Map.GetOrCreateChunk
+            AR.s.Map.UpdateChunksAroundPlayer(Vector3.zero);
 
             Debug.Log("GameScene initialized.");
         }
