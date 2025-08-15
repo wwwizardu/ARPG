@@ -24,7 +24,7 @@ namespace ARPG.Map
         private Dictionary<Vector2Int, MapChunkData> _activeChunks;
         private Stack<MapChunkData> _chunkPool;
         private System.Random _randomGenerator;
-        private Vector2Int _currentPlayerChunk;
+        private Vector2Int _currentPlayerChunk = new Vector2Int(-100000, -100000);
         private int _loadRadius = 1;
         private const int POOL_SIZE = 20;
         
