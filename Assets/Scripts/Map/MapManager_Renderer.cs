@@ -31,6 +31,23 @@ namespace ARPG.Map
                 }
             }
         }
+        
+        private void RemoveChunkFromTilemap(MapChunkData chunk)
+        {
+            if (_tileMap == null) return;
+            
+            for (int x = 0; x < chunkSize; x++)
+            {
+                for (int y = 0; y < chunkSize; y++)
+                {
+                    int worldX = chunk.chunkX * chunkSize + x;
+                    int worldY = chunk.chunkY * chunkSize + y;
+                    
+                    Vector3Int tilePosition = new Vector3Int(worldX, worldY, 0);
+                    _tileMap.SetTile(tilePosition, null); // 타일 제거
+                }
+            }
+        }
     }
 }
 

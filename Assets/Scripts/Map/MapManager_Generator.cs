@@ -87,6 +87,7 @@ namespace ARPG.Map
                 MapChunkData chunk = _activeChunks[chunkKey];
                 _activeChunks.Remove(chunkKey);
                 
+                RemoveChunkFromTilemap(chunk); // 타일맵에서 청크 제거
                 chunk.Deactivate();
                 _chunkPool.Push(chunk);
             }

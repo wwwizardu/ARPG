@@ -6,7 +6,5 @@ namespace ARPG.Creature
     {
         [SerializeField] private Sprite _characterSprite;
         [SerializeField] private SpriteRenderer _sr;
-
-        
     }
 }
