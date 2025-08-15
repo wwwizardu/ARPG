@@ -1,10 +1,15 @@
 using UnityEngine;
+using UnityEngine.Tilemaps;
 
 namespace ARPG.Map
 {
     public partial class MapManager : MonoBehaviour
     {
-        // Add any additional methods or properties specific to the MapManager here
+        [Header("타일 에셋")]
+        [SerializeField] private TileBase[] _tileAssets;
+
+
+
     }
 }
 
