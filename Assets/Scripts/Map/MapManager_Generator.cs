@@ -103,7 +103,7 @@ namespace ARPG.Map
         private Vector2Int WorldPositionToChunk(Vector3 worldPosition)
         {
             int chunkX = Mathf.FloorToInt(worldPosition.x / chunkSize);
-            int chunkY = Mathf.FloorToInt(worldPosition.z / chunkSize);
+            int chunkY = Mathf.FloorToInt(worldPosition.y / chunkSize);
             return new Vector2Int(chunkX, chunkY);
         }
         
@@ -137,9 +137,11 @@ namespace ARPG.Map
             foreach (var chunkPair in _activeChunks)
             {
                 Vector2Int chunkPos = chunkPair.Key;
-                float distance = Vector2Int.Distance(chunkPos, _currentPlayerChunk);
+                int deltaX = Mathf.Abs(chunkPos.x - _currentPlayerChunk.x);
+                int deltaY = Mathf.Abs(chunkPos.y - _currentPlayerChunk.y);
+                int maxDistance = Mathf.Max(deltaX, deltaY); // Chebyshev 거리
                 
-                if (distance > _loadRadius + 1)
+                if (maxDistance > _loadRadius)
                 {
                     chunksToReturn.Add(chunkPos);
                 }
