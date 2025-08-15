@@ -23,16 +23,19 @@ namespace ARPG.Scene
             GameObject playerObject = Instantiate(_playerPrefab);
             if(playerObject != null)
             {
-                ArpgPlayer _player = playerObject.GetComponent<ArpgPlayer>();
-                if (_player != null)
+                ArpgPlayer player = playerObject.GetComponent<ArpgPlayer>();
+                if (player != null)
                 {
-                    _player.Initialize();
+                    player.Initialize();
+                    _cameraController.Initialize(player);
                 }
             }
             else
             {
                 Debug.LogError("Failed to instantiate player object.");
             }
+
+            
             
 
             Debug.Log("GameScene initialized.");

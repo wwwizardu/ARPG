@@ -5,6 +5,8 @@ namespace ARPG.Creature
 {
     public class ArpgPlayer : CharacterBase
     {
+        [SerializeField] private float _speed = 5.0f;
+        
         private Vector2 _inputDirection = Vector2.zero;
         private Input.ArpgInputAction.PlayerActions? _input = null;
 
@@ -51,20 +53,23 @@ namespace ARPG.Creature
 
                 _inputDirection = _input.Value.Move.ReadValue<Vector2>();
 
-                if (0.01f < _inputDirection.x || _inputDirection.x < -0.01)
+                // 입력 방향에 따라 캐릭터 이동
+                if (_inputDirection.magnitude > 0.01f)
                 {
-                    Debug.Log($"Input Direction: {_inputDirection}");
+                    Vector3 movement = new Vector3(_inputDirection.x, _inputDirection.y, 0) * _speed * Time.deltaTime;
+                    transform.position += movement;
+                    
+                    // 맵 매니저에 플레이어 위치 업데이트 알림
+                    if (AR.s?.Map != null)
+                    {
+                        AR.s.Map.UpdateChunksAroundPlayer(transform.position);
+                    }
                 }
-                // {
-                //     // Update character movement based on input direction
-                //     UpdateHorizontalForce(_inputDirection.x > 0 ? Input.DirectionInput.Direction.Right : Input.DirectionInput.Direction.Left);
-                //     UpdateVerticalForce(_inputDirection.y > 0 ? Input.DirectionInput.Direction.Up : Input.DirectionInput.Direction.Down);
-                // }
-                // else
-                // {
-                //     // Stop character movement if no input
-                //     Stop();
-                // }
+                else
+                {
+                    // 입력이 없으면 정지
+                    Stop();
+                }
 
                 // Input.DirectionInput.Direction dirHorizontal = AR.s.UI.Input.DirectionInput.GetHorizontalInput();
                 // Input.DirectionInput.Direction dirVertical = AR.s.UI.Input.DirectionInput.GetVerticalInput();

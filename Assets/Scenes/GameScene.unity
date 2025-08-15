@@ -257,6 +257,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 2490919833446992439, guid: 733e4acdd8c549941b649980634c9991, type: 3}
+      propertyPath: _camera
+      value: 
+      objectReference: {fileID: 839676981991883591}
     - target: {fileID: 3453742039016503907, guid: 733e4acdd8c549941b649980634c9991, type: 3}
       propertyPath: m_Name
       value: CameraController
@@ -317,6 +321,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6da27266c2230644dace8ec28bcc6965, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!20 &839676981991883591 stripped
+Camera:
+  m_CorrespondingSourceObject: {fileID: 5572728700467499826, guid: 733e4acdd8c549941b649980634c9991, type: 3}
+  m_PrefabInstance: {fileID: 839676981991883587}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
