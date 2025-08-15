@@ -7,4 +7,6 @@ public class GlobalEnum
         Ground,     // 맨땅
         Glass,      // 잔디
     }
+
+
 }

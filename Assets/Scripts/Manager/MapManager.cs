@@ -61,27 +61,33 @@ namespace ARPG.Map
             }
         }
         
-        public MapChunkData GetOrCreateChunk(int chunkX, int chunkY)
+        public GlobalEnum.TileType GetTileTypeAt(int worldX, int worldY)
         {
-            if (chunkX < minChunkX || chunkX > maxChunkX ||
-                chunkY < minChunkY || chunkY > maxChunkY)
+            uint tileData = GetTileAt(worldX, worldY);
+            if (tileData == 0) return GlobalEnum.TileType.Ground; // 기본값
+            
+            return (GlobalEnum.TileType)(tileData & 0xF);
+        }
+        
+        public uint GetTileAt(int worldX, int worldY)
+        {
+            int chunkX = Mathf.FloorToInt((float)worldX / chunkSize);
+            int chunkY = Mathf.FloorToInt((float)worldY / chunkSize);
+
+            int localX = worldX - (chunkX * chunkSize);
+            int localY = worldY - (chunkY * chunkSize);
+
+            if (localX < 0) { chunkX--; localX += chunkSize; }
+            if (localY < 0) { chunkY--; localY += chunkSize; }
+
+            MapChunkData chunk = GetOrCreateChunk(chunkX, chunkY);
+            if (chunk == null)
             {
-                return null;
+                Debug.LogWarning($"[MapManager] GetTileAt - Chunk ({chunkX}, {chunkY}) is out of bounds.");
+                return 0; // 맵 범위 밖
             }
 
-            Vector2Int chunkKey = new Vector2Int(chunkX, chunkY);
-
-            if (_activeChunks.ContainsKey(chunkKey))
-            {
-                return _activeChunks[chunkKey];
-            }
-
-            MapChunkData chunk = GetChunkFromPool();
-            chunk.SetChunkPosition(chunkX, chunkY);
-            GenerateChunkData(chunk);
-            _activeChunks[chunkKey] = chunk;
-
-            return chunk;
+            return chunk.tiles[localX, localY];
         }
         
     }

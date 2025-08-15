@@ -113,9 +113,9 @@ namespace ARPG
         private Canvas? _canvas;
         private Vector3[] _corners = new Vector3[4];
 
-        // private InputController.BsnInput _input = new InputController.BsnInput();
+         private  Input.ArpgInput _input = new();
         
-        // private InputSystem_BSN _inputSystem;
+         private Input.ArpgInputAction _inputSystem;
 
         private Coroutine? _saveCoroutine = null;
 
@@ -132,7 +132,7 @@ namespace ARPG
 
         public bool IsPressed { get { return _isPressed == true && 0.5f < _pressedTime; } }
 
-        // public InputController.BsnInput Input { get { return _input; } }    
+        public Input.ArpgInput Input { get { return _input; } }    
 
         // public bool IsUIMode { get { return _input.IsUIMode; } }
 
@@ -156,9 +156,9 @@ namespace ARPG
 
             _pointerEventData = new PointerEventData(EventSystem.current);
 
-            // _inputSystem = new InputSystem_BSN();
-            // _inputSystem.Enable();
-            // _input.Initialize(_inputSystem);
+            _inputSystem = new ARPG.Input.ArpgInputAction();
+            _inputSystem.Enable();
+            _input.Initialize(_inputSystem);
         }
 
         public void Initialize()

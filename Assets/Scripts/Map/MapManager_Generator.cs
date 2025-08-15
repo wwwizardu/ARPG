@@ -14,6 +14,29 @@ namespace ARPG.Map
                 _chunkPool.Push(new MapChunkData(chunkSize));
             }
         }
+
+        private MapChunkData GetOrCreateChunk(int chunkX, int chunkY)
+        {
+            if (chunkX < minChunkX || chunkX > maxChunkX ||
+                chunkY < minChunkY || chunkY > maxChunkY)
+            {
+                return null;
+            }
+
+            Vector2Int chunkKey = new Vector2Int(chunkX, chunkY);
+
+            if (_activeChunks.ContainsKey(chunkKey))
+            {
+                return _activeChunks[chunkKey];
+            }
+
+            MapChunkData chunk = GetChunkFromPool();
+            chunk.SetChunkPosition(chunkX, chunkY);
+            GenerateChunkData(chunk);
+            _activeChunks[chunkKey] = chunk;
+
+            return chunk;
+        }
         
         private MapChunkData GetChunkFromPool()
         {
@@ -49,36 +72,7 @@ namespace ARPG.Map
                 }
             }
         }
-        
-        public uint GetTileAt(int worldX, int worldY)
-        {
-            int chunkX = Mathf.FloorToInt((float)worldX / chunkSize);
-            int chunkY = Mathf.FloorToInt((float)worldY / chunkSize);
-            
-            int localX = worldX - (chunkX * chunkSize);
-            int localY = worldY - (chunkY * chunkSize);
-            
-            if (localX < 0) { chunkX--; localX += chunkSize; }
-            if (localY < 0) { chunkY--; localY += chunkSize; }
-            
-            MapChunkData chunk = GetOrCreateChunk(chunkX, chunkY);
-            if (chunk == null)
-            {
-                Debug.LogWarning($"[MapManager] GetTileAt - Chunk ({chunkX}, {chunkY}) is out of bounds.");
-                return 0; // 맵 범위 밖
-            }
-            
-            return chunk.tiles[localX, localY];
-        }
-        
-        public GlobalEnum.TileType GetTileTypeAt(int worldX, int worldY)
-        {
-            uint tileData = GetTileAt(worldX, worldY);
-            if (tileData == 0) return GlobalEnum.TileType.Ground; // 기본값
-            
-            return (GlobalEnum.TileType)(tileData & 0xF);
-        }
-        
+    
         private void ReturnChunkToPool(int chunkX, int chunkY)
         {
             Vector2Int chunkKey = new Vector2Int(chunkX, chunkY);
