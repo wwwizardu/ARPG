@@ -8,7 +8,7 @@ namespace ARPG.Map
     public partial class MapManager : MonoBehaviour
     {
         [SerializeField] private Tilemap _tileMap;
-
+        
         [Header("Map Settings")]
         public int chunkSize = 32;
         public int mapSeed = 12345;
@@ -70,6 +70,52 @@ namespace ARPG.Map
             _activeChunks[chunkKey] = chunk;
             
             return chunk;
+        }
+        
+        public void GenerateMapAroundPlayer(Vector3 playerPosition)
+        {
+            Vector2Int playerChunk = WorldPositionToChunk(playerPosition);
+            
+            for (int x = -_loadRadius; x <= _loadRadius; x++)
+            {
+                for (int y = -_loadRadius; y <= _loadRadius; y++)
+                {
+                    Vector2Int chunkPos = new Vector2Int(
+                        playerChunk.x + x,
+                        playerChunk.y + y
+                    );
+                    
+                    MapChunkData chunk = GetOrCreateChunk(chunkPos.x, chunkPos.y);
+                    if (chunk != null)
+                    {
+                        RenderChunkToTilemap(chunk);
+                    }
+                }
+            }
+        }
+        
+        private void RenderChunkToTilemap(MapChunkData chunk)
+        {
+            if (_tileMap == null || _tileAssets == null || _tileAssets.Length < 2) return;
+            
+            for (int x = 0; x < chunkSize; x++)
+            {
+                for (int y = 0; y < chunkSize; y++)
+                {
+                    int worldX = chunk.chunkX * chunkSize + x;
+                    int worldY = chunk.chunkY * chunkSize + y;
+                    
+                    uint tileData = chunk.tiles[x, y];
+                    int tileType = (int)(tileData & 0xF); // 하위 4비트 읽기
+                    
+                    Vector3Int tilePosition = new Vector3Int(worldX, worldY, 0);
+                    
+                    if (tileType < _tileAssets.Length)
+                    {
+                        _tileMap.SetTile(tilePosition, _tileAssets[tileType]);
+                    }
+                }
+            }
         }
     }
 }
