@@ -9,7 +9,7 @@ public abstract class PrefabSingleton<T> : MonoBehaviour where T : MonoBehaviour
     private static T _instance = null;
     private static object _lock = new object();
 
-    public static T Instance
+    public static T s
     {
         get
         {

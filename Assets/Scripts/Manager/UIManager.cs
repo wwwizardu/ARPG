@@ -161,6 +161,16 @@ namespace ARPG
             // _input.Initialize(_inputSystem);
         }
 
+        public void Initialize()
+        {
+
+        }
+
+        public void Reset()
+        {
+            
+        }
+
         public void DisableInputSystem()
         {
             // if (_inputSystem == null)

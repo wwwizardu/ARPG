@@ -7,12 +7,12 @@ namespace ARPG.Map
     {
         public int chunkX;
         public int chunkY;
-        public int[,] tiles;
+        public uint[,] tiles;
         public bool isActive;
         
         public MapChunkData(int chunkSize)
         {
-            tiles = new int[chunkSize, chunkSize];
+            tiles = new uint[chunkSize, chunkSize];
             isActive = false;
         }
         

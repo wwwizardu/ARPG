@@ -11,6 +11,13 @@ namespace ARPG.Scene
         {
             yield return base.OnInitialize();
 
+            while (AR.s.IsInitialized == false)
+            {
+                yield return null; // Wait until AR is initialized
+            }
+
+            //AR.s.Map.GetOrCreateChunk
+
             Debug.Log("GameScene initialized.");
         }
         
