@@ -4,9 +4,14 @@ public class GlobalEnum
 {
     public enum TileType
     {
-        Ground,     // 맨땅
-        Glass,      // 잔디
-        Hill,       // 언덕
+        Ground = 0,     // 맨땅
+        Glass = 1,      // 잔디
+    }
+    
+    public enum TileFlag
+    {
+        None = 0,
+        Hill = 1 << 4,  // 5번째 비트 (16 = 0x10)
     }
 
 

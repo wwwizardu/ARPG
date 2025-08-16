@@ -70,18 +70,21 @@ namespace ARPG.Map
                         (worldY + mapSeed) * noiseScale
                     );
                     
-                    GlobalEnum.TileType tileType;
-                
-                    // 고도가 높은 지역은 언덕
-                    if (elevationNoise > 0.6f)
-                        tileType = GlobalEnum.TileType.Hill;
-                    else if (terrainNoise > 0.4f)
-                        tileType = GlobalEnum.TileType.Glass;
+                    // 바닥 타입 결정 (하위 4비트)
+                    GlobalEnum.TileType baseTileType;
+                    if (terrainNoise > 0.4f)
+                        baseTileType = GlobalEnum.TileType.Glass;
                     else
-                        tileType = GlobalEnum.TileType.Ground;
+                        baseTileType = GlobalEnum.TileType.Ground;
                     
+                    // 언덕 플래그 결정 (5번째 비트)
+                    uint hillFlag = 0;
+                    if (elevationNoise > 0.6f)
+                        hillFlag = (uint)GlobalEnum.TileFlag.Hill;
+                    
+                    // 타일 데이터 조합
                     uint currentTile = chunk.tiles[x, y];
-                    chunk.tiles[x, y] = (currentTile & 0xFFFFFFF0) | ((uint)tileType & 0x0000000F);
+                    chunk.tiles[x, y] = (currentTile & 0xFFFFFFE0) | ((uint)baseTileType & 0x0000000F) | hillFlag;
                 }
             }
         }

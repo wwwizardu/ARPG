@@ -18,6 +18,7 @@ namespace ARPG.Map
         private Vector3Int _tempStartPos;
         private BoundsInt _tempArea;
         private TileBase[] _tempTileArray;
+        private TileBase[] _tempHillTileArray;
         private TileBase[] _tempNullArray;
 
         private void RenderChunkToTilemap(MapChunkData chunk)
@@ -30,6 +31,11 @@ namespace ARPG.Map
                 _tempTileArray = new TileBase[chunkSize * chunkSize];
             }
             
+            if (_tempHillTileArray == null || _tempHillTileArray.Length != chunkSize * chunkSize)
+            {
+                _tempHillTileArray = new TileBase[chunkSize * chunkSize];
+            }
+            
             // 청크 영역 정의
             _tempStartPos.Set(chunk.chunkX * chunkSize, chunk.chunkY * chunkSize, 0);
             _tempArea = new BoundsInt(_tempStartPos.x, _tempStartPos.y, 0, chunkSize, chunkSize, 1);
@@ -39,30 +45,43 @@ namespace ARPG.Map
                 for (int y = 0; y < chunkSize; y++)
                 {
                     uint tileData = chunk.tiles[x, y];
-                    int tileType = (int)(tileData & 0xF); // 하위 4비트 읽기
+                    int baseTileType = (int)(tileData & 0xF); // 하위 4비트: 바닥 타입
+                    bool isHill = (tileData & (uint)GlobalEnum.TileFlag.Hill) != 0; // 5번째 비트: 언덕 여부
                     
                     int index = y * chunkSize + x; // 2D to 1D index
                     
-                    if (tileType < _tileAssets.Length)
+                    // 바닥 타일 설정
+                    if (baseTileType == (int)GlobalEnum.TileType.Ground)
                     {
-                        if (tileType == (int)GlobalEnum.TileType.Ground) // 룰 타일인 경우
-                        {
-                            _tempTileArray[index] = _ruleTile;
-                        }
-                        else
-                        {
-                            _tempTileArray[index] = _tileAssets[tileType];
-                        }
+                        _tempTileArray[index] = _ruleTile;
+                    }
+                    else if (baseTileType == (int)GlobalEnum.TileType.Glass)
+                    {
+                        _tempTileArray[index] = _tileAssets.Length > baseTileType ? _tileAssets[baseTileType] : null;
                     }
                     else
                     {
                         _tempTileArray[index] = null;
+                    }
+                    
+                    // 언덕 타일 설정
+                    if (isHill)
+                    {
+                        _tempHillTileArray[index] = _ruleTile_Hill;
+                    }
+                    else
+                    {
+                        _tempHillTileArray[index] = null;
                     }
                 }
             }
             
             // 한 번에 모든 타일 설정
             _tileMap.SetTilesBlock(_tempArea, _tempTileArray);
+            if (_tileMap_Hill != null)
+            {
+                _tileMap_Hill.SetTilesBlock(_tempArea, _tempHillTileArray);
+            }
         }
         
         private void RemoveChunkFromTilemap(MapChunkData chunk)
@@ -80,8 +99,12 @@ namespace ARPG.Map
             _tempStartPos.Set(chunk.chunkX * chunkSize, chunk.chunkY * chunkSize, 0);
             _tempArea = new BoundsInt(_tempStartPos.x, _tempStartPos.y, 0, chunkSize, chunkSize, 1);
             
-            // 한 번에 모든 타일 제거
+            // 기본 타일맵과 Hill 타일맵에서 모든 타일 제거
             _tileMap.SetTilesBlock(_tempArea, _tempNullArray);
+            if (_tileMap_Hill != null)
+            {
+                _tileMap_Hill.SetTilesBlock(_tempArea, _tempNullArray);
+            }
         }
     }
 }

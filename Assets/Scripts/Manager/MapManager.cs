@@ -70,6 +70,12 @@ namespace ARPG.Map
             return (GlobalEnum.TileType)(tileData & 0xF);
         }
         
+        public bool IsHillAt(int worldX, int worldY)
+        {
+            uint tileData = GetTileAt(worldX, worldY);
+            return (tileData & (uint)GlobalEnum.TileFlag.Hill) != 0;
+        }
+        
         public uint GetTileAt(int worldX, int worldY)
         {
             int chunkX = Mathf.FloorToInt((float)worldX / chunkSize);
