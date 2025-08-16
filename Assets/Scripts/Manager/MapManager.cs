@@ -8,6 +8,7 @@ namespace ARPG.Map
     public partial class MapManager : MonoBehaviour
     {
         [SerializeField] private Tilemap _tileMap;
+        [SerializeField] private Tilemap _tileMap_Hill;
         
         [Header("Map Settings")]
         public int chunkSize = 8;

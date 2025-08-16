@@ -58,14 +58,27 @@ namespace ARPG.Map
                 {
                     int worldX = chunk.chunkX * chunkSize + x;
                     int worldY = chunk.chunkY * chunkSize + y;
+
+                    // 고도 노이즈 (언덕의 높이를 나타냄)
+                    float elevationNoise = Mathf.PerlinNoise(
+                        (worldX + mapSeed) * (noiseScale * 0.3f),
+                        (worldY + mapSeed) * (noiseScale * 0.3f)
+                    );
                     
-                    float noiseValue = Mathf.PerlinNoise(
+                    float terrainNoise = Mathf.PerlinNoise(
                         (worldX + mapSeed) * noiseScale,
                         (worldY + mapSeed) * noiseScale
                     );
                     
-                    GlobalEnum.TileType tileType = noiseValue > 0.4f ? 
-                        GlobalEnum.TileType.Glass : GlobalEnum.TileType.Ground;
+                    GlobalEnum.TileType tileType;
+                
+                    // 고도가 높은 지역은 언덕
+                    if (elevationNoise > 0.6f)
+                        tileType = GlobalEnum.TileType.Hill;
+                    else if (terrainNoise > 0.4f)
+                        tileType = GlobalEnum.TileType.Glass;
+                    else
+                        tileType = GlobalEnum.TileType.Ground;
                     
                     uint currentTile = chunk.tiles[x, y];
                     chunk.tiles[x, y] = (currentTile & 0xFFFFFFF0) | ((uint)tileType & 0x0000000F);

@@ -7,7 +7,12 @@ namespace ARPG.Map
     {
         [Header("타일 에셋")]
         [SerializeField] private TileBase[] _tileAssets;
+
+        [Header("땅 룰 타일")]
         [SerializeField] private RuleTile _ruleTile;
+
+        [Header("언덕 룰 타일")]
+        [SerializeField] private RuleTile _ruleTile_Hill;
         
         // 타일맵 렌더링용 재사용 변수들
         private Vector3Int _tempStartPos;
