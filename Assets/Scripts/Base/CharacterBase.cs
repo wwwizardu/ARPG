@@ -1,3 +1,4 @@
+#nullable enable
 using System;
 using UnityEngine;
 
@@ -7,11 +8,13 @@ namespace ARPG.Creature
     {
         [SerializeField] protected Sprite _characterSprite;
         [SerializeField] protected SpriteRenderer _sr;
+        [SerializeField] protected Animator _animator;
 
         [SerializeField] protected TMPro.TextMeshPro _textName;
 
         protected CharacterConditions _condition = CharacterConditions.None;
         protected MovementStates _moveState = MovementStates.Null;
+        protected MovementStates _movementStatePrev = MovementStates.Null;
 
         protected Vector2 _pervPos;
         protected Vector2 _currentPos;
@@ -22,8 +25,8 @@ namespace ARPG.Creature
             Reset(); // Reset character
 
             _condition = CharacterConditions.Normal;
-            _moveState = MovementStates.Idle;
-
+            OnChangeMovementState(MovementStates.Idle);
+            
             _initialized = true;
         }
 
@@ -44,7 +47,18 @@ namespace ARPG.Creature
 
         public void PlayAnimation(Animation inAnimation, bool isLoop, int inTrackIndex = 0, float inSpeed = 1f, Action? onAnimDone = null)
         {
-
+            if (inAnimation == Animation.Idle)
+            {
+                _animator.SetTrigger("Idle");
+            }
+            else if (inAnimation == Animation.Walk)
+            {
+                _animator.SetTrigger("Walk");
+            }
+            // else if(inAnimation == Animation.Jump)
+            // {
+            //     _animator.Play("Jump", inTrackIndex, 0f);
+            // }
         }
 
         public void Stop()
@@ -54,6 +68,7 @@ namespace ARPG.Creature
             //     _controller.SetHorizontalForce(0f);
             // }
 
+            OnChangeMovementState(MovementStates.Idle);
             UpdateMovementState();
         }
 
@@ -217,6 +232,19 @@ namespace ARPG.Creature
         protected virtual void UpdateMovementState()
         {
 
+        }
+        
+        protected void OnChangeMovementState(MovementStates inNew)
+        {
+            if (_moveState == inNew)
+                return;
+
+            Debug.Log($"[Character] OnChangeMovementState - {_movementStatePrev} -> {inNew}");
+
+            _movementStatePrev = _moveState;
+            _moveState = inNew;
+
+            UpdateAnimator();
         }
     }
 

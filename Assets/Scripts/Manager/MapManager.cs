@@ -10,7 +10,7 @@ namespace ARPG.Map
         [SerializeField] private Tilemap _tileMap;
         
         [Header("Map Settings")]
-        public int chunkSize = 16;
+        public int chunkSize = 8;
         public int mapSeed = 12345;
         public float noiseScale = 0.1f;
         public float terrainHeight = 10f;
@@ -25,7 +25,7 @@ namespace ARPG.Map
         private Stack<MapChunkData> _chunkPool;
         private System.Random _randomGenerator;
         private Vector2Int _currentPlayerChunk = new Vector2Int(-100000, -100000);
-        private int _loadRadius = 1;
+        private int _loadRadius = 2;
         private const int POOL_SIZE = 20;
         
         public void Initialize()

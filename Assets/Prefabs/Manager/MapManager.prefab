@@ -214,7 +214,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _tileMap: {fileID: 6997485862513278914}
-  chunkSize: 32
+  chunkSize: 16
   mapSeed: 12345
   noiseScale: 0.1
   terrainHeight: 10

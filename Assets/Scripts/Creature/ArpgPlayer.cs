@@ -58,12 +58,14 @@ namespace ARPG.Creature
                 {
                     Vector3 movement = new Vector3(_inputDirection.x, _inputDirection.y, 0) * _speed * Time.deltaTime;
                     transform.position += movement;
-                    
+
                     // 맵 매니저에 플레이어 위치 업데이트 알림
                     if (AR.s?.Map != null)
                     {
                         AR.s.Map.UpdateChunksAroundPlayer(transform.position);
                     }
+                    
+                    OnChangeMovementState(MovementStates.Walking);
                 }
                 else
                 {
