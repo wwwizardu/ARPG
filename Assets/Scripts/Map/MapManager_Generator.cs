@@ -113,12 +113,9 @@ namespace ARPG.Map
             {
                 for (int y = -_loadRadius; y <= _loadRadius; y++)
                 {
-                    Vector2Int chunkPos = new Vector2Int(
-                        _currentPlayerChunk.x + x,
-                        _currentPlayerChunk.y + y
-                    );
+                    Vector2Int chunkPos = new Vector2Int(_currentPlayerChunk.x + x, _currentPlayerChunk.y + y);
                     
-                    if (!_activeChunks.ContainsKey(chunkPos))
+                    if (_activeChunks.ContainsKey(chunkPos) == false)
                     {
                         MapChunkData chunk = GetOrCreateChunk(chunkPos.x, chunkPos.y);
                         if (chunk != null)

@@ -7,6 +7,7 @@ namespace ARPG.Map
     {
         [Header("타일 에셋")]
         [SerializeField] private TileBase[] _tileAssets;
+        [SerializeField] private RuleTile _ruleTile;
         
         // 타일맵 렌더링용 재사용 변수들
         private Vector3Int _tempStartPos;
@@ -39,7 +40,14 @@ namespace ARPG.Map
                     
                     if (tileType < _tileAssets.Length)
                     {
-                        _tempTileArray[index] = _tileAssets[tileType];
+                        if (tileType == (int)GlobalEnum.TileType.Ground) // 룰 타일인 경우
+                        {
+                            _tempTileArray[index] = _ruleTile;
+                        }
+                        else
+                        {
+                            _tempTileArray[index] = _tileAssets[tileType];
+                        }
                     }
                     else
                     {

@@ -213,9 +213,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 55e3e86554947434f8ebc322fe26da83, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _tileAssets:
-  - {fileID: 11400000, guid: e22494330bca88e46a5991eeec6e3d25, type: 2}
-  - {fileID: 11400000, guid: 94e02ed7ae10a684baf2d7342773e335, type: 2}
   _tileMap: {fileID: 6997485862513278914}
   chunkSize: 32
   mapSeed: 12345
@@ -225,3 +222,7 @@ MonoBehaviour:
   maxChunkX: 50
   minChunkY: -50
   maxChunkY: 50
+  _tileAssets:
+  - {fileID: 11400000, guid: e22494330bca88e46a5991eeec6e3d25, type: 2}
+  - {fileID: 11400000, guid: 94e02ed7ae10a684baf2d7342773e335, type: 2}
+  _ruleTile: {fileID: 11400000, guid: 9224232a219ed3247958b19048036ec4, type: 2}

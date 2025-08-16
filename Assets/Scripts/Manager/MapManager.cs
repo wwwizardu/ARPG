@@ -10,7 +10,7 @@ namespace ARPG.Map
         [SerializeField] private Tilemap _tileMap;
         
         [Header("Map Settings")]
-        public int chunkSize = 32;
+        public int chunkSize = 16;
         public int mapSeed = 12345;
         public float noiseScale = 0.1f;
         public float terrainHeight = 10f;
