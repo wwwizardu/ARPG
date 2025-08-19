@@ -19,6 +19,8 @@ namespace ARPG.Creature
         protected Vector2 _pervPos;
         protected Vector2 _currentPos;
         protected bool _initialized = false;
+        
+        public CharacterConditions State { get { return _condition; } }
 
         public virtual void Initialize()
         {
@@ -26,7 +28,7 @@ namespace ARPG.Creature
 
             _condition = CharacterConditions.Normal;
             OnChangeMovementState(MovementStates.Idle);
-            
+
             _initialized = true;
         }
 
