@@ -25,7 +25,7 @@ namespace ARPG.Skill
 
         protected byte _targetType;
         protected long _targetId;
-        
+
         private float _time;
         private bool _initialized = false;
 
@@ -73,7 +73,7 @@ namespace ARPG.Skill
             _time += inTimeDT;
             if (_state == State.Start)
             {
-                if(_startTime < _time)
+                if (_startTime < _time)
                 {
                     _time = 0f;
                     _state = State.Process;
@@ -106,7 +106,7 @@ namespace ARPG.Skill
             _targetId = inTargetId;
 
             _state = State.Start;
-            
+
             return true;
         }
 
@@ -124,10 +124,27 @@ namespace ARPG.Skill
         {
             //Debug.Log($"[Skillbase] OnChangeState - State({inNewState}), Time({Time.time})");
 
-            if (inNewState == State.None)
+            if (inNewState == State.Process)
+            {
+                ProcessSkill(0f);
+            }
+            else if (inNewState == State.End)
+            {
+                EndSkill();
+            }
+            else if (inNewState == State.None)
             {
                 _controller.OnCompleteSkill(Id);
             }
+        }
+        
+        protected virtual void OnHitTarget(GameObject target)
+        {
+            // 히트 처리 로직
+            Debug.Log($"[Skill_Strike] Hit target: {target.name}");
+            
+            // 여기에 데미지 처리, 이펙트 등의 로직 추가
+            // 예: target.GetComponent<IHittable>()?.OnHit(damage);
         }
     }
 }

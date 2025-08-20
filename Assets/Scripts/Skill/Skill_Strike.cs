@@ -6,6 +6,9 @@ namespace ARPG.Skill
     {
         private float _attackTime = 1f;
         private float _attackSpeed = 1f; // 스윙 속도, 기본값은 1초에 한번
+        private Vector3 _mouseWorldPosition; // 스킬 시작 시 마우스 위치
+        private float _attackRange = 2f; // 공격 범위
+        private float _attackAngle = 45f; // 공격 각도 (좌우로 45도씩, 총 90도)
         public override void Initialize(Creature.CharacterBase inCharacter, SkillController inController, int inSkillId)
         {
             base.Initialize(inCharacter, inController, inSkillId);
@@ -17,6 +20,11 @@ namespace ARPG.Skill
         public override bool StartSkill(byte inTargetType, long inTargetId)
         {
             base.StartSkill(inTargetType, inTargetId);
+
+            // 마우스 위치 저장
+            Vector3 mouseScreenPosition = UnityEngine.Input.mousePosition;
+            _mouseWorldPosition = Camera.main.ScreenToWorldPoint(new Vector3(mouseScreenPosition.x, mouseScreenPosition.y, Camera.main.nearClipPlane));
+            _mouseWorldPosition.z = 0f; // 2D이므로 z값은 0으로 설정
 
             Creature.Animation attackAnimation = Creature.Animation.Attack;
 
@@ -38,6 +46,56 @@ namespace ARPG.Skill
             //Debug.Log($"[SkillSwing] StartSkill - Time({Time.time})");
             return true;
         }
+
+        public override void EndSkill()
+        {
+            base.EndSkill();
+            
+            // 히트 체크 수행
+            CheckHit();
+        }
+        
+        protected override void OnHitTarget(GameObject target)
+        {
+            base.OnHitTarget(target);
+
+            // 히트 처리 로직
+            Debug.Log($"[Skill_Strike] Hit target: {target.name}");
+        }
+
+        private void CheckHit()
+        {
+            if (_character == null)
+                return;
+
+            Vector3 characterPosition = _character.transform.position;
+            Vector3 attackDirection = (_mouseWorldPosition - characterPosition).normalized;
+
+            // 공격 범위 내의 모든 콜라이더 검색
+            Collider2D[] hitColliders = Physics2D.OverlapCircleAll(characterPosition, _attackRange);
+
+            foreach (Collider2D collider in hitColliders)
+            {
+                if (collider.gameObject == _character.gameObject)
+                    continue; // 자기 자신은 제외
+
+                if (IsWithinAttackAngle(characterPosition, collider.transform.position, attackDirection))
+                {
+                    // 히트 처리
+                    OnHitTarget(collider.gameObject);
+                }
+            }
+        }
+
+        private bool IsWithinAttackAngle(Vector3 attackerPos, Vector3 targetPos, Vector3 attackDirection)
+        {
+            Vector3 toTarget = (targetPos - attackerPos).normalized;
+            float angle = Vector3.Angle(attackDirection, toTarget);
+            
+            return angle <= _attackAngle;
+        }
+
+
 
     }
 }

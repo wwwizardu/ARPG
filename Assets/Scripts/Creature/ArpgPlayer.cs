@@ -113,9 +113,9 @@ namespace ARPG.Creature
             //_mouseTargetFinder.UpdateTarget(mousePosition);
         }
 
-        protected override void OnFixedUpdateCharacter()
+        protected override void OnFixedUpdateCharacter(float inDeltaTime)
         {
-            base.OnFixedUpdateCharacter();
+            base.OnFixedUpdateCharacter(inDeltaTime);
 
             // if(_condition < CharacterConditions.RobotControl)
             // {

@@ -149,6 +149,17 @@ namespace ARPG.Skill
             _character?.OnCompleteSkill(inSkillId);
         }
 
+        public void SkillUpdate(float deltaTime)
+        {
+            for (int i = 0; i < _activeSkillList.Count; i++)
+            {
+                if(_activeSkillList[i].IsRunning == true)
+                {
+                    _activeSkillList[i].SkillUpdate(deltaTime);
+                }
+            }
+        }
+
         private void FixedUpdate()
         {
             for (int i = 0; i < _activeSkillList.Count; i++)

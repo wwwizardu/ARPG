@@ -94,6 +94,15 @@ namespace ARPG.Creature
             // Handle skill stop logic
         }
 
+        public virtual void OnHitTarget(GameObject target)
+        {
+            // 히트 처리 로직
+            Debug.Log($"[CharacterBase] Hit target: {target.name}");
+            
+            // 여기에 데미지 처리, 이팩트 등의 로직 추가
+            // 예: target.GetComponent<IHittable>()?.OnHit(damage);
+        }
+
         public virtual void UpdateAnimator()
         {
             if (CharacterConditions.BlockMoveAnimation <= _condition)
@@ -176,16 +185,18 @@ namespace ARPG.Creature
             if (_initialized == false)
                 return;
 
-            OnFixedUpdateCharacter();
+            OnFixedUpdateCharacter(Time.fixedDeltaTime);
         }
 
-        protected virtual void OnFixedUpdateCharacter()
+        protected virtual void OnFixedUpdateCharacter(float inDeltaTime)
         {
             if (AR.s == null || AR.s.Map == null /*|| MapManager.mapInitialized == false*/)
                 return;
 
             if (CharacterConditions.Dead <= _condition) // 캐릭터가 죽은 상태라면
                 return;
+
+            _skillController.SkillUpdate(inDeltaTime);
 
             // if (IsOwner == true && GetPlayerTilePosition(out Vector2Int tilePos) == true)
             // {
