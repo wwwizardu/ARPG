@@ -10,11 +10,13 @@ namespace ARPG.Creature
         [SerializeField] protected SpriteRenderer _sr;
         [SerializeField] protected Animator _animator;
 
+        [SerializeField] protected Skill.SkillController _skillController;
+
         [SerializeField] protected TMPro.TextMeshPro _textName;
 
         protected CharacterConditions _condition = CharacterConditions.None;
-        protected MovementStates _moveState = MovementStates.Null;
-        protected MovementStates _movementStatePrev = MovementStates.Null;
+        protected MovementStates _moveState = MovementStates.None;
+        protected MovementStates _movementStatePrev = MovementStates.None;
 
         protected Vector2 _pervPos;
         protected Vector2 _currentPos;
@@ -28,6 +30,8 @@ namespace ARPG.Creature
 
             _condition = CharacterConditions.Normal;
             OnChangeMovementState(MovementStates.Idle);
+
+            _skillController.Initialize(this);
 
             _initialized = true;
         }
@@ -46,6 +50,12 @@ namespace ARPG.Creature
         {
             // Handle character input here
         }
+        
+        public virtual bool StartSkill(int inIndex)
+        {
+            _skillController.StartSkill(inIndex);
+            return true;
+        }
 
         public void PlayAnimation(Animation inAnimation, bool isLoop, int inTrackIndex = 0, float inSpeed = 1f, Action? onAnimDone = null)
         {
@@ -57,10 +67,10 @@ namespace ARPG.Creature
             {
                 _animator.SetTrigger("Walk");
             }
-            // else if(inAnimation == Animation.Jump)
-            // {
-            //     _animator.Play("Jump", inTrackIndex, 0f);
-            // }
+            else if (inAnimation == Animation.Attack)
+            {
+                _animator.SetTrigger("Attack");
+            }
         }
 
         public void Stop()
@@ -76,7 +86,7 @@ namespace ARPG.Creature
 
         public void OnCompleteSkill(int inSkillId)
         {
-
+            OnChangeMovementState(MovementStates.Idle);
         }
 
         public void OnStopSkill(int inSkillId)
@@ -91,15 +101,8 @@ namespace ARPG.Creature
 
             if (_moveState == MovementStates.Idle)
             {
-                // 스킬이 실행중일 때는 캐릭터가 이동하지 않고 제자리에 있었다면 Idle 애니로 돌아가지 않는다.
-                // if (_skillController.CurrentSkill != null && _skillController.CurrentSkill.IsRunning == true)
-                // {
-                //     if (_skillController.CurrentSkill.CharacterMoved == true)
-                //     {
-                //         PlayAnimation(Animation.Idle, true);
-                //     }
-                // }
-                // else
+                // 스킬이 실행중일 때는 Idle 애니메이션을 실행하지 않음
+                if (_skillController.CurrentSkill != null && _skillController.CurrentSkill.IsRunning == false)
                 {
                     PlayAnimation(Animation.Idle, true);
                 }
@@ -146,7 +149,7 @@ namespace ARPG.Creature
             //     _controller.SetHorizontalForce(0);
             // }
 
-            // _skillController.StopAllSkill();
+            _skillController.StopAllSkill();
 
             ChangeConditionState(CharacterConditions.Dead);
         }
@@ -264,8 +267,8 @@ namespace ARPG.Creature
     {
         None,
         Normal,
-        UseSkill,
         BlockMoveAnimation, // 이 밑으로는 캐릭터 MoveState에 따라 애니메이션을 변경해주지 않는 상태
+        UseSkill,
         InstallStructure,
         Interact,
         Stunned,            // Stunned 밑으로는 Input도 영양을 주지 못하는 상태
@@ -277,7 +280,7 @@ namespace ARPG.Creature
     /// but it's not mandatory
     public enum MovementStates
     {
-        Null,
+        None,
         Idle,
         Walking,        // 달리기
         Jumping,

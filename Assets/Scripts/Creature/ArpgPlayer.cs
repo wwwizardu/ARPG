@@ -99,17 +99,10 @@ namespace ARPG.Creature
                 //         }
                 //     }
                 // }
-                // else if (_input.Value.Shoot.IsPressed() == true)
-                // {
-                //     if (Hub.s.uiman.DummySlot.HasItem() == true)
-                //     {
-                //         Hub.s.uiman.DropItem();
-                //     }
-                //     else
-                //     {
-                //         Shoot();
-                //     }
-                // }
+                if (_input.Value.Attack.IsPressed() == true)
+                {
+                    StartSkill(1);
+                }
                 // else if (_input.Value.Interact.WasPressedThisFrame() == true)
                 // {
                 //     Interact();
