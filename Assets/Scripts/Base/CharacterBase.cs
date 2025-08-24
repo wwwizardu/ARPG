@@ -1,11 +1,13 @@
 #nullable enable
 using System;
 using UnityEngine;
+using UnityEngine.U2D.Animation;
 
 namespace ARPG.Creature
 {
     public class CharacterBase : MonoBehaviour
     {
+        [SerializeField] protected SpriteLibraryAsset _spriteLibraryAsset;
         [SerializeField] protected Sprite _characterSprite;
         [SerializeField] protected SpriteRenderer _sr;
         [SerializeField] protected Animator _animator;
@@ -17,6 +19,10 @@ namespace ARPG.Creature
         protected CharacterConditions _condition = CharacterConditions.None;
         protected MovementStates _moveState = MovementStates.None;
         protected MovementStates _movementStatePrev = MovementStates.None;
+
+        protected SpriteLibrary _spriteLibrary;
+
+        
 
         protected Vector2 _pervPos;
         protected Vector2 _currentPos;
@@ -71,6 +77,11 @@ namespace ARPG.Creature
             {
                 _animator.SetTrigger("Attack");
             }
+        }
+
+        protected virtual void SetAnimation(int inIndex)
+        {
+
         }
 
         public void Stop()
