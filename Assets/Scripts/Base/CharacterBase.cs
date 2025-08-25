@@ -21,6 +21,7 @@ namespace ARPG.Creature
         protected MovementStates _movementStatePrev = MovementStates.None;
 
         protected SpriteLibrary _spriteLibrary;
+        protected Vector2 _velocity = Vector2.zero;
 
         
 
@@ -122,7 +123,11 @@ namespace ARPG.Creature
             if (_moveState == MovementStates.Idle)
             {
                 // 스킬이 실행중일 때는 Idle 애니메이션을 실행하지 않음
-                if (_skillController.CurrentSkill != null && _skillController.CurrentSkill.IsRunning == false)
+                if (_skillController.CurrentSkill != null && _skillController.CurrentSkill.IsRunning == true)
+                {
+                    
+                }
+                else
                 {
                     PlayAnimation(Animation.Idle, true);
                 }
@@ -258,7 +263,14 @@ namespace ARPG.Creature
 
         protected virtual void UpdateMovementState()
         {
-
+            if (_velocity.IsZero() == true)
+            {
+                OnChangeMovementState(MovementStates.Idle);
+            }
+            else
+            {
+                OnChangeMovementState(MovementStates.Walking);
+            }
         }
         
         protected void OnChangeMovementState(MovementStates inNew)
@@ -266,7 +278,7 @@ namespace ARPG.Creature
             if (_moveState == inNew)
                 return;
 
-            Debug.Log($"[Character] OnChangeMovementState - {_movementStatePrev} -> {inNew}");
+            Debug.Log($"[Character] OnChangeMovementState - {_moveState} -> {inNew}");
 
             _movementStatePrev = _moveState;
             _moveState = inNew;

@@ -54,9 +54,10 @@ namespace ARPG.Creature
                 _inputDirection = _input.Value.Move.ReadValue<Vector2>();
 
                 // 입력 방향에 따라 캐릭터 이동
-                if (_inputDirection.magnitude > 0.01f)
+                if (_inputDirection.IsZero() == false)
                 {
-                    Vector3 movement = new Vector3(_inputDirection.x, _inputDirection.y, 0) * _speed * Time.deltaTime;
+                    _velocity = new Vector2(_inputDirection.x, _inputDirection.y) * _speed;
+                    Vector3 movement = new Vector3(_velocity.x, _velocity.y, 0) * Time.deltaTime;
                     transform.position += movement;
 
                     // 맵 매니저에 플레이어 위치 업데이트 알림
@@ -64,13 +65,10 @@ namespace ARPG.Creature
                     {
                         AR.s.Map.UpdateChunksAroundPlayer(transform.position);
                     }
-                    
-                    OnChangeMovementState(MovementStates.Walking);
                 }
                 else
                 {
-                    // 입력이 없으면 정지
-                    Stop();
+                    _velocity = Vector2.zero;
                 }
 
                 // Input.DirectionInput.Direction dirHorizontal = AR.s.UI.Input.DirectionInput.GetHorizontalInput();
