@@ -19,11 +19,13 @@ namespace ARPG.Creature
         public void Activate()
         {
             _activated = true;
+            gameObject.SetActive(true);
         }
 
         public void Deactivate()
         {
             _activated = false;
+            gameObject.SetActive(false);
         }
 
         public bool IsActivated()
