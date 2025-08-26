@@ -1,5 +1,8 @@
+#nullable enable
 using ARPG;
+using ARPG.Creature;
 using ARPG.Map;
+using ARPG.Manager;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 
@@ -13,12 +16,18 @@ namespace ARPG
 
         private bool _initialized = false;
 
-        private Base.SceneBase _currentScene;
+        private Base.SceneBase? _currentScene;
 
+        private PlayerManager _playerManager = new PlayerManager();
+        
         public bool IsInitialized => _initialized;
         public MapManager Map => _mapManager;
         public UIManager UI => _uiManager;
         public Monster.MonsterManager Monster => _monsterManager;
+
+        public PlayerManager Player => _playerManager;
+
+        public ArpgPlayer? MyPlayer => _playerManager.MyPlayers;
 
         protected override void Awake()
         {
@@ -43,7 +52,11 @@ namespace ARPG
         {
             _uiManager.Reset();
             _mapManager.Reset();
+            _monsterManager.Reset();
+
         }
+        
+
 
         public void OnLoadSceneComplete(Base.SceneBase inNewScene)
         {
@@ -51,7 +64,7 @@ namespace ARPG
 
             if (_currentScene is Scene.LoginScene loginScene)
             {
-                
+
             }
             else if (_currentScene is Scene.GameScene gameScene)
             {

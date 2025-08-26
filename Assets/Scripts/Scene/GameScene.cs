@@ -31,6 +31,8 @@ namespace ARPG.Scene
                 {
                     player.Initialize();
                     _cameraController.Initialize(player);
+
+                    AR.s.Player.AddPlayer(player);
                 }
             }
             else

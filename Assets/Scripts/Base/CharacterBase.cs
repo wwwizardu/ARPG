@@ -16,6 +16,8 @@ namespace ARPG.Creature
 
         [SerializeField] protected TMPro.TextMeshPro _textName;
 
+        protected StatController _statController = new StatController();
+
         protected CharacterConditions _condition = CharacterConditions.None;
         protected MovementStates _moveState = MovementStates.None;
         protected MovementStates _movementStatePrev = MovementStates.None;
@@ -38,8 +40,9 @@ namespace ARPG.Creature
             _condition = CharacterConditions.Normal;
             OnChangeMovementState(MovementStates.Idle);
 
+            _statController.Initialize();
             _skillController.Initialize(this);
-
+            
             _initialized = true;
         }
 
@@ -51,6 +54,9 @@ namespace ARPG.Creature
 
             _pervPos = transform.position;
             _currentPos = transform.position;
+
+            _statController.Reset();
+            _skillController.Reset();
         }
 
         protected virtual void UpdateInput()
@@ -184,6 +190,19 @@ namespace ARPG.Creature
             if (_initialized == false)
                 return;
 
+            OnUpdate();
+        }
+
+        private void FixedUpdate()
+        {
+            if (_initialized == false)
+                return;
+
+            OnFixedUpdateCharacter(Time.fixedDeltaTime);
+        }
+
+        protected virtual void OnUpdate()
+        {
             UpdateInput(); // 입력 업데이트
 
             UpdateConditionsState(); // 캐릭터 상태 업데이트
@@ -194,14 +213,6 @@ namespace ARPG.Creature
             //{
             //    Hub.s.uiman.Show<MerchantUI>("UI/MerchantUI", UIManager.Layer.Main);
             //}
-        }
-
-        private void FixedUpdate()
-        {
-            if (_initialized == false)
-                return;
-
-            OnFixedUpdateCharacter(Time.fixedDeltaTime);
         }
 
         protected virtual void OnFixedUpdateCharacter(float inDeltaTime)

@@ -3,14 +3,15 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using ARPG.Map;
+using ARPG.Creature;
 
 namespace ARPG.Monster
 {
     public class MonsterManager : MonoBehaviour
     {
-        private List<Creature.CharacterBase> _monsters = new();
+        private List<Creature.Monster> _monsters = new();
         private Dictionary<Vector2Int, ChunkMonsterData> _chunkMonsters = new();
-        private Dictionary<int, Creature.CharacterBase> _monsterInstanceById = new();
+        private Dictionary<int, Creature.Monster> _monsterInstanceById = new();
         private int _nextMonsterId = 1;
         
         private Transform? _monsterParent;
@@ -18,11 +19,19 @@ namespace ARPG.Monster
         private WaitForSeconds _cleanupInterval = new WaitForSeconds(1f);
 
         [SerializeField] private float _chunkMonsterLifetime = 300f; // 5분
+        [SerializeField] private float _activationDistance = 20f; // 몬스터 활성화 거리
+        [SerializeField] private float _deactivationDistance = 25f; // 몬스터 비활성화 거리 (하이스테리시스)
+        
+        private float _activationDistanceSqr;
+        private float _deactivationDistanceSqr;
         
         private bool _initialized = false;
 
         public void Initialize()
         {
+            _activationDistanceSqr = _activationDistance * _activationDistance;
+            _deactivationDistanceSqr = _deactivationDistance * _deactivationDistance;
+            
             StartCoroutine(CleanupRoutine());
             _initialized = true;
         }
@@ -60,7 +69,7 @@ namespace ARPG.Monster
             _monsterParent = inMonsterRoot;
         }
 
-        public void AddMonster(Creature.CharacterBase monster)
+        public void AddMonster(Creature.Monster monster)
         {
             if (monster == null)
                 return;
@@ -72,7 +81,7 @@ namespace ARPG.Monster
             }
         }
 
-        public void RemoveMonster(Creature.CharacterBase monster)
+        public void RemoveMonster(Creature.Monster monster)
         {
             if (monster == null)
                 return;
@@ -80,14 +89,14 @@ namespace ARPG.Monster
             _monsters.Remove(monster);
         }
 
-        public List<Creature.CharacterBase> GetAllMonsters()
+        public List<Creature.Monster> GetAllMonsters()
         {
-            return new List<Creature.CharacterBase>(_monsters);
+            return new List<Creature.Monster>(_monsters);
         }
 
-        public Creature.CharacterBase? GetNearestMonster(Vector3 position, float maxDistance = float.MaxValue)
+        public Creature.Monster? GetNearestMonster(Vector3 position, float maxDistance = float.MaxValue)
         {
-            Creature.CharacterBase? nearest = null;
+            Creature.Monster? nearest = null;
             float nearestDistance = maxDistance;
 
             foreach (var monster in _monsters)
@@ -121,6 +130,40 @@ namespace ARPG.Monster
         {
             if (!_initialized)
                 return;
+                
+            ArpgPlayer? player = AR.s.MyPlayer;
+            if (player == null)
+                return;
+
+            Vector3 playerPosition = player.transform.position;
+
+            for (int i = 0; i < _monsters.Count; i++)
+            {
+                var monster = _monsters[i];
+                if (monster != null)
+                {
+                    float distanceSqrToPlayer = (playerPosition - monster.transform.position).sqrMagnitude;
+                    
+                    // 하이스테리시스를 사용한 활성화/비활성화 로직
+                    if (monster.IsActivated())
+                    {
+                        // 이미 활성화된 몬스터는 더 먼 거리에서 비활성화
+                        if (distanceSqrToPlayer > _deactivationDistanceSqr)
+                        {
+                            monster.Deactivate();
+                        }
+                    }
+                    else
+                    {
+                        // 비활성화된 몬스터는 가까운 거리에서 활성화
+                        if (distanceSqrToPlayer <= _activationDistanceSqr)
+                        {
+                            monster.Activate();
+                        }
+                    }
+                }
+            }
+
         }
 
         private IEnumerator CleanupRoutine()
@@ -141,7 +184,7 @@ namespace ARPG.Monster
             Vector3 spawnPos = new Vector3(position.x, position.y, -0.05f) ;
 
             GameObject monsterObj = Instantiate(monsterPrefab, spawnPos, Quaternion.identity);
-            Creature.CharacterBase monster = monsterObj.GetComponent<Creature.CharacterBase>();
+            Creature.Monster monster = monsterObj.GetComponent<Creature.Monster>();
             
             if (monster == null)
             {
@@ -174,7 +217,7 @@ namespace ARPG.Monster
 
             foreach (int monsterId in chunkData.spawnedMonsterIds)
             {
-                if (_monsterInstanceById.TryGetValue(monsterId, out Creature.CharacterBase monster))
+                if (_monsterInstanceById.TryGetValue(monsterId, out Creature.Monster monster))
                 {
                     if (monster != null && monster.gameObject != null)
                     {
@@ -194,7 +237,7 @@ namespace ARPG.Monster
 
             foreach (int monsterId in chunkData.spawnedMonsterIds)
             {
-                if (_monsterInstanceById.TryGetValue(monsterId, out Creature.CharacterBase monster))
+                if (_monsterInstanceById.TryGetValue(monsterId, out Creature.Monster monster))
                 {
                     if (monster != null && monster.gameObject != null)
                     {
@@ -221,7 +264,7 @@ namespace ARPG.Monster
                     // 만료된 청크의 몬스터들 정리
                     foreach (int monsterId in chunkData.spawnedMonsterIds)
                     {
-                        if (_monsterInstanceById.TryGetValue(monsterId, out Creature.CharacterBase monster))
+                        if (_monsterInstanceById.TryGetValue(monsterId, out Creature.Monster monster))
                         {
                             if (monster != null)
                             {

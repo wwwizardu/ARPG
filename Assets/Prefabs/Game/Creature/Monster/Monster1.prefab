@@ -10,7 +10,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 5491045475900212818, guid: 895d0dd52443105478a080e9bb1bd295, type: 3}
       propertyPath: m_Name
-      value: Creature
+      value: Monster1
       objectReference: {fileID: 0}
     - target: {fileID: 6262499800842799366, guid: 895d0dd52443105478a080e9bb1bd295, type: 3}
       propertyPath: m_LocalPosition.x
@@ -52,8 +52,64 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    - target: {fileID: 6350110636512088884, guid: 895d0dd52443105478a080e9bb1bd295, type: 3}
+      propertyPath: m_Sprite
+      value: 
+      objectReference: {fileID: -406917328, guid: 36b8160564e977a47b420ad84774d3a1, type: 3}
+    - target: {fileID: 6350110636512088884, guid: 895d0dd52443105478a080e9bb1bd295, type: 3}
+      propertyPath: m_WasSpriteAssigned
+      value: 1
+      objectReference: {fileID: 0}
+    m_RemovedComponents:
+    - {fileID: 2413018562664831738, guid: 895d0dd52443105478a080e9bb1bd295, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 5491045475900212818, guid: 895d0dd52443105478a080e9bb1bd295, type: 3}
+      insertIndex: 1
+      addedObject: {fileID: -7522993112121433979}
   m_SourcePrefab: {fileID: 100100000, guid: 895d0dd52443105478a080e9bb1bd295, type: 3}
+--- !u!212 &954030777101700974 stripped
+SpriteRenderer:
+  m_CorrespondingSourceObject: {fileID: 6350110636512088884, guid: 895d0dd52443105478a080e9bb1bd295, type: 3}
+  m_PrefabInstance: {fileID: 6133192498703785050}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &1813093374385199624 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 5491045475900212818, guid: 895d0dd52443105478a080e9bb1bd295, type: 3}
+  m_PrefabInstance: {fileID: 6133192498703785050}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &-7522993112121433979
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1813093374385199624}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f448e8b7e24b65e4785fd59f586342c8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _spriteLibraryAsset: {fileID: 7108339969198208228, guid: 42e502c96dce7174dbb0c8a6fc8f8bc1, type: 3}
+  _characterSprite: {fileID: -8703504, guid: 36b8160564e977a47b420ad84774d3a1, type: 3}
+  _sr: {fileID: 954030777101700974}
+  _animator: {fileID: 9131003178436627238}
+  _skillController: {fileID: 3609025203078256416}
+  _textName: {fileID: 0}
+--- !u!114 &3609025203078256416 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 7424376786244143994, guid: 895d0dd52443105478a080e9bb1bd295, type: 3}
+  m_PrefabInstance: {fileID: 6133192498703785050}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3a57cb92252d1834895ac3c3b6cbf66c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!95 &9131003178436627238 stripped
+Animator:
+  m_CorrespondingSourceObject: {fileID: -6076854436679264388, guid: 895d0dd52443105478a080e9bb1bd295, type: 3}
+  m_PrefabInstance: {fileID: 6133192498703785050}
+  m_PrefabAsset: {fileID: 0}

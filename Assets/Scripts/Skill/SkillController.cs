@@ -58,13 +58,18 @@ namespace ARPG.Skill
             // }
         }
 
+        public void Reset()
+        {
+            
+        }
+
         public SkillBase? AddSkill(int inIndex, int inSkillMasterId)
         {
             SkillBase? skill = null;
             if (_skillDic.ContainsKey(inSkillMasterId) == false)
             {
                 skill = CreateSkill(inSkillMasterId);
-                if(skill == null)
+                if (skill == null)
                     return null;
 
                 _activeSkillList.Add(skill);
