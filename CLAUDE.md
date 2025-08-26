@@ -86,6 +86,10 @@ The project uses Unity's Input System with comprehensive action mappings:
 - UI navigation is fully mapped for accessibility across all input methods
 - Member variables should have an underscore (_) prefix.
 
+### Class Method Conventions
+- **Initialize()**: Called once during the first execution to set up the class functionality and initialize resources
+- **Reset()**: Used to reset the class functionality to its initial state, cleaning up resources and stopping ongoing processes
+
 ## Best Practices for This Project
 
 - Always test input changes across multiple control schemes (keyboard, gamepad, touch)

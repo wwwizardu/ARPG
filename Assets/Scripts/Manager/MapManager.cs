@@ -20,7 +20,11 @@ namespace ARPG.Map
         public int minChunkX = -50;
         public int maxChunkX = 50;
         public int minChunkY = -50;
-        public int maxChunkY = 50;
+        public int maxChunkY = 50;     
+
+        [Header("Monster Spawn")]
+        [SerializeField] private float _monsterSpawnRate = 0.1f;
+
         
         private Dictionary<Vector2Int, MapChunkData> _activeChunks;
         private Stack<MapChunkData> _chunkPool;
@@ -45,15 +49,22 @@ namespace ARPG.Map
                 chunk.Deactivate();
                 _chunkPool.Push(chunk);
             }
-            
+
             _activeChunks.Clear();
             _currentPlayerChunk = Vector2Int.zero;
+
+            OnResetSpawner();
+        }
+
+        public void UpdateMapManager(float inDeltaTime)
+        {
+            UpdateMonsterSpawner(inDeltaTime);
         }
         
         public void UpdateChunksAroundPlayer(Vector3 playerPosition)
         {
             Vector2Int playerChunk = WorldPositionToChunk(playerPosition);
-            
+
             if (playerChunk != _currentPlayerChunk)
             {
                 _currentPlayerChunk = playerChunk;

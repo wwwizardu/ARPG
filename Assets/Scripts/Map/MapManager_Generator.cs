@@ -52,6 +52,8 @@ namespace ARPG.Map
         
         private void GenerateChunkData(MapChunkData chunk)
         {
+            chunk.monsterSpawnPositions.Clear();
+            
             for (int x = 0; x < chunkSize; x++)
             {
                 for (int y = 0; y < chunkSize; y++)
@@ -82,9 +84,17 @@ namespace ARPG.Map
                     if (elevationNoise > 0.6f)
                         hillFlag = (uint)GlobalEnum.TileFlag.Hill;
                     
+                    // 몬스터 스폰 플래그 결정 (6번째 비트)
+                    uint monsterSpawnFlag = 0;
+                    if (hillFlag == 0 && _randomGenerator.NextDouble() < _monsterSpawnRate)
+                    {
+                        monsterSpawnFlag = (uint)GlobalEnum.TileFlag.MonsterSpawn;
+                        chunk.monsterSpawnPositions.Add(new Vector2Int(x, y));
+                    }
+                    
                     // 타일 데이터 조합
                     uint currentTile = chunk.tiles[x, y];
-                    chunk.tiles[x, y] = (currentTile & 0xFFFFFFE0) | ((uint)baseTileType & 0x0000000F) | hillFlag;
+                    chunk.tiles[x, y] = (currentTile & 0xFFFFFFC0) | ((uint)baseTileType & 0x0000000F) | hillFlag | monsterSpawnFlag;
                 }
             }
         }
@@ -137,6 +147,7 @@ namespace ARPG.Map
                         if (chunk != null)
                         {
                             RenderChunkToTilemap(chunk);
+                            OnChunkActivated(chunkPos, chunk);
                         }
                     }
                 }
@@ -162,6 +173,7 @@ namespace ARPG.Map
             
             foreach (var chunkPos in chunksToReturn)
             {
+                OnChunkDeactivated(chunkPos);
                 ReturnChunkToPool(chunkPos.x, chunkPos.y);
             }
         }

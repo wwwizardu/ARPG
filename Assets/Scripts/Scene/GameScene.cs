@@ -7,7 +7,10 @@ namespace ARPG.Scene
     public class GameScene : Base.SceneBase
     {
         [SerializeField] private CameraController _cameraController;
+        [SerializeField] private Transform _monsterRoot;
         [SerializeField] private GameObject _playerPrefab;
+        
+        public Transform MonsterRoot => _monsterRoot;
 
         protected override IEnumerator OnInitialize()
         {
@@ -21,7 +24,7 @@ namespace ARPG.Scene
             AR.s.Map.UpdateChunksAroundPlayer(Vector3.zero);
 
             GameObject playerObject = Instantiate(_playerPrefab);
-            if(playerObject != null)
+            if (playerObject != null)
             {
                 ArpgPlayer player = playerObject.GetComponent<ArpgPlayer>();
                 if (player != null)
@@ -35,8 +38,7 @@ namespace ARPG.Scene
                 Debug.LogError("Failed to instantiate player object.");
             }
 
-            
-            
+            AR.s.OnLoadSceneComplete(this);
 
             Debug.Log("GameScene initialized.");
         }

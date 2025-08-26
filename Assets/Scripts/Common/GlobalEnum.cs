@@ -12,6 +12,7 @@ public class GlobalEnum
     {
         None = 0,
         Hill = 1 << 4,  // 5번째 비트 (16 = 0x10)
+        MonsterSpawn = 1 << 5,  // 6번째 비트 (32 = 0x20)
     }
 
 
