@@ -98,6 +98,18 @@ The project uses Unity's Input System with comprehensive action mappings:
 - Maintain URP compatibility when adding new rendering features
 - Keep scenes organized in the Assets/Scenes directory with proper .meta files
 
+### Performance Optimization
+- **Distance Calculations**: Use `Vector2.Distance()` or `Vector3.Distance()` only when exact distance values are needed. For distance comparisons (e.g., "is player within range?"), use `Vector2.SqrMagnitude()` or `Vector3.SqrMagnitude()` instead for better performance, as they avoid the expensive square root calculation.
+  ```csharp
+  // Good: for distance comparison
+  float sqrDistance = (target.position - transform.position).sqrMagnitude;
+  if (sqrDistance <= detectionRange * detectionRange)
+  
+  // Avoid: unnecessary square root calculation
+  float distance = Vector2.Distance(target.position, transform.position);
+  if (distance <= detectionRange)
+  ```
+
 ## Testing and Quality Assurance
 
 - Use Unity Test Framework for unit testing (`com.unity.test-framework`)

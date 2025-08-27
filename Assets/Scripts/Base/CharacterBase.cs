@@ -23,6 +23,7 @@ namespace ARPG.Creature
         protected MovementStates _movementStatePrev = MovementStates.None;
 
         protected SpriteLibrary _spriteLibrary;
+        protected Vector2 _inputDirection = Vector2.zero;
         protected Vector2 _velocity = Vector2.zero;
 
         

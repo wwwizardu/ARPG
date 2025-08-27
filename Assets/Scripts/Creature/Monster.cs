@@ -1,19 +1,27 @@
+#nullable enable
 using UnityEngine;
+using ARPG.AI;
 
 namespace ARPG.Creature
 {
     public class Monster : CharacterBase
     {
         private bool _activated = false;
+        private MonsterAIBase? _ai = null;
 
         public override void Initialize()
         {
-
+            base.Initialize();
+            
+            _ai = new BasicMonsterAI(this);
+            _ai.Initialize();
         }
 
         public override void Reset()
         {
-
+            base.Reset();
+            
+            _ai?.Reset();
         }
 
         public void Activate()
@@ -48,6 +56,23 @@ namespace ARPG.Creature
                 return;
 
             base.OnFixedUpdateCharacter(inDeltaTime);
+        }
+
+        protected override void UpdateInput()
+        {
+            if (_activated == false || _ai == null)
+                return;
+
+            var (inputDirection, velocity) = _ai.Think();
+            
+            _inputDirection = inputDirection;
+            _velocity = velocity;
+            
+            if (_velocity.IsZero() == false)
+            {
+                Vector3 movement = new Vector3(_velocity.x, _velocity.y, 0) * Time.deltaTime;
+                transform.position += movement;
+            }
         }
     }
 }

@@ -7,7 +7,6 @@ namespace ARPG.Creature
     {
         [SerializeField] private float _speed = 5.0f;
         
-        private Vector2 _inputDirection = Vector2.zero;
         private Input.ArpgInputAction.PlayerActions? _input = null;
 
         public override void Initialize()

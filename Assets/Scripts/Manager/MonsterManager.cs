@@ -176,6 +176,8 @@ namespace ARPG.Monster
                 return -1;
             }
 
+            monster.Initialize();
+
             int monsterId = _nextMonsterId++;
             _monsterInstanceById[monsterId] = monster;
             AddMonster(monster);

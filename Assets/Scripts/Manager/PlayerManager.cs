@@ -8,8 +8,9 @@ namespace ARPG.Manager
     {
         private List<Creature.ArpgPlayer> _players = new List<Creature.ArpgPlayer>();
         private Creature.ArpgPlayer? _myPlayer = null;
-        
+
         public Creature.ArpgPlayer? MyPlayers => _myPlayer;
+
         public void AddPlayer(Creature.ArpgPlayer player)
         {
             if (player == null)
@@ -21,6 +22,11 @@ namespace ARPG.Manager
             }
 
             _myPlayer = player;
+        }
+        
+        public List<Creature.ArpgPlayer> GetAllPlayers()
+        {
+            return _players;
         }
     }
 }
