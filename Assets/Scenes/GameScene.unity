@@ -232,6 +232,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9b110dea7e4e4844f854582e67f9ecce, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _sceneType: 3
   _cameraController: {fileID: 839676981991883588}
   _monsterRoot: {fileID: 1360401515}
   _playerPrefab: {fileID: 18858255012889994, guid: f09d75977908a9546a0cf8c485ea0fdc, type: 3}

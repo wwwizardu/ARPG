@@ -63,19 +63,20 @@ namespace ARPG
 
         }
         
-
-
         public void OnLoadSceneComplete(Base.SceneBase inNewScene)
         {
             _currentScene = inNewScene;
 
-            if (_currentScene is Scene.LoginScene loginScene)
+            if (_currentScene.CurrentSceneType == Base.SceneBase.SceneType.Login)
             {
 
             }
-            else if (_currentScene is Scene.GameScene gameScene)
+            else if (_currentScene.CurrentSceneType == Base.SceneBase.SceneType.Game)
             {
-                _monsterManager.SetMorsterRoot(gameScene.MonsterRoot);
+                if (_currentScene is Scene.GameScene gameScene)
+                {
+                    _monsterManager.SetMorsterRoot(gameScene.MonsterRoot);    
+                }
             }
         }
 
@@ -84,10 +85,16 @@ namespace ARPG
             if (_initialized == false)
                 return;
 
-            float deltaTime = Time.deltaTime;
+            if(_currentScene == null)
+                return;
 
-            _mapManager.UpdateMapManager(deltaTime);
-            _monsterManager.UpdateMpnsterManager(deltaTime);
+            if (_currentScene.CurrentSceneType == Base.SceneBase.SceneType.Game)
+            {
+                float deltaTime = Time.deltaTime;
+                
+                _mapManager.UpdateMapManager(deltaTime);
+                _monsterManager.UpdateMpnsterManager(deltaTime);                
+            }
         }
     }
 }

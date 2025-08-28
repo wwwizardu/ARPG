@@ -10,6 +10,7 @@ namespace ARPG.Map
         public List<int> spawnedMonsterIds;
         public float lastActiveTime;
         public bool hasSpawned;
+        public int originalSpawnCount;
         
         public ChunkMonsterData(Vector2Int coord)
         {
@@ -17,6 +18,7 @@ namespace ARPG.Map
             spawnedMonsterIds = new List<int>();
             lastActiveTime = Time.time;
             hasSpawned = false;
+            originalSpawnCount = 0;
         }
     }
 }

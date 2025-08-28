@@ -44,9 +44,32 @@ namespace ARPG.Creature
             _stats.Luck = _owner.Table.Luck;
         }
 
+        public int GetHp()
+        {
+            return _stats.CurrentHp;
+        }
+
         public float GetMoveSpeed()
         {
             return _stats.MoveSpeed + _statEquipment.MoveSpeed;
+        }
+
+        public void DecreaseHp(int inDamage)
+        {
+            _stats.CurrentHp -= inDamage;
+
+            if (_stats.CurrentHp < 0)
+                _stats.CurrentHp = 0;
+        }
+
+        public int GetAttackMin()
+        {
+            return _stats.AttackMin + _statEquipment.AttackMin;
+        }
+
+        public int GetAttackMax()
+        {
+            return _stats.AttackMax + _statEquipment.AttackMax;
         }
 
         public void LoadFromTable(CharacterBase inCreature, Tables.CreatureTable inTable)

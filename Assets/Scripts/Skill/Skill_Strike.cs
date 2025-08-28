@@ -1,4 +1,5 @@
 using UnityEngine;
+using ARPG;
 
 namespace ARPG.Skill
 {
@@ -81,8 +82,18 @@ namespace ARPG.Skill
 
                 if (IsWithinAttackAngle(characterPosition, collider.transform.position, attackDirection))
                 {
-                    // 히트 처리
-                    OnHitTarget(collider.gameObject);
+                    // IHittable 인터페이스를 가진 대상만 처리
+                    IHittable hittable = collider.GetComponent<IHittable>();
+                    if (hittable != null)
+                    {
+                        // 데미지 계산 (AttackMin과 AttackMax 사이의 랜덤값)
+                        int minDamage = _character.Stat.GetAttackMin();
+                        int maxDamage = _character.Stat.GetAttackMax();
+                        int damage = UnityEngine.Random.Range(minDamage, maxDamage + 1);
+                        
+                        // IHittable의 OnHit 함수 호출
+                        hittable.OnHit(_character, damage);
+                    }
                 }
             }
         }

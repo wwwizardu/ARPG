@@ -25,25 +25,29 @@ namespace ARPG.Map
         [Header("Monster Spawn")]
         [SerializeField] private float _monsterSpawnRate = 0.1f;
 
-        
+        private int _randomSeed = 12345;
         private Dictionary<Vector2Int, MapChunkData> _activeChunks;
         private Stack<MapChunkData> _chunkPool;
         private System.Random _randomGenerator;
         private Vector2Int _currentPlayerChunk = new Vector2Int(-100000, -100000);
         private int _loadRadius = 2;
         private const int POOL_SIZE = 20;
+
+        private bool _createMapCompleted = false;
         
         public void Initialize()
         {
             _activeChunks = new Dictionary<Vector2Int, MapChunkData>();
             _chunkPool = new Stack<MapChunkData>();
-            _randomGenerator = new System.Random(mapSeed);
-            
+            _createMapCompleted = false;
+
             InitializeChunkPool();
         }
 
         public void Reset()
         {
+            _randomGenerator = new System.Random(_randomSeed);
+
             foreach (var chunk in _activeChunks.Values)
             {
                 chunk.Deactivate();
@@ -56,8 +60,23 @@ namespace ARPG.Map
             OnResetSpawner();
         }
 
+        public void CreateMap(int inSeed, Vector3 playerPosition)
+        {
+            _randomSeed = inSeed;
+            _randomGenerator = new System.Random(_randomSeed);
+
+            UpdateChunksAroundPlayer(playerPosition);
+
+            OnResetSpawner();
+
+            _createMapCompleted = true;
+        }
+
         public void UpdateMapManager(float inDeltaTime)
         {
+            if(_createMapCompleted == false)
+                return;
+
             UpdateMonsterSpawner(inDeltaTime);
         }
         
@@ -106,6 +125,11 @@ namespace ARPG.Map
             }
 
             return chunk.tiles[localX, localY];
+        }
+
+        public Dictionary<Vector2Int, MapChunkData>.KeyCollection GetActiveChunkCoords()
+        {
+            return _activeChunks.Keys;
         }
         
     }

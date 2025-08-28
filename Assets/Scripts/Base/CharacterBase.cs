@@ -6,7 +6,7 @@ using UnityEngine.U2D.Animation;
 
 namespace ARPG.Creature
 {
-    public class CharacterBase : MonoBehaviour
+    public class CharacterBase : MonoBehaviour, IHittable
     {
         [SerializeField] protected SpriteLibraryAsset _spriteLibraryAsset;
         [SerializeField] protected Sprite _characterSprite;
@@ -34,8 +34,10 @@ namespace ARPG.Creature
         protected bool _initialized = false;
 
         private CreatureTable? _table = null;
-        
+
         public CreatureTable? Table { get { return _table; } }
+
+        public StatController Stat { get { return _statController; } }
 
         public CharacterConditions State { get { return _condition; } }
 
@@ -82,6 +84,17 @@ namespace ARPG.Creature
             _initialized = true;
 
             return true;
+        }
+
+        public virtual void OnHit(CharacterBase inAttacker, int inDamage)
+        {
+            Debug.Log($"[CharacterBase] OnHit - Attacker: {inAttacker.name}, Damage: {inDamage}");
+            _statController.DecreaseHp(inDamage);
+
+            if (Stat.GetHp() <= 0)
+            {
+                Dead();
+            }
         }
 
         protected virtual void UpdateInput()
@@ -135,15 +148,6 @@ namespace ARPG.Creature
         public void OnStopSkill(int inSkillId)
         {
             // Handle skill stop logic
-        }
-
-        public virtual void OnHitTarget(GameObject target)
-        {
-            // 히트 처리 로직
-            Debug.Log($"[CharacterBase] Hit target: {target.name}");
-            
-            // 여기에 데미지 처리, 이팩트 등의 로직 추가
-            // 예: target.GetComponent<IHittable>()?.OnHit(damage);
         }
 
         public virtual void UpdateAnimator()

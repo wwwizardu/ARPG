@@ -21,8 +21,6 @@ namespace ARPG.Scene
                 yield return null; // Wait until AR is initialized
             }
 
-            AR.s.Map.UpdateChunksAroundPlayer(Vector3.zero);
-
             GameObject playerObject = Instantiate(_playerPrefab);
             if (playerObject != null)
             {
@@ -40,6 +38,8 @@ namespace ARPG.Scene
             {
                 Debug.LogError("Failed to instantiate player object.");
             }
+
+            AR.s.Map.CreateMap(12345, playerObject.transform.position);
 
             AR.s.OnLoadSceneComplete(this);
 

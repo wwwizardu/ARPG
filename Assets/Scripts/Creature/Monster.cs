@@ -8,6 +8,7 @@ namespace ARPG.Creature
     {
         private bool _activated = false;
         private MonsterAIBase? _ai = null;
+        private int _instanceId = -1;
 
         public override void Initialize()
         {
@@ -39,6 +40,16 @@ namespace ARPG.Creature
         public bool IsActivated()
         {
             return _activated;
+        }
+
+        public void SetInstanceId(int instanceId)
+        {
+            _instanceId = instanceId;
+        }
+
+        public int GetInstanceId()
+        {
+            return _instanceId;
         }
 
         protected override void OnUpdate()
