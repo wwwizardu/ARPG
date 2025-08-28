@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using ARPG.Tables;
 using UnityEngine;
 using UnityEngine.U2D.Animation;
 
@@ -31,7 +32,11 @@ namespace ARPG.Creature
         protected Vector2 _pervPos;
         protected Vector2 _currentPos;
         protected bool _initialized = false;
+
+        private CreatureTable? _table = null;
         
+        public CreatureTable? Table { get { return _table; } }
+
         public CharacterConditions State { get { return _condition; } }
 
         public virtual void Initialize()
@@ -43,8 +48,6 @@ namespace ARPG.Creature
 
             _statController.Initialize();
             _skillController.Initialize(this);
-            
-            _initialized = true;
         }
 
         public virtual void Reset()
@@ -58,6 +61,27 @@ namespace ARPG.Creature
 
             _statController.Reset();
             _skillController.Reset();
+        }
+
+        public virtual bool LoadData(int inId)
+        {
+            _table = AR.s.Data.GetCreature(inId);
+            if (_table == null)
+            {
+                Debug.LogError($"[CharacterBase] LoadData - CreatureTable not found for Id: {inId}");
+                return false;
+            }
+
+            if (_textName != null)
+            {
+                _textName.text = _table.Name;
+            }
+
+            // Load stats from table
+            _statController.LoadFromTable(this, _table);
+            _initialized = true;
+
+            return true;
         }
 
         protected virtual void UpdateInput()

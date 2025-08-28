@@ -10,6 +10,7 @@ namespace ARPG
 {
     public class AR : PrefabSingleton<AR>
     {
+        [SerializeField] private Data.DataManager _dataManager;
         [SerializeField] private MapManager _mapManager;
         [SerializeField] private UIManager _uiManager;
         [SerializeField] private ARPG.Monster.MonsterManager _monsterManager;
@@ -21,6 +22,8 @@ namespace ARPG
         private PlayerManager _playerManager = new PlayerManager();
         
         public bool IsInitialized => _initialized;
+
+        public Data.DataManager Data => _dataManager;
         public MapManager Map => _mapManager;
         public UIManager UI => _uiManager;
         public Monster.MonsterManager Monster => _monsterManager;
@@ -36,12 +39,15 @@ namespace ARPG
             Initialize();
         }
 
-        public void Initialize()
+        public async void Initialize()
         {
             // 초기화 로직
+            _dataManager.Initialize();
             _uiManager.Initialize();
             _mapManager.Initialize();
             _monsterManager.Initialize();
+
+            await _dataManager.LoadTableAsync();
 
             _initialized = true;
 
@@ -50,6 +56,7 @@ namespace ARPG
 
         public void Reset()
         {
+            _dataManager.Reset();
             _uiManager.Reset();
             _mapManager.Reset();
             _monsterManager.Reset();

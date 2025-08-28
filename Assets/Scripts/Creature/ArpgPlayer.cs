@@ -5,8 +5,6 @@ namespace ARPG.Creature
 {
     public class ArpgPlayer : CharacterBase
     {
-        [SerializeField] private float _speed = 5.0f;
-        
         private Input.ArpgInputAction.PlayerActions? _input = null;
 
         public override void Initialize()
@@ -55,7 +53,7 @@ namespace ARPG.Creature
                 // 입력 방향에 따라 캐릭터 이동
                 if (_inputDirection.IsZero() == false)
                 {
-                    _velocity = new Vector2(_inputDirection.x, _inputDirection.y) * _speed;
+                    _velocity = new Vector2(_inputDirection.x, _inputDirection.y) * _statController.GetMoveSpeed();
                     Vector3 movement = new Vector3(_velocity.x, _velocity.y, 0) * Time.deltaTime;
                     transform.position += movement;
 

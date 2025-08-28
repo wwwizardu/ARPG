@@ -30,6 +30,7 @@ namespace ARPG.Scene
                 if (player != null)
                 {
                     player.Initialize();
+                    player.LoadData(1); // 임시로 ID 1 사용
                     _cameraController.Initialize(player);
 
                     AR.s.Player.AddPlayer(player);

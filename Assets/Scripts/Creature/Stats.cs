@@ -1,3 +1,4 @@
+#nullable enable
 using UnityEngine;
 
 namespace ARPG.Creature
@@ -7,15 +8,52 @@ namespace ARPG.Creature
         private Stats _stats = new Stats();
 
         private Stats _statEquipment = new Stats();
-
+        private CharacterBase? _owner = null;
+        
         public void Initialize()
         {
-
+            _statEquipment.Reset();
         }
 
         public void Reset()
         {
+            if (_owner == null || _owner.Table == null)
+                return;
 
+            _stats.Str = _owner.Table.Str;
+            _stats.Dex = _owner.Table.Dex;
+            _stats.Int = _owner.Table.Int;
+            _stats.MaxHp = _owner.Table.MaxHp;
+            _stats.MaxMp = _owner.Table.MaxMp;
+            _stats.CurrentHp = _owner.Table.MaxHp;
+            _stats.CurrentMp = _owner.Table.MaxMp;
+            _stats.HpGeneration = _owner.Table.HpGeneration;
+            _stats.MpGeneration = _owner.Table.MpGeneration;
+            _stats.AttackMin = _owner.Table.AttackMin;
+            _stats.AttackMax = _owner.Table.AttackMax;
+            _stats.CriRate = _owner.Table.CriRate;
+            _stats.CriDamage = _owner.Table.CriDamage;
+            _stats.MoveSpeed = _owner.Table.MoveSpeed;
+            _stats.AttackSpeed = _owner.Table.AttackSpeed;
+            _stats.CastSpeed = _owner.Table.CastSpeed;
+            _stats.Defense = _owner.Table.Defense;
+            _stats.FireResist = _owner.Table.FireResist;
+            _stats.IceResist = _owner.Table.IceResist;
+            _stats.LightningResist = _owner.Table.LightningResist;
+            _stats.PoisonResist = _owner.Table.PoisonResist;
+            _stats.Luck = _owner.Table.Luck;
+        }
+
+        public float GetMoveSpeed()
+        {
+            return _stats.MoveSpeed + _statEquipment.MoveSpeed;
+        }
+
+        public void LoadFromTable(CharacterBase inCreature, Tables.CreatureTable inTable)
+        {
+            _owner = inCreature;
+
+            Reset();
         }
     }
 
@@ -42,8 +80,35 @@ namespace ARPG.Creature
         public int FireResist;      // 화염 저항
         public int IceResist;       // 냉기 저항
         public int LightningResist; // 번개 저항
-        public int PoisonResist;    
+        public int PoisonResist;
         public int Luck;            // 운
+        
+        public void Reset()
+        {
+            Str = 0;
+            Dex = 0;
+            Int = 0;
+
+            CurrentHp = 0;
+            CurrentMp = 0;
+            MaxHp = 0;
+            MaxMp = 0;
+            HpGeneration = 0;
+            MpGeneration = 0;
+            AttackMin = 0;
+            AttackMax = 0;
+            CriRate = 0;
+            CriDamage = 0;
+            MoveSpeed = 0;
+            AttackSpeed = 0;
+            CastSpeed = 0;
+            Defense = 0;
+            FireResist = 0;
+            IceResist = 0;
+            LightningResist = 0;
+            PoisonResist = 0;
+            Luck = 0;
+        }
     }
 }
 
