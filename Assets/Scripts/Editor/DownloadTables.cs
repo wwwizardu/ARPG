@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
@@ -20,72 +21,132 @@ namespace ARPG.Editor
 
     public class DownloadTables
     {
+        private static Dictionary<string, string> _tableDic;
+
         [MenuItem("ARPG/Download Table", false, 1)]
         private static async void DownloadTable()
         {
-            await DownloadCreatureTable("0", SaveType.String);
+            _tableDic = new();
 
+            await DownloadTable<CreatureTable>("0&range=A:V", 1, SaveType.String);
+
+            await DownloadTable<ItemTable>("2064107837&range=A:D", 1, SaveType.String);
+            
+            await DownloadTable<EquipmentTable>("853198133&range=A:Q", 1, SaveType.String);
+
+            foreach (var k in _tableDic.Keys)
+            {
+                SaveTable(k, _tableDic[k], SaveType.String);
+            }
+
+            AssetDatabase.Refresh();
+            
             Debug.Log("download Completed...");
         }
 
-
-
-        private static async Task<bool> DownloadCreatureTable(string inSheetId, SaveType inSaveType)
+        private static async Task<bool> DownloadTable<T>(string inSheet, int inStartLine, SaveType inSaveType) where T : TableBase, new()
         {
-            string text = await DownloadTableData($"https://docs.google.com/spreadsheets/d/13j0_AI_6nSHHEkAHK2w9oRd-98xYYiUoP5spAv0U4TA/export?format=tsv&gid={inSheetId}&range=A:V");
+            string text = await DownloadTableData($"https://docs.google.com/spreadsheets/d/13j0_AI_6nSHHEkAHK2w9oRd-98xYYiUoP5spAv0U4TA/export?format=tsv&gid={inSheet}");
             var lines = Regex.Split(text, @"\r\n|\n\r|\n|\r");
             if (lines.Length <= 1)
                 return false;
 
-            int dataStartLine = 1;
+            int dataStartLine = inStartLine;
 
-            List<CreatureTable> creatureTableList = new();
+            List<T> tableList = new();
             for (var i = dataStartLine; i < lines.Length; i++)
             {
-                var line = lines[i];
-                var values = line.Split('\t');
-
-                if (values.Length < 8)
-                    continue;
-
-                CreatureTable careTable = new CreatureTable();
-                try
-                {
-                    careTable.Id = int.Parse(values[0]);
-                    careTable.Name = values[1];
-                    careTable.Str = int.Parse(values[2]);
-                    careTable.Dex = int.Parse(values[3]);
-                    careTable.Int = int.Parse(values[4]);
-                    careTable.MaxHp = int.Parse(values[5]);
-                    careTable.MaxMp = int.Parse(values[6]);
-                    careTable.HpGeneration = int.Parse(values[7]);
-                    careTable.MpGeneration = int.Parse(values[8]);
-                    careTable.AttackMin = int.Parse(values[9]);
-                    careTable.AttackMax = int.Parse(values[10]);
-                    careTable.CriRate = int.Parse(values[11]);
-                    careTable.CriDamage = int.Parse(values[12]);
-                    careTable.MoveSpeed = int.Parse(values[13]);
-                    careTable.AttackSpeed = int.Parse(values[14]);
-                    careTable.CastSpeed = int.Parse(values[15]);
-                    careTable.Defense = int.Parse(values[16]);
-                    careTable.FireResist = int.Parse(values[17]);
-                    careTable.IceResist = int.Parse(values[18]);
-                    careTable.LightningResist = int.Parse(values[19]);
-                    careTable.PoisonResist = int.Parse(values[20]);
-                    careTable.Luck = int.Parse(values[21]);
-                }
-                catch
-                {
-                    Debug.LogError("[DownloadTables] DownloadCreatureTable - Parsing error at line " + (i + 1));
-                    continue;
-                }
-
-                creatureTableList.Add(careTable);
+                CreateTable<T>(lines[i], tableList);
             }
 
-            string result = JsonConvert.SerializeObject(creatureTableList.ToArray());
+            string result = JsonConvert.SerializeObject(tableList.ToArray());
 
-            return SaveTable("Creature", result, inSaveType);
+            string typeName = typeof(T).Name;
+            if (_tableDic.ContainsKey(typeName) == false)
+            {
+                _tableDic.Add(typeName, result);
+            }
+
+            return true;
+        }
+
+        private static bool CreateTable<T>(string inTableData, List<T> inList) where T : TableBase, new()
+        {
+            var values = inTableData.Split('\t');
+
+            if (values.Length < 1)
+                return false;
+
+            T table = new T();
+            
+            try
+            {
+                table.Id = int.Parse(values[0]);
+
+                if (table is CreatureTable creatureTable)
+                {
+                    ParseCreatureTable(creatureTable, values);
+                }
+                else if (table is ItemTable itemTable)
+                {
+                    ParseItemTable(itemTable, values);
+                }
+                else if (table is EquipmentTable equipmentTable)
+                {
+                    ParseEquipmentTable(equipmentTable, values);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[DownloadTables] CreateTable - Parsing error: {ex.Message}");
+                return false;
+            }
+
+            inList.Add(table);
+            return true;
+        }
+
+        private static void ParseCreatureTable(CreatureTable table, string[] values)
+        {
+            if (values.Length < 22) return;
+
+            table.Name = values[1];
+            table.Str = int.Parse(values[2]);
+            table.Dex = int.Parse(values[3]);
+            table.Int = int.Parse(values[4]);
+            table.MaxHp = int.Parse(values[5]);
+            table.MaxMp = int.Parse(values[6]);
+            table.HpGeneration = int.Parse(values[7]);
+            table.MpGeneration = int.Parse(values[8]);
+            table.AttackMin = int.Parse(values[9]);
+            table.AttackMax = int.Parse(values[10]);
+            table.CriRate = int.Parse(values[11]);
+            table.CriDamage = int.Parse(values[12]);
+            table.MoveSpeed = int.Parse(values[13]);
+            table.AttackSpeed = int.Parse(values[14]);
+            table.CastSpeed = int.Parse(values[15]);
+            table.Defense = int.Parse(values[16]);
+            table.FireResist = int.Parse(values[17]);
+            table.IceResist = int.Parse(values[18]);
+            table.LightningResist = int.Parse(values[19]);
+            table.PoisonResist = int.Parse(values[20]);
+            table.Luck = int.Parse(values[21]);
+        }
+
+        private static void ParseItemTable(ItemTable table, string[] values)
+        {
+            if (values.Length < 3) return;
+
+            table.Name = values[1];
+            table.Equipment = new EquipmentTable();
+            table.Equipment.Id = int.Parse(values[2]);
+            table.SpriteName = values[3];
+        }
+
+        private static void ParseEquipmentTable(EquipmentTable table, string[] values)
+        {
+            if (values.Length < 2) return;
+
         }
 
         private static async Task<string> DownloadTableData(string inURL)
@@ -132,8 +193,6 @@ namespace ARPG.Editor
             {
                 writer.Write(enData);
             }
-
-            AssetDatabase.Refresh();
 
             return true;
         }

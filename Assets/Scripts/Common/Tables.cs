@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Newtonsoft.Json;
 using UnityEngine;
 
@@ -36,4 +37,29 @@ namespace ARPG.Tables
         [JsonProperty("Luck")] public int Luck;
 
     }
+
+    [Serializable]
+    public class ItemTable : TableBase
+    {
+        [JsonProperty("Name")] public string Name;
+
+        [JsonProperty("EquipmentId")]public EquipmentTable Equipment;
+
+        [JsonProperty("SpriteName")] public string SpriteName;
+    }
+
+    [Serializable]
+    public class EquipmentTable : TableBase
+    {
+        [JsonProperty("Prefix")] public List<Stat> Prefix;
+        [JsonProperty("Postfix")] public List<Stat> Postfix;
+    }
+
+    [Serializable]
+    public class Stat
+    {
+        [JsonProperty("Type")] public GlobalEnum.Stat Type;
+        [JsonProperty("Value")] public int Value;
+    }
+
 }

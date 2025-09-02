@@ -15,5 +15,27 @@ public class GlobalEnum
         MonsterSpawn = 1 << 5,  // 6번째 비트 (32 = 0x20)
     }
 
-
+    public enum Stat
+    {
+        Str,
+        Dex,
+        Int,
+        Hp,
+        Mp,
+        HpGeneration,
+        MpGeneration,
+        AttackMin,
+        AttackMax,
+        CriRate,
+        CriDamage,
+        MoveSpeed,
+        AttackSpeed,
+        CastSpeed,
+        Defense,
+        FireResist,
+        IceResist,
+        LightningResist,
+        PoisonResist,
+        Luck,
+    }
 }
