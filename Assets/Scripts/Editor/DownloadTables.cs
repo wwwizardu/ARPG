@@ -10,6 +10,7 @@ using UnityEngine.Networking;
 
 using ARPG.Tables;
 using Newtonsoft.Json;
+using System.Collections;
 
 namespace ARPG.Editor
 {
@@ -21,7 +22,7 @@ namespace ARPG.Editor
 
     public class DownloadTables
     {
-        private static Dictionary<string, string> _tableDic;
+        private static Dictionary<Type, object> _tableDic;
 
         [MenuItem("ARPG/Download Table", false, 1)]
         private static async void DownloadTable()
@@ -34,9 +35,16 @@ namespace ARPG.Editor
             
             await DownloadTable<EquipmentTable>("853198133&range=A:Q", 1, SaveType.String);
 
-            foreach (var k in _tableDic.Keys)
+            foreach (var tableType in _tableDic.Keys)
             {
-                SaveTable(k, _tableDic[k], SaveType.String);
+                var tableList = (IList)_tableDic[tableType];
+                if (tableList == null)
+                {
+                    Debug.LogError($"[DownloadTables] DownloadTable() - tableList({tableType}) is null");
+                    continue;
+                }
+
+                SaveTable(tableType.Name, _tableDic[tableType], SaveType.String);
             }
 
             AssetDatabase.Refresh();
@@ -59,12 +67,10 @@ namespace ARPG.Editor
                 CreateTable<T>(lines[i], tableList);
             }
 
-            string result = JsonConvert.SerializeObject(tableList.ToArray());
-
-            string typeName = typeof(T).Name;
-            if (_tableDic.ContainsKey(typeName) == false)
+            Type tableType = typeof(T);
+            if (_tableDic.ContainsKey(tableType) == false)
             {
-                _tableDic.Add(typeName, result);
+                _tableDic.Add(tableType, tableList);
             }
 
             return true;
@@ -138,15 +144,34 @@ namespace ARPG.Editor
             if (values.Length < 3) return;
 
             table.Name = values[1];
-            table.Equipment = new EquipmentTable();
-            table.Equipment.Id = int.Parse(values[2]);
+            table.EquipmentId = int.Parse(values[2]);
             table.SpriteName = values[3];
         }
 
         private static void ParseEquipmentTable(EquipmentTable table, string[] values)
         {
-            if (values.Length < 2) return;
+            if (values.Length < 17) return;
 
+            table.Prefix = new List<Stat>();
+            table.Postfix = new List<Stat>();
+
+            for (int i = 0; i < 4; i++)
+            {
+                int index = (i * 2) + 1;
+                Stat stat = new Stat();
+                stat.Type = (GlobalEnum.Stat)Enum.Parse(typeof(GlobalEnum.Stat), values[index]);
+                stat.Value = int.Parse(values[index + 1]);
+                table.Prefix.Add(stat);
+            }
+
+            for (int i = 0; i < 4; i++)
+            {
+                int index = 8 + (i * 2) + 1;
+                Stat stat = new Stat();
+                stat.Type = (GlobalEnum.Stat)Enum.Parse(typeof(GlobalEnum.Stat), values[index]);
+                stat.Value = int.Parse(values[index+1]);
+                table.Postfix.Add(stat);
+            }
         }
 
         private static async Task<string> DownloadTableData(string inURL)
@@ -170,20 +195,22 @@ namespace ARPG.Editor
             }
         }
 
-        private static bool SaveTable(string inName, string inData, SaveType inSaveType)
+        private static bool SaveTable(string inName, object inData, SaveType inSaveType)
         {
             string fileName = $"{inName}.bytes";
 
+            string result = JsonConvert.SerializeObject(inData);
+            
             string enData = string.Empty, filePath = string.Empty;
             if (inSaveType == SaveType.String)
             {
-                enData = inData;
+                enData = result;
                 // filePath = Path.Combine(Application.dataPath, $"[ServerTableData]", fileName);
                 filePath = Path.Combine(Application.dataPath, $"[TableData]", fileName);
             }
             else
             {
-                enData = Encrypt(inData);
+                enData = Encrypt(result);
                 filePath = Path.Combine(Application.dataPath, $"[TableData]", fileName);
             }
 

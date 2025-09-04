@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using UnityEngine;
@@ -9,6 +10,11 @@ namespace ARPG.Tables
     public class TableBase
     {
         [JsonProperty("Id")] public int Id;
+
+        public virtual void LoadLate()
+        {
+
+        }
     }
 
     [Serializable]
@@ -43,9 +49,23 @@ namespace ARPG.Tables
     {
         [JsonProperty("Name")] public string Name;
 
-        [JsonProperty("EquipmentId")]public EquipmentTable Equipment;
+        [JsonProperty("EquipmentId")] public int EquipmentId;
 
         [JsonProperty("SpriteName")] public string SpriteName;
+
+        [JsonIgnore] public EquipmentTable Equipment;
+
+        public override void LoadLate()
+        {
+            EquipmentTable equipmentTable = AR.s.Data.GetEquipment(EquipmentId);
+            if (equipmentTable == null)
+            {
+                Debug.LogError($"[ItemTable] LoadLate() - equipmentTable is null, EquipmentId({EquipmentId})");
+                return;
+            }
+
+            Equipment = equipmentTable;
+        }
     }
 
     [Serializable]
@@ -53,6 +73,19 @@ namespace ARPG.Tables
     {
         [JsonProperty("Prefix")] public List<Stat> Prefix;
         [JsonProperty("Postfix")] public List<Stat> Postfix;
+
+        public EquipmentTable()
+        {
+
+        }
+
+        public EquipmentTable(EquipmentTable inTable)
+        {
+            Id = inTable.Id;
+            Prefix = new List<Stat>(inTable.Prefix);
+            Postfix = new List<Stat>(inTable.Postfix);
+        }
+
     }
 
     [Serializable]
