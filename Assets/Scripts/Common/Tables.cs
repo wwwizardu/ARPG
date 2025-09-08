@@ -89,6 +89,20 @@ namespace ARPG.Tables
     }
 
     [Serializable]
+    public class DropTable : TableBase
+    {
+        [JsonProperty("Tier")] public int Tier;
+        [JsonProperty("DropRate")] public int DropRate;
+        [JsonProperty("NormalRate")] public int NormalRate;
+        [JsonProperty("MaginRate")] public int MaginRate;
+        [JsonProperty("RareRate")] public int RareRate;
+        [JsonProperty("UniqueRate")] public int UniqueRate;
+        [JsonProperty("TotalRate")] public int TotalRate;
+        [JsonProperty("GoldMin")] public int GoldMin;
+        [JsonProperty("GoldMax")] public int GoldMax;
+    }
+
+    [Serializable]
     public class Stat
     {
         [JsonProperty("Type")] public GlobalEnum.Stat Type;

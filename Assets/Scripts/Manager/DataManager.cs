@@ -13,6 +13,7 @@ namespace ARPG.Data
         private ImmutableDictionary<int, Tables.CreatureTable> _creatureTable = null!;
         private ImmutableDictionary<int, Tables.ItemTable> _itemTable = null!;
         private ImmutableDictionary<int, Tables.EquipmentTable> _equipmentTable = null!;
+        private ImmutableDictionary<int, Tables.DropTable> _dropTable = null!;
 
         public void Initialize()
         {
@@ -32,7 +33,8 @@ namespace ARPG.Data
             await Task.WhenAll(
                 LoadTable<Tables.CreatureTable>("CreatureTable.bytes", tables => _creatureTable = tables),
                 LoadTable<Tables.ItemTable>("ItemTable.bytes", tables => _itemTable = tables),
-                LoadTable<Tables.EquipmentTable>("EquipmentTable.bytes", tables => _equipmentTable = tables)
+                LoadTable<Tables.EquipmentTable>("EquipmentTable.bytes", tables => _equipmentTable = tables),
+                LoadTable<Tables.DropTable>("DropTable.bytes", tables => _dropTable = tables)
             );
 
             // 모든 테이블 로드 후 LoadLate 실행
@@ -47,6 +49,11 @@ namespace ARPG.Data
             }
             
             foreach (var table in _equipmentTable.Values)
+            {
+                table.LoadLate();
+            }
+            
+            foreach (var table in _dropTable.Values)
             {
                 table.LoadLate();
             }
@@ -77,6 +84,16 @@ namespace ARPG.Data
         public Tables.EquipmentTable? GetEquipment(int id)
         {
             if (_equipmentTable.TryGetValue(id, out var table))
+            {
+                return table;
+            }
+
+            return null;
+        }
+
+        public Tables.DropTable? GetDrop(int id)
+        {
+            if (_dropTable.TryGetValue(id, out var table))
             {
                 return table;
             }

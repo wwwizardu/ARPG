@@ -34,6 +34,8 @@ namespace ARPG.Editor
             await DownloadTable<ItemTable>("2064107837&range=A:D", 1, SaveType.String);
             
             await DownloadTable<EquipmentTable>("853198133&range=A:Q", 1, SaveType.String);
+            
+            await DownloadTable<DropTable>("1241586373&range=A:J", 1, SaveType.String);
 
             foreach (var tableType in _tableDic.Keys)
             {
@@ -100,6 +102,10 @@ namespace ARPG.Editor
                 else if (table is EquipmentTable equipmentTable)
                 {
                     ParseEquipmentTable(equipmentTable, values);
+                }
+                else if (table is DropTable dropTable)
+                {
+                    ParseDropTable(dropTable, values);
                 }
             }
             catch (Exception ex)
@@ -172,6 +178,21 @@ namespace ARPG.Editor
                 stat.Value = int.Parse(values[index+1]);
                 table.Postfix.Add(stat);
             }
+        }
+
+        private static void ParseDropTable(DropTable table, string[] values)
+        {
+            if (values.Length < 10) return;
+
+            table.Tier = int.Parse(values[1]);
+            table.DropRate = int.Parse(values[2]);
+            table.NormalRate = int.Parse(values[3]);
+            table.MaginRate = int.Parse(values[4]);
+            table.RareRate = int.Parse(values[5]);
+            table.UniqueRate = int.Parse(values[6]);
+            table.TotalRate = int.Parse(values[7]);
+            table.GoldMin = int.Parse(values[8]);
+            table.GoldMax = int.Parse(values[9]);
         }
 
         private static async Task<string> DownloadTableData(string inURL)
