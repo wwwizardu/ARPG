@@ -32,7 +32,11 @@ public class MapFileSaverEditor : Editor
             if (success)
             {
                 string usedFileName = string.IsNullOrEmpty(fileName) ? "default" : fileName;
-                EditorUtility.DisplayDialog("Success", $"Map saved successfully as '{usedFileName}.dat'", "OK");
+
+                // 에셋 데이터베이스 새로고침하여 유니티에서 파일 변경사항을 즉시 인식
+                AssetDatabase.Refresh();
+
+                EditorUtility.DisplayDialog("Success", $"Map saved successfully as '{usedFileName}.bytes'", "OK");
             }
             else
             {
@@ -42,7 +46,7 @@ public class MapFileSaverEditor : Editor
         
         if (GUILayout.Button("Open Save Folder", GUILayout.Height(30)))
         {
-            string saveFolderPath = System.IO.Path.Combine(Application.persistentDataPath, "SavedMaps");
+            string saveFolderPath = System.IO.Path.Combine(Application.dataPath, "_BinaryData", "TilemapData");
             if (System.IO.Directory.Exists(saveFolderPath))
             {
                 EditorUtility.RevealInFinder(saveFolderPath);
@@ -62,55 +66,48 @@ public class MapFileSaverEditor : Editor
         EditorGUILayout.LabelField("Load Map Data", EditorStyles.boldLabel);
         
         _loadFileName = EditorGUILayout.TextField("Load File Name:", _loadFileName);
+        EditorGUILayout.EndVertical();
         
-        EditorGUILayout.BeginHorizontal();
-        if (GUILayout.Button("Load Map Data", GUILayout.Height(30)))
+        if (GUILayout.Button("Browse and Load Map", GUILayout.Height(30)))
         {
-            string fileName = string.IsNullOrEmpty(_loadFileName) ? null : _loadFileName;
-            var mapData = mapFileSaver.LoadMapData(fileName);
-            
-            if (mapData != null)
+            string saveFolderPath = System.IO.Path.Combine(Application.dataPath, "_BinaryData", "TilemapData");
+
+            // 폴더가 존재하지 않으면 생성
+            if (!System.IO.Directory.Exists(saveFolderPath))
             {
-                bool success = mapFileSaver.ApplyMapData(mapData);
-                if (success)
+                System.IO.Directory.CreateDirectory(saveFolderPath);
+            }
+
+            string selectedPath = EditorUtility.OpenFilePanel("Select Map File", saveFolderPath, "bytes");
+
+            if (!string.IsNullOrEmpty(selectedPath))
+            {
+                // 파일명에서 확장자 제거
+                string fileName = System.IO.Path.GetFileNameWithoutExtension(selectedPath);
+
+                var mapData = mapFileSaver.LoadMapData(fileName);
+
+                if (mapData != null)
                 {
-                    string usedFileName = string.IsNullOrEmpty(fileName) ? "default" : fileName;
-                    EditorUtility.DisplayDialog("Success", $"Map '{usedFileName}.dat' loaded and applied successfully!", "OK");
+                    bool success = mapFileSaver.ApplyMapData(mapData);
+                    if (success)
+                    {
+                        _saveFileName = fileName;
+                        Debug.Log($"Map '{fileName}.bytes' loaded and applied successfully!");
+                    }
+                    else
+                    {
+                        Debug.LogError("Map data loaded but failed to apply. Check console for details.");
+                    }
                 }
                 else
                 {
-                    EditorUtility.DisplayDialog("Error", "Map data loaded but failed to apply. Check console for details.", "OK");
+                    Debug.LogError("Failed to load map data. Check if file exists and console for details.");
                 }
             }
-            else
-            {
-                EditorUtility.DisplayDialog("Error", "Failed to load map data. Check if file exists and console for details.", "OK");
-            }
         }
+
         
-        if (GUILayout.Button("Load to Custom Position", GUILayout.Height(30)))
-        {
-            if (!string.IsNullOrEmpty(_loadFileName))
-            {
-                var mapData = mapFileSaver.LoadMapData(_loadFileName);
-                if (mapData != null)
-                {
-                    // 사용자가 좌표를 입력할 수 있는 팝업 창을 만들 수도 있지만, 
-                    // 간단하게 (0,0) 위치에 로드하는 예제
-                    bool success = mapFileSaver.ApplyMapData(mapData, 0, 0);
-                    if (success)
-                    {
-                        EditorUtility.DisplayDialog("Success", $"Map '{_loadFileName}.dat' loaded at position (0,0)!", "OK");
-                    }
-                }
-            }
-            else
-            {
-                EditorUtility.DisplayDialog("Error", "Please enter a file name to load.", "OK");
-            }
-        }
-        EditorGUILayout.EndHorizontal();
-        EditorGUILayout.EndVertical();
         
         EditorGUILayout.Space(5);
         

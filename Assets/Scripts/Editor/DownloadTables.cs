@@ -226,13 +226,12 @@ namespace ARPG.Editor
             if (inSaveType == SaveType.String)
             {
                 enData = result;
-                // filePath = Path.Combine(Application.dataPath, $"[ServerTableData]", fileName);
-                filePath = Path.Combine(Application.dataPath, $"[TableData]", fileName);
+                filePath = Path.Combine(Application.dataPath, Data.DataManager.TablePath, fileName);
             }
             else
             {
                 enData = Encrypt(result);
-                filePath = Path.Combine(Application.dataPath, $"[TableData]", fileName);
+                filePath = Path.Combine(Application.dataPath, Data.DataManager.TablePath, fileName);
             }
 
             Directory.CreateDirectory(Path.GetDirectoryName(filePath));

@@ -10,6 +10,8 @@ namespace ARPG.Data
 
     public class DataManager : MonoBehaviour
     {
+        public static string TablePath = "Assets/_BinaryData/TableData/";
+
         private ImmutableDictionary<int, Tables.CreatureTable> _creatureTable = null!;
         private ImmutableDictionary<int, Tables.ItemTable> _itemTable = null!;
         private ImmutableDictionary<int, Tables.EquipmentTable> _equipmentTable = null!;
@@ -105,7 +107,7 @@ namespace ARPG.Data
         {
             Dictionary<int, T> tables = new Dictionary<int, T>();
 
-            string path = System.IO.Path.Combine(Application.dataPath, $"[TableData]/{fileName}");
+            string path = System.IO.Path.Combine(Application.dataPath, $"{TablePath}{fileName}");
 
             try
             {

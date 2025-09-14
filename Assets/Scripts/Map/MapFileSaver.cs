@@ -16,7 +16,7 @@ namespace ARPG.Map
         [SerializeField] private string _fileName = "MapData";
         [SerializeField] private string _folderName = "SavedMaps";
         
-        private string SaveFolderPath => Path.Combine(Application.persistentDataPath, _folderName);
+        private string SaveFolderPath => Path.Combine(Application.dataPath, "_BinaryData", "TilemapData");
         
         private void Awake()
         {
@@ -78,7 +78,13 @@ namespace ARPG.Map
             // 바이너리 파일로 저장
             try
             {
-                string filePath = Path.Combine(SaveFolderPath, $"{saveFileName}.dat");
+                // 폴더가 없으면 생성
+                if (!Directory.Exists(SaveFolderPath))
+                {
+                    Directory.CreateDirectory(SaveFolderPath);
+                }
+
+                string filePath = Path.Combine(SaveFolderPath, $"{saveFileName}.bytes");
                 using (FileStream fileStream = new FileStream(filePath, FileMode.Create))
                 using (BinaryWriter writer = new BinaryWriter(fileStream))
                 {
@@ -103,7 +109,7 @@ namespace ARPG.Map
         public MapFileData LoadMapData(string fileName = null)
         {
             string loadFileName = fileName ?? _fileName;
-            string filePath = Path.Combine(SaveFolderPath, $"{loadFileName}.dat");
+            string filePath = Path.Combine(SaveFolderPath, $"{loadFileName}.bytes");
             
             if (!File.Exists(filePath))
             {
