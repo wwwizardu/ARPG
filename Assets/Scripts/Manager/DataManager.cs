@@ -10,7 +10,7 @@ namespace ARPG.Data
 
     public class DataManager : MonoBehaviour
     {
-        public static string TablePath = "Assets/_BinaryData/TableData/";
+        public static string TablePath = "_BinaryData/TableData/";
 
         private ImmutableDictionary<int, Tables.CreatureTable> _creatureTable = null!;
         private ImmutableDictionary<int, Tables.ItemTable> _itemTable = null!;

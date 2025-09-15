@@ -6,7 +6,7 @@ namespace ARPG.Map
     public partial class MapManager : MonoBehaviour
     {
         [Header("타일 에셋")]
-        [SerializeField] private TileBase[] _tileAssets;
+        [SerializeField] private ThemeTileSet _themeTileSet;
 
         [Header("땅 룰 타일")]
         [SerializeField] private RuleTile _ruleTile;
@@ -23,7 +23,7 @@ namespace ARPG.Map
 
         private void RenderChunkToTilemap(MapChunkData chunk)
         {
-            if (_tileMap == null || _tileAssets == null || _tileAssets.Length < 2) return;
+            if (_tileMap == null || _themeTileSet == null || _themeTileSet.TileSet == null || _themeTileSet.TileSet.Length < 2) return;
             
             // 배열 초기화 (필요시)
             if (_tempTileArray == null || _tempTileArray.Length != chunkSize * chunkSize)
@@ -57,7 +57,7 @@ namespace ARPG.Map
                     }
                     else if (baseTileType == (int)GlobalEnum.TileType.Glass)
                     {
-                        _tempTileArray[index] = _tileAssets.Length > baseTileType ? _tileAssets[baseTileType] : null;
+                        _tempTileArray[index] = _themeTileSet.TileSet.Length > baseTileType ? _themeTileSet.TileSet[baseTileType] : null;
                     }
                     else
                     {
