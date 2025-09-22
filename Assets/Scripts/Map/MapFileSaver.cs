@@ -15,6 +15,13 @@ namespace ARPG.Map
         [Header("파일 저장 설정")]
         [SerializeField] private string _fileName = "MapData";
         [SerializeField] private string _folderName = "SavedMaps";
+
+        [Header("Theme Settings")]
+        [SerializeField] private ThemeTileSet _themeTileSet;
+
+        [Header("Editor Only")]
+        [SerializeField] private string _saveFileName = "";
+        [SerializeField] private string _loadFileName = "";
         
         private string SaveFolderPath => Path.Combine(Application.dataPath, "_BinaryData", "TilemapData");
         
@@ -64,10 +71,24 @@ namespace ARPG.Map
                     
                     // Unity Tilemap에서 타일을 가져옴
                     Vector3Int tilemapPosition = new Vector3Int(tilemapX, tilemapY, 0);
-                    TileBase tile = _tilemap.GetTile(tilemapPosition);
-                    
+                    TileBase tileBase = _tilemap.GetTile(tilemapPosition);
+                    CustomTile customTile = tileBase as CustomTile;
+
+                    if(customTile == null)
+                    {
+                        if(tileBase == null)
+                        {
+                            Debug.LogWarning($"[MapFileSaver] Empty tile at X({x}), Y({y}) - TilemapPos({tilemapX}, {tilemapY})");
+                        }
+                        else
+                        {
+                            Debug.LogError($"[MapFileSaver] Non-CustomTile detected at X({x}), Y({y}) - TilemapPos({tilemapX}, {tilemapY}), Type: {tileBase.GetType().Name}");
+                        }
+                        continue;
+                    }
+
                     // TileBase를 uint로 변환 (간단한 해시 또는 인덱스 기반)
-                    uint tileData = ConvertTileToUint(tile);
+                    uint tileData = MapManager.CombineTileData(0, (GlobalEnum.TileType)customTile.CustomData, 0, 0);
                     
                     // Y좌표를 뒤집어서 저장 (왼쪽 아래가 (0,0)이 되도록)
                     int flippedY = bounds.size.y - 1 - y;
@@ -169,7 +190,7 @@ namespace ARPG.Map
                         uint tileData = mapFileData.GetTile(x, flippedY);
                         
                         // uint를 TileBase로 변환 후 타일맵에 설정
-                        TileBase tile = ConvertUintToTile(tileData);
+                        CustomTile tile = ConvertUintToTile(tileData);
                         Vector3Int tilemapPosition = new Vector3Int(tilemapX, tilemapY, 0);
                         _tilemap.SetTile(tilemapPosition, tile);
                     }
@@ -184,36 +205,33 @@ namespace ARPG.Map
                 return false;
             }
         }
-        
-        /// <summary>
-        /// TileBase를 uint로 변환합니다.
-        /// </summary>
-        private uint ConvertTileToUint(TileBase tile)
-        {
-            if (tile == null)
-                return 0;
-            
-            // 간단한 해시 기반 변환 (실제 프로젝트에서는 타일 ID 매핑 테이블 사용 권장)
-            return (uint)tile.GetInstanceID();
-        }
-        
+
         /// <summary>
         /// uint를 TileBase로 변환합니다.
         /// </summary>
-        private TileBase ConvertUintToTile(uint tileData)
+        private CustomTile ConvertUintToTile(uint tileData)
         {
             if (tileData == 0)
                 return null;
-            
-#if UNITY_EDITOR
-            // 에디터에서만 인스턴스 ID로 오브젝트 찾기 (제한적이므로 실제로는 타일 매핑 테이블 사용 권장)
-            UnityEngine.Object obj = EditorUtility.InstanceIDToObject((int)tileData);
-            return obj as TileBase;
-#else
-            // 런타임에서는 다른 방식으로 타일을 찾아야 함 (예: 타일 매핑 테이블)
-            Debug.LogWarning("Runtime tile conversion not implemented. Use tile mapping table.");
+
+            // 하위 4비트를 TileType으로 변환
+            GlobalEnum.TileType tileType = (GlobalEnum.TileType)(tileData & 0xF);
+
+            // ThemeTileSet에서 해당 타일 가져오기
+            if (_themeTileSet != null && _themeTileSet.TileSet != null)
+            {
+                int tileIndex = (int)tileType;
+                if (tileIndex >= 0 && tileIndex < _themeTileSet.TileSet.Length)
+                {
+                    return _themeTileSet.TileSet[tileIndex] as CustomTile;
+                }
+            }
+
+            Debug.LogError($"[MapFileSaver] ConvertUintToTile - TileType {tileType} not found in ThemeTileSet");
             return null;
-#endif
+
         }
+
+        public ThemeTileSet ThemeTileSet => _themeTileSet;
     }
 }

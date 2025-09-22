@@ -10,6 +10,6 @@ public class ThemeTileSet : ScriptableObject
     public Sprite themeIcon;
 
     [Header("Tiles")]
-    public TileBase [] TileSet;
-    
+    public TileBase[] TileSet;
+
 }

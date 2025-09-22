@@ -1,11 +1,15 @@
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 
 namespace ARPG.Map
 {
     public partial class MapManager : MonoBehaviour
     {
-
+        public static uint CombineTileData(uint currentTile, GlobalEnum.TileType inBaseTileType, uint inHillFlag, uint inMonsterSpawnFlag)
+        {
+            return (currentTile & 0xFFFFFFC0) | ((uint)inBaseTileType & 0x0000000F) | inHillFlag | inMonsterSpawnFlag;
+        }
 
         private void InitializeChunkPool()
         {
@@ -13,6 +17,8 @@ namespace ARPG.Map
             {
                 _chunkPool.Push(new MapChunkData(chunkSize));
             }
+
+            LoadFixedMapFiles();
         }
 
         private MapChunkData GetOrCreateChunk(int chunkX, int chunkY)
@@ -37,7 +43,7 @@ namespace ARPG.Map
 
             return chunk;
         }
-        
+
         private MapChunkData GetChunkFromPool()
         {
             if (_chunkPool.Count > 0)
@@ -49,11 +55,11 @@ namespace ARPG.Map
                 return new MapChunkData(chunkSize);
             }
         }
-        
+
         private void GenerateChunkData(MapChunkData chunk)
         {
             chunk.monsterSpawnPositions.Clear();
-            
+
             for (int x = 0; x < chunkSize; x++)
             {
                 for (int y = 0; y < chunkSize; y++)
@@ -66,24 +72,24 @@ namespace ARPG.Map
                         (worldX + mapSeed) * (noiseScale * 0.3f),
                         (worldY + mapSeed) * (noiseScale * 0.3f)
                     );
-                    
+
                     float terrainNoise = Mathf.PerlinNoise(
                         (worldX + mapSeed) * noiseScale,
                         (worldY + mapSeed) * noiseScale
                     );
-                    
+
                     // 바닥 타입 결정 (하위 4비트)
                     GlobalEnum.TileType baseTileType;
                     if (terrainNoise > 0.4f)
                         baseTileType = GlobalEnum.TileType.Glass;
                     else
                         baseTileType = GlobalEnum.TileType.Ground;
-                    
+
                     // 언덕 플래그 결정 (5번째 비트)
                     uint hillFlag = 0;
                     if (elevationNoise > 0.6f)
                         hillFlag = (uint)GlobalEnum.TileFlag.Hill;
-                    
+
                     // 몬스터 스폰 플래그 결정 (6번째 비트)
                     uint monsterSpawnFlag = 0;
                     if (hillFlag == 0 && _randomGenerator.NextDouble() < _monsterSpawnRate)
@@ -91,14 +97,68 @@ namespace ARPG.Map
                         monsterSpawnFlag = (uint)GlobalEnum.TileFlag.MonsterSpawn;
                         chunk.monsterSpawnPositions.Add(new Vector2Int(x, y));
                     }
-                    
+
                     // 타일 데이터 조합
                     uint currentTile = chunk.tiles[x, y];
-                    chunk.tiles[x, y] = (currentTile & 0xFFFFFFC0) | ((uint)baseTileType & 0x0000000F) | hillFlag | monsterSpawnFlag;
+                    chunk.tiles[x, y] = CombineTileData(currentTile, baseTileType, hillFlag, monsterSpawnFlag);
+                }
+            }
+
+            // MapFileData와 청크가 겹치는 부분에 대해 타일 데이터 덮어쓰기
+            OverlayMapFileData(chunk);
+        }
+
+        private void OverlayMapFileData(MapChunkData chunk)
+        {
+            foreach (var mapFileEntry in _mapFileDataDic)
+            {
+                Vector2Int mapFileChunkPos = mapFileEntry.Key;
+                MapFileData mapFileData = mapFileEntry.Value;
+
+                // 현재 청크와 MapFileData의 위치 관계 확인
+                Vector2Int chunkWorldStart = new Vector2Int(chunk.chunkX * chunkSize, chunk.chunkY * chunkSize);
+                Vector2Int chunkWorldEnd = new Vector2Int(chunkWorldStart.x + chunkSize - 1, chunkWorldStart.y + chunkSize - 1);
+
+                Vector2Int mapFileWorldStart = mapFileData.StartPosition;
+                Vector2Int mapFileWorldEnd = new Vector2Int(mapFileWorldStart.x + mapFileData.Width - 1, mapFileWorldStart.y + mapFileData.Height - 1);
+
+                // 겹치는 영역이 있는지 확인
+                if (chunkWorldEnd.x < mapFileWorldStart.x || chunkWorldStart.x > mapFileWorldEnd.x ||
+                    chunkWorldEnd.y < mapFileWorldStart.y || chunkWorldStart.y > mapFileWorldEnd.y)
+                {
+                    continue; // 겹치는 영역이 없음
+                }
+
+                // 겹치는 영역의 범위 계산
+                int overlapStartX = Mathf.Max(chunkWorldStart.x, mapFileWorldStart.x);
+                int overlapEndX = Mathf.Min(chunkWorldEnd.x, mapFileWorldEnd.x);
+                int overlapStartY = Mathf.Max(chunkWorldStart.y, mapFileWorldStart.y);
+                int overlapEndY = Mathf.Min(chunkWorldEnd.y, mapFileWorldEnd.y);
+
+                // 겹치는 영역에 대해 MapFileData의 타일 데이터로 덮어쓰기
+                for (int worldX = overlapStartX; worldX <= overlapEndX; worldX++)
+                {
+                    for (int worldY = overlapStartY; worldY <= overlapEndY; worldY++)
+                    {
+                        // 청크 내 로컬 좌표
+                        int chunkLocalX = worldX - chunkWorldStart.x;
+                        int chunkLocalY = worldY - chunkWorldStart.y;
+
+                        // MapFileData 내 로컬 좌표
+                        int mapFileLocalX = worldX - mapFileWorldStart.x;
+                        int mapFileLocalY = worldY - mapFileWorldStart.y;
+
+                        // MapFileData에서 타일 데이터 가져와서 청크에 덮어쓰기
+                        uint mapTileData = mapFileData.GetTile(mapFileLocalX, mapFileLocalY);
+                        if (mapTileData != 0) // 0이 아닌 경우에만 덮어쓰기
+                        {
+                            chunk.tiles[chunkLocalX, chunkLocalY] = mapTileData;
+                        }
+                    }
                 }
             }
         }
-    
+
         private void ReturnChunkToPool(int chunkX, int chunkY)
         {
             Vector2Int chunkKey = new Vector2Int(chunkX, chunkY);
@@ -106,18 +166,18 @@ namespace ARPG.Map
             {
                 MapChunkData chunk = _activeChunks[chunkKey];
                 _activeChunks.Remove(chunkKey);
-                
+
                 RemoveChunkFromTilemap(chunk); // 타일맵에서 청크 제거
                 chunk.Deactivate();
                 _chunkPool.Push(chunk);
             }
         }
-        
+
         public void SetSeed(int newSeed)
         {
             mapSeed = newSeed;
             _randomGenerator = new System.Random(mapSeed);
-            
+
             foreach (var chunk in _activeChunks.Values)
             {
                 chunk.Deactivate();
@@ -125,14 +185,14 @@ namespace ARPG.Map
             }
             _activeChunks.Clear();
         }
-        
+
         private Vector2Int WorldPositionToChunk(Vector3 worldPosition)
         {
             int chunkX = Mathf.FloorToInt(worldPosition.x / chunkSize);
             int chunkY = Mathf.FloorToInt(worldPosition.y / chunkSize);
             return new Vector2Int(chunkX, chunkY);
         }
-        
+
         private void LoadChunksAroundPlayer()
         {
             for (int x = -_loadRadius; x <= _loadRadius; x++)
@@ -140,7 +200,7 @@ namespace ARPG.Map
                 for (int y = -_loadRadius; y <= _loadRadius; y++)
                 {
                     Vector2Int chunkPos = new Vector2Int(_currentPlayerChunk.x + x, _currentPlayerChunk.y + y);
-                    
+
                     if (_activeChunks.ContainsKey(chunkPos) == false)
                     {
                         MapChunkData chunk = GetOrCreateChunk(chunkPos.x, chunkPos.y);
@@ -153,44 +213,82 @@ namespace ARPG.Map
                 }
             }
         }
-        
+
         private void UnloadDistantChunks()
         {
             List<Vector2Int> chunksToReturn = new List<Vector2Int>();
-            
+
             foreach (var chunkPair in _activeChunks)
             {
                 Vector2Int chunkPos = chunkPair.Key;
                 int deltaX = Mathf.Abs(chunkPos.x - _currentPlayerChunk.x);
                 int deltaY = Mathf.Abs(chunkPos.y - _currentPlayerChunk.y);
                 int maxDistance = Mathf.Max(deltaX, deltaY); // Chebyshev 거리
-                
+
                 if (maxDistance > _loadRadius)
                 {
                     chunksToReturn.Add(chunkPos);
                 }
             }
-            
+
             foreach (var chunkPos in chunksToReturn)
             {
                 OnChunkDeactivated(chunkPos);
                 ReturnChunkToPool(chunkPos.x, chunkPos.y);
             }
         }
-        
+
         public int GetActiveChunkCount()
         {
             return _activeChunks.Count;
         }
-        
+
         public int GetPooledChunkCount()
         {
             return _chunkPool.Count;
         }
-        
+
         public List<Vector2Int> GetActiveChunkPositions()
         {
             return new List<Vector2Int>(_activeChunks.Keys);
+        }
+
+        private void LoadFixedMapFiles()
+        {
+            _mapFileDataDic.Clear();
+
+            string filePath = Path.Combine(Application.dataPath, "_BinaryData", "TilemapData", "BaseTown.bytes");
+
+            if (File.Exists(filePath))
+            {
+                try
+                {
+                    using (FileStream fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read))
+                    using (BinaryReader reader = new BinaryReader(fileStream))
+                    {
+                        MapFileData mapFileData = MapFileData.ReadFromBinary(reader);
+
+                        Vector2Int mapKey = mapFileData.StartPosition;
+
+                        if (_mapFileDataDic.ContainsKey(mapKey))
+                        {
+                            Debug.LogWarning($"[MapManager] MapFileData already exists for key {mapKey}. Overwriting with BaseTown.bytes data.");
+                        }
+
+                        _mapFileDataDic[mapKey] = mapFileData;
+
+                        Debug.Log($"[MapManager] Loaded BaseTown.bytes - Size: {mapFileData.Width}x{mapFileData.Height}, Start: {mapFileData.StartPosition}, MapKey: {mapKey}");
+                    }
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogError($"[MapManager] Failed to load BaseTown.bytes: {e.Message}");
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"[MapManager] BaseTown.bytes not found at path: {filePath}");
+            }
         }
     }
 }

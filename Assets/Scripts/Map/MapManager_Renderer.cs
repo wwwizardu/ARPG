@@ -59,6 +59,10 @@ namespace ARPG.Map
                     {
                         _tempTileArray[index] = _themeTileSet.TileSet.Length > baseTileType ? _themeTileSet.TileSet[baseTileType] : null;
                     }
+                    else if (baseTileType == (int)GlobalEnum.TileType.StoneGround)
+                    {
+                        _tempTileArray[index] = _themeTileSet.TileSet.Length > baseTileType ? _themeTileSet.TileSet[baseTileType] : null;
+                    }
                     else
                     {
                         _tempTileArray[index] = null;

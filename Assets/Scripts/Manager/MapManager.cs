@@ -27,6 +27,7 @@ namespace ARPG.Map
 
         private int _randomSeed = 12345;
         private Dictionary<Vector2Int, MapChunkData> _activeChunks;
+        private Dictionary<Vector2Int, MapFileData> _mapFileDataDic = new();
         private Stack<MapChunkData> _chunkPool;
         private System.Random _randomGenerator;
         private Vector2Int _currentPlayerChunk = new Vector2Int(-100000, -100000);

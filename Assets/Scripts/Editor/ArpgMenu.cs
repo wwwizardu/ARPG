@@ -31,4 +31,29 @@ public class ArpgMenu
         AssetDatabase.CreateAsset(asset, filePath);
         AssetDatabase.SaveAssets();
     }
+
+    [MenuItem("ARPG/Create Custom Tile", false, 3)]
+    private static void CreateCustomTile()
+    {
+        string folderPath = "Assets/Art/Tilemap/CustomTiles";
+        if (!AssetDatabase.IsValidFolder(folderPath))
+        {
+            AssetDatabase.CreateFolder("Assets/Art", "Tilemap");
+            AssetDatabase.CreateFolder("Assets/Art/Tilemap", "CustomTiles");
+        }
+
+        string fileName = "CustomTile";
+        string uniqueFileName = AssetDatabase.GenerateUniqueAssetPath($"{folderPath}/{fileName}.asset");
+
+        CustomTile customTile = ScriptableObject.CreateInstance<CustomTile>();
+        customTile.SetCustomData(0);
+
+        AssetDatabase.CreateAsset(customTile, uniqueFileName);
+        AssetDatabase.SaveAssets();
+
+        Selection.activeObject = customTile;
+        EditorGUIUtility.PingObject(customTile);
+
+        Debug.Log($"Custom tile created at: {uniqueFileName}");
+    }
 }

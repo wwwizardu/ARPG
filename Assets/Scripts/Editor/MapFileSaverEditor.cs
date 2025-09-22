@@ -5,11 +5,20 @@ using ARPG.Map;
 [CustomEditor(typeof(MapFileSaver))]
 public class MapFileSaverEditor : Editor
 {
-    private string _saveFileName = "";
-    private string _loadFileName = "";
+    private SerializedProperty _saveFileNameProp;
+    private SerializedProperty _loadFileNameProp;
+    private SerializedProperty _themeTileSetProp;
+
+    private void OnEnable()
+    {
+        _saveFileNameProp = serializedObject.FindProperty("_saveFileName");
+        _loadFileNameProp = serializedObject.FindProperty("_loadFileName");
+        _themeTileSetProp = serializedObject.FindProperty("_themeTileSet");
+    }
     
     public override void OnInspectorGUI()
     {
+        serializedObject.Update();
         DrawDefaultInspector();
         
         MapFileSaver mapFileSaver = (MapFileSaver)target;
@@ -21,12 +30,12 @@ public class MapFileSaverEditor : Editor
         EditorGUILayout.BeginVertical("box");
         EditorGUILayout.LabelField("Save Map Data", EditorStyles.boldLabel);
         
-        _saveFileName = EditorGUILayout.TextField("Save File Name:", _saveFileName);
+        EditorGUILayout.PropertyField(_saveFileNameProp, new GUIContent("Save File Name:"));
         
         EditorGUILayout.BeginHorizontal();
         if (GUILayout.Button("Save Current Map", GUILayout.Height(30)))
         {
-            string fileName = string.IsNullOrEmpty(_saveFileName) ? null : _saveFileName;
+            string fileName = string.IsNullOrEmpty(_saveFileNameProp.stringValue) ? null : _saveFileNameProp.stringValue;
             bool success = mapFileSaver.SaveMapData(fileName);
             
             if (success)
@@ -65,7 +74,7 @@ public class MapFileSaverEditor : Editor
         EditorGUILayout.BeginVertical("box");
         EditorGUILayout.LabelField("Load Map Data", EditorStyles.boldLabel);
         
-        _loadFileName = EditorGUILayout.TextField("Load File Name:", _loadFileName);
+        EditorGUILayout.PropertyField(_loadFileNameProp, new GUIContent("Load File Name:"));
         EditorGUILayout.EndVertical();
         
         if (GUILayout.Button("Browse and Load Map", GUILayout.Height(30)))
@@ -92,7 +101,7 @@ public class MapFileSaverEditor : Editor
                     bool success = mapFileSaver.ApplyMapData(mapData);
                     if (success)
                     {
-                        _saveFileName = fileName;
+                        _saveFileNameProp.stringValue = fileName;
                         Debug.Log($"Map '{fileName}.bytes' loaded and applied successfully!");
                     }
                     else
@@ -106,8 +115,6 @@ public class MapFileSaverEditor : Editor
                 }
             }
         }
-
-        
         
         EditorGUILayout.Space(5);
         
@@ -127,5 +134,7 @@ public class MapFileSaverEditor : Editor
                 EditorGUILayout.HelpBox($"Current Tilemap Bounds: Position({bounds.xMin}, {bounds.yMin}), Size({bounds.size.x} x {bounds.size.y})", MessageType.Info);
             }
         }
+
+        serializedObject.ApplyModifiedProperties();
     }
 }

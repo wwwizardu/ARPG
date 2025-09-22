@@ -10,6 +10,8 @@ namespace ARPG.Map
         [SerializeField] private int _width;
         [SerializeField] private int _height;
         [SerializeField] private Vector2Int _startPosition;
+
+        [SerializeField] private string _themeName;
         [SerializeField] private uint[] _tileData;
         
         public int Width => _width;

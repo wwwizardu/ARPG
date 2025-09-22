@@ -4,8 +4,11 @@ public class GlobalEnum
 {
     public enum TileType
     {
-        Ground = 0,     // 맨땅
-        Glass = 1,      // 잔디
+        None = 0,       // 빈 타일
+        Ground = 1,     // 맨땅
+        Glass = 2,      // 잔디
+        StoneGround = 3, // 자갈
+        
     }
     
     public enum TileFlag
