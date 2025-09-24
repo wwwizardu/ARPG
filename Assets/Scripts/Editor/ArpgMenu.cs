@@ -3,12 +3,6 @@ using UnityEditor;
 
 public class ArpgMenu
 {
-    [MenuItem("ARPG/Download Table", false, 1)]
-    private static void CreateTile()
-    {
-
-    }
-
     [MenuItem("ARPG/Create Theme Tile Set", false, 2)]
     private static void CreateThemeTileSet()
     {

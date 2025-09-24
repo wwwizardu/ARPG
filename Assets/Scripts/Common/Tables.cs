@@ -41,6 +41,7 @@ namespace ARPG.Tables
         [JsonProperty("LightningResist")] public int LightningResist;
         [JsonProperty("PoisonResist")] public int PoisonResist;
         [JsonProperty("Luck")] public int Luck;
+        [JsonProperty("DropId")] public int DropId;
 
     }
 
@@ -91,15 +92,15 @@ namespace ARPG.Tables
     [Serializable]
     public class DropTable : TableBase
     {
-        [JsonProperty("Tier")] public int Tier;
-        [JsonProperty("DropRate")] public int DropRate;
-        [JsonProperty("NormalRate")] public int NormalRate;
-        [JsonProperty("MaginRate")] public int MaginRate;
-        [JsonProperty("RareRate")] public int RareRate;
-        [JsonProperty("UniqueRate")] public int UniqueRate;
-        [JsonProperty("TotalRate")] public int TotalRate;
-        [JsonProperty("GoldMin")] public int GoldMin;
-        [JsonProperty("GoldMax")] public int GoldMax;
+        [JsonProperty("Tier")] public int Tier;                 // Drop 아이템 티어
+        [JsonProperty("DropRate")] public int DropRate;         // 드랍 확률 (1/10000)
+        [JsonProperty("NormalRate")] public int NormalRate;     // 일반 아이템 드랍 확률
+        [JsonProperty("MaginRate")] public int MaginRate;       // 마법 아이템 드랍 확률
+        [JsonProperty("RareRate")] public int RareRate;        // 희귀 아이템 드랍 확률
+        [JsonProperty("UniqueRate")] public int UniqueRate;    // 고유 아이템 드랍 확률
+        [JsonProperty("TotalRate")] public int TotalRate;       // 총합 확률 (Normal + Magin + Rare + Unique)
+        [JsonProperty("GoldMin")] public int GoldMin;           // 드랍 골드 최소값
+        [JsonProperty("GoldMax")] public int GoldMax;           // 드랍 골드 최대값
     }
 
     [Serializable]

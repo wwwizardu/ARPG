@@ -29,7 +29,7 @@ namespace ARPG.Editor
         {
             _tableDic = new();
 
-            await DownloadTable<CreatureTable>("0&range=A:V", 1, SaveType.String);
+            await DownloadTable<CreatureTable>("0&range=A:W", 1, SaveType.String);
 
             await DownloadTable<ItemTable>("2064107837&range=A:D", 1, SaveType.String);
             
@@ -143,6 +143,7 @@ namespace ARPG.Editor
             table.LightningResist = int.Parse(values[19]);
             table.PoisonResist = int.Parse(values[20]);
             table.Luck = int.Parse(values[21]);
+            table.DropId = int.Parse(values[22]);
         }
 
         private static void ParseItemTable(ItemTable table, string[] values)
