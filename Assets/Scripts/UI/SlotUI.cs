@@ -19,20 +19,24 @@ namespace ARPG.UI
         [SerializeField] protected Image _Icon;
         [SerializeField] protected TextMeshProUGUI _TextQuantity;
 
-        
+        private int _slotIndex = -1;
 
+
+        public int SlotIndex { get { return _slotIndex; } }
         public UISlotType SlotType { get { return _slotType; } }
 
-        public virtual void Initialize()
+        public virtual void Initialize(int inSlotIndex)
         {
             Reset();
+
+            _slotIndex = inSlotIndex;
         }
 
         public virtual void Reset()
         {
             _BG.gameObject.SetActive(true);
-            _Icon.gameObject.SetActive(true);
-            _TextQuantity.gameObject.SetActive(true);
+            _Icon.gameObject.SetActive(false);
+            _TextQuantity.gameObject.SetActive(false);
         }
     }
 }

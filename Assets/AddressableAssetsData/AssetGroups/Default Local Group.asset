@@ -15,8 +15,28 @@ MonoBehaviour:
   m_GroupName: Default Local Group
   m_GUID: b5afdc8e1be332f4abe01660be954e53
   m_SerializeEntries:
+  - m_GUID: 21fcae8338717c34586e97a993d4afee
+    m_Address: UI/Character
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 460dc19b749967d42a7aaba5b52e8a6c
     m_Address: TileSet/Base
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 67e8b3db722c2c44b8daf70e09c44e42
+    m_Address: UI/Inventory
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b553a736b1dd77246a077c4c0ac530bd
+    m_Address: UI/SlotUI
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c7be8e5aec1ed9343b40ecd697f4f5d0
+    m_Address: UI/SlotUI_Equip
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

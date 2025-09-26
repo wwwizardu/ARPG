@@ -23,6 +23,8 @@ namespace ARPG
         
         public bool IsInitialized => _initialized;
 
+        public Base.SceneBase? CurrentScene => _currentScene;
+
         public Data.DataManager Data => _dataManager;
         public MapManager Map => _mapManager;
         public UIManager UI => _uiManager;

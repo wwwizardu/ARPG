@@ -1,4 +1,5 @@
 #nullable enable
+using ARPG.UI;
 using UnityEngine;
 
 namespace ARPG.Creature
@@ -35,6 +36,13 @@ namespace ARPG.Creature
         {
             if (_input == null)
                 return;
+
+            if(_input.Value.Inventory.WasPressedThisFrame() == true) // 인벤토리 열기
+            {
+                var characterUI = AR.s.UI.Show<UICharacter>(AddressablePath.Character, UIManager.Layer.Main);
+                if(characterUI == null)
+                    return;    
+            }
 
             // if (_input.Value.UseItem.WasPressedThisFrame() == true) // 아이템 사용 시 그냥 리턴
             // {

@@ -36,22 +36,6 @@ namespace ARPG.Base
             _rectTransform = GetComponent<RectTransform>();
         }
 
-        public virtual void Close(bool isDestroy = false)
-        {
-            // Hub.s.uiman.Close(_name, isDestroy);
-        }
-
-        public virtual bool UpdateInput(Input.ArpgInput inInput)
-        {
-            // if(IsBase == false && inInput.UI.CloseUI.WasReleasedThisFrame() == true)
-            // {
-            //     Close();
-            //     return true;
-            // }
-
-            return false;
-        }
-
         public virtual bool OnPointerDown(PointerEventData inEventData)
         {
             return true;
@@ -82,26 +66,7 @@ namespace ARPG.Base
             return true;
         }
 
-        public virtual void OnOpen()
-        {
-            gameObject.SetActive(true);
-            _rectTransform.SetAsLastSibling();
 
-            //UpdateLocalization(DataManager.Instance.LocalizationIndex);
-
-            //if (_openSound != null)
-            //{
-            //    RGM.Instance.AudioMgr.Play(AudioSourceType.Effect, _openSound);
-            //}
-        }
-
-        public virtual void OnClose()
-        {
-            //if (_closeSound != null)
-            //{
-            //    RGM.Instance.AudioMgr.Play(AudioSourceType.Effect, _closeSound);
-            //}
-        }
 
         // public virtual void OnBeginDragAndDrop(SlotUI inFromSlot)
         // {
@@ -125,6 +90,18 @@ namespace ARPG.Base
         protected virtual void OnUpdateLocalization()
         {
 
+        }
+
+        protected virtual async void LoadUI(string inName, Transform inParent)
+        {
+            // Addressables를 사용하여 UI 프리팹을 비동기적으로 로드
+            var handle = UnityEngine.AddressableAssets.Addressables.InstantiateAsync(inName, inParent);
+            await handle.Task;
+            
+            if (handle.Status != UnityEngine.ResourceManagement.AsyncOperations.AsyncOperationStatus.Succeeded)
+            {
+                Debug.LogError($"[UIBase] Failed to load UI: {inName}");
+            }
         }
 
         //protected string GetLocalizedString(string inTableName, string inKey)

@@ -8,9 +8,9 @@ namespace ARPG.UI
     {
         [SerializeField] Image _BG_EquipType;
 
-        public override void Initialize()
+        public override void Initialize(int inSlotIndex)
         {
-            base.Initialize();
+            base.Initialize(inSlotIndex);
         }
 
         public override void Reset()

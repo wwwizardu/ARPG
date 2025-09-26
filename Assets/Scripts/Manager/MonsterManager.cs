@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using ARPG.Map;
 using ARPG.Creature;
+using ARPG.Scene;
 
 namespace ARPG.Monster
 {
@@ -185,9 +186,12 @@ namespace ARPG.Monster
             if (monsterPrefab == null)
                 return -1;
 
+            if(AR.s.CurrentScene is GameScene gameScene == false)
+                return -1;
+
             Vector3 spawnPos = new Vector3(position.x, position.y, -0.05f) ;
 
-            GameObject monsterObj = Instantiate(monsterPrefab, spawnPos, Quaternion.identity);
+            GameObject monsterObj = Instantiate(monsterPrefab, spawnPos, Quaternion.identity, gameScene.MonsterRoot);
             Creature.Monster monster = monsterObj.GetComponent<Creature.Monster>();
             
             if (monster == null)

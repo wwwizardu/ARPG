@@ -1,6 +1,7 @@
 #nullable enable
 using ARPG.Creature;
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 
 public class CameraController : MonoBehaviour
 {
@@ -11,6 +12,21 @@ public class CameraController : MonoBehaviour
     public void Initialize(ArpgPlayer inPlayer)
     {
         _player = inPlayer;
+
+        //SetupCameraStack();
+    }
+
+    private void SetupCameraStack()
+    {
+        var cameraData = _camera.GetUniversalAdditionalCameraData();
+
+        Camera? uiCamera = ARPG.AR.s?.UI?.UICamera;
+        if (cameraData != null)
+        {
+            cameraData.cameraStack.Add(uiCamera);
+
+            Debug.Log("UI Camera added to camera stack");
+        }
     }
 
     // Update is called once per frame

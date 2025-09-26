@@ -4,6 +4,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using ARPG.UI;
 using Cysharp.Threading.Tasks;
 using DG.Tweening;
 using TMPro;
@@ -18,13 +19,22 @@ namespace ARPG
     public class UIResource
     {
         public AsyncOperationHandle Handle;
-        public Base.UIBase? UI;
+        public Base.UIBaseForm? UI;
+    }
+    
+    public static class AddressablePath
+    {
+        public const string SlotUI = "UI/SlotUI";
+        public const string Character = "UI/Character";
+        public const string Inventory = "UI/Inventory";
     }
 
     public class UIManager : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
     {
         public static int Width = 1920;
         public static int Height = 1080;
+
+
 
         public enum Layer
         {
@@ -61,7 +71,7 @@ namespace ARPG
         [Header("Canvas")]
         [SerializeField] private Transform _topCanvas;
         [SerializeField] private Transform _mainCanvas;
-        
+
         [Header("Loading UI")]
         [SerializeField] private UnityEngine.UI.Image _fadeInOutBG;
         [SerializeField] private TextMeshProUGUI _loadingText;
@@ -80,13 +90,9 @@ namespace ARPG
         //[Header("Drag And Drop Slot")]
         //[SerializeField] private DummySlotUI _dummySlot;
 
-        [Header("BG")]
-        [SerializeField] private GameObject _bgImage;
-
-
         private Dictionary<string, UIResource> _uiList = new Dictionary<string, UIResource>();
-        private List<Base.UIBase> _uiBaseList = new List<Base.UIBase>(); // 항상 떠있어야 하는 UI는 이곳에 넣는다.
-        private List<Base.UIBase> _uiCurrentList = new List<Base.UIBase>(); // 현재 활성화된 UI 리스트
+        private List<Base.UIBaseForm> _uiBaseList = new List<Base.UIBaseForm>(); // 항상 떠있어야 하는 UI는 이곳에 넣는다.
+        private List<Base.UIBaseForm> _uiCurrentList = new List<Base.UIBaseForm>(); // 현재 활성화된 UI 리스트
 
         private float _topCanvasCameraPlanDistance = 0f;
         private float _mainCanvasCameraPlanDistance = 0f;
@@ -113,13 +119,13 @@ namespace ARPG
         private Canvas? _canvas;
         private Vector3[] _corners = new Vector3[4];
 
-         private  Input.ArpgInput _input = new();
-        
-         private Input.ArpgInputAction _inputSystem;
+        private Input.ArpgInput _input = new();
+
+        private Input.ArpgInputAction _inputSystem;
 
         private Coroutine? _saveCoroutine = null;
 
-        public Camera UICamera { get { return _uiCamera; } }
+        public Camera UICamera { get { return _uiCamera!; } }
 
         public RectTransform MainCanvas { get { return (RectTransform)_mainCanvas; } }
 
@@ -132,7 +138,7 @@ namespace ARPG
 
         public bool IsPressed { get { return _isPressed == true && 0.5f < _pressedTime; } }
 
-        public Input.ArpgInput Input { get { return _input; } }    
+        public Input.ArpgInput Input { get { return _input; } }
 
         // public bool IsUIMode { get { return _input.IsUIMode; } }
 
@@ -168,7 +174,7 @@ namespace ARPG
 
         public void Reset()
         {
-            
+
         }
 
         public void DisableInputSystem()
@@ -191,7 +197,7 @@ namespace ARPG
             // _inputSystem.Disable();
         }
 
-        public T? Get<T>(string inName, Layer inLayer = Layer.Main) where T : Base.UIBase
+        public T? Get<T>(string inName, Layer inLayer = Layer.Main) where T : Base.UIBaseForm
         {
             if (_uiList.ContainsKey(inName) == false)
             {
@@ -208,7 +214,7 @@ namespace ARPG
             return _uiList[inName].UI as T;
         }
 
-        public T? Show<T>(string inName, Layer inLayer) where T : Base.UIBase
+        public T? Show<T>(string inName, Layer inLayer) where T : Base.UIBaseForm
         {
             Lock();
 
@@ -223,25 +229,20 @@ namespace ARPG
                     return _uiCurrentList[_uiCurrentList.Count - 1] as T;
                 }
 
-                if(_uiList.TryGetValue(inName, out UIResource outUI) == false)
+                if (_uiList.TryGetValue(inName, out UIResource outUI) == false)
                 {
                     Debug.LogError($"[UIManager] Show() - not found in _uiList, inName({inName})");
                     UnLock();
                     return null;
                 }
 
-                if(outUI.UI.IsBase == true) // Base UI라면 그냥 리턴한다.
+                if (outUI.UI.IsBase == true) // Base UI라면 그냥 리턴한다.
                 {
                     UnLock();
                     return outUI.UI as T;
                 }
                 else
                 {
-                    if(_isGameScene == true)
-                    {
-                        _bgImage.SetActive(true);
-                    }
-                    
                     // 그 밑에 있는 UI라면 최상위로 위치를 옮긴다.
                     int findIndex = _uiCurrentList.IndexOf(_uiList[inName].UI);
                     if (findIndex == -1)
@@ -276,7 +277,7 @@ namespace ARPG
                 return null;
             }
 
-            if(ui.IsBase == true)
+            if (ui.IsBase == true)
             {
                 if (_uiBaseList.Contains(ui) == false)
                 {
@@ -285,11 +286,6 @@ namespace ARPG
             }
             else
             {
-                if (_isGameScene == true)
-                {
-                    _bgImage.SetActive(true);
-                }
-
                 if (_uiCurrentList.Contains(ui) == false)
                 {
                     _uiCurrentList.Add(ui);
@@ -472,8 +468,8 @@ namespace ARPG
                 return;
             }
 
-            Base.UIBase? ui = _uiList[inName].UI;
-            if(ui != null) 
+            Base.UIBaseForm? ui = _uiList[inName].UI;
+            if (ui != null)
             {
                 ui.OnClose();
                 ui.gameObject.SetActive(false);
@@ -481,11 +477,6 @@ namespace ARPG
                 if (ui.IsBase == false)
                 {
                     _uiCurrentList.Remove(ui);
-                }
-
-                if (_uiCurrentList.Count == 0) // 더이상 활성화된 UI가 없다면 배경 이미지를 끈다.
-                {
-                    _bgImage.SetActive(false);
                 }
 
                 // UI 삭제
@@ -502,7 +493,7 @@ namespace ARPG
                 }
             }
 
-            
+
 
             // 창이 닫힐 때 툴팁도 닫는걸 시도한다.
             HideTooltip();
@@ -526,8 +517,10 @@ namespace ARPG
             return _uiList[inName].UI.gameObject.activeSelf;
         }
 
-        public void UpdateInputActionMap() 
+        public void UpdateInputActionMap()
         {
+            _input.ChangeActionMap(0 < _uiCurrentList.Count);
+
             // if(Hub.s!.console.IsActivateDebugConsol == true)
             // {
             //     _input.ChangeActionMap(true);
@@ -729,7 +722,7 @@ namespace ARPG
                     }
                 }
 
-                if(isAllPass == true) // 현재 UI에서 이벤트 사용하는 부분이 없다면 Base UI도 체크한다.
+                if (isAllPass == true) // 현재 UI에서 이벤트 사용하는 부분이 없다면 Base UI도 체크한다.
                 {
                     for (int i = _uiBaseList.Count - 1; 0 <= i; i--)
                     {
@@ -740,7 +733,7 @@ namespace ARPG
                     }
                 }
             }
-                  
+
         }
 
         public void OnPointerUp(PointerEventData eventData)
@@ -788,7 +781,7 @@ namespace ARPG
         //     EventSystem.current.RaycastAll(eventData, results);
 
         //     SlotUI clickedSlot = null;
-            
+
         //     for (int i = 0; i < results.Count; i++)
         //     {
         //         if (results[i].gameObject.TryGetComponent(out SlotUI slot))
@@ -796,14 +789,14 @@ namespace ARPG
         //             clickedSlot = slot;
         //             break;
         //         }
-                
+
         //         if (results[i].gameObject.CompareTag("ItemDropZone"))
         //         {
         //             DropItem();
         //             break;
         //         }
         //     }
-            
+
         //     if (clickedSlot != null)
         //     {
         //         HandleSlotClick(clickedSlot);
@@ -909,7 +902,7 @@ namespace ARPG
         //     return tooltipPosition;
         // }
 
-        private T? LoadUI<T>(string inName, Layer inLayer) where T : Base.UIBase
+        private T? LoadUI<T>(string inName, Layer inLayer) where T : Base.UIBaseForm
         {
             Transform layerParent = GetLayer(inLayer);
             if (layerParent == null)
@@ -957,7 +950,7 @@ namespace ARPG
 
         public void ClearAll()
         {
-            for (int i = _uiBaseList.Count -1; 0 <= i; i--)
+            for (int i = _uiBaseList.Count - 1; 0 <= i; i--)
             {
                 if (_uiBaseList[i].DontDestroy == true)
                     continue;
@@ -979,7 +972,7 @@ namespace ARPG
                 if (uiList[i] == null)
                     continue;
 
-                if(uiList[i].UI != null)
+                if (uiList[i].UI != null)
                 {
                     if (uiList[i].UI!.DontDestroy == true)
                         continue;
@@ -1075,60 +1068,60 @@ namespace ARPG
                 return;
 
             bool isAllPass = true;
-            // for (int i = _uiCurrentList.Count - 1; 0 <= i; i--) // 활성화된 UI Input 처리
-            // {
-            //     if (_uiCurrentList[i].UpdateInput(_input) == true)
-            //     {
-            //         isAllPass = false;
-            //         break;
-            //     }
-            // }
+            for (int i = _uiCurrentList.Count - 1; 0 <= i; i--) // 활성화된 UI Input 처리
+            {
+                if (_uiCurrentList[i].UpdateInput(_input) == true)
+                {
+                    isAllPass = false;
+                    break;
+                }
+            }
 
-            // if(isAllPass == true) // Base UI Input 처리
-            // {
-            //     for (int i = _uiBaseList.Count - 1; 0 <= i; i--)
-            //     {
-            //         if (_uiBaseList[i].UpdateInput(_input) == true)
-            //         {
-            //             isAllPass = false;
-            //             break;
-            //         }
-            //     }
-            // }
-            
-            // if(isAllPass == true) // Player Input 처리
-            // {
-            //     if (_input.UI.RightClick.WasReleasedThisFrame() == true) // 
-            //     {
-            //         // RobotController? robot = Hub.s?.pdata?.OwnerRobot;
-            //         // if (robot == null)
-            //         //     return;
-            //         //
-            //         // Shared.Item.ItemInstance? holdingItem = robot.Toolbelt?.HoldingItemInstance;
-            //         // if (holdingItem != null && holdingItem.ConsumableComponent != null && holdingItem.IsRobotItem == true)
-            //         // {
-            //         //     robot.ConsumeItemRpc(robot.Toolbelt!.HoldingItemInventorySlotIndex);
-            //         // }
-            //     }
-            //     else if(_input.Player.UseItem.WasReleasedThisFrame() == true)
-            //     {
-            //         if (Hub.s?.pdata?.OwnerPlayer == null)
-            //             return;
+            if (isAllPass == true) // Base UI Input 처리
+            {
+                for (int i = _uiBaseList.Count - 1; 0 <= i; i--)
+                {
+                    if (_uiBaseList[i].UpdateInput(_input) == true)
+                    {
+                        isAllPass = false;
+                        break;
+                    }
+                }
+            }
 
-            //         Shared.Item.ItemInstance? holdingItem = Hub.s.pdata.OwnerPlayer?.Toolbelt?.HoldingItemInstance;
-            //         if(holdingItem != null && holdingItem.ConsumableComponent != null) 
-            //         {
-            //             Hub.s.pdata.OwnerPlayer!.UseItem(holdingItem.ItemInstanceId);
-            //         }
-            //     }
-            //     else if (_input.Player.ShowMenu.WasReleasedThisFrame())
-            //     {
-            //         if (Hub.isUnderGround == false)
-            //             return;
+            if (isAllPass == true) // Player Input 처리
+            {
+                if (_input.UI.RightClick.WasReleasedThisFrame() == true) // 
+                {
+                    // RobotController? robot = Hub.s?.pdata?.OwnerRobot;
+                    // if (robot == null)
+                    //     return;
+                    //
+                    // Shared.Item.ItemInstance? holdingItem = robot.Toolbelt?.HoldingItemInstance;
+                    // if (holdingItem != null && holdingItem.ConsumableComponent != null && holdingItem.IsRobotItem == true)
+                    // {
+                    //     robot.ConsumeItemRpc(robot.Toolbelt!.HoldingItemInventorySlotIndex);
+                    // }
+                }
+                // else if(_input.Player.UseItem.WasReleasedThisFrame() == true)
+                // {
+                //     if (Hub.s?.pdata?.OwnerPlayer == null)
+                //         return;
 
-            //         Show<UIPrefab_Menu>(AddressablePath.UIPrefab_Menu, Layer.Top);
-            //     }
-            // }
+                //     Shared.Item.ItemInstance? holdingItem = Hub.s.pdata.OwnerPlayer?.Toolbelt?.HoldingItemInstance;
+                //     if(holdingItem != null && holdingItem.ConsumableComponent != null) 
+                //     {
+                //         Hub.s.pdata.OwnerPlayer!.UseItem(holdingItem.ItemInstanceId);
+                //     }
+                // }
+                // else if (_input.Player.ShowMenu.WasReleasedThisFrame())
+                // {
+                //     if (Hub.isUnderGround == false)
+                //         return;
+
+                //     Show<UIPrefab_Menu>(AddressablePath.UIPrefab_Menu, Layer.Top);
+                // }
+            }
         }
 
         private void ReleaseDummySlot()
