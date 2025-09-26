@@ -18,11 +18,11 @@ namespace ARPG.UI
         {
             SlotCount = inSlotMaxCount;
             base.Initialize(inName, false);
-            
+
             if (_inventory == null)
                 _inventory = new Inventory();
 
-            _inventory.Initialize(SlotCount);
+            _inventory.Initialize(AR.s.Data.Player._inventory, SlotCount);
 
             var loadResult = await LoadSlots();
             if (loadResult == false)

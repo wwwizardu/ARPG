@@ -1,3 +1,4 @@
+using ARPG.Data;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -37,6 +38,11 @@ namespace ARPG.UI
             _BG.gameObject.SetActive(true);
             _Icon.gameObject.SetActive(false);
             _TextQuantity.gameObject.SetActive(false);
+        }
+
+        public virtual void SetItem(ItemData inItem)
+        {
+
         }
     }
 }

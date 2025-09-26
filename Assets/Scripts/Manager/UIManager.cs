@@ -87,8 +87,8 @@ namespace ARPG
         [Header("Waiting For Response")]
         [SerializeField] private GameObject _waitingFor;
 
-        //[Header("Drag And Drop Slot")]
-        //[SerializeField] private DummySlotUI _dummySlot;
+        [Header("Drag And Drop Slot")]
+        [SerializeField] private SlotUI _dragSlot;
 
         private Dictionary<string, UIResource> _uiList = new Dictionary<string, UIResource>();
         private List<Base.UIBaseForm> _uiBaseList = new List<Base.UIBaseForm>(); // 항상 떠있어야 하는 UI는 이곳에 넣는다.
@@ -144,7 +144,7 @@ namespace ARPG
 
         public Action OnLangugeChanged;
 
-        // public DummySlotUI DummySlot { get { return _dummySlot; } }
+        public SlotUI DragSlot { get { return _dragSlot; } }
 
         void Awake()
         {
@@ -765,15 +765,15 @@ namespace ARPG
             }
         }
 
-        // public void BeginDraggingFromSlot(SlotUI slot, PointerEventData eventData)
-        // {
-        //     if (_input.UI.Ctrl.IsPressed() == true)
-        //         return;
+         public void BeginDraggingFromSlot(SlotUI slot, PointerEventData eventData)
+         {
+            // if (_input.UI.Ctrl.IsPressed() == true)
+            //     return;
 
-        //     HandleSlotClick(slot);
+            //     HandleSlotClick(slot);
 
-        //     CurrentUI?.OnBeginDragAndDrop(slot);
-        // }
+            //     CurrentUI?.OnBeginDragAndDrop(slot);
+         }
 
         // public void EndDraggingOn(PointerEventData eventData)
         // {

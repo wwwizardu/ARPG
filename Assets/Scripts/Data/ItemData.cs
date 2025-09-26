@@ -1,4 +1,5 @@
 using System;
+using ARPG.Tables;
 using UnityEngine;
 
 namespace ARPG.Data
@@ -11,6 +12,8 @@ namespace ARPG.Data
         public int ItemInstanceId;
 
         public int Quantity;
+
+        [NonSerialized] public ItemTable Table;
 
     } 
 }

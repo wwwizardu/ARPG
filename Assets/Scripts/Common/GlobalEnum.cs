@@ -8,9 +8,9 @@ public class GlobalEnum
         Ground = 1,     // 맨땅
         Glass = 2,      // 잔디
         StoneGround = 3, // 자갈
-        
+
     }
-    
+
     public enum TileFlag
     {
         None = 0,
@@ -40,5 +40,20 @@ public class GlobalEnum
         LightningResist,
         PoisonResist,
         Luck,
+    }
+
+    public enum EquipSlotType
+    {
+        WeaponLeft,     // 왼손 무기
+        WeaponRight,    // 오른손 무기
+        Helmet,         // 투구
+        Armor,          // 갑옷
+        Gloves,         // 장갑
+        Boots,          // 부츠
+        Necklace,       // 목걸이
+        RingLeft,       // 왼쪽 반지
+        RingRight,      // 오른쪽 반지
+        Belt,           // 허리띠
+        Max,
     }
 }

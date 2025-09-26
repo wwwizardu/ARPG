@@ -44,12 +44,10 @@ namespace ARPG
         public async void Initialize()
         {
             // 초기화 로직
-            _dataManager.Initialize();
+            await _dataManager.Initialize();
             _uiManager.Initialize();
             _mapManager.Initialize();
             _monsterManager.Initialize();
-
-            await _dataManager.LoadTableAsync();
 
             _initialized = true;
 

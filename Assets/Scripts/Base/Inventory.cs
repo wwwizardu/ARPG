@@ -1,21 +1,23 @@
+#nullable enable
 using System.Collections.Generic;
+using ARPG;
 using ARPG.Data;
 using UnityEngine;
 
 public class Inventory
 {
-    private List<ItemData> _items = new List<ItemData>();
     private int _maxSlotCount = 0;
 
-    public void Initialize(int inSlotMaxCount)
-    {
-        _maxSlotCount = inSlotMaxCount;
-        _items.Clear();
+    private List<ItemData?> _items = null!;
 
-        // 인벤토리 슬롯을 null로 초기화
-        for (int i = 0; i < _maxSlotCount; i++)
+    public void Initialize(List<ItemData?> inItemList, int inSlotMaxCount)
+    {
+        _items = inItemList;
+        _maxSlotCount = inSlotMaxCount;
+
+        if (_items == null)
         {
-            _items.Add(null);
+            Debug.LogError("[Inventory] Initialize - inItemList is null");
         }
     }
 
@@ -23,13 +25,13 @@ public class Inventory
     {
         if (inItem == null)
             return false;
-
+        
         // 같은 ID의 아이템이 있는지 확인하여 수량 증가
         for (int i = 0; i < _items.Count; i++)
         {
-            if (_items[i] != null && _items[i].Id == inItem.Id)
+            if (_items[i] != null && _items[i]!.Id == inItem.Id)
             {
-                _items[i].Quantity += inItem.Quantity;
+                _items[i]!.Quantity += inItem.Quantity;
                 return true;
             }
         }
@@ -48,7 +50,7 @@ public class Inventory
         return false;
     }
 
-    public bool AddItem(ItemData inItem, int slotIndex, out ItemData replacedItem)
+    public bool AddItem(ItemData inItem, int slotIndex, out ItemData? replacedItem)
     {
         replacedItem = null;
 
@@ -60,9 +62,9 @@ public class Inventory
             return false;
 
         // 해당 슬롯에 같은 ID의 아이템이 있으면 수량 증가
-        if (_items[slotIndex] != null && _items[slotIndex].Id == inItem.Id)
+        if (_items[slotIndex] != null && _items[slotIndex]!.Id == inItem.Id)
         {
-            _items[slotIndex].Quantity += inItem.Quantity;
+            _items[slotIndex]!.Quantity += inItem.Quantity;
             return true;
         }
 
@@ -107,8 +109,8 @@ public class Inventory
             return true;
 
         // 아이템 위치 교환 (빈 슬롯이어도 교환 가능)
-        ItemData fromItem = _items[inFromIndex];
-        ItemData toItem = _items[inToIndex];
+        ItemData? fromItem = _items[inFromIndex];
+        ItemData? toItem = _items[inToIndex];
 
         _items[inFromIndex] = toItem;
         _items[inToIndex] = fromItem;
@@ -116,12 +118,12 @@ public class Inventory
         return true;
     }
 
-    public List<ItemData> GetItems()
+    public List<ItemData?> GetItems()
     {
         return _items;
     }
     
-    public ItemData GetItemBySlotIndex(int inIndex)
+    public ItemData? GetItemBySlotIndex(int inIndex)
     {
         if (inIndex < 0 || inIndex >= _items.Count)
             return null;
