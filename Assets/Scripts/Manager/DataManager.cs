@@ -16,6 +16,7 @@ namespace ARPG.Data
             // 데이터 초기화 로직
             await LoadTableAsync();
 
+            await Load();
 
             Debug.Log("DataManager Initialized");
         }
@@ -28,6 +29,7 @@ namespace ARPG.Data
 
         public async Task<bool> Load()
         {
+            _playerData.Initialize(60); // 인벤토리 슬롯 60개로 초기화
 
             return true;
         }

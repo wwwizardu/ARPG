@@ -11,6 +11,7 @@ namespace ARPG.UI
         [SerializeField] private Transform _inventoryRoot;
 
         private UIInventory _inventoryUI;
+        private CharacterUI _characterUI;
         private bool _loadCompleted = false;
 
         public bool LoadCompleted => _loadCompleted;
@@ -43,6 +44,11 @@ namespace ARPG.UI
         {
             var loadTasks = new List<UniTask>();
 
+            if (_characterUI == null)
+            {
+                loadTasks.Add(LoadCharacterUI());
+            }
+
             if (_inventoryUI == null)
             {
                 loadTasks.Add(LoadInventoryUI());
@@ -52,6 +58,13 @@ namespace ARPG.UI
 
             _loadCompleted = true;
             Debug.Log("UICharacter LoadUI completed");
+        }
+
+        private async UniTask LoadCharacterUI()
+        {
+            // 캐릭터 UI 로드 로직 (필요시 구현)
+            _characterUI = await LoadUIAsync<CharacterUI>("UI/CharacterUI", _characterRoot);
+            _characterUI.Initialize("UI/CharacterUI"); 
         }
 
         private async UniTask LoadInventoryUI()

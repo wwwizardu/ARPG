@@ -58,7 +58,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 0.38679248, g: 0.0054734685, b: 0.0054734685, a: 1}
+  m_Color: {r: 0.3137255, g: 0.0054734685, b: 0.0054734685, a: 1}
   m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 0
@@ -124,10 +124,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 01e23422088377945ac4636e3f464078, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _dontDestroy: 0
-  _isBase: 0
-  _openSound: {fileID: 0}
-  _closeSound: {fileID: 0}
   SlotCount: 20
   _slotRoot: {fileID: 4825199860917996564}
 --- !u!1 &7140666097092547002

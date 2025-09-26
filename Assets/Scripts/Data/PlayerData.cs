@@ -20,6 +20,27 @@ namespace ARPG.Data
 
         public List<ItemData?> _inventory = new List<ItemData?>();
 
+        public void Initialize(int inInventorySlotMaxCount)
+        {
+            Level = 1;
+            Exp = 0;
+            Gold = 0;
+
+            PositionX = 0;
+            PositionZ = 0;
+
+            for (int i = 0; i < (int)GlobalEnum.EquipSlotType.Max; i++)
+            {
+                _inventoryEquip[i] = null;
+            }
+
+            _inventory.Clear();
+            for (int i = 0; i < inInventorySlotMaxCount; i++)
+            {
+                _inventory.Add(null);
+            }
+        }
+
         public bool Load()
         {
             // 로드 로직

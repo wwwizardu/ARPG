@@ -8,16 +8,8 @@ namespace ARPG.Base
         protected string _name;
         protected RectTransform _rectTransform;
 
-        [SerializeField] protected bool _dontDestroy = false;
-        [SerializeField] protected bool _isBase = false;
-        [SerializeField] private AudioClip _openSound;
-        [SerializeField] private AudioClip _closeSound;
-
         public string Name { get { return _name; } }
-        public bool DontDestroy { get { return _dontDestroy; } }
-
-        public bool IsBase { get { return _isBase; } }
-
+        
         private int _localizationCodeIndex = 0;
 
         protected virtual void Awake()

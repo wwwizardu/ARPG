@@ -21,7 +21,7 @@ namespace ARPG
         public AsyncOperationHandle Handle;
         public Base.UIBaseForm? UI;
     }
-    
+
     public static class AddressablePath
     {
         public const string SlotUI = "UI/SlotUI";

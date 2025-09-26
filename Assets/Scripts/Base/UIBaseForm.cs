@@ -5,7 +5,15 @@ namespace ARPG.Base
 {
     public class UIBaseForm : UIBase
     {
+        [SerializeField] protected bool _dontDestroy = false;
+        [SerializeField] private AudioClip _openSound;
+        [SerializeField] private AudioClip _closeSound;
         [SerializeField] protected Transform _visual;
+        [SerializeField] protected bool _isBase = false;
+
+
+        public bool DontDestroy { get { return _dontDestroy; } }
+        public bool IsBase { get { return _isBase; } }
 
         public virtual bool UpdateInput(Input.ArpgInput inInput)
         {
