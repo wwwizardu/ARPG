@@ -31,7 +31,12 @@ namespace ARPG.Base
 
         protected virtual IEnumerator OnInitialize()
         {
-            yield return null; // Placeholder for initialization logic
+            while (AR.s.IsInitialized == false)
+            {
+                yield return null; // Wait until AR is initialized
+            }
+
+            AR.s.OnSceneLoadStart(this);
         }
     }
 }

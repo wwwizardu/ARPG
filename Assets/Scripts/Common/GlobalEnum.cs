@@ -54,6 +54,8 @@ public class GlobalEnum
         RingLeft,       // 왼쪽 반지
         RingRight,      // 오른쪽 반지
         Belt,           // 허리띠
+        EarringLeft,    // 왼쪽 귀걸이
+        EarringRight,   // 오른쪽 귀걸이
         Max,
     }
 }

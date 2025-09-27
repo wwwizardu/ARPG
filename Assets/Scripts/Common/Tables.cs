@@ -72,6 +72,7 @@ namespace ARPG.Tables
     [Serializable]
     public class EquipmentTable : TableBase
     {
+        [JsonProperty("EquipType")] public GlobalEnum.EquipSlotType EquipType;
         [JsonProperty("Prefix")] public List<Stat> Prefix;
         [JsonProperty("Postfix")] public List<Stat> Postfix;
 
@@ -107,7 +108,7 @@ namespace ARPG.Tables
     public class Stat
     {
         [JsonProperty("Type")] public GlobalEnum.Stat Type;
-        [JsonProperty("Value")] public int Value;
+        [JsonProperty("Value")] public ushort Value;
     }
 
 }

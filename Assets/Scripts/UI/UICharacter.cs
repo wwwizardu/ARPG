@@ -70,7 +70,7 @@ namespace ARPG.UI
         private async UniTask LoadInventoryUI()
         {
             _inventoryUI = await LoadUIAsync<UIInventory>(AddressablePath.Inventory, _inventoryRoot);
-            _inventoryUI.Initialize(AddressablePath.Inventory, 40); // 슬롯 40개로 초기화
+            _inventoryUI.Initialize(AddressablePath.Inventory, AR.s.Data.Player._inventory, AR.s.Data.Player._inventory.Count); // 슬롯 40개로 초기화
         }
 
         private async UniTask<T> LoadUIAsync<T>(string inName, Transform inParent) where T : UIBase

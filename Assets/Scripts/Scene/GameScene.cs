@@ -16,11 +16,6 @@ namespace ARPG.Scene
         {
             yield return base.OnInitialize();
 
-            while (AR.s.IsInitialized == false)
-            {
-                yield return null; // Wait until AR is initialized
-            }
-
             GameObject playerObject = Instantiate(_playerPrefab);
             if (playerObject != null)
             {

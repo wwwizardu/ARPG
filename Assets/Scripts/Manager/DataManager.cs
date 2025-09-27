@@ -7,7 +7,8 @@ namespace ARPG.Data
 {
     public partial class DataManager : MonoBehaviour
     {
-        private PlayerData _playerData = new PlayerData();
+        private WorldData _worldData = new();
+        private PlayerData _playerData = new();
 
         public PlayerData Player => _playerData;
 
@@ -29,6 +30,8 @@ namespace ARPG.Data
 
         public async Task<bool> Load()
         {
+            _worldData.Initialize();
+
             _playerData.Initialize(60); // 인벤토리 슬롯 60개로 초기화
 
             return true;
@@ -40,6 +43,12 @@ namespace ARPG.Data
             return true;
         }
 
+        public bool DropItem(Vector2 inPosition, ItemData inItem)
+        {
+            if (inItem == null)
+                return false;
 
+            return _worldData.AddDropItem(inPosition.x, inPosition.y, inItem);
+        }
     }
 }

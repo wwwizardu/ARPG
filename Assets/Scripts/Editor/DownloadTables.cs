@@ -33,7 +33,7 @@ namespace ARPG.Editor
 
             await DownloadTable<ItemTable>("2064107837&range=A:D", 1, SaveType.String);
             
-            await DownloadTable<EquipmentTable>("853198133&range=A:Q", 1, SaveType.String);
+            await DownloadTable<EquipmentTable>("853198133&range=A:R", 1, SaveType.String);
             
             await DownloadTable<DropTable>("1241586373&range=A:J", 1, SaveType.String);
 
@@ -157,26 +157,32 @@ namespace ARPG.Editor
 
         private static void ParseEquipmentTable(EquipmentTable table, string[] values)
         {
-            if (values.Length < 17) return;
+            if (values.Length < 18) return;
+
+            table.EquipType = (GlobalEnum.EquipSlotType)Enum.Parse(typeof(GlobalEnum.EquipSlotType), values[1]);
 
             table.Prefix = new List<Stat>();
             table.Postfix = new List<Stat>();
 
+            // Prefix 시작 인덱스 (EquipType 다음부터)
+            int prefixStartIndex = 2;
             for (int i = 0; i < 4; i++)
             {
-                int index = (i * 2) + 1;
+                int index = prefixStartIndex + (i * 2);
                 Stat stat = new Stat();
                 stat.Type = (GlobalEnum.Stat)Enum.Parse(typeof(GlobalEnum.Stat), values[index]);
-                stat.Value = int.Parse(values[index + 1]);
+                stat.Value = ushort.Parse(values[index + 1]);
                 table.Prefix.Add(stat);
             }
 
+            // Postfix 시작 인덱스 (Prefix 4개 스탯 이후)
+            int postfixStartIndex = prefixStartIndex + 8;
             for (int i = 0; i < 4; i++)
             {
-                int index = 8 + (i * 2) + 1;
+                int index = postfixStartIndex + (i * 2);
                 Stat stat = new Stat();
                 stat.Type = (GlobalEnum.Stat)Enum.Parse(typeof(GlobalEnum.Stat), values[index]);
-                stat.Value = int.Parse(values[index+1]);
+                stat.Value = ushort.Parse(values[index+1]);
                 table.Postfix.Add(stat);
             }
         }

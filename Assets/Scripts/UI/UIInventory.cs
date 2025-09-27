@@ -12,17 +12,19 @@ namespace ARPG.UI
         [SerializeField] Transform _slotRoot;
 
         private SlotUI? []? _slotUIs = null;
-        private Inventory? _inventory;
+        private List<Data.ItemData?> _items = null!;
 
-        public async void Initialize(string inName, int inSlotMaxCount)
+        public async void Initialize(string inName, List<Data.ItemData?> inInventory, int inSlotMaxCount)
         {
             SlotCount = inSlotMaxCount;
             base.Initialize(inName, false);
 
-            if (_inventory == null)
-                _inventory = new Inventory();
-
-            _inventory.Initialize(AR.s.Data.Player._inventory, SlotCount);
+            _items = inInventory;
+            if(_items == null)
+            {
+                Debug.LogError("[UIInventory] Player inventory is null");
+                return;
+            }
 
             var loadResult = await LoadSlots();
             if (loadResult == false)
@@ -35,6 +37,116 @@ namespace ARPG.UI
         public override void Initialize(string inName, bool isForm = false)
         {
             Debug.LogError("[UIInventory] Initialize called, use Initialize(string inName, int inSlotMaxCount)");
+        }
+
+        public bool AddItem(Data.ItemData inItem)
+        {
+            if (inItem == null)
+                return false;
+            
+            // 같은 ID의 아이템이 있는지 확인하여 수량 증가
+            for (int i = 0; i < _items.Count; i++)
+            {
+                if (_items[i] != null && _items[i]!.Id == inItem.Id)
+                {
+                    _items[i]!.Quantity += inItem.Quantity;
+                    return true;
+                }
+            }
+
+            // 같은 아이템이 없으면 빈 슬롯 찾기
+            for (int i = 0; i < _items.Count; i++)
+            {
+                if (_items[i] == null)
+                {
+                    _items[i] = inItem;
+                    return true;
+                }
+            }
+
+            // 빈 슬롯이 없음
+            return false;
+        }
+
+        public bool AddItem(Data.ItemData inItem, int slotIndex, out Data.ItemData? replacedItem)
+        {
+            replacedItem = null;
+
+            if (inItem == null)
+                return false;
+
+            // 인덱스 유효성 검사
+            if (slotIndex < 0 || slotIndex >= _items.Count)
+                return false;
+
+            // 해당 슬롯에 같은 ID의 아이템이 있으면 수량 증가
+            if (_items[slotIndex] != null && _items[slotIndex]!.Id == inItem.Id)
+            {
+                _items[slotIndex]!.Quantity += inItem.Quantity;
+                return true;
+            }
+
+            // 해당 슬롯에 다른 아이템이 있으면 교체
+            if (_items[slotIndex] != null)
+            {
+                replacedItem = _items[slotIndex];
+            }
+
+            _items[slotIndex] = inItem;
+            return true;
+        }
+
+        public bool RemoveItem(Data.ItemData inItem)
+        {
+            if (inItem == null)
+                return false;
+
+            for (int i = 0; i < _items.Count; i++)
+            {
+                if (_items[i] == inItem)
+                {
+                    _items[i] = null;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public bool MoveItem(int inFromIndex, int inToIndex)
+        {
+            // 인덱스 유효성 검사
+            if (inFromIndex < 0 || inFromIndex >= _items.Count ||
+                inToIndex < 0 || inToIndex >= _items.Count)
+            {
+                return false;
+            }
+
+            // 같은 위치로 이동하는 경우
+            if (inFromIndex == inToIndex)
+                return true;
+
+            // 아이템 위치 교환 (빈 슬롯이어도 교환 가능)
+            Data.ItemData? fromItem = _items[inFromIndex];
+            Data.ItemData? toItem = _items[inToIndex];
+
+            _items[inFromIndex] = toItem;
+            _items[inToIndex] = fromItem;
+
+            return true;
+        }
+
+        public List<Data.ItemData?> GetItems()
+        {
+            return _items;
+        }
+        
+        public Data.ItemData? GetItemBySlotIndex(int inIndex)
+        {
+            if (inIndex < 0 || inIndex >= _items.Count)
+                return null;
+
+            return _items[inIndex];
         }
         
         private async Task<bool> LoadSlots()

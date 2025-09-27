@@ -169,7 +169,7 @@ namespace ARPG
 
         public void Initialize()
         {
-
+            DragSlot.gameObject.SetActive(false);
         }
 
         public void Reset()

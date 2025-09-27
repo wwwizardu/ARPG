@@ -63,9 +63,18 @@ namespace ARPG
 
         }
         
+        public void OnSceneLoadStart(Base.SceneBase inScene)
+        {
+            _currentScene = inScene;
+        }
+        
         public void OnLoadSceneComplete(Base.SceneBase inNewScene)
         {
-            _currentScene = inNewScene;
+            if (_currentScene == null)
+            {
+                Debug.LogError("[AR] OnLoadSceneComplete() - CurrentScene is null");
+                return;
+            }
 
             if (_currentScene.CurrentSceneType == Base.SceneBase.SceneType.Login)
             {
@@ -75,7 +84,7 @@ namespace ARPG
             {
                 if (_currentScene is Scene.GameScene gameScene)
                 {
-                    _monsterManager.SetMorsterRoot(gameScene.MonsterRoot);    
+                    _monsterManager.SetMorsterRoot(gameScene.MonsterRoot);
                 }
             }
         }
