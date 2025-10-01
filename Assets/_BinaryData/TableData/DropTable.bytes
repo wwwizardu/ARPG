@@ -1,1 +1,1 @@
-[{"Tier":5,"DropRate":15,"NormalRate":57,"MaginRate":30,"RareRate":10,"UniqueRate":3,"TotalRate":100,"GoldMin":0,"GoldMax":5,"Id":1},{"Tier":5,"DropRate":20,"NormalRate":57,"MaginRate":30,"RareRate":10,"UniqueRate":3,"TotalRate":100,"GoldMin":0,"GoldMax":10,"Id":2}]
+[{"Tier":0,"DropRate":0,"CurrencyRate":0,"CurrencyId":0,"EquipmentRate":0,"EquipmentId":0,"Id":1},{"Tier":0,"DropRate":0,"CurrencyRate":0,"CurrencyId":0,"EquipmentRate":0,"EquipmentId":0,"Id":2}]

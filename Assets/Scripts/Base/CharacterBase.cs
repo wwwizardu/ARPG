@@ -17,6 +17,7 @@ namespace ARPG.Creature
 
         [SerializeField] protected TMPro.TextMeshPro _textName;
 
+        protected CreatureTable? _table = null;
         protected StatController _statController = new StatController();
 
         protected CharacterConditions _condition = CharacterConditions.None;
@@ -32,8 +33,7 @@ namespace ARPG.Creature
         protected Vector2 _pervPos;
         protected Vector2 _currentPos;
         protected bool _initialized = false;
-
-        private CreatureTable? _table = null;
+        
 
         public CreatureTable? Table { get { return _table; } }
 
@@ -65,22 +65,26 @@ namespace ARPG.Creature
             _skillController.Reset();
         }
 
+        public virtual bool LoadTable(int inId)
+        {
+            return false;
+        }
+
         public virtual bool LoadData(int inId)
         {
-            _table = AR.s.Data.GetCreature(inId);
-            if (_table == null)
+            if(LoadTable(inId) == false)
             {
-                Debug.LogError($"[CharacterBase] LoadData - CreatureTable not found for Id: {inId}");
+                Debug.LogError($"[CharacterBase] LoadData - Failed to load table for Id: {inId}");
                 return false;
             }
 
             if (_textName != null)
             {
-                _textName.text = _table.Name;
+                _textName.text = _table!.Name;
             }
 
             // Load stats from table
-            _statController.LoadFromTable(this, _table);
+            _statController.LoadFromTable(this, _table!);
             _initialized = true;
 
             return true;

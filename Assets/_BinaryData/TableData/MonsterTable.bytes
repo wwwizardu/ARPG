@@ -1,0 +1,1 @@
+[{"DropId":1,"DropRateBonus":0,"DropRarityBonus":0,"Name":"Monster","Str":10,"Dex":5,"Int":2,"MaxHp":20,"MaxMp":20,"HpGeneration":2,"MpGeneration":2,"AttackMin":5,"AttackMax":10,"CriRate":5,"CriDamage":10,"MoveSpeed":3,"AttackSpeed":5,"CastSpeed":0,"Defense":20,"FireResist":5,"IceResist":5,"LightningResist":5,"PoisonResist":5,"Luck":5,"PrefabName":null,"Id":1}]

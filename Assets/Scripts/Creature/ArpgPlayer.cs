@@ -26,6 +26,18 @@ namespace ARPG.Creature
             Debug.Log("ArpgPlayer reset.");
         }
 
+        public override bool LoadTable(int inId)
+        {
+            _table = AR.s.Data.GetCreature(inId);
+            if (_table == null)
+            {
+                Debug.LogError($"[CharacterBase] LoadData - CreatureTable not found for Id: {inId}");
+                return false;
+            }
+            
+            return true;
+        }
+
         // protected override void InitializeSkill()
         // {
         //     _skillController.Initialize(this, _gamePlayer?.SkillData?.SkillDatas);
@@ -37,11 +49,11 @@ namespace ARPG.Creature
             if (_input == null)
                 return;
 
-            if(_input.Value.Inventory.WasPressedThisFrame() == true) // 인벤토리 열기
+            if (_input.Value.Inventory.WasPressedThisFrame() == true) // 인벤토리 열기
             {
                 var characterUI = AR.s.UI.Show<UICharacter>(AddressablePath.Character, UIManager.Layer.Main);
-                if(characterUI == null)
-                    return;    
+                if (characterUI == null)
+                    return;
             }
 
             // if (_input.Value.UseItem.WasPressedThisFrame() == true) // 아이템 사용 시 그냥 리턴

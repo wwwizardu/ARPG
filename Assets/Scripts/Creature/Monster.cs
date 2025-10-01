@@ -7,9 +7,12 @@ namespace ARPG.Creature
 {
     public class Monster : CharacterBase
     {
+        protected new Tables.MonsterTable? _table = null;
         private bool _activated = false;
         private MonsterAIBase? _ai = null;
         private int _instanceId = -1;
+
+        public new Tables.MonsterTable? Table { get { return _table; } }
 
         public override void Initialize()
         {
@@ -24,6 +27,18 @@ namespace ARPG.Creature
             base.Reset();
 
             _ai?.Reset();
+        }
+
+        public override bool LoadTable(int inId)
+        {
+            _table = AR.s.Data.GetMonster(inId);
+            if (_table == null)
+            {
+                Debug.LogError($"[Monster] LoadTable - MonsterTable not found for Id: {inId}");
+                return false;
+            }
+
+            return true;
         }
 
         protected override void Dead()
@@ -109,8 +124,36 @@ namespace ARPG.Creature
                 return;
             }
 
-            if (DropTable.DropRate <= UnityEngine.Random.Range(0, 100))
+            // 드랍 아이템 결정
+            int totalRate = DropTable.NothingRate + DropTable.CurrencyRate + DropTable.EquipmentRate;
+            int randomValue = UnityEngine.Random.Range(0, totalRate);
+
+            // 아무것도 안떨어짐
+            if (randomValue < DropTable.NothingRate)
                 return;
+
+            // 화폐 vs 장비 결정
+            if (randomValue < DropTable.NothingRate + DropTable.CurrencyRate)
+            {
+                // 화폐 드랍
+                var currencyTable = AR.s?.Data.GetDropCurrency(DropTable.CurrencyId);
+                if (currencyTable != null)
+                {
+                    Debug.Log($"[Monster] Dropping currency from table: {DropTable.CurrencyId}");
+                    // TODO: 실제 화폐 드랍 로직 구현
+                }
+            }
+            else
+            {
+                // 장비 드랍
+                var equipmentTable = AR.s?.Data.GetDropEquipment(DropTable.EquipmentId);
+                if (equipmentTable != null)
+                {
+                    Debug.Log($"[Monster] Dropping equipment from table: {DropTable.EquipmentId}");
+                    // TODO: 실제 장비 드랍 로직 구현
+                }
+            }
+
 
             // Addressable을 사용하여 비동기로 아이템 GameObject 생성
             DropItemAsync();
@@ -120,6 +163,8 @@ namespace ARPG.Creature
         {
             try
             {
+
+
                 var handle = Addressables.InstantiateAsync("Item/Item", transform.position, Quaternion.identity);
                 var itemObject = await handle.Task;
 

@@ -29,13 +29,19 @@ namespace ARPG.Editor
         {
             _tableDic = new();
 
-            await DownloadTable<CreatureTable>("0&range=A:W", 1, SaveType.String);
+            await DownloadTable<CreatureTable>("0&range=A:V", 1, SaveType.String);
 
-            await DownloadTable<ItemTable>("2064107837&range=A:D", 1, SaveType.String);
+            await DownloadTable<MonsterTable>("483012127&range=A:Y", 1, SaveType.String);
+
+            await DownloadTable<ItemTable>("2064107837&range=A:E", 1, SaveType.String);
             
             await DownloadTable<EquipmentTable>("853198133&range=A:R", 1, SaveType.String);
             
             await DownloadTable<DropTable>("1241586373&range=A:J", 1, SaveType.String);
+
+            await DownloadTable<DropCurrencyTable>("2071520432&range=A:B", 1, SaveType.String);
+
+            await DownloadTable<DropEquipmentTable>("1267382287&range=A:B", 1, SaveType.String);
 
             foreach (var tableType in _tableDic.Keys)
             {
@@ -91,7 +97,13 @@ namespace ARPG.Editor
             {
                 table.Id = int.Parse(values[0]);
 
-                if (table is CreatureTable creatureTable)
+                Debug.Log($"[DownloadTables] CreateTable - Creating table, Table({table}), Id({table.Id})");
+
+                if (table is MonsterTable monsterTable)
+                {
+                    ParseMonsterTable(monsterTable, values);
+                }
+                else if (table is CreatureTable creatureTable)
                 {
                     ParseCreatureTable(creatureTable, values);
                 }
@@ -106,6 +118,14 @@ namespace ARPG.Editor
                 else if (table is DropTable dropTable)
                 {
                     ParseDropTable(dropTable, values);
+                }
+                else if (table is DropCurrencyTable dropCurrencyTable)
+                {
+                    ParseDropCurrencyTable(dropCurrencyTable, values);
+                }
+                else if (table is DropEquipmentTable dropEquipmentTable)
+                {
+                    ParseDropEquipmentTable(dropEquipmentTable, values);
                 }
             }
             catch (Exception ex)
@@ -143,16 +163,46 @@ namespace ARPG.Editor
             table.LightningResist = int.Parse(values[19]);
             table.PoisonResist = int.Parse(values[20]);
             table.Luck = int.Parse(values[21]);
+        }
+
+        private static void ParseMonsterTable(MonsterTable table, string[] values)
+        {
+            if (values.Length < 22) return;
+
+            table.Name = values[1];
+            table.Str = int.Parse(values[2]);
+            table.Dex = int.Parse(values[3]);
+            table.Int = int.Parse(values[4]);
+            table.MaxHp = int.Parse(values[5]);
+            table.MaxMp = int.Parse(values[6]);
+            table.HpGeneration = int.Parse(values[7]);
+            table.MpGeneration = int.Parse(values[8]);
+            table.AttackMin = int.Parse(values[9]);
+            table.AttackMax = int.Parse(values[10]);
+            table.CriRate = int.Parse(values[11]);
+            table.CriDamage = int.Parse(values[12]);
+            table.MoveSpeed = int.Parse(values[13]);
+            table.AttackSpeed = int.Parse(values[14]);
+            table.CastSpeed = int.Parse(values[15]);
+            table.Defense = int.Parse(values[16]);
+            table.FireResist = int.Parse(values[17]);
+            table.IceResist = int.Parse(values[18]);
+            table.LightningResist = int.Parse(values[19]);
+            table.PoisonResist = int.Parse(values[20]);
+            table.Luck = int.Parse(values[21]);
             table.DropId = int.Parse(values[22]);
+            table.DropRateBonus = int.Parse(values[23]);
+            table.DropRarityBonus = int.Parse(values[24]);
         }
 
         private static void ParseItemTable(ItemTable table, string[] values)
         {
-            if (values.Length < 3) return;
+            if (values.Length < 4) return;
 
-            table.Name = values[1];
-            table.EquipmentId = int.Parse(values[2]);
-            table.SpriteName = values[3];
+            table.Tier = int.Parse(values[1]);
+            table.Name = values[2];
+            table.EquipmentId = int.Parse(values[3]);
+            table.SpriteName = values[4];
         }
 
         private static void ParseEquipmentTable(EquipmentTable table, string[] values)
@@ -189,17 +239,28 @@ namespace ARPG.Editor
 
         private static void ParseDropTable(DropTable table, string[] values)
         {
-            if (values.Length < 10) return;
+            if (values.Length < 8) return;
 
             table.Tier = int.Parse(values[1]);
-            table.DropRate = int.Parse(values[2]);
-            table.NormalRate = int.Parse(values[3]);
-            table.MaginRate = int.Parse(values[4]);
-            table.RareRate = int.Parse(values[5]);
-            table.UniqueRate = int.Parse(values[6]);
-            table.TotalRate = int.Parse(values[7]);
-            table.GoldMin = int.Parse(values[8]);
-            table.GoldMax = int.Parse(values[9]);
+            table.NothingRate = int.Parse(values[2]);
+            table.CurrencyRate = int.Parse(values[3]);
+            table.CurrencyId = int.Parse(values[4]);
+            table.EquipmentRate = int.Parse(values[5]);
+            table.EquipmentId = int.Parse(values[6]);
+        }
+
+        private static void ParseDropCurrencyTable(DropCurrencyTable table, string[] values)
+        {
+            if (values.Length < 2) return;
+
+            table.Tier = int.Parse(values[1]);
+        }
+
+        private static void ParseDropEquipmentTable(DropEquipmentTable table, string[] values)
+        {
+            if (values.Length < 2) return;
+
+            table.Tier = int.Parse(values[1]);
         }
 
         private static async Task<string> DownloadTableData(string inURL)

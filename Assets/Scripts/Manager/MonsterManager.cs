@@ -201,7 +201,7 @@ namespace ARPG.Monster
             }
 
             monster.Initialize();
-            monster.LoadData(2); // 임시로 ID 1 사용
+            monster.LoadData(1); // 임시로 ID 1 사용
 
             int monsterId = _nextMonsterId++;
             monster.SetInstanceId(monsterId); // 몬스터에 인스턴스 ID 저장

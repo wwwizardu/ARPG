@@ -41,13 +41,22 @@ namespace ARPG.Tables
         [JsonProperty("LightningResist")] public int LightningResist;
         [JsonProperty("PoisonResist")] public int PoisonResist;
         [JsonProperty("Luck")] public int Luck;
-        [JsonProperty("DropId")] public int DropId;
+        [JsonProperty("PrefabName")] public string PrefabName;
+    }
 
+    [Serializable]
+    public class MonsterTable : CreatureTable
+    {
+        [JsonProperty("DropId")] public int DropId;
+        [JsonProperty("DropRateBonus")] public int DropRateBonus;
+        [JsonProperty("DropRarityBonus")] public int DropRarityBonus;
     }
 
     [Serializable]
     public class ItemTable : TableBase
     {
+        [JsonProperty("Tier")] public int Tier;
+
         [JsonProperty("Name")] public string Name;
 
         [JsonProperty("EquipmentId")] public int EquipmentId;
@@ -93,15 +102,26 @@ namespace ARPG.Tables
     [Serializable]
     public class DropTable : TableBase
     {
+        [JsonProperty("Tier")] public int Tier;                     // Drop 아이템 티어
+        [JsonProperty("DropRate")] public int NothingRate;          // 아무것도 안떨어질 확률
+        [JsonProperty("CurrencyRate")] public int CurrencyRate;     // Drop 화폐 확률
+        [JsonProperty("CurrencyId")] public int CurrencyId;         // Drop 화폐 테이블 Id
+        [JsonProperty("EquipmentRate")] public int EquipmentRate;   // Drop 장비 확률
+        [JsonProperty("EquipmentId")] public int EquipmentId;       // Drop 장비 테이블 Id
+    }
+
+    [Serializable]
+    public class DropCurrencyTable : TableBase
+    {
         [JsonProperty("Tier")] public int Tier;                 // Drop 아이템 티어
-        [JsonProperty("DropRate")] public int DropRate;         // 드랍 확률 (1/10000)
-        [JsonProperty("NormalRate")] public int NormalRate;     // 일반 아이템 드랍 확률
-        [JsonProperty("MaginRate")] public int MaginRate;       // 마법 아이템 드랍 확률
-        [JsonProperty("RareRate")] public int RareRate;        // 희귀 아이템 드랍 확률
-        [JsonProperty("UniqueRate")] public int UniqueRate;    // 고유 아이템 드랍 확률
-        [JsonProperty("TotalRate")] public int TotalRate;       // 총합 확률 (Normal + Magin + Rare + Unique)
-        [JsonProperty("GoldMin")] public int GoldMin;           // 드랍 골드 최소값
-        [JsonProperty("GoldMax")] public int GoldMax;           // 드랍 골드 최대값
+
+    }
+
+    [Serializable]
+    public class DropEquipmentTable : TableBase
+    {
+        [JsonProperty("Tier")] public int Tier;                 // Drop 아이템 티어
+
     }
 
     [Serializable]

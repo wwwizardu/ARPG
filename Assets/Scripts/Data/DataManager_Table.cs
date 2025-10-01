@@ -12,18 +12,24 @@ namespace ARPG.Data
         public static string TablePath = "_BinaryData/TableData/";
 
         private ImmutableDictionary<int, Tables.CreatureTable> _creatureTable = null!;
+        private ImmutableDictionary<int, Tables.MonsterTable> _monsterTable = null!;
         private ImmutableDictionary<int, Tables.ItemTable> _itemTable = null!;
         private ImmutableDictionary<int, Tables.EquipmentTable> _equipmentTable = null!;
         private ImmutableDictionary<int, Tables.DropTable> _dropTable = null!;
+        private ImmutableDictionary<int, Tables.DropCurrencyTable> _dropCurrencyTable = null!;
+        private ImmutableDictionary<int, Tables.DropEquipmentTable> _dropEquipmentTable = null!;
         
         public async Task LoadTableAsync()
         {
             // 모든 테이블을 병렬로 로드
             await Task.WhenAll(
                 LoadTable<Tables.CreatureTable>("CreatureTable.bytes", tables => _creatureTable = tables),
+                LoadTable<Tables.MonsterTable>("MonsterTable.bytes", tables => _monsterTable = tables),
                 LoadTable<Tables.ItemTable>("ItemTable.bytes", tables => _itemTable = tables),
                 LoadTable<Tables.EquipmentTable>("EquipmentTable.bytes", tables => _equipmentTable = tables),
-                LoadTable<Tables.DropTable>("DropTable.bytes", tables => _dropTable = tables)
+                LoadTable<Tables.DropTable>("DropTable.bytes", tables => _dropTable = tables),
+                LoadTable<Tables.DropCurrencyTable>("DropCurrencyTable.bytes", tables => _dropCurrencyTable = tables),
+                LoadTable<Tables.DropEquipmentTable>("DropEquipmentTable.bytes", tables => _dropEquipmentTable = tables)
             );
 
             // 모든 테이블 로드 후 LoadLate 실행
@@ -31,18 +37,33 @@ namespace ARPG.Data
             {
                 table.LoadLate();
             }
-            
+
+            foreach (var table in _monsterTable.Values)
+            {
+                table.LoadLate();
+            }
+
             foreach (var table in _itemTable.Values)
             {
                 table.LoadLate();
             }
-            
+
             foreach (var table in _equipmentTable.Values)
             {
                 table.LoadLate();
             }
-            
+
             foreach (var table in _dropTable.Values)
+            {
+                table.LoadLate();
+            }
+
+            foreach (var table in _dropCurrencyTable.Values)
+            {
+                table.LoadLate();
+            }
+
+            foreach (var table in _dropEquipmentTable.Values)
             {
                 table.LoadLate();
             }
@@ -53,6 +74,16 @@ namespace ARPG.Data
         public Tables.CreatureTable? GetCreature(int id)
         {
             if (_creatureTable.TryGetValue(id, out var table))
+            {
+                return table;
+            }
+
+            return null;
+        }
+
+        public Tables.MonsterTable? GetMonster(int id)
+        {
+            if (_monsterTable.TryGetValue(id, out var table))
             {
                 return table;
             }
@@ -83,6 +114,26 @@ namespace ARPG.Data
         public Tables.DropTable? GetDrop(int id)
         {
             if (_dropTable.TryGetValue(id, out var table))
+            {
+                return table;
+            }
+
+            return null;
+        }
+
+        public Tables.DropCurrencyTable? GetDropCurrency(int id)
+        {
+            if (_dropCurrencyTable.TryGetValue(id, out var table))
+            {
+                return table;
+            }
+
+            return null;
+        }
+
+        public Tables.DropEquipmentTable? GetDropEquipment(int id)
+        {
+            if (_dropEquipmentTable.TryGetValue(id, out var table))
             {
                 return table;
             }
