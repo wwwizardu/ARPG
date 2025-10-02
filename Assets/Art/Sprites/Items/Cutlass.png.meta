@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: 0e303979ed8555e4fae85d48e24452c7
+guid: fc2755b20c874a94ab8a42ed316aaa0c
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 761100573506273824
-    second: knife_0
+      213: 5120801441036646160
+    second: Cutlass_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -100,23 +100,23 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: knife_0
+      name: Cutlass_0
       rect:
         serializedVersion: 2
-        x: 0
-        y: 0
-        width: 128
-        height: 128
+        x: 48
+        y: 2
+        width: 32
+        height: 126
       alignment: 0
-      pivot: {x: 0.5, y: 0.5}
+      pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 022003a60f8ff8a00800000000000000
-      internalID: 761100573506273824
+      spriteID: 0173c4a87cdb01740800000000000000
+      internalID: 5120801441036646160
       vertices: []
       indices: 
       edges: []
@@ -125,7 +125,7 @@ TextureImporter:
     customData: 
     physicsShape: []
     bones: []
-    spriteID: d34a476ba29a09445a0ff6024fa2c1c3
+    spriteID: 5e97eb03825dee720800000000000000
     internalID: 0
     vertices: []
     indices: 
@@ -135,7 +135,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      knife_0: 761100573506273824
+      Cutlass_0: 5120801441036646160
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
