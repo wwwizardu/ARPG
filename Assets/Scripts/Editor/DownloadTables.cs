@@ -33,7 +33,7 @@ namespace ARPG.Editor
 
             await DownloadTable<MonsterTable>("483012127&range=A:Y", 1, SaveType.String);
 
-            await DownloadTable<ItemTable>("2064107837&range=A:E", 1, SaveType.String);
+            await DownloadTable<ItemTable>("2064107837&range=A:G", 1, SaveType.String);
             
             await DownloadTable<EquipmentTable>("853198133&range=A:G", 1, SaveType.String);
 
@@ -146,7 +146,11 @@ namespace ARPG.Editor
 
         private static void ParseCreatureTable(CreatureTable table, string[] values)
         {
-            if (values.Length < 22) return;
+            if (values.Length < 22)
+            {
+                Debug.LogError($"[ParseCreatureTable] Invalid data length. Expected at least 22, got {values.Length}. Id: {table.Id}");
+                return;
+            }
 
             table.Name = values[1];
             table.Str = int.Parse(values[2]);
@@ -173,7 +177,11 @@ namespace ARPG.Editor
 
         private static void ParseMonsterTable(MonsterTable table, string[] values)
         {
-            if (values.Length < 22) return;
+            if (values.Length < 25)
+            {
+                Debug.LogError($"[ParseMonsterTable] Invalid data length. Expected at least 25, got {values.Length}. Id: {table.Id}");
+                return;
+            }
 
             table.Name = values[1];
             table.Str = int.Parse(values[2]);
@@ -203,7 +211,11 @@ namespace ARPG.Editor
 
         private static void ParseItemTable(ItemTable table, string[] values)
         {
-            if (values.Length < 7) return;
+            if (values.Length < 7)
+            {
+                Debug.LogError($"[ParseItemTable] Invalid data length. Expected at least 7, got {values.Length}. Id: {table.Id}");
+                return;
+            }
 
             table.Tier = int.Parse(values[1]);
             table.Name = values[2];
@@ -215,7 +227,11 @@ namespace ARPG.Editor
 
         private static void ParseEquipmentTable(EquipmentTable table, string[] values)
         {
-            if (values.Length < 6) return;
+            if (values.Length < 7)
+            {
+                Debug.LogError($"[ParseEquipmentTable] Invalid data length. Expected at least 7, got {values.Length}. Id: {table.Id}");
+                return;
+            }
 
             table.EquipType = (GlobalEnum.EquipSlotType)Enum.Parse(typeof(GlobalEnum.EquipSlotType), values[1]);
             table.AttackSpeed = float.Parse(values[2]);
@@ -227,7 +243,11 @@ namespace ARPG.Editor
 
         private static void ParseEquipmentStatTable(EquipmentStatTable table, string[] values)
         {
-            if (values.Length < 18) return;
+            if (values.Length < 17)
+            {
+                Debug.LogError($"[ParseEquipmentStatTable] Invalid data length. Expected at least 17, got {values.Length}. Id: {table.Id}");
+                return;
+            }
 
             table.Prefix = new List<Stat>();
             table.Postfix = new List<Stat>();
@@ -257,7 +277,11 @@ namespace ARPG.Editor
 
         private static void ParseDropTable(DropTable table, string[] values)
         {
-            if (values.Length < 8) return;
+            if (values.Length < 7)
+            {
+                Debug.LogError($"[ParseDropTable] Invalid data length. Expected at least 7, got {values.Length}. Id: {table.Id}");
+                return;
+            }
 
             table.Tier = int.Parse(values[1]);
             table.NothingRate = int.Parse(values[2]);
@@ -269,14 +293,22 @@ namespace ARPG.Editor
 
         private static void ParseDropCurrencyTable(DropCurrencyTable table, string[] values)
         {
-            if (values.Length < 2) return;
+            if (values.Length < 2)
+            {
+                Debug.LogError($"[ParseDropCurrencyTable] Invalid data length. Expected at least 2, got {values.Length}. Id: {table.Id}");
+                return;
+            }
 
             table.Tier = int.Parse(values[1]);
         }
 
         private static void ParseDropEquipmentTable(DropEquipmentTable table, string[] values)
         {
-            if (values.Length < 2) return;
+            if (values.Length < 2)
+            {
+                Debug.LogError($"[ParseDropEquipmentTable] Invalid data length. Expected at least 2, got {values.Length}. Id: {table.Id}");
+                return;
+            }
 
             table.Tier = int.Parse(values[1]);
         }

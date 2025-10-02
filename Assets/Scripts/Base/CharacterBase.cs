@@ -322,7 +322,7 @@ namespace ARPG.Creature
             if (_moveState == inNew)
                 return;
 
-            Debug.Log($"[Character] OnChangeMovementState - {_moveState} -> {inNew}");
+            //Debug.Log($"[Character] OnChangeMovementState - {_moveState} -> {inNew}");
 
             _movementStatePrev = _moveState;
             _moveState = inNew;
