@@ -35,7 +35,9 @@ namespace ARPG.Editor
 
             await DownloadTable<ItemTable>("2064107837&range=A:E", 1, SaveType.String);
             
-            await DownloadTable<EquipmentTable>("853198133&range=A:R", 1, SaveType.String);
+            await DownloadTable<EquipmentTable>("853198133&range=A:G", 1, SaveType.String);
+
+            await DownloadTable<EquipmentStatTable>("488047668&range=A:Q", 1, SaveType.String);
             
             await DownloadTable<DropTable>("1241586373&range=A:J", 1, SaveType.String);
 
@@ -114,6 +116,10 @@ namespace ARPG.Editor
                 else if (table is EquipmentTable equipmentTable)
                 {
                     ParseEquipmentTable(equipmentTable, values);
+                }
+                else if (table is EquipmentStatTable equipmentStatTable)
+                {
+                    ParseEquipmentStatTable(equipmentStatTable, values);
                 }
                 else if (table is DropTable dropTable)
                 {
@@ -197,25 +203,37 @@ namespace ARPG.Editor
 
         private static void ParseItemTable(ItemTable table, string[] values)
         {
-            if (values.Length < 4) return;
+            if (values.Length < 7) return;
 
             table.Tier = int.Parse(values[1]);
             table.Name = values[2];
-            table.EquipmentId = int.Parse(values[3]);
-            table.SpriteName = values[4];
+            table.Description = values[3];
+            table.DropRate = int.Parse(values[4]);
+            table.EquipmentId = int.Parse(values[5]);
+            table.SpriteName = values[6];
         }
 
         private static void ParseEquipmentTable(EquipmentTable table, string[] values)
         {
-            if (values.Length < 18) return;
+            if (values.Length < 6) return;
 
             table.EquipType = (GlobalEnum.EquipSlotType)Enum.Parse(typeof(GlobalEnum.EquipSlotType), values[1]);
+            table.AttackSpeed = float.Parse(values[2]);
+            table.Critical = int.Parse(values[3]);
+            table.DamageMin = int.Parse(values[4]);
+            table.DamageMax = int.Parse(values[5]);
+            table.EquipmentStatId = int.Parse(values[6]);
+        }
+
+        private static void ParseEquipmentStatTable(EquipmentStatTable table, string[] values)
+        {
+            if (values.Length < 18) return;
 
             table.Prefix = new List<Stat>();
             table.Postfix = new List<Stat>();
 
-            // Prefix 시작 인덱스 (EquipType 다음부터)
-            int prefixStartIndex = 2;
+            // Prefix 시작 인덱스
+            int prefixStartIndex = 1;
             for (int i = 0; i < 4; i++)
             {
                 int index = prefixStartIndex + (i * 2);
@@ -232,7 +250,7 @@ namespace ARPG.Editor
                 int index = postfixStartIndex + (i * 2);
                 Stat stat = new Stat();
                 stat.Type = (GlobalEnum.Stat)Enum.Parse(typeof(GlobalEnum.Stat), values[index]);
-                stat.Value = ushort.Parse(values[index+1]);
+                stat.Value = ushort.Parse(values[index + 1]);
                 table.Postfix.Add(stat);
             }
         }

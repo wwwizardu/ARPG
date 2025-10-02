@@ -19,7 +19,12 @@ namespace ARPG.Item
 
         }
 
-        
+        public virtual bool Pickup()
+        {
+            Debug.Log("[ItemObject] Pickup()");
+            return false;
+        }
+
     }
 
 }

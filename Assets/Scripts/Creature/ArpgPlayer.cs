@@ -34,7 +34,7 @@ namespace ARPG.Creature
                 Debug.LogError($"[CharacterBase] LoadData - CreatureTable not found for Id: {inId}");
                 return false;
             }
-            
+
             return true;
         }
 
@@ -116,7 +116,14 @@ namespace ARPG.Creature
                 // }
                 if (_input.Value.Attack.IsPressed() == true)
                 {
-                    StartSkill(1);
+                    if (CheckPickupItem(mouseWorldPos) == true)
+                    {
+
+                    }
+                    else
+                    {
+                        StartSkill(1);    
+                    }                    
                 }
                 // else if (_input.Value.Interact.WasPressedThisFrame() == true)
                 // {
@@ -139,7 +146,7 @@ namespace ARPG.Creature
             //     CheckChangeStatForSecond();
             // }
         }
-        
+
         private void UpdateHorizontalForce(Input.DirectionInput.Direction inDirection)
         {
             float horizontalForce = 0f;
@@ -161,7 +168,28 @@ namespace ARPG.Creature
 
         private void UpdateVerticalForce(Input.DirectionInput.Direction inDirection)
         {
-            
+
+        }
+
+        private bool CheckPickupItem(Vector3 inMouseWorldPos)
+        {
+            // 2D 레이캐스트 (2D 게임의 경우)
+            RaycastHit2D hit = Physics2D.Raycast(inMouseWorldPos, Vector2.zero);
+            if (hit.collider != null)
+            {
+                // 아이템 컴포넌트 확인
+                if (hit.collider.gameObject.CompareTag("DropedItem"))
+                {
+                    var item = hit.collider.gameObject.GetComponentInParent<Item.ItemObject>();
+                    if (item != null)
+                    {
+                        item.Pickup();
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
     }
 }

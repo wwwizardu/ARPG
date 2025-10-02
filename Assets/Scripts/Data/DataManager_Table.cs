@@ -15,6 +15,7 @@ namespace ARPG.Data
         private ImmutableDictionary<int, Tables.MonsterTable> _monsterTable = null!;
         private ImmutableDictionary<int, Tables.ItemTable> _itemTable = null!;
         private ImmutableDictionary<int, Tables.EquipmentTable> _equipmentTable = null!;
+        private ImmutableDictionary<int, Tables.EquipmentStatTable> _equipmentStatTable = null!;
         private ImmutableDictionary<int, Tables.DropTable> _dropTable = null!;
         private ImmutableDictionary<int, Tables.DropCurrencyTable> _dropCurrencyTable = null!;
         private ImmutableDictionary<int, Tables.DropEquipmentTable> _dropEquipmentTable = null!;
@@ -27,6 +28,7 @@ namespace ARPG.Data
                 LoadTable<Tables.MonsterTable>("MonsterTable.bytes", tables => _monsterTable = tables),
                 LoadTable<Tables.ItemTable>("ItemTable.bytes", tables => _itemTable = tables),
                 LoadTable<Tables.EquipmentTable>("EquipmentTable.bytes", tables => _equipmentTable = tables),
+                LoadTable<Tables.EquipmentStatTable>("EquipmentStatTable.bytes", tables => _equipmentStatTable = tables),
                 LoadTable<Tables.DropTable>("DropTable.bytes", tables => _dropTable = tables),
                 LoadTable<Tables.DropCurrencyTable>("DropCurrencyTable.bytes", tables => _dropCurrencyTable = tables),
                 LoadTable<Tables.DropEquipmentTable>("DropEquipmentTable.bytes", tables => _dropEquipmentTable = tables)
@@ -104,6 +106,16 @@ namespace ARPG.Data
         public Tables.EquipmentTable? GetEquipment(int id)
         {
             if (_equipmentTable.TryGetValue(id, out var table))
+            {
+                return table;
+            }
+
+            return null;
+        }
+
+        public Tables.EquipmentStatTable? GetEquipmentStat(int id)
+        {
+            if (_equipmentStatTable.TryGetValue(id, out var table))
             {
                 return table;
             }

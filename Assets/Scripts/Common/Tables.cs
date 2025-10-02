@@ -59,6 +59,10 @@ namespace ARPG.Tables
 
         [JsonProperty("Name")] public string Name;
 
+        [JsonProperty("Description")] public string Description;
+
+        [JsonProperty("DropRate")] public int DropRate;
+
         [JsonProperty("EquipmentId")] public int EquipmentId;
 
         [JsonProperty("SpriteName")] public string SpriteName;
@@ -68,13 +72,14 @@ namespace ARPG.Tables
         public override void LoadLate()
         {
             EquipmentTable equipmentTable = AR.s.Data.GetEquipment(EquipmentId);
-            if (equipmentTable == null)
+            if (equipmentTable != null)
             {
-                Debug.LogError($"[ItemTable] LoadLate() - equipmentTable is null, EquipmentId({EquipmentId})");
-                return;
+                Equipment = equipmentTable;
             }
-
-            Equipment = equipmentTable;
+            else
+            {
+                Equipment = null;
+            }
         }
     }
 
@@ -82,21 +87,40 @@ namespace ARPG.Tables
     public class EquipmentTable : TableBase
     {
         [JsonProperty("EquipType")] public GlobalEnum.EquipSlotType EquipType;
-        [JsonProperty("Prefix")] public List<Stat> Prefix;
-        [JsonProperty("Postfix")] public List<Stat> Postfix;
+        [JsonProperty("AttackSpeed")] public float AttackSpeed;
+        [JsonProperty("Critical")] public int Critical;
+        [JsonProperty("DamageMin")] public int DamageMin;
+        [JsonProperty("DamageMax")] public int DamageMax;
+        [JsonProperty("EquipmentStatId")] public int EquipmentStatId;
+
+        [JsonIgnore] public EquipmentStatTable EquipmentStat;
 
         public EquipmentTable()
         {
 
         }
 
-        public EquipmentTable(EquipmentTable inTable)
+        public override void LoadLate()
         {
-            Id = inTable.Id;
-            Prefix = new List<Stat>(inTable.Prefix);
-            Postfix = new List<Stat>(inTable.Postfix);
+            EquipmentStatTable equipmentStatTable = AR.s.Data.GetEquipmentStat(EquipmentStatId);
+            if (equipmentStatTable != null)
+            {
+                EquipmentStat = equipmentStatTable;
+            }
+            else
+            {
+                EquipmentStat = null;
+            }
         }
 
+    }
+
+    [Serializable]
+    public class EquipmentStatTable : TableBase
+    {
+        [JsonProperty("Prefix")] public List<Stat> Prefix;
+        [JsonProperty("Postfix")] public List<Stat> Postfix;
+        
     }
 
     [Serializable]

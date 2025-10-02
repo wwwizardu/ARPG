@@ -132,6 +132,7 @@ namespace ARPG.Creature
             if (randomValue < DropTable.NothingRate)
                 return;
 
+            int dropItemId = 0;
             // 화폐 vs 장비 결정
             if (randomValue < DropTable.NothingRate + DropTable.CurrencyRate)
             {
@@ -139,6 +140,7 @@ namespace ARPG.Creature
                 var currencyTable = AR.s?.Data.GetDropCurrency(DropTable.CurrencyId);
                 if (currencyTable != null)
                 {
+                    
                     Debug.Log($"[Monster] Dropping currency from table: {DropTable.CurrencyId}");
                     // TODO: 실제 화폐 드랍 로직 구현
                 }
@@ -156,10 +158,10 @@ namespace ARPG.Creature
 
 
             // Addressable을 사용하여 비동기로 아이템 GameObject 생성
-            DropItemAsync();
+            DropItemObjectAsync();
         }
 
-        private async void DropItemAsync()
+        private async void DropItemObjectAsync()
         {
             try
             {
