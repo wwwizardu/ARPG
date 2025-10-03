@@ -2,6 +2,7 @@
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using ARPG.AI;
+using ARPG.Item;
 
 namespace ARPG.Creature
 {
@@ -140,9 +141,11 @@ namespace ARPG.Creature
                 var currencyTable = AR.s?.Data.GetDropCurrency(DropTable.CurrencyId);
                 if (currencyTable != null)
                 {
-                    
+
                     Debug.Log($"[Monster] Dropping currency from table: {DropTable.CurrencyId}");
                     // TODO: 실제 화폐 드랍 로직 구현
+
+                    dropItemId = 1;
                 }
             }
             else
@@ -153,27 +156,44 @@ namespace ARPG.Creature
                 {
                     Debug.Log($"[Monster] Dropping equipment from table: {DropTable.EquipmentId}");
                     // TODO: 실제 장비 드랍 로직 구현
+
+                    dropItemId = 1;
                 }
             }
 
-
             // Addressable을 사용하여 비동기로 아이템 GameObject 생성
-            DropItemObjectAsync();
+            DropItemObjectAsync(dropItemId);
         }
 
-        private async void DropItemObjectAsync()
+        private async void DropItemObjectAsync(int inItemId)
         {
             try
             {
-
+                var itemTable = AR.s.Data.GetItem(inItemId);
+                if (itemTable == null)
+                {
+                    Debug.LogError($"[Monster] DropItemObjectAsync - itemTable is null, itemId({inItemId})");
+                    return;
+                }
 
                 var handle = Addressables.InstantiateAsync("Item/Item", transform.position, Quaternion.identity);
                 var itemObject = await handle.Task;
 
-                if (itemObject != null)
+                if (itemObject == null)
                 {
-                    Debug.Log("[Monster] Item dropped successfully");
+                    Debug.LogError($"[Monster] DropItemObjectAsync - itemObject is null");
+                    return;
                 }
+
+                var item = itemObject.GetComponent<ItemObject>();
+                if (item == null)
+                {
+                    Debug.Log("[Monster] DropItemObjectAsync - item is null");
+                    return;
+                }
+
+                item.SetItem(itemTable);
+                Debug.Log("[Monster] Item dropped successfully");
             }
             catch (System.Exception ex)
             {

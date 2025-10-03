@@ -17,6 +17,8 @@ namespace ARPG.Data
             // 데이터 초기화 로직
             await LoadTableAsync();
 
+            await LoadBaseSpriteAtlas();
+
             await Load();
 
             Debug.Log("DataManager Initialized");
