@@ -41,9 +41,9 @@ namespace ARPG.Editor
             
             await DownloadTable<DropTable>("1241586373&range=A:J", 1, SaveType.String);
 
-            await DownloadTable<DropCurrencyTable>("2071520432&range=A:B", 1, SaveType.String);
+            await DownloadTable<DropCurrencyTable>("2071520432&range=A:V", 1, SaveType.String);
 
-            await DownloadTable<DropEquipmentTable>("1267382287&range=A:B", 1, SaveType.String);
+            await DownloadTable<DropEquipmentTable>("1267382287&range=A:V", 1, SaveType.String);
 
             foreach (var tableType in _tableDic.Keys)
             {
@@ -293,24 +293,58 @@ namespace ARPG.Editor
 
         private static void ParseDropCurrencyTable(DropCurrencyTable table, string[] values)
         {
-            if (values.Length < 2)
+            if (values.Length < 22)
             {
-                Debug.LogError($"[ParseDropCurrencyTable] Invalid data length. Expected at least 2, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseDropCurrencyTable] Invalid data length. Expected at least 22, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
             table.Tier = int.Parse(values[1]);
+
+            table.DropList = new List<DropInfo>();
+
+            // DropInfo 시작 인덱스
+            int dropInfoStartIndex = 2;
+            for (int i = 0; i < 10; i++)
+            {
+                int index = dropInfoStartIndex + (i * 2);
+                int id = int.Parse(values[index]);
+                if (id == 0)
+                    continue;
+
+                DropInfo dropInfo = new DropInfo();
+                dropInfo.Id = id;
+                dropInfo.Rate = int.Parse(values[index + 1]);
+                table.DropList.Add(dropInfo);
+            }
         }
 
         private static void ParseDropEquipmentTable(DropEquipmentTable table, string[] values)
         {
-            if (values.Length < 2)
+            if (values.Length < 22)
             {
-                Debug.LogError($"[ParseDropEquipmentTable] Invalid data length. Expected at least 2, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseDropEquipmentTable] Invalid data length. Expected at least 22, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
             table.Tier = int.Parse(values[1]);
+
+            table.DropList = new List<DropInfo>();
+
+            // DropInfo 시작 인덱스
+            int dropInfoStartIndex = 2;
+            for (int i = 0; i < 10; i++)
+            {
+                int index = dropInfoStartIndex + (i * 2);
+                int id = int.Parse(values[index]);
+                if (id == 0)
+                    continue;
+
+                DropInfo dropInfo = new DropInfo();
+                dropInfo.Id = id;
+                dropInfo.Rate = int.Parse(values[index + 1]);
+                table.DropList.Add(dropInfo);
+            }
         }
 
         private static async Task<string> DownloadTableData(string inURL)

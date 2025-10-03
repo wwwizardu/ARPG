@@ -1,4 +1,5 @@
 #nullable enable
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using ARPG.AI;
@@ -138,31 +139,63 @@ namespace ARPG.Creature
             if (randomValue < DropTable.NothingRate + DropTable.CurrencyRate)
             {
                 // 화폐 드랍
-                var currencyTable = AR.s?.Data.GetDropCurrency(DropTable.CurrencyId);
-                if (currencyTable != null)
-                {
-
-                    Debug.Log($"[Monster] Dropping currency from table: {DropTable.CurrencyId}");
-                    // TODO: 실제 화폐 드랍 로직 구현
-
-                    dropItemId = 1;
-                }
+                dropItemId = SelectRandomCurrencyItem(DropTable.CurrencyId);
             }
             else
             {
                 // 장비 드랍
-                var equipmentTable = AR.s?.Data.GetDropEquipment(DropTable.EquipmentId);
-                if (equipmentTable != null)
-                {
-                    Debug.Log($"[Monster] Dropping equipment from table: {DropTable.EquipmentId}");
-                    // TODO: 실제 장비 드랍 로직 구현
-
-                    dropItemId = 1;
-                }
+                dropItemId = SelectRandomEquipmentItem(DropTable.EquipmentId);
             }
 
             // Addressable을 사용하여 비동기로 아이템 GameObject 생성
             DropItemObjectAsync(dropItemId);
+        }
+
+        private int SelectRandomCurrencyItem(int inCurrencyTableId)
+        {
+            var currencyTable = AR.s?.Data.GetDropCurrency(inCurrencyTableId);
+            if (currencyTable == null || currencyTable.DropList == null)
+                return 0;
+
+            return SelectRandomIdFromDropInfoList(currencyTable.DropList, "currency");
+        }
+
+        private int SelectRandomEquipmentItem(int inEquipmentTableId)
+        {
+            var equipmentTable = AR.s?.Data.GetDropEquipment(inEquipmentTableId);
+            if (equipmentTable == null || equipmentTable.DropList == null)
+                return 0;
+
+            return SelectRandomIdFromDropInfoList(equipmentTable.DropList, "equipment");
+        }
+
+        private int SelectRandomIdFromDropInfoList(List<Tables.DropInfo> inDropList, string inDropType)
+        {
+            if (inDropList == null || inDropList.Count == 0)
+                return 0;
+
+            // DropList의 전체 확률 합계 계산
+            int totalDropRate = 0;
+            foreach (var dropInfo in inDropList)
+            {
+                totalDropRate += dropInfo.Rate;
+            }
+
+            // 랜덤 값으로 아이템 선택
+            int randomDropValue = UnityEngine.Random.Range(0, totalDropRate);
+            int cumulativeRate = 0;
+
+            foreach (var dropInfo in inDropList)
+            {
+                cumulativeRate += dropInfo.Rate;
+                if (randomDropValue < cumulativeRate)
+                {
+                    Debug.Log($"[Monster] Dropping {inDropType}: ItemId={dropInfo.Id}, RandomValue({randomDropValue}), Rate={dropInfo.Rate}/{totalDropRate}");
+                    return dropInfo.Id;
+                }
+            }
+
+            return 0;
         }
 
         private async void DropItemObjectAsync(int inItemId)

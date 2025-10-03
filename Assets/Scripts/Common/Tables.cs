@@ -120,7 +120,7 @@ namespace ARPG.Tables
     {
         [JsonProperty("Prefix")] public List<Stat> Prefix;
         [JsonProperty("Postfix")] public List<Stat> Postfix;
-        
+
     }
 
     [Serializable]
@@ -139,12 +139,15 @@ namespace ARPG.Tables
     {
         [JsonProperty("Tier")] public int Tier;                 // Drop 아이템 티어
 
+        [JsonProperty("DropList")] public List<DropInfo> DropList;
+
     }
 
     [Serializable]
     public class DropEquipmentTable : TableBase
     {
         [JsonProperty("Tier")] public int Tier;                 // Drop 아이템 티어
+        [JsonProperty("DropList")] public List<DropInfo> DropList;
 
     }
 
@@ -153,6 +156,13 @@ namespace ARPG.Tables
     {
         [JsonProperty("Type")] public GlobalEnum.Stat Type;
         [JsonProperty("Value")] public ushort Value;
+    }
+
+    [Serializable]
+    public class DropInfo
+    {
+        [JsonProperty("Type")] public int Id;
+        [JsonProperty("Value")] public int Rate;
     }
 
 }
