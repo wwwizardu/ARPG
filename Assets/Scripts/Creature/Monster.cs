@@ -200,37 +200,9 @@ namespace ARPG.Creature
 
         private async void DropItemObjectAsync(int inItemId)
         {
-            try
+            if(await AR.s.Item.CreateItem(inItemId, 1, transform.position) == false)
             {
-                var itemTable = AR.s.Data.GetItem(inItemId);
-                if (itemTable == null)
-                {
-                    Debug.LogError($"[Monster] DropItemObjectAsync - itemTable is null, itemId({inItemId})");
-                    return;
-                }
-
-                var handle = Addressables.InstantiateAsync("Item/Item", transform.position, Quaternion.identity);
-                var itemObject = await handle.Task;
-
-                if (itemObject == null)
-                {
-                    Debug.LogError($"[Monster] DropItemObjectAsync - itemObject is null");
-                    return;
-                }
-
-                var item = itemObject.GetComponent<ItemObject>();
-                if (item == null)
-                {
-                    Debug.Log("[Monster] DropItemObjectAsync - item is null");
-                    return;
-                }
-
-                item.SetItem(itemTable);
-                Debug.Log("[Monster] Item dropped successfully");
-            }
-            catch (System.Exception ex)
-            {
-                Debug.LogError($"[Monster] Failed to instantiate item: {ex.Message}");
+                Debug.LogError($"[Monster] DropItemObjectAsync - Failed to create item with Id({inItemId})");
             }
         }
     }

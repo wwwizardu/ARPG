@@ -1,3 +1,4 @@
+#nullable enable
 using ARPG.Data;
 using ARPG.Tables;
 using TMPro;
@@ -10,8 +11,8 @@ namespace ARPG.Item
         [SerializeField] private GameObject _visual;
         [SerializeField] private TextMeshPro _text;
         [SerializeField] private SpriteRenderer _sr;
-        private ItemData _itemData;
-        private ItemTable _table;
+        private ItemData _itemData = null!;
+        private ItemTable _table = null!;
 
         public void Initialize()
         {
@@ -23,16 +24,43 @@ namespace ARPG.Item
 
         }
 
-        public void SetItem(ItemTable inItem)
+        public bool SetItem(ItemTable inTable, int inId, int inInstanceId, EquipmentData? inEquipment, int inQuantity)
         {
-            _table = inItem;
+            ItemData inItemData = new ItemData()
+            {
+                Table = inTable,
+                Id = inId,
+                ItemInstanceId = inInstanceId,
+                Equipment = inEquipment,
+                Quantity = inQuantity,
+            };
+
+            return SetItem(inItemData);
+        }
+
+        public bool SetItem(ItemData inItemData)
+        {
+            if (inItemData.Table == null)
+            {
+                Debug.LogError($"[Monster] DropItemObjectAsync - itemTable is null, itemId({inItemData.Id})");
+                return false;
+            }
+
+            _table = inItemData.Table;
+            _itemData = inItemData;
 
             Refresh();
+
+            return true;
         }
 
         public virtual bool Pickup()
         {
-            Debug.Log("[ItemObject] Pickup()");
+            if (AR.s.MyPlayer?.Inventory?.AddItem(_itemData) == true)
+            {
+                return AR.s.Item.DestroyItem(_itemData.ItemInstanceId);
+            }
+            
             return false;
         }
 

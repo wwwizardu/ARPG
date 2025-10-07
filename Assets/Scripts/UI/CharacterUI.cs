@@ -25,6 +25,11 @@ namespace ARPG.UI
             }
         }
 
+        public void OnLoadCompleted()
+        {
+            
+        }
+
         // 지정된 장비 슬롯에 아이템을 장착하는 함수
         // inEquipType: 장착할 슬롯 타입 (무기, 방어구 등)
         // inItem: 장착할 아이템 데이터

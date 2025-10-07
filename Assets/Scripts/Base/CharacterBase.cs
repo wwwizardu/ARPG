@@ -70,7 +70,7 @@ namespace ARPG.Creature
             return false;
         }
 
-        public virtual bool LoadData(int inId)
+        public virtual bool Load(int inId)
         {
             if(LoadTable(inId) == false)
             {

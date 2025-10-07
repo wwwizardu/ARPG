@@ -16,8 +16,12 @@ namespace ARPG.Data
         public float PositionX;
         public float PositionZ;
 
-        public ItemData? [] _inventoryEquip = new ItemData?[(int)GlobalEnum.EquipSlotType.Max];
+        public int MaxInventorySlotCount = 40;
 
+        // 장착한 아이템
+        public ItemData?[] _inventoryEquip = new ItemData?[(int)GlobalEnum.EquipSlotType.Max];
+
+        // 인벤토리 아이템
         public List<ItemData?> _inventory = new List<ItemData?>();
 
         public void Initialize(int inInventorySlotMaxCount)
@@ -28,6 +32,8 @@ namespace ARPG.Data
 
             PositionX = 0;
             PositionZ = 0;
+
+            MaxInventorySlotCount = inInventorySlotMaxCount;
 
             for (int i = 0; i < (int)GlobalEnum.EquipSlotType.Max; i++)
             {

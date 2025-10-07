@@ -15,6 +15,8 @@ namespace ARPG
         [SerializeField] private UIManager _uiManager;
         [SerializeField] private ARPG.Monster.MonsterManager _monsterManager;
 
+        [SerializeField] private Item.ItemManager _itemManager;
+
         private bool _initialized = false;
 
         private Base.SceneBase? _currentScene;
@@ -29,6 +31,7 @@ namespace ARPG
         public MapManager Map => _mapManager;
         public UIManager UI => _uiManager;
         public Monster.MonsterManager Monster => _monsterManager;
+        public Item.ItemManager Item => _itemManager;
 
         public PlayerManager Player => _playerManager;
 
@@ -47,8 +50,9 @@ namespace ARPG
             await _dataManager.Initialize();
             _uiManager.Initialize();
             _mapManager.Initialize();
+            _itemManager.Initialize();
             _monsterManager.Initialize();
-
+            
             _initialized = true;
 
             Debug.Log("AR Initialized");

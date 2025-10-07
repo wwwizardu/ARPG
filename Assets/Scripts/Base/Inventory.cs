@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using ARPG;
 using ARPG.Data;
+using ARPG.UI;
 using UnityEngine;
 
 public class Inventory
@@ -10,22 +11,29 @@ public class Inventory
 
     private List<ItemData?> _items = null!;
 
-    public void Initialize(List<ItemData?> inItemList, int inSlotMaxCount)
+    public void Initialize()
     {
-        _items = inItemList;
-        _maxSlotCount = inSlotMaxCount;
 
-        if (_items == null)
-        {
-            Debug.LogError("[Inventory] Initialize - inItemList is null");
-        }
+    }
+
+    public bool Load()
+    {
+        _items = AR.s.Data.Player._inventory;
+        _maxSlotCount = AR.s.Data.Player.MaxInventorySlotCount;
+        
+        return true;
+    }
+
+    public bool Save()
+    {
+        return true;
     }
 
     public bool AddItem(ItemData inItem)
     {
         if (inItem == null)
             return false;
-        
+
         // 같은 ID의 아이템이 있는지 확인하여 수량 증가
         for (int i = 0; i < _items.Count; i++)
         {

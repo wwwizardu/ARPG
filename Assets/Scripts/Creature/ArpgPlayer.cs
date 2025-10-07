@@ -7,6 +7,9 @@ namespace ARPG.Creature
     public class ArpgPlayer : CharacterBase
     {
         private Input.ArpgInputAction.PlayerActions? _input = null;
+        private Inventory _inventory = null!;
+
+        public Inventory Inventory { get { return _inventory; } }
 
         public override void Initialize()
         {
@@ -15,6 +18,8 @@ namespace ARPG.Creature
             _input = AR.s.UI.Input.Player;
 
             transform.position = new Vector3(0, 0, -0.1f); // Set initial position
+
+            _inventory = new Inventory();
 
             Debug.Log("ArpgPlayer initialized.");
         }
@@ -35,6 +40,20 @@ namespace ARPG.Creature
                 return false;
             }
 
+            return true;
+        }
+
+        public override bool Load(int inId)
+        {
+            if (base.Load(inId) == false)
+                return false;
+
+            if (_inventory.Load() == false)
+            {
+                Debug.LogError("[ArpgPlayer] Load - Failed to load inventory");
+                return false;
+            }
+                
             return true;
         }
 
@@ -116,14 +135,14 @@ namespace ARPG.Creature
                 // }
                 if (_input.Value.Attack.IsPressed() == true)
                 {
-                    if (CheckPickupItem(mouseWorldPos) == true)
+                    if (_input.Value.Attack.WasPressedThisFrame() == true && CheckPickupItem(mouseWorldPos) == true)
                     {
 
                     }
                     else
                     {
-                        StartSkill(1);    
-                    }                    
+                        StartSkill(1);
+                    }
                 }
                 // else if (_input.Value.Interact.WasPressedThisFrame() == true)
                 // {

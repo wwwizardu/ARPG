@@ -64,11 +64,19 @@ namespace ARPG.UI
                 return;
             }
 
-            _BG.gameObject.SetActive(false);
+            _BG.gameObject.SetActive(true);
             _Icon.gameObject.SetActive(true);
-            // _Icon.sprite = AR.s.Data.GetItemIcon(_itemData.Id);
 
-            if (_itemData.Quantity > 1)
+            if (_itemData.Table == null)
+            {
+                Debug.LogError($"[SlotUI] Refresh - itemTable is null, itemId({_itemData.Id})");
+                _Icon.sprite = null;
+                return;
+            }
+
+            _Icon.sprite = AR.s.Data.GetSprite(_itemData.Table.SpriteName);
+
+            if (1 <= _itemData.Quantity)
             {
                 _TextQuantity.gameObject.SetActive(true);
                 _TextQuantity.text = _itemData.Quantity.ToString();

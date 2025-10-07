@@ -18,7 +18,6 @@ namespace ARPG.Data
         public int Quantity;
 
         [NonSerialized] public ItemTable? Table;
-
     }
 
     [Serializable]

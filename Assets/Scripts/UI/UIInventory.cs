@@ -14,7 +14,7 @@ namespace ARPG.UI
         private SlotUI? []? _slotUIs = null;
         private List<Data.ItemData?> _items = null!;
 
-        public async void Initialize(string inName, List<Data.ItemData?> inInventory, int inSlotMaxCount)
+        public async Task Initialize(string inName, List<Data.ItemData?> inInventory, int inSlotMaxCount)
         {
             SlotCount = inSlotMaxCount;
             base.Initialize(inName, false);
@@ -31,6 +31,23 @@ namespace ARPG.UI
             {
                 Debug.LogError("[UIInventory] Failed to load slots");
                 return;
+            }
+        }
+
+        public void OnLoadCompleted()
+        {
+            if (_slotUIs == null || _items == null)
+            {
+                Debug.LogError("[UIInventory] OnLoadCompleted - _slotUIs or _items is null");
+                return;
+            }
+
+            for (int i = 0; i < _slotUIs.Length && i < _items.Count; i++)
+            {
+                if (_slotUIs[i] != null && _items[i] != null)
+                {
+                    _slotUIs[i]!.SetItem(_items[i]!);
+                }
             }
         }
 
