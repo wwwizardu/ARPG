@@ -4,9 +4,12 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
+using UnityEngine.EventSystems;
+using ARPG.Base;
+
 namespace ARPG.UI
 {
-    public class SlotUI : MonoBehaviour
+    public class SlotUI : UIBase, IPointerEnterHandler, IPointerExitHandler
     {
         public enum UISlotType
         {
@@ -30,6 +33,8 @@ namespace ARPG.UI
 
         public virtual void Initialize(int inSlotIndex)
         {
+            base.Initialize($"Slot_{inSlotIndex}", false);
+
             Reset();
 
             _slotIndex = inSlotIndex;
@@ -38,7 +43,7 @@ namespace ARPG.UI
         public virtual void Reset()
         {
             _itemData = null;
-            
+
             _BG.gameObject.SetActive(true);
             _Icon.gameObject.SetActive(false);
             _TextQuantity.gameObject.SetActive(false);
@@ -54,6 +59,25 @@ namespace ARPG.UI
             _itemData = inItem;
 
             Refresh();
+        }
+
+        // 마우스가 UI 요소 위로 들어올 때 (툴팁 활성화)
+        public void OnPointerEnter(PointerEventData eventData)
+        {
+            if (_itemData?.Table == null)
+                return;
+
+            if (_itemData.Table.ItemType == GlobalEnum.ItemType.Equipment)
+            {
+                AR.s.UI.ShowTooltip_Equipment(_itemData, _rectTransform);
+            }
+        }
+
+        // 마우스가 UI 요소 밖으로 나갈 때 (툴팁 비활성화)
+        public void OnPointerExit(PointerEventData eventData)
+        {
+            //OnExit(eventData);
+            AR.s.UI.HideTooltip();
         }
 
         public virtual void Refresh()
@@ -85,6 +109,16 @@ namespace ARPG.UI
             {
                 _TextQuantity.gameObject.SetActive(false);
             }
+        }
+
+        protected virtual void OnEnter(PointerEventData eventData)
+        {
+            Debug.Log($"[SlotUI] OnEnter - SlotIndex({_slotIndex}), ItemId({(_itemData != null ? _itemData.Id.ToString() : "null")})");
+        }
+
+        protected virtual void OnExit(PointerEventData eventData)
+        {
+            Debug.Log($"[SlotUI] OnExit - SlotIndex({_slotIndex}), ItemId({(_itemData != null ? _itemData.Id.ToString() : "null")})");
         }
     }
 }

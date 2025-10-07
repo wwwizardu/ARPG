@@ -58,6 +58,19 @@ namespace ARPG.UI
             base.Refresh();
 
         }
+
+        protected override void OnEnter(UnityEngine.EventSystems.PointerEventData eventData)
+        {
+            if (_itemData != null)
+            {
+                AR.s.UI.ShowTooltip_Equipment(_itemData, _rectTransform);
+            }
+        }
+
+        protected override void OnExit(UnityEngine.EventSystems.PointerEventData eventData)
+        {
+            AR.s.UI.HideTooltip();
+        }
     }
 }
 

@@ -15,6 +15,11 @@ MonoBehaviour:
   m_GroupName: Default Local Group
   m_GUID: b5afdc8e1be332f4abe01660be954e53
   m_SerializeEntries:
+  - m_GUID: 095958c886d2a00429417bbbebffcc10
+    m_Address: UI/UIEquipmentTooltip
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 21fcae8338717c34586e97a993d4afee
     m_Address: UI/Character
     m_ReadOnly: 0
@@ -37,6 +42,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 98787bc7e144ce1408c5c6220d9fba34
     m_Address: Atlas/Base
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a8d24ae4c7d2d724ea0c3b3675455d5f
+    m_Address: UI/UICurrencyTooltip
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

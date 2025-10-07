@@ -58,4 +58,12 @@ public class GlobalEnum
         EarringRight,   // 오른쪽 귀걸이
         Max,
     }
+
+    public enum ItemType
+    {
+        Currency = 1,
+        Equipment = 2,
+        Consumable = 3,
+        Quest = 4,
+    }
 }

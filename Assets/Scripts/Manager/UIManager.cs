@@ -4,6 +4,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using ARPG.Data;
 using ARPG.UI;
 using Cysharp.Threading.Tasks;
 using DG.Tweening;
@@ -27,6 +28,8 @@ namespace ARPG
         public const string SlotUI = "UI/SlotUI";
         public const string Character = "UI/Character";
         public const string Inventory = "UI/Inventory";
+
+        public const string TooltipEquipment = "UI/UIEquipmentTooltip";
     }
 
     public class UIManager : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
@@ -102,7 +105,7 @@ namespace ARPG
 
         private PointerEventData _pointerEventData;
 
-        //private TooltipUI? _tooltip = null;
+        private UITooltip? _tooltip = null;
         private Coroutine? _tooltipCoroutine = null;
 
         private bool _isLocked = false;
@@ -353,31 +356,34 @@ namespace ARPG
         //}
 
         // 툴팁은 따로 관리한다. 기존의 Show함수를 이용하면 tooltip UI에 이벤트가 들어가기 때문에 문제가 발생함
-        public void ShowRecipeTooltip(int inRecipeMasterId, RectTransform inBaseUI)
+        public void ShowTooltip_Equipment(ItemData inItemData, RectTransform inBaseUI)
         {
-            // if (_tooltipCoroutine != null)
-            // {
-            //     StopCoroutine(_tooltipCoroutine);
-            // }
+            if (_tooltipCoroutine != null)
+            {
+                StopCoroutine(_tooltipCoroutine);
+            }
 
-            // RecipeTooltipUI? recipeTooltip = Get<RecipeTooltipUI>(AddressablePath.RecipeTooltipUI, Layer.Tooltip);
-            // if (recipeTooltip == null)
-            // {
-            //     Debug.LogError($"[UIManager] ShowTooltip - _tooltip({AddressablePath.RecipeTooltipUI}) is null");
-            //     return;
-            // }
+            if (inItemData == null)
+                return;
 
-            // recipeTooltip.gameObject.SetActive(true);
-            // recipeTooltip.SetRecipeData(inRecipeMasterId);
-            // recipeTooltip.OnOpen();
+            UITooltipEquipment? tooltip = Get<UITooltipEquipment>(AddressablePath.TooltipEquipment, Layer.Tooltip);
+            if (tooltip == null)
+            {
+                Debug.LogError($"[UIManager] ShotTooltip_Equipment - _tooltip({AddressablePath.TooltipEquipment}) is null");
+                return;
+            }
 
-            // // 대상 UI의 월드 좌표에서 모든 모서리 가져오기
-            // inBaseUI.GetWorldCorners(_corners);
-            // Vector3 topRightCorner = _corners[2]; // 우상단 모서리
-            // Vector3 topLeftCorner = _corners[1];  // 좌상단 모서리
+            tooltip.gameObject.SetActive(true);
+            tooltip.SetEquipmentData(inItemData);
+            tooltip.OnOpen();
 
-            // _tooltip = recipeTooltip;
-            // _tooltipCoroutine = StartCoroutine(ShowTooltipCo(topRightCorner, topLeftCorner));
+            // 대상 UI의 모서리 좌표 가져오기 (Screen Space - Overlay에서는 스크린 좌표)
+            inBaseUI.GetWorldCorners(_corners);
+            Vector3 topRightCorner = _corners[2]; // 우상단 모서리
+            Vector3 topLeftCorner = _corners[1];  // 좌상단 모서리
+
+            _tooltip = tooltip;
+            _tooltipCoroutine = StartCoroutine(ShowTooltipCo(topRightCorner, topLeftCorner));
         }
 
         // public void ShowTooltip(string inName, Bifrost.Cooked.ItemInfo? inItemInfo, int inDurability, RectTransform inBaseUI)
@@ -413,17 +419,17 @@ namespace ARPG
 
         public void HideTooltip()
         {
-            // if (_tooltip == null || IsShow(_tooltip.Name) == false)
-            //     return;
+            if (_tooltip == null || IsShow(_tooltip.Name) == false)
+                return;
 
-            // if (_tooltipCoroutine != null)
-            // {
-            //     StopCoroutine(_tooltipCoroutine);
-            // }
-            // _tooltipCoroutine = null;
+            if (_tooltipCoroutine != null)
+            {
+                StopCoroutine(_tooltipCoroutine);
+            }
+            _tooltipCoroutine = null;
 
-            // _tooltip.gameObject.SetActive(false);
-            // _tooltip.OnClose();
+            _tooltip.gameObject.SetActive(false);
+            _tooltip.OnClose();
         }
 
         //public void HideTooltip()
@@ -839,68 +845,83 @@ namespace ARPG
         //     _dummySlot.TargetInventory.DropItemBySlotRpc(_dummySlot.TargetInventory, 0, pos);
         // }
 
-        // public Vector2 GetPositionTooltip(Vector3 inScreenPosition, Vector3 inScreenLeftPosition)
-        // {
-        //     if (_tooltip == null)
-        //         return Vector2.zero;
+        public Vector2 GetPositionTooltip(Vector3 inScreenPosition, Vector3 inScreenLeftPosition)
+        {
+            if (_tooltip == null)
+                return Vector2.zero;
 
-        //     // Canvas 컴포넌트와 RectTransform 가져오기
-        //     RectTransform? canvasRect = _mainCanvas as RectTransform;
+            // Canvas 컴포넌트와 RectTransform 가져오기
+            RectTransform? canvasRect = _mainCanvas as RectTransform;
+            Vector2 canvasSize = canvasRect!.sizeDelta;
 
-        //     // 화면 좌표를 Canvas 로컬 좌표로 변환
-        //     RectTransformUtility.ScreenPointToLocalPointInRectangle(
-        //         canvasRect,
-        //         inScreenPosition,
-        //         null, // Screen Space - Overlay에서는 카메라가 null
-        //         out Vector2 localPoint
-        //     );
+            // 슬롯의 우상단 화면 좌표를 Canvas 로컬 좌표로 변환
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                canvasRect,
+                inScreenPosition,
+                null,
+                out Vector2 slotTopRightLocal
+            );
 
-        //     // 기본 오프셋 적용
-        //     Vector2 offset = new Vector2(5f, 0f);
-        //     Vector2 tooltipPosition = localPoint + offset;
+            // 툴팁 정보 가져오기
+            var tooltipRect = _tooltip.TooltipRect;
+            Vector2 tooltipSize = tooltipRect.sizeDelta;
+            Vector2 tooltipPivot = tooltipRect.pivot;
 
-        //     // 툴팁 크기 가져오기
-        //     var tooltipRect = _tooltip.TooltipRect;
-        //     Vector2 tooltipSize = tooltipRect.sizeDelta;
+            // 기본 오프셋
+            float horizontalOffset = 5f;
 
-        //     // Canvas 크기 가져오기
-        //     Vector2 canvasSize = canvasRect!.sizeDelta;
+            // Canvas 경계 계산
+            float canvasLeft = -canvasSize.x * 0.5f;
+            float canvasRight = canvasSize.x * 0.5f;
+            float canvasTop = canvasSize.y * 0.5f;
+            float canvasBottom = -canvasSize.y * 0.5f;
 
-        //     // Width 경계 체크 및 조정
-        //     float tooltipRightEdge = tooltipPosition.x + tooltipSize.x;
-        //     float canvasRightEdge = canvasSize.x * 0.5f; // Canvas 중심 기준 오른쪽 경계
+            // 초기 위치: 슬롯 오른쪽 상단에 툴팁 왼쪽 상단 맞춤
+            Vector2 tooltipPosition = slotTopRightLocal;
+            tooltipPosition.x += horizontalOffset;
 
-        //     if (tooltipRightEdge > canvasRightEdge)
-        //     {
-        //         // 대상 UI의 좌상단 모서리로 변경하고 툴팁 너비만큼 왼쪽으로 이동
-        //         RectTransformUtility.ScreenPointToLocalPointInRectangle(
-        //             canvasRect,
-        //             inScreenLeftPosition,
-        //             null,
-        //             out Vector2 leftLocalPoint
-        //         );
-        //         tooltipPosition.x = leftLocalPoint.x - tooltipSize.x - offset.x;
-        //     }
+            // 툴팁의 실제 경계 계산 (pivot 기준)
+            float tooltipLeft = tooltipPosition.x - tooltipSize.x * tooltipPivot.x;
+            float tooltipRight = tooltipPosition.x + tooltipSize.x * (1f - tooltipPivot.x);
+            float tooltipTop = tooltipPosition.y + tooltipSize.y * (1f - tooltipPivot.y);
+            float tooltipBottom = tooltipPosition.y - tooltipSize.y * tooltipPivot.y;
 
-        //     // Height 경계 체크 및 조정
-        //     float tooltipTopEdge = tooltipPosition.y;
-        //     float tooltipBottomEdge = tooltipPosition.y - tooltipSize.y;
-        //     float canvasTopEdge = canvasSize.y * 0.5f; // Canvas 중심 기준 위쪽 경계
-        //     float canvasBottomEdge = -canvasSize.y * 0.5f; // Canvas 중심 기준 아래쪽 경계
+            // 오른쪽 경계 체크 - 넘으면 슬롯 왼쪽에 배치
+            if (tooltipRight > canvasRight)
+            {
+                RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                    canvasRect,
+                    inScreenLeftPosition,
+                    null,
+                    out Vector2 slotTopLeftLocal
+                );
+                tooltipPosition.x = slotTopLeftLocal.x - horizontalOffset;
 
-        //     // 위쪽으로 나가는 경우
-        //     if (tooltipTopEdge > canvasTopEdge)
-        //     {
-        //         tooltipPosition.y = canvasTopEdge;
-        //     }
-        //     // 아래쪽으로 나가는 경우
-        //     else if (tooltipBottomEdge < canvasBottomEdge)
-        //     {
-        //         tooltipPosition.y = canvasBottomEdge + tooltipSize.y + 5;
-        //     }
+                // 경계 재계산
+                tooltipLeft = tooltipPosition.x - tooltipSize.x * tooltipPivot.x;
+            }
 
-        //     return tooltipPosition;
-        // }
+            // 왼쪽 경계 체크
+            if (tooltipLeft < canvasLeft)
+            {
+                tooltipPosition.x = canvasLeft + tooltipSize.x * tooltipPivot.x;
+            }
+
+            // 위쪽 경계 체크
+            if (tooltipTop > canvasTop)
+            {
+                tooltipPosition.y = canvasTop - tooltipSize.y * (1f - tooltipPivot.y);
+                tooltipBottom = tooltipPosition.y - tooltipSize.y * tooltipPivot.y;
+            }
+
+            // 아래쪽 경계 체크
+            if (tooltipBottom < canvasBottom)
+            {
+                tooltipPosition.y = canvasBottom + tooltipSize.y * tooltipPivot.y;
+            }
+
+            return tooltipPosition;
+        }
 
         private T? LoadUI<T>(string inName, Layer inLayer) where T : Base.UIBaseForm
         {
@@ -1419,8 +1440,8 @@ namespace ARPG
         private IEnumerator ShowTooltipCo(Vector3 inScreenPosition, Vector3 inScreenLeftPosition)
         {
             yield return null;
-            //Vector2 pos = GetPositionTooltip(inScreenPosition, inScreenLeftPosition);
-            //_tooltip!.SetPosition(pos);
+            Vector2 pos = GetPositionTooltip(inScreenPosition, inScreenLeftPosition);
+            _tooltip!.SetPosition(pos);
         }
 
         private void StopShowSaveText()

@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 using UnityEngine;
 
 namespace ARPG.Tables
@@ -58,6 +59,8 @@ namespace ARPG.Tables
         [JsonProperty("Tier")] public int Tier;
 
         [JsonProperty("Name")] public string Name;
+
+        [JsonProperty("ItemType")] public GlobalEnum.ItemType ItemType;
 
         [JsonProperty("Description")] public string Description;
 
