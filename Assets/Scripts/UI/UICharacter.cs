@@ -161,7 +161,7 @@ namespace ARPG.UI
                 }
             }
 
-            Debug.Log($"[UICharacter] OnClickSlot - SlotType({inSlotType}), SlotIndex({inSlotIndex})");
+            // Debug.Log($"[UICharacter] OnClickSlot - SlotType({inSlotType}), SlotIndex({inSlotIndex})");
         }
     }
 }

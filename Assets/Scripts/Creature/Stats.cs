@@ -1,18 +1,19 @@
 #nullable enable
+using ARPG.Tables;
 using UnityEngine;
 
 namespace ARPG.Creature
 {
     public class StatController
     {
-        private Stats _stats = new Stats();
-
+        private Stats _statsTotal = new Stats();
+        private Stats _statsBase = new Stats();
         private Stats _statEquipment = new Stats();
         private CharacterBase? _owner = null;
         
         public void Initialize()
         {
-            _statEquipment.Reset();
+            
         }
 
         public void Reset()
@@ -20,117 +21,263 @@ namespace ARPG.Creature
             if (_owner == null || _owner.Table == null)
                 return;
 
-            _stats.Str = _owner.Table.Str;
-            _stats.Dex = _owner.Table.Dex;
-            _stats.Int = _owner.Table.Int;
-            _stats.MaxHp = _owner.Table.MaxHp;
-            _stats.MaxMp = _owner.Table.MaxMp;
-            _stats.CurrentHp = _owner.Table.MaxHp;
-            _stats.CurrentMp = _owner.Table.MaxMp;
-            _stats.HpGeneration = _owner.Table.HpGeneration;
-            _stats.MpGeneration = _owner.Table.MpGeneration;
-            _stats.AttackMin = _owner.Table.AttackMin;
-            _stats.AttackMax = _owner.Table.AttackMax;
-            _stats.CriRate = _owner.Table.CriRate;
-            _stats.CriDamage = _owner.Table.CriDamage;
-            _stats.MoveSpeed = _owner.Table.MoveSpeed;
-            _stats.AttackSpeed = _owner.Table.AttackSpeed;
-            _stats.CastSpeed = _owner.Table.CastSpeed;
-            _stats.Defense = _owner.Table.Defense;
-            _stats.FireResist = _owner.Table.FireResist;
-            _stats.IceResist = _owner.Table.IceResist;
-            _stats.LightningResist = _owner.Table.LightningResist;
-            _stats.PoisonResist = _owner.Table.PoisonResist;
-            _stats.Luck = _owner.Table.Luck;
+            _statsBase.Str = _owner.Table.Str;
+            _statsBase.Dex = _owner.Table.Dex;
+            _statsBase.Int = _owner.Table.Int;
+            _statsBase.MaxHp = _owner.Table.MaxHp;
+            _statsBase.MaxMp = _owner.Table.MaxMp;
+            _statsBase.CurrentHp = _owner.Table.MaxHp;
+            _statsBase.CurrentMp = _owner.Table.MaxMp;
+            _statsBase.HpGeneration = _owner.Table.HpGeneration;
+            _statsBase.MpGeneration = _owner.Table.MpGeneration;
+            _statsBase.AttackMin = _owner.Table.AttackMin;
+            _statsBase.AttackMax = _owner.Table.AttackMax;
+            _statsBase.CriRate = _owner.Table.CriRate;
+            _statsBase.CriDamage = _owner.Table.CriDamage;
+            _statsBase.MoveSpeed = _owner.Table.MoveSpeed;
+            _statsBase.AttackSpeed = _owner.Table.AttackSpeed;
+            _statsBase.CastSpeed = _owner.Table.CastSpeed;
+            _statsBase.Defense = _owner.Table.Defense;
+            _statsBase.FireResist = _owner.Table.FireResist;
+            _statsBase.IceResist = _owner.Table.IceResist;
+            _statsBase.LightningResist = _owner.Table.LightningResist;
+            _statsBase.PoisonResist = _owner.Table.PoisonResist;
+            _statsBase.Luck = _owner.Table.Luck;
+
+            UpdateEquipmentStat();
         }
 
         public int GetHp()
         {
-            return _stats.CurrentHp;
+            return _statsTotal.CurrentHp;
         }
 
         public float GetMoveSpeed()
         {
-            return _stats.MoveSpeed + _statEquipment.MoveSpeed;
+            return _statsTotal.MoveSpeed;
         }
 
         public void DecreaseHp(int inDamage)
         {
-            _stats.CurrentHp -= inDamage;
+            _statsTotal.CurrentHp -= inDamage;
 
-            if (_stats.CurrentHp < 0)
-                _stats.CurrentHp = 0;
+            if (_statsTotal.CurrentHp < 0)
+                _statsTotal.CurrentHp = 0;
         }
 
         public int GetAttackMin()
         {
-            return _stats.AttackMin + _statEquipment.AttackMin;
+            return _statsTotal.AttackMin;
         }
 
         public int GetAttackMax()
         {
-            return _stats.AttackMax + _statEquipment.AttackMax;
+            return _statsTotal.AttackMax;
+        }
+
+        public void UpdateStat()
+        {
+            _statsTotal.CopyFrom(_statsBase);
+            _statsTotal.Add(_statEquipment);
+        }
+
+        public void UpdateEquipmentStat()
+        {
+            _statEquipment.Reset();
+
+            Data.ItemData?[] equipItems = AR.s.Data.Player._inventoryEquip;
+            for (int i = 0; i < (int)GlobalEnum.EquipSlotType.Max; i++)
+            {
+                Data.ItemData? item = equipItems[i];
+                if (item?.Equipment?.StatData != null)
+                {
+                    for (int j = 0; j < item.Equipment.StatData.Prefix.Count; j++)
+                    {
+                        _statEquipment[item.Equipment.StatData.Prefix[j].Type] += item.Equipment.StatData.Prefix[j].Value;
+                    }
+                    for (int j = 0; j < item.Equipment.StatData.Postfix.Count; j++)
+                    {
+                        _statEquipment[item.Equipment.StatData.Postfix[j].Type] += item.Equipment.StatData.Postfix[j].Value;
+                    }    
+                }
+            }
+
+            UpdateStat();
         }
 
         public void LoadFromTable(CharacterBase inCreature, Tables.CreatureTable inTable)
         {
             _owner = inCreature;
 
-            Reset();
+            Reset(); // 기본 스탯 테이블 수치로 초기화
+
+            UpdateEquipmentStat(); // 장비 스탯 적용
         }
     }
 
     public class Stats
     {
-        public int Str; // 힘
-        public int Dex; // 민첩
-        public int Int; // 지능
+        private readonly int[] _stats = new int[System.Enum.GetValues(typeof(GlobalEnum.Stat)).Length];
 
         public int CurrentHp;       // 현재 체력
         public int CurrentMp;       // 현재 마나
-        public int MaxHp;           // 최대 체력
-        public int MaxMp;           // 최대 마나   
-        public int HpGeneration;    // 체력 재생
-        public int MpGeneration;    // 마나 재생   
-        public int AttackMin;       // 최소 공격력
-        public int AttackMax;       // 최대 공격력
-        public int CriRate;         // 치명타 확률
-        public int CriDamage;       // 치명타 피해
-        public int MoveSpeed;       // 이동 속도
-        public int AttackSpeed;     // 공격 속도
-        public int CastSpeed;       // 시전 속도  
-        public int Defense;         // 방어력 
-        public int FireResist;      // 화염 저항
-        public int IceResist;       // 냉기 저항
-        public int LightningResist; // 번개 저항
-        public int PoisonResist;
-        public int Luck;            // 운
-        
+
+        // 인덱서로 GlobalEnum.Stat을 통해 접근
+        public int this[GlobalEnum.Stat stat]
+        {
+            get { return _stats[(int)stat]; }
+            set { _stats[(int)stat] = value; }
+        }
+
+        // 편의를 위한 프로퍼티들
+        public int Str
+        {
+            get { return this[GlobalEnum.Stat.Str]; }
+            set { this[GlobalEnum.Stat.Str] = value; }
+        }
+
+        public int Dex
+        {
+            get { return this[GlobalEnum.Stat.Dex]; }
+            set { this[GlobalEnum.Stat.Dex] = value; }
+        }
+
+        public int Int
+        {
+            get { return this[GlobalEnum.Stat.Int]; }
+            set { this[GlobalEnum.Stat.Int] = value; }
+        }
+
+        public int MaxHp
+        {
+            get { return this[GlobalEnum.Stat.Hp]; }
+            set { this[GlobalEnum.Stat.Hp] = value; }
+        }
+
+        public int MaxMp
+        {
+            get { return this[GlobalEnum.Stat.Mp]; }
+            set { this[GlobalEnum.Stat.Mp] = value; }
+        }
+
+        public int HpGeneration
+        {
+            get { return this[GlobalEnum.Stat.HpGeneration]; }
+            set { this[GlobalEnum.Stat.HpGeneration] = value; }
+        }
+
+        public int MpGeneration
+        {
+            get { return this[GlobalEnum.Stat.MpGeneration]; }
+            set { this[GlobalEnum.Stat.MpGeneration] = value; }
+        }
+
+        public int AttackMin
+        {
+            get { return this[GlobalEnum.Stat.AttackMin]; }
+            set { this[GlobalEnum.Stat.AttackMin] = value; }
+        }
+
+        public int AttackMax
+        {
+            get { return this[GlobalEnum.Stat.AttackMax]; }
+            set { this[GlobalEnum.Stat.AttackMax] = value; }
+        }
+
+        public int CriRate
+        {
+            get { return this[GlobalEnum.Stat.CriRate]; }
+            set { this[GlobalEnum.Stat.CriRate] = value; }
+        }
+
+        public int CriDamage
+        {
+            get { return this[GlobalEnum.Stat.CriDamage]; }
+            set { this[GlobalEnum.Stat.CriDamage] = value; }
+        }
+
+        public int MoveSpeed
+        {
+            get { return this[GlobalEnum.Stat.MoveSpeed]; }
+            set { this[GlobalEnum.Stat.MoveSpeed] = value; }
+        }
+
+        public int AttackSpeed
+        {
+            get { return this[GlobalEnum.Stat.AttackSpeed]; }
+            set { this[GlobalEnum.Stat.AttackSpeed] = value; }
+        }
+
+        public int CastSpeed
+        {
+            get { return this[GlobalEnum.Stat.CastSpeed]; }
+            set { this[GlobalEnum.Stat.CastSpeed] = value; }
+        }
+
+        public int Defense
+        {
+            get { return this[GlobalEnum.Stat.Defense]; }
+            set { this[GlobalEnum.Stat.Defense] = value; }
+        }
+
+        public int FireResist
+        {
+            get { return this[GlobalEnum.Stat.FireResist]; }
+            set { this[GlobalEnum.Stat.FireResist] = value; }
+        }
+
+        public int IceResist
+        {
+            get { return this[GlobalEnum.Stat.IceResist]; }
+            set { this[GlobalEnum.Stat.IceResist] = value; }
+        }
+
+        public int LightningResist
+        {
+            get { return this[GlobalEnum.Stat.LightningResist]; }
+            set { this[GlobalEnum.Stat.LightningResist] = value; }
+        }
+
+        public int PoisonResist
+        {
+            get { return this[GlobalEnum.Stat.PoisonResist]; }
+            set { this[GlobalEnum.Stat.PoisonResist] = value; }
+        }
+
+        public int Luck
+        {
+            get { return this[GlobalEnum.Stat.Luck]; }
+            set { this[GlobalEnum.Stat.Luck] = value; }
+        }
+
+        public void Add(Stats other)
+        {
+            for (int i = 0; i < _stats.Length; i++)
+            {
+                _stats[i] += other._stats[i];
+            }
+            CurrentHp += other.CurrentHp;
+            CurrentMp += other.CurrentMp;
+        }
+
+        public void CopyFrom(Stats source)
+        {
+            for (int i = 0; i < _stats.Length; i++)
+            {
+                _stats[i] = source._stats[i];
+            }
+            CurrentHp = source.CurrentHp;
+            CurrentMp = source.CurrentMp;
+        }
+
         public void Reset()
         {
-            Str = 0;
-            Dex = 0;
-            Int = 0;
-
+            for (int i = 0; i < _stats.Length; i++)
+            {
+                _stats[i] = 0;
+            }
             CurrentHp = 0;
             CurrentMp = 0;
-            MaxHp = 0;
-            MaxMp = 0;
-            HpGeneration = 0;
-            MpGeneration = 0;
-            AttackMin = 0;
-            AttackMax = 0;
-            CriRate = 0;
-            CriDamage = 0;
-            MoveSpeed = 0;
-            AttackSpeed = 0;
-            CastSpeed = 0;
-            Defense = 0;
-            FireResist = 0;
-            IceResist = 0;
-            LightningResist = 0;
-            PoisonResist = 0;
-            Luck = 0;
         }
     }
 }

@@ -43,23 +43,23 @@ namespace ARPG.Creature
 
         public virtual void Initialize()
         {
-            Reset(); // Reset character
+            _sr.sprite = _characterSprite;
+            _pervPos = transform.position;
+            _currentPos = transform.position;
 
             _condition = CharacterConditions.Normal;
             OnChangeMovementState(MovementStates.Idle);
 
             _statController.Initialize();
             _skillController.Initialize(this);
+
+            Reset();
         }
 
         public virtual void Reset()
         {
             // Reset character state
-            _sr.sprite = _characterSprite;
             // _textName.text = string.Empty;
-
-            _pervPos = transform.position;
-            _currentPos = transform.position;
 
             _statController.Reset();
             _skillController.Reset();

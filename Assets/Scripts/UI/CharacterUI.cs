@@ -56,6 +56,7 @@ namespace ARPG.UI
 
             // 새로운 아이템을 슬롯에 장착
             _slots[(int)inEquipType].SetItem(inItem);
+            UpdateCharacterStat();
             return true;
         }
 
@@ -75,11 +76,15 @@ namespace ARPG.UI
             unequippedItem = _slots[slotIndex].GetItem();
             // 슬롯을 초기화하여 아이템 해제
             _slots[slotIndex].Reset();
+            UpdateCharacterStat();
 
             return true;
         }
 
-
+        private void UpdateCharacterStat()
+        {
+            AR.s.MyPlayer?.Stat.UpdateEquipmentStat();
+        }
     }
 }
 
