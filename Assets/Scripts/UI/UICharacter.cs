@@ -111,11 +111,11 @@ namespace ARPG.UI
             return uiComponent;
         }
 
-        private void OnClickSlot(SlotUI.UISlotType inSlotType, int inSlotIndex, UnityEngine.EventSystems.PointerEventData inEventData)
+        private void OnClickSlot(SlotUI inClickedSlot, UnityEngine.EventSystems.PointerEventData inEventData)
         {
-            if (inSlotType == SlotUI.UISlotType.Inventory) // 인벤토리 클릭 - 장비 장착
+            if (inClickedSlot.SlotType == SlotUI.UISlotType.Inventory) // 인벤토리 클릭 - 장비 장착
             {
-                ItemData? itemData = _inventoryUI!.GetItemBySlotIndex(inSlotIndex);
+                ItemData? itemData = _inventoryUI!.GetItemBySlotIndex(inClickedSlot.SlotIndex);
                 if (itemData == null || itemData.Table == null || itemData.Equipment == null) // 아이템이 없거나 장비 아이템이 아닌 경우
                     return;
 
@@ -124,19 +124,19 @@ namespace ARPG.UI
                     if (replacedItem != null)
                     {
                         // 기존 장착 아이템이 있었다면 인벤토리에 다시 넣기
-                        if (_inventoryUI.AddItem(replacedItem, inSlotIndex, out _) == false)
+                        if (_inventoryUI.AddItem(replacedItem, inClickedSlot.SlotIndex, out _) == false)
                         {
-                            Debug.LogWarning($"[UICharacter] OnClickSlot - Inventory full, cannot add replaced item, inSlotIndex({inSlotIndex})");
+                            Debug.LogWarning($"[UICharacter] OnClickSlot - Inventory full, cannot add replaced item, inSlotIndex({inClickedSlot.SlotIndex})");
                         }
                     }
                     else
                     {
                         // 장착 성공했으니 인벤토리에서 아이템 제거
-                        _inventoryUI.RemoveItem(inSlotIndex);
+                        _inventoryUI.RemoveItem(inClickedSlot.SlotIndex);
                     }
                 }
             }
-            else if (inSlotType == SlotUI.UISlotType.Equipment) // 장비 클릭 - 장비 해제
+            else if (inClickedSlot.SlotType == SlotUI.UISlotType.Equipment) // 장비 클릭 - 장비 해제
             {
                 // 인벤토리에 여유 공간이 있는지 먼저 체크
                 if (_inventoryUI!.HasEmptySlot() == false)
@@ -145,7 +145,14 @@ namespace ARPG.UI
                     return;
                 }
 
-                if (_characterUI != null && _characterUI.UnequipItem(inSlotIndex, out var unequippedItem))
+                SlotUI_Equip? equipSlot = inClickedSlot as SlotUI_Equip;
+                if (equipSlot == null)
+                {
+                    Debug.LogError("[UICharacter] OnClickSlot - Clicked slot is not an equipment slot (should not happen)");
+                    return;
+                }
+
+                if (_characterUI != null && _characterUI.UnequipItem(equipSlot.EquipSlotType, out var unequippedItem))
                 {
                     if (unequippedItem != null)
                     {
@@ -155,7 +162,7 @@ namespace ARPG.UI
                             Debug.LogError("[UICharacter] OnClickSlot - Failed to add unequipped item to inventory (should not happen)");
                             // 여유 공간을 체크했으므로 이 상황은 발생하지 않아야 함
                             // 만약 발생하면 다시 장착
-                            _characterUI.EquipItem((GlobalEnum.EquipSlotType)inSlotIndex, unequippedItem, out _);
+                            _characterUI.EquipItem((GlobalEnum.EquipSlotType)equipSlot.EquipSlotType, unequippedItem, out _);
                         }
                     }
                 }

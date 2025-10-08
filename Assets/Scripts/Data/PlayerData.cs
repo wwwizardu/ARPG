@@ -47,6 +47,43 @@ namespace ARPG.Data
             }
         }
 
+        public bool EquipItem(GlobalEnum.EquipSlotType inEquipType, ItemData inItem, out ItemData? replacedItem)
+        {
+            replacedItem = null;
+
+            if (inItem == null)
+                return false;
+
+            if (inItem?.Equipment?.Table == null )
+                return false;
+
+            if (inItem.Equipment.Table.EquipType != inEquipType)
+                return false;
+
+            // 기존에 장착된 아이템이 있는 경우 교체할 아이템으로 설정
+            if (_inventoryEquip[(int)inEquipType] != null)
+            {
+                replacedItem = _inventoryEquip[(int)inEquipType];
+            }
+
+            // 아이템 장착
+            _inventoryEquip[(int)inEquipType] = inItem;
+
+            return true;
+        }
+
+        public bool UnequipItem(GlobalEnum.EquipSlotType inEquipType, out Data.ItemData? unequippedItem)
+        {
+            unequippedItem = null;
+            if (_inventoryEquip[(int)inEquipType] == null)
+                return false;
+
+            unequippedItem = _inventoryEquip[(int)inEquipType];
+            _inventoryEquip[(int)inEquipType] = null;
+
+            return true;
+        }
+
         public bool Load()
         {
             // 로드 로직

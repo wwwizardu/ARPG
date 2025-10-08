@@ -21,6 +21,8 @@ namespace ARPG.Creature
             if (_owner == null || _owner.Table == null)
                 return;
 
+            _statsBase.Reset();
+
             _statsBase.Str = _owner.Table.Str;
             _statsBase.Dex = _owner.Table.Dex;
             _statsBase.Int = _owner.Table.Int;
@@ -81,6 +83,11 @@ namespace ARPG.Creature
             _statsTotal.Add(_statEquipment);
         }
 
+        public Stats GetStats()
+        {
+            return _statsTotal;
+        }
+
         public void UpdateEquipmentStat()
         {
             _statEquipment.Reset();
@@ -98,7 +105,7 @@ namespace ARPG.Creature
                     for (int j = 0; j < item.Equipment.StatData.Postfix.Count; j++)
                     {
                         _statEquipment[item.Equipment.StatData.Postfix[j].Type] += item.Equipment.StatData.Postfix[j].Value;
-                    }    
+                    }
                 }
             }
 

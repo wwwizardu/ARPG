@@ -16,7 +16,7 @@ namespace ARPG.UI
         private SlotUI? []? _slotUIs = null;
         private List<Data.ItemData?> _items = null!;
 
-        public async Task Initialize(string inName, List<Data.ItemData?> inInventory, int inSlotMaxCount, Action<SlotUI.UISlotType, int, PointerEventData> onClickSlot)
+        public async Task Initialize(string inName, List<Data.ItemData?> inInventory, int inSlotMaxCount, Action<SlotUI, PointerEventData> onClickSlot)
         {
             SlotCount = inSlotMaxCount;
             base.Initialize(inName, false);
@@ -197,7 +197,7 @@ namespace ARPG.UI
             return false;
         }
         
-        private async Task<bool> LoadSlots(Action<SlotUI.UISlotType, int, PointerEventData> onClickSlot)
+        private async Task<bool> LoadSlots(Action<SlotUI, PointerEventData> onClickSlot)
         {
             try
             {

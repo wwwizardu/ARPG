@@ -20,26 +20,26 @@ public class GlobalEnum
 
     public enum Stat
     {
-        Str,
-        Dex,
-        Int,
-        Hp,
-        Mp,
-        HpGeneration,
-        MpGeneration,
-        AttackMin,
-        AttackMax,
-        CriRate,
-        CriDamage,
-        MoveSpeed,
-        AttackSpeed,
-        CastSpeed,
-        Defense,
-        FireResist,
-        IceResist,
-        LightningResist,
-        PoisonResist,
-        Luck,
+        Str,                // 힘
+        Dex,                // 민첩
+        Int,                // 지능
+        Hp,                 // 체력
+        Mp,                 // 마나
+        HpGeneration,       // 체력 재생
+        MpGeneration,       // 마나 재생
+        AttackMin,          // 최소 공격력
+        AttackMax,          // 최대 공격력
+        CriRate,            // 치명타 확률
+        CriDamage,          // 치명타 피해
+        MoveSpeed,          // 이동 속도
+        AttackSpeed,        // 공격 속도
+        CastSpeed,          // 시전 속도
+        Defense,            // 방어력
+        FireResist,         // 화염 저항
+        IceResist,          // 냉기 저항
+        LightningResist,    // 번개 저항
+        PoisonResist,       // 독 저항
+        Luck,               // 행운
     }
 
     public enum EquipSlotType

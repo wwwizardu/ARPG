@@ -12,9 +12,10 @@ namespace ARPG.UI
         [SerializeField] private GlobalEnum.EquipSlotType _equipSlotType = GlobalEnum.EquipSlotType.Max;
         [SerializeField] Image _BG_EquipType;
 
+        public GlobalEnum.EquipSlotType EquipSlotType { get { return _equipSlotType; } }
 
 
-        public override void Initialize(int inSlotIndex, Action<SlotUI.UISlotType, int, PointerEventData> onClick)
+        public override void Initialize(int inSlotIndex, Action<SlotUI, PointerEventData> onClick)
         {
             base.Initialize(inSlotIndex, onClick);
         }
@@ -76,7 +77,7 @@ namespace ARPG.UI
 
         protected override void OnClick(PointerEventData eventData)
         {
-            _onClick?.Invoke(_slotType, _slotIndex, eventData);
+            _onClick?.Invoke(this, eventData);
         }
     }
 }

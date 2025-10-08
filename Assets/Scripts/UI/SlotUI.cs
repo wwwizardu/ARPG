@@ -29,12 +29,12 @@ namespace ARPG.UI
 
         protected Data.ItemData? _itemData = null;
 
-        protected Action<UISlotType, int, PointerEventData>? _onClick = null;
+        protected Action<SlotUI, PointerEventData>? _onClick = null;
 
         public int SlotIndex { get { return _slotIndex; } }
         public UISlotType SlotType { get { return _slotType; } }
 
-        public virtual void Initialize(int inSlotIndex, Action<UISlotType, int, PointerEventData> onClick)
+        public virtual void Initialize(int inSlotIndex, Action<SlotUI, PointerEventData> onClick)
         {
             base.Initialize($"Slot_{inSlotIndex}", false);
 
@@ -133,7 +133,7 @@ namespace ARPG.UI
 
         protected virtual void OnClick(PointerEventData eventData)
         {
-            _onClick?.Invoke(_slotType, _slotIndex, eventData);
+            _onClick?.Invoke(this, eventData);
         }
     }
 }

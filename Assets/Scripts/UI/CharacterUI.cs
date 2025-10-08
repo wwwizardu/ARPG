@@ -2,15 +2,17 @@
 using System;
 using ARPG.Base;
 using ARPG.Tables;
+using TMPro;
 using UnityEngine;
 
 namespace ARPG.UI
 {
     public class CharacterUI : UIBase
     {
+        [SerializeField] private TextMeshProUGUI[] _textStat;
         [SerializeField] private SlotUI_Equip[] _slots;
 
-        public void Initialize(Action<SlotUI.UISlotType, int, UnityEngine.EventSystems.PointerEventData> OnClickSlot)
+        public void Initialize(Action<SlotUI, UnityEngine.EventSystems.PointerEventData> OnClickSlot)
         {
             base.Initialize("UI/CharacterUI", false);
 
@@ -24,6 +26,8 @@ namespace ARPG.UI
             {
                 _slots[i].Initialize(i, OnClickSlot);
             }
+
+            UpdateCharacterStat();
         }
 
         public void OnLoadCompleted()
@@ -44,19 +48,16 @@ namespace ARPG.UI
             if (inItem == null)
                 return false;
 
-            // 해당 슬롯에 아이템을 장착할 수 있는지 확인
-            if (_slots[(int)inEquipType].CanEquip(inItem) == false)
+            // 장비 아이템 데이터에 세팅
+            if (AR.s.Data.Player.EquipItem(inEquipType, inItem, out replacedItem) == false)
                 return false;
-
-            // 기존에 장착된 아이템이 있는 경우 교체할 아이템으로 설정
-            if (_slots[(int)inEquipType].HasItem() == true)
-            {
-                replacedItem = _slots[(int)inEquipType].GetItem();
-            }
 
             // 새로운 아이템을 슬롯에 장착
             _slots[(int)inEquipType].SetItem(inItem);
+
+            // 캐릭터 스탯 업데이트
             UpdateCharacterStat();
+            
             return true;
         }
 
@@ -64,18 +65,18 @@ namespace ARPG.UI
         // slotIndex: 해제할 슬롯의 인덱스
         // unequippedItem: 해제된 아이템 데이터
         // 반환값: 해제 성공 시 true, 실패 시 false
-        public bool UnequipItem(int slotIndex, out Data.ItemData? unequippedItem)
+        public bool UnequipItem(GlobalEnum.EquipSlotType inEquipType, out Data.ItemData? unequippedItem)
         {
             unequippedItem = null;
 
-            // 해당 슬롯에 장착된 아이템이 없는 경우 해제 실패
-            if (_slots[slotIndex].HasItem() == false)
+            // 장비 아이템 데이터에 세팅
+            if (AR.s.Data.Player.UnequipItem(inEquipType, out unequippedItem) == false)
                 return false;
 
-            // 장착된 아이템을 가져와서 반환값으로 설정
-            unequippedItem = _slots[slotIndex].GetItem();
             // 슬롯을 초기화하여 아이템 해제
-            _slots[slotIndex].Reset();
+            _slots[(int)inEquipType].Reset();
+
+            // 캐릭터 스탯 업데이트
             UpdateCharacterStat();
 
             return true;
@@ -84,6 +85,31 @@ namespace ARPG.UI
         private void UpdateCharacterStat()
         {
             AR.s.MyPlayer?.Stat.UpdateEquipmentStat();
+
+            ARPG.Creature.Stats? stat = AR.s.MyPlayer?.Stat.GetStats();
+            if (stat == null)
+                return;
+
+            _textStat[(int)GlobalEnum.Stat.Str].text = $"힘 {stat.Str}";
+            _textStat[(int)GlobalEnum.Stat.Dex].text = $"민첩 {stat.Dex}";
+            _textStat[(int)GlobalEnum.Stat.Int].text = $"지능 {stat.Int}";
+            _textStat[(int)GlobalEnum.Stat.Hp].text = $"체력 {stat.CurrentHp}/{stat.MaxHp}";
+            _textStat[(int)GlobalEnum.Stat.Mp].text = $"마나 {stat.CurrentMp}/{stat.MaxMp}";
+            _textStat[(int)GlobalEnum.Stat.HpGeneration].text = $"체력 재생 {stat.HpGeneration}";
+            _textStat[(int)GlobalEnum.Stat.MpGeneration].text = $"마나 재생 {stat.MpGeneration}";
+            _textStat[(int)GlobalEnum.Stat.AttackMin].text = $"공격력 {stat.AttackMin} - {stat.AttackMax}";
+            _textStat[(int)GlobalEnum.Stat.AttackMax].gameObject.SetActive(false);
+            _textStat[(int)GlobalEnum.Stat.CriRate].text = $"치명타 확률 {stat.CriRate}%";
+            _textStat[(int)GlobalEnum.Stat.CriDamage].text = $"치명타 피해 {stat.CriDamage}%";
+            _textStat[(int)GlobalEnum.Stat.MoveSpeed].text = $"이동 속도 {stat.MoveSpeed}";
+            _textStat[(int)GlobalEnum.Stat.AttackSpeed].text = $"공격 속도 {stat.AttackSpeed}";
+            _textStat[(int)GlobalEnum.Stat.CastSpeed].text = $"시전 속도 {stat.CastSpeed}";
+            _textStat[(int)GlobalEnum.Stat.Hp].text = $"방어력 {stat.Defense}";
+            _textStat[(int)GlobalEnum.Stat.Hp].text = $"화염 저항 {stat.FireResist}";
+            _textStat[(int)GlobalEnum.Stat.Hp].text = $"냉기 저항 {stat.IceResist}";
+            _textStat[(int)GlobalEnum.Stat.Hp].text = $"번개 저항 {stat.LightningResist}";
+            _textStat[(int)GlobalEnum.Stat.Hp].text = $"독 저항 {stat.PoisonResist}";
+            _textStat[(int)GlobalEnum.Stat.Hp].text = $"행운 {stat.Luck}";
         }
     }
 }
