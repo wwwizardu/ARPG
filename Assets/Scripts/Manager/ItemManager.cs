@@ -118,7 +118,66 @@ namespace ARPG.Item
             if (inTable == null || inTable.Equipment == null)
                 return null;
 
-            return null;
+            if (inTable.Equipment.EquipmentStat != null) // 옵션이 정해져 있는 장비
+            {
+                EquipmentData equipmentData = new EquipmentData()
+                {
+                    Id = inTable.Equipment.Id,
+                    Prefix = inTable.Equipment.EquipmentStat.Prefix != null ? new List<Stat>(inTable.Equipment.EquipmentStat.Prefix) : new List<Stat>(),
+                    Postfix = inTable.Equipment.EquipmentStat.Postfix != null ? new List<Stat>(inTable.Equipment.EquipmentStat.Postfix) : new List<Stat>(),
+                };
+
+                return equipmentData;
+            }
+            else // 옵션이 생성되어야 하는 장비
+            {
+                EquipmentData equipmentData = new EquipmentData()
+                {
+                    Id = inTable.Equipment.Id,
+                    Prefix = new List<Stat>(),
+                    Postfix = new List<Stat>(),
+                };
+
+                // 접두사 옵션 생성
+                int prefixCount = Random.Range(1, 3); // 접두사 옵션 개수 (1~2개)
+                for (int i = 0; i < prefixCount; i++)
+                {
+                    // 랜덤 스탯 타입 선택
+                    GlobalEnum.Stat randomStatType = (GlobalEnum.Stat)Random.Range(0, System.Enum.GetValues(typeof(GlobalEnum.Stat)).Length);
+
+                    // 랜덤 스탯 값 (1~5)
+                    ushort randomStatValue = (ushort)Random.Range(1, 6);
+
+                    Stat newStat = new Stat()
+                    {
+                        Type = randomStatType,
+                        Value = randomStatValue
+                    };
+
+                    equipmentData.Prefix.Add(newStat);
+                }
+
+                // 접미사 옵션 생성
+                int postfixCount = Random.Range(1, 3); // 접미사 옵션 개수 (1~2개)
+                for (int i = 0; i < postfixCount; i++)
+                {
+                    // 랜덤 스탯 타입 선택
+                    GlobalEnum.Stat randomStatType = (GlobalEnum.Stat)Random.Range(0, System.Enum.GetValues(typeof(GlobalEnum.Stat)).Length);
+
+                    // 랜덤 스탯 값 (1~5)
+                    ushort randomStatValue = (ushort)Random.Range(1, 6);
+
+                    Stat newStat = new Stat()
+                    {
+                        Type = randomStatType,
+                        Value = randomStatValue
+                    };
+
+                    equipmentData.Postfix.Add(newStat);
+                }
+
+                return equipmentData;
+            }
         }
 
     }

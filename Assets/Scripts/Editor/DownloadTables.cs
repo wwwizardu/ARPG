@@ -35,7 +35,7 @@ namespace ARPG.Editor
 
             await DownloadTable<ItemTable>("2064107837&range=A:H", 1, SaveType.String);
             
-            await DownloadTable<EquipmentTable>("853198133&range=A:G", 1, SaveType.String);
+            await DownloadTable<EquipmentTable>("853198133&range=A:H", 1, SaveType.String);
 
             await DownloadTable<EquipmentStatTable>("488047668&range=A:Q", 1, SaveType.String);
             
@@ -228,18 +228,19 @@ namespace ARPG.Editor
 
         private static void ParseEquipmentTable(EquipmentTable table, string[] values)
         {
-            if (values.Length < 7)
+            if (values.Length < 8)
             {
                 Debug.LogError($"[ParseEquipmentTable] Invalid data length. Expected at least 7, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
-            table.EquipType = (GlobalEnum.EquipSlotType)Enum.Parse(typeof(GlobalEnum.EquipSlotType), values[1]);
-            table.AttackSpeed = float.Parse(values[2]);
-            table.Critical = int.Parse(values[3]);
-            table.DamageMin = int.Parse(values[4]);
-            table.DamageMax = int.Parse(values[5]);
-            table.EquipmentStatId = int.Parse(values[6]);
+            // values[1] 은 웹에서만 사용한다.
+            table.EquipType = (GlobalEnum.EquipSlotType)Enum.Parse(typeof(GlobalEnum.EquipSlotType), values[2]);
+            table.AttackSpeed = float.Parse(values[3]);
+            table.Critical = int.Parse(values[4]);
+            table.DamageMin = int.Parse(values[5]);
+            table.DamageMax = int.Parse(values[6]);
+            table.EquipmentStatId = int.Parse(values[7]);
         }
 
         private static void ParseEquipmentStatTable(EquipmentStatTable table, string[] values)

@@ -29,8 +29,6 @@ namespace ARPG.Data
 
         public List<Stat> Postfix = new();
 
-
-        
     }
 }
 

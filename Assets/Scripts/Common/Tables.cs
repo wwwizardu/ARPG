@@ -1,3 +1,4 @@
+#nullable enable
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -70,11 +71,11 @@ namespace ARPG.Tables
 
         [JsonProperty("SpriteName")] public string SpriteName;
 
-        [JsonIgnore] public EquipmentTable Equipment;
+        [JsonIgnore] public EquipmentTable? Equipment;
 
         public override void LoadLate()
         {
-            EquipmentTable equipmentTable = AR.s.Data.GetEquipment(EquipmentId);
+            EquipmentTable? equipmentTable = AR.s.Data?.GetEquipment(EquipmentId);
             if (equipmentTable != null)
             {
                 Equipment = equipmentTable;
@@ -96,7 +97,7 @@ namespace ARPG.Tables
         [JsonProperty("DamageMax")] public int DamageMax;
         [JsonProperty("EquipmentStatId")] public int EquipmentStatId;
 
-        [JsonIgnore] public EquipmentStatTable EquipmentStat;
+        [JsonIgnore] public EquipmentStatTable? EquipmentStat;
 
         public EquipmentTable()
         {
@@ -105,7 +106,7 @@ namespace ARPG.Tables
 
         public override void LoadLate()
         {
-            EquipmentStatTable equipmentStatTable = AR.s.Data.GetEquipmentStat(EquipmentStatId);
+            EquipmentStatTable? equipmentStatTable = AR.s.Data.GetEquipmentStat(EquipmentStatId);
             if (equipmentStatTable != null)
             {
                 EquipmentStat = equipmentStatTable;
@@ -121,8 +122,8 @@ namespace ARPG.Tables
     [Serializable]
     public class EquipmentStatTable : TableBase
     {
-        [JsonProperty("Prefix")] public List<Stat> Prefix;
-        [JsonProperty("Postfix")] public List<Stat> Postfix;
+        [JsonProperty("Prefix")] public List<Stat>? Prefix;
+        [JsonProperty("Postfix")] public List<Stat>? Postfix;
 
     }
 
