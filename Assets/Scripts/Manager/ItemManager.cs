@@ -35,7 +35,7 @@ namespace ARPG.Item
                 Debug.LogError($"[Monster] DropItemObjectAsync - inQuantity is invalid, inItemId({inItemId}), inQuantity({inQuantity})");
                 return false;
             }
-                
+
             var handle = Addressables.InstantiateAsync("Item/Item", inPosition, Quaternion.identity);
             var itemObject = await handle.Task;
 
@@ -85,7 +85,7 @@ namespace ARPG.Item
                 Addressables.ReleaseInstance(itemObject);
                 return false;
             }
-            
+
             _itemInstances[itemData.ItemInstanceId] = item;
 
             Debug.Log("[Monster] Item dropped successfully");
@@ -118,11 +118,18 @@ namespace ARPG.Item
             if (inTable == null || inTable.Equipment == null)
                 return null;
 
+            
+
             if (inTable.Equipment.EquipmentStat != null) // 옵션이 정해져 있는 장비
             {
                 EquipmentData equipmentData = new EquipmentData()
                 {
                     Id = inTable.Equipment.Id,
+                    Table = inTable.Equipment
+                };
+
+                equipmentData.StatData = new()
+                {
                     Prefix = inTable.Equipment.EquipmentStat.Prefix != null ? new List<Stat>(inTable.Equipment.EquipmentStat.Prefix) : new List<Stat>(),
                     Postfix = inTable.Equipment.EquipmentStat.Postfix != null ? new List<Stat>(inTable.Equipment.EquipmentStat.Postfix) : new List<Stat>(),
                 };
@@ -134,49 +141,64 @@ namespace ARPG.Item
                 EquipmentData equipmentData = new EquipmentData()
                 {
                     Id = inTable.Equipment.Id,
+                    Table = inTable.Equipment
+                };
+
+                equipmentData.StatData = new()
+                {
                     Prefix = new List<Stat>(),
                     Postfix = new List<Stat>(),
                 };
 
                 // 접두사 옵션 생성
-                int prefixCount = Random.Range(1, 3); // 접두사 옵션 개수 (1~2개)
-                for (int i = 0; i < prefixCount; i++)
-                {
-                    // 랜덤 스탯 타입 선택
-                    GlobalEnum.Stat randomStatType = (GlobalEnum.Stat)Random.Range(0, System.Enum.GetValues(typeof(GlobalEnum.Stat)).Length);
-
-                    // 랜덤 스탯 값 (1~5)
-                    ushort randomStatValue = (ushort)Random.Range(1, 6);
-
-                    Stat newStat = new Stat()
-                    {
-                        Type = randomStatType,
-                        Value = randomStatValue
-                    };
-
-                    equipmentData.Prefix.Add(newStat);
-                }
+                CreatePrefixOptions(equipmentData.StatData);
 
                 // 접미사 옵션 생성
-                int postfixCount = Random.Range(1, 3); // 접미사 옵션 개수 (1~2개)
-                for (int i = 0; i < postfixCount; i++)
-                {
-                    // 랜덤 스탯 타입 선택
-                    GlobalEnum.Stat randomStatType = (GlobalEnum.Stat)Random.Range(0, System.Enum.GetValues(typeof(GlobalEnum.Stat)).Length);
-
-                    // 랜덤 스탯 값 (1~5)
-                    ushort randomStatValue = (ushort)Random.Range(1, 6);
-
-                    Stat newStat = new Stat()
-                    {
-                        Type = randomStatType,
-                        Value = randomStatValue
-                    };
-
-                    equipmentData.Postfix.Add(newStat);
-                }
+                CreatePostfixOptions(equipmentData.StatData);
 
                 return equipmentData;
+            }
+        }
+        
+        private void CreatePrefixOptions(EquipmentStatData equipmentStatData)
+        {
+            int prefixCount = Random.Range(1, 3); // 접두사 옵션 개수 (1~2개)
+            for (int i = 0; i < prefixCount; i++)
+            {
+                // 랜덤 스탯 타입 선택
+                GlobalEnum.Stat randomStatType = (GlobalEnum.Stat)Random.Range(0, System.Enum.GetValues(typeof(GlobalEnum.Stat)).Length);
+
+                // 랜덤 스탯 값 (1~5)
+                ushort randomStatValue = (ushort)Random.Range(1, 6);
+
+                Stat newStat = new Stat()
+                {
+                    Type = randomStatType,
+                    Value = randomStatValue
+                };
+
+                equipmentStatData.Prefix.Add(newStat);
+            }
+        }
+
+        private void CreatePostfixOptions(EquipmentStatData equipmentStatData)
+        {
+            int postfixCount = Random.Range(1, 3); // 접미사 옵션 개수 (1~2개)
+            for (int i = 0; i < postfixCount; i++)
+            {
+                // 랜덤 스탯 타입 선택
+                GlobalEnum.Stat randomStatType = (GlobalEnum.Stat)Random.Range(0, System.Enum.GetValues(typeof(GlobalEnum.Stat)).Length);
+
+                // 랜덤 스탯 값 (1~5)
+                ushort randomStatValue = (ushort)Random.Range(1, 6);
+
+                Stat newStat = new Stat()
+                {
+                    Type = randomStatType,
+                    Value = randomStatValue
+                };
+
+                equipmentStatData.Postfix.Add(newStat);
             }
         }
 

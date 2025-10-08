@@ -25,10 +25,17 @@ namespace ARPG.Data
     {
         public int Id;
 
+        public EquipmentStatData? StatData;
+
+        [NonSerialized] public EquipmentTable? Table;
+    }
+
+    [Serializable]
+    public class EquipmentStatData
+    {
         public List<Stat> Prefix = new();
 
         public List<Stat> Postfix = new();
-
     }
 }
 

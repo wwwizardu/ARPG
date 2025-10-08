@@ -2,6 +2,8 @@
 using UnityEngine.UI;
 using UnityEngine;
 using ARPG.Data;
+using UnityEngine.EventSystems;
+using System;
 
 namespace ARPG.UI
 {
@@ -12,9 +14,9 @@ namespace ARPG.UI
 
 
 
-        public override void Initialize(int inSlotIndex)
+        public override void Initialize(int inSlotIndex, Action<SlotUI.UISlotType, int, PointerEventData> onClick)
         {
-            base.Initialize(inSlotIndex);
+            base.Initialize(inSlotIndex, onClick);
         }
 
         public override void Reset()
@@ -70,6 +72,11 @@ namespace ARPG.UI
         protected override void OnExit(UnityEngine.EventSystems.PointerEventData eventData)
         {
             AR.s.UI.HideTooltip();
+        }
+
+        protected override void OnClick(PointerEventData eventData)
+        {
+            _onClick?.Invoke(_slotType, _slotIndex, eventData);
         }
     }
 }

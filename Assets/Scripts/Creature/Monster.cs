@@ -9,12 +9,12 @@ namespace ARPG.Creature
 {
     public class Monster : CharacterBase
     {
-        protected new Tables.MonsterTable? _table = null;
+        protected Tables.MonsterTable? _monsterTable = null;
         private bool _activated = false;
         private MonsterAIBase? _ai = null;
         private int _instanceId = -1;
 
-        public new Tables.MonsterTable? Table { get { return _table; } }
+        public new Tables.MonsterTable? Table { get { return _monsterTable; } }
 
         public override void Initialize()
         {
@@ -33,8 +33,8 @@ namespace ARPG.Creature
 
         public override bool LoadTable(int inId)
         {
-            _table = AR.s.Data.GetMonster(inId);
-            if (_table == null)
+            _monsterTable = AR.s.Data.GetMonster(inId);
+            if (_monsterTable == null)
             {
                 Debug.LogError($"[Monster] LoadTable - MonsterTable not found for Id: {inId}");
                 return false;

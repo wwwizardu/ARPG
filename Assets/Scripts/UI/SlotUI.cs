@@ -6,15 +6,16 @@ using UnityEngine.UI;
 
 using UnityEngine.EventSystems;
 using ARPG.Base;
+using System;
 
 namespace ARPG.UI
 {
-    public class SlotUI : UIBase, IPointerEnterHandler, IPointerExitHandler
+    public class SlotUI : UIBase, IPointerEnterHandler, IPointerExitHandler, IPointerClickHandler
     {
         public enum UISlotType
         {
             None,
-            Item,
+            Inventory,
             Skill,
             Equipment
         }
@@ -28,16 +29,19 @@ namespace ARPG.UI
 
         protected Data.ItemData? _itemData = null;
 
+        protected Action<UISlotType, int, PointerEventData>? _onClick = null;
+
         public int SlotIndex { get { return _slotIndex; } }
         public UISlotType SlotType { get { return _slotType; } }
 
-        public virtual void Initialize(int inSlotIndex)
+        public virtual void Initialize(int inSlotIndex, Action<UISlotType, int, PointerEventData> onClick)
         {
             base.Initialize($"Slot_{inSlotIndex}", false);
 
             Reset();
 
             _slotIndex = inSlotIndex;
+            _onClick = onClick;
         }
 
         public virtual void Reset()
@@ -80,6 +84,12 @@ namespace ARPG.UI
             AR.s.UI.HideTooltip();
         }
 
+        // 마우스 클릭 시
+        public void OnPointerClick(PointerEventData eventData)
+        {
+            OnClick(eventData);
+        }
+
         public virtual void Refresh()
         {
             if (_itemData == null)
@@ -119,6 +129,11 @@ namespace ARPG.UI
         protected virtual void OnExit(PointerEventData eventData)
         {
             Debug.Log($"[SlotUI] OnExit - SlotIndex({_slotIndex}), ItemId({(_itemData != null ? _itemData.Id.ToString() : "null")})");
+        }
+
+        protected virtual void OnClick(PointerEventData eventData)
+        {
+            _onClick?.Invoke(_slotType, _slotIndex, eventData);
         }
     }
 }

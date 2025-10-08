@@ -13,13 +13,13 @@ namespace ARPG.UI
         {
             _textName.text = inItemData.Table.Name;
 
-            if (inItemData.Equipment == null)
+            if (inItemData.Equipment?.StatData == null)
                 return;
 
             int statIndex = 0;
 
             // Prefix 옵션들을 _textStat에 추가
-            foreach (var stat in inItemData.Equipment.Prefix)
+            foreach (var stat in inItemData.Equipment.StatData.Prefix)
             {
                 if (statIndex >= _textStat.Count)
                     break;
@@ -30,7 +30,7 @@ namespace ARPG.UI
             }
 
             // Postfix 옵션들을 _textStat에 추가
-            foreach (var stat in inItemData.Equipment.Postfix)
+            foreach (var stat in inItemData.Equipment.StatData.Postfix)
             {
                 if (statIndex >= _textStat.Count)
                     break;

@@ -3,6 +3,8 @@ using UnityEngine;
 using UnityEngine.AddressableAssets;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using UnityEngine.EventSystems;
+using System;
 
 namespace ARPG.UI
 {
@@ -14,7 +16,7 @@ namespace ARPG.UI
         private SlotUI? []? _slotUIs = null;
         private List<Data.ItemData?> _items = null!;
 
-        public async Task Initialize(string inName, List<Data.ItemData?> inInventory, int inSlotMaxCount)
+        public async Task Initialize(string inName, List<Data.ItemData?> inInventory, int inSlotMaxCount, Action<SlotUI.UISlotType, int, PointerEventData> onClickSlot)
         {
             SlotCount = inSlotMaxCount;
             base.Initialize(inName, false);
@@ -26,7 +28,7 @@ namespace ARPG.UI
                 return;
             }
 
-            var loadResult = await LoadSlots();
+            var loadResult = await LoadSlots(onClickSlot);
             if (loadResult == false)
             {
                 Debug.LogError("[UIInventory] Failed to load slots");
@@ -60,13 +62,14 @@ namespace ARPG.UI
         {
             if (inItem == null)
                 return false;
-            
+
             // 같은 ID의 아이템이 있는지 확인하여 수량 증가
             for (int i = 0; i < _items.Count; i++)
             {
                 if (_items[i] != null && _items[i]!.Id == inItem.Id)
                 {
                     _items[i]!.Quantity += inItem.Quantity;
+                    _slotUIs?[i]?.Refresh();
                     return true;
                 }
             }
@@ -77,6 +80,7 @@ namespace ARPG.UI
                 if (_items[i] == null)
                 {
                     _items[i] = inItem;
+                    _slotUIs?[i]?.SetItem(inItem);
                     return true;
                 }
             }
@@ -100,6 +104,7 @@ namespace ARPG.UI
             if (_items[slotIndex] != null && _items[slotIndex]!.Id == inItem.Id)
             {
                 _items[slotIndex]!.Quantity += inItem.Quantity;
+                _slotUIs?[slotIndex]?.Refresh();
                 return true;
             }
 
@@ -110,6 +115,7 @@ namespace ARPG.UI
             }
 
             _items[slotIndex] = inItem;
+            _slotUIs?[slotIndex]?.SetItem(inItem);
             return true;
         }
 
@@ -123,11 +129,26 @@ namespace ARPG.UI
                 if (_items[i] == inItem)
                 {
                     _items[i] = null;
+                    _slotUIs?[i]?.Reset();
                     return true;
                 }
             }
 
             return false;
+        }
+
+        public bool RemoveItem(int inSlotIndex)
+        {
+            // 인덱스 유효성 검사
+            if (inSlotIndex < 0 || inSlotIndex >= _items.Count)
+                return false;
+
+            if (_items[inSlotIndex] == null)
+                return false;
+
+            _items[inSlotIndex] = null;
+            _slotUIs?[inSlotIndex]?.Reset();
+            return true;
         }
 
         public bool MoveItem(int inFromIndex, int inToIndex)
@@ -157,7 +178,7 @@ namespace ARPG.UI
         {
             return _items;
         }
-        
+
         public Data.ItemData? GetItemBySlotIndex(int inIndex)
         {
             if (inIndex < 0 || inIndex >= _items.Count)
@@ -165,8 +186,18 @@ namespace ARPG.UI
 
             return _items[inIndex];
         }
+
+        public bool HasEmptySlot()
+        {
+            for (int i = 0; i < _items.Count; i++)
+            {
+                if (_items[i] == null)
+                    return true;
+            }
+            return false;
+        }
         
-        private async Task<bool> LoadSlots()
+        private async Task<bool> LoadSlots(Action<SlotUI.UISlotType, int, PointerEventData> onClickSlot)
         {
             try
             {
@@ -189,8 +220,8 @@ namespace ARPG.UI
                         Debug.LogError($"[UIInventory] Slot prefab does not contain SlotUI component at index {i}");
                         return false;
                     }
-
-                    slotUI.Initialize(i);
+                    
+                    slotUI.Initialize(i, onClickSlot);                    
                     _slotUIs[i] = slotUI;
                 }
 

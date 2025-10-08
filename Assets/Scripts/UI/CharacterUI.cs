@@ -1,4 +1,5 @@
 #nullable enable
+using System;
 using ARPG.Base;
 using ARPG.Tables;
 using UnityEngine;
@@ -9,9 +10,9 @@ namespace ARPG.UI
     {
         [SerializeField] private SlotUI_Equip[] _slots;
 
-        public override void Initialize(string inName, bool isForm = false)
+        public void Initialize(Action<SlotUI.UISlotType, int, UnityEngine.EventSystems.PointerEventData> OnClickSlot)
         {
-            base.Initialize(inName, isForm);
+            base.Initialize("UI/CharacterUI", false);
 
             if (_slots == null || _slots.Length == 0)
             {
@@ -21,13 +22,13 @@ namespace ARPG.UI
 
             for (int i = 0; i < _slots.Length; i++)
             {
-                _slots[i].Initialize(i);
+                _slots[i].Initialize(i, OnClickSlot);
             }
         }
 
         public void OnLoadCompleted()
         {
-            
+
         }
 
         // 지정된 장비 슬롯에 아이템을 장착하는 함수
@@ -57,7 +58,7 @@ namespace ARPG.UI
             _slots[(int)inEquipType].SetItem(inItem);
             return true;
         }
-        
+
         // 지정된 슬롯 인덱스의 장비를 해제하는 함수
         // slotIndex: 해제할 슬롯의 인덱스
         // unequippedItem: 해제된 아이템 데이터
@@ -77,6 +78,7 @@ namespace ARPG.UI
 
             return true;
         }
+
 
     }
 }
