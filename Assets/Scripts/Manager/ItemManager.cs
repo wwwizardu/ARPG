@@ -118,11 +118,10 @@ namespace ARPG.Item
             if (inTable == null || inTable.Equipment == null)
                 return null;
 
-            
-
+            EquipmentData? equipmentData = null;
             if (inTable.Equipment.EquipmentStat != null) // 옵션이 정해져 있는 장비
             {
-                EquipmentData equipmentData = new EquipmentData()
+                equipmentData = new EquipmentData()
                 {
                     Id = inTable.Equipment.Id,
                     Table = inTable.Equipment
@@ -138,7 +137,7 @@ namespace ARPG.Item
             }
             else // 옵션이 생성되어야 하는 장비
             {
-                EquipmentData equipmentData = new EquipmentData()
+                equipmentData = new EquipmentData()
                 {
                     Id = inTable.Equipment.Id,
                     Table = inTable.Equipment
@@ -155,9 +154,11 @@ namespace ARPG.Item
 
                 // 접미사 옵션 생성
                 CreatePostfixOptions(equipmentData.StatData);
-
-                return equipmentData;
             }
+
+            equipmentData.Quality = Random.Range(1, 101); // 1~100 사이의 품질 값 설정
+
+            return equipmentData;
         }
         
         private void CreatePrefixOptions(EquipmentStatData equipmentStatData)

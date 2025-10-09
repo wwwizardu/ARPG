@@ -12,6 +12,8 @@ namespace ARPG.UI
         [SerializeField] private TextMeshProUGUI[] _textStat;
         [SerializeField] private SlotUI_Equip[] _slots;
 
+        private Data.ItemData?[]? _equippedItems = null;
+
         public void Initialize(Action<SlotUI, UnityEngine.EventSystems.PointerEventData> OnClickSlot)
         {
             base.Initialize("UI/CharacterUI", false);
@@ -21,6 +23,8 @@ namespace ARPG.UI
                 Debug.LogError("[CharacterUI] Equip slots not assigned");
                 return;
             }
+
+            _equippedItems = AR.s.Data.Player._inventoryEquip;
 
             for (int i = 0; i < _slots.Length; i++)
             {
@@ -32,7 +36,25 @@ namespace ARPG.UI
 
         public void OnLoadCompleted()
         {
+            if (_slots == null || _equippedItems == null)
+            {
+                Debug.LogError("[UIInventory] OnLoadCompleted - _slotUIs or _items is null");
+                return;
+            }
 
+            if(_slots.Length != _equippedItems.Length)
+            {
+                Debug.LogError("[UICharacter] OnLoadCompleted - _slots length does not match _equippedItems length");
+                return;
+            }
+
+            for (int i = 0; i < _slots.Length; i++)
+            {
+                if (_slots[i] != null && _equippedItems[i] != null)
+                {
+                    _slots[i]!.SetItem(_equippedItems[i]!);
+                }
+            }
         }
 
         // 지정된 장비 슬롯에 아이템을 장착하는 함수

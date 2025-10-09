@@ -38,6 +38,8 @@ namespace ARPG.Data
     {
         public int Id;
 
+        public int Quality;
+
         public EquipmentStatData? StatData;
 
         [NonSerialized] public EquipmentTable? Table;

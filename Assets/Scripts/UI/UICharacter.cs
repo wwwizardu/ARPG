@@ -132,7 +132,7 @@ namespace ARPG.UI
                     else
                     {
                         // 장착 성공했으니 인벤토리에서 아이템 제거
-                        _inventoryUI.RemoveItem(inClickedSlot.SlotIndex);
+                        _inventoryUI.RemoveItem(inClickedSlot.SlotIndex, 1);
                     }
                 }
             }

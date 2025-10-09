@@ -72,27 +72,38 @@ namespace ARPG.UI
             return true;
         }
 
-        public bool RemoveItem(Data.ItemData inItem)
+        // public bool RemoveItem(Data.ItemData inItem, int inQuantity)
+        // {
+        //     int slotIndex = _inventory.RemoveItem(inItem, inQuantity, out var removedItem);
+        //     if (slotIndex == -1)
+        //         return false;
+
+        //     if (removedItem == null)
+        //     {
+        //         _slotUIs?[slotIndex]?.Reset();    
+        //     }
+        //     else
+        //     {
+        //         _slotUIs?[slotIndex]?.SetItem(removedItem);
+        //     }
+
+        //     return true;
+        // }
+
+        public bool RemoveItem(int inSlotIndex, int inQuantity)
         {
-            int slotIndex = _inventory.RemoveItem(inItem);
-            if (slotIndex == -1)
+            if (_inventory.RemoveItem(inSlotIndex, inQuantity, out var remainItem) == false)
                 return false;
 
-            _slotUIs?[slotIndex]?.Reset();
-            return true;
-        }
+            if (remainItem == null)
+            {
+                _slotUIs?[inSlotIndex]?.Reset();
+            }
+            else
+            {
+                _slotUIs?[inSlotIndex]?.Refresh();
+            }
 
-        public bool RemoveItem(int inSlotIndex)
-        {
-            // 인덱스 유효성 검사
-            if (inSlotIndex < 0 || inSlotIndex >= _inventory.Items.Count)
-                return false;
-
-            if (_inventory.Items[inSlotIndex] == null)
-                return false;
-
-            _inventory.Items[inSlotIndex] = null;
-            _slotUIs?[inSlotIndex]?.Reset();
             return true;
         }
 

@@ -63,6 +63,8 @@ namespace ARPG.Tables
 
         [JsonProperty("ItemType")] public GlobalEnum.ItemType ItemType;
 
+        [JsonProperty("Stackable")] public bool Stackable;
+
         [JsonProperty("Description")] public string Description;
 
         [JsonProperty("DropRate")] public int DropRate;

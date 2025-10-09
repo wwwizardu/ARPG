@@ -37,17 +37,20 @@ namespace ARPG.Item
             if (inItem == null)
                 return -1;
 
-            // 같은 ID의 아이템이 있는지 확인하여 수량 증가
-            for (int i = 0; i < _items.Count; i++)
+            // Stackable이 true일 경우에만 같은 ID의 아이템을 찾아 수량 증가
+            if (inItem.Table != null && inItem.Table.Stackable)
             {
-                if (_items[i] != null && _items[i]!.Id == inItem.Id)
+                for (int i = 0; i < _items.Count; i++)
                 {
-                    _items[i]!.Quantity += inItem.Quantity;
-                    return i;
+                    if (_items[i] != null && _items[i]!.Id == inItem.Id)
+                    {
+                        _items[i]!.Quantity += inItem.Quantity;
+                        return i;
+                    }
                 }
             }
 
-            // 같은 아이템이 없으면 빈 슬롯 찾기
+            // Stackable이 false이거나 같은 아이템이 없으면 빈 슬롯 찾기
             for (int i = 0; i < _items.Count; i++)
             {
                 if (_items[i] == null)
@@ -89,21 +92,74 @@ namespace ARPG.Item
             return true;
         }
 
-        public int RemoveItem(ItemData inItem)
-        {
-            if (inItem == null)
-                return -1;
+        // public int RemoveItem(ItemData inItem, int inQuantity, out ItemData? outRemainItem) // 제거된 아이템의 슬롯 인덱스 반환, 실패 시 -1
+        // {
+        //     outRemainItem = null;
 
-            for (int i = 0; i < _items.Count; i++)
+        //     if (inItem == null)
+        //         return -1;
+
+        //     for (int i = 0; i < _items.Count; i++)
+        //     {
+        //         if (_items[i] == inItem)
+        //         {
+        //             // 제거할 수량이 현재 수량보다 많으면 에러
+        //             if (_items[i]!.Quantity < inQuantity)
+        //             {
+        //                 Debug.LogError($"[Inventory] RemoveItem - Not enough quantity. Current: {_items[i]!.Quantity}, Requested: {inQuantity}");
+        //                 return -1;
+        //             }
+
+        //             // 제거할 수량이 현재 수량과 같으면 슬롯 비우기
+        //             if (_items[i]!.Quantity == inQuantity)
+        //             {
+        //                 _items[i] = null;
+        //                 return i;
+        //             }
+        //             else
+        //             {
+        //                 // 수량만 감소
+        //                 _items[i]!.Quantity -= inQuantity;
+        //                 outRemainItem = _items[i];
+        //                 return i;
+        //             }
+        //         }
+        //     }
+
+        //     return -1;
+        // }
+
+        public bool RemoveItem(int inSlotIndex, int inQuantity, out ItemData? outRemainItem)
+        {
+            outRemainItem = null;
+
+            // 인덱스 유효성 검사
+            if (inSlotIndex < 0 || inSlotIndex >= _items.Count)
+                return false;
+
+            if (_items[inSlotIndex] == null)
+                return false;
+
+            // 제거할 수량이 현재 수량보다 많으면 에러
+            if (_items[inSlotIndex]!.Quantity < inQuantity)
             {
-                if (_items[i] == inItem)
-                {
-                    _items[i] = null;
-                    return i;
-                }
+                Debug.LogError($"[Inventory] RemoveItem - Not enough quantity. Current: {_items[inSlotIndex]!.Quantity}, Requested: {inQuantity}");
+                return false;
             }
 
-            return -1;
+            // 제거할 수량이 현재 수량과 같으면 슬롯 비우기
+            if (_items[inSlotIndex]!.Quantity == inQuantity)
+            {
+                _items[inSlotIndex] = null;
+                return true;
+            }
+            else
+            {
+                // 수량만 감소
+                _items[inSlotIndex]!.Quantity -= inQuantity;
+                outRemainItem = _items[inSlotIndex];
+                return true;
+            }
         }
 
         public bool MoveItem(int inFromIndex, int inToIndex)
