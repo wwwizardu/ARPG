@@ -18,6 +18,19 @@ namespace ARPG.Data
         public int Quantity;
 
         [NonSerialized] public ItemTable? Table;
+
+        public void OnLoadCompleted()
+        {
+            if (Table == null)
+            {
+                Table = AR.s.Data.GetItem(Id);
+            }
+
+            if (Equipment != null)
+            {
+                Equipment.OnLoadCompleted();
+            }
+        }
     }
 
     [Serializable]
@@ -28,6 +41,14 @@ namespace ARPG.Data
         public EquipmentStatData? StatData;
 
         [NonSerialized] public EquipmentTable? Table;
+
+        public void OnLoadCompleted()
+        {
+            if (Table == null)
+            {
+                Table = AR.s.Data.GetEquipment(Id);
+            }
+        }
     }
 
     [Serializable]

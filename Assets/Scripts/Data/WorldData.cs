@@ -16,6 +16,11 @@ namespace ARPG.Data
             WorldDropItemDatas.Clear();
         }
 
+        public void LoadCompleted()
+        {
+            // 로드 완료 후 처리할 내용이 있으면 여기에 작성
+        }
+
         public bool AddDropItem(float inPosX, float inPosZ, ItemData inItem)
         {
             if (inItem == null)

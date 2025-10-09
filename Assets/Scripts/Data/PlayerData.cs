@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using UnityEditorInternal.Profiling.Memory.Experimental;
 
 namespace ARPG.Data
 {
@@ -16,15 +17,13 @@ namespace ARPG.Data
         public float PositionX;
         public float PositionZ;
 
-        public int MaxInventorySlotCount = 40;
-
         // 장착한 아이템
         public ItemData?[] _inventoryEquip = new ItemData?[(int)GlobalEnum.EquipSlotType.Max];
 
         // 인벤토리 아이템
         public List<ItemData?> _inventory = new List<ItemData?>();
 
-        public void Initialize(int inInventorySlotMaxCount)
+        public void Initialize()
         {
             Level = 1;
             Exp = 0;
@@ -33,17 +32,30 @@ namespace ARPG.Data
             PositionX = 0;
             PositionZ = 0;
 
-            MaxInventorySlotCount = inInventorySlotMaxCount;
-
             for (int i = 0; i < (int)GlobalEnum.EquipSlotType.Max; i++)
             {
                 _inventoryEquip[i] = null;
             }
 
             _inventory.Clear();
-            for (int i = 0; i < inInventorySlotMaxCount; i++)
+            for (int i = 0; i < GlobalEnum.PLAYER_INVENTORY_SLOTCOUNT_MAX; i++)
             {
                 _inventory.Add(null);
+            }
+        }
+
+        public void LoadCompleted()
+        {
+            // 장착 아이템 테이블 세팅
+            for (int i = 0; i < _inventoryEquip.Length; i++)
+            {
+                _inventoryEquip[i]?.OnLoadCompleted();
+            }
+
+            // 인벤토리 아이템 테이블 세팅
+            for (int i = 0; i < _inventory.Count; i++)
+            {
+                _inventory[i]?.OnLoadCompleted();
             }
         }
 
@@ -54,7 +66,7 @@ namespace ARPG.Data
             if (inItem == null)
                 return false;
 
-            if (inItem?.Equipment?.Table == null )
+            if (inItem?.Equipment?.Table == null)
                 return false;
 
             if (inItem.Equipment.Table.EquipType != inEquipType)

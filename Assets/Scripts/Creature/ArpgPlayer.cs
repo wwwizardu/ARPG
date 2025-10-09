@@ -7,9 +7,9 @@ namespace ARPG.Creature
     public class ArpgPlayer : CharacterBase
     {
         private Input.ArpgInputAction.PlayerActions? _input = null;
-        private Inventory _inventory = null!;
+        private Item.Inventory _inventory = new Item.Inventory();
 
-        public Inventory Inventory { get { return _inventory; } }
+        public Item.Inventory Inventory { get { return _inventory; } }
 
         public override void Initialize()
         {
@@ -19,7 +19,7 @@ namespace ARPG.Creature
 
             transform.position = new Vector3(0, 0, -0.1f); // Set initial position
 
-            _inventory = new Inventory();
+            _inventory.Initialize(AR.s.Data.Player._inventory, AR.s.Data.Player._inventory.Count);
 
             Debug.Log("ArpgPlayer initialized.");
         }
@@ -48,12 +48,6 @@ namespace ARPG.Creature
             if (base.Load(inId) == false)
                 return false;
 
-            if (_inventory.Load() == false)
-            {
-                Debug.LogError("[ArpgPlayer] Load - Failed to load inventory");
-                return false;
-            }
-                
             return true;
         }
 
@@ -202,10 +196,24 @@ namespace ARPG.Creature
                     var item = hit.collider.gameObject.GetComponentInParent<Item.ItemObject>();
                     if (item != null)
                     {
-                        item.Pickup();
-                        return true;
+                        return PickupItem(item);
                     }
                 }
+            }
+
+            return false;
+        }
+
+        private bool PickupItem(Item.ItemObject inItem)
+        {
+            if (inItem == null)
+                return false;
+
+            if (0 <= AR.s.MyPlayer?.Inventory?.AddItem(inItem.ItemData))
+            {
+                AR.s.Item.DestroyItem(inItem.ItemData.ItemInstanceId);
+
+                AR.s.Data.Save();
             }
 
             return false;

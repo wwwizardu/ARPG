@@ -14,6 +14,8 @@ namespace ARPG.Item
         private ItemData _itemData = null!;
         private ItemTable _table = null!;
 
+        public ItemData ItemData { get { return _itemData; } }
+
         public void Initialize()
         {
 
@@ -52,16 +54,6 @@ namespace ARPG.Item
             Refresh();
 
             return true;
-        }
-
-        public virtual bool Pickup()
-        {
-            if (AR.s.MyPlayer?.Inventory?.AddItem(_itemData) == true)
-            {
-                return AR.s.Item.DestroyItem(_itemData.ItemInstanceId);
-            }
-            
-            return false;
         }
 
         private void Refresh()

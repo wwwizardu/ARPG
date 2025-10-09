@@ -87,7 +87,7 @@ namespace ARPG.UI
                 return;
             }
 
-            await _inventoryUI!.Initialize(AddressablePath.Inventory, AR.s.Data.Player._inventory, AR.s.Data.Player._inventory.Count, OnClickSlot); // 슬롯 40개로 초기화
+            await _inventoryUI!.Initialize(AddressablePath.Inventory, AR.s.MyPlayer!.Inventory, OnClickSlot); // 슬롯 40개로 초기화
         }
 
         private async UniTask<T?> LoadUIAsync<T>(string inName, Transform inParent) where T : UIBase

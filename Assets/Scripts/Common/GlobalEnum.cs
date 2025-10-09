@@ -66,4 +66,6 @@ public class GlobalEnum
         Consumable = 3,
         Quest = 4,
     }
+
+    static public ushort PLAYER_INVENTORY_SLOTCOUNT_MAX = 60;
 }

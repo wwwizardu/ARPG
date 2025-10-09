@@ -1,9 +1,36 @@
 using UnityEngine;
 using UnityEditor;
+using System.IO;
 
 public class ArpgMenu
 {
-    [MenuItem("ARPG/Create Theme Tile Set", false, 2)]
+    [MenuItem("ARPG/Open Save Directory", false, 2)]
+    public static void OpenSaveDirectory()
+    {
+        string directory = Path.Combine(Application.persistentDataPath, "Saved");
+        if (Application.platform == RuntimePlatform.WindowsEditor)
+        {
+            if (Directory.Exists(directory) == false)
+            {
+                Debug.LogError($"Save directory does not exist: {directory}");
+                return;
+            }
+
+            string winPath = directory.Replace("/", "\\");
+            Debug.Log($"Attempting to open explorer with path: {winPath}");
+
+            try
+            {
+                System.Diagnostics.Process.Start("explorer.exe", winPath);
+            }
+            catch (System.ComponentModel.Win32Exception ex)
+            {
+                Debug.LogError($"Failed to open explorer: {ex.Message}");
+            }
+        }
+    }
+
+    [MenuItem("ARPG/Create Theme Tile Set", false, 3)]
     private static void CreateThemeTileSet()
     {
         string folderPath = "Assets/Art/Tilemap/TileSet";
@@ -26,7 +53,7 @@ public class ArpgMenu
         AssetDatabase.SaveAssets();
     }
 
-    [MenuItem("ARPG/Create Custom Tile", false, 3)]
+    [MenuItem("ARPG/Create Custom Tile", false, 4)]
     private static void CreateCustomTile()
     {
         string folderPath = "Assets/Art/Tilemap/CustomTiles";
