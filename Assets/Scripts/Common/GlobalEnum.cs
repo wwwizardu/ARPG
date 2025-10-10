@@ -67,5 +67,12 @@ public class GlobalEnum
         Quest = 4,
     }
 
+    public enum TeamType
+    {
+        None = 0,       // 중립
+        Player = 1,     // 플레이어 팀
+        Monster = 2,    // 몬스터 팀
+    }
+
     static public ushort PLAYER_INVENTORY_SLOTCOUNT_MAX = 60;
 }

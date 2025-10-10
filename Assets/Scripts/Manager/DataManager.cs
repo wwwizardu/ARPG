@@ -208,6 +208,7 @@ namespace ARPG.Data
                     await File.WriteAllTextAsync(worldDataPath, worldDataJson);
 
                     // PlayerData 저장
+                    AR.s.MyPlayer?.Save(_playerData);
                     string playerDataJson = JsonConvert.SerializeObject(_playerData, Formatting.Indented, new JsonSerializerSettings
                     {
                         NullValueHandling = NullValueHandling.Include,

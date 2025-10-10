@@ -1,4 +1,5 @@
 #nullable enable
+using ARPG.Data;
 using ARPG.UI;
 using UnityEngine;
 
@@ -14,6 +15,8 @@ namespace ARPG.Creature
         public override void Initialize()
         {
             base.Initialize();
+
+            _team = GlobalEnum.TeamType.Player;
 
             _input = AR.s.UI.Input.Player;
 
@@ -33,7 +36,7 @@ namespace ARPG.Creature
 
         public override bool LoadTable(int inId)
         {
-            _table = AR.s.Data.GetCreature(inId);
+            _table = AR.s.Data.GetPlayer(inId);
             if (_table == null)
             {
                 Debug.LogError($"[CharacterBase] LoadData - CreatureTable not found for Id: {inId}");
@@ -48,7 +51,25 @@ namespace ARPG.Creature
             if (base.Load(inId) == false)
                 return false;
 
+            // 현재 체력과 마나 설정
+            if (AR.s?.Data?.Player != null)
+            {
+                _statController.SetHp(AR.s.Data.Player.CurrentHp);
+                _statController.SetMp(AR.s.Data.Player.CurrentMp);
+            }
+
+            if (_hpBar != null)
+            {
+                _hpBar.fillAmount = _statController.GetHpRatio();
+            }     
+
             return true;
+        }
+
+        public void Save(PlayerData inPlayerData)
+        {
+            inPlayerData.CurrentHp = _statController.GetHp();
+            inPlayerData.CurrentMp = _statController.GetMp();
         }
 
         // protected override void InitializeSkill()

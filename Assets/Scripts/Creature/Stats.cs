@@ -1,4 +1,5 @@
 #nullable enable
+using ARPG.Data;
 using ARPG.Tables;
 using UnityEngine;
 
@@ -52,6 +53,21 @@ namespace ARPG.Creature
         public int GetHp()
         {
             return _statsTotal.CurrentHp;
+        }
+
+        public void SetHp(int inHp)
+        {
+            _statsTotal.CurrentHp = Mathf.Clamp(inHp, 0, _statsTotal.MaxHp);
+        }
+
+        public int GetMp()
+        {
+            return _statsTotal.CurrentMp;
+        }
+
+        public void SetMp(int inMp)
+        {
+            _statsTotal.CurrentMp = Mathf.Clamp(inMp, 0, _statsTotal.MaxMp);
         }
 
         public float GetHpRatio()
@@ -123,6 +139,11 @@ namespace ARPG.Creature
         public int GetStat(GlobalEnum.Stat inStat)
         {
             return _statsTotal[inStat];
+        }
+
+        public void SetStat(GlobalEnum.Stat inStat, int inValue)
+        {
+            _statsTotal[inStat] = inValue;
         }
 
         public void UpdateEquipmentStat()

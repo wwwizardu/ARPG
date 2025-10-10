@@ -32,7 +32,7 @@ namespace ARPG.Creature
         protected Vector2 _inputDirection = Vector2.zero;
         protected Vector2 _velocity = Vector2.zero;
 
-        
+        protected GlobalEnum.TeamType _team = GlobalEnum.TeamType.None;
 
         protected Vector2 _pervPos;
         protected Vector2 _currentPos;
@@ -40,13 +40,15 @@ namespace ARPG.Creature
 
         protected Coroutine? _LoopUpdateCo = null;
         protected WaitForSeconds _waitForSeconds = new WaitForSeconds(1f);
-        
+
 
         public CreatureTable? Table { get { return _table; } }
 
         public StatController Stat { get { return _statController; } }
 
         public CharacterConditions State { get { return _condition; } }
+
+        public GlobalEnum.TeamType Team { get { return _team; } }
 
         public virtual void Initialize()
         {
@@ -92,9 +94,8 @@ namespace ARPG.Creature
 
             // Load stats from table
             _statController.LoadFromTable(this, _table!);
-            _initialized = true;
 
-            if(_statController.GetStat(GlobalEnum.Stat.HpGeneration) > 0 || _statController.GetStat(GlobalEnum.Stat.MpGeneration) > 0)
+            if (_statController.GetStat(GlobalEnum.Stat.HpGeneration) > 0 || _statController.GetStat(GlobalEnum.Stat.MpGeneration) > 0)
             {
                 if (_LoopUpdateCo != null)
                 {
@@ -102,8 +103,15 @@ namespace ARPG.Creature
                     _LoopUpdateCo = null;
                 }
 
-                _LoopUpdateCo = StartCoroutine(LoopUpdate());    
-            }
+                _LoopUpdateCo = StartCoroutine(LoopUpdate());
+            }      
+
+            if (_hpBar != null)
+            {
+                _hpBar.fillAmount = _statController.GetHpRatio();
+            }      
+
+            _initialized = true;
 
             return true;
         }

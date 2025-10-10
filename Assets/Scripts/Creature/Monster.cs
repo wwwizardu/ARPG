@@ -20,6 +20,8 @@ namespace ARPG.Creature
         {
             base.Initialize();
 
+            _team = GlobalEnum.TeamType.Monster;
+
             _ai = new BasicMonsterAI(this);
             _ai.Initialize();
         }

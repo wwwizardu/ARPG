@@ -86,11 +86,17 @@ namespace ARPG.Skill
                     IHittable hittable = collider.GetComponent<IHittable>();
                     if (hittable != null)
                     {
+                        // 같은 팀은 공격하지 않음
+                        if (hittable.Team == _character.Team && hittable.Team != GlobalEnum.TeamType.None)
+                        {
+                            continue;
+                        }
+
                         // 데미지 계산 (AttackMin과 AttackMax 사이의 랜덤값)
                         int minDamage = _character.Stat.GetAttackMin();
                         int maxDamage = _character.Stat.GetAttackMax();
                         int damage = UnityEngine.Random.Range(minDamage, maxDamage + 1);
-                        
+
                         // IHittable의 OnHit 함수 호출
                         hittable.OnHit(_character, damage);
                     }

@@ -73,7 +73,7 @@ namespace ARPG.Data
             Debug.Log("Data Tables Loaded");
         }
 
-        public Tables.CreatureTable? GetCreature(int id)
+        public Tables.CreatureTable? GetPlayer(int id)
         {
             if (_creatureTable.TryGetValue(id, out var table))
             {

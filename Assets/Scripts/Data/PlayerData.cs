@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using ARPG.Tables;
 using UnityEditorInternal.Profiling.Memory.Experimental;
 
 namespace ARPG.Data
@@ -10,12 +11,17 @@ namespace ARPG.Data
     public class PlayerData
     {
         public ushort Version = 1;
+
+        public int PlayerTableId;
         public int Level;
         public int Exp;
         public int Gold;
 
         public float PositionX;
         public float PositionZ;
+
+        public int CurrentHp;
+        public int CurrentMp;
 
         // 장착한 아이템
         public ItemData?[] _inventoryEquip = new ItemData?[(int)GlobalEnum.EquipSlotType.Max];
@@ -25,12 +31,25 @@ namespace ARPG.Data
 
         public void Initialize()
         {
+            PlayerTableId = 1;
             Level = 1;
             Exp = 0;
             Gold = 0;
 
             PositionX = 0;
             PositionZ = 0;
+
+            CreatureTable? playerTable = AR.s.Data.GetPlayer(PlayerTableId);
+            if(playerTable != null)
+            {
+                CurrentHp = playerTable.MaxHp;
+                CurrentMp = playerTable.MaxMp;
+            }
+            else
+            {
+                CurrentHp = 100;
+                CurrentMp = 100;
+            }
 
             for (int i = 0; i < (int)GlobalEnum.EquipSlotType.Max; i++)
             {
