@@ -63,12 +63,13 @@ PrefabInstance:
     - target: {fileID: 6350110636512088884, guid: 895d0dd52443105478a080e9bb1bd295, type: 3}
       propertyPath: m_Sprite
       value: 
-      objectReference: {fileID: 0}
+      objectReference: {fileID: -406917328, guid: 36b8160564e977a47b420ad84774d3a1, type: 3}
     - target: {fileID: 6350110636512088884, guid: 895d0dd52443105478a080e9bb1bd295, type: 3}
       propertyPath: m_WasSpriteAssigned
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 2413018562664831738, guid: 895d0dd52443105478a080e9bb1bd295, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents:
@@ -97,14 +98,25 @@ MonoBehaviour:
   _characterSprite: {fileID: -8703504, guid: 36b8160564e977a47b420ad84774d3a1, type: 3}
   _sr: {fileID: 1465636102543462636}
   _animator: {fileID: 7483943171866825892}
+  _hpBar: {fileID: 1633603156295254409}
   _skillController: {fileID: 3134026941507684514}
   _textName: {fileID: 0}
-  _speed: 5
 --- !u!212 &1465636102543462636 stripped
 SpriteRenderer:
   m_CorrespondingSourceObject: {fileID: 6350110636512088884, guid: 895d0dd52443105478a080e9bb1bd295, type: 3}
   m_PrefabInstance: {fileID: 5509841607298171864}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &1633603156295254409 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 6547489306309771857, guid: 895d0dd52443105478a080e9bb1bd295, type: 3}
+  m_PrefabInstance: {fileID: 5509841607298171864}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
 --- !u!114 &3134026941507684514 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 7424376786244143994, guid: 895d0dd52443105478a080e9bb1bd295, type: 3}

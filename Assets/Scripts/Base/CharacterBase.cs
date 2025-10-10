@@ -2,7 +2,9 @@
 using System;
 using ARPG.Tables;
 using UnityEngine;
+using UnityEngine.UI;
 using UnityEngine.U2D.Animation;
+using System.Collections;
 
 namespace ARPG.Creature
 {
@@ -12,6 +14,8 @@ namespace ARPG.Creature
         [SerializeField] protected Sprite _characterSprite;
         [SerializeField] protected SpriteRenderer _sr;
         [SerializeField] protected Animator _animator;
+
+        [SerializeField] protected Image _hpBar;
 
         [SerializeField] protected Skill.SkillController _skillController;
 
@@ -33,6 +37,9 @@ namespace ARPG.Creature
         protected Vector2 _pervPos;
         protected Vector2 _currentPos;
         protected bool _initialized = false;
+
+        protected Coroutine? _LoopUpdateCo = null;
+        protected WaitForSeconds _waitForSeconds = new WaitForSeconds(1f);
         
 
         public CreatureTable? Table { get { return _table; } }
@@ -87,6 +94,17 @@ namespace ARPG.Creature
             _statController.LoadFromTable(this, _table!);
             _initialized = true;
 
+            if(_statController.GetStat(GlobalEnum.Stat.HpGeneration) > 0 || _statController.GetStat(GlobalEnum.Stat.MpGeneration) > 0)
+            {
+                if (_LoopUpdateCo != null)
+                {
+                    StopCoroutine(_LoopUpdateCo);
+                    _LoopUpdateCo = null;
+                }
+
+                _LoopUpdateCo = StartCoroutine(LoopUpdate());    
+            }
+
             return true;
         }
 
@@ -98,6 +116,26 @@ namespace ARPG.Creature
             if (Stat.GetHp() <= 0)
             {
                 Dead();
+            }
+
+            _hpBar.fillAmount = Stat.GetHpRatio();
+        }
+
+        public virtual void OnHeal(int inHp)
+        {
+            _statController.IncreaseHp(inHp);
+            _hpBar.fillAmount = _statController.GetHpRatio();
+        }
+
+        public virtual void OnChangeMp(int inDeltaMp)
+        {
+            if (inDeltaMp > 0)
+            {
+                _statController.IncreaseMp(inDeltaMp);
+            }
+            else if (inDeltaMp < 0)
+            {
+                _statController.DecreaseMp(-inDeltaMp);
             }
         }
 
@@ -258,6 +296,8 @@ namespace ARPG.Creature
 
             _skillController.SkillUpdate(inDeltaTime);
 
+
+
             // if (IsOwner == true && GetPlayerTilePosition(out Vector2Int tilePos) == true)
             // {
             //     _currentMapTilePos = tilePos;
@@ -316,7 +356,7 @@ namespace ARPG.Creature
                 OnChangeMovementState(MovementStates.Walking);
             }
         }
-        
+
         protected void OnChangeMovementState(MovementStates inNew)
         {
             if (_moveState == inNew)
@@ -328,6 +368,21 @@ namespace ARPG.Creature
             _moveState = inNew;
 
             UpdateAnimator();
+        }
+        
+        protected IEnumerator LoopUpdate()
+        {
+            while (true)
+            {
+                yield return _waitForSeconds;
+
+                if (_initialized == false) // 초기화가 안된 상태라면 대기
+                    continue;
+
+                // Hp, Mp 자연 회복
+                OnHeal(_statController.GetStat(GlobalEnum.Stat.HpGeneration));
+                OnChangeMp(_statController.GetStat(GlobalEnum.Stat.MpGeneration));
+            }
         }
     }
 

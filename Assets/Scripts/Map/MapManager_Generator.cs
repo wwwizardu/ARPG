@@ -6,6 +6,8 @@ namespace ARPG.Map
 {
     public partial class MapManager : MonoBehaviour
     {
+        private List<Vector2Int> _candidateSpawnPositions = new List<Vector2Int>();
+
         public static uint CombineTileData(uint currentTile, GlobalEnum.TileType inBaseTileType, uint inHillFlag, uint inMonsterSpawnFlag)
         {
             return (currentTile & 0xFFFFFFC0) | ((uint)inBaseTileType & 0x0000000F) | inHillFlag | inMonsterSpawnFlag;
@@ -60,6 +62,10 @@ namespace ARPG.Map
         {
             chunk.monsterSpawnPositions.Clear();
 
+            // 몬스터 스폰 후보 위치 임시 저장
+            _candidateSpawnPositions.Clear();
+
+            // 1. 절차적 생성으로 타일 데이터 생성
             for (int x = 0; x < chunkSize; x++)
             {
                 for (int y = 0; y < chunkSize; y++)
@@ -95,7 +101,7 @@ namespace ARPG.Map
                     if (hillFlag == 0 && _randomGenerator.NextDouble() < _monsterSpawnRate)
                     {
                         monsterSpawnFlag = (uint)GlobalEnum.TileFlag.MonsterSpawn;
-                        chunk.monsterSpawnPositions.Add(new Vector2Int(x, y));
+                        _candidateSpawnPositions.Add(new Vector2Int(x, y));
                     }
 
                     // 타일 데이터 조합
@@ -104,8 +110,18 @@ namespace ARPG.Map
                 }
             }
 
-            // MapFileData와 청크가 겹치는 부분에 대해 타일 데이터 덮어쓰기
+            // 2. MapFileData로 타일 데이터 덮어쓰기
             OverlayMapFileData(chunk);
+
+            // 3. 후보 위치 중 최종적으로 몬스터 스폰 플래그가 유지된 위치만 수집
+            foreach (var pos in _candidateSpawnPositions)
+            {
+                uint tileData = chunk.tiles[pos.x, pos.y];
+                if ((tileData & (uint)GlobalEnum.TileFlag.MonsterSpawn) != 0)
+                {
+                    chunk.monsterSpawnPositions.Add(pos);
+                }
+            }
         }
 
         private void OverlayMapFileData(MapChunkData chunk)

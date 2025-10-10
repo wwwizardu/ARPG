@@ -54,9 +54,33 @@ namespace ARPG.Creature
             return _statsTotal.CurrentHp;
         }
 
+        public float GetHpRatio()
+        {
+            if (_statsTotal.MaxHp == 0)
+                return 0.0f;
+                
+            return (float)_statsTotal.CurrentHp / _statsTotal.MaxHp;
+        }
+
         public float GetMoveSpeed()
         {
             return _statsTotal.MoveSpeed;
+        }
+
+        public void IncreaseHp(int inHeal)
+        {
+            _statsTotal.CurrentHp += inHeal;
+
+            if (_statsTotal.CurrentHp > _statsTotal.MaxHp)
+                _statsTotal.CurrentHp = _statsTotal.MaxHp;
+        }
+
+        public void IncreaseMp(int inMana)
+        {
+            _statsTotal.CurrentMp += inMana;
+
+            if (_statsTotal.CurrentMp > _statsTotal.MaxMp)
+                _statsTotal.CurrentMp = _statsTotal.MaxMp;
         }
 
         public void DecreaseHp(int inDamage)
@@ -65,6 +89,14 @@ namespace ARPG.Creature
 
             if (_statsTotal.CurrentHp < 0)
                 _statsTotal.CurrentHp = 0;
+        }
+
+        public void DecreaseMp(int inMana)
+        {
+            _statsTotal.CurrentMp -= inMana;
+
+            if (_statsTotal.CurrentMp < 0)
+                _statsTotal.CurrentMp = 0;
         }
 
         public int GetAttackMin()
@@ -86,6 +118,11 @@ namespace ARPG.Creature
         public Stats GetStats()
         {
             return _statsTotal;
+        }
+
+        public int GetStat(GlobalEnum.Stat inStat)
+        {
+            return _statsTotal[inStat];
         }
 
         public void UpdateEquipmentStat()
