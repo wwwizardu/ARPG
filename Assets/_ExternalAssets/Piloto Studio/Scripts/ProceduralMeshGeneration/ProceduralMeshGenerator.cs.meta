@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 271498f36ec95b3488847b73cb4c54d8
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {fileID: 10904, guid: 0000000000000000f000000000000000, type: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 337756
+  packageName: Procedural Spell Indicators VFX
+  packageVersion: 1.0
+  assetPath: Assets/Piloto Studio/Scripts/ProceduralMeshGeneration/ProceduralMeshGenerator.cs
+  uploadId: 799444

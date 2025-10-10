@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: d0cbccdae63eda14994cf47828667c54
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 337756
+  packageName: Procedural Spell Indicators VFX
+  packageVersion: 1.0
+  assetPath: Assets/Piloto Studio/Scripts/ProceduralMeshGeneration/Editor/ProceduralMeshBakeWindow.cs
+  uploadId: 799444

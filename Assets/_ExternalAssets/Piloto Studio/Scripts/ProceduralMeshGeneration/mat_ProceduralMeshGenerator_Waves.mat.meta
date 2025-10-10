@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: c2aaae4b55d8b4f4ba9d11fb528cc38a
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 337756
+  packageName: Procedural Spell Indicators VFX
+  packageVersion: 1.0
+  assetPath: Assets/Piloto Studio/Scripts/ProceduralMeshGeneration/mat_ProceduralMeshGenerator_Waves.mat
+  uploadId: 799444
