@@ -4,6 +4,7 @@ using System.Collections;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
+using Unity.VisualScripting;
 using UnityEngine;
 
 namespace ARPG.Tables
@@ -23,6 +24,30 @@ namespace ARPG.Tables
     public class CreatureTable : TableBase
     {
         [JsonProperty("Name")] public string Name;
+
+        [JsonProperty("Stat")] public int StatId;
+
+        [JsonProperty("PrefabName")] public string PrefabName;
+
+        [JsonIgnore] public StatTable Stat = null!;
+
+        public override void LoadLate()
+        {
+            StatTable? statTable = AR.s.Data?.GetStat(StatId);
+            if (statTable != null)
+            {
+                Stat = statTable;
+            }
+            else
+            {
+                throw new Exception($"CreatureTable LoadLate - StatTable not found for Id: {StatId}");
+            }
+        }
+    }
+
+    [Serializable]
+    public class StatTable : TableBase
+    {
         [JsonProperty("Str")] public int Str;
         [JsonProperty("Dex")] public int Dex;
         [JsonProperty("Int")] public int Int;
@@ -43,11 +68,18 @@ namespace ARPG.Tables
         [JsonProperty("LightningResist")] public int LightningResist;
         [JsonProperty("PoisonResist")] public int PoisonResist;
         [JsonProperty("Luck")] public int Luck;
-        [JsonProperty("PrefabName")] public string PrefabName;
     }
 
     [Serializable]
     public class MonsterTable : CreatureTable
+    {
+        [JsonProperty("DropId")] public int DropId;
+        [JsonProperty("DropRateBonus")] public int DropRateBonus;
+        [JsonProperty("DropRarityBonus")] public int DropRarityBonus;
+    }
+
+    [Serializable]
+    public class NpcTable : CreatureTable
     {
         [JsonProperty("DropId")] public int DropId;
         [JsonProperty("DropRateBonus")] public int DropRateBonus;

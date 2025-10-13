@@ -13,6 +13,8 @@ namespace ARPG.Data
 
         private ImmutableDictionary<int, Tables.CreatureTable> _creatureTable = null!;
         private ImmutableDictionary<int, Tables.MonsterTable> _monsterTable = null!;
+        private ImmutableDictionary<int, Tables.NpcTable> _npcTable = null!;
+        private ImmutableDictionary<int, Tables.StatTable> _statTable = null!;
         private ImmutableDictionary<int, Tables.ItemTable> _itemTable = null!;
         private ImmutableDictionary<int, Tables.EquipmentTable> _equipmentTable = null!;
         private ImmutableDictionary<int, Tables.EquipmentStatTable> _equipmentStatTable = null!;
@@ -26,6 +28,8 @@ namespace ARPG.Data
             await Task.WhenAll(
                 LoadTable<Tables.CreatureTable>("CreatureTable.bytes", tables => _creatureTable = tables),
                 LoadTable<Tables.MonsterTable>("MonsterTable.bytes", tables => _monsterTable = tables),
+                LoadTable<Tables.NpcTable>("NpcTable.bytes", tables => _npcTable = tables),
+                LoadTable<Tables.StatTable>("StatTable.bytes", tables => _statTable = tables),
                 LoadTable<Tables.ItemTable>("ItemTable.bytes", tables => _itemTable = tables),
                 LoadTable<Tables.EquipmentTable>("EquipmentTable.bytes", tables => _equipmentTable = tables),
                 LoadTable<Tables.EquipmentStatTable>("EquipmentStatTable.bytes", tables => _equipmentStatTable = tables),
@@ -41,6 +45,16 @@ namespace ARPG.Data
             }
 
             foreach (var table in _monsterTable.Values)
+            {
+                table.LoadLate();
+            }
+
+            foreach (var table in _npcTable.Values)
+            {
+                table.LoadLate();
+            }
+
+            foreach (var table in _statTable.Values)
             {
                 table.LoadLate();
             }
@@ -86,6 +100,26 @@ namespace ARPG.Data
         public Tables.MonsterTable? GetMonster(int id)
         {
             if (_monsterTable.TryGetValue(id, out var table))
+            {
+                return table;
+            }
+
+            return null;
+        }
+
+        public Tables.NpcTable? GetNpc(int id)
+        {
+            if (_npcTable.TryGetValue(id, out var table))
+            {
+                return table;
+            }
+
+            return null;
+        }
+
+        public Tables.StatTable? GetStat(int id)
+        {
+            if (_statTable.TryGetValue(id, out var table))
             {
                 return table;
             }

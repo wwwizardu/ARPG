@@ -29,9 +29,13 @@ namespace ARPG.Editor
         {
             _tableDic = new();
 
-            await DownloadTable<CreatureTable>("0&range=A:V", 1, SaveType.String);
+            await DownloadTable<CreatureTable>("0&range=A:D", 1, SaveType.String);
 
-            await DownloadTable<MonsterTable>("483012127&range=A:Y", 1, SaveType.String);
+            await DownloadTable<MonsterTable>("483012127&range=A:G", 1, SaveType.String);
+
+            await DownloadTable<NpcTable>("1460299278&range=A:G", 1, SaveType.String);
+
+            await DownloadTable<StatTable>("318209064&range=A:W", 1, SaveType.String);
 
             await DownloadTable<ItemTable>("2064107837&range=A:I", 1, SaveType.String);
             
@@ -105,9 +109,17 @@ namespace ARPG.Editor
                 {
                     ParseMonsterTable(monsterTable, values);
                 }
+                else if (table is NpcTable npcTable)
+                {
+                    ParseNpcTable(npcTable, values);
+                }
                 else if (table is CreatureTable creatureTable)
                 {
                     ParseCreatureTable(creatureTable, values);
+                }
+                else if (table is StatTable statTable)
+                {
+                    ParseStatTable(statTable, values);
                 }
                 else if (table is ItemTable itemTable)
                 {
@@ -146,67 +158,80 @@ namespace ARPG.Editor
 
         private static void ParseCreatureTable(CreatureTable table, string[] values)
         {
-            if (values.Length < 22)
+            if (values.Length < 3)
             {
-                Debug.LogError($"[ParseCreatureTable] Invalid data length. Expected at least 22, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseCreatureTable] Invalid data length. Expected at least 3, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
             table.Name = values[1];
-            table.Str = int.Parse(values[2]);
-            table.Dex = int.Parse(values[3]);
-            table.Int = int.Parse(values[4]);
-            table.MaxHp = int.Parse(values[5]);
-            table.MaxMp = int.Parse(values[6]);
-            table.HpGeneration = int.Parse(values[7]);
-            table.MpGeneration = int.Parse(values[8]);
-            table.AttackMin = int.Parse(values[9]);
-            table.AttackMax = int.Parse(values[10]);
-            table.CriRate = int.Parse(values[11]);
-            table.CriDamage = int.Parse(values[12]);
-            table.MoveSpeed = int.Parse(values[13]);
-            table.AttackSpeed = int.Parse(values[14]);
-            table.CastSpeed = int.Parse(values[15]);
-            table.Defense = int.Parse(values[16]);
-            table.FireResist = int.Parse(values[17]);
-            table.IceResist = int.Parse(values[18]);
-            table.LightningResist = int.Parse(values[19]);
-            table.PoisonResist = int.Parse(values[20]);
-            table.Luck = int.Parse(values[21]);
+            table.StatId = int.Parse(values[2]);
+            table.PrefabName = values[3];
+        }
+
+        private static void ParseNpcTable(NpcTable table, string[] values)
+        {
+            if (values.Length < 6)
+            {
+                Debug.LogError($"[ParseNpcTable] Invalid data length. Expected at least 6, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            table.Name = values[1];
+            table.StatId = int.Parse(values[2]);
+            table.PrefabName = values[3];
+            table.DropId = int.Parse(values[4]);
+            table.DropRateBonus = int.Parse(values[5]);
+            table.DropRarityBonus = int.Parse(values[6]);
+        }
+
+        private static void ParseStatTable(StatTable table, string[] values)
+        {
+            if (values.Length < 22)
+            {
+                Debug.LogError($"[ParseStatTable] Invalid data length. Expected at least 20, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            // values[0] 은 Id 이다.
+            // values[1], values[2] 는 웹에서만 사용한다.
+
+            table.Str = int.Parse(values[3]);
+            table.Dex = int.Parse(values[4]);
+            table.Int = int.Parse(values[5]);
+            table.MaxHp = int.Parse(values[6]);
+            table.MaxMp = int.Parse(values[7]);
+            table.HpGeneration = int.Parse(values[8]);
+            table.MpGeneration = int.Parse(values[9]);
+            table.AttackMin = int.Parse(values[10]);
+            table.AttackMax = int.Parse(values[11]);
+            table.CriRate = int.Parse(values[12]);
+            table.CriDamage = int.Parse(values[13]);
+            table.MoveSpeed = int.Parse(values[14]);
+            table.AttackSpeed = int.Parse(values[15]);
+            table.CastSpeed = int.Parse(values[16]);
+            table.Defense = int.Parse(values[17]);
+            table.FireResist = int.Parse(values[18]);
+            table.IceResist = int.Parse(values[19]);
+            table.LightningResist = int.Parse(values[20]);
+            table.PoisonResist = int.Parse(values[21]);
+            table.Luck = int.Parse(values[22]);
         }
 
         private static void ParseMonsterTable(MonsterTable table, string[] values)
         {
-            if (values.Length < 25)
+            if (values.Length < 6)
             {
-                Debug.LogError($"[ParseMonsterTable] Invalid data length. Expected at least 25, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseMonsterTable] Invalid data length. Expected at least 6, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
             table.Name = values[1];
-            table.Str = int.Parse(values[2]);
-            table.Dex = int.Parse(values[3]);
-            table.Int = int.Parse(values[4]);
-            table.MaxHp = int.Parse(values[5]);
-            table.MaxMp = int.Parse(values[6]);
-            table.HpGeneration = int.Parse(values[7]);
-            table.MpGeneration = int.Parse(values[8]);
-            table.AttackMin = int.Parse(values[9]);
-            table.AttackMax = int.Parse(values[10]);
-            table.CriRate = int.Parse(values[11]);
-            table.CriDamage = int.Parse(values[12]);
-            table.MoveSpeed = int.Parse(values[13]);
-            table.AttackSpeed = int.Parse(values[14]);
-            table.CastSpeed = int.Parse(values[15]);
-            table.Defense = int.Parse(values[16]);
-            table.FireResist = int.Parse(values[17]);
-            table.IceResist = int.Parse(values[18]);
-            table.LightningResist = int.Parse(values[19]);
-            table.PoisonResist = int.Parse(values[20]);
-            table.Luck = int.Parse(values[21]);
-            table.DropId = int.Parse(values[22]);
-            table.DropRateBonus = int.Parse(values[23]);
-            table.DropRarityBonus = int.Parse(values[24]);
+            table.StatId = int.Parse(values[2]);
+            table.PrefabName = values[3];
+            table.DropId = int.Parse(values[4]);
+            table.DropRateBonus = int.Parse(values[5]);
+            table.DropRarityBonus = int.Parse(values[6]);
         }
 
         private static void ParseItemTable(ItemTable table, string[] values)

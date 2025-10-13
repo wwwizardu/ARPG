@@ -10,16 +10,7 @@ namespace ARPG.Creature
 {
     public class CharacterBase : MonoBehaviour, IHittable
     {
-        [SerializeField] protected SpriteLibraryAsset _spriteLibraryAsset;
-        [SerializeField] protected Sprite _characterSprite;
-        [SerializeField] protected SpriteRenderer _sr;
-        [SerializeField] protected Animator _animator;
-
-        [SerializeField] protected Image _hpBar;
-
-        [SerializeField] protected Skill.SkillController _skillController;
-
-        [SerializeField] protected TMPro.TextMeshPro _textName;
+        [SerializeField] protected CharacterInfo _characterInfo;
 
         protected CreatureTable? _table = null;
         protected StatController _statController = new StatController();
@@ -52,7 +43,14 @@ namespace ARPG.Creature
 
         public virtual void Initialize()
         {
-            _sr.sprite = _characterSprite;
+            _characterInfo.Sr.sprite = _characterInfo.CharacterSprite;
+            SpriteLibrary sl = _characterInfo.Sr.GetComponent<SpriteLibrary>();
+            if (sl != null && _characterInfo.SpriteLibraryAsset != null)
+            {
+                sl.spriteLibraryAsset = _characterInfo.SpriteLibraryAsset;
+                _spriteLibrary = sl;
+            }
+            
             _pervPos = transform.position;
             _currentPos = transform.position;
 
@@ -60,7 +58,7 @@ namespace ARPG.Creature
             OnChangeMovementState(MovementStates.Idle);
 
             _statController.Initialize();
-            _skillController.Initialize(this);
+            _characterInfo.SkillController.Initialize(this);
 
             Reset();
         }
@@ -68,10 +66,10 @@ namespace ARPG.Creature
         public virtual void Reset()
         {
             // Reset character state
-            // _textName.text = string.Empty;
+            // _characterInfo.TextName.text = string.Empty;
 
             _statController.Reset();
-            _skillController.Reset();
+            _characterInfo.SkillController.Reset();
         }
 
         public virtual bool LoadTable(int inId)
@@ -87,9 +85,9 @@ namespace ARPG.Creature
                 return false;
             }
 
-            if (_textName != null)
+            if (_characterInfo.TextName != null)
             {
-                _textName.text = _table!.Name;
+                _characterInfo.TextName.text = _table!.Name;
             }
 
             // Load stats from table
@@ -106,9 +104,9 @@ namespace ARPG.Creature
                 _LoopUpdateCo = StartCoroutine(LoopUpdate());
             }      
 
-            if (_hpBar != null)
+            if (_characterInfo.HpBar != null)
             {
-                _hpBar.fillAmount = _statController.GetHpRatio();
+                _characterInfo.HpBar.fillAmount = _statController.GetHpRatio();
             }      
 
             _initialized = true;
@@ -126,13 +124,13 @@ namespace ARPG.Creature
                 Dead();
             }
 
-            _hpBar.fillAmount = Stat.GetHpRatio();
+            _characterInfo.HpBar.fillAmount = Stat.GetHpRatio();
         }
 
         public virtual void OnHeal(int inHp)
         {
             _statController.IncreaseHp(inHp);
-            _hpBar.fillAmount = _statController.GetHpRatio();
+            _characterInfo.HpBar.fillAmount = _statController.GetHpRatio();
         }
 
         public virtual void OnChangeMp(int inDeltaMp)
@@ -154,7 +152,7 @@ namespace ARPG.Creature
         
         public virtual bool StartSkill(int inIndex)
         {
-            _skillController.StartSkill(inIndex);
+            _characterInfo.SkillController.StartSkill(inIndex);
             return true;
         }
 
@@ -162,15 +160,15 @@ namespace ARPG.Creature
         {
             if (inAnimation == Animation.Idle)
             {
-                _animator.SetTrigger("Idle");
+                _characterInfo.Animator.SetTrigger("Idle");
             }
             else if (inAnimation == Animation.Walk)
             {
-                _animator.SetTrigger("Walk");
+                _characterInfo.Animator.SetTrigger("Walk");
             }
             else if (inAnimation == Animation.Attack)
             {
-                _animator.SetTrigger("Attack");
+                _characterInfo.Animator.SetTrigger("Attack");
             }
         }
 
@@ -208,9 +206,9 @@ namespace ARPG.Creature
             if (_moveState == MovementStates.Idle)
             {
                 // 스킬이 실행중일 때는 Idle 애니메이션을 실행하지 않음
-                if (_skillController.CurrentSkill != null && _skillController.CurrentSkill.IsRunning == true)
+                if (_characterInfo.SkillController.CurrentSkill != null && _characterInfo.SkillController.CurrentSkill.IsRunning == true)
                 {
-                    
+
                 }
                 else
                 {
@@ -259,7 +257,7 @@ namespace ARPG.Creature
             //     _controller.SetHorizontalForce(0);
             // }
 
-            _skillController.StopAllSkill();
+            _characterInfo.SkillController.StopAllSkill();
 
             ChangeConditionState(CharacterConditions.Dead);
         }
@@ -302,7 +300,7 @@ namespace ARPG.Creature
             if (CharacterConditions.Dead <= _condition) // 캐릭터가 죽은 상태라면
                 return;
 
-            _skillController.SkillUpdate(inDeltaTime);
+            _characterInfo.SkillController.SkillUpdate(inDeltaTime);
 
 
 

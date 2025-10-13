@@ -58,9 +58,9 @@ namespace ARPG.Creature
                 _statController.SetMp(AR.s.Data.Player.CurrentMp);
             }
 
-            if (_hpBar != null)
+            if (_characterInfo.HpBar != null)
             {
-                _hpBar.fillAmount = _statController.GetHpRatio();
+                _characterInfo.HpBar.fillAmount = _statController.GetHpRatio();
             }     
 
             return true;

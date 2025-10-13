@@ -24,28 +24,28 @@ namespace ARPG.Creature
 
             _statsBase.Reset();
 
-            _statsBase.Str = _owner.Table.Str;
-            _statsBase.Dex = _owner.Table.Dex;
-            _statsBase.Int = _owner.Table.Int;
-            _statsBase.MaxHp = _owner.Table.MaxHp;
-            _statsBase.MaxMp = _owner.Table.MaxMp;
-            _statsBase.CurrentHp = _owner.Table.MaxHp;
-            _statsBase.CurrentMp = _owner.Table.MaxMp;
-            _statsBase.HpGeneration = _owner.Table.HpGeneration;
-            _statsBase.MpGeneration = _owner.Table.MpGeneration;
-            _statsBase.AttackMin = _owner.Table.AttackMin;
-            _statsBase.AttackMax = _owner.Table.AttackMax;
-            _statsBase.CriRate = _owner.Table.CriRate;
-            _statsBase.CriDamage = _owner.Table.CriDamage;
-            _statsBase.MoveSpeed = _owner.Table.MoveSpeed;
-            _statsBase.AttackSpeed = _owner.Table.AttackSpeed;
-            _statsBase.CastSpeed = _owner.Table.CastSpeed;
-            _statsBase.Defense = _owner.Table.Defense;
-            _statsBase.FireResist = _owner.Table.FireResist;
-            _statsBase.IceResist = _owner.Table.IceResist;
-            _statsBase.LightningResist = _owner.Table.LightningResist;
-            _statsBase.PoisonResist = _owner.Table.PoisonResist;
-            _statsBase.Luck = _owner.Table.Luck;
+            _statsBase.Str = _owner.Table.Stat.Str;
+            _statsBase.Dex = _owner.Table.Stat.Dex;
+            _statsBase.Int = _owner.Table.Stat.Int;
+            _statsBase.MaxHp = _owner.Table.Stat.MaxHp;
+            _statsBase.MaxMp = _owner.Table.Stat.MaxMp;
+            _statsBase.CurrentHp = _owner.Table.Stat.MaxHp;
+            _statsBase.CurrentMp = _owner.Table.Stat.MaxMp;
+            _statsBase.HpGeneration = _owner.Table.Stat.HpGeneration;
+            _statsBase.MpGeneration = _owner.Table.Stat.MpGeneration;
+            _statsBase.AttackMin = _owner.Table.Stat.AttackMin;
+            _statsBase.AttackMax = _owner.Table.Stat.AttackMax;
+            _statsBase.CriRate = _owner.Table.Stat.CriRate;
+            _statsBase.CriDamage = _owner.Table.Stat.CriDamage;
+            _statsBase.MoveSpeed = _owner.Table.Stat.MoveSpeed;
+            _statsBase.AttackSpeed = _owner.Table.Stat.AttackSpeed;
+            _statsBase.CastSpeed = _owner.Table.Stat.CastSpeed;
+            _statsBase.Defense = _owner.Table.Stat.Defense;
+            _statsBase.FireResist = _owner.Table.Stat.FireResist;
+            _statsBase.IceResist = _owner.Table.Stat.IceResist;
+            _statsBase.LightningResist = _owner.Table.Stat.LightningResist;
+            _statsBase.PoisonResist = _owner.Table.Stat.PoisonResist;
+            _statsBase.Luck = _owner.Table.Stat.Luck;
 
             UpdateEquipmentStat();
         }

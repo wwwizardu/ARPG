@@ -84,6 +84,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 6262499800842799366}
+  - component: {fileID: 8374064567899756726}
   - component: {fileID: 2413018562664831738}
   - component: {fileID: 7165538220372485980}
   - component: {fileID: 130894395846717856}
@@ -112,6 +113,25 @@ Transform:
   - {fileID: 7000213873577565430}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &8374064567899756726
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5491045475900212818}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: eef2c5d6d1966404ab0f71173edee115, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CharacterInfo
+  _spriteLibraryAsset: {fileID: 7108339969198208228, guid: 42e502c96dce7174dbb0c8a6fc8f8bc1, type: 3}
+  _characterSprite: {fileID: -8703504, guid: 36b8160564e977a47b420ad84774d3a1, type: 3}
+  _sr: {fileID: 6350110636512088884}
+  _animator: {fileID: -6076854436679264388}
+  _hpBar: {fileID: 6547489306309771857}
+  _skillController: {fileID: 7424376786244143994}
+  _textName: {fileID: 0}
 --- !u!114 &2413018562664831738
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -124,13 +144,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 36820e0451ab90647a7cd201883f3fb4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _spriteLibraryAsset: {fileID: 7108339969198208228, guid: 42e502c96dce7174dbb0c8a6fc8f8bc1, type: 3}
-  _characterSprite: {fileID: -8703504, guid: 36b8160564e977a47b420ad84774d3a1, type: 3}
-  _sr: {fileID: 6350110636512088884}
-  _animator: {fileID: -6076854436679264388}
-  _hpBar: {fileID: 6547489306309771857}
-  _skillController: {fileID: 7424376786244143994}
-  _textName: {fileID: 0}
+  _characterInfo: {fileID: 8374064567899756726}
 --- !u!61 &7165538220372485980
 BoxCollider2D:
   m_ObjectHideFlags: 0

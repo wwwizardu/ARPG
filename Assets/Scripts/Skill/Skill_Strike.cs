@@ -1,3 +1,4 @@
+#nullable enable
 using UnityEngine;
 using ARPG;
 
@@ -7,7 +8,7 @@ namespace ARPG.Skill
     {
         private float _attackTime = 1f;
         private float _attackSpeed = 1f; // 스윙 속도, 기본값은 1초에 한번
-        private Vector3 _mouseWorldPosition; // 스킬 시작 시 마우스 위치
+        private Vector3 _targetPosition; // 스킬 시작 시 타겟 위치
         private float _attackRange = 2f; // 공격 범위
         private float _attackAngle = 45f; // 공격 각도 (좌우로 45도씩, 총 90도)
         public override void Initialize(Creature.CharacterBase inCharacter, SkillController inController, int inSkillId)
@@ -23,9 +24,41 @@ namespace ARPG.Skill
             base.StartSkill(inTargetType, inTargetId);
 
             // 마우스 위치 저장
-            Vector3 mouseScreenPosition = UnityEngine.Input.mousePosition;
-            _mouseWorldPosition = Camera.main.ScreenToWorldPoint(new Vector3(mouseScreenPosition.x, mouseScreenPosition.y, Camera.main.nearClipPlane));
-            _mouseWorldPosition.z = 0f; // 2D이므로 z값은 0으로 설정
+            if (_character == null)
+            {
+                Debug.LogError("[Skill_Strike] StartSkill - _character is null");
+                return false;
+            }
+
+            if (_character is Creature.ArpgPlayer)
+            {
+                Vector3 mouseScreenPosition = UnityEngine.Input.mousePosition;
+                _targetPosition = Camera.main.ScreenToWorldPoint(new Vector3(mouseScreenPosition.x, mouseScreenPosition.y, Camera.main.nearClipPlane));
+                _targetPosition.z = 0f; // 2D이므로 z값은 0으로 설정
+            }
+            else if (_character is Creature.Monster)
+            {
+                // 몬스터의 경우 플레이어를 향해 공격
+                Creature.ArpgPlayer? player = AR.s.MyPlayer;
+                if (player != null)
+                {
+                    _targetPosition = player.transform.position;
+                }
+                else
+                {
+                    Debug.LogError("[Skill_Strike] StartSkill - Player not found for Monster attack");
+                    return false;
+                }
+            }
+            else if (_character is Creature.Npc npc)
+            {
+
+            }
+            else
+            {
+                Debug.LogError("[Skill_Strike] StartSkill - Unsupported character type");
+                return false;
+            }
 
             Creature.Animation attackAnimation = Creature.Animation.Attack;
 
@@ -70,7 +103,7 @@ namespace ARPG.Skill
                 return;
 
             Vector3 characterPosition = _character.transform.position;
-            Vector3 attackDirection = (_mouseWorldPosition - characterPosition).normalized;
+            Vector3 attackDirection = (_targetPosition - characterPosition).normalized;
 
             // 공격 범위 내의 모든 콜라이더 검색
             Collider2D[] hitColliders = Physics2D.OverlapCircleAll(characterPosition, _attackRange);

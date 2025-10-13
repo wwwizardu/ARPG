@@ -42,8 +42,8 @@ namespace ARPG.Data
             CreatureTable? playerTable = AR.s.Data.GetPlayer(PlayerTableId);
             if(playerTable != null)
             {
-                CurrentHp = playerTable.MaxHp;
-                CurrentMp = playerTable.MaxMp;
+                CurrentHp = playerTable.Stat.MaxHp;
+                CurrentMp = playerTable.Stat.MaxMp;
             }
             else
             {
