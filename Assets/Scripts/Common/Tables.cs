@@ -190,6 +190,22 @@ namespace ARPG.Tables
     }
 
     [Serializable]
+    public class SkillTable : TableBase
+    {
+        [JsonProperty("Name")] public string Name;                          // 이름
+        [JsonProperty("SkillType")] public GlobalEnum.SkillType SkillType;  // 스킬 타입
+        [JsonProperty("SubType")] public GlobalEnum.SkillSubType SubType;   // 스킬 서브 타입
+        [JsonProperty("Cooltime")] public float Cooltime;                   // 쿨 타임
+        [JsonProperty("Mana")] public int Mana;                             // 마나 소모량
+        [JsonProperty("Damage")] public int Damage;                         // 데미지
+        [JsonProperty("Duration")] public int Duration;                     // 지속 시간
+        [JsonProperty("AnimationName")] public string AnimationName;        // 애니메이션 이름
+        [JsonProperty("Desctiption")] public string Desctiption;            // 설명
+        
+
+    }
+
+    [Serializable]
     public class Stat
     {
         [JsonProperty("Type")] public GlobalEnum.Stat Type;

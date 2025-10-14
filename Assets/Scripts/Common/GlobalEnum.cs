@@ -74,5 +74,20 @@ public class GlobalEnum
         Monster = 2,    // 몬스터 팀
     }
 
+    public enum SkillType
+    {
+        None = 0,
+        Melee,
+        Range,
+        Buff,
+        Summon,
+    }
+
+    public enum SkillSubType
+    {
+        None = 0,
+        SelfDestroy,
+    }
+
     static public ushort PLAYER_INVENTORY_SLOTCOUNT_MAX = 60;
 }

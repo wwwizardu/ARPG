@@ -26,6 +26,8 @@ namespace ARPG.Skill
         protected byte _targetType;
         protected long _targetId;
 
+        protected Vector2 _targetPosition;
+
         private float _time;
         private bool _initialized = false;
 
