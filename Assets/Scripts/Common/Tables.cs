@@ -193,14 +193,20 @@ namespace ARPG.Tables
     public class SkillTable : TableBase
     {
         [JsonProperty("Name")] public string Name;                          // 이름
+        [JsonProperty("Desctiption")] public string Desctiption;            // 설명
         [JsonProperty("SkillType")] public GlobalEnum.SkillType SkillType;  // 스킬 타입
         [JsonProperty("SubType")] public GlobalEnum.SkillSubType SubType;   // 스킬 서브 타입
+        [JsonProperty("SkillRangeMin")] public float SkillRangeMin;         // 스킬 최소 사정 거리
+        [JsonProperty("SkillRangeMax")] public float SkillRangeMax;         // 스킬 최대 사정 거리
         [JsonProperty("Cooltime")] public float Cooltime;                   // 쿨 타임
         [JsonProperty("Mana")] public int Mana;                             // 마나 소모량
         [JsonProperty("Damage")] public int Damage;                         // 데미지
         [JsonProperty("Duration")] public int Duration;                     // 지속 시간
+        [JsonProperty("SkillTargetType")] public GlobalEnum.SkillTargetType SkillTargetType; // 스킬 타겟 타입
+        [JsonProperty("SkillTargetRange1")] public float SkillTargetRange1; // 스킬 타겟 타입 범위 1
+        [JsonProperty("SkillTargetRange2")] public float SkillTargetRange2; // 스킬 타겟 타입 범위 2
         [JsonProperty("AnimationName")] public string AnimationName;        // 애니메이션 이름
-        [JsonProperty("Desctiption")] public string Desctiption;            // 설명
+        
         
 
     }

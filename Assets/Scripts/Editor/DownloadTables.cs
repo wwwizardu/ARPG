@@ -49,7 +49,7 @@ namespace ARPG.Editor
 
             await DownloadTable<DropEquipmentTable>("1267382287&range=A:V", 1, SaveType.String);
 
-            await DownloadTable<SkillTable>("1267382287&range=A:J", 1, SaveType.String);
+            await DownloadTable<SkillTable>("1267382287&range=A:O", 1, SaveType.String);
 
             foreach (var tableType in _tableDic.Keys)
             {
@@ -383,21 +383,26 @@ namespace ARPG.Editor
 
         private static void ParseSkillTable(SkillTable table, string[] values)
         {
-            if (values.Length < 10)
+            if (values.Length < 14)
             {
-                Debug.LogError($"[ParseSkillTable] Invalid data length. Expected at least 10, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseSkillTable] Invalid data length. Expected at least 14, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
             table.Name = values[1];
-            table.SkillType = (GlobalEnum.SkillType)Enum.Parse(typeof(GlobalEnum.SkillType), values[2]);
-            table.SubType = (GlobalEnum.SkillSubType)Enum.Parse(typeof(GlobalEnum.SkillSubType), values[3]);
-            table.Cooltime = float.Parse(values[4]);
-            table.Mana = int.Parse(values[5]);
-            table.Damage = int.Parse(values[6]);
-            table.Duration = int.Parse(values[7]);
-            table.AnimationName = values[8];
-            table.Desctiption = values[9];
+            table.Desctiption = values[2];
+            table.SkillType = (GlobalEnum.SkillType)Enum.Parse(typeof(GlobalEnum.SkillType), values[3]);
+            table.SubType = (GlobalEnum.SkillSubType)Enum.Parse(typeof(GlobalEnum.SkillSubType), values[4]);
+            table.SkillRangeMin = float.Parse(values[5]);
+            table.SkillRangeMax = float.Parse(values[6]);
+            table.Cooltime = float.Parse(values[7]);
+            table.Mana = int.Parse(values[8]);
+            table.Damage = int.Parse(values[9]);
+            table.Duration = int.Parse(values[10]);
+            table.SkillTargetType = (GlobalEnum.SkillTargetType)Enum.Parse(typeof(GlobalEnum.SkillTargetType), values[11]);
+            table.SkillTargetRange1 = float.Parse(values[12]);
+            table.SkillTargetRange2 = float.Parse(values[13]);
+            table.AnimationName = values[14];
         }
 
         private static async Task<string> DownloadTableData(string inURL)

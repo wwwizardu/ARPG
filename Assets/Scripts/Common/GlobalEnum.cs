@@ -89,5 +89,11 @@ public class GlobalEnum
         SelfDestroy,
     }
 
+    public enum SkillTargetType
+    {
+        Target,
+        Range_Circle,
+    }
+
     static public ushort PLAYER_INVENTORY_SLOTCOUNT_MAX = 60;
 }
