@@ -201,7 +201,12 @@ namespace ARPG.Monster
             }
 
             monster.Initialize();
-            monster.Load(1); // 임시로 ID 1 사용
+            if(monster.Load(1) == false) // 임시로 ID 1 사용
+            {
+                Debug.LogError($"[MonsterManager] SpawnMonster - Failed to load monster with ID 1");
+                Destroy(monsterObj);
+                return -1;
+            }
 
             int monsterId = _nextMonsterId++;
             monster.SetInstanceId(monsterId); // 몬스터에 인스턴스 ID 저장

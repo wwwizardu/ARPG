@@ -24,6 +24,9 @@ namespace ARPG.Creature
 
             _inventory.Initialize(AR.s.Data.Player._inventory, AR.s.Data.Player._inventory.Count);
 
+            // 기본 스킬을 추가한다.
+            _characterInfo.SkillController.CreateSkill(1);
+
             Debug.Log("ArpgPlayer initialized.");
         }
 

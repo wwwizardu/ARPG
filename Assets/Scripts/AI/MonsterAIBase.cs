@@ -4,22 +4,28 @@ using ARPG.Creature;
 
 namespace ARPG.AI
 {
-    public abstract class MonsterAIBase
+    public abstract class AIBase
     {
-        protected Creature.Monster _monster;
+        protected CharacterBase _character;
+        protected Tables.AiTable _table = null!;
+
         protected float _detectionRange = 5.0f;
 
         protected float _attackRange = 0.8f;
         protected float _speed = 3.0f;
         
-        public MonsterAIBase(Creature.Monster monster)
+        public AIBase(Creature.CharacterBase monster)
         {
-            _monster = monster;
+            _character = monster;
         }
 
         public virtual void Initialize()
         {
-            
+            if (_table == null)
+                return;
+
+            // 스킬 생성
+            CreateSkill();
         }
 
         public virtual void Reset()
@@ -27,38 +33,7 @@ namespace ARPG.AI
             
         }
 
-        public virtual (Vector2 inputDirection, Vector2 velocity) Think()
-        {
-            if(_monster == null || _monster.State != CharacterConditions.Normal) // Normal 상태가 아니면 아무것도 안함
-                return (Vector2.zero, Vector2.zero);
-
-            ArpgPlayer? player = FindPlayer();
-            if (player == null)
-                return (Vector2.zero, Vector2.zero);
-
-            // 플레이어와의 거리 계산
-            Vector2 directionToPlayer = player.transform.position - _monster.transform.position;
-            float sqrDistanceToPlayer = directionToPlayer.sqrMagnitude;
-
-            // 공격 범위 내에 있으면 기본 공격 스킬 사용
-            if (sqrDistanceToPlayer <= _attackRange * _attackRange)
-            {
-                _monster.StartSkill(1);
-                return (Vector2.zero, Vector2.zero);
-            }
-            
-            // 탐지 범위 내에 있으면 플레이어를 향해 이동
-            if (sqrDistanceToPlayer <= _detectionRange * _detectionRange)
-            {
-                Vector2 normalizedDirection = directionToPlayer.normalized;
-                Vector2 velocity = normalizedDirection * _speed;
-
-                return (normalizedDirection, velocity);
-            }
-            
-            // 탐지 범위 밖에 있으면 아무것도 안함
-            return (Vector2.zero, Vector2.zero);
-        }
+        public abstract (Vector2 inputDirection, Vector2 velocity) Think();
 
         protected ArpgPlayer? FindPlayer()
         {
@@ -77,7 +52,7 @@ namespace ARPG.AI
                 if (player == null)
                     continue;
 
-                float sqrDistance = (player.transform.position - _monster.transform.position).sqrMagnitude;
+                float sqrDistance = (player.transform.position - _character.transform.position).sqrMagnitude;
                 if (sqrDistance < closestSqrDistance)
                 {
                     closestSqrDistance = sqrDistance;
@@ -86,6 +61,22 @@ namespace ARPG.AI
             }
 
             return closestPlayer;
+        }
+
+        private void CreateSkill()
+        {
+            if (0 < _table.SkillId1)
+            {
+                _character.CharacterInfo.SkillController.CreateSkill(_table.SkillId1);
+            }
+            if (0 < _table.SkillId2)
+            {
+                _character.CharacterInfo.SkillController.CreateSkill(_table.SkillId2);
+            }
+            if(0 < _table.SkillId3)
+            {
+                _character.CharacterInfo.SkillController.CreateSkill(_table.SkillId3);    
+            }
         }
     }
 }

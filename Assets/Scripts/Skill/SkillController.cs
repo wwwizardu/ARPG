@@ -18,9 +18,6 @@ namespace ARPG.Skill
             Block,
         }
 
-        private const string _attackSkillLabel = "skill_attack_10";
-        private const string _useItemSkillLabel = "skill_item_use";
-
         private Creature.CharacterBase? _character;
         private List<SkillBase> _activeSkillList = new(); // 액티브 스킬 리스트
         private List<SkillBase> _passiveSkillList = new(); // 액티브 스킬 리스트
@@ -42,9 +39,6 @@ namespace ARPG.Skill
             _skillDic.Clear();
             _activeSkillList.Clear();
             _passiveSkillList.Clear();
-
-            // 기본 스킬을 추가한다.
-            CreateSkill(0, 1);
         }
 
         public void Reset()
@@ -52,12 +46,12 @@ namespace ARPG.Skill
             
         }
 
-        public SkillBase? CreateSkill(int inIndex, int inSkillMasterId)
+        public SkillBase? CreateSkill(int inSkillMasterId)
         {
             SkillBase? skill = null;
             if (_skillDic.ContainsKey(inSkillMasterId) == false)
             {
-                skill = CreateSkill(inSkillMasterId);
+                skill = CreateSkill_Internal(inSkillMasterId);
                 if (skill == null)
                     return null;
 
@@ -294,12 +288,17 @@ namespace ARPG.Skill
             }
         }
 
-        private SkillBase? CreateSkill(int inSkillId)
+        private SkillBase? CreateSkill_Internal(int inSkillId)
         {
             SkillBase? skill = null;
             if (inSkillId == 1)
             {
                 skill = new Skill_Strike();
+            }
+            else
+            {
+                Debug.LogError($"[SkillController] CreateSkill_Internal - cannot found skill, Id({inSkillId})");
+                return null;
             }
 
             skill?.Initialize(_character, this, inSkillId);

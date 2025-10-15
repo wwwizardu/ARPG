@@ -41,6 +41,8 @@ namespace ARPG.Creature
 
         public GlobalEnum.TeamType Team { get { return _team; } }
 
+        public CharacterInfo CharacterInfo { get { return _characterInfo; } }
+
         public virtual void Initialize()
         {
             _characterInfo.Sr.sprite = _characterInfo.CharacterSprite;

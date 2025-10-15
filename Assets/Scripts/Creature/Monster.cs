@@ -11,7 +11,7 @@ namespace ARPG.Creature
     {
         protected Tables.MonsterTable? _monsterTable = null;
         private bool _activated = false;
-        private MonsterAIBase? _ai = null;
+        private AIBase? _ai = null;
         private int _instanceId = -1;
 
         public new Tables.MonsterTable? Table { get { return _monsterTable; } }
@@ -21,9 +21,6 @@ namespace ARPG.Creature
             base.Initialize();
 
             _team = GlobalEnum.TeamType.Monster;
-
-            _ai = new BasicMonsterAI(this);
-            _ai.Initialize();
         }
 
         public override void Reset()
@@ -40,6 +37,18 @@ namespace ARPG.Creature
             {
                 Debug.LogError($"[Monster] LoadTable - MonsterTable not found for Id: {inId}");
                 return false;
+            }
+
+            // Ai Table에 따른 ai 생성
+            if (_monsterTable.AiTable == null)
+                return false;
+            
+            if (_monsterTable.AiTable.AiType == GlobalEnum.AiType.NormalMonster)
+            {
+                _ai = new BasicMonsterAI(this, _monsterTable.AiTable);
+                _ai.Initialize();
+
+                _characterInfo.SkillController.CreateSkill(_monsterTable.AiTable.SkillId1);
             }
 
             return true;
