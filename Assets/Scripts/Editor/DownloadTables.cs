@@ -31,9 +31,11 @@ namespace ARPG.Editor
 
             await DownloadTable<CreatureTable>("0&range=A:D", 1, SaveType.String);
 
-            await DownloadTable<MonsterTable>("483012127&range=A:G", 1, SaveType.String);
+            await DownloadTable<AiTable>("947794841&range=A:F", 1, SaveType.String);
 
-            await DownloadTable<NpcTable>("1460299278&range=A:G", 1, SaveType.String);
+            await DownloadTable<MonsterTable>("483012127&range=A:H", 1, SaveType.String);
+
+            await DownloadTable<NpcTable>("1460299278&range=A:H", 1, SaveType.String);
 
             await DownloadTable<StatTable>("318209064&range=A:W", 1, SaveType.String);
 
@@ -151,6 +153,10 @@ namespace ARPG.Editor
                 {
                     ParseSkillTable(skillTable, values);
                 }
+                else if (table is AiTable aiTable)
+                {
+                    ParseAiTable(aiTable, values);
+                }
             }
             catch (Exception ex)
             {
@@ -177,18 +183,19 @@ namespace ARPG.Editor
 
         private static void ParseNpcTable(NpcTable table, string[] values)
         {
-            if (values.Length < 6)
+            if (values.Length < 7)
             {
-                Debug.LogError($"[ParseNpcTable] Invalid data length. Expected at least 6, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseNpcTable] Invalid data length. Expected at least 7, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
             table.Name = values[1];
             table.StatId = int.Parse(values[2]);
             table.PrefabName = values[3];
-            table.DropId = int.Parse(values[4]);
-            table.DropRateBonus = int.Parse(values[5]);
-            table.DropRarityBonus = int.Parse(values[6]);
+            table.AiTableId = int.Parse(values[4]);
+            table.DropId = int.Parse(values[5]);
+            table.DropRateBonus = int.Parse(values[6]);
+            table.DropRarityBonus = int.Parse(values[7]);
         }
 
         private static void ParseStatTable(StatTable table, string[] values)
@@ -226,18 +233,19 @@ namespace ARPG.Editor
 
         private static void ParseMonsterTable(MonsterTable table, string[] values)
         {
-            if (values.Length < 6)
+            if (values.Length < 7)
             {
-                Debug.LogError($"[ParseMonsterTable] Invalid data length. Expected at least 6, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseMonsterTable] Invalid data length. Expected at least 7, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
             table.Name = values[1];
             table.StatId = int.Parse(values[2]);
             table.PrefabName = values[3];
-            table.DropId = int.Parse(values[4]);
-            table.DropRateBonus = int.Parse(values[5]);
-            table.DropRarityBonus = int.Parse(values[6]);
+            table.AiTableId = int.Parse(values[4]);
+            table.DropId = int.Parse(values[5]);
+            table.DropRateBonus = int.Parse(values[6]);
+            table.DropRarityBonus = int.Parse(values[7]);
         }
 
         private static void ParseItemTable(ItemTable table, string[] values)
@@ -403,6 +411,21 @@ namespace ARPG.Editor
             table.SkillTargetRange1 = float.Parse(values[12]);
             table.SkillTargetRange2 = float.Parse(values[13]);
             table.AnimationName = values[14];
+        }
+
+        private static void ParseAiTable(AiTable table, string[] values)
+        {
+            if (values.Length < 5)
+            {
+                Debug.LogError($"[ParseAiTable] Invalid data length. Expected at least 5, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            table.Name = values[1];
+            table.AiType = (GlobalEnum.AiType)Enum.Parse(typeof(GlobalEnum.AiType), values[2]);
+            table.SkillId1 = int.Parse(values[3]);
+            table.SkillId2 = int.Parse(values[4]);
+            table.SkillId3 = int.Parse(values[5]);
         }
 
         private static async Task<string> DownloadTableData(string inURL)

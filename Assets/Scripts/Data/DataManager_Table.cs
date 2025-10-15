@@ -22,6 +22,7 @@ namespace ARPG.Data
         private ImmutableDictionary<int, Tables.DropCurrencyTable> _dropCurrencyTable = null!;
         private ImmutableDictionary<int, Tables.DropEquipmentTable> _dropEquipmentTable = null!;
         private ImmutableDictionary<int, Tables.SkillTable> _skillTable = null!;
+        private ImmutableDictionary<int, Tables.AiTable> _aiTable = null!;
         
         public async Task LoadTableAsync()
         {
@@ -37,7 +38,8 @@ namespace ARPG.Data
                 LoadTable<Tables.DropTable>("DropTable.bytes", tables => _dropTable = tables),
                 LoadTable<Tables.DropCurrencyTable>("DropCurrencyTable.bytes", tables => _dropCurrencyTable = tables),
                 LoadTable<Tables.DropEquipmentTable>("DropEquipmentTable.bytes", tables => _dropEquipmentTable = tables),
-                LoadTable<Tables.SkillTable>("SkillTable.bytes", tables => _skillTable = tables)
+                LoadTable<Tables.SkillTable>("SkillTable.bytes", tables => _skillTable = tables),
+                LoadTable<Tables.AiTable>("AiTable.bytes", tables => _aiTable = tables)
             );
 
             // 모든 테이블 로드 후 LoadLate 실행
@@ -87,6 +89,11 @@ namespace ARPG.Data
             }
 
             foreach (var table in _skillTable.Values)
+            {
+                table.LoadLate();
+            }
+
+            foreach (var table in _aiTable.Values)
             {
                 table.LoadLate();
             }
@@ -197,6 +204,16 @@ namespace ARPG.Data
         public Tables.SkillTable? GetSkill(int id)
         {
             if (_skillTable.TryGetValue(id, out var table))
+            {
+                return table;
+            }
+
+            return null;
+        }
+
+        public Tables.AiTable? GetAiTable(int id)
+        {
+            if (_aiTable.TryGetValue(id, out var table))
             {
                 return table;
             }

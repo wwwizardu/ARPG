@@ -43,7 +43,7 @@ namespace ARPG.AI
             // 공격 범위 내에 있으면 기본 공격 스킬 사용
             if (sqrDistanceToPlayer <= _attackRange * _attackRange)
             {
-                _monster.StartSkill(0);
+                _monster.StartSkill(1);
                 return (Vector2.zero, Vector2.zero);
             }
             

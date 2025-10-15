@@ -25,8 +25,6 @@ namespace ARPG.Skill
         private List<SkillBase> _activeSkillList = new(); // 액티브 스킬 리스트
         private List<SkillBase> _passiveSkillList = new(); // 액티브 스킬 리스트
         private Dictionary<int, SkillBase> _skillDic = new();
-        private Dictionary<BaseSkillType, SkillBase> _baseSkillDic = new();
-
         private SkillBase? _currentSkill = null;
         
         private bool _waitServerResponse = false;
@@ -42,20 +40,11 @@ namespace ARPG.Skill
         {
             _character = inCharacter;
             _skillDic.Clear();
-            _baseSkillDic.Clear();
             _activeSkillList.Clear();
             _passiveSkillList.Clear();
 
             // 기본 스킬을 추가한다.
-            CreateBaseSkill();
-            
-            // if (inSkillDatas?.SkillData != null)
-            // {
-            //     for (int i = 1; i < inSkillDatas.SkillData.Length + 1; i++)
-            //     {
-            //         AddSkill(i, inSkillDatas.SkillData[i].MasterId);
-            //     }
-            // }
+            CreateSkill(0, 1);
         }
 
         public void Reset()
@@ -63,7 +52,7 @@ namespace ARPG.Skill
             
         }
 
-        public SkillBase? AddSkill(int inIndex, int inSkillMasterId)
+        public SkillBase? CreateSkill(int inIndex, int inSkillMasterId)
         {
             SkillBase? skill = null;
             if (_skillDic.ContainsKey(inSkillMasterId) == false)
@@ -115,8 +104,7 @@ namespace ARPG.Skill
             _passiveSkillList.Clear();
             _activeSkillList.Clear();
             _skillDic.Clear();
-            _baseSkillDic.Clear();
-
+            
             UpdateSkills();
         }
 
@@ -176,17 +164,17 @@ namespace ARPG.Skill
             }
         }
 
-        public bool StartBaseSkill(BaseSkillType inType)
+        public bool StartSkill(int inSkillId)
         {
-            if(_character == null || _character.State == Creature.CharacterConditions.Dead)
+            if (_character == null || _character.State == Creature.CharacterConditions.Dead)
                 return false;
-
-            // if (_waitServerResponse == true)
-            //     return false;
+                
+            if (_waitServerResponse == true)
+                return false;
 
             try
             {
-                if (_baseSkillDic.TryGetValue(inType, out SkillBase skill) == false)
+                if (_skillDic.TryGetValue(inSkillId, out SkillBase skill) == false)
                     return false;
 
                 if (skill == null)
@@ -199,38 +187,7 @@ namespace ARPG.Skill
 
                 _currentSkill = skill;
                 _currentSkill.StartSkill(0, 0); // 0, 0은 기본값으로 타겟이 없는 경우를 의미함
-                // var targetInfo = GetTarget(skill.Table.MasterId);
-                // StartSkillServerRpc(skill.Table.MasterId, targetInfo.Item1, targetInfo.Item2);
-            }
-            catch
-            {
                 _waitServerResponse = false;
-            }
-
-            return true;
-        }
-
-        public bool StartSkill(int inSkillId)
-        {
-            // if (_waitServerResponse == true)
-            //     return false;
-
-            try
-            {
-                // if (_skillDic.TryGetValue(inSkillId, out SkillBase skill) == false)
-                //     return false;
-
-                // if (skill == null)
-                //     return false;
-
-                // if (skill.EnableSkill() == false)
-                //     return false;
-
-                //_waitServerResponse = true;
-
-                //var targetInfo = GetTarget(inSkillId);
-                // StartSkillServerRpc(inSkillId, targetInfo.Item1, targetInfo.Item2);
-                StartBaseSkill(BaseSkillType.Attack);
             }
             catch
             {
@@ -337,33 +294,6 @@ namespace ARPG.Skill
             }
         }
 
-        private void CreateBaseSkill()
-        {
-            // 공격 스킬
-
-
-            // SkillDataInfo? swingSkill = Hub.s.dataman.ExcelDataManager.GetSkillDataInfo(_attackSkillLabel);
-            // if (swingSkill != null)
-            // {
-                SkillBase? skill = AddSkill(0, 1);
-                if(skill != null)
-                {
-                    _baseSkillDic.Add(BaseSkillType.Attack, skill);
-                }
-            // }
-
-            // // 아이템 사용 스킬
-            // SkillDataInfo? useItemSkill = Hub.s.dataman.ExcelDataManager.GetSkillDataInfo(_useItemSkillLabel);
-            // if (useItemSkill != null)
-            // {
-            //     Skillbase? skill = AddSkill(0, useItemSkill.MasterId);
-            //     if (skill != null)
-            //     {
-            //         _baseSkillDic.Add(BaseSkillType.UseItem, skill);
-            //     }
-            // }
-        }
-
         private SkillBase? CreateSkill(int inSkillId)
         {
             SkillBase? skill = null;
@@ -371,14 +301,6 @@ namespace ARPG.Skill
             {
                 skill = new Skill_Strike();
             }
-            // else if (skillDataInfo.Label == _useItemSkillLabel)
-            // {
-            //     skill = new SkillUseItem();
-            // }
-            // else
-            // {
-            //     Debug.LogError($"[SkillController] CreateSkill - wrond skill Type, Label({skillDataInfo.Label})");
-            // }
 
             skill?.Initialize(_character, this, inSkillId);
 

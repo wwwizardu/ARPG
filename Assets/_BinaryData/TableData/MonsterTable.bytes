@@ -1,1 +1,1 @@
-[{"DropId":1,"DropRateBonus":0,"DropRarityBonus":0,"Name":"Monster","Stat":1001,"PrefabName":"temp","Id":1},{"DropId":1,"DropRateBonus":0,"DropRarityBonus":0,"Name":"Monster","Stat":1002,"PrefabName":"temp","Id":2}]
+[{"AiTableId":1,"DropId":1,"DropRateBonus":0,"DropRarityBonus":0,"Name":"Monster","Stat":1001,"PrefabName":"temp","Id":1},{"AiTableId":1,"DropId":1,"DropRateBonus":0,"DropRarityBonus":0,"Name":"Monster","Stat":1002,"PrefabName":"temp","Id":2}]

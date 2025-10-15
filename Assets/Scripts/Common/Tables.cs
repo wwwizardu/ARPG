@@ -73,17 +73,53 @@ namespace ARPG.Tables
     [Serializable]
     public class MonsterTable : CreatureTable
     {
+        [JsonProperty("AiTableId")] public int AiTableId;
         [JsonProperty("DropId")] public int DropId;
         [JsonProperty("DropRateBonus")] public int DropRateBonus;
         [JsonProperty("DropRarityBonus")] public int DropRarityBonus;
+
+        [JsonIgnore] public AiTable? AiTable;
+
+        public override void LoadLate()
+        {
+            base.LoadLate();
+
+            AiTable? aiTable = AR.s.Data?.GetAiTable(AiTableId);
+            if (aiTable != null)
+            {
+                AiTable = aiTable;
+            }
+            else
+            {
+                AiTable = null;
+            }
+        }
     }
 
     [Serializable]
     public class NpcTable : CreatureTable
     {
+        [JsonProperty("AiTableId")] public int AiTableId;
         [JsonProperty("DropId")] public int DropId;
         [JsonProperty("DropRateBonus")] public int DropRateBonus;
         [JsonProperty("DropRarityBonus")] public int DropRarityBonus;
+
+        [JsonIgnore] public AiTable? AiTable;
+
+        public override void LoadLate()
+        {
+            base.LoadLate();
+
+            AiTable? aiTable = AR.s.Data?.GetAiTable(AiTableId);
+            if (aiTable != null)
+            {
+                AiTable = aiTable;
+            }
+            else
+            {
+                AiTable = null;
+            }
+        }
     }
 
     [Serializable]
@@ -206,9 +242,16 @@ namespace ARPG.Tables
         [JsonProperty("SkillTargetRange1")] public float SkillTargetRange1; // 스킬 타겟 타입 범위 1
         [JsonProperty("SkillTargetRange2")] public float SkillTargetRange2; // 스킬 타겟 타입 범위 2
         [JsonProperty("AnimationName")] public string AnimationName;        // 애니메이션 이름
-        
-        
+    }
 
+    [Serializable]
+    public class AiTable : TableBase
+    {
+        [JsonProperty("Name")] public string Name;                  // 이름
+        [JsonProperty("AiType")] public GlobalEnum.AiType AiType;   // Ai 타입
+        [JsonProperty("SkillId1")] public int SkillId1;             // 스킬 1
+        [JsonProperty("SkillId2")] public int SkillId2;             // 스킬 2
+        [JsonProperty("SkillId3")] public int SkillId3;             // 스킬 3
     }
 
     [Serializable]

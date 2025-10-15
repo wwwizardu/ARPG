@@ -95,5 +95,12 @@ public class GlobalEnum
         Range_Circle,
     }
 
+    public enum AiType
+    {
+        None = 0,
+        NormalMonster,
+    }
+
+
     static public ushort PLAYER_INVENTORY_SLOTCOUNT_MAX = 60;
 }
