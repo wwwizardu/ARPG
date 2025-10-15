@@ -14,6 +14,8 @@ namespace ARPG.Creature
         private AIBase? _ai = null;
         private int _instanceId = -1;
 
+        private float _thinkTime = 0f;
+
         public new Tables.MonsterTable? Table { get { return _monsterTable; } }
 
         public override void Initialize()
@@ -103,6 +105,13 @@ namespace ARPG.Creature
                 return;
 
             base.OnFixedUpdateCharacter(inDeltaTime);
+
+            _thinkTime += inDeltaTime;
+            if(0.1f < _thinkTime)
+            {
+                _ai?.Think();
+                _thinkTime -= 0.1f;
+            }
         }
 
         protected override void UpdateInput()
@@ -110,7 +119,7 @@ namespace ARPG.Creature
             if (_activated == false || _ai == null)
                 return;
 
-            var (inputDirection, velocity) = _ai.Think();
+            var (inputDirection, velocity) = _ai.CalculateMove();
 
             _inputDirection = inputDirection;
             _velocity = velocity;

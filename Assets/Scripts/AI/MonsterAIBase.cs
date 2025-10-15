@@ -30,10 +30,12 @@ namespace ARPG.AI
 
         public virtual void Reset()
         {
-            
-        }
 
-        public abstract (Vector2 inputDirection, Vector2 velocity) Think();
+        }
+        
+        public abstract void Think();
+
+        public abstract (Vector2 inputDirection, Vector2 velocity) CalculateMove();
 
         protected ArpgPlayer? FindPlayer()
         {
