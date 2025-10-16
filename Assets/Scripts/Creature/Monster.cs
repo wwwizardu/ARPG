@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.AddressableAssets;
 using ARPG.AI;
 using ARPG.Item;
+using ARPG.Tables;
 
 namespace ARPG.Creature
 {
@@ -16,8 +17,8 @@ namespace ARPG.Creature
 
         private float _thinkTime = 0f;
 
-        public new Tables.MonsterTable? Table { get { return _monsterTable; } }
-
+        public MonsterTable MonsterTable => _monsterTable!;
+        
         public override void Initialize()
         {
             base.Initialize();
@@ -44,7 +45,7 @@ namespace ARPG.Creature
             // Ai Table에 따른 ai 생성
             if (_monsterTable.AiTable == null)
                 return false;
-            
+
             if (_monsterTable.AiTable.AiType == GlobalEnum.AiType.NormalMonster)
             {
                 _ai = new BasicMonsterAI(this, _monsterTable.AiTable);
@@ -52,6 +53,8 @@ namespace ARPG.Creature
 
                 _characterInfo.SkillController.CreateSkill(_monsterTable.AiTable.SkillId1);
             }
+
+            _table = _monsterTable;
 
             return true;
         }
@@ -139,10 +142,10 @@ namespace ARPG.Creature
                 return;
             }
 
-            var DropTable = AR.s?.Data.GetDrop(Table.DropId);
+            var DropTable = AR.s?.Data.GetDrop(MonsterTable.DropId);
             if (DropTable == null)
             {
-                Debug.LogError($"[Monster] DropTable is null. DropId: {Table.DropId}");
+                Debug.LogError($"[Monster] DropTable is null. DropId: {MonsterTable.DropId}");
                 return;
             }
 

@@ -106,7 +106,7 @@ namespace ARPG.UI
 
         private void UpdateCharacterStat()
         {
-            AR.s.MyPlayer?.Stat.UpdateEquipmentStat();
+            AR.s.MyPlayer?.Stat.UpdateStat();
 
             ARPG.Creature.Stats? stat = AR.s.MyPlayer?.Stat.GetStats();
             if (stat == null)

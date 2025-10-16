@@ -7,22 +7,11 @@ namespace ARPG.AI
 {
     public class BasicMonsterAI : AIBase
     {
-        private enum AIState
-        {
-            Idle,
-            Chase,
-            Attack
-        }
-
-        private AIState _currentState = AIState.Idle;
-        private ArpgPlayer? _targetPlayer = null;
-
         public BasicMonsterAI(CharacterBase inCharacter, AiTable inTable) : base(inCharacter)
         {
             _table = inTable;
 
             _detectionRange = 5.0f;
-            _speed = 3.0f;
         }
 
         public override void Initialize()
@@ -35,16 +24,13 @@ namespace ARPG.AI
             base.Reset();
             _currentState = AIState.Idle;
             _targetPlayer = null;
+            _moveDirection = Vector2.zero;
         }
 
         public override void Think()
         {
             if (_character == null || _character.State != CharacterConditions.Normal)
-            {
-                _currentState = AIState.Idle;
-                _targetPlayer = null;
                 return;
-            }
 
             switch (_currentState)
             {
@@ -82,21 +68,30 @@ namespace ARPG.AI
             if (_targetPlayer == null)
             {
                 _currentState = AIState.Idle;
+                _moveDirection = Vector2.zero;
                 return;
             }
 
-            float sqrDistanceToPlayer = (_targetPlayer.transform.position - _character.transform.position).sqrMagnitude;
+            Vector2 directionToPlayer = _targetPlayer.transform.position - _character.transform.position;
+            float sqrDistanceToPlayer = directionToPlayer.sqrMagnitude;
 
             // 공격 범위 내면 Attack 상태로 전환
             if (sqrDistanceToPlayer <= _attackRange * _attackRange)
             {
                 _currentState = AIState.Attack;
+                _moveDirection = Vector2.zero;
             }
             // 탐지 범위 밖이면 Idle 상태로 전환
             else if (sqrDistanceToPlayer > _detectionRange * _detectionRange)
             {
                 _currentState = AIState.Idle;
                 _targetPlayer = null;
+                _moveDirection = Vector2.zero;
+            }
+            else
+            {
+                // Chase 상태 유지 - 이동 방향 계산
+                _moveDirection = directionToPlayer.normalized;
             }
         }
 
@@ -137,22 +132,14 @@ namespace ARPG.AI
             switch (_currentState)
             {
                 case AIState.Chase:
-                    if (_targetPlayer != null)
-                    {
-                        Vector2 directionToPlayer = _targetPlayer.transform.position - _character.transform.position;
-                        Vector2 normalizedDirection = directionToPlayer.normalized;
-                        Vector2 velocity = normalizedDirection * _speed;
-                        return (normalizedDirection, velocity);
-                    }
-                    break;
+                    Vector2 velocity = _moveDirection * _character.Stat.GetMoveSpeed();
+                    return (_moveDirection, velocity);
 
                 case AIState.Attack:
                 case AIState.Idle:
                 default:
                     return (Vector2.zero, Vector2.zero);
             }
-
-            return (Vector2.zero, Vector2.zero);
         }
     }
 }

@@ -9,17 +9,23 @@ namespace ARPG.Creature
     {
         private Stats _statsTotal = new Stats();
         private Stats _statsBase = new Stats();
-        private Stats _statEquipment = new Stats();
+        private Stats? _statEquipment = null;
         private CharacterBase? _owner = null;
         
-        public void Initialize()
+        public void Initialize(CharacterBase? inCreature)
         {
-            
+            _owner = inCreature;
+
+            if(_owner is ArpgPlayer)
+            {
+                _statEquipment = new Stats();
+                _statEquipment.Reset();
+            }
         }
 
         public void Reset()
         {
-            if (_owner == null || _owner.Table == null)
+            if (_owner?.Table == null)
                 return;
 
             _statsBase.Reset();
@@ -47,7 +53,7 @@ namespace ARPG.Creature
             _statsBase.PoisonResist = _owner.Table.Stat.PoisonResist;
             _statsBase.Luck = _owner.Table.Stat.Luck;
 
-            UpdateEquipmentStat();
+            UpdateStat();
         }
 
         public int GetHp()
@@ -128,7 +134,11 @@ namespace ARPG.Creature
         public void UpdateStat()
         {
             _statsTotal.CopyFrom(_statsBase);
-            _statsTotal.Add(_statEquipment);
+
+            if(_statEquipment != null)
+            {
+                UpdateEquipmentStat();
+            }
         }
 
         public Stats GetStats()
@@ -148,6 +158,9 @@ namespace ARPG.Creature
 
         public void UpdateEquipmentStat()
         {
+            if (_owner == null || _statEquipment == null)
+                return;
+
             _statEquipment.Reset();
 
             Data.ItemData?[] equipItems = AR.s.Data.Player._inventoryEquip;
@@ -166,17 +179,13 @@ namespace ARPG.Creature
                     }
                 }
             }
-
-            UpdateStat();
+            
+            _statsTotal.Add(_statEquipment);    
         }
 
-        public void LoadFromTable(CharacterBase inCreature, Tables.CreatureTable inTable)
+        public void Load()
         {
-            _owner = inCreature;
-
             Reset(); // 기본 스탯 테이블 수치로 초기화
-
-            UpdateEquipmentStat(); // 장비 스탯 적용
         }
     }
 

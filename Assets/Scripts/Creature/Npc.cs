@@ -1,13 +1,15 @@
+#nullable enable
+using ARPG.Tables;
 using UnityEngine;
 
 namespace ARPG.Creature
 {
     public class Npc : CharacterBase
     {
-        // protected Tables.NpcTable? _npcTable = null;
+        protected Tables.NpcTable? _npcTable = null;
 
-        // public new Tables.NpcTable? Table { get { return _npcTable; } }
-
+        public NpcTable NpcTable {get { return _npcTable!; }}
+        
         public override void Initialize()
         {
             base.Initialize();
@@ -24,12 +26,14 @@ namespace ARPG.Creature
 
         public override bool LoadTable(int inId)
         {
-            // _npcTable = AR.s.Data.GetNpc(inId);
-            // if (_npcTable == null)
-            // {
-            //     Debug.LogError($"[Npc] LoadTable - NpcTable not found for Id: {inId}");
-            //     return false;
-            // }
+             _npcTable = AR.s.Data.GetNpc(inId);
+            if (_npcTable == null)
+            {
+                Debug.LogError($"[Npc] LoadTable - NpcTable not found for Id: {inId}");
+                return false;
+            }
+
+            _table = _npcTable;
 
             return true;
         }

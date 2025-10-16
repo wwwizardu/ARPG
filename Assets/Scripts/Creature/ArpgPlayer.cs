@@ -1,5 +1,6 @@
 #nullable enable
 using ARPG.Data;
+using ARPG.Tables;
 using ARPG.UI;
 using UnityEngine;
 
@@ -7,9 +8,11 @@ namespace ARPG.Creature
 {
     public class ArpgPlayer : CharacterBase
     {
+        protected CreatureTable? _playerTable = null;
         private Input.ArpgInputAction.PlayerActions? _input = null;
         private Item.Inventory _inventory = new Item.Inventory();
 
+        public override Tables.CreatureTable Table => _playerTable!;
         public Item.Inventory Inventory { get { return _inventory; } }
 
         public override void Initialize()
@@ -39,8 +42,8 @@ namespace ARPG.Creature
 
         public override bool LoadTable(int inId)
         {
-            _table = AR.s.Data.GetPlayer(inId);
-            if (_table == null)
+            _playerTable = AR.s.Data.GetPlayer(inId);
+            if (_playerTable == null)
             {
                 Debug.LogError($"[CharacterBase] LoadData - CreatureTable not found for Id: {inId}");
                 return false;

@@ -8,11 +8,12 @@ using System.Collections;
 
 namespace ARPG.Creature
 {
-    public class CharacterBase : MonoBehaviour, IHittable
+    public abstract class CharacterBase : MonoBehaviour, IHittable
     {
         [SerializeField] protected CharacterInfo _characterInfo;
 
-        protected CreatureTable? _table = null;
+        protected CreatureTable? _table;
+
         protected StatController _statController = new StatController();
 
         protected CharacterConditions _condition = CharacterConditions.None;
@@ -32,8 +33,7 @@ namespace ARPG.Creature
         protected Coroutine? _LoopUpdateCo = null;
         protected WaitForSeconds _waitForSeconds = new WaitForSeconds(1f);
 
-
-        public CreatureTable? Table { get { return _table; } }
+        public virtual CreatureTable Table { get {return _table!;} }
 
         public StatController Stat { get { return _statController; } }
 
@@ -59,7 +59,7 @@ namespace ARPG.Creature
             _condition = CharacterConditions.Normal;
             OnChangeMovementState(MovementStates.Idle);
 
-            _statController.Initialize();
+            _statController.Initialize(this);
             _characterInfo.SkillController.Initialize(this);
 
             Reset();
@@ -87,13 +87,13 @@ namespace ARPG.Creature
                 return false;
             }
 
-            if (_characterInfo.TextName != null)
-            {
-                _characterInfo.TextName.text = _table!.Name;
-            }
+            // if (_characterInfo.TextName != null)
+            // {
+            //     _characterInfo.TextName.text = Table!.Name;
+            // }
 
             // Load stats from table
-            _statController.LoadFromTable(this, _table!);
+            _statController.Load();
 
             if (_statController.GetStat(GlobalEnum.Stat.HpGeneration) > 0 || _statController.GetStat(GlobalEnum.Stat.MpGeneration) > 0)
             {
