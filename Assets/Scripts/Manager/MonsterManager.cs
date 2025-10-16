@@ -200,8 +200,9 @@ namespace ARPG.Monster
                 return -1;
             }
 
+            int monsterTableId = Random.Range(1001, 1003);
             monster.Initialize();
-            if(monster.Load(1) == false) // 임시로 ID 1 사용
+            if (monster.Load(monsterTableId) == false) // 임시로 ID 1 사용
             {
                 Debug.LogError($"[MonsterManager] SpawnMonster - Failed to load monster with ID 1");
                 Destroy(monsterObj);

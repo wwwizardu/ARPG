@@ -33,7 +33,7 @@ namespace ARPG.Editor
 
             await DownloadTable<AiTable>("947794841&range=A:F", 1, SaveType.String);
 
-            await DownloadTable<MonsterTable>("483012127&range=A:H", 1, SaveType.String);
+            await DownloadTable<MonsterTable>("483012127&range=A:I", 1, SaveType.String);
 
             await DownloadTable<NpcTable>("1460299278&range=A:H", 1, SaveType.String);
 
@@ -233,19 +233,20 @@ namespace ARPG.Editor
 
         private static void ParseMonsterTable(MonsterTable table, string[] values)
         {
-            if (values.Length < 7)
+            if (values.Length < 8)
             {
-                Debug.LogError($"[ParseMonsterTable] Invalid data length. Expected at least 7, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseMonsterTable] Invalid data length. Expected at least 8, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
             table.Name = values[1];
-            table.StatId = int.Parse(values[2]);
-            table.PrefabName = values[3];
-            table.AiTableId = int.Parse(values[4]);
-            table.DropId = int.Parse(values[5]);
-            table.DropRateBonus = int.Parse(values[6]);
-            table.DropRarityBonus = int.Parse(values[7]);
+            // values[2]는 웹에서만 사용한다.
+            table.StatId = int.Parse(values[3]);
+            table.PrefabName = values[4];
+            table.AiTableId = int.Parse(values[5]);
+            table.DropId = int.Parse(values[6]);
+            table.DropRateBonus = int.Parse(values[7]);
+            table.DropRarityBonus = int.Parse(values[8]);
         }
 
         private static void ParseItemTable(ItemTable table, string[] values)

@@ -895,7 +895,8 @@ namespace ARPG
                     null,
                     out Vector2 slotTopLeftLocal
                 );
-                tooltipPosition.x = slotTopLeftLocal.x - horizontalOffset;
+                // 툴팁의 오른쪽 끝이 슬롯 왼쪽에 오도록 배치
+                tooltipPosition.x = slotTopLeftLocal.x - horizontalOffset - tooltipSize.x * (1f - tooltipPivot.x);
 
                 // 경계 재계산
                 tooltipLeft = tooltipPosition.x - tooltipSize.x * tooltipPivot.x;
