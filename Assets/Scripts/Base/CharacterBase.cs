@@ -28,6 +28,7 @@ namespace ARPG.Creature
 
         protected Vector2 _pervPos;
         protected Vector2 _currentPos;
+        protected float _moveSpeed;
         protected bool _initialized = false;
 
         protected Coroutine? _LoopUpdateCo = null;
@@ -42,6 +43,8 @@ namespace ARPG.Creature
         public GlobalEnum.TeamType Team { get { return _team; } }
 
         public CharacterInfo CharacterInfo { get { return _characterInfo; } }
+
+        public float MoveSpeed { get {return _moveSpeed; } }
 
         public virtual void Initialize()
         {
@@ -81,7 +84,7 @@ namespace ARPG.Creature
 
         public virtual bool Load(int inId)
         {
-            if(LoadTable(inId) == false)
+            if (LoadTable(inId) == false)
             {
                 Debug.LogError($"[CharacterBase] LoadData - Failed to load table for Id: {inId}");
                 return false;
@@ -95,6 +98,8 @@ namespace ARPG.Creature
             // Load stats from table
             _statController.Load();
 
+            UpdateStat();
+
             if (_statController.GetStat(GlobalEnum.Stat.HpGeneration) > 0 || _statController.GetStat(GlobalEnum.Stat.MpGeneration) > 0)
             {
                 if (_LoopUpdateCo != null)
@@ -104,16 +109,30 @@ namespace ARPG.Creature
                 }
 
                 _LoopUpdateCo = StartCoroutine(LoopUpdate());
-            }      
+            }
 
             if (_characterInfo.HpBar != null)
             {
                 _characterInfo.HpBar.fillAmount = _statController.GetHpRatio();
-            }      
+            }
 
             _initialized = true;
 
             return true;
+        }
+
+        public virtual void UpdateStat()
+        {
+            if (_statController == null || _characterInfo?.SkillController == null)
+            {
+                Debug.LogError("[CharacterBase] UpdateStat() - null");
+                return;
+            }
+
+            _statController.UpdateStat();
+            _characterInfo.SkillController.UpdateSkillSpeed();
+
+            _moveSpeed = _statController.GetStat(GlobalEnum.Stat.MoveSpeed) * (_statController.GetStat(GlobalEnum.Stat.MoveSpeedMul) * 0.01f);
         }
 
         public virtual void OnHit(CharacterBase inAttacker, int inDamage)
@@ -172,6 +191,11 @@ namespace ARPG.Creature
             {
                 _characterInfo.Animator.SetTrigger("Attack");
             }
+        }
+
+        public virtual float GetAttackSpeed()
+        {
+            return 1f;
         }
 
         protected virtual void SetAnimation(int inIndex)

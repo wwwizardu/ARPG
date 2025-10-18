@@ -3,9 +3,8 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
-using Unity.VisualScripting;
-using UnityEngine;
+using GE = GlobalEnum;
+
 
 namespace ARPG.Tables
 {
@@ -129,7 +128,7 @@ namespace ARPG.Tables
 
         [JsonProperty("Name")] public string Name;
 
-        [JsonProperty("ItemType")] public GlobalEnum.ItemType ItemType;
+        [JsonProperty("ItemType")] public GE.ItemType ItemType;
 
         [JsonProperty("Stackable")] public bool Stackable;
 
@@ -160,7 +159,7 @@ namespace ARPG.Tables
     [Serializable]
     public class EquipmentTable : TableBase
     {
-        [JsonProperty("EquipType")] public GlobalEnum.EquipSlotType EquipType;
+        [JsonProperty("EquipType")] public GE.EquipSlotType EquipType;
         [JsonProperty("AttackSpeed")] public float AttackSpeed;
         [JsonProperty("Critical")] public int Critical;
         [JsonProperty("DamageMin")] public int DamageMin;
@@ -228,27 +227,35 @@ namespace ARPG.Tables
     [Serializable]
     public class SkillTable : TableBase
     {
-        [JsonProperty("Name")] public string Name;                          // 이름
-        [JsonProperty("Desctiption")] public string Desctiption;            // 설명
-        [JsonProperty("SkillType")] public GlobalEnum.SkillType SkillType;  // 스킬 타입
-        [JsonProperty("SubType")] public GlobalEnum.SkillSubType SubType;   // 스킬 서브 타입
-        [JsonProperty("SkillRangeMin")] public float SkillRangeMin;         // 스킬 최소 사정 거리
-        [JsonProperty("SkillRangeMax")] public float SkillRangeMax;         // 스킬 최대 사정 거리
-        [JsonProperty("Cooltime")] public float Cooltime;                   // 쿨 타임
-        [JsonProperty("Mana")] public int Mana;                             // 마나 소모량
-        [JsonProperty("Damage")] public int Damage;                         // 데미지
-        [JsonProperty("Duration")] public int Duration;                     // 지속 시간
-        [JsonProperty("SkillTargetType")] public GlobalEnum.SkillTargetType SkillTargetType; // 스킬 타겟 타입
-        [JsonProperty("SkillTargetRange1")] public float SkillTargetRange1; // 스킬 타겟 타입 범위 1
-        [JsonProperty("SkillTargetRange2")] public float SkillTargetRange2; // 스킬 타겟 타입 범위 2
-        [JsonProperty("AnimationName")] public string AnimationName;        // 애니메이션 이름
+        [JsonProperty("Name")] public string Name;                              // 이름
+        [JsonProperty("Desctiption")] public string Desctiption;                // 설명
+        [JsonProperty("SkillType")] public GE.SkillType SkillType;              // 스킬 타입
+        [JsonProperty("SubType")] public GE.SkillSubType SubType;               // 스킬 서브 타입
+        [JsonProperty("SkillRangeMin")] public float SkillRangeMin;             // 스킬 최소 사정 거리
+        [JsonProperty("SkillRangeMax")] public float SkillRangeMax;             // 스킬 최대 사정 거리
+        [JsonProperty("Cooltime")] public float Cooltime;                       // 쿨 타임
+        [JsonProperty("Mana")] public int Mana;                                 // 마나 소모량
+        [JsonProperty("DamageTime")] public float DamageTime;                   // 데미지 입히는 시간
+        [JsonProperty("DamageType")] public GE.DamageType DamageType;           // 데미지 입히는 시간
+        [JsonProperty("DamageMin")] public int DamageMin;                       // 데미지 최소값
+        [JsonProperty("DamageMax")] public int DamageMax;                       // 데미지 최대값
+        [JsonProperty("Duration")] public int Duration;                         // 지속 시간
+        [JsonProperty("SkillTargetType")] public GE.SkillTargetType SkillTargetType; // 스킬 타겟 타입
+        [JsonProperty("SkillTargetRange1")] public float SkillTargetRange1;     // 스킬 타겟 타입 범위 1
+        [JsonProperty("SkillTargetRange2")] public float SkillTargetRange2;     // 스킬 타겟 타입 범위 2
+        [JsonProperty("AnimationName")] public string AnimationName;            // 애니메이션 이름
+        [JsonProperty("StartEffectName")] public string StartEffectName;        // 애니메이션 이름
+        [JsonProperty("ActivateName")] public string ActivateName;              // 애니메이션 이름
+        [JsonProperty("HitEffect")] public string HitEffect;                    // 애니메이션 이름
+        
+        
     }
 
     [Serializable]
     public class AiTable : TableBase
     {
         [JsonProperty("Name")] public string Name;                  // 이름
-        [JsonProperty("AiType")] public GlobalEnum.AiType AiType;   // Ai 타입
+        [JsonProperty("AiType")] public GE.AiType AiType;           // Ai 타입
         [JsonProperty("SkillId1")] public int SkillId1;             // 스킬 1
         [JsonProperty("SkillId2")] public int SkillId2;             // 스킬 2
         [JsonProperty("SkillId3")] public int SkillId3;             // 스킬 3
@@ -257,7 +264,7 @@ namespace ARPG.Tables
     [Serializable]
     public class Stat
     {
-        [JsonProperty("Type")] public GlobalEnum.Stat Type;
+        [JsonProperty("Type")] public GE.Stat Type;
         [JsonProperty("Value")] public ushort Value;
     }
 

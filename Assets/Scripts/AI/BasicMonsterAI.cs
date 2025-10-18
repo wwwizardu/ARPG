@@ -132,7 +132,7 @@ namespace ARPG.AI
             switch (_currentState)
             {
                 case AIState.Chase:
-                    Vector2 velocity = _moveDirection * _character.Stat.GetMoveSpeed();
+                    Vector2 velocity = _moveDirection * _character.MoveSpeed;
                     return (_moveDirection, velocity);
 
                 case AIState.Attack:

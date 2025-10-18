@@ -10,6 +10,8 @@ namespace ARPG.Creature
     {
         protected CreatureTable? _playerTable = null;
         private Input.ArpgInputAction.PlayerActions? _input = null;
+
+        private PlayerData _playerData;
         private Item.Inventory _inventory = new Item.Inventory();
 
         public override Tables.CreatureTable Table => _playerTable!;
@@ -67,9 +69,16 @@ namespace ARPG.Creature
             if (_characterInfo.HpBar != null)
             {
                 _characterInfo.HpBar.fillAmount = _statController.GetHpRatio();
-            }     
+            }
 
             return true;
+        }
+        
+        public override float GetAttackSpeed()
+        {
+            
+
+            return 1f;
         }
 
         public void Save(PlayerData inPlayerData)
@@ -113,7 +122,7 @@ namespace ARPG.Creature
                 // 입력 방향에 따라 캐릭터 이동
                 if (_inputDirection.IsZero() == false)
                 {
-                    _velocity = new Vector2(_inputDirection.x, _inputDirection.y) * _statController.GetMoveSpeed();
+                    _velocity = new Vector2(_inputDirection.x, _inputDirection.y) * MoveSpeed;
                     Vector3 movement = new Vector3(_velocity.x, _velocity.y, 0) * Time.deltaTime;
                     transform.position += movement;
 

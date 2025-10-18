@@ -30,10 +30,13 @@ public class GlobalEnum
         AttackMin,          // 최소 공격력
         AttackMax,          // 최대 공격력
         CriRate,            // 치명타 확률
-        CriDamage,          // 치명타 피해
+        CriDamageMul,       // 치명타 피해 배율
         MoveSpeed,          // 이동 속도
+        MoveSpeedMul,       // 이동 속도 증가 배율
         AttackSpeed,        // 공격 속도
+        AttackSpeedMul,     // 공격 속도 증가 배율
         CastSpeed,          // 시전 속도
+        CastSpeedMul,       // 시전 속도 증가 배율
         Defense,            // 방어력
         FireResist,         // 화염 저항
         IceResist,          // 냉기 저항
@@ -99,6 +102,15 @@ public class GlobalEnum
     {
         None = 0,
         NormalMonster,
+    }
+
+    public enum DamageType
+    {
+        Physics,
+        Fire,
+        Ice,
+        Lightning,
+        Poison,
     }
 
 

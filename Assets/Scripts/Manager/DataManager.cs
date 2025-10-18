@@ -3,6 +3,7 @@ using UnityEngine;
 using Cysharp.Threading.Tasks;
 using System.Threading.Tasks;
 using System.IO;
+using System.Collections.Generic;
 using Newtonsoft.Json;
 
 namespace ARPG.Data
@@ -12,12 +13,37 @@ namespace ARPG.Data
         private const ushort CURRENT_WORLD_DATA_VERSION = 1;
         private const ushort CURRENT_PLAYER_DATA_VERSION = 1;
         private WorldData _worldData = new();
-        private PlayerData _playerData = new();
-
+        private List<PlayerData> _playerDataList = new();
+        private int _currentPlayerId = 0; // 현재 활성화된 플레이어 ID
+        
         private bool _isSaving = false;
         private bool _needsAnotherSave = false;
 
-        public PlayerData Player => _playerData;
+        // 하위 호환성을 위한 속성 - 현재 활성 플레이어 반환
+        public PlayerData Player
+        {
+            get
+            {
+                var player = GetPlayerData(_currentPlayerId);
+                if (player != null)
+                    return player;
+
+                if (_playerDataList.Count > 0)
+                    return _playerDataList[0];
+
+                // 플레이어가 없으면 기본 플레이어 생성
+                var newPlayer = new PlayerData();
+                newPlayer.Initialize(0);
+                _playerDataList.Add(newPlayer);
+                return newPlayer;
+            }
+        }
+
+        // 전체 플레이어 목록
+        public List<PlayerData> PlayerDataList => _playerDataList;
+
+        // 현재 활성 플레이어 ID
+        public int CurrentPlayerId => _currentPlayerId;
 
         public async Task Initialize()
         {
@@ -100,24 +126,44 @@ namespace ARPG.Data
                 }
             }
 
-            // PlayerData 로드
-            _playerData.Initialize();
+            // PlayerData 로드 (여러 플레이어 지원)
+            _playerDataList.Clear();
             if (File.Exists(playerDataPath))
             {
                 try
                 {
                     string playerDataJson = File.ReadAllText(playerDataPath);
-                    _playerData = JsonConvert.DeserializeObject<PlayerData>(playerDataJson) ?? new PlayerData();
+                    var loadedList = JsonConvert.DeserializeObject<List<PlayerData>>(playerDataJson);
 
-                    // 버전 체크 및 마이그레이션
-                    if (_playerData.Version < CURRENT_PLAYER_DATA_VERSION)
+                    if (loadedList != null && loadedList.Count > 0)
                     {
-                        MigratePlayerData(_playerData.Version, CURRENT_PLAYER_DATA_VERSION);
-                        _playerData.Version = CURRENT_PLAYER_DATA_VERSION;
-                    }
+                        _playerDataList = loadedList;
 
-                    _playerData.LoadCompleted();
-                    Debug.Log($"[DataManager] PlayerData loaded successfully (Version: {_playerData.Version})");
+                        // 각 플레이어 데이터의 버전 체크 및 마이그레이션
+                        foreach (var playerData in _playerDataList)
+                        {
+                            if (playerData.Version < CURRENT_PLAYER_DATA_VERSION)
+                            {
+                                MigratePlayerData(playerData, playerData.Version, CURRENT_PLAYER_DATA_VERSION);
+                                playerData.Version = CURRENT_PLAYER_DATA_VERSION;
+                            }
+                            playerData.LoadCompleted();
+                        }
+
+                        // 첫 번째 플레이어를 현재 플레이어로 설정
+                        _currentPlayerId = _playerDataList[0].PlayerId;
+
+                        Debug.Log($"[DataManager] PlayerData loaded successfully. Player count: {_playerDataList.Count}");
+                    }
+                    else
+                    {
+                        // 빈 리스트이거나 null인 경우 기본 플레이어 생성
+                        var defaultPlayer = new PlayerData();
+                        defaultPlayer.Initialize(0);
+                        _playerDataList.Add(defaultPlayer);
+                        _currentPlayerId = 0;
+                        Debug.Log("[DataManager] No player data found, created default player");
+                    }
                 }
                 catch (System.Exception ex)
                 {
@@ -129,24 +175,48 @@ namespace ARPG.Data
                         try
                         {
                             string backupJson = File.ReadAllText(playerDataBackupPath);
-                            _playerData = JsonConvert.DeserializeObject<PlayerData>(backupJson) ?? new PlayerData();
+                            var loadedList = JsonConvert.DeserializeObject<List<PlayerData>>(backupJson);
 
-                            // 백업 파일도 버전 체크
-                            if (_playerData.Version < CURRENT_PLAYER_DATA_VERSION)
+                            if (loadedList != null && loadedList.Count > 0)
                             {
-                                MigratePlayerData(_playerData.Version, CURRENT_PLAYER_DATA_VERSION);
-                                _playerData.Version = CURRENT_PLAYER_DATA_VERSION;
-                            }
+                                _playerDataList = loadedList;
 
-                            _playerData.LoadCompleted();
-                            Debug.Log($"[DataManager] PlayerData loaded from backup (Version: {_playerData.Version})");
+                                foreach (var playerData in _playerDataList)
+                                {
+                                    if (playerData.Version < CURRENT_PLAYER_DATA_VERSION)
+                                    {
+                                        MigratePlayerData(playerData, playerData.Version, CURRENT_PLAYER_DATA_VERSION);
+                                        playerData.Version = CURRENT_PLAYER_DATA_VERSION;
+                                    }
+                                    playerData.LoadCompleted();
+                                }
+
+                                _currentPlayerId = _playerDataList[0].PlayerId;
+
+                                Debug.Log($"[DataManager] PlayerData loaded from backup. Player count: {_playerDataList.Count}");
+                            }
                         }
                         catch (System.Exception backupEx)
                         {
                             Debug.LogError($"[DataManager] Failed to load PlayerData from backup: {backupEx.Message}");
+
+                            // 모든 복구 실패 시 기본 플레이어 생성
+                            var defaultPlayer = new PlayerData();
+                            defaultPlayer.Initialize(0);
+                            _playerDataList.Add(defaultPlayer);
+                            _currentPlayerId = 0;
                         }
                     }
                 }
+            }
+            else
+            {
+                // 파일이 없는 경우 기본 플레이어 생성
+                var defaultPlayer = new PlayerData();
+                defaultPlayer.Initialize(0);
+                _playerDataList.Add(defaultPlayer);
+                _currentPlayerId = 0;
+                Debug.Log("[DataManager] PlayerData file not found, created default player");
             }
 
             return true;
@@ -207,9 +277,19 @@ namespace ARPG.Data
                     });
                     await File.WriteAllTextAsync(worldDataPath, worldDataJson);
 
-                    // PlayerData 저장
-                    AR.s.MyPlayer?.Save(_playerData);
-                    string playerDataJson = JsonConvert.SerializeObject(_playerData, Formatting.Indented, new JsonSerializerSettings
+                    // PlayerData 저장 (여러 플레이어 지원)
+                    // 현재 활성 플레이어 저장
+                    if (AR.s.MyPlayer != null)
+                    {
+                        var currentPlayer = GetPlayerData(_currentPlayerId);
+                        if (currentPlayer != null)
+                        {
+                            AR.s.MyPlayer.Save(currentPlayer);
+                        }
+                    }
+
+                    // 전체 플레이어 리스트 저장
+                    string playerDataJson = JsonConvert.SerializeObject(_playerDataList, Formatting.Indented, new JsonSerializerSettings
                     {
                         NullValueHandling = NullValueHandling.Include,
                         DefaultValueHandling = DefaultValueHandling.Include
@@ -272,6 +352,124 @@ namespace ARPG.Data
             return _worldData.AddDropItem(inPosition.x, inPosition.y, inItem);
         }
 
+        // ==================== 플레이어 관리 메서드 ====================
+
+        /// <summary>
+        /// 사용되지 않는 새로운 플레이어 ID 생성
+        /// </summary>
+        private int CreatePlayerId()
+        {
+            // 0부터 시작해서 사용되지 않는 첫 번째 ID 찾기
+            for (int id = 0; id < int.MaxValue; id++)
+            {
+                if (_playerDataList.Find(p => p.PlayerId == id) == null)
+                {
+                    return id;
+                }
+            }
+
+            // 이론적으로 도달할 수 없지만, 안전을 위해
+            Debug.LogError("[DataManager] Failed to create new player ID: all IDs are in use");
+            return -1;
+        }
+
+        /// <summary>
+        /// 플레이어 ID로 플레이어 데이터 가져오기
+        /// </summary>
+        public PlayerData? GetPlayerData(int inPlayerId)
+        {
+            return _playerDataList.Find(p => p.PlayerId == inPlayerId);
+        }
+
+        /// <summary>
+        /// 새 플레이어 추가
+        /// </summary>
+        public PlayerData AddPlayer()
+        {
+            int newId = CreatePlayerId();
+            if (newId < 0)
+            {
+                Debug.LogError("[DataManager] Failed to add new player: unable to create player ID");
+                return null!;
+            }
+
+            var newPlayer = new PlayerData();
+            newPlayer.Initialize(newId);
+            _playerDataList.Add(newPlayer);
+
+            Debug.Log($"[DataManager] New player added with ID: {newPlayer.PlayerId}");
+            return newPlayer;
+        }
+
+        /// <summary>
+        /// 플레이어 제거
+        /// </summary>
+        public bool RemovePlayer(int inPlayerId)
+        {
+            var player = GetPlayerData(inPlayerId);
+            if (player == null)
+            {
+                Debug.LogWarning($"[DataManager] Player with ID {inPlayerId} not found");
+                return false;
+            }
+
+            _playerDataList.Remove(player);
+
+            // 현재 플레이어가 제거된 경우 다른 플레이어로 전환
+            if (_currentPlayerId == inPlayerId)
+            {
+                if (_playerDataList.Count > 0)
+                {
+                    _currentPlayerId = _playerDataList[0].PlayerId;
+                }
+                else
+                {
+                    _currentPlayerId = 0;
+                }
+            }
+
+            Debug.Log($"[DataManager] Player {inPlayerId} removed");
+            return true;
+        }
+
+        /// <summary>
+        /// 현재 활성 플레이어 설정
+        /// </summary>
+        public bool SetCurrentPlayer(int inPlayerId)
+        {
+            var player = GetPlayerData(inPlayerId);
+            if (player == null)
+            {
+                Debug.LogWarning($"[DataManager] Cannot set current player: Player with ID {inPlayerId} not found");
+                return false;
+            }
+
+            _currentPlayerId = inPlayerId;
+            Debug.Log($"[DataManager] Current player set to ID: {inPlayerId}");
+            return true;
+        }
+
+        /// <summary>
+        /// 인덱스로 플레이어 가져오기
+        /// </summary>
+        public PlayerData? GetPlayerDataByIndex(int inIndex)
+        {
+            if (inIndex < 0 || inIndex >= _playerDataList.Count)
+                return null;
+
+            return _playerDataList[inIndex];
+        }
+
+        /// <summary>
+        /// 전체 플레이어 수
+        /// </summary>
+        public int GetPlayerCount()
+        {
+            return _playerDataList.Count;
+        }
+
+        // ==================== 버전 마이그레이션 ====================
+
         // WorldData 버전 마이그레이션
         private void MigrateWorldData(ushort fromVersion, ushort toVersion)
         {
@@ -291,15 +489,15 @@ namespace ARPG.Data
         }
 
         // PlayerData 버전 마이그레이션
-        private void MigratePlayerData(ushort fromVersion, ushort toVersion)
+        private void MigratePlayerData(PlayerData playerData, ushort fromVersion, ushort toVersion)
         {
-            Debug.Log($"[DataManager] Migrating PlayerData from version {fromVersion} to {toVersion}");
+            Debug.Log($"[DataManager] Migrating PlayerData (ID: {playerData.PlayerId}) from version {fromVersion} to {toVersion}");
 
             // 예시: 버전 1 -> 2 마이그레이션
             // if (fromVersion == 1 && toVersion >= 2)
             // {
             //     // 새로운 필드 초기화 또는 데이터 변환
-            //     // _playerData.NewField = defaultValue;
+            //     // playerData.NewField = defaultValue;
             // }
 
             // 예시: 버전 2 -> 3 마이그레이션

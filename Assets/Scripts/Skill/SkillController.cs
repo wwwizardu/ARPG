@@ -98,20 +98,24 @@ namespace ARPG.Skill
             _passiveSkillList.Clear();
             _activeSkillList.Clear();
             _skillDic.Clear();
-            
+
             UpdateSkills();
         }
 
         public void UpdateSkills()
         {
-            //for (int i = 0; i < _activeSkillList.Count; i++)
-            //{
-            //    SkillDataInfo? skillDataInfo = Hub.s.dataman.ExcelDataManager.GetSkillDataInfo(_activeSkillList[i]);
-            //    if (skillDataInfo != null)
-            //    {
-            //        CreateSkill(skillDataInfo);
-            //    }
-            //}
+            for (int i = 0; i < _activeSkillList.Count; i++)
+            {
+
+            }
+        }
+        
+        public void UpdateSkillSpeed()
+        {
+            for (int i = 0; i < _activeSkillList.Count; i++)
+            {
+                _activeSkillList[i].UpdateSkillSpeed();
+            }
         }
 
         public void StopAllSkill()

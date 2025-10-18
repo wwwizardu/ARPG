@@ -51,7 +51,7 @@ namespace ARPG.Editor
 
             await DownloadTable<DropEquipmentTable>("1267382287&range=A:V", 1, SaveType.String);
 
-            await DownloadTable<SkillTable>("1267382287&range=A:O", 1, SaveType.String);
+            await DownloadTable<SkillTable>("92727160&range=A:U", 1, SaveType.String);
 
             foreach (var tableType in _tableDic.Keys)
             {
@@ -392,9 +392,9 @@ namespace ARPG.Editor
 
         private static void ParseSkillTable(SkillTable table, string[] values)
         {
-            if (values.Length < 14)
+            if (values.Length < 19)
             {
-                Debug.LogError($"[ParseSkillTable] Invalid data length. Expected at least 14, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseSkillTable] Invalid data length. Expected at least 19, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
@@ -406,12 +406,18 @@ namespace ARPG.Editor
             table.SkillRangeMax = float.Parse(values[6]);
             table.Cooltime = float.Parse(values[7]);
             table.Mana = int.Parse(values[8]);
-            table.Damage = int.Parse(values[9]);
-            table.Duration = int.Parse(values[10]);
-            table.SkillTargetType = (GlobalEnum.SkillTargetType)Enum.Parse(typeof(GlobalEnum.SkillTargetType), values[11]);
-            table.SkillTargetRange1 = float.Parse(values[12]);
-            table.SkillTargetRange2 = float.Parse(values[13]);
-            table.AnimationName = values[14];
+            table.DamageTime = float.Parse(values[9]);
+            table.DamageType = (GlobalEnum.DamageType)Enum.Parse(typeof(GlobalEnum.DamageType), values[10]);
+            table.DamageMin = int.Parse(values[11]);
+            table.DamageMax = int.Parse(values[12]);
+            table.Duration = int.Parse(values[13]);
+            table.SkillTargetType = (GlobalEnum.SkillTargetType)Enum.Parse(typeof(GlobalEnum.SkillTargetType), values[14]);
+            table.SkillTargetRange1 = float.Parse(values[15]);
+            table.SkillTargetRange2 = float.Parse(values[16]);
+            table.AnimationName = values[17];
+            table.StartEffectName = values[18];
+            table.ActivateName = values[19];
+            table.HitEffect = values[20];
         }
 
         private static void ParseAiTable(AiTable table, string[] values)

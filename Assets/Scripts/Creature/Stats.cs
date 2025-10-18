@@ -11,7 +11,7 @@ namespace ARPG.Creature
         private Stats _statsBase = new Stats();
         private Stats? _statEquipment = null;
         private CharacterBase? _owner = null;
-        
+
         public void Initialize(CharacterBase? inCreature)
         {
             _owner = inCreature;
@@ -44,8 +44,11 @@ namespace ARPG.Creature
             _statsBase.CriRate = _owner.Table.Stat.CriRate;
             _statsBase.CriDamage = _owner.Table.Stat.CriDamage;
             _statsBase.MoveSpeed = _owner.Table.Stat.MoveSpeed;
+            _statsBase.MoveSpeedMul = 100;
             _statsBase.AttackSpeed = _owner.Table.Stat.AttackSpeed;
+            _statsBase.AttackSpeedMul = 100;
             _statsBase.CastSpeed = _owner.Table.Stat.CastSpeed;
+            _statsBase.CastSpeedMul = 100;
             _statsBase.Defense = _owner.Table.Stat.Defense;
             _statsBase.FireResist = _owner.Table.Stat.FireResist;
             _statsBase.IceResist = _owner.Table.Stat.IceResist;
@@ -84,9 +87,19 @@ namespace ARPG.Creature
             return (float)_statsTotal.CurrentHp / _statsTotal.MaxHp;
         }
 
-        public float GetMoveSpeed()
+        public float GetMoveSpeedMultiplier()
         {
             return _statsTotal.MoveSpeed;
+        }
+
+        public float GetAttackSpeedMultiplier()
+        {
+            return _statsTotal.AttackSpeedMul;
+        }
+
+        public float GetCastSpeedMultiplier()
+        {
+            return _statsTotal.CastSpeedMul;
         }
 
         public void IncreaseHp(int inHeal)
@@ -135,7 +148,7 @@ namespace ARPG.Creature
         {
             _statsTotal.CopyFrom(_statsBase);
 
-            if(_statEquipment != null)
+            if (_statEquipment != null)
             {
                 UpdateEquipmentStat();
             }
@@ -203,7 +216,7 @@ namespace ARPG.Creature
             set { _stats[(int)stat] = value; }
         }
 
-        // 편의를 위한 프로퍼티들
+        // 편의를 위한 프로퍼티들```
         public int Str
         {
             get { return this[GlobalEnum.Stat.Str]; }
@@ -266,8 +279,8 @@ namespace ARPG.Creature
 
         public int CriDamage
         {
-            get { return this[GlobalEnum.Stat.CriDamage]; }
-            set { this[GlobalEnum.Stat.CriDamage] = value; }
+            get { return this[GlobalEnum.Stat.CriDamageMul]; }
+            set { this[GlobalEnum.Stat.CriDamageMul] = value; }
         }
 
         public int MoveSpeed
@@ -276,16 +289,34 @@ namespace ARPG.Creature
             set { this[GlobalEnum.Stat.MoveSpeed] = value; }
         }
 
+        public int MoveSpeedMul
+        {
+            get { return this[GlobalEnum.Stat.MoveSpeedMul]; }
+            set { this[GlobalEnum.Stat.MoveSpeedMul] = value; }
+        }
+
         public int AttackSpeed
         {
             get { return this[GlobalEnum.Stat.AttackSpeed]; }
             set { this[GlobalEnum.Stat.AttackSpeed] = value; }
         }
 
+        public int AttackSpeedMul
+        {
+            get { return this[GlobalEnum.Stat.AttackSpeedMul]; }
+            set { this[GlobalEnum.Stat.AttackSpeedMul] = value; }
+        }
+
         public int CastSpeed
         {
             get { return this[GlobalEnum.Stat.CastSpeed]; }
             set { this[GlobalEnum.Stat.CastSpeed] = value; }
+        }
+
+        public int CastSpeedMul
+        {
+            get { return this[GlobalEnum.Stat.CastSpeedMul]; }
+            set { this[GlobalEnum.Stat.CastSpeedMul] = value; }
         }
 
         public int Defense

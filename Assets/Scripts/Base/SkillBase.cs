@@ -1,3 +1,5 @@
+#nullable enable
+using ARPG.Tables;
 using UnityEngine;
 
 namespace ARPG.Skill
@@ -13,9 +15,9 @@ namespace ARPG.Skill
         }
 
         protected int _id;
-        //protected Bifrost.Cooked.SkillDataInfo _table;
-        protected Creature.CharacterBase _character;
-        protected SkillController _controller;
+        protected SkillTable _table = null!;
+        protected Creature.CharacterBase? _character;
+        protected SkillController? _controller;
         protected bool _isRunning;
         protected State _state = State.None;
 
@@ -48,7 +50,13 @@ namespace ARPG.Skill
             _processTime = 0f;
             _endTime = 0f;
 
-            //_table = Hub.s.dataman.ExcelDataManager.GetSkillDataInfo(inSkillId);
+            _table = AR.s.Data.GetSkill(_id);
+            if (_table == null)
+            {
+                Debug.LogError($"[SkillBase] _table is null, Id({_id})");
+            }
+            
+            UpdateSkillSpeed();
 
             _initialized = true;
         }
@@ -65,6 +73,18 @@ namespace ARPG.Skill
                 return false;
 
             return true;
+        }
+
+        public virtual void UpdateSkillSpeed()
+        {
+            if (_character == null)
+                return;
+
+            float baseAttackSpeed = 1f / _character.GetAttackSpeed();
+            float attackSpeedMultiplier = _character.Stat.GetStat(GlobalEnum.Stat.AttackSpeedMul) * 0.01f;
+
+            _processTime = _table.DamageTime / attackSpeedMultiplier;
+            _endTime = baseAttackSpeed / attackSpeedMultiplier;
         }
 
         public virtual void SkillUpdate(float inTimeDT)
@@ -139,15 +159,16 @@ namespace ARPG.Skill
                 _controller.OnCompleteSkill(Id);
             }
         }
-        
+
         protected virtual void OnHitTarget(GameObject target)
         {
             // 히트 처리 로직
             Debug.Log($"[Skill_Strike] Hit target: {target.name}");
-            
+
             // 여기에 데미지 처리, 이펙트 등의 로직 추가
             // 예: target.GetComponent<IHittable>()?.OnHit(damage);
         }
+        
     }
 }
 

@@ -12,6 +12,7 @@ namespace ARPG.Data
     {
         public ushort Version = 1;
 
+        public int PlayerId; // 고유 플레이어 ID
         public int PlayerTableId;
         public int Level;
         public int Exp;
@@ -29,8 +30,9 @@ namespace ARPG.Data
         // 인벤토리 아이템
         public List<ItemData?> _inventory = new List<ItemData?>();
 
-        public void Initialize()
+        public void Initialize(int inPlayerId = 0)
         {
+            PlayerId = inPlayerId;
             PlayerTableId = 1;
             Level = 1;
             Exp = 0;

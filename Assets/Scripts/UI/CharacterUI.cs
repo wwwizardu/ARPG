@@ -106,7 +106,7 @@ namespace ARPG.UI
 
         private void UpdateCharacterStat()
         {
-            AR.s.MyPlayer?.Stat.UpdateStat();
+            AR.s.MyPlayer?.UpdateStat();
 
             ARPG.Creature.Stats? stat = AR.s.MyPlayer?.Stat.GetStats();
             if (stat == null)
@@ -122,7 +122,7 @@ namespace ARPG.UI
             _textStat[(int)GlobalEnum.Stat.AttackMin].text = $"공격력 {stat.AttackMin} - {stat.AttackMax}";
             _textStat[(int)GlobalEnum.Stat.AttackMax].gameObject.SetActive(false);
             _textStat[(int)GlobalEnum.Stat.CriRate].text = $"치명타 확률 {stat.CriRate}%";
-            _textStat[(int)GlobalEnum.Stat.CriDamage].text = $"치명타 피해 {stat.CriDamage}%";
+            _textStat[(int)GlobalEnum.Stat.CriDamageMul].text = $"치명타 피해 {stat.CriDamage}%";
             _textStat[(int)GlobalEnum.Stat.MoveSpeed].text = $"이동 속도 {stat.MoveSpeed}";
             _textStat[(int)GlobalEnum.Stat.AttackSpeed].text = $"공격 속도 {stat.AttackSpeed}";
             _textStat[(int)GlobalEnum.Stat.CastSpeed].text = $"시전 속도 {stat.CastSpeed}";
