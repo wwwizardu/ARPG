@@ -101,7 +101,7 @@ namespace ARPG.Data
 
             // 아이템 장착
             _inventoryEquip[(int)inEquipType] = inItem;
-
+            
             return true;
         }
 
@@ -115,6 +115,11 @@ namespace ARPG.Data
             _inventoryEquip[(int)inEquipType] = null;
 
             return true;
+        }
+
+        public ItemData? GetEquipedItem(GlobalEnum.EquipSlotType inEquipType)
+        {
+            return _inventoryEquip[(int)inEquipType];
         }
 
         public bool Load()

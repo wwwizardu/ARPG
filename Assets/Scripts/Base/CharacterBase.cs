@@ -63,8 +63,8 @@ namespace ARPG.Creature
             OnChangeMovementState(MovementStates.Idle);
 
             _statController.Initialize(this);
-            _characterInfo.SkillController.Initialize(this);
-
+            _characterInfo.Initialize(this);
+            
             Reset();
         }
 
@@ -196,6 +196,11 @@ namespace ARPG.Creature
         public virtual float GetAttackSpeed()
         {
             return 1f;
+        }
+
+        public virtual (int, int) GetAttackDamage()
+        {
+            return (0, 0);
         }
 
         protected virtual void SetAnimation(int inIndex)

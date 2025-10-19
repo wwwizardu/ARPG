@@ -151,17 +151,6 @@ namespace ARPG.Skill
             }
         }
 
-        private void FixedUpdate()
-        {
-            for (int i = 0; i < _activeSkillList.Count; i++)
-            {
-                if(_activeSkillList[i].IsRunning == true)
-                {
-                    _activeSkillList[i].SkillUpdate(Time.fixedDeltaTime);
-                }
-            }
-        }
-
         public bool StartSkill(int inSkillId)
         {
             if (_character == null || _character.State == Creature.CharacterConditions.Dead)

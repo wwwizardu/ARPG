@@ -59,6 +59,14 @@ namespace ARPG.Creature
             return true;
         }
 
+        public override (int, int) GetAttackDamage()
+        {
+            if (_monsterTable?.Weapon == null)
+                return (0, 0);
+
+            return (_monsterTable.Weapon.DamageMin, _monsterTable.Weapon.DamageMax);
+        }
+
         protected override void Dead()
         {
             base.Dead();

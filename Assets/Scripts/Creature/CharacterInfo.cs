@@ -3,6 +3,7 @@ using ARPG.Tables;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.U2D.Animation;
+using UnityEditor.Animations;
 
 namespace ARPG.Creature
 {
@@ -23,5 +24,61 @@ namespace ARPG.Creature
         public Image HpBar => _hpBar;
         public Skill.SkillController SkillController => _skillController;
         public TMPro.TextMeshPro TextName => _textName;
+
+        private float _attackTime = -1;
+
+        public void Initialize(CharacterBase inCharacter)
+        {
+            SkillController.Initialize(inCharacter);
+
+            AnimationClip? clip = GetAnimationClip("Attack");
+            if (clip != null)
+            {
+                _attackTime = GetEventTime(clip, "OnAttackAnimationEvent");
+            }
+        }
+
+        public void OnAttackAnimationEvent()
+        {
+
+        }
+        public float GetAttackEventTime()
+        {
+            return _attackTime;
+        }
+
+        private AnimationClip? GetAnimationClip(string clipName)
+        {
+            if (_animator == null)
+                return null;
+
+            RuntimeAnimatorController ac = _animator.runtimeAnimatorController;
+
+            for (int i = 0; i < ac.animationClips.Length; i++)
+            {
+                if (ac.animationClips[i].name == clipName)
+                {
+                    return ac.animationClips[i];
+                }
+            }
+
+            return null;
+        }
+        
+        private float GetEventTime(AnimationClip clip, string eventName)
+        {
+            AnimationEvent[] events = clip.events;
+
+            for (int i = 0; i < events.Length; i++)
+            {
+                if (events[i].functionName == eventName)
+                {
+                    return events[i].time;
+                }
+            }
+
+            Debug.LogError($"[CharacterInfo] GetEventTime() - cannot found event, Name({eventName})");
+            return -1f; // 이벤트를 찾지 못한 경우
+        }
     }
 }

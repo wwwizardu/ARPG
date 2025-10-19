@@ -11,7 +11,7 @@ namespace ARPG.Creature
         protected CreatureTable? _playerTable = null;
         private Input.ArpgInputAction.PlayerActions? _input = null;
 
-        private PlayerData _playerData;
+        private PlayerData _playerData = null!;
         private Item.Inventory _inventory = new Item.Inventory();
 
         public override Tables.CreatureTable Table => _playerTable!;
@@ -29,9 +29,6 @@ namespace ARPG.Creature
 
             _inventory.Initialize(AR.s.Data.Player._inventory, AR.s.Data.Player._inventory.Count);
 
-            // 기본 스킬을 추가한다.
-            _characterInfo.SkillController.CreateSkill(1);
-
             Debug.Log("ArpgPlayer initialized.");
         }
 
@@ -42,12 +39,12 @@ namespace ARPG.Creature
             Debug.Log("ArpgPlayer reset.");
         }
 
-        public override bool LoadTable(int inId)
+        public override bool LoadTable(int inTableId)
         {
-            _playerTable = AR.s.Data.GetPlayer(inId);
+            _playerTable = AR.s.Data.GetPlayer(inTableId);
             if (_playerTable == null)
             {
-                Debug.LogError($"[CharacterBase] LoadData - CreatureTable not found for Id: {inId}");
+                Debug.LogError($"[CharacterBase] LoadData - CreatureTable not found for Id: {inTableId}");
                 return false;
             }
 
@@ -59,12 +56,20 @@ namespace ARPG.Creature
             if (base.Load(inId) == false)
                 return false;
 
-            // 현재 체력과 마나 설정
-            if (AR.s?.Data?.Player != null)
+            if(AR.s?.Data?.Player == null)
             {
-                _statController.SetHp(AR.s.Data.Player.CurrentHp);
-                _statController.SetMp(AR.s.Data.Player.CurrentMp);
+                Debug.LogError($"[ArpgPlayer] Load - AR.s.Data.Player is null, Id({inId})");
+                return false;
             }
+
+            _playerData = AR.s.Data.Player;
+
+           // 기본 스킬을 추가한다.
+            _characterInfo.SkillController.CreateSkill(1);
+
+            // 현재 체력과 마나 설정
+            _statController.SetHp(_playerData.CurrentHp);
+            _statController.SetMp(_playerData.CurrentMp);
 
             if (_characterInfo.HpBar != null)
             {
@@ -73,13 +78,29 @@ namespace ARPG.Creature
 
             return true;
         }
-        
+
         public override float GetAttackSpeed()
         {
-            
+            // 플레이어는 장착하고 있는 무기의 공격 속도를 가지고 온다.
+            ItemData? item = _playerData.GetEquipedItem(GlobalEnum.EquipSlotType.WeaponLeft);
+            if (item?.Equipment == null)
+            {
+                Debug.LogError("[ArpgPlayer] GetAttackSpeed() - item?.Equipment is null");
+                return 0f;
+            }
 
-            return 1f;
+            return item.Equipment.GetAttackSpeed();
         }
+
+        public override (int, int) GetAttackDamage()
+        {
+            ItemData? item = _playerData.GetEquipedItem(GlobalEnum.EquipSlotType.WeaponLeft);
+            if (item?.Equipment?.Table == null)
+                return (0, 0);
+
+            return (item.Equipment.Table.DamageMin, item.Equipment.Table.DamageMax);
+        }
+
 
         public void Save(PlayerData inPlayerData)
         {

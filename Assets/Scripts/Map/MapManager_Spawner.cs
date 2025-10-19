@@ -80,7 +80,7 @@ namespace ARPG.Map
                     
                     if (monsterId != -1)
                     {
-                        Debug.Log($"Spawned monster {monsterId} at chunk {chunkCoord} position {worldPos}");
+                        //Debug.Log($"Spawned monster {monsterId} at chunk {chunkCoord} position {worldPos}");
                     }
                 }
             }

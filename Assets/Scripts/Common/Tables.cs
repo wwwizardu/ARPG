@@ -72,16 +72,29 @@ namespace ARPG.Tables
     [Serializable]
     public class MonsterTable : CreatureTable
     {
+        [JsonProperty("WeaponId")] public int WeaponId;
         [JsonProperty("AiTableId")] public int AiTableId;
         [JsonProperty("DropId")] public int DropId;
         [JsonProperty("DropRateBonus")] public int DropRateBonus;
         [JsonProperty("DropRarityBonus")] public int DropRarityBonus;
 
+        [JsonIgnore] public EquipmentTable? Weapon;
         [JsonIgnore] public AiTable? AiTable;
+
 
         public override void LoadLate()
         {
             base.LoadLate();
+
+            EquipmentTable? equipmentTable = AR.s.Data?.GetEquipment(WeaponId);
+            if (equipmentTable != null)
+            {
+                Weapon = equipmentTable;
+            }
+            else
+            {
+                Weapon = null;
+            }
 
             AiTable? aiTable = AR.s.Data?.GetAiTable(AiTableId);
             if (aiTable != null)

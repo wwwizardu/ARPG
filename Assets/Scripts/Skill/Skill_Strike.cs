@@ -62,7 +62,8 @@ namespace ARPG.Skill
             }
 #endif
             // 스킬 속도는 1초에 한번을 기준으로 맞춘다. SwingSpeedStat에 따라 증가함
-            _character.PlayAnimation(attackAnimation, false, 1, _character.Stat.GetAttackSpeedMultiplier());
+            float animationSpeed = _character.Stat.GetAttackSpeedMultiplier() * 0.01f;
+            _character.PlayAnimation(attackAnimation, false, 1, animationSpeed);
 
             //Debug.Log($"[SkillSwing] StartSkill - Time({Time.time})");
             return true;
@@ -113,9 +114,8 @@ namespace ARPG.Skill
                         }
 
                         // 데미지 계산 (AttackMin과 AttackMax 사이의 랜덤값)
-                        int minDamage = _character.Stat.GetAttackMin();
-                        int maxDamage = _character.Stat.GetAttackMax();
-                        int damage = UnityEngine.Random.Range(minDamage, maxDamage + 1);
+                        var damageBase = _character.GetAttackDamage();
+                        int damage = UnityEngine.Random.Range(damageBase.Item1, damageBase.Item2 + 1);
 
                         // IHittable의 OnHit 함수 호출
                         hittable.OnHit(_character, damage);

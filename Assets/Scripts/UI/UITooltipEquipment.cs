@@ -7,6 +7,12 @@ namespace ARPG.UI
 {
     public class UITooltipEquipment : UITooltip
     {
+        [SerializeField] private TMPro.TextMeshProUGUI _textQuality;
+        [SerializeField] private TooltipEquipmentWeapon _weapon;
+        [SerializeField] private TooltipEquipmentArmor _armor;
+
+        [SerializeField] private TMPro.TextMeshProUGUI _textRequirement;
+
         [SerializeField] private List<TMPro.TextMeshProUGUI> _textStat;
 
         public void SetEquipmentData(ItemData inItemData)
@@ -15,6 +21,8 @@ namespace ARPG.UI
 
             if (inItemData.Equipment?.StatData == null)
                 return;
+
+            SetEquipment(inItemData);
 
             int statIndex = 0;
 
@@ -44,6 +52,21 @@ namespace ARPG.UI
             for (int i = statIndex; i < _textStat.Count; i++)
             {
                 _textStat[i].gameObject.SetActive(false);
+            }
+        }
+
+        private void SetEquipment(ItemData inItemData)
+        {
+            if (inItemData.Equipment.Table.EquipType == GlobalEnum.EquipSlotType.WeaponLeft ||
+            inItemData.Equipment.Table.EquipType == GlobalEnum.EquipSlotType.WeaponRight)
+            {
+                _weapon.Show(true, inItemData);
+                _armor.Show(false, null);
+            }
+            else
+            {
+                _weapon.Show(false, null);
+                _armor.Show(true, inItemData);
             }
         }
     }

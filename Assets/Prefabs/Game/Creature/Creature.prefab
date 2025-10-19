@@ -85,7 +85,6 @@ GameObject:
   m_Component:
   - component: {fileID: 6262499800842799366}
   - component: {fileID: 8374064567899756726}
-  - component: {fileID: 2413018562664831738}
   - component: {fileID: 7165538220372485980}
   - component: {fileID: 130894395846717856}
   - component: {fileID: -6076854436679264388}
@@ -132,19 +131,6 @@ MonoBehaviour:
   _hpBar: {fileID: 6547489306309771857}
   _skillController: {fileID: 7424376786244143994}
   _textName: {fileID: 0}
---- !u!114 &2413018562664831738
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5491045475900212818}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 36820e0451ab90647a7cd201883f3fb4, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _characterInfo: {fileID: 8374064567899756726}
 --- !u!61 &7165538220372485980
 BoxCollider2D:
   m_ObjectHideFlags: 0
