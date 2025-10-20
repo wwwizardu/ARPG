@@ -22,11 +22,11 @@ namespace ARPG.Tables
     [Serializable]
     public class CreatureTable : TableBase
     {
-        [JsonProperty("Name")] public string Name;
+        [JsonProperty("Name")] public string Name = string.Empty;
 
         [JsonProperty("Stat")] public int StatId;
 
-        [JsonProperty("PrefabName")] public string PrefabName;
+        [JsonProperty("PrefabName")] public string PrefabName = string.Empty;
 
         [JsonIgnore] public StatTable Stat = null!;
 
@@ -139,19 +139,19 @@ namespace ARPG.Tables
     {
         [JsonProperty("Tier")] public int Tier;
 
-        [JsonProperty("Name")] public string Name;
+        [JsonProperty("Name")] public string Name = string.Empty;
 
         [JsonProperty("ItemType")] public GE.ItemType ItemType;
 
         [JsonProperty("Stackable")] public bool Stackable;
 
-        [JsonProperty("Description")] public string Description;
+        [JsonProperty("Description")] public string Description = string.Empty;
 
         [JsonProperty("DropRate")] public int DropRate;
 
         [JsonProperty("EquipmentId")] public int EquipmentId;
 
-        [JsonProperty("SpriteName")] public string SpriteName;
+        [JsonProperty("SpriteName")] public string SpriteName = string.Empty;
 
         [JsonIgnore] public EquipmentTable? Equipment;
 
@@ -225,7 +225,7 @@ namespace ARPG.Tables
     {
         [JsonProperty("Tier")] public int Tier;                 // Drop 아이템 티어
 
-        [JsonProperty("DropList")] public List<DropInfo> DropList;
+        [JsonProperty("DropList")] public List<DropInfo>? DropList;
 
     }
 
@@ -233,15 +233,15 @@ namespace ARPG.Tables
     public class DropEquipmentTable : TableBase
     {
         [JsonProperty("Tier")] public int Tier;                 // Drop 아이템 티어
-        [JsonProperty("DropList")] public List<DropInfo> DropList;
+        [JsonProperty("DropList")] public List<DropInfo>? DropList;
 
     }
 
     [Serializable]
     public class SkillTable : TableBase
     {
-        [JsonProperty("Name")] public string Name;                              // 이름
-        [JsonProperty("Desctiption")] public string Desctiption;                // 설명
+        [JsonProperty("Name")] public string Name = string.Empty;               // 이름
+        [JsonProperty("Desctiption")] public string Desctiption = string.Empty; // 설명
         [JsonProperty("SkillType")] public GE.SkillType SkillType;              // 스킬 타입
         [JsonProperty("SubType")] public GE.SkillSubType SubType;               // 스킬 서브 타입
         [JsonProperty("SkillRangeMin")] public float SkillRangeMin;             // 스킬 최소 사정 거리
@@ -256,10 +256,10 @@ namespace ARPG.Tables
         [JsonProperty("SkillTargetType")] public GE.SkillTargetType SkillTargetType; // 스킬 타겟 타입
         [JsonProperty("SkillTargetRange1")] public float SkillTargetRange1;     // 스킬 타겟 타입 범위 1
         [JsonProperty("SkillTargetRange2")] public float SkillTargetRange2;     // 스킬 타겟 타입 범위 2
-        [JsonProperty("AnimationName")] public string AnimationName;            // 애니메이션 이름
-        [JsonProperty("StartEffectName")] public string StartEffectName;        // 애니메이션 이름
-        [JsonProperty("ActivateName")] public string ActivateName;              // 애니메이션 이름
-        [JsonProperty("HitEffect")] public string HitEffect;                    // 애니메이션 이름
+        [JsonProperty("AnimationName")] public string AnimationName = string.Empty;     // 애니메이션 이름
+        [JsonProperty("StartEffectName")] public string StartEffectName = string.Empty; // 애니메이션 이름
+        [JsonProperty("ActivateName")] public string ActivateName = string.Empty;       // 애니메이션 이름
+        [JsonProperty("HitEffect")] public string HitEffect = string.Empty;             // 애니메이션 이름
         
         
     }
@@ -267,11 +267,50 @@ namespace ARPG.Tables
     [Serializable]
     public class AiTable : TableBase
     {
-        [JsonProperty("Name")] public string Name;                  // 이름
+        [JsonProperty("Name")] public string Name = string.Empty;   // 이름
         [JsonProperty("AiType")] public GE.AiType AiType;           // Ai 타입
         [JsonProperty("SkillId1")] public int SkillId1;             // 스킬 1
         [JsonProperty("SkillId2")] public int SkillId2;             // 스킬 2
         [JsonProperty("SkillId3")] public int SkillId3;             // 스킬 3
+    }
+
+    [Serializable]
+    public class BuffTable : TableBase
+    {
+        [JsonProperty("Name")] public string Name = string.Empty;               // 버프 이름
+        [JsonProperty("Description")] public string Description = string.Empty; // 버프 설명
+        [JsonProperty("BuffType")] public GE.BuffType BuffType;                 // 버프 타입 (버프/디버프)
+        [JsonProperty("Duration")] public float Duration;                       // 지속 시간 (초)
+        [JsonProperty("TickInterval")] public float TickInterval;               // 틱 간격 (DoT/HoT용, 0이면 즉시 적용)
+        [JsonProperty("MaxStack")] public int MaxStack;                         // 최대 스택 수
+        [JsonProperty("IsDispellable")] public bool IsDispellable;              // 최대 스택 수
+        [JsonProperty("BuffEffectId")] public int BuffEffectId;                 // 버프 효과 테이블 Id
+        [JsonProperty("IconName")] public string IconName = string.Empty;       // 아이콘 이름
+
+        [JsonIgnore] public BuffEffectTable? BuffEffectTable;
+
+        public override void LoadLate()
+        {
+            if (AR.s.Data != null)
+            {
+                BuffEffectTable? buffEffectTable = AR.s.Data.GetBuffEffect(BuffEffectId);
+                if (buffEffectTable != null)
+                {
+                    BuffEffectTable = buffEffectTable;
+                }
+                else
+                {
+                    BuffEffectTable = null;
+                }
+            }
+        }
+    }
+
+    [Serializable]
+    public class BuffEffectTable : TableBase
+    {
+        [JsonProperty("Name")] public string Name = string.Empty;               // 버프 이름
+        [JsonProperty("BuffEffectList")] public List<BuffEffect>? BuffEffectList = null;          // 스탯 리스트
     }
 
     [Serializable]
@@ -286,6 +325,13 @@ namespace ARPG.Tables
     {
         [JsonProperty("Type")] public int Id;
         [JsonProperty("Value")] public int Rate;
+    }
+
+    [Serializable]
+    public class BuffEffect
+    {
+        [JsonProperty("Type")] public GE.BuffEffectType Type;
+        [JsonProperty("Value")] public ushort Value;
     }
 
 }

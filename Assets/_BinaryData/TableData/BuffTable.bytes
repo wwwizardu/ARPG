@@ -1,0 +1,1 @@
+[{"Name":"출혈","Description":"출혈 데미지","BuffType":1,"Duration":10.0,"TickInterval":1.0,"MaxStack":1,"IsDispellable":true,"BuffEffectId":1,"IconName":"Blood","Id":1}]

@@ -113,6 +113,17 @@ public class GlobalEnum
         Poison,
     }
 
+    public enum BuffType
+    {
+        Buff,       // 버프 (긍정적 효과)
+        Debuff,     // 디버프 (부정적 효과)
+    }
+
+    public enum BuffEffectType
+    {
+        Blooding,   // 출혈
+    }
+
 
     static public ushort PLAYER_INVENTORY_SLOTCOUNT_MAX = 60;
 }

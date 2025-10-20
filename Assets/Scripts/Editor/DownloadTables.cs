@@ -53,6 +53,10 @@ namespace ARPG.Editor
 
             await DownloadTable<SkillTable>("92727160&range=A:U", 1, SaveType.String);
 
+            await DownloadTable<BuffTable>("127577579&range=A:J", 1, SaveType.String);
+            
+            await DownloadTable<BuffEffectTable>("2104311648&range=A:K", 1, SaveType.String);
+
             foreach (var tableType in _tableDic.Keys)
             {
                 var tableList = (IList)_tableDic[tableType];
@@ -156,6 +160,14 @@ namespace ARPG.Editor
                 else if (table is AiTable aiTable)
                 {
                     ParseAiTable(aiTable, values);
+                }
+                else if (table is BuffTable buffTable)
+                {
+                    ParseBuffTable(buffTable, values);
+                }
+                else if (table is BuffEffectTable buffEffectTable)
+                {
+                    ParseBuffEffectTable(buffEffectTable, values);
                 }
             }
             catch (Exception ex)
@@ -434,6 +446,70 @@ namespace ARPG.Editor
             table.SkillId1 = int.Parse(values[3]);
             table.SkillId2 = int.Parse(values[4]);
             table.SkillId3 = int.Parse(values[5]);
+        }
+
+        private static void ParseBuffTable(BuffTable table, string[] values)
+        {
+            // 전체 범위: A:J = 10개 컬럼
+            if (values.Length < 10)
+            {
+                Debug.LogError($"[ParseBuffTable] Invalid data length. Expected at least 10, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            table.Name = values[1];
+            table.Description = values[2];
+            table.BuffType = (GlobalEnum.BuffType)Enum.Parse(typeof(GlobalEnum.BuffType), values[3]);
+            table.Duration = float.Parse(values[4]);
+            table.TickInterval = float.Parse(values[5]);
+            table.MaxStack = int.Parse(values[6]);
+            table.IsDispellable = values[7].Trim().ToUpper() == "TRUE";
+            table.BuffEffectId = int.Parse(values[8]);
+            table.IconName = values[9];
+        }
+
+        private static void ParseBuffEffectTable(BuffEffectTable table, string[] values)
+        {
+            // 전체 범위: A:K = 11개 컬럼 (Id, Name, 웹용, 4개 효과 * 2컬럼)
+            if (values.Length < 11)
+            {
+                Debug.LogError($"[ParseBuffEffectTable] Invalid data length. Expected at least 11, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            table.Name = values[1];
+
+            // values[2]는 웹에서만 사용
+
+            // BuffEffectList 파싱 (values[3]부터 시작, 최대 4개 효과 * 2 컬럼 = 8개 컬럼)
+            // values[3-4]: BuffEffect 1 (Type, Value)
+            // values[5-6]: BuffEffect 2 (Type, Value)
+            // values[7-8]: BuffEffect 3 (Type, Value)
+            // values[9-10]: BuffEffect 4 (Type, Value)
+            int buffEffectStartIndex = 3;
+            for (int i = 0; i < 4; i++)
+            {
+                int index = buffEffectStartIndex + (i * 2);
+
+                // 배열 범위 체크
+                if (values.Length <= index + 1)
+                    break;
+
+                // 버프 효과 타입이 비어있으면 스킵
+                if (string.IsNullOrEmpty(values[index]))
+                    continue;
+
+                // 첫 번째 효과를 발견했을 때만 리스트 생성
+                table.BuffEffectList ??= new();
+
+                BuffEffect buffEffect = new()
+                {
+                    Type = (GlobalEnum.BuffEffectType)Enum.Parse(typeof(GlobalEnum.BuffEffectType), values[index]),
+                    Value = ushort.Parse(values[index + 1])
+                };
+
+                table.BuffEffectList.Add(buffEffect);
+            }
         }
 
         private static async Task<string> DownloadTableData(string inURL)

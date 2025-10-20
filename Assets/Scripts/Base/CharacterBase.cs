@@ -15,6 +15,7 @@ namespace ARPG.Creature
         protected CreatureTable? _table;
 
         protected StatController _statController = new StatController();
+        protected BuffController _buffController = new BuffController();
 
         protected CharacterConditions _condition = CharacterConditions.None;
         protected MovementStates _moveState = MovementStates.None;
@@ -63,6 +64,7 @@ namespace ARPG.Creature
             OnChangeMovementState(MovementStates.Idle);
 
             _statController.Initialize(this);
+            _buffController.Initialize(this);
             _characterInfo.Initialize(this);
             
             Reset();
@@ -74,6 +76,7 @@ namespace ARPG.Creature
             // _characterInfo.TextName.text = string.Empty;
 
             _statController.Reset();
+            _buffController.Reset();
             _characterInfo.SkillController.Reset();
         }
 
