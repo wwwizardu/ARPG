@@ -336,6 +336,8 @@ namespace ARPG.Creature
 
             _characterInfo.SkillController.SkillUpdate(inDeltaTime);
 
+            _buffController.UpdateTick(inDeltaTime);
+
             
 
             // if (IsOwner == true && GetPlayerTilePosition(out Vector2Int tilePos) == true)
