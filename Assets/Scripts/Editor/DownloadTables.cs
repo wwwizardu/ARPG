@@ -55,7 +55,7 @@ namespace ARPG.Editor
 
             await DownloadTable<BuffTable>("127577579&range=A:J", 1, SaveType.String);
             
-            await DownloadTable<BuffEffectTable>("2104311648&range=A:K", 1, SaveType.String);
+            //await DownloadTable<BuffEffectTable>("2104311648&range=A:K", 1, SaveType.String);
 
             foreach (var tableType in _tableDic.Keys)
             {
@@ -464,8 +464,8 @@ namespace ARPG.Editor
             table.TickInterval = float.Parse(values[5]);
             table.MaxStack = int.Parse(values[6]);
             table.IsDispellable = values[7].Trim().ToUpper() == "TRUE";
-            table.BuffEffectId = int.Parse(values[8]);
-            table.IconName = values[9];
+            table.EffectType = (GlobalEnum.BuffEffectType)Enum.Parse(typeof(GlobalEnum.BuffEffectType), values[8]);
+            table.EffectValue = int.Parse(values[9]);
         }
 
         private static void ParseBuffEffectTable(BuffEffectTable table, string[] values)

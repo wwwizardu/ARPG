@@ -16,6 +16,7 @@ namespace ARPG.Creature
         [SerializeField] protected Image _hpBar;
         [SerializeField] protected Skill.SkillController _skillController;
         [SerializeField] protected TMPro.TextMeshPro _textName;
+        [SerializeField] protected Transform _buffImageRoot;
 
         public SpriteLibraryAsset SpriteLibraryAsset => _spriteLibraryAsset;
         public Sprite CharacterSprite => _characterSprite;
@@ -24,6 +25,8 @@ namespace ARPG.Creature
         public Image HpBar => _hpBar;
         public Skill.SkillController SkillController => _skillController;
         public TMPro.TextMeshPro TextName => _textName;
+
+        public Transform BuffIconRoot => _buffImageRoot;
 
         private float _attackTime = -1;
 

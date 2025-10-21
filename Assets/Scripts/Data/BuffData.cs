@@ -14,6 +14,8 @@ namespace ARPG.Data
 
         public int Damage;
 
+        public BuffEffect? BuffEffect = null;
+
         [NonSerialized] public BuffTable? Table;
     }
 }

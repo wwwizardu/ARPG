@@ -284,26 +284,26 @@ namespace ARPG.Tables
         [JsonProperty("TickInterval")] public float TickInterval;               // 틱 간격 (DoT/HoT용, 0이면 즉시 적용)
         [JsonProperty("MaxStack")] public int MaxStack;                         // 최대 스택 수
         [JsonProperty("IsDispellable")] public bool IsDispellable;              // 최대 스택 수
-        [JsonProperty("BuffEffectId")] public int BuffEffectId;                 // 버프 효과 테이블 Id
-        [JsonProperty("IconName")] public string IconName = string.Empty;       // 아이콘 이름
+        [JsonProperty("BuffEffectId")] public GE.BuffEffectType EffectType;     // 버프 이팩트 타입
+        [JsonProperty("EffectValue")] public int EffectValue;                   // 버프 이팩트 값
+        
+        //[JsonIgnore] public BuffEffectTable? BuffEffectTable;
 
-        [JsonIgnore] public BuffEffectTable? BuffEffectTable;
-
-        public override void LoadLate()
-        {
-            if (AR.s.Data != null)
-            {
-                BuffEffectTable? buffEffectTable = AR.s.Data.GetBuffEffect(BuffEffectId);
-                if (buffEffectTable != null)
-                {
-                    BuffEffectTable = buffEffectTable;
-                }
-                else
-                {
-                    BuffEffectTable = null;
-                }
-            }
-        }
+        // public override void LoadLate()
+        // {
+        //     if (AR.s.Data != null)
+        //     {
+        //         BuffEffectTable? buffEffectTable = AR.s.Data.GetBuffEffect(BuffEffectId);
+        //         if (buffEffectTable != null)
+        //         {
+        //             BuffEffectTable = buffEffectTable;
+        //         }
+        //         else
+        //         {
+        //             BuffEffectTable = null;
+        //         }
+        //     }
+        //}
     }
 
     [Serializable]

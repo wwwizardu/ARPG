@@ -59,6 +59,20 @@ namespace ARPG.Creature
             return true;
         }
 
+        public override void OnHit(CharacterBase? inAttacker, bool isOnHit, GlobalEnum.DamageType inDamageType, int inDamage)
+        {
+            base.OnHit(inAttacker, isOnHit, inDamageType, inDamage);
+
+            if(isOnHit == true)
+            {
+                if (inDamageType == GlobalEnum.DamageType.Physics)
+                {
+                    int bloodingDamage = Mathf.FloorToInt(inDamage * 0.3f);
+                    AddBuff(1, bloodingDamage);
+                }                
+            }
+        }
+
         public override (int, int) GetAttackDamage()
         {
             if (_monsterTable?.Weapon == null)

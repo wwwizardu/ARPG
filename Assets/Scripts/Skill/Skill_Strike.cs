@@ -118,7 +118,7 @@ namespace ARPG.Skill
                         int damage = UnityEngine.Random.Range(damageBase.Item1, damageBase.Item2 + 1);
 
                         // IHittable의 OnHit 함수 호출
-                        hittable.OnHit(_character, damage);
+                        hittable.OnHit(_character, true, GlobalEnum.DamageType.Physics, damage);
                     }
                 }
             }

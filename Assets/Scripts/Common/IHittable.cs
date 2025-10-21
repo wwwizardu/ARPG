@@ -7,7 +7,7 @@ namespace ARPG
     {
         GlobalEnum.TeamType Team { get; }
 
-        public virtual void OnHit(CharacterBase inAttacker, int inDamage)
+        public virtual void OnHit(CharacterBase inAttacker, bool isOnHit, GlobalEnum.DamageType inDamageType, int inDamage)
         {
             Debug.Log($"Hit with {inDamage} damage");
         }

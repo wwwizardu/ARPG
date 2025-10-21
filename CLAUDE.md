@@ -90,6 +90,13 @@ The project uses Unity's Input System with comprehensive action mappings:
 - **Initialize()**: Called once during the first execution to set up the class functionality and initialize resources
 - **Reset()**: Used to reset the class functionality to its initial state, cleaning up resources and stopping ongoing processes
 
+### Method Organization
+- Methods should be organized by access modifier in the following order:
+  1. **public** methods at the top
+  2. **protected** methods in the middle
+  3. **private** methods at the bottom
+- This ordering provides clear visibility of the class's public API and makes it easier to understand the class interface at a glance
+
 ## Best Practices for This Project
 
 - Always test input changes across multiple control schemes (keyboard, gamepad, touch)
@@ -99,12 +106,30 @@ The project uses Unity's Input System with comprehensive action mappings:
 - Keep scenes organized in the Assets/Scenes directory with proper .meta files
 
 ### Performance Optimization
+
+- **Loop Iteration**: Always prefer `for` loops over `foreach` loops in Unity for performance-critical code. The `foreach` statement creates an Enumerator object which generates garbage and adds overhead, while `for` loops use direct index access without allocations.
+  ```csharp
+  // Good: Use for loop
+  List<BuffEffect> effectList = buff.Table.BuffEffectTable.BuffEffectList;
+  for (int i = 0; i < effectList.Count; i++)
+  {
+      BuffEffect effect = effectList[i];
+      // Process effect...
+  }
+
+  // Avoid: foreach creates GC overhead
+  foreach (BuffEffect effect in buff.Table.BuffEffectTable.BuffEffectList)
+  {
+      // Process effect...
+  }
+  ```
+
 - **Distance Calculations**: Use `Vector2.Distance()` or `Vector3.Distance()` only when exact distance values are needed. For distance comparisons (e.g., "is player within range?"), use `Vector2.SqrMagnitude()` or `Vector3.SqrMagnitude()` instead for better performance, as they avoid the expensive square root calculation.
   ```csharp
   // Good: for distance comparison
   float sqrDistance = (target.position - transform.position).sqrMagnitude;
   if (sqrDistance <= detectionRange * detectionRange)
-  
+
   // Avoid: unnecessary square root calculation
   float distance = Vector2.Distance(target.position, transform.position);
   if (distance <= detectionRange)

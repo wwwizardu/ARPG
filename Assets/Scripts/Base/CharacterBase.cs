@@ -5,6 +5,8 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.U2D.Animation;
 using System.Collections;
+using ARPG.Data;
+using System.Collections.Generic;
 
 namespace ARPG.Creature
 {
@@ -34,6 +36,8 @@ namespace ARPG.Creature
 
         protected Coroutine? _LoopUpdateCo = null;
         protected WaitForSeconds _waitForSeconds = new WaitForSeconds(1f);
+
+        protected Dictionary<GlobalEnum.BuffEffectType, GameObject> _buffIconDic = new();
 
         public virtual CreatureTable Table { get {return _table!;} }
 
@@ -138,9 +142,8 @@ namespace ARPG.Creature
             _moveSpeed = _statController.GetStat(GlobalEnum.Stat.MoveSpeed) * (_statController.GetStat(GlobalEnum.Stat.MoveSpeedMul) * 0.01f);
         }
 
-        public virtual void OnHit(CharacterBase inAttacker, int inDamage)
+        public virtual void OnHit(CharacterBase? inAttacker, bool isOnHit, GlobalEnum.DamageType inDamageType, int inDamage)
         {
-            Debug.Log($"[CharacterBase] OnHit - Attacker: {inAttacker.name}, Damage: {inDamage}");
             _statController.DecreaseHp(inDamage);
 
             if (Stat.GetHp() <= 0)
@@ -230,6 +233,38 @@ namespace ARPG.Creature
         public void OnStopSkill(int inSkillId)
         {
             // Handle skill stop logic
+        }
+
+        public void AddBuff(int inBuffId, int inEffectValue = 0)
+        {
+            _buffController.AddBuff(inBuffId, inEffectValue);
+        }
+
+        public virtual void OnAddBuff(BuffEffect inBuff)
+        {
+            GameObject? iconObject = AR.s.Data.GetIconPrefab(inBuff);
+            if(iconObject != null)
+            {
+                if (_buffIconDic.ContainsKey(inBuff.Type) == true)
+                {
+                    AR.s.Data.RestoreIconPrefab(iconObject);
+                }
+                else
+                {
+                    iconObject.transform.SetParent(_characterInfo.BuffIconRoot);
+                    iconObject.transform.localScale = Vector3.one;
+                    _buffIconDic.Add(inBuff.Type, iconObject);
+                }
+            }
+        }
+        
+        public virtual void OnRemoveBuff(BuffEffect inBuff)
+        {
+            if (_buffIconDic.TryGetValue(inBuff.Type, out GameObject? iconObject))
+            {
+                AR.s.Data.RestoreIconPrefab(iconObject);
+                _buffIconDic.Remove(inBuff.Type);
+            }
         }
 
         public virtual void UpdateAnimator()
