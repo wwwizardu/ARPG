@@ -132,8 +132,6 @@ namespace ARPG.Item
                     Prefix = inTable.Equipment.EquipmentStat.Prefix != null ? new List<Stat>(inTable.Equipment.EquipmentStat.Prefix) : new List<Stat>(),
                     Postfix = inTable.Equipment.EquipmentStat.Postfix != null ? new List<Stat>(inTable.Equipment.EquipmentStat.Postfix) : new List<Stat>(),
                 };
-
-                return equipmentData;
             }
             else // 옵션이 생성되어야 하는 장비
             {
@@ -157,6 +155,7 @@ namespace ARPG.Item
             }
 
             equipmentData.Quality = Random.Range(1, 101); // 1~100 사이의 품질 값 설정
+            equipmentData.Update();
 
             return equipmentData;
         }

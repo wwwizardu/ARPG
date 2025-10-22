@@ -47,27 +47,27 @@ namespace ARPG.Map
                     uint tileData = chunk.tiles[x, y];
                     int baseTileType = (int)(tileData & 0xF); // 하위 4비트: 바닥 타입
                     bool isHill = (tileData & (uint)GlobalEnum.TileFlag.Hill) != 0; // 5번째 비트: 언덕 여부
-                    
+
                     int index = y * chunkSize + x; // 2D to 1D index
-                    
+
                     // 바닥 타일 설정
-                    if (baseTileType == (int)GlobalEnum.TileType.Ground)
+                    try
                     {
-                        _tempTileArray[index] = _ruleTile;
+                        if (baseTileType == (int)GlobalEnum.TileType.Ground)
+                        {
+                            _tempTileArray[index] = _ruleTile;
+                        }
+                        else
+                        {
+                            _tempTileArray[index] = _themeTileSet.TileSet.Length > baseTileType ? _themeTileSet.TileSet[baseTileType] : null;
+                        }
                     }
-                    else if (baseTileType == (int)GlobalEnum.TileType.Glass)
+                    catch
                     {
-                        _tempTileArray[index] = _themeTileSet.TileSet.Length > baseTileType ? _themeTileSet.TileSet[baseTileType] : null;
-                    }
-                    else if (baseTileType == (int)GlobalEnum.TileType.StoneGround)
-                    {
-                        _tempTileArray[index] = _themeTileSet.TileSet.Length > baseTileType ? _themeTileSet.TileSet[baseTileType] : null;
-                    }
-                    else
-                    {
+                        Debug.LogError($"[MapManager] RenderChunkToTilemap - exception baseTileType({baseTileType}), Position({x},{y})");
                         _tempTileArray[index] = null;
                     }
-                    
+
                     // 언덕 타일 설정
                     if (isHill)
                     {
@@ -77,7 +77,7 @@ namespace ARPG.Map
                     {
                         _tempHillTileArray[index] = null;
                     }
-                }
+                    }
             }
             
             // 한 번에 모든 타일 설정

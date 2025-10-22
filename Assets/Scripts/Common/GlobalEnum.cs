@@ -4,10 +4,11 @@ public class GlobalEnum
 {
     public enum TileType
     {
-        None = 0,       // 빈 타일
-        Ground = 1,     // 맨땅
-        Glass = 2,      // 잔디
-        StoneGround = 3, // 자갈
+        None = 0,           // 빈 타일
+        Ground = 1,         // 맨땅
+        Glass = 2,          // 잔디
+        StoneGround = 3,    // 돌 바닥
+        Stone = 4,          // 돌 벽
 
     }
 
@@ -43,6 +44,8 @@ public class GlobalEnum
         LightningResist,    // 번개 저항
         PoisonResist,       // 독 저항
         Luck,               // 행운
+        BloodingRate,       // 출혈 확률
+        IgniteRate,         // 점화 확률
     }
 
     public enum EquipSlotType

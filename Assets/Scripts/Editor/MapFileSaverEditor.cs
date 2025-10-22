@@ -119,19 +119,35 @@ public class MapFileSaverEditor : Editor
         EditorGUILayout.Space(5);
         
         // 정보 표시
-        var tilemapField = serializedObject.FindProperty("_tilemap");
-        if (tilemapField.objectReferenceValue == null)
+        var tilemapGroundField = serializedObject.FindProperty("_tilemapGround");
+        var tilemapObjectField = serializedObject.FindProperty("_tilemapObject");
+
+        if (tilemapGroundField.objectReferenceValue == null && tilemapObjectField.objectReferenceValue == null)
         {
-            EditorGUILayout.HelpBox("No Tilemap assigned. Please assign a Tilemap in the inspector.", MessageType.Warning);
+            EditorGUILayout.HelpBox("No Tilemap assigned. Please assign at least one Tilemap in the inspector.", MessageType.Warning);
         }
         else
         {
-            // 현재 타일맵 정보 표시
-            var tilemap = tilemapField.objectReferenceValue as UnityEngine.Tilemaps.Tilemap;
-            if (tilemap != null)
+            // Ground 타일맵 정보 표시
+            if (tilemapGroundField.objectReferenceValue != null)
             {
-                var bounds = tilemap.cellBounds;
-                EditorGUILayout.HelpBox($"Current Tilemap Bounds: Position({bounds.xMin}, {bounds.yMin}), Size({bounds.size.x} x {bounds.size.y})", MessageType.Info);
+                var tilemapGround = tilemapGroundField.objectReferenceValue as UnityEngine.Tilemaps.Tilemap;
+                if (tilemapGround != null)
+                {
+                    var boundsGround = tilemapGround.cellBounds;
+                    EditorGUILayout.HelpBox($"Ground Tilemap Bounds: Position({boundsGround.xMin}, {boundsGround.yMin}), Size({boundsGround.size.x} x {boundsGround.size.y})", MessageType.Info);
+                }
+            }
+
+            // Object 타일맵 정보 표시
+            if (tilemapObjectField.objectReferenceValue != null)
+            {
+                var tilemapObject = tilemapObjectField.objectReferenceValue as UnityEngine.Tilemaps.Tilemap;
+                if (tilemapObject != null)
+                {
+                    var boundsObject = tilemapObject.cellBounds;
+                    EditorGUILayout.HelpBox($"Object Tilemap Bounds: Position({boundsObject.xMin}, {boundsObject.yMin}), Size({boundsObject.size.x} x {boundsObject.size.y})", MessageType.Info);
+                }
             }
         }
 

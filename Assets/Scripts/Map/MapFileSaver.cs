@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.IO;
+using System.Collections.Generic;
 using UnityEngine.Tilemaps;
 #if UNITY_EDITOR
 using UnityEditor;
@@ -10,7 +11,8 @@ namespace ARPG.Map
     public class MapFileSaver : MonoBehaviour
     {
         [Header("Tilemap")]
-        [SerializeField] private Tilemap _tilemap;
+        [SerializeField] private Tilemap _tilemapGround;
+        [SerializeField] private Tilemap _tilemapObject;
 
         [Header("파일 저장 설정")]
         [SerializeField] private string _fileName = "MapData";
@@ -42,14 +44,14 @@ namespace ARPG.Map
         /// <returns>저장 성공 여부</returns>
         public bool SaveMapData(string fileName = null)
         {
-            if (_tilemap == null)
+            if (_tilemapGround == null)
             {
                 Debug.LogError("Tilemap is not assigned");
                 return false;
             }
             
             // 타일맵의 실제 사용 영역 계산
-            BoundsInt bounds = _tilemap.cellBounds;
+            BoundsInt bounds = _tilemapGround.cellBounds;
             if (bounds.size.x == 0 || bounds.size.y == 0)
             {
                 Debug.LogWarning("Tilemap is empty or has no bounds");
@@ -68,10 +70,10 @@ namespace ARPG.Map
                 {
                     int tilemapX = bounds.xMin + x;
                     int tilemapY = bounds.yMin + y;
-                    
+
                     // Unity Tilemap에서 타일을 가져옴
                     Vector3Int tilemapPosition = new Vector3Int(tilemapX, tilemapY, 0);
-                    TileBase tileBase = _tilemap.GetTile(tilemapPosition);
+                    TileBase tileBase = _tilemapGround.GetTile(tilemapPosition);
                     CustomTile customTile = tileBase as CustomTile;
 
                     if(customTile == null)
@@ -89,10 +91,41 @@ namespace ARPG.Map
 
                     // TileBase를 uint로 변환 (간단한 해시 또는 인덱스 기반)
                     uint tileData = MapManager.CombineTileData(0, (GlobalEnum.TileType)customTile.CustomData, 0, 0);
-                    
+
                     // Y좌표를 뒤집어서 저장 (왼쪽 아래가 (0,0)이 되도록)
                     int flippedY = bounds.size.y - 1 - y;
                     mapFileData.SetTile(x, flippedY, tileData);
+                }
+            }
+
+            // Object 타일맵의 타일 데이터를 수집 (오브젝트 레이어)
+            if (_tilemapObject != null)
+            {
+                mapFileData.ClearObjects(); // 기존 오브젝트 리스트 초기화
+
+                for (int x = 0; x < bounds.size.x; x++)
+                {
+                    for (int y = 0; y < bounds.size.y; y++)
+                    {
+                        int tilemapX = bounds.xMin + x;
+                        int tilemapY = bounds.yMin + y;
+
+                        Vector3Int tilemapPosition = new Vector3Int(tilemapX, tilemapY, 0);
+                        TileBase objectTileBase = _tilemapObject.GetTile(tilemapPosition);
+                        CustomTile objectCustomTile = objectTileBase as CustomTile;
+
+                        if (objectCustomTile != null)
+                        {
+                            // Y좌표를 뒤집어서 저장
+                            int flippedY = bounds.size.y - 1 - y;
+
+                            // ObjectType과 ObjectId로 저장 (CustomData 활용)
+                            int objectType = (int)GlobalEnum.TileType.None; // 기본값
+                            int objectId = (int)objectCustomTile.CustomData;
+
+                            mapFileData.AddObject(x, flippedY, objectType, objectId);
+                        }
+                    }
                 }
             }
             
@@ -165,7 +198,7 @@ namespace ARPG.Map
         /// <returns>적용 성공 여부</returns>
         public bool ApplyMapData(MapFileData mapFileData, int? targetX = null, int? targetY = null)
         {
-            if (_tilemap == null || mapFileData == null)
+            if (_tilemapGround == null || mapFileData == null)
             {
                 Debug.LogError("Tilemap is not assigned or MapFileData is null");
                 return false;
@@ -176,7 +209,7 @@ namespace ARPG.Map
             
             try
             {
-                // 지정된 범위에 타일 데이터를 적용
+                // 1. Ground 타일 데이터 적용
                 // 좌표계 변환: 저장할 때 Y축을 뒤집었으므로 로드할 때도 뒤집어서 복원
                 for (int x = 0; x < mapFileData.Width; x++)
                 {
@@ -184,19 +217,49 @@ namespace ARPG.Map
                     {
                         int tilemapX = startX + x;
                         int tilemapY = startY + y;
-                        
+
                         // Y좌표를 뒤집어서 읽기 (저장할 때 뒤집었으므로)
                         int flippedY = mapFileData.Height - 1 - y;
                         uint tileData = mapFileData.GetTile(x, flippedY);
-                        
+
                         // uint를 TileBase로 변환 후 타일맵에 설정
                         CustomTile tile = ConvertUintToTile(tileData);
                         Vector3Int tilemapPosition = new Vector3Int(tilemapX, tilemapY, 0);
-                        _tilemap.SetTile(tilemapPosition, tile);
+                        _tilemapGround.SetTile(tilemapPosition, tile);
                     }
                 }
-                
-                Debug.Log($"Map data applied successfully at position ({startX}, {startY})");
+
+                // 2. Object 타일 데이터 적용
+                if (_tilemapObject != null)
+                {
+                    // 먼저 Object 타일맵 초기화 (기존 오브젝트 제거)
+                    _tilemapObject.ClearAllTiles();
+
+                    // 저장된 오브젝트 복원
+                    List<MapFileObjectData> objects = mapFileData.GetObjects();
+                    foreach (var obj in objects)
+                    {
+                        // Y좌표를 뒤집어서 복원 (저장할 때 뒤집었으므로)
+                        int flippedY = mapFileData.Height - 1 - obj.Y;
+                        int tilemapX = startX + obj.X;
+                        int tilemapY = startY + flippedY;
+
+                        // ObjectId를 CustomData로 가진 타일 생성
+                        CustomTile objectTile = ConvertObjectIdToTile(obj.ObjectId);
+                        if (objectTile != null)
+                        {
+                            Vector3Int tilemapPosition = new Vector3Int(tilemapX, tilemapY, 0);
+                            _tilemapObject.SetTile(tilemapPosition, objectTile);
+                        }
+                    }
+
+                    Debug.Log($"Map data applied successfully: {objects.Count} objects restored at position ({startX}, {startY})");
+                }
+                else
+                {
+                    Debug.Log($"Map data applied successfully at position ({startX}, {startY})");
+                }
+
                 return true;
             }
             catch (System.Exception e)
@@ -229,7 +292,28 @@ namespace ARPG.Map
 
             Debug.LogError($"[MapFileSaver] ConvertUintToTile - TileType {tileType} not found in ThemeTileSet");
             return null;
+        }
 
+        /// <summary>
+        /// ObjectId를 CustomTile로 변환합니다.
+        /// </summary>
+        private CustomTile ConvertObjectIdToTile(int objectId)
+        {
+            if (objectId == 0)
+                return null;
+
+            // ThemeTileSet에서 해당 타일 가져오기
+            if (_themeTileSet != null && _themeTileSet.TileSet != null)
+            {
+                // ObjectId를 TileSet의 인덱스로 사용
+                if (objectId >= 0 && objectId < _themeTileSet.TileSet.Length)
+                {
+                    return _themeTileSet.TileSet[objectId] as CustomTile;
+                }
+            }
+
+            Debug.LogError($"[MapFileSaver] ConvertObjectIdToTile - ObjectId {objectId} not found in ThemeTileSet");
+            return null;
         }
 
         public ThemeTileSet ThemeTileSet => _themeTileSet;

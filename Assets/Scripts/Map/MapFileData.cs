@@ -1,6 +1,7 @@
 using UnityEngine;
 using System;
 using System.IO;
+using System.Collections.Generic;
 
 namespace ARPG.Map
 {
@@ -13,11 +14,13 @@ namespace ARPG.Map
 
         [SerializeField] private string _themeName;
         [SerializeField] private uint[] _tileData;
-        
+
+        [SerializeField] List<MapFileObjectData> _objectList = new();
+
         public int Width => _width;
         public int Height => _height;
         public Vector2Int StartPosition => _startPosition;
-        
+
         public MapFileData(int width, int height, Vector2Int startPosition)
         {
             _width = width;
@@ -25,23 +28,23 @@ namespace ARPG.Map
             _startPosition = startPosition;
             _tileData = new uint[width * height];
         }
-        
+
         public uint GetTile(int x, int y)
         {
             if (x < 0 || x >= _width || y < 0 || y >= _height)
                 return 0;
-            
+
             return _tileData[y * _width + x];
         }
-        
+
         public void SetTile(int x, int y, uint tileValue)
         {
             if (x < 0 || x >= _width || y < 0 || y >= _height)
                 return;
-            
+
             _tileData[y * _width + x] = tileValue;
         }
-        
+
         public uint[,] GetTileData2D()
         {
             uint[,] result = new uint[_width, _height];
@@ -54,7 +57,7 @@ namespace ARPG.Map
             }
             return result;
         }
-        
+
         public void SetTileData2D(uint[,] tileData)
         {
             if (tileData.GetLength(0) != _width || tileData.GetLength(1) != _height)
@@ -62,7 +65,7 @@ namespace ARPG.Map
                 Debug.LogError($"Tile data dimensions ({tileData.GetLength(0)}, {tileData.GetLength(1)}) do not match MapFileData dimensions ({_width}, {_height})");
                 return;
             }
-            
+
             for (int x = 0; x < _width; x++)
             {
                 for (int y = 0; y < _height; y++)
@@ -71,7 +74,29 @@ namespace ARPG.Map
                 }
             }
         }
-        
+
+        public void AddObject(int x, int y, int objectType, int objectId)
+        {
+            MapFileObjectData objectData = new MapFileObjectData
+            {
+                X = x,
+                Y = y,
+                ObjectType = objectType,
+                ObjectId = objectId
+            };
+            _objectList.Add(objectData);
+        }
+
+        public void ClearObjects()
+        {
+            _objectList.Clear();
+        }
+
+        public List<MapFileObjectData> GetObjects()
+        {
+            return _objectList;
+        }
+
         /// <summary>
         /// 바이너리 데이터를 스트림에 저장합니다.
         /// </summary>
@@ -83,7 +108,7 @@ namespace ARPG.Map
             writer.Write(jsonBytes.Length);
             writer.Write(jsonBytes);
         }
-        
+
         /// <summary>
         /// 바이너리 데이터를 스트림에서 읽어옵니다.
         /// </summary>
@@ -95,5 +120,15 @@ namespace ARPG.Map
             string jsonData = System.Text.Encoding.UTF8.GetString(jsonBytes);
             return JsonUtility.FromJson<MapFileData>(jsonData);
         }
+    }
+
+    [System.Serializable]
+    public class MapFileObjectData
+    {
+        public int X;
+        public int Y;
+
+        public int ObjectType;
+        public int ObjectId;
     }
 }

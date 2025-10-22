@@ -9,6 +9,7 @@ namespace ARPG.Map
     {
         [SerializeField] private Tilemap _tileMap;
         [SerializeField] private Tilemap _tileMap_Hill;
+        [SerializeField] private Tilemap _tileMap_Object;
         
         [Header("Map Settings")]
         public int chunkSize = 8;

@@ -20,8 +20,8 @@ namespace ARPG.Monster
         private WaitForSeconds _cleanupInterval = new WaitForSeconds(1f);
 
         [SerializeField] private float _chunkMonsterLifetime = 300f; // 5분
-        [SerializeField] private float _activationDistance = 20f; // 몬스터 활성화 거리
-        [SerializeField] private float _deactivationDistance = 25f; // 몬스터 비활성화 거리 (하이스테리시스)
+        [SerializeField] private float _activationDistance = 25f; // 몬스터 활성화 거리
+        [SerializeField] private float _deactivationDistance = 30f; // 몬스터 비활성화 거리 (하이스테리시스)
         
         private float _activationDistanceSqr;
         private float _deactivationDistanceSqr;

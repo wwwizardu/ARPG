@@ -37,7 +37,7 @@ namespace ARPG.Editor
 
             await DownloadTable<NpcTable>("1460299278&range=A:H", 1, SaveType.String);
 
-            await DownloadTable<StatTable>("318209064&range=A:W", 1, SaveType.String);
+            await DownloadTable<StatTable>("318209064&range=A:Y", 1, SaveType.String);
 
             await DownloadTable<ItemTable>("2064107837&range=A:I", 1, SaveType.String);
             
@@ -212,9 +212,9 @@ namespace ARPG.Editor
 
         private static void ParseStatTable(StatTable table, string[] values)
         {
-            if (values.Length < 22)
+            if (values.Length < 25)
             {
-                Debug.LogError($"[ParseStatTable] Invalid data length. Expected at least 20, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseStatTable] Invalid data length. Expected at least 25, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
@@ -241,6 +241,8 @@ namespace ARPG.Editor
             table.LightningResist = int.Parse(values[20]);
             table.PoisonResist = int.Parse(values[21]);
             table.Luck = int.Parse(values[22]);
+            table.BloodingRate = int.Parse(values[23]);
+            table.IgniteRate = int.Parse(values[24]);
         }
 
         private static void ParseMonsterTable(MonsterTable table, string[] values)

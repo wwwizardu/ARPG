@@ -55,6 +55,8 @@ namespace ARPG.Creature
             _statsBase.LightningResist = _owner.Table.Stat.LightningResist;
             _statsBase.PoisonResist = _owner.Table.Stat.PoisonResist;
             _statsBase.Luck = _owner.Table.Stat.Luck;
+            _statsBase.BloodingRate = _owner.Table.Stat.BloodingRate;
+            _statsBase.IgniteRate = _owner.Table.Stat.IgniteRate;
 
             UpdateStat();
         }
@@ -353,6 +355,18 @@ namespace ARPG.Creature
         {
             get { return this[GlobalEnum.Stat.Luck]; }
             set { this[GlobalEnum.Stat.Luck] = value; }
+        }
+
+        public int BloodingRate
+        {
+            get { return this[GlobalEnum.Stat.BloodingRate]; }
+            set { this[GlobalEnum.Stat.BloodingRate] = value; }
+        }
+
+        public int IgniteRate
+        {
+            get { return this[GlobalEnum.Stat.IgniteRate]; }
+            set { this[GlobalEnum.Stat.IgniteRate] = value; }
         }
 
         public void Add(Stats other)

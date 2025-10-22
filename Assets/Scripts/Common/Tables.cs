@@ -67,6 +67,8 @@ namespace ARPG.Tables
         [JsonProperty("LightningResist")] public int LightningResist;
         [JsonProperty("PoisonResist")] public int PoisonResist;
         [JsonProperty("Luck")] public int Luck;
+        [JsonProperty("BloodingRate")] public int BloodingRate;
+        [JsonProperty("IgniteRate")] public int IgniteRate;
     }
 
     [Serializable]

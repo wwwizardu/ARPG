@@ -1,0 +1,16 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 248a3fba91942d54093c07e7b850ea99, type: 3}
+  m_Name: Stone
+  m_EditorClassIdentifier: 
+  _sprite: {fileID: 21300000, guid: ea8bf9adcced8ed45b08ee0f74f7e443, type: 2}
+  _customData: 4
