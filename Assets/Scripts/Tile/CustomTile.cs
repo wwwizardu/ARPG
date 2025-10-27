@@ -5,6 +5,7 @@ using UnityEngine.Tilemaps;
 public class CustomTile : TileBase
 {
     [SerializeField] private Sprite _sprite;
+    [SerializeField] private GlobalEnum.TileLayer _layer;
     [SerializeField] private uint _customData;
 
     public Sprite Sprite => _sprite;

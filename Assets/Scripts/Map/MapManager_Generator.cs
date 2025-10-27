@@ -8,9 +8,9 @@ namespace ARPG.Map
     {
         private List<Vector2Int> _candidateSpawnPositions = new List<Vector2Int>();
 
-        public static uint CombineTileData(uint currentTile, GlobalEnum.TileType inBaseTileType, uint inHillFlag, uint inMonsterSpawnFlag)
+        public static ulong CombineTileData(ulong currentTile, GlobalEnum.TileType inBaseTileType, uint inHillFlag, uint inMonsterSpawnFlag)
         {
-            return (currentTile & 0xFFFFFFC0) | ((uint)inBaseTileType & 0x0000000F) | inHillFlag | inMonsterSpawnFlag;
+            return (currentTile & 0xFFFFFFC0) | ((ulong)inBaseTileType & 0x0000000F) | inHillFlag | inMonsterSpawnFlag;
         }
 
         private void InitializeChunkPool()
@@ -105,7 +105,7 @@ namespace ARPG.Map
                     }
 
                     // 타일 데이터 조합
-                    uint currentTile = chunk.tiles[x, y];
+                    ulong currentTile = chunk.tiles[x, y];
                     chunk.tiles[x, y] = CombineTileData(currentTile, baseTileType, hillFlag, monsterSpawnFlag);
                 }
             }
@@ -114,12 +114,12 @@ namespace ARPG.Map
             OverlayMapFileData(chunk);
 
             // 2.1 MapFileData의 오브젝트 로드
-            LoadMapFileObjects(chunk);
+            //LoadMapFileObjects(chunk);
 
             // 3. 후보 위치 중 최종적으로 몬스터 스폰 플래그가 유지된 위치만 수집
             foreach (var pos in _candidateSpawnPositions)
             {
-                uint tileData = chunk.tiles[pos.x, pos.y];
+                ulong tileData = chunk.tiles[pos.x, pos.y];
                 if ((tileData & (uint)GlobalEnum.TileFlag.MonsterSpawn) != 0)
                 {
                     chunk.monsterSpawnPositions.Add(pos);
@@ -168,7 +168,7 @@ namespace ARPG.Map
                         int mapFileLocalY = worldY - mapFileWorldStart.y;
 
                         // MapFileData에서 타일 데이터 가져와서 청크에 덮어쓰기
-                        uint mapTileData = mapFileData.GetTile(mapFileLocalX, mapFileLocalY);
+                        ulong mapTileData = mapFileData.GetTile(mapFileLocalX, mapFileLocalY);
                         if (mapTileData != 0) // 0이 아닌 경우에만 덮어쓰기
                         {
                             chunk.tiles[chunkLocalX, chunkLocalY] = mapTileData;

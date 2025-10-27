@@ -19,6 +19,7 @@ namespace ARPG.Map
         private BoundsInt _tempArea;
         private TileBase[] _tempTileArray;
         private TileBase[] _tempHillTileArray;
+        private TileBase[] _tempObjectTileArray;
         private TileBase[] _tempNullArray;
 
         private void RenderChunkToTilemap(MapChunkData chunk)
@@ -30,10 +31,15 @@ namespace ARPG.Map
             {
                 _tempTileArray = new TileBase[chunkSize * chunkSize];
             }
-            
+
             if (_tempHillTileArray == null || _tempHillTileArray.Length != chunkSize * chunkSize)
             {
                 _tempHillTileArray = new TileBase[chunkSize * chunkSize];
+            }
+
+            if (_tempObjectTileArray == null || _tempObjectTileArray.Length != chunkSize * chunkSize)
+            {
+                _tempObjectTileArray = new TileBase[chunkSize * chunkSize];
             }
             
             // 청크 영역 정의
@@ -44,9 +50,10 @@ namespace ARPG.Map
             {
                 for (int y = 0; y < chunkSize; y++)
                 {
-                    uint tileData = chunk.tiles[x, y];
+                    ulong tileData = chunk.tiles[x, y];
                     int baseTileType = (int)(tileData & 0xF); // 하위 4비트: 바닥 타입
                     bool isHill = (tileData & (uint)GlobalEnum.TileFlag.Hill) != 0; // 5번째 비트: 언덕 여부
+                    ulong objectId = (tileData & (ulong)GlobalEnum.TileFlag.ObjectTypeMask) >> 56; // 56~63번째 비트: 오브젝트 ID
 
                     int index = y * chunkSize + x; // 2D to 1D index
 
@@ -77,7 +84,17 @@ namespace ARPG.Map
                     {
                         _tempHillTileArray[index] = null;
                     }
+
+                    // 오브젝트 타일 설정
+                    if (objectId > 0 && _themeTileSet.ObjectSet != null && objectId < (ulong)_themeTileSet.ObjectSet.Length)
+                    {
+                        _tempObjectTileArray[index] = _themeTileSet.ObjectSet[objectId];
                     }
+                    else
+                    {
+                        _tempObjectTileArray[index] = null;
+                    }
+                }
             }
             
             // 한 번에 모든 타일 설정
@@ -85,6 +102,10 @@ namespace ARPG.Map
             if (_tileMap_Hill != null)
             {
                 _tileMap_Hill.SetTilesBlock(_tempArea, _tempHillTileArray);
+            }
+            if (_tileMap_Object != null)
+            {
+                _tileMap_Object.SetTilesBlock(_tempArea, _tempObjectTileArray);
             }
         }
         
@@ -103,11 +124,15 @@ namespace ARPG.Map
             _tempStartPos.Set(chunk.chunkX * chunkSize, chunk.chunkY * chunkSize, 0);
             _tempArea = new BoundsInt(_tempStartPos.x, _tempStartPos.y, 0, chunkSize, chunkSize, 1);
             
-            // 기본 타일맵과 Hill 타일맵에서 모든 타일 제거
+            // 기본 타일맵과 Hill 타일맵, Object 타일맵에서 모든 타일 제거
             _tileMap.SetTilesBlock(_tempArea, _tempNullArray);
             if (_tileMap_Hill != null)
             {
                 _tileMap_Hill.SetTilesBlock(_tempArea, _tempNullArray);
+            }
+            if (_tileMap_Object != null)
+            {
+                _tileMap_Object.SetTilesBlock(_tempArea, _tempNullArray);
             }
         }
     }

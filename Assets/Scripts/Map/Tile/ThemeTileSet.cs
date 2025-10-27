@@ -12,4 +12,7 @@ public class ThemeTileSet : ScriptableObject
     [Header("Tiles")]
     public TileBase[] TileSet;
 
+    [Header("Object")]
+    public TileBase[] ObjectSet;
+
 }

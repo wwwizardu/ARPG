@@ -96,7 +96,7 @@ namespace ARPG.Map
         
         public GlobalEnum.TileType GetTileTypeAt(int worldX, int worldY)
         {
-            uint tileData = GetTileAt(worldX, worldY);
+            ulong tileData = GetTileAt(worldX, worldY);
             if (tileData == 0) return GlobalEnum.TileType.Ground; // 기본값
             
             return (GlobalEnum.TileType)(tileData & 0xF);
@@ -104,11 +104,11 @@ namespace ARPG.Map
         
         public bool IsHillAt(int worldX, int worldY)
         {
-            uint tileData = GetTileAt(worldX, worldY);
+            ulong tileData = GetTileAt(worldX, worldY);
             return (tileData & (uint)GlobalEnum.TileFlag.Hill) != 0;
         }
         
-        public uint GetTileAt(int worldX, int worldY)
+        public ulong GetTileAt(int worldX, int worldY)
         {
             int chunkX = Mathf.FloorToInt((float)worldX / chunkSize);
             int chunkY = Mathf.FloorToInt((float)worldY / chunkSize);

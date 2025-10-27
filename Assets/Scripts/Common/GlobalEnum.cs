@@ -2,21 +2,35 @@ using UnityEngine;
 
 public class GlobalEnum
 {
+    public enum TileLayer
+    {
+        Ground,
+        Object,
+    }
+
     public enum TileType
     {
         None = 0,           // 빈 타일
         Ground = 1,         // 맨땅
         Glass = 2,          // 잔디
         StoneGround = 3,    // 돌 바닥
-        Stone = 4,          // 돌 벽
-
+        
     }
 
-    public enum TileFlag
+    public enum ObjectType
+    {
+        None = 0,           // 빈 타일
+        Stone = 1,          // 돌 벽
+    }
+
+    public enum TileFlag : ulong
     {
         None = 0,
-        Hill = 1 << 4,  // 5번째 비트 (16 = 0x10)
-        MonsterSpawn = 1 << 5,  // 6번째 비트 (32 = 0x20)
+        Hill = 1UL << 4,  // 5번째 비트 (16 = 0x10)
+        MonsterSpawn = 1UL << 5,  // 6번째 비트 (32 = 0x20)
+
+        // 오브젝트 타입 (맨 앞 8비트, 56~63번째 비트)
+        ObjectTypeMask = 0xFFUL << 56,  // 오브젝트 타입 마스크 (8비트, 최대 255개 타입)
     }
 
     public enum Stat

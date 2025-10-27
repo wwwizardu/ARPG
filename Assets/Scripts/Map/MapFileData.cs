@@ -13,7 +13,7 @@ namespace ARPG.Map
         [SerializeField] private Vector2Int _startPosition;
 
         [SerializeField] private string _themeName;
-        [SerializeField] private uint[] _tileData;
+        [SerializeField] private ulong[] _tileData;
 
         [SerializeField] List<MapFileObjectData> _objectList = new();
 
@@ -26,10 +26,10 @@ namespace ARPG.Map
             _width = width;
             _height = height;
             _startPosition = startPosition;
-            _tileData = new uint[width * height];
+            _tileData = new ulong[width * height];
         }
 
-        public uint GetTile(int x, int y)
+        public ulong GetTile(int x, int y)
         {
             if (x < 0 || x >= _width || y < 0 || y >= _height)
                 return 0;
@@ -37,7 +37,7 @@ namespace ARPG.Map
             return _tileData[y * _width + x];
         }
 
-        public void SetTile(int x, int y, uint tileValue)
+        public void SetTile(int x, int y, ulong tileValue)
         {
             if (x < 0 || x >= _width || y < 0 || y >= _height)
                 return;
@@ -45,9 +45,9 @@ namespace ARPG.Map
             _tileData[y * _width + x] = tileValue;
         }
 
-        public uint[,] GetTileData2D()
+        public ulong[,] GetTileData2D()
         {
-            uint[,] result = new uint[_width, _height];
+            ulong[,] result = new ulong[_width, _height];
             for (int x = 0; x < _width; x++)
             {
                 for (int y = 0; y < _height; y++)
@@ -58,7 +58,7 @@ namespace ARPG.Map
             return result;
         }
 
-        public void SetTileData2D(uint[,] tileData)
+        public void SetTileData2D(ulong[,] tileData)
         {
             if (tileData.GetLength(0) != _width || tileData.GetLength(1) != _height)
             {

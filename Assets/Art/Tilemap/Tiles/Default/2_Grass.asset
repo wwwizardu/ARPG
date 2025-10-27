@@ -10,7 +10,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 248a3fba91942d54093c07e7b850ea99, type: 3}
-  m_Name: Stone
+  m_Name: 2_Grass
   m_EditorClassIdentifier: 
-  _sprite: {fileID: 21300000, guid: ea8bf9adcced8ed45b08ee0f74f7e443, type: 2}
-  _customData: 4
+  _sprite: {fileID: -1693407351, guid: f53bdf35b8a6ac9469eb7c4944d074eb, type: 3}
+  _customData: 2

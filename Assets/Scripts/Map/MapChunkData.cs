@@ -30,13 +30,13 @@ namespace ARPG.Map
     {
         public int chunkX;
         public int chunkY;
-        public uint[,] tiles;
+        public ulong[,] tiles;
         public bool isActive;
         public List<Vector2Int> monsterSpawnPositions;
-        
+
         public MapChunkData(int chunkSize)
         {
-            tiles = new uint[chunkSize, chunkSize];
+            tiles = new ulong[chunkSize, chunkSize];
             monsterSpawnPositions = new List<Vector2Int>();
             isActive = false;
         }

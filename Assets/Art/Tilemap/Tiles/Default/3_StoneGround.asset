@@ -10,7 +10,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 248a3fba91942d54093c07e7b850ea99, type: 3}
-  m_Name: StoneGround
+  m_Name: 3_StoneGround
   m_EditorClassIdentifier: 
   _sprite: {fileID: 5835110277255142420, guid: 3d6294ac8eeb579439be0cfe3844a7d0, type: 3}
   _customData: 3
