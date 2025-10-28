@@ -89,10 +89,8 @@ namespace ARPG.Map
                         continue;
                     }
 
-                    // 2. Ground 타일 데이터 생성
-                    ulong tileData = MapManager.CombineTileData(0, (GlobalEnum.TileType)customTile.CustomData, 0, 0);
-
-                    // 3. Object 타일이 있으면 ObjectTypeMask 영역에 오브젝트 ID 추가
+                    // 2. Object 타일 데이터 가져오기
+                    ulong objectId = 0;
                     if (_tilemapObject != null)
                     {
                         TileBase objectTileBase = _tilemapObject.GetTile(tilemapPosition);
@@ -100,11 +98,12 @@ namespace ARPG.Map
 
                         if (objectCustomTile != null)
                         {
-                            // ObjectId를 ObjectTypeMask 위치(56~63번째 비트)에 저장
-                            ulong objectId = (ulong)objectCustomTile.CustomData;
-                            tileData |= (objectId << 56);
+                            objectId = (ulong)objectCustomTile.CustomData;
                         }
                     }
+
+                    // 3. Ground 타일과 Object 타일 데이터를 통합하여 생성
+                    ulong tileData = MapManager.CombineTileData(0, (GlobalEnum.TileType)customTile.CustomData, 0, 0, objectId);
 
                     // 4. Y좌표를 뒤집어서 저장 (왼쪽 아래가 (0,0)이 되도록)
                     int flippedY = bounds.size.y - 1 - y;
@@ -236,8 +235,8 @@ namespace ARPG.Map
             if (tileData == 0)
                 return null;
 
-            // 하위 4비트를 TileType으로 변환
-            GlobalEnum.TileType tileType = (GlobalEnum.TileType)(tileData & 0xF);
+            // 하위 10비트를 TileType으로 변환 (GroundLayerMask)
+            GlobalEnum.TileType tileType = (GlobalEnum.TileType)(tileData & (ulong)GlobalEnum.TileFlag.GroundLayerMask);
 
             // ThemeTileSet에서 해당 타일 가져오기
             if (_themeTileSet != null && _themeTileSet.TileSet != null)
@@ -258,8 +257,8 @@ namespace ARPG.Map
         /// </summary>
         private CustomTile ConvertObjectIdToTile(ulong tileData)
         {
-            // ObjectTypeMask를 사용해 오브젝트 ID 추출 (56~63번째 비트)
-            ulong objectId = (tileData & (ulong)GlobalEnum.TileFlag.ObjectTypeMask) >> 56;
+            // ObjectLayerMask를 사용해 오브젝트 ID 추출 (10~19번째 비트)
+            ulong objectId = (tileData & (ulong)GlobalEnum.TileFlag.ObjectLayerMask) >> 10;
 
             if (objectId == 0)
                 return null;

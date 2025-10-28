@@ -13,6 +13,9 @@ namespace ARPG.Map
 
         [Header("언덕 룰 타일")]
         [SerializeField] private RuleTile _ruleTile_Hill;
+
+        [Header("오브젝트 룰 타일")]
+        [SerializeField] private RuleTile _ruleTile_Object;
         
         // 타일맵 렌더링용 재사용 변수들
         private Vector3Int _tempStartPos;
@@ -51,9 +54,9 @@ namespace ARPG.Map
                 for (int y = 0; y < chunkSize; y++)
                 {
                     ulong tileData = chunk.tiles[x, y];
-                    int baseTileType = (int)(tileData & 0xF); // 하위 4비트: 바닥 타입
-                    bool isHill = (tileData & (uint)GlobalEnum.TileFlag.Hill) != 0; // 5번째 비트: 언덕 여부
-                    ulong objectId = (tileData & (ulong)GlobalEnum.TileFlag.ObjectTypeMask) >> 56; // 56~63번째 비트: 오브젝트 ID
+                    int baseTileType = (int)(tileData & (ulong)GlobalEnum.TileFlag.GroundLayerMask); // 하위 10비트: 바닥 타입
+                    bool isHill = (tileData & (ulong)GlobalEnum.TileFlag.Hill) != 0; // 20번째 비트: 언덕 여부
+                    ulong objectId = (tileData & (ulong)GlobalEnum.TileFlag.ObjectLayerMask) >> 10; 
 
                     int index = y * chunkSize + x; // 2D to 1D index
 

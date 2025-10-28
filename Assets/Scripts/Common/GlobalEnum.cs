@@ -26,11 +26,21 @@ public class GlobalEnum
     public enum TileFlag : ulong
     {
         None = 0,
-        Hill = 1UL << 4,  // 5번째 비트 (16 = 0x10)
-        MonsterSpawn = 1UL << 5,  // 6번째 비트 (32 = 0x20)
 
-        // 오브젝트 타입 (맨 앞 8비트, 56~63번째 비트)
-        ObjectTypeMask = 0xFFUL << 56,  // 오브젝트 타입 마스크 (8비트, 최대 255개 타입)
+        // 하위 10비트: Ground Layer (0-9번 비트, 최대 1024개 타입)
+        GroundLayerMask = 0x3FFUL,  // 0x3FF = 0b1111111111 (10비트)
+
+        // 다음 10비트: Object Layer (10-19번 비트, 최대 1024개 타입)
+        ObjectLayerMask = 0x3FFUL << 10,  // 0xFFC00 (10비트)
+
+        // 다음 1비트: Hill (20번 비트)
+        Hill = 1UL << 20,
+
+        // 다음 1비트: MonsterSpawn (21번 비트)
+        MonsterSpawn = 1UL << 21,
+
+        // 다음 1비트: Blocked (22번 비트) - 이동 불가능
+        Blocked = 1UL << 22,
     }
 
     public enum Stat

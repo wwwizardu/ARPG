@@ -8,9 +8,21 @@ namespace ARPG.Map
     {
         private List<Vector2Int> _candidateSpawnPositions = new List<Vector2Int>();
 
-        public static ulong CombineTileData(ulong currentTile, GlobalEnum.TileType inBaseTileType, uint inHillFlag, uint inMonsterSpawnFlag)
+        public static ulong CombineTileData(ulong currentTile, GlobalEnum.TileType inBaseTileType, uint inHillFlag, uint inMonsterSpawnFlag, ulong inObjectId = 0)
         {
-            return (currentTile & 0xFFFFFFC0) | ((ulong)inBaseTileType & 0x0000000F) | inHillFlag | inMonsterSpawnFlag;
+            // 기존 타일 데이터에서 수정할 비트들을 제외한 나머지 비트 유지
+            // GroundLayerMask(0-9비트), ObjectLayerMask(10-19비트), Hill(20비트), MonsterSpawn(21비트)를 제거
+            ulong preservedBits = currentTile & ~((ulong)GlobalEnum.TileFlag.GroundLayerMask |
+                                                  (ulong)GlobalEnum.TileFlag.ObjectLayerMask |
+                                                  (ulong)GlobalEnum.TileFlag.Hill |
+                                                  (ulong)GlobalEnum.TileFlag.MonsterSpawn);
+
+            // 새로운 값 설정: 바닥 타입(0-9비트) + 오브젝트 ID(10-19비트) + Hill 플래그 + MonsterSpawn 플래그
+            return preservedBits |
+                   ((ulong)inBaseTileType & (ulong)GlobalEnum.TileFlag.GroundLayerMask) |
+                   ((inObjectId << 10) & (ulong)GlobalEnum.TileFlag.ObjectLayerMask) |
+                   inHillFlag |
+                   inMonsterSpawnFlag;
         }
 
         private void InitializeChunkPool()
