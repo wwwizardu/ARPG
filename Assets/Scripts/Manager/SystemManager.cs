@@ -21,6 +21,10 @@ namespace ARPG.Systems
             System_Move moveSystem = new System_Move();
             RegisterSystems(moveSystem);
 
+            // Render System (Update, 가장 마지막)
+            System_Render renderSystem = new System_Render();
+            RegisterSystems(renderSystem);
+
             // Priority 값이 작은 순서대로 정렬
             _systems.Sort((a, b) => a.Priority.CompareTo(b.Priority));
             _updateSystems.Sort((a, b) => a.Priority.CompareTo(b.Priority));
@@ -32,7 +36,7 @@ namespace ARPG.Systems
             // 모든 시스템 정리
             for (int i = 0; i < _systems.Count; i++)
             {
-                _systems[i].Dispose();
+                _systems[i].OnReset();
             }
 
             _systems.Clear();
@@ -74,22 +78,35 @@ namespace ARPG.Systems
             {
                 _fixedUpdateSystems.Remove(fixedUpdateSystem);
             }
-
-            inSystem.Dispose();
         }
 
-        public ISystem? GetSystem<T>() where T : ISystem
+        public T? GetSystem<T>() where T : struct, ISystem
+        {
+            for (int i = 0; i < _systems.Count; i++)
+            {
+                if (_systems[i] is T system)
+                {
+                    return system;
+                }
+            }
+
+            return null;
+        }
+
+        // System 존재 확인
+        public bool HasSystem<T>() where T : struct, ISystem
         {
             for (int i = 0; i < _systems.Count; i++)
             {
                 if (_systems[i] is T)
                 {
-                    return _systems[i];
+                    return true;
                 }
             }
 
-            return default;
+            return false;
         }
+
 
         // Update: 매 프레임마다 실행 (입력, 렌더링, UI 등)
         private void Update()

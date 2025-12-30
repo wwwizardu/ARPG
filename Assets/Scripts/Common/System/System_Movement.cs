@@ -16,6 +16,11 @@ namespace ARPG.Systems
             Debug.Log("System_Movement Created");
         }
 
+        public void OnReset()
+        {
+            Debug.Log("System_Movement Reset called");
+        }
+
         public void Initialize(ComponentManager componentManager)
         {
             _componentManager = componentManager;

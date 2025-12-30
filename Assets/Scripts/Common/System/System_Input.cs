@@ -1,3 +1,4 @@
+#nullable enable
 using ARPG.Component;
 using ARPG.Systems;
 using UnityEngine;
@@ -12,18 +13,20 @@ namespace ARPG.Systems
         private Input.ArpgInputAction.PlayerActions? _input;
 
         private ComponentManager _componentManager;
-        private Entity _playerEntity;
+        private int _playerEntityId;
 
         public void OnCreate()
         {
             Debug.Log("System_Input Created");
         }
 
-        public void Initialize(ComponentManager componentManager, Entity playerEntity)
+        public void OnReset()
         {
             _input = AR.s.UI.Input.Player;
-            _componentManager = componentManager;
-            _playerEntity = playerEntity;
+            _componentManager = AR.s.Component;
+            _playerEntityId = -1;
+
+            Debug.Log("System_Input Reset");
         }
 
         // Update: 매 프레임마다 입력 수집
@@ -32,6 +35,19 @@ namespace ARPG.Systems
             if (_input == null || _componentManager == null)
                 return;
 
+            if (_playerEntityId == -1)
+            {
+                var inputComponentPool = AR.s.Component.GetComponentPool<InputComponent>();
+                if (inputComponentPool.Count > 0)
+                {
+                    _playerEntityId = inputComponentPool.GetEntityId(0);
+                }
+                else
+                {
+                    return; // 플레이어 엔티티가 아직 없음
+                }
+            }
+
             if (_input.Value.Inventory.WasPressedThisFrame() == true) // 인벤토리 열기
             {
                 var characterUI = AR.s.UI.Show<UI.UICharacter>(AddressablePath.Character, UIManager.Layer.Main);
@@ -39,7 +55,7 @@ namespace ARPG.Systems
                     return;
             }
 
-            if (AR.s.Component.TryGetComponent<InputComponent>(_playerEntity, out var inputComponent) == false)
+            if (AR.s.Component.TryGetComponent<InputComponent>(_playerEntityId, out var inputComponent) == false)
                 return;
 
             inputComponent.MoveDirection = _input.Value.Move.ReadValue<Vector2>();
@@ -47,25 +63,9 @@ namespace ARPG.Systems
             inputComponent.IsAttacking = _input.Value.Attack.IsPressed();
             inputComponent.IsInteracting = _input.Value.Interact.WasPressedThisFrame();
             inputComponent.IsSprinting = _input.Value.Sprint.IsPressed();
-            
+
             // 업데이트된 입력 컴포넌트 저장
-            _componentManager.SetComponent(_playerEntity, inputComponent);
-        }
-
-        public bool RegisterEntity(IEntity inEntity)
-        {
-            // InputSystem은 플레이어 엔티티만 처리
-            return false;
-        }
-
-        public bool UnregisterEntity(IEntity inEntity)
-        {
-            return false;
-        }
-
-        public void Dispose()
-        {
-            _componentManager = null;
+            _componentManager.SetComponent(_playerEntityId, inputComponent);
         }
     }
 }

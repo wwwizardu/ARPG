@@ -12,9 +12,10 @@ namespace ARPG.Systems
             Debug.Log("ISystem OnCreate called");
         }
 
-        public bool RegisterEntity(IEntity inEntity);
-        public bool UnregisterEntity(IEntity inEntity);
-        public void Dispose();
+        public void OnReset()
+        {
+            Debug.Log("ISystem OnReset called");
+        }
     }
 
     // Update 매 프레임마다 실행 (입력, 렌더링, UI 등)

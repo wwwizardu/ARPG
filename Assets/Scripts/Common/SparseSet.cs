@@ -180,13 +180,41 @@ namespace ARPG
             _count--;
         }
     
-    // 순회: 메모리 연속적이라 캐시 효율 좋음!
-    public void ForEach(System.Action<T> action)
-    {
-        for (int i = 0; i < _count; i++)
+        // 순회: 메모리 연속적이라 캐시 효율 좋음!
+        public void ForEach(System.Action<T> action)
         {
-            action(_data[i]);
+            for (int i = 0; i < _count; i++)
+            {
+                action(_data[i]);
+            }
         }
-    }
+
+        // EntityId와 Component를 함께 순회
+        public void ForEach(System.Action<int, T> action)
+        {
+            for (int i = 0; i < _count; i++)
+            {
+                int entityId = _dense[i];
+                action(entityId, _data[i]);
+            }
+        }
+
+        // EntityId 가져오기 (인덱스 기반)
+        public int GetEntityId(int index)
+        {
+            if (index < 0 || index >= _count)
+                return -1;
+
+            return _dense[index];
+        }
+
+        // 인덱스로 데이터 가져오기
+        public T GetByIndex(int index)
+        {
+            if (index < 0 || index >= _count)
+                return default;
+
+            return _data[index];
+        }
     }
 }

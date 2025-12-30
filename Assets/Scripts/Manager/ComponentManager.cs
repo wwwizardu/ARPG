@@ -21,34 +21,34 @@ namespace ARPG.Component
         }
 
         // 컴포넌트 추가/업데이트 (존재하면 업데이트, 없으면 추가)
-        public void AddComponent<T>(Entity entity, T component) where T : struct
+        public void AddComponent<T>(int entityId, T component) where T : struct
         {
             SparseSet<T> pool = GetOrCreatePool<T>();
-            pool.Add(entity.Id, component);
+            pool.Add(entityId, component);
         }
 
         // 컴포넌트 설정 (존재하면 업데이트, 없으면 추가)
-        public void SetComponent<T>(Entity entity, T component) where T : struct
+        public void SetComponent<T>(int entityId, T component) where T : struct
         {
             SparseSet<T> pool = GetOrCreatePool<T>();
-            pool.Set(entity.Id, component);
+            pool.Set(entityId, component);
         }
 
         // 컴포넌트 조회
-        public T GetComponent<T>(Entity entity) where T : struct
+        public T GetComponent<T>(int entityId) where T : struct
         {
             SparseSet<T> pool = GetPool<T>();
-            return pool != null ? pool.Get(entity.Id) : default;
+            return pool != null ? pool.Get(entityId) : default;
         }
 
         // 컴포넌트 조회 시도 (Unity 패턴, 가장 효율적)
-        public bool TryGetComponent<T>(Entity entity, out T component) where T : struct
+        public bool TryGetComponent<T>(int entityId, out T component) where T : struct
         {
             SparseSet<T> pool = GetPool<T>();
 
-            if (pool != null && pool.Contains(entity.Id))
+            if (pool != null && pool.Contains(entityId))
             {
-                component = pool.Get(entity.Id);
+                component = pool.Get(entityId);
                 return true;
             }
 
@@ -57,17 +57,17 @@ namespace ARPG.Component
         }
 
         // 컴포넌트 제거
-        public void RemoveComponent<T>(Entity entity) where T : struct
+        public void RemoveComponent<T>(int entityId) where T : struct
         {
             SparseSet<T> pool = GetPool<T>();
-            pool?.Remove(entity.Id);
+            pool?.Remove(entityId);
         }
 
         // 컴포넌트 존재 확인
-        public bool HasComponent<T>(Entity entity) where T : struct
+        public bool HasComponent<T>(int entityId) where T : struct
         {
             SparseSet<T> pool = GetPool<T>();
-            return pool != null && pool.Contains(entity.Id);
+            return pool != null && pool.Contains(entityId);
         }
 
         // System이 특정 타입의 모든 컴포넌트에 접근할 때 사용
