@@ -192,6 +192,7 @@ MonoBehaviour:
   _skillController: {fileID: 7424376786244143994}
   _textName: {fileID: 0}
   _buffImageRoot: {fileID: 3617537922088778943}
+  _boxCollider: {fileID: 7165538220372485980}
 --- !u!61 &7165538220372485980
 BoxCollider2D:
   m_ObjectHideFlags: 0

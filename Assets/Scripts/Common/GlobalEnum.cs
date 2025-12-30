@@ -2,6 +2,13 @@ using UnityEngine;
 
 public class GlobalEnum
 {
+    public enum EntityType
+    {
+        Actor,
+        Item,
+        SkillEffect,
+    }
+
     public enum TileLayer
     {
         Ground,

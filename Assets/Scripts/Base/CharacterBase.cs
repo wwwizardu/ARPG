@@ -10,14 +10,17 @@ using System.Collections.Generic;
 
 namespace ARPG.Creature
 {
-    public abstract class CharacterBase : MonoBehaviour, IHittable
+    public abstract class CharacterBase : MonoBehaviour, IMovable, IHittable
     {
+        [SerializeField] protected GlobalEnum.EntityType _entityType;
         [SerializeField] protected CharacterInfo _characterInfo;
+
 
         protected CreatureTable? _table;
 
         protected StatController _statController = new StatController();
         protected BuffController _buffController = new BuffController();
+        protected MoveController _moveController = new();
 
         protected CharacterConditions _condition = CharacterConditions.None;
         protected MovementStates _moveState = MovementStates.None;
@@ -39,6 +42,7 @@ namespace ARPG.Creature
 
         protected Dictionary<GlobalEnum.BuffEffectType, GameObject> _buffIconDic = new();
 
+        public GlobalEnum.EntityType EntityType { get { return _entityType; } }
         public virtual CreatureTable Table { get {return _table!;} }
 
         public StatController Stat { get { return _statController; } }
@@ -82,6 +86,18 @@ namespace ARPG.Creature
             _statController.Reset();
             _buffController.Reset();
             _characterInfo.SkillController.Reset();
+        }
+
+        public Vector3 Vector3 { get {return _velocity;} }
+
+        public virtual void UpdateVelocity(float inDeltaTime)
+        {
+            
+        }
+
+        public virtual void UpdatePosition(float inDeltaTime)
+        {
+            
         }
 
         public virtual bool LoadTable(int inId)
@@ -446,7 +462,7 @@ namespace ARPG.Creature
 
             UpdateAnimator();
         }
-        
+
         protected IEnumerator LoopUpdate()
         {
             while (true)
@@ -461,6 +477,191 @@ namespace ARPG.Creature
                 OnChangeMp(_statController.GetStat(GlobalEnum.Stat.MpGeneration));
             }
         }
+
+		protected Vector2 _boundsTopLeftCorner;
+		protected Vector2 _boundsBottomLeftCorner;
+		protected Vector2 _boundsTopRightCorner;
+		protected Vector2 _boundsBottomRightCorner;
+		protected Vector2 _boundsCenter;
+		protected Vector2 _bounds;
+		protected float _boundsWidth;
+        protected float _boundsHeight;
+        
+        protected Vector2 _horizontalRayCastFromBottom = Vector2.zero;
+		protected Vector2 _horizontalRayCastToTop = Vector2.zero;
+		protected Vector2 _verticalRayCastFromLeft = Vector2.zero;
+		protected Vector2 _verticalRayCastToRight = Vector2.zero;
+		protected Vector2 _aboveRayCastStart = Vector2.zero;
+		protected Vector2 _aboveRayCastEnd = Vector2.zero;
+        protected Vector2 _rayCastOrigin = Vector2.zero;
+        protected RaycastHit2D[] _sideHitsStorage;
+
+        [Tooltip("the number of rays cast horizontally")]
+        public int NumberOfHorizontalRays = 8;
+        
+        [Tooltip("an offset to apply vertically to the origin of the controller's raycasts that will have an impact on obstacle detection. Tweak this to adapt to your character's and obstacle's size")]
+        public float ObstacleHeightTolerance = 0.05f;
+		
+		[Tooltip("a small value added to all horizontal raycasts to accomodate for edge cases")]
+		public float RayOffsetHorizontal = 0.05f;
+		/// a small value added to all raycasts to accomodate for edge cases	
+		[Tooltip("a small value added to all vertical raycasts to accomodate for edge cases")]
+		public float RayOffsetVertical = 0.05f;
+		/// an extra length you an add when casting rays horizontally
+		[Tooltip("an extra length you an add when casting rays horizontally")]
+		public float RayExtraLengthHorizontal = 0f;
+		/// an extra length you an add when casting rays vertically
+		[Tooltip("an extra length you an add when casting rays vertically")]
+		public float RayExtraLengthVertical = 0f;
+        
+        protected virtual void SetRaysParameters()
+        {
+            BoxCollider2D boxCollider = _characterInfo.BoxCollider;
+            float top = boxCollider.offset.y + (boxCollider.size.y / 2f);
+            float bottom = boxCollider.offset.y - (boxCollider.size.y / 2f);
+            float left = boxCollider.offset.x - (boxCollider.size.x / 2f);
+            float right = boxCollider.offset.x + (boxCollider.size.x / 2f);
+
+            _boundsTopLeftCorner.x = left;
+            _boundsTopLeftCorner.y = top;
+
+            _boundsTopRightCorner.x = right;
+            _boundsTopRightCorner.y = top;
+
+            _boundsBottomLeftCorner.x = left;
+            _boundsBottomLeftCorner.y = bottom;
+
+            _boundsBottomRightCorner.x = right;
+            _boundsBottomRightCorner.y = bottom;
+
+            _boundsTopLeftCorner = transform.TransformPoint(_boundsTopLeftCorner);
+            _boundsTopRightCorner = transform.TransformPoint(_boundsTopRightCorner);
+            _boundsBottomLeftCorner = transform.TransformPoint(_boundsBottomLeftCorner);
+            _boundsBottomRightCorner = transform.TransformPoint(_boundsBottomRightCorner);
+            _boundsCenter = boxCollider.bounds.center;
+
+            _boundsWidth = Vector2.Distance(_boundsBottomLeftCorner, _boundsBottomRightCorner);
+            _boundsHeight = Vector2.Distance(_boundsBottomLeftCorner, _boundsTopLeftCorner);
+        }
+        
+        protected virtual void CastRaysToTheSides(float raysDirection)
+        {
+            // we determine the origin of our rays
+            _horizontalRayCastFromBottom = (_boundsBottomRightCorner + _boundsBottomLeftCorner) / 2;
+            _horizontalRayCastToTop = (_boundsTopLeftCorner + _boundsTopRightCorner) / 2;
+            _horizontalRayCastFromBottom = _horizontalRayCastFromBottom + (Vector2)transform.up * ObstacleHeightTolerance;
+            _horizontalRayCastToTop = _horizontalRayCastToTop - (Vector2)transform.up * ObstacleHeightTolerance;
+
+            // we determine the length of our rays
+            // float horizontalRayLength = Mathf.Abs(_speed.x * DeltaTime) + _boundsWidth / 2 + RayOffsetHorizontal * 2 + RayExtraLengthHorizontal;
+
+            // // we resize our storage if needed
+            // if (_sideHitsStorage.Length != NumberOfHorizontalRays)
+            // {
+            //     _sideHitsStorage = new RaycastHit2D[NumberOfHorizontalRays];
+            // }
+
+            // // we cast rays to the sides
+            // for (int i = 0; i < NumberOfHorizontalRays; i++)
+            // {
+            //     Vector2 rayOriginPoint = Vector2.Lerp(_horizontalRayCastFromBottom, _horizontalRayCastToTop, (float)i / (float)(NumberOfHorizontalRays - 1));
+
+            //     // if we were grounded last frame and if this is our first ray, we don't cast against one way platforms
+            //     if (State.WasGroundedLastFrame && i == 0)
+            //     {
+            //         _sideHitsStorage[i] = RayCast(rayOriginPoint, raysDirection * (transform.right), horizontalRayLength, PlatformMask, MMColors.Indigo, Parameters.DrawRaycastsGizmos);
+            //     }
+            //     else
+            //     {
+            //         _sideHitsStorage[i] = RayCast(rayOriginPoint, raysDirection * (transform.right), horizontalRayLength, PlatformMask & ~OneWayPlatformMask & ~MovingOneWayPlatformMask, MMColors.Indigo, Parameters.DrawRaycastsGizmos);
+            //     }
+            //     // if we've hit something
+            //     if (_sideHitsStorage[i].distance > 0)
+            //     {
+            //         // if this collider is on our ignore list, we break
+            //         if (_sideHitsStorage[i].collider == _ignoredCollider)
+            //         {
+            //             break;
+            //         }
+
+            //         // we determine and store our current lateral slope angle
+            //         float hitAngle = Mathf.Abs(Vector2.Angle(_sideHitsStorage[i].normal, transform.up));
+
+            //         if (OneWayPlatformMask.MMContains(_sideHitsStorage[i].collider.gameObject))
+            //         {
+            //             if (hitAngle > 90)
+            //             {
+            //                 break;
+            //             }
+            //         }
+
+            //         // we check if this is our movement direction
+            //         if (_movementDirection == raysDirection)
+            //         {
+            //             State.LateralSlopeAngle = hitAngle;
+            //         }
+
+            //         // if the lateral slope angle is higher than our maximum slope angle, then we've hit a wall, and stop x movement accordingly
+            //         if (hitAngle > Parameters.MaximumSlopeAngle)
+            //         {
+            //             if (raysDirection < 0)
+            //             {
+            //                 State.IsCollidingLeft = true;
+            //                 State.DistanceToLeftCollider = _sideHitsStorage[i].distance;
+            //             }
+            //             else
+            //             {
+            //                 State.IsCollidingRight = true;
+            //                 State.DistanceToRightCollider = _sideHitsStorage[i].distance;
+            //             }
+
+            //             if ((_movementDirection == raysDirection) || (CastRaysOnBothSides && (_speed.x == 0f)))
+            //             {
+            //                 CurrentWallCollider = _sideHitsStorage[i].collider.gameObject;
+            //                 State.SlopeAngleOK = false;
+
+            //                 float distance = MMMaths.DistanceBetweenPointAndLine(_sideHitsStorage[i].point, _horizontalRayCastFromBottom, _horizontalRayCastToTop);
+            //                 if (raysDirection <= 0)
+            //                 {
+            //                     _newPosition.x = -distance
+            //                                      + _boundsWidth / 2
+            //                                      + RayOffsetHorizontal * 2;
+            //                 }
+            //                 else
+            //                 {
+            //                     _newPosition.x = distance
+            //                                      - _boundsWidth / 2
+            //                                      - RayOffsetHorizontal * 2;
+            //                 }
+
+            //                 // if we're in the air, we prevent the character from being pushed back.
+            //                 if (!State.IsGrounded && (Speed.y != 0) && (!Mathf.Approximately(hitAngle, 90f)))
+            //                 {
+            //                     _newPosition.x = 0;
+            //                 }
+
+            //                 _contactList.Add(_sideHitsStorage[i]);
+            //                 _speed.x = 0;
+            //                 _shouldComputeNewSpeed = true;
+            //             }
+
+            //             break;
+            //         }
+            //     }
+            // }
+        }
+        
+        protected RaycastHit2D RayCast(Vector2 rayOriginPoint, Vector2 rayDirection, float rayDistance, LayerMask mask, Color color,bool drawGizmo=false)
+        {
+#if UNITY_EDITOR
+            if (drawGizmo)
+            {
+                Debug.DrawRay(rayOriginPoint, rayDirection * rayDistance, color);
+            }
+#endif
+            
+			return Physics2D.Raycast(rayOriginPoint,rayDirection,rayDistance,mask);		
+		}
     }
 
     public enum Animation

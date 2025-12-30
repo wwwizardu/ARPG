@@ -10,12 +10,15 @@ namespace ARPG
 {
     public class AR : PrefabSingleton<AR>
     {
+        [SerializeField] private Systems.SystemManager _systemManager;
+        [SerializeField] private Component.ComponentManager _componentManager;
         [SerializeField] private Data.DataManager _dataManager;
         [SerializeField] private MapManager _mapManager;
         [SerializeField] private UIManager _uiManager;
         [SerializeField] private ARPG.Monster.MonsterManager _monsterManager;
 
         [SerializeField] private Item.ItemManager _itemManager;
+
 
         private bool _initialized = false;
 
@@ -27,6 +30,8 @@ namespace ARPG
 
         public Base.SceneBase? CurrentScene => _currentScene;
 
+        public Systems.SystemManager System => _systemManager;
+        public Component.ComponentManager Component => _componentManager;
         public Data.DataManager Data => _dataManager;
         public MapManager Map => _mapManager;
         public UIManager UI => _uiManager;

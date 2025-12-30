@@ -133,7 +133,37 @@ namespace ARPG.Map
         {
             return _activeChunks.Keys;
         }
-        
+
+        public bool IsWalkable(Vector3 worldPosition)
+        {
+            Vector3Int cellPos = _tileMap.WorldToCell(worldPosition);
+
+            // 1. Object 레이어 체크 (벽, 나무 등 장애물)
+            TileBase objectTile = _tileMap_Object.GetTile(cellPos);
+            if (objectTile != null)
+            {
+                // CustomTile이면 IsWalkable 플래그 확인
+                if (objectTile is CustomTile customTile)
+                {
+                    return customTile.IsWalkable;
+                }
+                // CustomTile이 아니면 기본적으로 이동 불가
+                return false;
+            }
+
+            // 2. 기존 타일 데이터 시스템 활용 - Blocked 플래그 체크
+            ulong tileData = GetTileAt(cellPos.x, cellPos.y);
+            bool isBlocked = (tileData & (ulong)GlobalEnum.TileFlag.Blocked) != 0;
+
+            return !isBlocked; // Blocked가 아니면 이동 가능
+        }
+
+        public Vector3 GetCellCenterWorld(Vector3 worldPosition)
+        {
+            Vector3Int cellPos = _tileMap.WorldToCell(worldPosition);
+            return _tileMap.GetCellCenterWorld(cellPos);
+        }
+
     }
 }
 
