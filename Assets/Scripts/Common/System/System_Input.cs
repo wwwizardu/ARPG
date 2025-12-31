@@ -17,15 +17,15 @@ namespace ARPG.Systems
 
         public void OnCreate()
         {
+            _input = AR.s.UI.Input.Player;
+            _componentManager = AR.s.Component;
+            _playerEntityId = -1;
+
             Debug.Log("System_Input Created");
         }
 
         public void OnReset()
         {
-            _input = AR.s.UI.Input.Player;
-            _componentManager = AR.s.Component;
-            _playerEntityId = -1;
-
             Debug.Log("System_Input Reset");
         }
 

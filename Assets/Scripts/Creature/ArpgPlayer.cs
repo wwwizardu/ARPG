@@ -1,4 +1,5 @@
 #nullable enable
+using ARPG.Component;
 using ARPG.Data;
 using ARPG.Tables;
 using ARPG.UI;
@@ -16,7 +17,7 @@ namespace ARPG.Creature
 
         public override Tables.CreatureTable Table => _playerTable!;
         public Item.Inventory Inventory { get { return _inventory; } }
-
+        
         public override void Initialize()
         {
             base.Initialize();
@@ -29,7 +30,68 @@ namespace ARPG.Creature
 
             _inventory.Initialize(AR.s.Data.Player._inventory, AR.s.Data.Player._inventory.Count);
 
+            // ECS 컴포넌트 초기화
+            InitializeECSComponents();
+
             Debug.Log("ArpgPlayer initialized.");
+        }
+
+        private void InitializeECSComponents()
+        {
+            // Entity ID 생성 (간단하게 GetInstanceID 사용)
+            _entityId = gameObject.GetInstanceID();
+
+            // InputComponent 추가
+            InputComponent inputComponent = new()
+            {
+                MoveDirection = Vector2.zero,
+                MousePosition = Vector2.zero,
+                IsAttacking = false,
+                IsInteracting = false,
+                IsSprinting = false
+            };
+            AR.s.Component.AddComponent(_entityId, inputComponent);
+
+            // VelocityComponent 추가
+            VelocityComponent velocityComponent = new()
+            {
+                Velocity = Vector2.zero,
+                Speed = MoveSpeed, // CharacterBase의 MoveSpeed 사용
+                SprintMultiplier = 2f
+            };
+            AR.s.Component.AddComponent(_entityId, velocityComponent);
+
+            // TransformComponent 추가
+            TransformComponent transformComponent = new()
+            {
+                Position = new Vector2(transform.position.x, transform.position.y),
+                Rotation = 0f,
+                Scale = Vector2.one
+            };
+            AR.s.Component.AddComponent(_entityId, transformComponent);
+
+            // RenderSystem에 GameObject 등록
+            var renderSystem = AR.s.System.GetSystem<Systems.System_Render>();
+            if (renderSystem.HasValue)
+            {
+                var system = renderSystem.Value;
+                system.RegisterGameObject(_entityId, gameObject);
+                Debug.Log($"GameObject registered to RenderSystem for Entity {_entityId}");
+            }
+
+            // AnimationSystem에 Animator 등록 (Animator가 있는 경우)
+            if(_characterInfo.Animator != null)
+            {
+                var animSystem = AR.s.System.GetSystem<Systems.System_Animation>();
+                if (animSystem.HasValue)
+                {
+                    var system = animSystem.Value;
+                    system.RegisterAnimator(_entityId, _characterInfo.Animator);
+                    Debug.Log($"Animator registered to AnimationSystem for Entity {_entityId}");
+                }
+            }
+            
+            Debug.Log($"ECS Components initialized for Entity {_entityId}");
         }
 
         public override void Reset()
@@ -122,99 +184,99 @@ namespace ARPG.Creature
             if (_input == null)
                 return;
 
-            if (_input.Value.Inventory.WasPressedThisFrame() == true) // 인벤토리 열기
-            {
-                var characterUI = AR.s.UI.Show<UICharacter>(AddressablePath.Character, UIManager.Layer.Main);
-                if (characterUI == null)
-                    return;
-            }
-
-            // if (_input.Value.UseItem.WasPressedThisFrame() == true) // 아이템 사용 시 그냥 리턴
+            // if (_input.Value.Inventory.WasPressedThisFrame() == true) // 인벤토리 열기
             // {
-            //     CharacterComponent.Toolbelt.UseHoldingItem();
-            //     return;
+            //     var characterUI = AR.s.UI.Show<UICharacter>(AddressablePath.Character, UIManager.Layer.Main);
+            //     if (characterUI == null)
+            //         return;
             // }
 
-            if (_condition == CharacterConditions.Normal || _condition == CharacterConditions.UseSkill)
-            {
-                Vector2 mousePosition = _input.Value.MouseMove.ReadValue<Vector2>();
-                Vector3 mouseWorldPos = Camera.main.ScreenToWorldPoint(new Vector3(mousePosition.x, mousePosition.y, 0f));
-                //SetCharacterFaceDirection(mouseWorldPos.x < transform.position.x);
+            // // if (_input.Value.UseItem.WasPressedThisFrame() == true) // 아이템 사용 시 그냥 리턴
+            // // {
+            // //     CharacterComponent.Toolbelt.UseHoldingItem();
+            // //     return;
+            // // }
 
-                _inputDirection = _input.Value.Move.ReadValue<Vector2>();
+            // if (_condition == CharacterConditions.Normal || _condition == CharacterConditions.UseSkill)
+            // {
+            //     Vector2 mousePosition = _input.Value.MouseMove.ReadValue<Vector2>();
+            //     Vector3 mouseWorldPos = Camera.main.ScreenToWorldPoint(new Vector3(mousePosition.x, mousePosition.y, 0f));
+            //     //SetCharacterFaceDirection(mouseWorldPos.x < transform.position.x);
 
-                // 입력 방향에 따라 캐릭터 이동
-                if (_inputDirection.IsZero() == false)
-                {
-                    // 안전한 이동 거리 계산 및 적용
-                    Vector2 safeMovement = CalculateSafeMovement(_inputDirection);
+            //     _inputDirection = _input.Value.Move.ReadValue<Vector2>();
 
-                    if (safeMovement.sqrMagnitude > 0.0001f)
-                    {
-                        transform.position += (Vector3)safeMovement;
+            //     // 입력 방향에 따라 캐릭터 이동
+            //     if (_inputDirection.IsZero() == false)
+            //     {
+            //         // 안전한 이동 거리 계산 및 적용
+            //         Vector2 safeMovement = CalculateSafeMovement(_inputDirection);
 
-                        // velocity 업데이트 (실제 이동한 거리 기반)
-                        _velocity = safeMovement / Time.deltaTime;
+            //         if (safeMovement.sqrMagnitude > 0.0001f)
+            //         {
+            //             transform.position += (Vector3)safeMovement;
 
-                        // 맵 매니저에 플레이어 위치 업데이트 알림
-                        if (AR.s != null && AR.s.Map != null)
-                        {
-                            AR.s.Map.UpdateChunksAroundPlayer(transform.position);
-                        }
-                    }
-                    else
-                    {
-                        _velocity = Vector2.zero;
-                    }
-                }
-                else
-                {
-                    _velocity = Vector2.zero;
-                }
+            //             // velocity 업데이트 (실제 이동한 거리 기반)
+            //             _velocity = safeMovement / Time.deltaTime;
 
-                // Input.DirectionInput.Direction dirHorizontal = AR.s.UI.Input.DirectionInput.GetHorizontalInput();
-                // Input.DirectionInput.Direction dirVertical = AR.s.UI.Input.DirectionInput.GetVerticalInput();
+            //             // 맵 매니저에 플레이어 위치 업데이트 알림
+            //             if (AR.s != null && AR.s.Map != null)
+            //             {
+            //                 AR.s.Map.UpdateChunksAroundPlayer(transform.position);
+            //             }
+            //         }
+            //         else
+            //         {
+            //             _velocity = Vector2.zero;
+            //         }
+            //     }
+            //     else
+            //     {
+            //         _velocity = Vector2.zero;
+            //     }
 
-                // UpdateHorizontalForce(dirHorizontal);
-                // UpdateVerticalForce(dirVertical);
+            //     // Input.DirectionInput.Direction dirHorizontal = AR.s.UI.Input.DirectionInput.GetHorizontalInput();
+            //     // Input.DirectionInput.Direction dirVertical = AR.s.UI.Input.DirectionInput.GetVerticalInput();
 
-                // if (_input.Value.Jump.WasPressedThisFrame() == true)
-                // {
-                //     if (IsOwner == true)
-                //     {
-                //         if (_controller.State.IsGrounded == true || _isLadderClimbing == true) // 땅이거나 사다리를 타는 중에만 점프 가능
-                //         {
-                //             // 아래 방향키를 누르고 있었을때는 점프 안뛰고 그냥 떨어지도록
-                //             if (dirVertical != InputController.DirectionInput.Direction.Down) 
-                //             {
-                //                 float jumpHeight = Status.GetFloat(StatusPropertyType.JumpHeightStat);
-                //                 _controller.SetVerticalForce(Mathf.Sqrt(2f * jumpHeight * Mathf.Abs(_controller.Parameters.Gravity)));
-                //             }
+            //     // UpdateHorizontalForce(dirHorizontal);
+            //     // UpdateVerticalForce(dirVertical);
 
-                //             if(IsLadderClimbing == true) // 사다리를 타고 있었다면 종료한다.
-                //             {
-                //                 EndClimb(CharacterStates.MovementStates.Jumping);
-                //             }
-                //         }
-                //     }
-                // }
-                if (_input.Value.Attack.IsPressed() == true)
-                {
-                    if (_input.Value.Attack.WasPressedThisFrame() == true && CheckPickupItem(mouseWorldPos) == true)
-                    {
+            //     // if (_input.Value.Jump.WasPressedThisFrame() == true)
+            //     // {
+            //     //     if (IsOwner == true)
+            //     //     {
+            //     //         if (_controller.State.IsGrounded == true || _isLadderClimbing == true) // 땅이거나 사다리를 타는 중에만 점프 가능
+            //     //         {
+            //     //             // 아래 방향키를 누르고 있었을때는 점프 안뛰고 그냥 떨어지도록
+            //     //             if (dirVertical != InputController.DirectionInput.Direction.Down) 
+            //     //             {
+            //     //                 float jumpHeight = Status.GetFloat(StatusPropertyType.JumpHeightStat);
+            //     //                 _controller.SetVerticalForce(Mathf.Sqrt(2f * jumpHeight * Mathf.Abs(_controller.Parameters.Gravity)));
+            //     //             }
 
-                    }
-                    else
-                    {
-                        StartSkill(1);
-                    }
-                }
-                // else if (_input.Value.Interact.WasPressedThisFrame() == true)
-                // {
-                //     Interact();
-                // }
+            //     //             if(IsLadderClimbing == true) // 사다리를 타고 있었다면 종료한다.
+            //     //             {
+            //     //                 EndClimb(CharacterStates.MovementStates.Jumping);
+            //     //             }
+            //     //         }
+            //     //     }
+            //     // }
+            //     if (_input.Value.Attack.IsPressed() == true)
+            //     {
+            //         if (_input.Value.Attack.WasPressedThisFrame() == true && CheckPickupItem(mouseWorldPos) == true)
+            //         {
 
-            }
+            //         }
+            //         else
+            //         {
+            //             StartSkill(1);
+            //         }
+            //     }
+            //     // else if (_input.Value.Interact.WasPressedThisFrame() == true)
+            //     // {
+            //     //     Interact();
+            //     // }
+
+            // }
 
             //_mouseTargetFinder.UpdateTarget(mousePosition);
         }

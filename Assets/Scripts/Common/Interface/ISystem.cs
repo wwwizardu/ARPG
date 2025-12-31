@@ -18,7 +18,7 @@ namespace ARPG.Systems
         }
     }
 
-    // Update 매 프레임마다 실행 (입력, 렌더링, UI 등)
+    // Update 매 프레임마다 실행 (입력, UI 등)
     public interface IUpdateSystem : ISystem
     {
         public void OnUpdate(float inDeltaTime);
@@ -28,6 +28,12 @@ namespace ARPG.Systems
     public interface IFixedUpdateSystem : ISystem
     {
         public void OnFixedUpdate(float inFixedDeltaTime);
+    }
+
+    // LateUpdate FixedUpdate와 Update 이후 실행 (카메라, 렌더링 동기화)
+    public interface ILateUpdateSystem : ISystem
+    {
+        public void OnLateUpdate(float inDeltaTime);
     }
 }
 

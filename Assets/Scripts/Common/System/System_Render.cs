@@ -56,8 +56,8 @@ namespace ARPG.Systems
             Debug.Log($"GameObject unregistered for Entity {entityId}");
         }
 
-        // Update: TransformComponent -> GameObject.transform 동기화
-        public void OnUpdate(float inDeltaTime)
+        // Update: Velocity를 이용해 Position 계산 후 GameObject 동기화
+        public readonly void OnUpdate(float inDeltaTime)
         {
             if (_componentManager == null || _entityToGameObject == null)
                 return;
@@ -76,6 +76,15 @@ namespace ARPG.Systems
 
                 if (gameObject == null)
                     continue;
+
+                // Velocity를 이용해 Position 업데이트
+                if (_componentManager.TryGetComponent<VelocityComponent>(entityId, out var velocity))
+                {
+                    transformComponent.Position += velocity.Velocity * inDeltaTime;
+
+                    // 업데이트된 Position 저장
+                    _componentManager.AddComponent(entityId, transformComponent);
+                }
 
                 // ECS TransformComponent -> GameObject Transform 동기화
                 gameObject.transform.position = new Vector3(

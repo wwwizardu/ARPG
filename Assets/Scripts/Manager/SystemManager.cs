@@ -9,26 +9,35 @@ namespace ARPG.Systems
         private readonly List<ISystem> _systems = new();
         private readonly List<IUpdateSystem> _updateSystems = new();
         private readonly List<IFixedUpdateSystem> _fixedUpdateSystems = new();
+        private readonly List<ILateUpdateSystem> _lateUpdateSystems = new();
 
         public void Initialize()
         {
             Debug.Log("SystemManager Initialized");
 
-            // Systems 등록
-            System_Input inputSystem = new System_Input();
+            // Systems 등록 (Priority 순서대로 주석)
+
+            // Priority 0: Input System (Update) - 입력 수집
+            System_Input inputSystem = new();
             RegisterSystems(inputSystem);
 
-            System_Move moveSystem = new System_Move();
+            // Priority 100: Movement System (FixedUpdate) - 이동 로직
+            System_Move moveSystem = new();
             RegisterSystems(moveSystem);
 
-            // Render System (Update, 가장 마지막)
-            System_Render renderSystem = new System_Render();
+            // Priority 500: Animation System (Update) - 애니메이션 제어
+            System_Animation animationSystem = new();
+            RegisterSystems(animationSystem);
+
+            // Priority 1000: Render System (Update) - GameObject 동기화
+            System_Render renderSystem = new();
             RegisterSystems(renderSystem);
 
             // Priority 값이 작은 순서대로 정렬
             _systems.Sort((a, b) => a.Priority.CompareTo(b.Priority));
             _updateSystems.Sort((a, b) => a.Priority.CompareTo(b.Priority));
             _fixedUpdateSystems.Sort((a, b) => a.Priority.CompareTo(b.Priority));
+            _lateUpdateSystems.Sort((a, b) => a.Priority.CompareTo(b.Priority));
         }
 
         public void Reset()
@@ -42,6 +51,7 @@ namespace ARPG.Systems
             _systems.Clear();
             _updateSystems.Clear();
             _fixedUpdateSystems.Clear();
+            _lateUpdateSystems.Clear();
 
             Debug.Log("SystemManager Reset - All systems disposed");
         }
@@ -62,6 +72,12 @@ namespace ARPG.Systems
                 _fixedUpdateSystems.Add(fixedUpdateSystem);
             }
 
+            // LateUpdate System 분류
+            if (inSystem is ILateUpdateSystem lateUpdateSystem)
+            {
+                _lateUpdateSystems.Add(lateUpdateSystem);
+            }
+
             inSystem.OnCreate();
         }
 
@@ -77,6 +93,11 @@ namespace ARPG.Systems
             if (inSystem is IFixedUpdateSystem fixedUpdateSystem)
             {
                 _fixedUpdateSystems.Remove(fixedUpdateSystem);
+            }
+
+            if (inSystem is ILateUpdateSystem lateUpdateSystem)
+            {
+                _lateUpdateSystems.Remove(lateUpdateSystem);
             }
         }
 
@@ -127,6 +148,17 @@ namespace ARPG.Systems
             for (int i = 0; i < _fixedUpdateSystems.Count; i++)
             {
                 _fixedUpdateSystems[i].OnFixedUpdate(fixedDeltaTime);
+            }
+        }
+
+        // LateUpdate: Update와 FixedUpdate 이후 실행 (카메라, 렌더링 동기화)
+        private void LateUpdate()
+        {
+            float deltaTime = Time.deltaTime;
+
+            for (int i = 0; i < _lateUpdateSystems.Count; i++)
+            {
+                _lateUpdateSystems[i].OnLateUpdate(deltaTime);
             }
         }
     }

@@ -73,34 +73,34 @@ namespace ARPG.Systems
 
         private readonly void UpdateAnimatorFromVelocity(Animator animator, VelocityComponent velocity, int entityId)
         {
-            float speed = velocity.Velocity.magnitude;
+            // float speed = velocity.Velocity.magnitude;
 
-            // 속도에 따른 애니메이션 파라미터 설정
-            animator.SetFloat("Speed", speed);
+            // // 속도에 따른 애니메이션 파라미터 설정
+            // animator.SetFloat("Speed", speed);
 
-            // 이동 방향 설정 (2D)
-            if (speed > 0.01f)
-            {
-                animator.SetFloat("Horizontal", velocity.Velocity.x);
-                animator.SetFloat("Vertical", velocity.Velocity.y);
-            }
+            // // 이동 방향 설정 (2D)
+            // if (speed > 0.01f)
+            // {
+            //     animator.SetFloat("Horizontal", velocity.Velocity.x);
+            //     animator.SetFloat("Vertical", velocity.Velocity.y);
+            // }
 
-            // 상태 결정
-            bool isMoving = speed > 0.01f;
-            animator.SetBool("IsMoving", isMoving);
+            // // 상태 결정
+            // bool isMoving = speed > 0.01f;
+            // animator.SetBool("IsMoving", isMoving);
 
-            // 달리기 체크
-            if (_componentManager.TryGetComponent<InputComponent>(entityId, out var input))
-            {
-                bool isRunning = input.IsSprinting && speed > 3f;
-                animator.SetBool("IsRunning", isRunning);
+            // // 달리기 체크
+            // if (_componentManager.TryGetComponent<InputComponent>(entityId, out var input))
+            // {
+            //     bool isRunning = input.IsSprinting && speed > 3f;
+            //     animator.SetBool("IsRunning", isRunning);
 
-                // 공격 애니메이션
-                if (input.IsAttacking)
-                {
-                    animator.SetTrigger("Attack");
-                }
-            }
+            //     // 공격 애니메이션
+            //     if (input.IsAttacking)
+            //     {
+            //         animator.SetTrigger("Attack");
+            //     }
+            // }
         }
     }
 }

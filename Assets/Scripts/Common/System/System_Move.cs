@@ -35,12 +35,9 @@ namespace ARPG.Systems
                 if (AR.s.Component.TryGetComponent<VelocityComponent>(entityId, out var velocity) == false)
                     continue;
 
-                if (AR.s.Component.TryGetComponent<TransformComponent>(entityId, out var transform) == false)
-                    continue;
-
                 InputComponent input = inputPool.GetByIndex(i);
 
-                // 이동 로직
+                // 이동 로직: Velocity만 계산 (Position은 System_Render에서 계산)
                 if (input.MoveDirection.sqrMagnitude > 0.0001f)
                 {
                     // 속도 계산 (달리기 체크)
@@ -49,10 +46,10 @@ namespace ARPG.Systems
                         speed *= velocity.SprintMultiplier;
 
                     // 정규화된 방향 * 속도
-                    velocity.Velocity = input.MoveDirection.normalized * speed;
+                    velocity.Velocity = input.MoveDirection * speed;
 
-                    // 위치 업데이트
-                    transform.Position += velocity.Velocity * inFixedDeltaTime;
+                    // TODO: 여기서 물리 충돌 검사 후 Velocity 조정
+                    // velocity.Velocity = ApplyCollision(velocity.Velocity, transform.Position);
                 }
                 else
                 {
@@ -60,9 +57,8 @@ namespace ARPG.Systems
                     velocity.Velocity = Vector2.zero;
                 }
 
-                // 업데이트된 컴포넌트 저장
+                // Velocity만 저장 (Position은 System_Render에서 업데이트)
                 AR.s.Component.AddComponent(entityId, velocity);
-                AR.s.Component.AddComponent(entityId, transform);
             }
         }
 

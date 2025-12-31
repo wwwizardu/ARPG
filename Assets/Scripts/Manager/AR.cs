@@ -53,6 +53,8 @@ namespace ARPG
         {
             // 초기화 로직
             await _dataManager.Initialize();
+            _componentManager.Initialize();
+            _systemManager.Initialize();
             _uiManager.Initialize();
             _mapManager.Initialize();
             _itemManager.Initialize();

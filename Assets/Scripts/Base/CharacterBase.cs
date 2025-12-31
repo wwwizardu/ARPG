@@ -16,6 +16,7 @@ namespace ARPG.Creature
         [SerializeField] protected CharacterInfo _characterInfo;
 
 
+        protected int _entityId = -1; // ECS Entity ID
         protected CreatureTable? _table;
 
         protected StatController _statController = new StatController();
@@ -42,6 +43,7 @@ namespace ARPG.Creature
 
         protected Dictionary<GlobalEnum.BuffEffectType, GameObject> _buffIconDic = new();
 
+        public int EntityId => _entityId;
         public GlobalEnum.EntityType EntityType { get { return _entityType; } }
         public virtual CreatureTable Table { get {return _table!;} }
 
@@ -156,6 +158,12 @@ namespace ARPG.Creature
             _characterInfo.SkillController.UpdateSkillSpeed();
 
             _moveSpeed = _statController.GetStat(GlobalEnum.Stat.MoveSpeed) * (_statController.GetStat(GlobalEnum.Stat.MoveSpeedMul) * 0.01f);
+
+            if(AR.s.Component.TryGetComponent<Component.VelocityComponent>(_entityId, out var velocity) == true)
+            {
+                velocity.Speed = _moveSpeed;
+                AR.s.Component.SetComponent(_entityId, velocity);
+            }
         }
 
         public virtual void OnHit(CharacterBase? inAttacker, bool isOnHit, GlobalEnum.DamageType inDamageType, int inDamage)
