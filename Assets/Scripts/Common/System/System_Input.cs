@@ -66,6 +66,11 @@ namespace ARPG.Systems
 
             // 업데이트된 입력 컴포넌트 저장
             _componentManager.SetComponent(_playerEntityId, inputComponent);
+
+            if(inputComponent.IsAttacking == true)
+            {
+                
+            }
         }
     }
 }

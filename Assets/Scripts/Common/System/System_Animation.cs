@@ -72,22 +72,50 @@ namespace ARPG.Systems
 
         private readonly void UpdateAnimatorFromState(Animator animator, ref StateComponent state, int entityId)
         {
-            if(state.MoveState != state.MovementStatePrev)
+            if(state.Condition != state.ConditionPrev)
             {
-                switch(state.MoveState)
+                switch(state.Condition)
                 {
-                    case Creature.MovementStates.Idle:
-                        animator.SetTrigger("Idle");
+                    case Creature.CharacterConditions.Normal:   // 정상 상태
                         break;
-                    case Creature.MovementStates.Walking:
-                        animator.SetTrigger("Walk");
+                    case Creature.CharacterConditions.UseSkill: // 스킬 사용 상태
+                        UpdateSkillAnimation(animator, entityId, ref state);
+                        break;
+                    case Creature.CharacterConditions.Stunned:  // 기절 상태
+                        break;
+                    case Creature.CharacterConditions.Dead:     // 사망 상태
                         break;
                     // 추가 상태 처리 가능
                 }
 
-                state.MovementStatePrev = state.MoveState;
+                state.ConditionPrev = state.Condition;
                 AR.s.Component.SetComponent(entityId, state);
             }
+
+            if(state.Condition == Creature.CharacterConditions.Normal) // 정상 상태일 경우에만 이동 애니메이션 적용
+            {
+                if(state.MoveState != state.MovementStatePrev)
+                {
+                    switch(state.MoveState)
+                    {
+                        case Creature.MovementStates.Idle:
+                            animator.SetTrigger("Idle");
+                            break;
+                        case Creature.MovementStates.Walking:
+                            animator.SetTrigger("Walk");
+                            break;
+                        // 추가 상태 처리 가능
+                    }
+
+                    state.MovementStatePrev = state.MoveState;
+                    AR.s.Component.SetComponent(entityId, state);
+                }
+            }
+        }
+
+        private readonly void UpdateSkillAnimation(Animator inAnimato, int inEneityId, ref StateComponent inState)
+        {
+            
         }
     }
 }
