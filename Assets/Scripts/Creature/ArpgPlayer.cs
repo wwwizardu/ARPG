@@ -52,6 +52,28 @@ namespace ARPG.Creature
             };
             AR.s.Component.AddComponent(_entityId, inputComponent);
 
+            // StatComponent 추가
+            StatComponent statComponent = new()
+            {
+                Level = 0,
+                CurrentHealth = 0,
+                MaxHealth = 0,
+                CurrentMana = 0,
+                MaxMana = 0,
+                Strength = 0,
+                Agility = 0,
+                Intelligence = 0
+            };
+            AR.s.Component.AddComponent(_entityId, statComponent);
+
+            // StateComponent 추가
+            StateComponent stateComponent = new();
+            stateComponent.Condition = CharacterConditions.Normal;
+            stateComponent.ConditionPrev = CharacterConditions.Normal;
+            stateComponent.MoveState = MovementStates.Idle;
+            stateComponent.MovementStatePrev = MovementStates.Idle;
+            AR.s.Component.AddComponent(_entityId, stateComponent);
+
             // VelocityComponent 추가
             VelocityComponent velocityComponent = new()
             {

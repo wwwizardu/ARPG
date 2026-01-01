@@ -58,8 +58,36 @@ namespace ARPG.Systems
                 }
 
                 // Velocity만 저장 (Position은 System_Render에서 업데이트)
-                AR.s.Component.AddComponent(entityId, velocity);
+                AR.s.Component.SetComponent(entityId, velocity);
+
+                if (AR.s.Component.TryGetComponent<StateComponent>(entityId, out var state) == true)
+                {
+                    CheckStateChanges(entityId, ref velocity, ref state);
+                }
             }
+        }
+
+        private readonly void CheckStateChanges(int entityId, ref VelocityComponent refVelocity,  ref StateComponent refState)
+        {
+            // 이동 상태 업데이트
+            if (refVelocity.Velocity.sqrMagnitude > 0.001f)
+            {
+                if(refState.MoveState != Creature.MovementStates.Walking)
+                {
+                    refState.MovementStatePrev = refState.MoveState;
+                    refState.MoveState = Creature.MovementStates.Walking;    
+                }
+            }
+            else
+            {
+                if(refState.MoveState != Creature.MovementStates.Idle)
+                {
+                    refState.MovementStatePrev = refState.MoveState;
+                    refState.MoveState = Creature.MovementStates.Idle;
+                }
+            }
+
+            AR.s.Component.SetComponent(entityId, refState);
         }
 
     }

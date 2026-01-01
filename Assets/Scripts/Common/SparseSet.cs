@@ -12,7 +12,7 @@ namespace ARPG
         public int Count => _count;
         public int Capacity => _data.Length;
 
-        public SparseSet(int capacity = 1000)
+        public SparseSet(int capacity = 100)
         {
             _sparse = new Dictionary<int, int>();
             _dense = new int[capacity];

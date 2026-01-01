@@ -63,44 +63,31 @@ namespace ARPG.Systems
                 if (animator == null)
                     continue;
 
-                // VelocityComponent로 애니메이션 상태 결정
-                if (_componentManager.TryGetComponent<VelocityComponent>(entityId, out var velocity))
+                if (_componentManager.TryGetComponent<StateComponent>(entityId, out var state) == true)
                 {
-                    UpdateAnimatorFromVelocity(animator, velocity, entityId);
+                    UpdateAnimatorFromState(animator, ref state, entityId);
                 }
             }
         }
 
-        private readonly void UpdateAnimatorFromVelocity(Animator animator, VelocityComponent velocity, int entityId)
+        private readonly void UpdateAnimatorFromState(Animator animator, ref StateComponent state, int entityId)
         {
-            // float speed = velocity.Velocity.magnitude;
+            if(state.MoveState != state.MovementStatePrev)
+            {
+                switch(state.MoveState)
+                {
+                    case Creature.MovementStates.Idle:
+                        animator.SetTrigger("Idle");
+                        break;
+                    case Creature.MovementStates.Walking:
+                        animator.SetTrigger("Walk");
+                        break;
+                    // 추가 상태 처리 가능
+                }
 
-            // // 속도에 따른 애니메이션 파라미터 설정
-            // animator.SetFloat("Speed", speed);
-
-            // // 이동 방향 설정 (2D)
-            // if (speed > 0.01f)
-            // {
-            //     animator.SetFloat("Horizontal", velocity.Velocity.x);
-            //     animator.SetFloat("Vertical", velocity.Velocity.y);
-            // }
-
-            // // 상태 결정
-            // bool isMoving = speed > 0.01f;
-            // animator.SetBool("IsMoving", isMoving);
-
-            // // 달리기 체크
-            // if (_componentManager.TryGetComponent<InputComponent>(entityId, out var input))
-            // {
-            //     bool isRunning = input.IsSprinting && speed > 3f;
-            //     animator.SetBool("IsRunning", isRunning);
-
-            //     // 공격 애니메이션
-            //     if (input.IsAttacking)
-            //     {
-            //         animator.SetTrigger("Attack");
-            //     }
-            // }
+                state.MovementStatePrev = state.MoveState;
+                AR.s.Component.SetComponent(entityId, state);
+            }
         }
     }
 }
