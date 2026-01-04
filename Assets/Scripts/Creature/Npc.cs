@@ -15,7 +15,7 @@ namespace ARPG.Creature
             base.Initialize();
 
             // 기본 스킬을 추가한다.
-            _characterInfo.SkillController.CreateSkill(1);
+            //_characterInfo.SkillController.CreateSkill(1);
             //_team = GlobalEnum.TeamType.Npc;
         }
 

@@ -10,13 +10,11 @@ using System.Collections.Generic;
 
 namespace ARPG.Creature
 {
-    public abstract class CharacterBase : MonoBehaviour, IMovable, IHittable
+    public abstract class CharacterBase : Base.EntityBase, IMovable, IHittable
     {
         [SerializeField] protected GlobalEnum.EntityType _entityType;
         [SerializeField] protected CharacterInfo _characterInfo;
 
-
-        protected int _entityId = -1; // ECS Entity ID
         protected CreatureTable? _table;
 
         protected StatController _statController = new StatController();
@@ -57,7 +55,7 @@ namespace ARPG.Creature
 
         public float MoveSpeed { get {return _moveSpeed; } }
 
-        public virtual void Initialize()
+        public override void Initialize()
         {
             _characterInfo.Sr.sprite = _characterInfo.CharacterSprite;
             SpriteLibrary sl = _characterInfo.Sr.GetComponent<SpriteLibrary>();
@@ -80,14 +78,71 @@ namespace ARPG.Creature
             Reset();
         }
 
-        public virtual void Reset()
+        public override void Reset()
         {
             // Reset character state
             // _characterInfo.TextName.text = string.Empty;
 
             _statController.Reset();
             _buffController.Reset();
-            _characterInfo.SkillController.Reset();
+            //_characterInfo.SkillController.Reset();
+        }
+
+        protected override void InitializeECSComponents()
+        {
+            base.InitializeECSComponents();
+
+            // StatComponent 추가
+            Component.StatComponent statComponent = new()
+            {
+                Level = 0,
+                CurrentHealth = 0,
+                MaxHealth = 0,
+                CurrentMana = 0,
+                MaxMana = 0,
+                Strength = 0,
+                Agility = 0,
+                Intelligence = 0
+            };
+            AR.s.Component.AddComponent(_entityId, statComponent);
+
+            // StateComponent 추가
+            Component.StateComponent stateComponent = new();
+            stateComponent.Condition = CharacterConditions.Normal;
+            stateComponent.ConditionPrev = CharacterConditions.Normal;
+            stateComponent.MoveState = MovementStates.Idle;
+            stateComponent.MovementStatePrev = MovementStates.Idle;
+            AR.s.Component.AddComponent(_entityId, stateComponent);
+
+            // VelocityComponent 추가
+            Component.VelocityComponent velocityComponent = new()
+            {
+                Velocity = Vector2.zero,
+                Speed = MoveSpeed, // CharacterBase의 MoveSpeed 사용
+                SprintMultiplier = 2f
+            };
+            AR.s.Component.AddComponent(_entityId, velocityComponent);
+
+            // RenderSystem에 GameObject 등록
+            var renderSystem = AR.s.System.GetSystem<Systems.System_Render>();
+            if (renderSystem.HasValue)
+            {
+                var system = renderSystem.Value;
+                system.RegisterGameObject(_entityId, gameObject);
+                Debug.Log($"GameObject registered to RenderSystem for Entity {_entityId}");
+            }
+
+            // AnimationSystem에 Animator 등록 (Animator가 있는 경우)
+            if(_characterInfo.Animator != null)
+            {
+                var animSystem = AR.s.System.GetSystem<Systems.System_Animation>();
+                if (animSystem.HasValue)
+                {
+                    var system = animSystem.Value;
+                    system.RegisterAnimator(_entityId, _characterInfo.Animator);
+                    Debug.Log($"Animator registered to AnimationSystem for Entity {_entityId}");
+                }
+            }
         }
 
         public Vector3 Vector3 { get {return _velocity;} }
@@ -148,14 +203,14 @@ namespace ARPG.Creature
 
         public virtual void UpdateStat()
         {
-            if (_statController == null || _characterInfo?.SkillController == null)
+            if (_statController == null /*|| _characterInfo?.SkillController == null?*/)
             {
                 Debug.LogError("[CharacterBase] UpdateStat() - null");
                 return;
             }
 
             _statController.UpdateStat();
-            _characterInfo.SkillController.UpdateSkillSpeed();
+            //_characterInfo.SkillController.UpdateSkillSpeed();
 
             _moveSpeed = _statController.GetStat(GlobalEnum.Stat.MoveSpeed) * (_statController.GetStat(GlobalEnum.Stat.MoveSpeedMul) * 0.01f);
 
@@ -203,7 +258,7 @@ namespace ARPG.Creature
         
         public virtual bool StartSkill(int inIndex)
         {
-            _characterInfo.SkillController.StartSkill(inIndex);
+            //_characterInfo.SkillController.StartSkill(inIndex);
             return true;
         }
 
@@ -299,14 +354,14 @@ namespace ARPG.Creature
             if (_moveState == MovementStates.Idle)
             {
                 // 스킬이 실행중일 때는 Idle 애니메이션을 실행하지 않음
-                if (_characterInfo.SkillController.CurrentSkill != null && _characterInfo.SkillController.CurrentSkill.IsRunning == true)
-                {
+                // if (_characterInfo.SkillController.CurrentSkill != null && _characterInfo.SkillController.CurrentSkill.IsRunning == true)
+                // {
 
-                }
-                else
-                {
-                    PlayAnimation(Animation.Idle, true);
-                }
+                // }
+                // else
+                // {
+                //     PlayAnimation(Animation.Idle, true);
+                // }
             }
             else if (_moveState == MovementStates.Walking)
             {
@@ -350,7 +405,7 @@ namespace ARPG.Creature
             //     _controller.SetHorizontalForce(0);
             // }
 
-            _characterInfo.SkillController.StopAllSkill();
+            //_characterInfo.SkillController.StopAllSkill();
 
             ChangeConditionState(CharacterConditions.Dead);
         }
@@ -393,7 +448,7 @@ namespace ARPG.Creature
             if (CharacterConditions.Dead <= _condition) // 캐릭터가 죽은 상태라면
                 return;
 
-            _characterInfo.SkillController.SkillUpdate(inDeltaTime);
+            //_characterInfo.SkillController.SkillUpdate(inDeltaTime);
 
             _buffController.UpdateTick(inDeltaTime);
 
@@ -468,7 +523,7 @@ namespace ARPG.Creature
             _movementStatePrev = _moveState;
             _moveState = inNew;
 
-            UpdateAnimator();
+            //UpdateAnimator();
         }
 
         protected IEnumerator LoopUpdate()

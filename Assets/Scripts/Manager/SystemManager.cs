@@ -25,6 +25,10 @@ namespace ARPG.Systems
             System_Move moveSystem = new();
             RegisterSystems(moveSystem);
 
+            // Priority 200: Skill System (FixedUpdate) - 스킬 로직
+            System_Skill skillSystem = new(); 
+            RegisterSystems(skillSystem);
+
             // Priority 500: Animation System (Update) - 애니메이션 제어
             System_Animation animationSystem = new();
             RegisterSystems(animationSystem);

@@ -24,7 +24,7 @@ namespace ARPG.Creature
         public SpriteRenderer Sr => _sr;
         public Animator Animator => _animator;
         public Image HpBar => _hpBar;
-        public Skill.SkillController SkillController => _skillController;
+        //public Skill.SkillController SkillController => _skillController;
         public TMPro.TextMeshPro TextName => _textName;
 
         public Transform BuffIconRoot => _buffImageRoot;
@@ -35,7 +35,7 @@ namespace ARPG.Creature
 
         public void Initialize(CharacterBase inCharacter)
         {
-            SkillController.Initialize(inCharacter);
+            //SkillController.Initialize(inCharacter);
 
             AnimationClip? clip = GetAnimationClip("Attack");
             if (clip != null)

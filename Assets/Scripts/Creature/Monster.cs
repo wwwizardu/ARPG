@@ -26,6 +26,14 @@ namespace ARPG.Creature
             _team = GlobalEnum.TeamType.Monster;
         }
 
+        protected override void InitializeECSComponents()
+        {
+            base.InitializeECSComponents();
+
+            // 기본 스킬 생성 (스킬 ID 2)
+            CreateSkill(0, 2); 
+        }
+
         public override void Reset()
         {
             base.Reset();
@@ -51,7 +59,7 @@ namespace ARPG.Creature
                 _ai = new BasicMonsterAI(this, _monsterTable.AiTable);
                 _ai.Initialize();
 
-                _characterInfo.SkillController.CreateSkill(_monsterTable.AiTable.SkillId1);
+                //_characterInfo.SkillController.CreateSkill(_monsterTable.AiTable.SkillId1);
             }
 
             _table = _monsterTable;

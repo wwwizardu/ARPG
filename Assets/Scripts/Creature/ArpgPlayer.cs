@@ -3,6 +3,7 @@ using ARPG.Component;
 using ARPG.Data;
 using ARPG.Tables;
 using ARPG.UI;
+using ARPG.Utility;
 using UnityEngine;
 
 namespace ARPG.Creature
@@ -36,10 +37,12 @@ namespace ARPG.Creature
             Debug.Log("ArpgPlayer initialized.");
         }
 
-        private void InitializeECSComponents()
+        protected override void InitializeECSComponents()
         {
-            // Entity ID 생성 (간단하게 GetInstanceID 사용)
-            _entityId = gameObject.GetInstanceID();
+            base.InitializeECSComponents();
+
+            // 기본 스킬 생성 (스킬 ID 1)
+            CreateSkill(0, 1); 
 
             // InputComponent 추가
             InputComponent inputComponent = new()
@@ -51,69 +54,6 @@ namespace ARPG.Creature
                 IsSprinting = false
             };
             AR.s.Component.AddComponent(_entityId, inputComponent);
-
-            // StatComponent 추가
-            StatComponent statComponent = new()
-            {
-                Level = 0,
-                CurrentHealth = 0,
-                MaxHealth = 0,
-                CurrentMana = 0,
-                MaxMana = 0,
-                Strength = 0,
-                Agility = 0,
-                Intelligence = 0
-            };
-            AR.s.Component.AddComponent(_entityId, statComponent);
-
-            // StateComponent 추가
-            StateComponent stateComponent = new();
-            stateComponent.Condition = CharacterConditions.Normal;
-            stateComponent.ConditionPrev = CharacterConditions.Normal;
-            stateComponent.MoveState = MovementStates.Idle;
-            stateComponent.MovementStatePrev = MovementStates.Idle;
-            AR.s.Component.AddComponent(_entityId, stateComponent);
-
-            // VelocityComponent 추가
-            VelocityComponent velocityComponent = new()
-            {
-                Velocity = Vector2.zero,
-                Speed = MoveSpeed, // CharacterBase의 MoveSpeed 사용
-                SprintMultiplier = 2f
-            };
-            AR.s.Component.AddComponent(_entityId, velocityComponent);
-
-            // TransformComponent 추가
-            TransformComponent transformComponent = new()
-            {
-                Position = new Vector2(transform.position.x, transform.position.y),
-                Rotation = 0f,
-                Scale = Vector2.one
-            };
-            AR.s.Component.AddComponent(_entityId, transformComponent);
-
-            // RenderSystem에 GameObject 등록
-            var renderSystem = AR.s.System.GetSystem<Systems.System_Render>();
-            if (renderSystem.HasValue)
-            {
-                var system = renderSystem.Value;
-                system.RegisterGameObject(_entityId, gameObject);
-                Debug.Log($"GameObject registered to RenderSystem for Entity {_entityId}");
-            }
-
-            // AnimationSystem에 Animator 등록 (Animator가 있는 경우)
-            if(_characterInfo.Animator != null)
-            {
-                var animSystem = AR.s.System.GetSystem<Systems.System_Animation>();
-                if (animSystem.HasValue)
-                {
-                    var system = animSystem.Value;
-                    system.RegisterAnimator(_entityId, _characterInfo.Animator);
-                    Debug.Log($"Animator registered to AnimationSystem for Entity {_entityId}");
-                }
-            }
-            
-            Debug.Log($"ECS Components initialized for Entity {_entityId}");
         }
 
         public override void Reset()
@@ -121,6 +61,16 @@ namespace ARPG.Creature
             base.Reset();
             // Reset player-specific state if needed
             Debug.Log("ArpgPlayer reset.");
+        }
+
+        private void OnDestroy()
+        {
+            // 엔티티 ID 제거 (스킬 엔티티도 함께 제거됨)
+            if (_entityId != 0)
+            {
+                EntityIdHelper.DestroyEntity(_entityId);
+                Debug.Log($"ArpgPlayer entity {_entityId} destroyed");
+            }
         }
 
         public override bool LoadTable(int inTableId)
@@ -149,7 +99,7 @@ namespace ARPG.Creature
             _playerData = AR.s.Data.Player;
 
            // 기본 스킬을 추가한다.
-            _characterInfo.SkillController.CreateSkill(1);
+            //_characterInfo.SkillController.CreateSkill(1);
 
             // 현재 체력과 마나 설정
             _statController.SetHp(_playerData.CurrentHp);

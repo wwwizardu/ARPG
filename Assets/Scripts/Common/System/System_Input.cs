@@ -1,6 +1,7 @@
 #nullable enable
 using ARPG.Component;
 using ARPG.Systems;
+using ARPG.Utility;
 using UnityEngine;
 
 namespace ARPG.Systems
@@ -67,9 +68,40 @@ namespace ARPG.Systems
             // 업데이트된 입력 컴포넌트 저장
             _componentManager.SetComponent(_playerEntityId, inputComponent);
 
+            // 공격 입력 처리
             if(inputComponent.IsAttacking == true)
             {
-                
+                // 슬롯 인덱스로 스킬 엔티티 ID 즉시 계산
+                int slotIndex = 0; // 기본 공격 슬롯
+                int skillEntityId = SkillEntityIdHelper.GetSkillEntityId(_playerEntityId, slotIndex);
+
+                // 스킬이 실제로 존재하는지 확인
+                if (AR.s.Component.TryGetComponent<SkillComponent>(skillEntityId, out var skill) == true)
+                {
+                    // 마우스 위치로 스킬 커맨드 생성
+                    if(AR.s.Component.TryGetComponent<SkillCommandComponent>(_playerEntityId, out var command) == false)
+                    {
+                        command = new SkillCommandComponent();
+                        if(skill.Table != null)
+                        {
+                            command.TargetType = skill.Table.SkillTargetType;    
+                        }
+                        else
+                        {
+                            Debug.LogError($"[System_Input] Skill.Table is null for SkillId({skill.SkillId}), SkillEntityId({skillEntityId})");
+                        }
+                    }
+
+                    command.SkillEntityId = skillEntityId;
+                    command.TargetPosition = inputComponent.MousePosition;
+
+                    // 캐릭터 엔티티에 커맨드 설정 (이미 있으면 덮어쓰기)
+                    _componentManager.SetComponent(_playerEntityId, command);
+                }
+                else
+                {
+                    Debug.LogWarning($"[System_Input] Skill not found at slot {slotIndex}");
+                }
             }
         }
     }

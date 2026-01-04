@@ -110,18 +110,18 @@ namespace ARPG.AI
 
         private void CreateSkill()
         {
-            if (0 < _table.SkillId1)
-            {
-                _character.CharacterInfo.SkillController.CreateSkill(_table.SkillId1);
-            }
-            if (0 < _table.SkillId2)
-            {
-                _character.CharacterInfo.SkillController.CreateSkill(_table.SkillId2);
-            }
-            if(0 < _table.SkillId3)
-            {
-                _character.CharacterInfo.SkillController.CreateSkill(_table.SkillId3);    
-            }
+            // if (0 < _table.SkillId1)
+            // {
+            //     _character.CharacterInfo.SkillController.CreateSkill(_table.SkillId1);
+            // }
+            // if (0 < _table.SkillId2)
+            // {
+            //     _character.CharacterInfo.SkillController.CreateSkill(_table.SkillId2);
+            // }
+            // if(0 < _table.SkillId3)
+            // {
+            //     _character.CharacterInfo.SkillController.CreateSkill(_table.SkillId3);    
+            // }
         }
     }
 }

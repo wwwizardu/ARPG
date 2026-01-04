@@ -9,12 +9,10 @@ namespace ARPG.Component
     {
         /// <summary>실행 중이 아님</summary>
         None,
-        /// <summary>시작 단계</summary>
-        Start,
-        /// <summary>진행 단계 (데미지 등 주요 효과 발생)</summary>
-        Process,
-        /// <summary>종료 단계 (후딜레이)</summary>
-        End,
+        Start,      // 시작(시전 시간, 준비 모션)
+        Process,    // 진행(실제 스킬 효과 발생)
+        End,        // 종료(후딜레이)
+        Completed,  // 완료 (실제 효과는 없지만 상태를 구분하기 위채)
     }
 
     /// <summary>
@@ -30,6 +28,9 @@ namespace ARPG.Component
 
         /// <summary>이전 상태 (디버깅/로직 처리용)</summary>
         public SkillState PreviousState;
+
+        /// <summary>Single 타입 스킬의 효과가 이미 적용되었는지 여부</summary>
+        public bool IsEffectApplied;
 
         /// <summary>
         /// 스킬이 실행 중인지 여부
@@ -54,6 +55,7 @@ namespace ARPG.Component
             State = SkillState.None;
             PreviousState = SkillState.None;
             ElapsedTime = 0f;
+            IsEffectApplied = false;
         }
     }
 }
