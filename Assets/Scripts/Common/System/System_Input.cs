@@ -78,24 +78,30 @@ namespace ARPG.Systems
                 // 스킬이 실제로 존재하는지 확인
                 if (AR.s.Component.TryGetComponent<SkillComponent>(skillEntityId, out var skill) == true)
                 {
-                    // 마우스 위치로 스킬 커맨드 생성
-                    if(AR.s.Component.TryGetComponent<SkillCommandComponent>(_playerEntityId, out var command) == false)
+                    // 스킬이 실행 중이면 커맨드 생성하지 않음
+                    if (AR.s.Component.TryGetComponent<SkillStateComponent>(skillEntityId, out var skillState))
                     {
-                        command = new SkillCommandComponent();
-                        if(skill.Table != null)
+                        if (skillState.IsRunning)
                         {
-                            command.TargetType = skill.Table.SkillTargetType;    
+                            return;
                         }
-                        else
-                        {
-                            Debug.LogError($"[System_Input] Skill.Table is null for SkillId({skill.SkillId}), SkillEntityId({skillEntityId})");
-                        }
+                    }
+
+                    // 마우스 위치로 스킬 커맨드 생성 (이미 있으면 최신 마우스 위치로 업데이트)
+                    SkillCommandComponent command = new SkillCommandComponent();
+                    if(skill.Table != null)
+                    {
+                        command.TargetType = skill.Table.SkillTargetType;
+                    }
+                    else
+                    {
+                        Debug.LogError($"[System_Input] Skill.Table is null for SkillId({skill.SkillId}), SkillEntityId({skillEntityId})");
                     }
 
                     command.SkillEntityId = skillEntityId;
                     command.TargetPosition = inputComponent.MousePosition;
 
-                    // 캐릭터 엔티티에 커맨드 설정 (이미 있으면 덮어쓰기)
+                    // 캐릭터 엔티티에 커맨드 설정 (이미 있으면 최신 값으로 덮어쓰기)
                     _componentManager.SetComponent(_playerEntityId, command);
                 }
                 else

@@ -1,5 +1,6 @@
 #nullable enable
 using ARPG.Component;
+using Mono.Cecil.Cil;
 using UnityEngine;
 
 namespace ARPG.Systems
@@ -49,7 +50,7 @@ namespace ARPG.Systems
                     if (ShouldCancelSkill(skill) == true)
                     {
                         // 실행 중인 스킬이 있으면 취소
-                        StopSkillInternal(skillEntityId, ref skillState);
+                        StopSkillInternal(skillEntityId, ref skill, ref skillState);
                         continue; // 스킬 업데이트 건너뜀
                     }
 
@@ -78,8 +79,14 @@ namespace ARPG.Systems
         /// <param name="skill">스킬 컴포넌트</param>
         private readonly void ProcessSkillCommands(int skillEntityId, ref SkillComponent inSkill, ref SkillCommandComponent inCommand)
         {
+            if(AR.s.Component.TryGetComponent<StateComponent>(inSkill.OwnerEntityId, out var charState) == false)
+            {
+                Debug.LogError($"[System_Skill] Character StateComponent not found (OwnerEntityId: {inSkill.OwnerEntityId})");
+                return;
+            }
+
             // 스킬 사용 가능 여부 확인
-            if(CheckEnableSkill(skillEntityId, inSkill.OwnerEntityId) == false)
+            if(CheckEnableSkill(charState) == false)
                 return;
 
             // 상태 컴포넌트가 없으면 건너뜀
@@ -137,11 +144,15 @@ namespace ARPG.Systems
             AR.s.Component.SetComponent(skillEntityId, target);
 
             // 스킬 시작
-            OnChangeState(skillEntityId, ref skillState, SkillState.Start);
+            OnChangeState(skillEntityId, ref skillState, ref inSkill, SkillState.Start);
             AR.s.Component.SetComponent(skillEntityId, skillState);
 
             // 커맨드 처리 완료 - 컴포넌트 제거
             AR.s.Component.RemoveComponent<SkillCommandComponent>(inSkill.OwnerEntityId);
+
+            // 캐릭터 상태 변경
+            charState.Condition = Creature.CharacterConditions.UseSkill;
+            AR.s.Component.SetComponent(inSkill.OwnerEntityId , charState);
         }
 
         /// <summary>
@@ -203,7 +214,10 @@ namespace ARPG.Systems
             if (state.ElapsedTime >= timing.StartDuration)
             {
                 // Process 상태로 전환
-                OnChangeState(skillEntityId, ref state, SkillState.Process);
+                if (AR.s.Component.TryGetComponent<SkillComponent>(skillEntityId, out var skill))
+                {
+                    OnChangeState(skillEntityId, ref state, ref skill, SkillState.Process);
+                }
             }
         }
 
@@ -244,7 +258,7 @@ namespace ARPG.Systems
             if (state.ElapsedTime >= timing.ProcessDuration)
             {
                 // End 상태로 전환
-                OnChangeState(skillEntityId, ref state, SkillState.End);
+                OnChangeState(skillEntityId, ref state, ref skill, SkillState.End);
             }
         }
 
@@ -256,14 +270,17 @@ namespace ARPG.Systems
             if (state.ElapsedTime >= timing.EndDuration)
             {
                 // 스킬 종료
-                OnChangeState(skillEntityId, ref state, SkillState.None);
+                if (AR.s.Component.TryGetComponent<SkillComponent>(skillEntityId, out var skill))
+                {
+                    OnChangeState(skillEntityId, ref state, ref skill, SkillState.None);
+                }
             }
         }
 
         /// <summary>
         /// 스킬 상태 변경 및 상태 진입 처리
         /// </summary>
-        private readonly void OnChangeState(int skillEntityId, ref SkillStateComponent state, SkillState newState)
+        private readonly void OnChangeState(int skillEntityId, ref SkillStateComponent state, ref SkillComponent skill, SkillState newState)
         {
             state.ChangeState(newState);
 
@@ -271,19 +288,19 @@ namespace ARPG.Systems
             switch (newState)
             {
                 case SkillState.Start:
-                    OnEnterStartState(skillEntityId);
+                    OnEnterStartState(skillEntityId, ref skill);
                     break;
 
                 case SkillState.Process:
-                    OnEnterProcessState(skillEntityId);
+                    OnEnterProcessState(skillEntityId, ref skill);
                     break;
 
                 case SkillState.End:
-                    OnEnterEndState(skillEntityId);
+                    OnEnterEndState(skillEntityId, ref skill);
                     break;
 
                 case SkillState.None:
-                    OnSkillComplete(skillEntityId);
+                    OnSkillComplete(skillEntityId, ref skill, ref state);
                     break;
             }
         }
@@ -292,18 +309,37 @@ namespace ARPG.Systems
         /// <summary>
         /// Start 상태 진입 시 호출 - 스킬 준비 모션 시작
         /// </summary>
-        private readonly void OnEnterStartState(int skillEntityId)
+        private readonly void OnEnterStartState(int skillEntityId, ref SkillComponent inSkill)
         {
-            // TODO: 시작 이펙트, 사운드, 애니메이션 등
-            Debug.Log($"[System_Skill] Skill Start - SkillEntityId: {skillEntityId}");
+            // AnimatorComponent를 통해 애니메이션 재생 요청
+            if (AR.s.Component.TryGetComponent<AnimatorComponent>(inSkill.OwnerEntityId, out var animatorComp))
+            {
+                if (inSkill.Table != null && string.IsNullOrEmpty(inSkill.Table.AnimationName) == false)
+                {
+                    int animHash = UnityEngine.Animator.StringToHash(inSkill.Table.AnimationName);
+                    animatorComp.RequestAnimation(animHash);
+                    AR.s.Component.SetComponent(inSkill.OwnerEntityId, animatorComp);
 
-            
+                    Debug.Log($"[System_Skill] Requested animation '{inSkill.Table.AnimationName}' (Hash: {animHash}) - SkillEntityId: {skillEntityId}, OwnerEntityId: {inSkill.OwnerEntityId}");
+                }
+                else
+                {
+                    Debug.LogWarning($"[System_Skill] No animation name set for SkillId: {inSkill.SkillId}");
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"[System_Skill] AnimatorComponent not found for OwnerEntityId: {inSkill.OwnerEntityId}");
+            }
+
+            // TODO: 시작 이펙트, 사운드 등
+            Debug.Log($"[System_Skill] Skill Start - SkillEntityId: {skillEntityId}");
         }
 
         /// <summary>
         /// Process 상태 진입 시 호출 - 실제 스킬 효과 발생
         /// </summary>
-        private readonly void OnEnterProcessState(int skillEntityId)
+        private readonly void OnEnterProcessState(int skillEntityId, ref SkillComponent inSkill)
         {
             // SkillTarget 컴포넌트에서 타겟 정보 가져오기
             if (!AR.s.Component.TryGetComponent<SkillTargetComponent>(skillEntityId, out var target))
@@ -316,7 +352,7 @@ namespace ARPG.Systems
         /// <summary>
         /// End 상태 진입 시 호출
         /// </summary>
-        private readonly void OnEnterEndState(int skillEntityId)
+        private readonly void OnEnterEndState(int skillEntityId, ref SkillComponent inSkill)
         {
             // TODO: 종료 이펙트, 사운드 등
             Debug.Log($"[System_Skill] Skill End - SkillEntityId: {skillEntityId}");
@@ -325,14 +361,25 @@ namespace ARPG.Systems
         /// <summary>
         /// 스킬 완료 시 호출
         /// </summary>
-        private readonly void OnSkillComplete(int skillEntityId)
+        private readonly void OnSkillComplete(int skillEntityId, ref SkillComponent inSkill, ref SkillStateComponent inSkillState)
         {
             // 스킬 런타임 데이터 초기화
-            if (AR.s.Component.TryGetComponent<SkillComponent>(skillEntityId, out var skill))
+            inSkill.ResetRuntimeData();
+            AR.s.Component.SetComponent(skillEntityId, inSkill);
+
+            // 스킬 상태 초기화
+            inSkillState.Reset();
+            AR.s.Component.SetComponent(skillEntityId, inSkillState);
+
+            // 캐릭터 상태 초기화
+            if(AR.s.Component.TryGetComponent<StateComponent>(inSkill.OwnerEntityId, out var charState) == false)
             {
-                skill.ResetRuntimeData();
-                AR.s.Component.SetComponent(skillEntityId, skill);
+                Debug.LogError($"[System_Skill] StopSkillInternal - StateComponent not found, EntityId({inSkill.OwnerEntityId})");
+                return;
             }
+
+            charState.Condition = Creature.CharacterConditions.Normal;
+            AR.s.Component.SetComponent(inSkill.OwnerEntityId, charState);
 
             // TODO: 스킬 완료 콜백 처리
             // - 쿨다운 시작
@@ -360,7 +407,7 @@ namespace ARPG.Systems
             // 다음 히트 시간이 되었으면 효과 적용
             if (state.ElapsedTime >= nextHitTime)
             {
-                ApplySkillEffect(skillEntityId, skill);
+                ProcessSkillHit(skillEntityId, skill);
                 skill.CurrentHitIndex++;
 
                 Debug.Log($"[System_Skill] MultiHit {skill.CurrentHitIndex}/{skill.HitCount} - SkillEntityId: {skillEntityId}");
@@ -375,10 +422,10 @@ namespace ARPG.Systems
             // 입력이 끊기면 스킬 중단함
             if(AR.s.Component.TryGetComponent<SkillCommandComponent>(skill.OwnerEntityId, out var command) == false)
             {
-                StopSkillInternal(skillEntityId, ref state);
+                StopSkillInternal(skillEntityId, ref skill, ref state);
                 return;
             }
-            
+
             // if (!IsInputHeld(skill.OwnerEntityId))
             // {
             //     OnChangeState(skillEntityId, ref state, SkillState.End);
@@ -388,7 +435,7 @@ namespace ARPG.Systems
             // 채널링 간격마다 효과 적용
             if (state.ElapsedTime - skill.LastChannelingTime >= skill.ChannelingInterval)
             {
-                ApplySkillEffect(skillEntityId, skill);
+                ProcessSkillHit(skillEntityId, skill);
                 skill.LastChannelingTime = state.ElapsedTime;
 
                 Debug.Log($"[System_Skill] Channeling tick at {state.ElapsedTime:F2}s - SkillEntityId: {skillEntityId}");
@@ -428,7 +475,7 @@ namespace ARPG.Systems
                 if (skill.IsToggleActive)
                 {
                     // 토글 ON - 버프 적용 등
-                    ApplySkillEffect(skillEntityId, skill);
+                    ProcessSkillHit(skillEntityId, skill);
                     Debug.Log($"[System_Skill] Toggle ON - SkillEntityId: {skillEntityId}");
                 }
                 else
@@ -444,9 +491,9 @@ namespace ARPG.Systems
         }
 
         /// <summary>
-        /// 스킬 효과를 적용합니다
+        /// 스킬 히트 처리 - 충돌 판정 후 타겟에 스킬 효과 적용
         /// </summary>
-        private readonly void ApplySkillEffect(int skillEntityId, SkillComponent skill)
+        private readonly void ProcessSkillHit(int skillEntityId, SkillComponent skill)
         {
             // SkillTarget 컴포넌트에서 타겟 정보 가져오기
             if (AR.s.Component.TryGetComponent<SkillTargetComponent>(skillEntityId, out var target) == false)
@@ -478,7 +525,7 @@ namespace ARPG.Systems
             // - 버프/디버프 적용
             // - 넉백, CC 효과 등
 
-            Debug.Log($"[System_Skill] ApplySkillEffect - SkillEntityId: {skillEntityId}, OwnerEntityId: {skill.OwnerEntityId}, HitCount: {hitEntities.Count}");
+            Debug.Log($"[System_Skill] ProcessSkillHit - SkillEntityId: {skillEntityId}, OwnerEntityId: {skill.OwnerEntityId}, HitCount: {hitEntities.Count}");
         }
 
         /// <summary>
@@ -699,7 +746,7 @@ namespace ARPG.Systems
             }
 
             // 스킬 시작
-            OnChangeState(skillEntityId, ref state, SkillState.Start);
+            OnChangeState(skillEntityId, ref state, ref skill, SkillState.Start);
             AR.s.Component.SetComponent(skillEntityId, state);
 
             Debug.Log($"[System_Skill] Skill started at position - SkillEntityId: {skillEntityId}, Position: {position}");
@@ -733,7 +780,7 @@ namespace ARPG.Systems
             }
 
             // 스킬 시작
-            OnChangeState(skillEntityId, ref state, SkillState.Start);
+            OnChangeState(skillEntityId, ref state, ref skill, SkillState.Start);
             AR.s.Component.SetComponent(skillEntityId, state);
 
             Debug.Log($"[System_Skill] Skill started in direction - SkillEntityId: {skillEntityId}, Direction: {direction}");
@@ -743,19 +790,9 @@ namespace ARPG.Systems
         /// <summary>
         /// 스킬 강제 중단 (내부 사용)
         /// </summary>
-        private readonly void StopSkillInternal(int skillEntityId)
+        private readonly void StopSkillInternal(int skillEntityId, ref SkillComponent inSkill, ref SkillStateComponent inState)
         {
-            if (AR.s.Component.TryGetComponent<SkillStateComponent>(skillEntityId, out var state))
-            {
-                StopSkillInternal(skillEntityId, ref state);
-            }
-        }
-
-        private readonly void StopSkillInternal(int skillEntityId, ref SkillStateComponent state)
-        {
-            state.Reset();
-            AR.s.Component.SetComponent(skillEntityId, state);
-
+            OnSkillComplete(skillEntityId, ref inSkill, ref inState);
             Debug.Log($"[System_Skill] Skill stopped - SkillEntityId: {skillEntityId}");
         }
 
@@ -776,19 +813,13 @@ namespace ARPG.Systems
             return false;
         }
 
-        private readonly bool CheckEnableSkill(int skillEntityId, int ownerEntityId)
+        private readonly bool CheckEnableSkill(StateComponent inCharState)
         {
-            if(AR.s.Component.TryGetComponent<StateComponent>(ownerEntityId, out var charState) == false)
-            {
-                Debug.LogError($"[System_Skill] Character StateComponent not found (OwnerEntityId: {ownerEntityId})");
-                return false;
-            }
-
             // 비정상 상태에서는 스킬 사용 불가    
-            if(charState.Condition != Creature.CharacterConditions.Normal)
-                return false;
+            if(inCharState.Condition == Creature.CharacterConditions.Normal)
+                return true;
         
-            return true;
+            return false;
         }
 
         #endregion

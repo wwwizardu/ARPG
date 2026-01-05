@@ -35,6 +35,13 @@ namespace ARPG.Systems
                 _entityToAnimator = new Dictionary<int, Animator>();
 
             _entityToAnimator[entityId] = animator;
+
+            // Animator가 있으면 AnimatorComponent도 자동 추가
+            if (_componentManager != null && !_componentManager.HasComponent<AnimatorComponent>(entityId))
+            {
+                _componentManager.AddComponent(entityId, new AnimatorComponent());
+            }
+
             Debug.Log($"Animator registered for Entity {entityId}");
         }
 
@@ -46,6 +53,17 @@ namespace ARPG.Systems
 
             _entityToAnimator.Remove(entityId);
             Debug.Log($"Animator unregistered for Entity {entityId}");
+        }
+
+        // Animator 가져오기
+        public readonly bool TryGetAnimator(int entityId, out Animator animator)
+        {
+            animator = null;
+
+            if (_entityToAnimator == null)
+                return false;
+
+            return _entityToAnimator.TryGetValue(entityId, out animator);
         }
 
         // Update: VelocityComponent 기반으로 애니메이션 상태 결정
@@ -63,6 +81,18 @@ namespace ARPG.Systems
                 if (animator == null)
                     continue;
 
+                // 1. AnimatorComponent의 애니메이션 재생 요청 처리
+                if (_componentManager.TryGetComponent<AnimatorComponent>(entityId, out var animatorComp) == true)
+                {
+                    if (animatorComp.HasRequest)
+                    {
+                        animator.SetTrigger(animatorComp.RequestedAnimationHash);
+                        animatorComp.ClearRequest();
+                        _componentManager.SetComponent(entityId, animatorComp);
+                    }
+                }
+
+                // 2. StateComponent 기반 애니메이션 처리
                 if (_componentManager.TryGetComponent<StateComponent>(entityId, out var state) == true)
                 {
                     UpdateAnimatorFromState(animator, ref state, entityId);
@@ -79,7 +109,6 @@ namespace ARPG.Systems
                     case Creature.CharacterConditions.Normal:   // 정상 상태
                         break;
                     case Creature.CharacterConditions.UseSkill: // 스킬 사용 상태
-                        UpdateSkillAnimation(animator, entityId, ref state);
                         break;
                     case Creature.CharacterConditions.Stunned:  // 기절 상태
                         break;

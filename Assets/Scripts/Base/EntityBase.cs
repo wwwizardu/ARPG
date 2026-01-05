@@ -71,6 +71,9 @@ namespace ARPG.Base
                 Table = skillTable,
                 IsInitialized = true,
                 IsEnabled = true,
+                ExecutionType = SkillExecutionType.MultiHit,
+                HitCount = 1,
+                HitInterval = 0,
             });
 
             // SkillStateComponent 추가
@@ -83,9 +86,9 @@ namespace ARPG.Base
             // SkillTimingComponent 추가
             AR.s.Component.AddComponent(skillEntityId, new SkillTimingComponent
             {
-                StartDuration = 0,
-                ProcessDuration = 0,
-                EndDuration = 0
+                StartDuration = skillTable.DamageTime,
+                ProcessDuration = 0.1f,
+                EndDuration = skillTable.Duration - skillTable.DamageTime,
             });
 
             // SkillTargetComponent 추가
