@@ -20,7 +20,7 @@ namespace ARPG.Base
 
         }
 
-        protected virtual void InitializeECSComponents()
+        public virtual void InitializeECSComponents()
         {
             // EntityId 생성
             _entityId = EntityIdHelper.CreateEntity();

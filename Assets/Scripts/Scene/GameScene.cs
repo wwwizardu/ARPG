@@ -24,6 +24,8 @@ namespace ARPG.Scene
                 {
                     player.Initialize();
                     player.Load(1); // 임시로 ID 1 사용
+                    player.InitializeECSComponents();
+
                     _cameraController.Initialize(player);
 
                     AR.s.Player.AddPlayer(player);

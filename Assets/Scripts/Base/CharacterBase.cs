@@ -88,22 +88,13 @@ namespace ARPG.Creature
             //_characterInfo.SkillController.Reset();
         }
 
-        protected override void InitializeECSComponents()
+        public override void InitializeECSComponents()
         {
             base.InitializeECSComponents();
 
             // StatComponent 추가
-            Component.StatComponent statComponent = new()
-            {
-                Level = 0,
-                CurrentHealth = 0,
-                MaxHealth = 0,
-                CurrentMana = 0,
-                MaxMana = 0,
-                Strength = 0,
-                Agility = 0,
-                Intelligence = 0
-            };
+            Component.StatComponent statComponent = new();
+            statComponent.InitializeFromTable(Table.Stat);
             AR.s.Component.AddComponent(_entityId, statComponent);
 
             // StateComponent 추가

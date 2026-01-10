@@ -31,13 +31,10 @@ namespace ARPG.Creature
 
             _inventory.Initialize(AR.s.Data.Player._inventory, AR.s.Data.Player._inventory.Count);
 
-            // ECS 컴포넌트 초기화
-            InitializeECSComponents();
-
             Debug.Log("ArpgPlayer initialized.");
         }
 
-        protected override void InitializeECSComponents()
+        public override void InitializeECSComponents()
         {
             base.InitializeECSComponents();
 
