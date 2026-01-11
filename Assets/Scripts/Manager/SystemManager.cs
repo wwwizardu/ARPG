@@ -21,6 +21,10 @@ namespace ARPG.Systems
             System_Input inputSystem = new();
             RegisterSystems(inputSystem);
 
+            // Priority 40: Buff Update System (Update) - 버프 시간 감소 및 만료
+            System_BuffUpdate buffUpdateSystem = new();
+            RegisterSystems(buffUpdateSystem);
+
             // Priority 100: Movement System (FixedUpdate) - 이동 로직
             System_Move moveSystem = new();
             RegisterSystems(moveSystem);

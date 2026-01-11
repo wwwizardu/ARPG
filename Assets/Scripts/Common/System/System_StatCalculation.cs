@@ -102,12 +102,21 @@ namespace ARPG.Systems
         {
             List<StatModifier> modifiers = new List<StatModifier>();
 
-            // StatModifierBufferElement를 하나씩 가져와서 리스트에 추가
-            // (현재 구조에서는 SparseSet을 사용하므로, 여러 개의 modifier를 저장하려면
-            //  각 modifier마다 별도의 타입을 만들거나, Dictionary를 사용해야 함)
+            // StatModifierComponent 풀에서 이 엔티티에 적용되는 modifier들 찾기
+            SparseSet<StatModifierComponent> modifierPool = AR.s.Component.GetComponentPool<StatModifierComponent>();
+            if (modifierPool == null || modifierPool.Count == 0)
+                return modifiers;
 
-            // 임시 구현: 여러 modifier를 처리할 수 있도록 수정 필요
-            // 여기서는 기본 구조만 제공
+            // 모든 StatModifier를 순회하며 해당 엔티티의 것만 수집
+            for (int i = 0; i < modifierPool.Count; i++)
+            {
+                StatModifierComponent modComp = modifierPool.GetByIndex(i);
+
+                if (modComp.OwnerEntityId == entityId)
+                {
+                    modifiers.Add(modComp.Modifier);
+                }
+            }
 
             return modifiers;
         }
