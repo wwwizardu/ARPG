@@ -28,9 +28,10 @@ namespace ARPG.Utility
         private static readonly Dictionary<int, HashSet<int>> _characterSkillSlots = new Dictionary<int, HashSet<int>>();
 
         /// <summary>
-        /// 타겟별 버프 타입별 사용중인 인스턴스 인덱스 추적 (targetEntityId -> (buffTableID -> 사용중인 인스턴스 인덱스들))
+        /// 타겟별 버프 타입 추적 (targetEntityId -> 사용중인 buffTableID 집합)
+        /// 같은 타입의 버프는 StackCount로 관리하므로 타입당 하나의 Entity만 존재
         /// </summary>
-        private static readonly Dictionary<int, Dictionary<int, HashSet<int>>> _targetBuffInstances = new Dictionary<int, Dictionary<int, HashSet<int>>>();
+        private static readonly Dictionary<int, HashSet<int>> _targetBuffTypes = new Dictionary<int, HashSet<int>>();
 
         /// <summary>
         /// 재사용 가능한 엔티티 ID 풀 (삭제된 ID를 재활용)
@@ -54,7 +55,7 @@ namespace ARPG.Utility
             _nextEntityId = 0;
             _registeredEntityIds.Clear();
             _characterSkillSlots.Clear();
-            _targetBuffInstances.Clear();
+            _targetBuffTypes.Clear();
             _recycledEntityIds.Clear();
             Debug.Log("[EntityIdHelper] Reset - All entities cleared");
         }
@@ -310,10 +311,11 @@ namespace ARPG.Utility
 
         /// <summary>
         /// 버프 엔티티 생성 (결정적 ID 사용)
+        /// 같은 타입의 버프가 이미 존재하면 -1을 반환 (BuffSystem에서 StackCount 증가 처리)
         /// </summary>
         /// <param name="targetEntityId">버프를 받을 타겟 엔티티 ID</param>
         /// <param name="buffTableID">버프 테이블 ID</param>
-        /// <returns>생성된 버프 엔티티 ID, 실패시 -1</returns>
+        /// <returns>생성된 버프 엔티티 ID, 이미 존재하거나 실패시 -1</returns>
         public static int CreateBuffEntity(int targetEntityId, int buffTableID)
         {
             // 타겟 엔티티가 등록되어 있는지 확인
@@ -330,57 +332,37 @@ namespace ARPG.Utility
                 return -1;
             }
 
-            // 타겟의 버프 인스턴스 추적 초기화
-            if (!_targetBuffInstances.ContainsKey(targetEntityId))
-            {
-                _targetBuffInstances[targetEntityId] = new Dictionary<int, HashSet<int>>();
-            }
-
-            Dictionary<int, HashSet<int>> buffInstances = _targetBuffInstances[targetEntityId];
-
-            // 해당 버프 타입의 인스턴스 추적 초기화
-            if (!buffInstances.ContainsKey(buffTableID))
-            {
-                buffInstances[buffTableID] = new HashSet<int>();
-            }
-
-            HashSet<int> usedInstances = buffInstances[buffTableID];
-
-            // 사용 가능한 첫 번째 인스턴스 인덱스 찾기
-            int instanceIndex = -1;
-            for (int i = 0; i < BuffEntityIdHelper.MAX_BUFF_INSTANCES_PER_TYPE; i++)
-            {
-                if (!usedInstances.Contains(i))
-                {
-                    instanceIndex = i;
-                    break;
-                }
-            }
-
-            if (instanceIndex == -1)
-            {
-                Debug.LogError($"[EntityIdHelper] No available buff instance slots for target {targetEntityId}, buff table {buffTableID}. Max: {BuffEntityIdHelper.MAX_BUFF_INSTANCES_PER_TYPE}");
-                return -1;
-            }
-
             // 버프 엔티티 ID 생성
-            int buffEntityId = BuffEntityIdHelper.GetBuffEntityId(targetEntityId, buffTableID, instanceIndex);
+            int buffEntityId = BuffEntityIdHelper.GetBuffEntityId(targetEntityId, buffTableID);
             if (buffEntityId == -1)
             {
                 Debug.LogError($"[EntityIdHelper] Failed to create buff entity ID");
                 return -1;
             }
 
+            // 이미 같은 버프가 존재하는지 확인
+            if (_registeredEntityIds.Contains(buffEntityId))
+            {
+                // 이미 존재함 - BuffSystem에서 StackCount 증가 처리
+                return -1;
+            }
+
+            // 타겟의 버프 타입 추적 초기화
+            if (!_targetBuffTypes.ContainsKey(targetEntityId))
+            {
+                _targetBuffTypes[targetEntityId] = new HashSet<int>();
+            }
+
             // 등록
             _registeredEntityIds.Add(buffEntityId);
-            usedInstances.Add(instanceIndex);
+            _targetBuffTypes[targetEntityId].Add(buffTableID);
 
-            Debug.Log($"[EntityIdHelper] Buff entity created - ID: {buffEntityId}, Target: {targetEntityId}, TableID: {buffTableID}, Instance: {instanceIndex}");
+            Debug.Log($"[EntityIdHelper] Buff entity created - ID: {buffEntityId}, Target: {targetEntityId}, TableID: {buffTableID}");
             return buffEntityId;
         }
 
         /// <summary>
-        /// 버프 엔티티를 제거하고 인스턴스 슬롯 해제
+        /// 버프 엔티티를 제거하고 타입 추적에서 제거
         /// </summary>
         /// <param name="buffEntityId">제거할 버프 엔티티 ID</param>
         public static void DestroyBuffEntity(int buffEntityId)
@@ -394,7 +376,6 @@ namespace ARPG.Utility
             // 버프 엔티티 ID에서 정보 추출
             int targetEntityId = BuffEntityIdHelper.GetTargetEntityId(buffEntityId);
             int buffTableID = BuffEntityIdHelper.GetBuffTableID(buffEntityId);
-            int instanceIndex = BuffEntityIdHelper.GetInstanceIndex(buffEntityId);
 
             // 유효성 검증
             if (!BuffEntityIdHelper.IsValidBuffEntityId(buffEntityId))
@@ -406,26 +387,19 @@ namespace ARPG.Utility
             // 등록 해제
             _registeredEntityIds.Remove(buffEntityId);
 
-            // 인스턴스 슬롯 해제
-            if (_targetBuffInstances.ContainsKey(targetEntityId) &&
-                _targetBuffInstances[targetEntityId].ContainsKey(buffTableID))
+            // 버프 타입 추적에서 제거
+            if (_targetBuffTypes.ContainsKey(targetEntityId))
             {
-                _targetBuffInstances[targetEntityId][buffTableID].Remove(instanceIndex);
-
-                // 해당 버프 타입의 인스턴스가 모두 제거되면 Dictionary에서도 제거
-                if (_targetBuffInstances[targetEntityId][buffTableID].Count == 0)
-                {
-                    _targetBuffInstances[targetEntityId].Remove(buffTableID);
-                }
+                _targetBuffTypes[targetEntityId].Remove(buffTableID);
 
                 // 타겟의 모든 버프가 제거되면 Dictionary에서도 제거
-                if (_targetBuffInstances[targetEntityId].Count == 0)
+                if (_targetBuffTypes[targetEntityId].Count == 0)
                 {
-                    _targetBuffInstances.Remove(targetEntityId);
+                    _targetBuffTypes.Remove(targetEntityId);
                 }
             }
 
-            Debug.Log($"[EntityIdHelper] Buff entity destroyed - ID: {buffEntityId}, Target: {targetEntityId}, TableID: {buffTableID}, Instance: {instanceIndex}");
+            Debug.Log($"[EntityIdHelper] Buff entity destroyed - ID: {buffEntityId}, Target: {targetEntityId}, TableID: {buffTableID}");
         }
 
         /// <summary>
@@ -440,16 +414,15 @@ namespace ARPG.Utility
         }
 
         /// <summary>
-        /// 타겟이 특정 버프 타입을 몇 개 가지고 있는지 반환
+        /// 타겟이 특정 버프 타입을 가지고 있는지 확인
         /// </summary>
-        public static int GetBuffInstanceCount(int targetEntityId, int buffTableID)
+        public static bool HasBuffType(int targetEntityId, int buffTableID)
         {
-            if (_targetBuffInstances.ContainsKey(targetEntityId) &&
-                _targetBuffInstances[targetEntityId].ContainsKey(buffTableID))
+            if (_targetBuffTypes.ContainsKey(targetEntityId))
             {
-                return _targetBuffInstances[targetEntityId][buffTableID].Count;
+                return _targetBuffTypes[targetEntityId].Contains(buffTableID);
             }
-            return 0;
+            return false;
         }
 
         #endregion

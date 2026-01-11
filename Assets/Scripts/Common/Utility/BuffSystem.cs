@@ -14,11 +14,12 @@ namespace ARPG.Utility
     {
         /// <summary>
         /// 타겟 엔티티에 버프 추가
+        /// 같은 타입의 버프가 이미 존재하면 StackCount를 증가시킴
         /// </summary>
         /// <param name="targetEntityId">버프를 받을 엔티티 ID</param>
         /// <param name="buffTableID">버프 테이블 ID</param>
         /// <param name="duration">지속 시간 (초)</param>
-        /// <returns>생성된 버프 Entity ID, 실패 시 -1</returns>
+        /// <returns>버프 Entity ID (신규 생성 또는 기존), 실패 시 -1</returns>
         public static int AddBuff(int targetEntityId, int buffTableID, float duration)
         {
             // 1. 타겟 엔티티 유효성 검증
@@ -28,15 +29,36 @@ namespace ARPG.Utility
                 return -1;
             }
 
-            // 2. 버프 Entity 생성 (결정적 ID 사용)
+            // 2. 버프 Entity 생성 시도 (결정적 ID 사용)
             int buffEntityId = EntityIdHelper.CreateBuffEntity(targetEntityId, buffTableID);
+
             if (buffEntityId == -1)
             {
-                Debug.LogWarning($"[BuffSystem] Failed to create buff entity for target {targetEntityId}, table {buffTableID}");
-                return -1;
+                // 이미 같은 버프가 존재 - StackCount 증가
+                buffEntityId = BuffEntityIdHelper.GetBuffEntityId(targetEntityId, buffTableID);
+
+                if (AR.s.Component.TryGetComponent<BuffInstance>(buffEntityId, out BuffInstance existingBuff))
+                {
+                    existingBuff.StackCount++;
+                    existingBuff.RemainTime = duration; // 지속 시간 갱신
+                    existingBuff.Duration = duration;
+                    AR.s.Component.SetComponent(buffEntityId, existingBuff);
+
+                    Debug.Log($"[BuffSystem] Buff stacked - BuffEntityId: {buffEntityId}, Target: {targetEntityId}, TableID: {buffTableID}, StackCount: {existingBuff.StackCount}, Duration: {duration}");
+
+                    // Dirty 태그 추가 (스탯 재계산 요청 - 스택 증가 시 스탯 효과 재계산)
+                    AR.s.Component.AddComponent(targetEntityId, new StatDirtyTag());
+
+                    return buffEntityId;
+                }
+                else
+                {
+                    Debug.LogWarning($"[BuffSystem] Failed to create or find buff entity for target {targetEntityId}, table {buffTableID}");
+                    return -1;
+                }
             }
 
-            // 3. BuffInstance 컴포넌트 추가
+            // 3. 신규 버프 - BuffInstance 컴포넌트 추가
             AR.s.Component.AddComponent(buffEntityId, new BuffInstance(targetEntityId, buffTableID, duration));
 
             // 4. 버프 효과 로드 및 StatModifier 추가

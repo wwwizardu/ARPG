@@ -24,6 +24,7 @@ ECS 원칙에 맞는 버프 시스템을 **결정적 Entity ID**와 **BuffInstan
   - `BuffTableID`: 버프 테이블 ID
   - `Duration`: 전체 지속시간
   - `RemainTime`: 남은 시간
+  - `StackCount`: 중복 카운트 (같은 버프가 여러 번 적용되면 증가)
 
 ### 2. StatModifierComponent.cs
 - **역할**: 버프로 인한 스탯 효과를 별도 Entity로 관리
@@ -38,55 +39,60 @@ ECS 원칙에 맞는 버프 시스템을 **결정적 Entity ID**와 **BuffInstan
 
 **ID 생성 공식**:
 ```
-BuffEntityId = targetEntityId + (buffTableID + 1) * 100000 + instanceIndex * 10
+BuffEntityId = targetEntityId + (buffTableID + 1) * 100000
 ```
 
 **예시**:
 - Target Entity: 12345
 - Buff Table ID: 1001
-- Instance 0: `100212345` (첫 번째 공격력 버프)
-- Instance 1: `100212355` (두 번째 공격력 버프, 중복 적용)
+- BuffEntityId: `100212345`
+
+**중복 버프 관리**:
+- 같은 타입의 버프는 하나의 Entity만 존재
+- 중복 적용 시 `BuffInstance.StackCount`가 증가
 
 **주요 메서드**:
-- `GetBuffEntityId(targetEntityId, buffTableID, instanceIndex)`: ID 생성
+- `GetBuffEntityId(targetEntityId, buffTableID)`: ID 생성
 - `GetTargetEntityId(buffEntityId)`: 타겟 추출
 - `GetBuffTableID(buffEntityId)`: 버프 타입 추출
-- `GetInstanceIndex(buffEntityId)`: 인스턴스 번호 추출
 - `IsValidBuffEntityId(buffEntityId)`: 유효성 검증
 - `GetDebugString(buffEntityId)`: 디버그 문자열 생성
 
 **제한**:
 - 최대 버프 테이블 ID: 9999
-- 타입당 최대 인스턴스: 9999
 
 ### 2. EntityIdHelper.cs (버프 관련 추가)
 **추가된 기능**:
 - `CreateBuffEntity(targetEntityId, buffTableID)`: 버프 엔티티 생성
-  - 자동으로 사용 가능한 인스턴스 인덱스 찾기
+  - 같은 타입의 버프가 이미 존재하면 -1 반환 (BuffSystem에서 StackCount 증가)
   - 중복 ID 방지
 - `DestroyBuffEntity(buffEntityId)`: 버프 엔티티 삭제
-  - 인스턴스 슬롯 자동 해제
+  - 타입 추적에서 자동 제거
 - `IsValidBuffEntity(buffEntityId)`: 버프 엔티티 유효성 확인
-- `GetBuffInstanceCount(targetEntityId, buffTableID)`: 특정 버프 타입 개수 조회
+- `HasBuffType(targetEntityId, buffTableID)`: 특정 버프 타입 보유 여부 확인
 
 **내부 추적**:
 ```csharp
-Dictionary<int, Dictionary<int, HashSet<int>>> _targetBuffInstances
-// targetEntityId -> (buffTableID -> {instanceIndex 집합})
+Dictionary<int, HashSet<int>> _targetBuffTypes
+// targetEntityId -> {buffTableID 집합}
 ```
 
 ### 3. BuffSystem.cs (유틸리티)
 **주요 기능**:
 - `AddBuff(targetEntityId, buffTableID, duration)`: 버프 추가
   1. `EntityIdHelper.CreateBuffEntity()` 호출 (결정적 ID 생성)
-  2. BuffInstance 컴포넌트 추가
-  3. StatModifier Entity 생성 (스탯 효과)
+  2. **신규 버프인 경우**:
+     - BuffInstance 컴포넌트 추가 (StackCount = 1)
+     - StatModifier Entity 생성 (스탯 효과)
+  3. **기존 버프인 경우 (중복)**:
+     - BuffInstance.StackCount 증가
+     - Duration 및 RemainTime 갱신
   4. StatDirtyTag 추가 (재계산 요청)
 
 - `RemoveBuff(buffEntityId)`: 버프 제거
   1. StatModifier Entity들 삭제
   2. BuffInstance 제거
-  3. `EntityIdHelper.DestroyBuffEntity()` 호출 (슬롯 해제)
+  3. `EntityIdHelper.DestroyBuffEntity()` 호출 (타입 추적 제거)
   4. StatDirtyTag 추가
 
 - `RemoveBuffByTableID(targetEntityId, buffTableID)`: 특정 종류의 버프 제거
@@ -124,11 +130,11 @@ Dictionary<int, Dictionary<int, HashSet<int>>> _targetBuffInstances
 ├─ StatComponent
 └─ StatDirtyTag (재계산 필요 시)
 
-[버프 Entity #100212345]  ← 결정적 ID (Target: 5, TableID: 1001, Instance: 0)
-└─ BuffInstance { TargetEntityId: 5, BuffTableID: 1001, RemainTime: 5.2 }
+[버프 Entity #100212345]  ← 결정적 ID (Target: 5, TableID: 1001)
+└─ BuffInstance { TargetEntityId: 5, BuffTableID: 1001, RemainTime: 5.2, StackCount: 2 }
 
-[버프 Entity #100312345]  ← 결정적 ID (Target: 5, TableID: 1002, Instance: 0)
-└─ BuffInstance { TargetEntityId: 5, BuffTableID: 1002, RemainTime: 3.8 }
+[버프 Entity #100312345]  ← 결정적 ID (Target: 5, TableID: 1002)
+└─ BuffInstance { TargetEntityId: 5, BuffTableID: 1002, RemainTime: 3.8, StackCount: 1 }
 
 [StatModifier Entity #200]
 └─ StatModifierComponent { OwnerEntityId: 5, Modifier: { Attack +10 } }
@@ -136,6 +142,8 @@ Dictionary<int, Dictionary<int, HashSet<int>>> _targetBuffInstances
 [StatModifier Entity #201]
 └─ StatModifierComponent { OwnerEntityId: 5, Modifier: { Defense +20 } }
 ```
+
+**참고**: 같은 타입의 버프(예: 1001)가 여러 번 적용되면 별도 Entity를 생성하지 않고 `StackCount`만 증가합니다.
 
 ### 메모리 효율
 - **플레이어 1000명, 평균 버프 2개 가정**:
@@ -155,16 +163,15 @@ Dictionary<int, Dictionary<int, HashSet<int>>> _targetBuffInstances
 
 ## 실행 흐름
 
-### 버프 추가 시
+### 버프 추가 시 (신규)
 ```
 1. BuffSystem.AddBuff(targetEntityId: 5, buffTableID: 1001, duration: 10f)
    ↓
 2. EntityIdHelper.CreateBuffEntity(5, 1001)
-   ├─ 사용 가능한 인스턴스 인덱스 찾기 (0)
    ├─ BuffEntityID 생성: 100212345
-   └─ 등록 및 슬롯 추적
+   └─ 등록 및 타입 추적
    ↓
-3. BuffInstance 추가 (Entity #100212345)
+3. BuffInstance 추가 (Entity #100212345, StackCount: 1)
    ↓
 4. StatModifier Entity들 생성 (효과마다)
    ├─ Attack +10 (Entity #200)
@@ -173,6 +180,23 @@ Dictionary<int, Dictionary<int, HashSet<int>>> _targetBuffInstances
 5. StatDirtyTag 추가 (Entity #5)
    ↓
 6. [다음 프레임] System_StatCalculation이 스탯 재계산
+```
+
+### 버프 추가 시 (중복)
+```
+1. BuffSystem.AddBuff(targetEntityId: 5, buffTableID: 1001, duration: 10f)
+   ↓
+2. EntityIdHelper.CreateBuffEntity(5, 1001)
+   └─ 이미 존재 (100212345) → -1 반환
+   ↓
+3. BuffInstance 업데이트 (Entity #100212345)
+   ├─ StackCount: 1 → 2
+   ├─ Duration: 10f
+   └─ RemainTime: 10f (갱신)
+   ↓
+4. StatDirtyTag 추가 (Entity #5)
+   ↓
+5. [다음 프레임] System_StatCalculation이 스탯 재계산
 ```
 
 ### 버프 만료 시
@@ -192,7 +216,7 @@ Dictionary<int, Dictionary<int, HashSet<int>>> _targetBuffInstances
 5. BuffInstance 제거 (Entity #100212345)
    ↓
 6. EntityIdHelper.DestroyBuffEntity(100212345)
-   ├─ 인스턴스 슬롯 해제 (Instance 0)
+   ├─ 타입 추적에서 제거
    └─ 등록 해제
    ↓
 7. StatDirtyTag 추가 (Entity #5)
@@ -203,29 +227,40 @@ Dictionary<int, Dictionary<int, HashSet<int>>> _targetBuffInstances
 ## 사용 예시
 
 ```csharp
-// 플레이어에게 공격력 버프 10초 추가
+// 플레이어에게 공격력 버프 10초 추가 (신규)
 int buffEntityId = BuffSystem.AddBuff(playerEntityId, buffTableID: 1001, duration: 10f);
 // 결과: buffEntityId = 100212345 (결정적 ID)
+// BuffInstance.StackCount = 1
 
-// 같은 버프 다시 추가 (중복 적용)
+// 같은 버프 다시 추가 (중복 적용 - StackCount 증가)
 int buffEntityId2 = BuffSystem.AddBuff(playerEntityId, buffTableID: 1001, duration: 5f);
-// 결과: buffEntityId2 = 100212355 (Instance 1)
+// 결과: buffEntityId2 = 100212345 (동일한 ID)
+// BuffInstance.StackCount = 2, Duration = 5f (갱신)
 
 // 버프 보유 확인
 bool hasBuff = BuffSystem.HasBuff(playerEntityId, 1001);  // true
 
-// 특정 버프 제거
-BuffSystem.RemoveBuff(buffEntityId);  // 첫 번째 공격력 버프만 제거
+// EntityIdHelper로 빠른 체크
+bool hasBuffFast = EntityIdHelper.HasBuffType(playerEntityId, 1001);  // O(1)
+
+// 특정 버프 제거 (StackCount와 관계없이 전체 제거)
+BuffSystem.RemoveBuff(buffEntityId);
 
 // 특정 타입의 모든 버프 제거
-int removed = BuffSystem.RemoveBuffByTableID(playerEntityId, 1001);  // 남은 공격력 버프 제거
+int removed = BuffSystem.RemoveBuffByTableID(playerEntityId, 1001);
 
 // 모든 버프 제거
 BuffSystem.RemoveAllBuffs(playerEntityId);
 
 // BuffEntity ID 디버깅
 string debugInfo = BuffEntityIdHelper.GetDebugString(buffEntityId);
-// "BuffEntityId=100212345 (TargetId=5, TableId=1001, InstanceIndex=0)"
+// "BuffEntityId=100212345 (TargetId=5, TableId=1001)"
+
+// BuffInstance 확인
+if (AR.s.Component.TryGetComponent<BuffInstance>(buffEntityId, out var buff))
+{
+    Debug.Log($"StackCount: {buff.StackCount}, RemainTime: {buff.RemainTime}");
+}
 ```
 
 ## 확장 가능한 부분
@@ -240,12 +275,16 @@ case 1001: // 공격력 버프
 
 **개선안**: JSON/ScriptableObject로 버프 테이블 데이터 관리
 
-### 2. 버프 스택 정책
-현재는 같은 버프 여러 개 추가 가능 (중복 적용).
-**개선안**:
-- 스택 불가 버프: `AddBuff()` 전에 `HasBuff()` 체크
-- 스택 가능하지만 제한: `EntityIdHelper.GetBuffInstanceCount()` 활용
-- 시간 갱신 버프: 기존 버프의 RemainTime 업데이트
+### 2. 버프 스택 정책 (현재 구현됨!)
+**현재 동작**:
+- 같은 버프 타입은 하나의 Entity만 존재
+- 중복 추가 시 `BuffInstance.StackCount` 증가
+- 지속 시간은 마지막 적용 시간으로 갱신
+
+**추가 개선안**:
+- 스택 최대치 제한: BuffInstance에 `MaxStack` 필드 추가
+- 스택당 효과 배율: `StatModifier` 계산 시 StackCount 고려
+- StackCount 감소 로직: 제거 시 전체 제거 대신 StackCount만 감소
 
 ### 3. 버프 아이콘/UI
 현재는 데이터만 관리.
@@ -272,15 +311,20 @@ int buffEntityId = BuffSystem.AddBuff(playerEntityId, 1001, 10f);
 // ID 파싱
 int targetId = BuffEntityIdHelper.GetTargetEntityId(buffEntityId);  // 5
 int tableId = BuffEntityIdHelper.GetBuffTableID(buffEntityId);      // 1001
-int instanceIndex = BuffEntityIdHelper.GetInstanceIndex(buffEntityId); // 0
 
 // 디버그 문자열
 Debug.Log(BuffEntityIdHelper.GetDebugString(buffEntityId));
-// "BuffEntityId=100212345 (TargetId=5, TableId=1001, InstanceIndex=0)"
+// "BuffEntityId=100212345 (TargetId=5, TableId=1001)"
+
+// BuffInstance 정보 확인
+if (AR.s.Component.TryGetComponent<BuffInstance>(buffEntityId, out var buff))
+{
+    Debug.Log($"StackCount: {buff.StackCount}, RemainTime: {buff.RemainTime}");
+}
 ```
 
 ### Unity Inspector
-- BuffInstance의 모든 필드가 Inspector에 표시됨
+- BuffInstance의 모든 필드가 Inspector에 표시됨 (StackCount 포함)
 - Entity ID만 봐도 어떤 버프인지 파악 가능
 
 ### 예시 씬
@@ -345,12 +389,18 @@ Debug.Log(BuffEntityIdHelper.GetDebugString(buffEntityId));
 
 ## 주요 변경 이력
 
-### v2.0 (현재) - 결정적 ID 방식
+### v3.0 (현재) - StackCount 방식
+- **BuffInstance.StackCount 추가**: 중복 버프를 Entity 생성 대신 카운트로 관리
+- **BuffEntityIdHelper 단순화**: 인스턴스 인덱스 제거, 타입당 하나의 ID
+- **EntityIdHelper 단순화**: `_targetBuffTypes`로 타입 추적만 수행
+- **자동 스택**: 같은 버프 추가 시 자동으로 StackCount 증가 및 시간 갱신
+- ID 구조 단순화: `targetEntityId + (buffTableID + 1) * 100000`
+
+### v2.0 - 결정적 ID 방식 (인스턴스 인덱스)
 - BuffListComponent 제거
-- BuffEntityIdHelper 추가 (스킬 시스템과 동일한 방식)
-- EntityIdHelper에 버프 엔티티 관리 기능 추가
-- 버프 개수 제한 제거 (무제한)
-- 결정적 ID로 디버깅 향상
+- BuffEntityIdHelper 추가 (인스턴스 인덱스 포함)
+- 같은 타입 버프를 별도 Entity로 관리
+- ID: `targetEntityId + (buffTableID + 1) * 100000 + instanceIndex * 10`
 
 ### v1.0 - 초기 구현
 - BuffListComponent로 버프 목록 관리
@@ -360,14 +410,19 @@ Debug.Log(BuffEntityIdHelper.GetDebugString(buffEntityId));
 ## 다음 단계
 
 1. **버프 테이블 데이터** 구현 (JSON/ScriptableObject)
-2. **버프 스택 정책** 구현 (스택 불가/시간 갱신 등)
-3. **버프 UI** 구현 (아이콘, 남은 시간 표시)
-4. **버프 VFX/SFX** 통합
-5. **특수 버프** 구현 (디버프, 영구 버프, 조건부 버프 등)
-6. **성능 프로파일링** 및 필요시 BitMask 최적화
+2. **스택 최대치 및 효과 배율** 구현 (StackCount 기반 스탯 계산)
+3. **부분 스택 제거** 로직 (전체 제거 대신 StackCount 감소 옵션)
+4. **버프 UI** 구현 (아이콘, 남은 시간, StackCount 표시)
+5. **버프 VFX/SFX** 통합
+6. **특수 버프** 구현 (디버프, 영구 버프, 조건부 버프 등)
+7. **성능 프로파일링** 및 필요시 BitMask 최적화
 
 ---
 
 **구현 완료!** 🎉
 
-**핵심 개선사항**: BuffListComponent 제거 + 결정적 Entity ID 사용으로 코드 단순화 및 디버깅 향상
+**핵심 개선사항 (v3.0)**:
+- ✅ BuffInstance.StackCount로 중복 버프를 효율적으로 관리
+- ✅ 인스턴스 인덱스 제거로 ID 구조 단순화
+- ✅ 자동 스택 및 시간 갱신으로 사용 편의성 향상
+- ✅ 타입당 하나의 Entity만 생성하여 메모리 효율 증가

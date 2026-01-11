@@ -10,6 +10,7 @@ namespace ARPG.Component
         public int BuffTableID;         // 버프 테이블 ID
         public float Duration;          // 전체 지속시간
         public float RemainTime;        // 남은 시간
+        public int StackCount;          // 중복 카운트 (같은 버프가 여러 번 적용되면 증가)
 
         public BuffInstance(int targetEntityId, int buffTableID, float duration)
         {
@@ -17,6 +18,7 @@ namespace ARPG.Component
             BuffTableID = buffTableID;
             Duration = duration;
             RemainTime = duration;
+            StackCount = 1;
         }
     }
 }
