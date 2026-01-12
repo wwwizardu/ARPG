@@ -604,7 +604,14 @@ namespace ARPG.Systems
             if (skill.Table == null)
                 return;
 
-            Vector2 centerPosition = target.TargetPosition;
+            if(AR.s.Component.TryGetComponent<TransformComponent>(skill.OwnerEntityId, out var ownerTransform) == false)
+            {
+                Debug.LogError($"[System_Skill] Owner TransformComponent not found - OwnerEntityId: {skill.OwnerEntityId}");
+                return;
+            }              
+
+            Vector2 ownerPosition = ownerTransform.Position;  
+
             float range = skill.Table.SkillTargetRange1; // 거리
             float angle = skill.Table.SkillTargetRange2; // 각도 (360도면 전방향, 그 외는 부채꼴)
 
@@ -622,7 +629,7 @@ namespace ARPG.Systems
                 TransformComponent entityTransform = transformPool.GetByIndex(i);
 
                 // 1. 거리 체크 (성능을 위해 제곱 거리 비교)
-                float sqrDistance = (entityTransform.Position - centerPosition).sqrMagnitude;
+                float sqrDistance = (entityTransform.Position - ownerPosition).sqrMagnitude;
                 float sqrRange = range * range;
 
                 if (sqrDistance > sqrRange)
@@ -632,7 +639,7 @@ namespace ARPG.Systems
                 if (angle < 360f)
                 {
                     // 타겟 방향을 기준으로 각도 체크
-                    Vector2 directionToEntity = (entityTransform.Position - centerPosition).normalized;
+                    Vector2 directionToEntity = (entityTransform.Position - ownerPosition).normalized;
                     Vector2 targetDirection = target.TargetDirection.normalized;
 
                     // 두 벡터 사이의 각도 계산
@@ -654,12 +661,35 @@ namespace ARPG.Systems
         /// </summary>
         private readonly void ApplySkillEffectToEntity(int skillEntityId, SkillComponent skill, int targetEntityId)
         {
-            // TODO: 실제 엔티티별 스킬 효과 적용 구현
-            // - 데미지 계산 및 적용 (skill.Table의 DamageMin, DamageMax 사용)
+            // 타겟 엔티티의 StatComponent 가져오기
+            if (AR.s.Component.TryGetComponent<StatComponent>(targetEntityId, out var targetStat) == false)
+            {
+                Debug.LogWarning($"[System_Skill] Target entity has no StatComponent - TargetEntityId: {targetEntityId}");
+                return;
+            }
+
+            // 스킬 테이블 확인
+            if (skill.Table == null)
+            {
+                Debug.LogError($"[System_Skill] SkillTable is null - SkillId: {skill.SkillId}");
+                return;
+            }
+
+            // 데미지 계산 (DamageMin ~ DamageMax 사이의 랜덤 값)
+            int damage = UnityEngine.Random.Range(skill.Table.DamageMin, skill.Table.DamageMax + 1);
+
+            // HP 감소 (0 이하로 떨어지지 않도록 처리)
+            targetStat.CurrentHp = Mathf.Max(0, targetStat.CurrentHp - damage);
+
+            // 변경된 StatComponent 저장
+            AR.s.Component.SetComponent(targetEntityId, targetStat);
+
+            Debug.Log($"[System_Skill] ApplySkillEffectToEntity - SkillEntityId: {skillEntityId}, SkillId: {skill.SkillId}, TargetEntityId: {targetEntityId}, Damage: {damage}, RemainingHP: {targetStat.CurrentHp}");
+
+            // TODO: 추가 구현 필요
             // - 버프/디버프 적용
             // - 넉백, CC 효과 등
-
-            Debug.Log($"[System_Skill] ApplySkillEffectToEntity - SkillEntityId: {skillEntityId}, SkillId: {skill.SkillId}, TargetEntityId: {targetEntityId}");
+            // - 데미지 이펙트, 사운드 재생
         }
 
         /// <summary>
