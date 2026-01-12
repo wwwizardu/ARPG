@@ -23,6 +23,10 @@ namespace ARPG.Component
             // 보통 사용되는 컴포넌트
             { typeof(InputComponent), 100 },
 
+            // AI 컴포넌트 (NPC/몬스터용)
+            { typeof(AIComponent), 500 },
+            { typeof(AIPerceptionComponent), 500 },
+
             // 적게 사용되는 컴포넌트 (스킬 엔티티용)
             { typeof(SkillComponent), 50 },
             { typeof(SkillStateComponent), 50 },

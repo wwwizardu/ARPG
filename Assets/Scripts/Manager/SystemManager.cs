@@ -11,6 +11,11 @@ namespace ARPG.Systems
         private readonly List<IFixedUpdateSystem> _fixedUpdateSystems = new();
         private readonly List<ILateUpdateSystem> _lateUpdateSystems = new();
 
+        // 각 시스템의 마지막 업데이트 시간 추적 (UpdateInterval 사용 시)
+        private readonly Dictionary<IUpdateSystem, float> _updateSystemTimers = new();
+        private readonly Dictionary<IFixedUpdateSystem, float> _fixedUpdateSystemTimers = new();
+        private readonly Dictionary<ILateUpdateSystem, float> _lateUpdateSystemTimers = new();
+
         public void Initialize()
         {
             Debug.Log("SystemManager Initialized");
@@ -20,6 +25,10 @@ namespace ARPG.Systems
             // Priority 0: Input System (Update) - 입력 수집
             System_Input inputSystem = new();
             RegisterSystems(inputSystem);
+
+            // Priority 30: AI Perception System (FixedUpdate) - AI 타겟 감지
+            System_AI_Perception aiPerceptionSystem = new();
+            RegisterSystems(aiPerceptionSystem);
 
             // Priority 40: Buff Update System (Update) - 버프 시간 감소 및 만료
             System_BuffUpdate buffUpdateSystem = new();
@@ -72,18 +81,21 @@ namespace ARPG.Systems
             if (inSystem is IUpdateSystem updateSystem)
             {
                 _updateSystems.Add(updateSystem);
+                _updateSystemTimers[updateSystem] = 0f;
             }
 
             // FixedUpdate System 분류
             if (inSystem is IFixedUpdateSystem fixedUpdateSystem)
             {
                 _fixedUpdateSystems.Add(fixedUpdateSystem);
+                _fixedUpdateSystemTimers[fixedUpdateSystem] = 0f;
             }
 
             // LateUpdate System 분류
             if (inSystem is ILateUpdateSystem lateUpdateSystem)
             {
                 _lateUpdateSystems.Add(lateUpdateSystem);
+                _lateUpdateSystemTimers[lateUpdateSystem] = 0f;
             }
 
             inSystem.OnCreate();
@@ -96,16 +108,19 @@ namespace ARPG.Systems
             if (inSystem is IUpdateSystem updateSystem)
             {
                 _updateSystems.Remove(updateSystem);
+                _updateSystemTimers.Remove(updateSystem);
             }
 
             if (inSystem is IFixedUpdateSystem fixedUpdateSystem)
             {
                 _fixedUpdateSystems.Remove(fixedUpdateSystem);
+                _fixedUpdateSystemTimers.Remove(fixedUpdateSystem);
             }
 
             if (inSystem is ILateUpdateSystem lateUpdateSystem)
             {
                 _lateUpdateSystems.Remove(lateUpdateSystem);
+                _lateUpdateSystemTimers.Remove(lateUpdateSystem);
             }
         }
 
@@ -144,7 +159,26 @@ namespace ARPG.Systems
 
             for (int i = 0; i < _updateSystems.Count; i++)
             {
-                _updateSystems[i].OnUpdate(deltaTime);
+                IUpdateSystem system = _updateSystems[i];
+                float updateInterval = system.UpdateInterval;
+
+                // UpdateInterval이 0이면 매 프레임 실행
+                if (updateInterval <= 0f)
+                {
+                    system.OnUpdate(deltaTime);
+                }
+                else
+                {
+                    // 타이머 누적
+                    _updateSystemTimers[system] += deltaTime;
+
+                    // 간격이 지났으면 실행
+                    if (_updateSystemTimers[system] >= updateInterval)
+                    {
+                        system.OnUpdate(_updateSystemTimers[system]);
+                        _updateSystemTimers[system] = 0f;
+                    }
+                }
             }
         }
 
@@ -155,7 +189,26 @@ namespace ARPG.Systems
 
             for (int i = 0; i < _fixedUpdateSystems.Count; i++)
             {
-                _fixedUpdateSystems[i].OnFixedUpdate(fixedDeltaTime);
+                IFixedUpdateSystem system = _fixedUpdateSystems[i];
+                float updateInterval = system.UpdateInterval;
+
+                // UpdateInterval이 0이면 매 프레임 실행
+                if (updateInterval <= 0f)
+                {
+                    system.OnFixedUpdate(fixedDeltaTime);
+                }
+                else
+                {
+                    // 타이머 누적
+                    _fixedUpdateSystemTimers[system] += fixedDeltaTime;
+
+                    // 간격이 지났으면 실행
+                    if (_fixedUpdateSystemTimers[system] >= updateInterval)
+                    {
+                        system.OnFixedUpdate(_fixedUpdateSystemTimers[system]);
+                        _fixedUpdateSystemTimers[system] = 0f;
+                    }
+                }
             }
         }
 
@@ -166,7 +219,26 @@ namespace ARPG.Systems
 
             for (int i = 0; i < _lateUpdateSystems.Count; i++)
             {
-                _lateUpdateSystems[i].OnLateUpdate(deltaTime);
+                ILateUpdateSystem system = _lateUpdateSystems[i];
+                float updateInterval = system.UpdateInterval;
+
+                // UpdateInterval이 0이면 매 프레임 실행
+                if (updateInterval <= 0f)
+                {
+                    system.OnLateUpdate(deltaTime);
+                }
+                else
+                {
+                    // 타이머 누적
+                    _lateUpdateSystemTimers[system] += deltaTime;
+
+                    // 간격이 지났으면 실행
+                    if (_lateUpdateSystemTimers[system] >= updateInterval)
+                    {
+                        system.OnLateUpdate(_lateUpdateSystemTimers[system]);
+                        _lateUpdateSystemTimers[system] = 0f;
+                    }
+                }
             }
         }
     }

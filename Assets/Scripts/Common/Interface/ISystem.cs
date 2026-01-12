@@ -7,6 +7,14 @@ namespace ARPG.Systems
     {
         public int Priority { get; }
 
+        /// <summary>
+        /// 업데이트 간격 (초 단위)
+        /// 0이면 매 프레임마다 실행
+        /// 0.5f면 0.5초마다 실행
+        /// 1.0f면 1초마다 실행
+        /// </summary>
+        public float UpdateInterval => 0f;  // 기본값: 매 프레임
+
         public void OnCreate()
         {
             Debug.Log("ISystem OnCreate called");

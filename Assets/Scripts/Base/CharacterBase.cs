@@ -41,7 +41,6 @@ namespace ARPG.Creature
 
         protected Dictionary<GlobalEnum.BuffEffectType, GameObject> _buffIconDic = new();
 
-        public int EntityId => _entityId;
         public GlobalEnum.EntityType EntityType { get { return _entityType; } }
         public virtual CreatureTable Table { get {return _table!;} }
 
