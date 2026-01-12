@@ -40,24 +40,25 @@ namespace ARPG.Monster
         public void Reset()
         {
             StopAllCoroutines();
-            
+
             // 모든 몬스터 제거
             foreach (var monster in _monsters)
             {
                 if (monster != null && monster.gameObject != null)
                 {
-                    Destroy(monster.gameObject);
+                    // 리스트에서는 나중에 Clear()로 일괄 제거하므로 removeFromList = false
+                    DestroyMonster(monster, removeFromList: false);
                 }
             }
-            
+
             // 컬렉션 정리
             _monsters.Clear();
             _chunkMonsters.Clear();
             _monsterInstanceById.Clear();
-            
+
             // ID 카운터 리셋
             _nextMonsterId = 1;
-            
+
             // 코루틴 다시 시작 (이미 초기화된 상태라면)
             if (_initialized)
             {
@@ -88,6 +89,36 @@ namespace ARPG.Monster
                 return;
 
             _monsters.Remove(monster);
+        }
+
+        /// <summary>
+        /// 몬스터를 완전히 제거합니다 (ECS 컴포넌트 + GameObject + 추적 정보)
+        /// </summary>
+        /// <param name="monster">제거할 몬스터</param>
+        /// <param name="removeFromList">_monsters 리스트에서도 제거할지 여부 (기본값: true)</param>
+        private void DestroyMonster(Creature.Monster monster, bool removeFromList = true)
+        {
+            if (monster == null)
+                return;
+
+            // 리스트에서 제거
+            if (removeFromList)
+            {
+                _monsters.Remove(monster);
+            }
+
+            // 인스턴스 딕셔너리에서 제거
+            int instanceId = monster.GetInstanceId();
+            if (instanceId != -1)
+            {
+                _monsterInstanceById.Remove(instanceId);
+            }
+
+            // ECS 컴포넌트 일괄 제거
+            AR.s.Component.RemoveAllComponents(monster.EntityId);
+
+            // GameObject 파괴
+            Destroy(monster.gameObject);
         }
 
         public List<Creature.Monster> GetAllMonsters()
@@ -147,18 +178,11 @@ namespace ARPG.Monster
                     // 몬스터가 죽었는지 확인
                     if (monster.State == CharacterConditions.Dead)
                     {
-                        // 리스트에서 제거
+                        // 리스트에서 직접 제거 (역순 순회 중이므로)
                         _monsters.RemoveAt(i);
-                        
-                        // 인스턴스 딕셔너리에서 제거 (몬스터의 인스턴스 ID 사용)
-                        int instanceId = monster.GetInstanceId();
-                        if (instanceId != -1)
-                        {
-                            _monsterInstanceById.Remove(instanceId);
-                        }
-                        
-                        // 게임 오브젝트 파괴
-                        Destroy(monster.gameObject);
+
+                        // 몬스터 완전 제거 (리스트는 이미 제거했으므로 removeFromList = false)
+                        DestroyMonster(monster, removeFromList: false);
                     }
                     else
                     {
@@ -417,10 +441,14 @@ namespace ARPG.Monster
                         {
                             if (monster != null)
                             {
-                                RemoveMonster(monster);
-                                Destroy(monster.gameObject);
+                                // 몬스터 완전 제거 (모든 정보 제거)
+                                DestroyMonster(monster, removeFromList: true);
                             }
-                            _monsterInstanceById.Remove(monsterId);
+                            else
+                            {
+                                // monster가 null이면 딕셔너리에서만 제거
+                                _monsterInstanceById.Remove(monsterId);
+                            }
                         }
                     }
                     expiredChunks.Add(kvp.Key);

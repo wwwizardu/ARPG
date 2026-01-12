@@ -2,7 +2,17 @@ using System.Collections.Generic;
 
 namespace ARPG
 {
-    public class SparseSet<T>
+    /// <summary>
+    /// 컴포넌트 풀의 공통 인터페이스
+    /// 타입에 관계없이 Entity 제거 기능을 제공
+    /// </summary>
+    public interface IComponentPool
+    {
+        void Remove(int entityId);
+        bool Contains(int entityId);
+    }
+
+    public class SparseSet<T> : IComponentPool
     {
         private readonly Dictionary<int, int> _sparse;  // Entity ID -> Dense 배열의 인덱스
         private int[] _dense;   // 연속된 Entity ID들

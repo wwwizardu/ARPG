@@ -114,15 +114,20 @@ namespace ARPG.Utility
                     skillEntitiesToRemove.Add(skillEntityId);
                 }
 
-                // 스킬 엔티티들 제거
+                // 스킬 엔티티들의 ECS 컴포넌트 제거
                 for (int i = 0; i < skillEntitiesToRemove.Count; i++)
                 {
-                    _registeredEntityIds.Remove(skillEntitiesToRemove[i]);
+                    int skillEntityId = skillEntitiesToRemove[i];
+                    AR.s.Component.RemoveAllComponents(skillEntityId);
+                    _registeredEntityIds.Remove(skillEntityId);
                 }
 
                 _characterSkillSlots.Remove(entityId);
                 Debug.Log($"[EntityIdHelper] Removed {skillEntitiesToRemove.Count} skill entities for character {entityId}");
             }
+
+            // 메인 엔티티의 모든 ECS 컴포넌트 제거
+            AR.s.Component.RemoveAllComponents(entityId);
 
             _registeredEntityIds.Remove(entityId);
 
@@ -257,6 +262,9 @@ namespace ARPG.Utility
                 return;
             }
 
+            // ECS 컴포넌트 일괄 제거
+            AR.s.Component.RemoveAllComponents(skillEntityId);
+
             // 등록 해제
             _registeredEntityIds.Remove(skillEntityId);
 
@@ -383,6 +391,9 @@ namespace ARPG.Utility
                 Debug.LogWarning($"[EntityIdHelper] Invalid buff entity ID: {buffEntityId}");
                 return;
             }
+
+            // ECS 컴포넌트 일괄 제거
+            AR.s.Component.RemoveAllComponents(buffEntityId);
 
             // 등록 해제
             _registeredEntityIds.Remove(buffEntityId);

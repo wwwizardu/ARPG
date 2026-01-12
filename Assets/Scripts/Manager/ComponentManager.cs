@@ -6,7 +6,13 @@ namespace ARPG.Component
 {
     public class ComponentManager : MonoBehaviour
     {
-        private Dictionary<Type, object> _componentPools = new Dictionary<Type, object>();
+        private readonly Dictionary<Type, IComponentPool> _componentPools = new();
+
+        /// <summary>
+        /// Entity별로 등록된 컴포넌트 타입들을 추적
+        /// Key: EntityId, Value: 해당 Entity에 등록된 컴포넌트 타입들
+        /// </summary>
+        private Dictionary<int, HashSet<Type>> _entityComponents = new Dictionary<int, HashSet<Type>>();
 
         /// <summary>
         /// 컴포넌트 타입별 SparseSet 초기 용량 설정
@@ -54,6 +60,7 @@ namespace ARPG.Component
         {
             // 모든 컴포넌트 풀 정리
             _componentPools.Clear();
+            _entityComponents.Clear();
             Debug.Log("ComponentManager Reset - All component pools cleared");
         }
 
@@ -62,6 +69,9 @@ namespace ARPG.Component
         {
             SparseSet<T> pool = GetOrCreatePool<T>();
             pool.Add(entityId, component);
+
+            // Entity에 등록된 컴포넌트 타입 추적
+            TrackComponentType<T>(entityId);
         }
 
         // 컴포넌트 설정 (존재하면 업데이트, 없으면 추가)
@@ -69,6 +79,9 @@ namespace ARPG.Component
         {
             SparseSet<T> pool = GetOrCreatePool<T>();
             pool.Set(entityId, component);
+
+            // Entity에 등록된 컴포넌트 타입 추적
+            TrackComponentType<T>(entityId);
         }
 
         // 컴포넌트 조회
@@ -98,6 +111,54 @@ namespace ARPG.Component
         {
             SparseSet<T> pool = GetPool<T>();
             pool?.Remove(entityId);
+
+            // Entity 추적 정보에서 컴포넌트 타입 제거
+            Type type = typeof(T);
+            if (_entityComponents.TryGetValue(entityId, out HashSet<Type> componentTypes))
+            {
+                componentTypes.Remove(type);
+
+                // 컴포넌트가 모두 제거되면 Entity 정보도 제거
+                if (componentTypes.Count == 0)
+                {
+                    _entityComponents.Remove(entityId);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Entity에 등록된 모든 컴포넌트를 제거합니다.
+        /// IComponentPool 인터페이스를 통해 타입 안전하게 제거 (Reflection 불필요)
+        /// </summary>
+        /// <param name="entityId">제거할 Entity ID</param>
+        public void RemoveAllComponents(int entityId)
+        {
+            if (!_entityComponents.TryGetValue(entityId, out HashSet<Type> componentTypes))
+            {
+                // 해당 Entity에 등록된 컴포넌트가 없음
+                return;
+            }
+
+            // 등록된 모든 컴포넌트 타입을 순회하며 제거
+            // ToArray()로 복사본 생성 (순회 중 컬렉션 수정 방지)
+            Type[] typesToRemove = new Type[componentTypes.Count];
+            componentTypes.CopyTo(typesToRemove);
+
+            int removedCount = 0;
+            foreach (Type componentType in typesToRemove)
+            {
+                if (_componentPools.TryGetValue(componentType, out IComponentPool pool))
+                {
+                    // IComponentPool 인터페이스를 통해 직접 Remove 호출
+                    pool.Remove(entityId);
+                    removedCount++;
+                }
+            }
+
+            // Entity 추적 정보 제거
+            _entityComponents.Remove(entityId);
+
+            Debug.Log($"[ComponentManager] Removed all components for Entity {entityId} ({removedCount}/{typesToRemove.Length} components)");
         }
 
         // 컴포넌트 존재 확인
@@ -134,7 +195,23 @@ namespace ARPG.Component
             return _componentPools.ContainsKey(type) ? _componentPools[type] as SparseSet<T> : null;
         }
 
-    }    
+        /// <summary>
+        /// Entity에 컴포넌트 타입을 추적 정보에 추가
+        /// </summary>
+        private void TrackComponentType<T>(int entityId) where T : struct
+        {
+            Type type = typeof(T);
+
+            if (!_entityComponents.TryGetValue(entityId, out HashSet<Type> componentTypes))
+            {
+                componentTypes = new HashSet<Type>();
+                _entityComponents[entityId] = componentTypes;
+            }
+
+            componentTypes.Add(type);
+        }
+
+    }
 }
 
 
