@@ -37,24 +37,19 @@ namespace ARPG.Systems
 
                 InputComponent input = inputPool.GetByIndex(i);
 
-                // 이동 로직: Velocity만 계산 (Position은 System_Render에서 계산)
+                // 이동 로직: Direction과 Speed 설정 (Position은 System_Render에서 계산)
                 if (input.MoveDirection.sqrMagnitude > 0.0001f)
                 {
-                    // 속도 계산 (달리기 체크)
-                    float speed = velocity.Speed;
-                    if (input.IsSprinting)
-                        speed *= velocity.SprintMultiplier;
+                    // 방향 설정 (정규화된 입력)
+                    velocity.Direction = input.MoveDirection;
 
-                    // 정규화된 방향 * 속도
-                    velocity.Velocity = input.MoveDirection * speed;
-
-                    // TODO: 여기서 물리 충돌 검사 후 Velocity 조정
-                    // velocity.Velocity = ApplyCollision(velocity.Velocity, transform.Position);
+                    // TODO: 여기서 물리 충돌 검사 후 Direction 조정
+                    // velocity.Direction = ApplyCollision(velocity.Direction, transform.Position);
                 }
                 else
                 {
-                    // 입력이 없으면 정지
-                    velocity.Velocity = Vector2.zero;
+                    // 입력이 없으면 정지 (방향을 0으로)
+                    velocity.Direction = Vector2.zero;
                 }
 
                 // Velocity만 저장 (Position은 System_Render에서 업데이트)

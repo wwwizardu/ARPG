@@ -107,7 +107,7 @@ namespace ARPG.Creature
             // VelocityComponent 추가
             Component.VelocityComponent velocityComponent = new()
             {
-                Velocity = Vector2.zero,
+                Direction = Vector2.zero,
                 Speed = MoveSpeed, // CharacterBase의 MoveSpeed 사용
                 SprintMultiplier = 2f
             };

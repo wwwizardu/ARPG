@@ -208,6 +208,7 @@ namespace ARPG.Monster
                 Destroy(monsterObj);
                 return -1;
             }
+            monster.InitializeECSComponents(); // ECS 컴포넌트 초기화
 
             int monsterId = _nextMonsterId++;
             monster.SetInstanceId(monsterId); // 몬스터에 인스턴스 ID 저장

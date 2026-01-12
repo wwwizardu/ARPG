@@ -34,6 +34,10 @@ namespace ARPG.Systems
             System_BuffUpdate buffUpdateSystem = new();
             RegisterSystems(buffUpdateSystem);
 
+            // Priority 50: AI Behavior System (FixedUpdate) - AI 상태 머신 및 행동 로직
+            System_AI_Behavior aiBehaviorSystem = new();
+            RegisterSystems(aiBehaviorSystem);
+
             // Priority 100: Movement System (FixedUpdate) - 이동 로직
             System_Move moveSystem = new();
             RegisterSystems(moveSystem);

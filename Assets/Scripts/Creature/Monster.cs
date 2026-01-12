@@ -30,6 +30,35 @@ namespace ARPG.Creature
         {
             base.InitializeECSComponents();
 
+            // AI 관련 컴포넌트 추가
+            AR.s.Component.AddComponent<Component.AIComponent>(_entityId, new Component.AIComponent
+            {
+                AITableID = 0,
+                TargetEntityId = 0,
+                LastKnownTargetPos = Vector2.zero
+            });
+
+            AR.s.Component.AddComponent<Component.AIPerceptionComponent>(_entityId, new Component.AIPerceptionComponent
+            {
+                DetectionRange = 5f,
+                AttackRange = 0.8f,
+                LoseTargetRange = 10f,
+                FieldOfView = 360f,
+                LastDetectionTime = 0f
+            });            
+
+            AR.s.Component.AddComponent<Component.AIBehaviorTypeComponent>(_entityId, new Component.AIBehaviorTypeComponent
+            {
+                BehaviorType = Component.AIBehaviorType.Melee,
+                AggroRange = 10f,
+                AttackRange = 2f
+            });
+            AR.s.Component.AddComponent<Component.AIStateComponent>(_entityId, new Component.AIStateComponent
+            {
+                CurrentState = Component.AIState.Idle,
+                SpawnPosition = Vector2.zero
+            });
+
             // 기본 스킬 생성 (스킬 ID 2)
             CreateSkill(0, 2); 
         }
@@ -153,19 +182,19 @@ namespace ARPG.Creature
 
         protected override void UpdateInput()
         {
-            if (_activated == false || _ai == null)
-                return;
+            // if (_activated == false || _ai == null)
+            //     return;
 
-            var (inputDirection, velocity) = _ai.CalculateMove();
+            // var (inputDirection, velocity) = _ai.CalculateMove();
 
-            _inputDirection = inputDirection;
-            _velocity = velocity;
+            // _inputDirection = inputDirection;
+            // _velocity = velocity;
 
-            if (_velocity.IsZero() == false)
-            {
-                Vector3 movement = new Vector3(_velocity.x, _velocity.y, 0) * Time.deltaTime;
-                transform.position += movement;
-            }
+            // if (_velocity.IsZero() == false)
+            // {
+            //     Vector3 movement = new Vector3(_velocity.x, _velocity.y, 0) * Time.deltaTime;
+            //     transform.position += movement;
+            // }
         }
 
         protected void DropItems()
