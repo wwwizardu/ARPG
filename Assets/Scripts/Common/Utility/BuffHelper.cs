@@ -6,11 +6,11 @@ using GE = GlobalEnum;
 namespace ARPG.Utility
 {
     /// <summary>
-    /// 버프 시스템 유틸리티
+    /// 버프 헬퍼 유틸리티
     /// 버프 추가, 제거, 조회 등의 기능 제공
     /// BuffInstance만으로 모든 버프를 관리 (BuffListComponent 제거)
     /// </summary>
-    public static class BuffSystem
+    public static class BuffHelper
     {
         /// <summary>
         /// 타겟 엔티티에 버프 추가
@@ -23,28 +23,38 @@ namespace ARPG.Utility
         public static int AddBuff(int targetEntityId, int buffTableID, float duration)
         {
             // 1. 타겟 엔티티 유효성 검증
-            if (!EntityIdHelper.IsEntityRegistered(targetEntityId))
+            if (EntityIdHelper.IsEntityRegistered(targetEntityId) == false)
             {
-                Debug.LogWarning($"[BuffSystem] Target entity {targetEntityId} is not registered");
+                Debug.LogError($"[BuffHelper] Target entity {targetEntityId} is not registered");
                 return -1;
             }
 
-            // 2. 버프 Entity 생성 시도 (결정적 ID 사용)
-            int buffEntityId = EntityIdHelper.CreateBuffEntity(targetEntityId, buffTableID);
+            // 2. 버프 테이블 데이터 로드
+            var buffTable = AR.s.Data?.GetBuff(buffTableID);
+            if (buffTable == null)
+            {
+                Debug.LogError($"[BuffHelper] BuffTable not found - TableID: {buffTableID}");
+                return -1;
+            }
 
-            if (buffEntityId == -1)
+            // 3. 이미 같은 버프가 존재하는지 먼저 확인
+            int buffEntityId = BuffEntityIdHelper.GetBuffEntityId(targetEntityId, buffTableID);
+
+            if (EntityIdHelper.IsValidBuffEntity(buffEntityId))
             {
                 // 이미 같은 버프가 존재 - StackCount 증가
-                buffEntityId = BuffEntityIdHelper.GetBuffEntityId(targetEntityId, buffTableID);
-
                 if (AR.s.Component.TryGetComponent<BuffInstance>(buffEntityId, out BuffInstance existingBuff))
                 {
-                    existingBuff.StackCount++;
+                    if(existingBuff.StackCount < buffTable.MaxStack) // 최대 스택 수 체크
+                    {
+                        existingBuff.StackCount++;    
+                    }
+                    
                     existingBuff.RemainTime = duration; // 지속 시간 갱신
                     existingBuff.Duration = duration;
                     AR.s.Component.SetComponent(buffEntityId, existingBuff);
 
-                    Debug.Log($"[BuffSystem] Buff stacked - BuffEntityId: {buffEntityId}, Target: {targetEntityId}, TableID: {buffTableID}, StackCount: {existingBuff.StackCount}, Duration: {duration}");
+                    Debug.Log($"[BuffHelper] Buff stacked - BuffEntityId: {buffEntityId}, Target: {targetEntityId}, TableID: {buffTableID}, StackCount: {existingBuff.StackCount}, Duration: {duration}");
 
                     // Dirty 태그 추가 (스탯 재계산 요청 - 스택 증가 시 스탯 효과 재계산)
                     AR.s.Component.AddComponent(targetEntityId, new StatDirtyTag());
@@ -53,21 +63,57 @@ namespace ARPG.Utility
                 }
                 else
                 {
-                    Debug.LogWarning($"[BuffSystem] Failed to create or find buff entity for target {targetEntityId}, table {buffTableID}");
+                    Debug.LogError($"[BuffHelper] Buff entity {buffEntityId} exists but has no BuffInstance component");
                     return -1;
                 }
             }
 
-            // 3. 신규 버프 - BuffInstance 컴포넌트 추가
-            AR.s.Component.AddComponent(buffEntityId, new BuffInstance(targetEntityId, buffTableID, duration));
+            // 4. 신규 버프 Entity 생성 시도
+            buffEntityId = EntityIdHelper.CreateBuffEntity(targetEntityId, buffTableID);
 
-            // 4. 버프 효과 로드 및 StatModifier 추가
+            if (buffEntityId == -1)
+            {
+                Debug.LogError($"[BuffHelper] Failed to create buff entity for target {targetEntityId}, table {buffTableID}");
+                return -1;
+            }
+
+            // 5. 신규 버프 - BuffInstance 컴포넌트 추가 (테이블 데이터 복사)
+            BuffInstance newBuff = new BuffInstance(targetEntityId, buffTableID, duration);
+
+            // 틱 데이터를 테이블에서 복사
+            newBuff.TickInterval = buffTable.TickInterval;
+
+            if(buffTable.EffectType == GE.BuffEffectType.Blooding)
+            {
+                if (AR.s.Component.TryGetComponent<StatComponent>(targetEntityId, out StatComponent stat) == true)
+                {
+                    newBuff.DamageType = GE.DamageType.Physics;
+                    newBuff.TickDamage = (int)(stat.FinalMaxHp * buffTable.EffectValue * 0.01f); // 최대 체력의 퍼센트로 계산
+                }
+                else
+                {
+                    Debug.LogWarning($"[BuffHelper] Target entity has no StatComponent - TargetEntityId: {targetEntityId}, BuffTableId: {buffTableID}");
+                    newBuff.TickDamage = 0;
+                    newBuff.DamageType = 0;
+                }
+            }
+            else
+            {
+                newBuff.TickDamage = 0;
+                newBuff.DamageType = 0;
+            }
+
+            newBuff.LastTickTime = duration; // RemainTime 기준이므로 duration으로 초기화
+
+            AR.s.Component.AddComponent(buffEntityId, newBuff);
+
+            // 5. 버프 효과 로드 및 StatModifier 추가
             LoadBuffEffects(buffEntityId, targetEntityId, buffTableID);
 
-            // 5. Dirty 태그 추가 (스탯 재계산 요청)
+            // 6. Dirty 태그 추가 (스탯 재계산 요청)
             AR.s.Component.AddComponent(targetEntityId, new StatDirtyTag());
 
-            Debug.Log($"[BuffSystem] Buff added - BuffEntityId: {buffEntityId}, Target: {targetEntityId}, TableID: {buffTableID}, Duration: {duration}");
+            Debug.Log($"[BuffHelper] Buff added - BuffEntityId: {buffEntityId}, Target: {targetEntityId}, TableID: {buffTableID}, Duration: {duration}");
             return buffEntityId;
         }
 
@@ -78,9 +124,9 @@ namespace ARPG.Utility
         public static void RemoveBuff(int buffEntityId)
         {
             // 1. BuffInstance 가져오기
-            if (!AR.s.Component.TryGetComponent<BuffInstance>(buffEntityId, out BuffInstance buff))
+            if (AR.s.Component.TryGetComponent<BuffInstance>(buffEntityId, out BuffInstance buff) == false)
             {
-                Debug.LogWarning($"[BuffSystem] Buff entity {buffEntityId} has no BuffInstance component");
+                Debug.LogWarning($"[BuffHelper] Buff entity {buffEntityId} has no BuffInstance component");
                 return;
             }
 
@@ -99,7 +145,7 @@ namespace ARPG.Utility
             // 5. Dirty 태그 추가 (스탯 재계산 요청)
             AR.s.Component.AddComponent(targetEntityId, new StatDirtyTag());
 
-            Debug.Log($"[BuffSystem] Buff removed - BuffEntityId: {buffEntityId}, Target: {targetEntityId}, TableID: {buffTableID}");
+            Debug.Log($"[BuffHelper] Buff removed - BuffEntityId: {buffEntityId}, Target: {targetEntityId}, TableID: {buffTableID}");
         }
 
         /// <summary>
@@ -244,7 +290,7 @@ namespace ARPG.Utility
             int modifierEntityId = EntityIdHelper.CreateEntity();
             AR.s.Component.AddComponent(modifierEntityId, new StatModifierComponent(targetEntityId, modifier));
 
-            Debug.Log($"[BuffSystem] StatModifier added - ModifierEntity: {modifierEntityId}, Target: {targetEntityId}, Stat: {statType}, Type: {modifierType}, Value: {value}");
+            Debug.Log($"[BuffHelper] StatModifier added - ModifierEntity: {modifierEntityId}, Target: {targetEntityId}, Stat: {statType}, Type: {modifierType}, Value: {value}");
         }
 
         /// <summary>
@@ -280,7 +326,7 @@ namespace ARPG.Utility
                 }
             }
 
-            Debug.Log($"[BuffSystem] StatModifiers removed - Target: {targetEntityId}, BuffEntity: {buffEntityId}, Removed: {removedCount}");
+            Debug.Log($"[BuffHelper] StatModifiers removed - Target: {targetEntityId}, BuffEntity: {buffEntityId}, Removed: {removedCount}");
         }
     }
 }

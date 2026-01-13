@@ -285,7 +285,7 @@ namespace ARPG.Tables
         [JsonProperty("Duration")] public float Duration;                       // 지속 시간 (초)
         [JsonProperty("TickInterval")] public float TickInterval;               // 틱 간격 (DoT/HoT용, 0이면 즉시 적용)
         [JsonProperty("MaxStack")] public int MaxStack;                         // 최대 스택 수
-        [JsonProperty("IsDispellable")] public bool IsDispellable;              // 최대 스택 수
+        [JsonProperty("IsDispellable")] public bool IsDispellable;              // 해제 가능 여부
         [JsonProperty("BuffEffectId")] public GE.BuffEffectType EffectType;     // 버프 이팩트 타입
         [JsonProperty("EffectValue")] public int EffectValue;                   // 버프 이팩트 값
         

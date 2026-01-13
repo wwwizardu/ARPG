@@ -40,7 +40,7 @@ namespace ARPG.Example
             // // 1키: 공격력 버프 추가 (10초)
             // if (Input.GetKeyDown(KeyCode.Alpha1))
             // {
-            //     int buffId = BuffSystem.AddBuff(_playerEntityId, 1001, 10f);
+            //     int buffId = BuffHelper.AddBuff(_playerEntityId, 1001, 10f);
             //     Debug.Log($"[Example] Added Attack Buff (ID: {buffId})");
             //     PrintCurrentStats();
             // }
@@ -48,7 +48,7 @@ namespace ARPG.Example
             // // 2키: 방어력 버프 추가 (5초)
             // if (Input.GetKeyDown(KeyCode.Alpha2))
             // {
-            //     int buffId = BuffSystem.AddBuff(_playerEntityId, 1002, 5f);
+            //     int buffId = BuffHelper.AddBuff(_playerEntityId, 1002, 5f);
             //     Debug.Log($"[Example] Added Defense Buff (ID: {buffId})");
             //     PrintCurrentStats();
             // }
@@ -56,7 +56,7 @@ namespace ARPG.Example
             // // 3키: 이동속도 버프 추가 (8초)
             // if (Input.GetKeyDown(KeyCode.Alpha3))
             // {
-            //     int buffId = BuffSystem.AddBuff(_playerEntityId, 1003, 8f);
+            //     int buffId = BuffHelper.AddBuff(_playerEntityId, 1003, 8f);
             //     Debug.Log($"[Example] Added Speed Buff (ID: {buffId})");
             //     PrintCurrentStats();
             // }
@@ -64,7 +64,7 @@ namespace ARPG.Example
             // // 4키: 모든 버프 제거
             // if (Input.GetKeyDown(KeyCode.Alpha4))
             // {
-            //     int removedCount = BuffSystem.RemoveAllBuffs(_playerEntityId);
+            //     int removedCount = BuffHelper.RemoveAllBuffs(_playerEntityId);
             //     Debug.Log($"[Example] Removed all buffs (Count: {removedCount})");
             //     PrintCurrentStats();
             // }
@@ -94,7 +94,7 @@ namespace ARPG.Example
         /// </summary>
         private void PrintBuffStatus()
         {
-            int buffCount = BuffSystem.GetBuffCount(_playerEntityId);
+            int buffCount = BuffHelper.GetBuffCount(_playerEntityId);
             Debug.Log($"[Buffs] Total: {buffCount}");
 
             if (buffCount == 0)

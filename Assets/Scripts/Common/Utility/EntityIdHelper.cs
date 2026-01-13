@@ -95,7 +95,7 @@ namespace ARPG.Utility
         /// <param name="allowRecycle">ID 재활용 허용 여부 (기본값: true)</param>
         public static void DestroyEntity(int entityId, bool allowRecycle = true)
         {
-            if (!_registeredEntityIds.Contains(entityId))
+            if (_registeredEntityIds.Contains(entityId) == false)
             {
                 Debug.LogWarning($"[EntityIdHelper] Entity {entityId} is not registered");
                 return;
@@ -161,7 +161,7 @@ namespace ARPG.Utility
         public static int CreateSkillEntity(int characterEntityId, int slotIndex)
         {
             // 캐릭터 엔티티가 등록되어 있는지 확인
-            if (!_registeredEntityIds.Contains(characterEntityId))
+            if (_registeredEntityIds.Contains(characterEntityId) == false)
             {
                 Debug.LogError($"[EntityIdHelper] Character entity {characterEntityId} is not registered");
                 return -1;
@@ -175,7 +175,7 @@ namespace ARPG.Utility
             }
 
             // 이미 할당된 슬롯인지 확인
-            if (!_characterSkillSlots.ContainsKey(characterEntityId))
+            if (_characterSkillSlots.ContainsKey(characterEntityId) == false)
             {
                 _characterSkillSlots[characterEntityId] = new HashSet<int>();
             }
@@ -212,14 +212,14 @@ namespace ARPG.Utility
         public static int CreateSkillEntityAuto(int characterEntityId)
         {
             // 캐릭터 엔티티가 등록되어 있는지 확인
-            if (!_registeredEntityIds.Contains(characterEntityId))
+            if (_registeredEntityIds.Contains(characterEntityId) == false)
             {
                 Debug.LogError($"[EntityIdHelper] Character entity {characterEntityId} is not registered");
                 return -1;
             }
 
             // 사용 가능한 슬롯 찾기
-            if (!_characterSkillSlots.ContainsKey(characterEntityId))
+            if (_characterSkillSlots.ContainsKey(characterEntityId) == false)
             {
                 _characterSkillSlots[characterEntityId] = new HashSet<int>();
             }
@@ -229,7 +229,7 @@ namespace ARPG.Utility
             // 사용 가능한 첫 번째 슬롯 찾기
             for (int slotIndex = 0; slotIndex < SkillEntityIdHelper.MAX_SKILL_SLOTS; slotIndex++)
             {
-                if (!usedSlots.Contains(slotIndex))
+                if (usedSlots.Contains(slotIndex) == false)
                 {
                     return CreateSkillEntity(characterEntityId, slotIndex);
                 }
@@ -245,7 +245,7 @@ namespace ARPG.Utility
         /// <param name="skillEntityId">제거할 스킬 엔티티 ID</param>
         public static void DestroySkillEntity(int skillEntityId)
         {
-            if (!_registeredEntityIds.Contains(skillEntityId))
+            if (_registeredEntityIds.Contains(skillEntityId) == false)
             {
                 Debug.LogWarning($"[EntityIdHelper] Skill entity {skillEntityId} is not registered");
                 return;
@@ -256,7 +256,7 @@ namespace ARPG.Utility
             int slotIndex = SkillEntityIdHelper.GetSlotIndex(skillEntityId, characterEntityId);
 
             // 유효성 검증
-            if (!SkillEntityIdHelper.IsValidSkillEntityId(skillEntityId, characterEntityId))
+            if (SkillEntityIdHelper.IsValidSkillEntityId(skillEntityId, characterEntityId) == false)
             {
                 Debug.LogWarning($"[EntityIdHelper] Invalid skill entity ID: {skillEntityId}");
                 return;
@@ -282,7 +282,7 @@ namespace ARPG.Utility
         /// </summary>
         public static bool IsValidSkillEntity(int skillEntityId)
         {
-            if (!_registeredEntityIds.Contains(skillEntityId))
+            if (_registeredEntityIds.Contains(skillEntityId) == false)
                 return false;
 
             int characterEntityId = SkillEntityIdHelper.GetCharacterEntityId(skillEntityId);
@@ -327,7 +327,7 @@ namespace ARPG.Utility
         public static int CreateBuffEntity(int targetEntityId, int buffTableID)
         {
             // 타겟 엔티티가 등록되어 있는지 확인
-            if (!_registeredEntityIds.Contains(targetEntityId))
+            if (_registeredEntityIds.Contains(targetEntityId) == false)
             {
                 Debug.LogError($"[EntityIdHelper] Target entity {targetEntityId} is not registered");
                 return -1;
@@ -351,12 +351,12 @@ namespace ARPG.Utility
             // 이미 같은 버프가 존재하는지 확인
             if (_registeredEntityIds.Contains(buffEntityId))
             {
-                // 이미 존재함 - BuffSystem에서 StackCount 증가 처리
+                // 이미 존재함 - BuffHelper에서 StackCount 증가 처리
                 return -1;
             }
 
             // 타겟의 버프 타입 추적 초기화
-            if (!_targetBuffTypes.ContainsKey(targetEntityId))
+            if (_targetBuffTypes.ContainsKey(targetEntityId) == false)
             {
                 _targetBuffTypes[targetEntityId] = new HashSet<int>();
             }
@@ -375,7 +375,7 @@ namespace ARPG.Utility
         /// <param name="buffEntityId">제거할 버프 엔티티 ID</param>
         public static void DestroyBuffEntity(int buffEntityId)
         {
-            if (!_registeredEntityIds.Contains(buffEntityId))
+            if (_registeredEntityIds.Contains(buffEntityId) == false)
             {
                 Debug.LogWarning($"[EntityIdHelper] Buff entity {buffEntityId} is not registered");
                 return;
@@ -386,7 +386,7 @@ namespace ARPG.Utility
             int buffTableID = BuffEntityIdHelper.GetBuffTableID(buffEntityId);
 
             // 유효성 검증
-            if (!BuffEntityIdHelper.IsValidBuffEntityId(buffEntityId))
+            if (BuffEntityIdHelper.IsValidBuffEntityId(buffEntityId) == false)
             {
                 Debug.LogWarning($"[EntityIdHelper] Invalid buff entity ID: {buffEntityId}");
                 return;
@@ -418,7 +418,7 @@ namespace ARPG.Utility
         /// </summary>
         public static bool IsValidBuffEntity(int buffEntityId)
         {
-            if (!_registeredEntityIds.Contains(buffEntityId))
+            if (_registeredEntityIds.Contains(buffEntityId) == false)
                 return false;
 
             return BuffEntityIdHelper.IsValidBuffEntityId(buffEntityId);

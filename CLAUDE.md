@@ -36,6 +36,7 @@ Assets/Scripts/
 - **Reset()**: Clean up and return to initial state
 - **Loop iteration**: Always use `for` over `foreach` (avoids GC)
 - **Distance checks**: Use `SqrMagnitude` for comparisons (avoids sqrt)
+- **Boolean conditions**: Use explicit comparisons (`== false`, `== null`) instead of `!` operator for better readability
 
 ## Custom ECS Architecture
 
