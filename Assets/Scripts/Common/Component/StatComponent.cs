@@ -61,8 +61,8 @@ namespace ARPG.Component
 
         // === 현재 상태 값 ===
         // 전투 중 변동되는 값들
-        public float CurrentHp;         // 현재 체력
-        public float CurrentMp;         // 현재 마나
+        public int CurrentHp;         // 현재 체력
+        public int CurrentMp;         // 현재 마나
 
         /// <summary>
         /// StatTable로부터 기본 스탯을 초기화

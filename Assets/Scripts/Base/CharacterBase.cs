@@ -17,7 +17,6 @@ namespace ARPG.Creature
 
         protected CreatureTable? _table;
 
-        protected StatController _statController = new StatController();
         protected BuffController _buffController = new BuffController();
         protected MoveController _moveController = new();
 
@@ -33,7 +32,6 @@ namespace ARPG.Creature
 
         protected Vector2 _pervPos;
         protected Vector2 _currentPos;
-        protected float _moveSpeed;
         protected bool _initialized = false;
 
         protected Coroutine? _LoopUpdateCo = null;
@@ -44,15 +42,11 @@ namespace ARPG.Creature
         public GlobalEnum.EntityType EntityType { get { return _entityType; } }
         public virtual CreatureTable Table { get {return _table!;} }
 
-        public StatController Stat { get { return _statController; } }
-
         public CharacterConditions State { get { return _condition; } }
 
         public GlobalEnum.TeamType Team { get { return _team; } }
 
         public CharacterInfo CharacterInfo { get { return _characterInfo; } }
-
-        public float MoveSpeed { get {return _moveSpeed; } }
 
         public override void Initialize()
         {
@@ -70,10 +64,9 @@ namespace ARPG.Creature
             _condition = CharacterConditions.Normal;
             OnChangeMovementState(MovementStates.Idle);
 
-            _statController.Initialize(this);
             _buffController.Initialize(this);
             _characterInfo.Initialize(this);
-            
+
             Reset();
         }
 
@@ -82,7 +75,6 @@ namespace ARPG.Creature
             // Reset character state
             // _characterInfo.TextName.text = string.Empty;
 
-            _statController.Reset();
             _buffController.Reset();
             //_characterInfo.SkillController.Reset();
         }
@@ -108,7 +100,7 @@ namespace ARPG.Creature
             Component.VelocityComponent velocityComponent = new()
             {
                 Direction = Vector2.zero,
-                Speed = MoveSpeed, // CharacterBase의 MoveSpeed 사용
+                Speed = statComponent.FinalMoveSpeed, // CharacterBase의 MoveSpeed 사용
                 SprintMultiplier = 2f
             };
             AR.s.Component.AddComponent(_entityId, velocityComponent);
@@ -165,26 +157,7 @@ namespace ARPG.Creature
             //     _characterInfo.TextName.text = Table!.Name;
             // }
 
-            // Load stats from table
-            _statController.Load();
-
             UpdateStat();
-
-            if (_statController.GetStat(GlobalEnum.Stat.HpGeneration) > 0 || _statController.GetStat(GlobalEnum.Stat.MpGeneration) > 0)
-            {
-                if (_LoopUpdateCo != null)
-                {
-                    StopCoroutine(_LoopUpdateCo);
-                    _LoopUpdateCo = null;
-                }
-
-                _LoopUpdateCo = StartCoroutine(LoopUpdate());
-            }
-
-            if (_characterInfo.HpBar != null)
-            {
-                _characterInfo.HpBar.fillAmount = _statController.GetHpRatio();
-            }
 
             _initialized = true;
 
@@ -193,52 +166,23 @@ namespace ARPG.Creature
 
         public virtual void UpdateStat()
         {
-            if (_statController == null /*|| _characterInfo?.SkillController == null?*/)
-            {
-                Debug.LogError("[CharacterBase] UpdateStat() - null");
-                return;
-            }
+            // TODO: StatComponent 기반 스탯 업데이트 로직 구현 필요
 
-            _statController.UpdateStat();
-            //_characterInfo.SkillController.UpdateSkillSpeed();
-
-            _moveSpeed = _statController.GetStat(GlobalEnum.Stat.MoveSpeed) * (_statController.GetStat(GlobalEnum.Stat.MoveSpeedMul) * 0.01f);
-
-            if(AR.s.Component.TryGetComponent<Component.VelocityComponent>(_entityId, out var velocity) == true)
-            {
-                velocity.Speed = _moveSpeed;
-                AR.s.Component.SetComponent(_entityId, velocity);
-            }
         }
 
         public virtual void OnHit(CharacterBase? inAttacker, bool isOnHit, GlobalEnum.DamageType inDamageType, int inDamage)
         {
-            _statController.DecreaseHp(inDamage);
-
-            if (Stat.GetHp() <= 0)
-            {
-                Dead();
-            }
-
-            _characterInfo.HpBar.fillAmount = Stat.GetHpRatio();
+            // TODO: StatComponent 기반 HP 감소 로직 구현 필요
         }
 
         public virtual void OnHeal(int inHp)
         {
-            _statController.IncreaseHp(inHp);
-            _characterInfo.HpBar.fillAmount = _statController.GetHpRatio();
+            // TODO: StatComponent 기반 HP 회복 로직 구현 필요
         }
 
         public virtual void OnChangeMp(int inDeltaMp)
         {
-            if (inDeltaMp > 0)
-            {
-                _statController.IncreaseMp(inDeltaMp);
-            }
-            else if (inDeltaMp < 0)
-            {
-                _statController.DecreaseMp(-inDeltaMp);
-            }
+            // TODO: StatComponent 기반 MP 변경 로직 구현 필요
         }
 
         protected virtual void UpdateInput()
@@ -525,9 +469,7 @@ namespace ARPG.Creature
                 if (_initialized == false) // 초기화가 안된 상태라면 대기
                     continue;
 
-                // Hp, Mp 자연 회복
-                OnHeal(_statController.GetStat(GlobalEnum.Stat.HpGeneration));
-                OnChangeMp(_statController.GetStat(GlobalEnum.Stat.MpGeneration));
+                // TODO: StatComponent 기반 HP/MP 자연 회복 로직 구현 필요
             }
         }
 

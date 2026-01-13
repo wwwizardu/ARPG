@@ -100,18 +100,18 @@ namespace ARPG.Creature
         {
             base.OnHit(inAttacker, isOnHit, inDamageType, inDamage);
 
-            if(inAttacker != null && isOnHit == true)
-            {
-                if (inDamageType == GlobalEnum.DamageType.Physics)
-                {
-                    int BloodingRate = inAttacker.Stat.GetStat(GlobalEnum.Stat.BloodingRate) + 50;
-                    if(UnityEngine.Random.Range(0, 100) < BloodingRate)
-                    {
-                        int bloodingDamage = Mathf.FloorToInt(inDamage * 0.3f);
-                        AddBuff(1, bloodingDamage);
-                    }
-                }                
-            }
+            // if(inAttacker != null && isOnHit == true)
+            // {
+            //     if (inDamageType == GlobalEnum.DamageType.Physics)
+            //     {
+            //         int BloodingRate = inAttacker.Stat.GetStat(GlobalEnum.Stat.BloodingRate) + 50;
+            //         if(UnityEngine.Random.Range(0, 100) < BloodingRate)
+            //         {
+            //             int bloodingDamage = Mathf.FloorToInt(inDamage * 0.3f);
+            //             AddBuff(1, bloodingDamage);
+            //         }
+            //     }                
+            // }
         }
 
         public override (int, int) GetAttackDamage()

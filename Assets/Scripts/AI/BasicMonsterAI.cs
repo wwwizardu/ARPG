@@ -132,7 +132,14 @@ namespace ARPG.AI
             switch (_currentState)
             {
                 case AIState.Chase:
-                    Vector2 velocity = _moveDirection * _character.MoveSpeed;
+                    // StatComponent에서 FinalMoveSpeed 가져오기
+                    float moveSpeed = 0f;
+                    if (AR.s.Component.TryGetComponent<Component.StatComponent>(_character.EntityId, out var statComp))
+                    {
+                        moveSpeed = statComp.FinalMoveSpeed;
+                    }
+
+                    Vector2 velocity = _moveDirection * moveSpeed;
                     return (_moveDirection, velocity);
 
                 case AIState.Attack:

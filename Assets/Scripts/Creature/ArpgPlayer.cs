@@ -99,13 +99,13 @@ namespace ARPG.Creature
             //_characterInfo.SkillController.CreateSkill(1);
 
             // 현재 체력과 마나 설정
-            _statController.SetHp(_playerData.CurrentHp);
-            _statController.SetMp(_playerData.CurrentMp);
+            // _statController.SetHp(_playerData.CurrentHp);
+            // _statController.SetMp(_playerData.CurrentMp);
 
-            if (_characterInfo.HpBar != null)
-            {
-                _characterInfo.HpBar.fillAmount = _statController.GetHpRatio();
-            }
+            // if (_characterInfo.HpBar != null)
+            // {
+            //     _characterInfo.HpBar.fillAmount = _statController.GetHpRatio();
+            // }
 
             return true;
         }
@@ -138,8 +138,14 @@ namespace ARPG.Creature
 
         public void Save(PlayerData inPlayerData)
         {
-            inPlayerData.CurrentHp = _statController.GetHp();
-            inPlayerData.CurrentMp = _statController.GetMp();
+            if(AR.s.TryGetComponent<StatComponent>(out var _statComponent) == false)
+            {
+                Debug.LogError("[ArpgPlayer] Save - StatComponent not found");
+                return;
+            }
+
+            inPlayerData.CurrentHp = _statComponent.CurrentHp;
+            inPlayerData.CurrentMp = _statComponent.CurrentMp;
         }
 
         // protected override void InitializeSkill()
@@ -321,27 +327,27 @@ namespace ARPG.Creature
             return false;
         }
 
-        private Vector2 CalculateSafeMovement(Vector2 inputDirection)
-        {
-            if (AR.s == null || AR.s.Map == null || _characterInfo == null || _characterInfo.BoxCollider == null)
-                return Vector2.zero;
+        // private Vector2 CalculateSafeMovement(Vector2 inputDirection)
+        // {
+        //     if (AR.s == null || AR.s.Map == null || _characterInfo == null || _characterInfo.BoxCollider == null)
+        //         return Vector2.zero;
 
-            float deltaTime = Time.deltaTime;
-            float desiredMoveDistance = MoveSpeed * deltaTime;
-            Vector2 desiredMovement = inputDirection * desiredMoveDistance;
+        //     float deltaTime = Time.deltaTime;
+        //     float desiredMoveDistance = MoveSpeed * deltaTime;
+        //     Vector2 desiredMovement = inputDirection * desiredMoveDistance;
 
-            // BoxCollider의 bounds 정보
-            Bounds bounds = _characterInfo.BoxCollider.bounds;
-            Vector2 currentCenter = bounds.center;
-            Vector2 halfSize = bounds.size * 0.5f;
-            float margin = 0.01f;
+        //     // BoxCollider의 bounds 정보
+        //     Bounds bounds = _characterInfo.BoxCollider.bounds;
+        //     Vector2 currentCenter = bounds.center;
+        //     Vector2 halfSize = bounds.size * 0.5f;
+        //     float margin = 0.01f;
 
-            // X축과 Y축 각각 안전한 이동 거리 계산
-            float safeX = CalculateSafeDistance(desiredMovement.x, currentCenter, halfSize, margin, true);
-            float safeY = CalculateSafeDistance(desiredMovement.y, currentCenter, halfSize, margin, false);
+        //     // X축과 Y축 각각 안전한 이동 거리 계산
+        //     float safeX = CalculateSafeDistance(desiredMovement.x, currentCenter, halfSize, margin, true);
+        //     float safeY = CalculateSafeDistance(desiredMovement.y, currentCenter, halfSize, margin, false);
 
-            return new Vector2(safeX, safeY);
-        }
+        //     return new Vector2(safeX, safeY);
+        // }
 
         private float CalculateSafeDistance(float desiredMove, Vector2 center, Vector2 halfSize, float margin, bool isXAxis)
         {

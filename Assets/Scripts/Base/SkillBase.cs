@@ -80,13 +80,13 @@ namespace ARPG.Skill
             if (_character == null)
                 return;
 
-            float baseAttackSpeed = _character.GetAttackSpeed();
-            float attackSpeedMultiplier = _character.Stat.GetStat(GlobalEnum.Stat.AttackSpeedMul) * 0.01f;
+            // float baseAttackSpeed = _character.GetAttackSpeed();
+            // float attackSpeedMultiplier = _character.Stat.GetStat(GlobalEnum.Stat.AttackSpeedMul) * 0.01f;
 
-            float attackDamageTime = _character.CharacterInfo.GetAttackEventTime();
+            // float attackDamageTime = _character.CharacterInfo.GetAttackEventTime();
 
-            _processTime = attackDamageTime / attackSpeedMultiplier;
-            _endTime = baseAttackSpeed / attackSpeedMultiplier;
+            // _processTime = attackDamageTime / attackSpeedMultiplier;
+            // _endTime = baseAttackSpeed / attackSpeedMultiplier;
         }
 
         public virtual void SkillUpdate(float inTimeDT)

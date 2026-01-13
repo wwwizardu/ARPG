@@ -106,32 +106,32 @@ namespace ARPG.UI
 
         private void UpdateCharacterStat()
         {
-            AR.s.MyPlayer?.UpdateStat();
-
-            ARPG.Creature.Stats? stat = AR.s.MyPlayer?.Stat.GetStats();
-            if (stat == null)
+            if(AR.s.TryGetComponent<Component.StatComponent>(out var _statComponent) == false)
+            {
+                Debug.LogError("[CharacterUI] UpdateCharacterStat - StatComponent not found");
                 return;
+            }
 
-            _textStat[(int)GlobalEnum.Stat.Str].text = $"힘 {stat.Str}";
-            _textStat[(int)GlobalEnum.Stat.Dex].text = $"민첩 {stat.Dex}";
-            _textStat[(int)GlobalEnum.Stat.Int].text = $"지능 {stat.Int}";
-            _textStat[(int)GlobalEnum.Stat.Hp].text = $"체력 {stat.CurrentHp}/{stat.MaxHp}";
-            _textStat[(int)GlobalEnum.Stat.Mp].text = $"마나 {stat.CurrentMp}/{stat.MaxMp}";
-            _textStat[(int)GlobalEnum.Stat.HpGeneration].text = $"체력 재생 {stat.HpGeneration}";
-            _textStat[(int)GlobalEnum.Stat.MpGeneration].text = $"마나 재생 {stat.MpGeneration}";
-            _textStat[(int)GlobalEnum.Stat.AttackMin].text = $"공격력 {stat.AttackMin} - {stat.AttackMax}";
+            _textStat[(int)GlobalEnum.Stat.Str].text = $"힘 {_statComponent.FinalStr}";
+            _textStat[(int)GlobalEnum.Stat.Dex].text = $"민첩 {_statComponent.FinalDex}";
+            _textStat[(int)GlobalEnum.Stat.Int].text = $"지능 {_statComponent.FinalInt}";
+            _textStat[(int)GlobalEnum.Stat.Hp].text = $"체력 {_statComponent.CurrentHp}/{_statComponent.FinalMaxHp}";
+            _textStat[(int)GlobalEnum.Stat.Mp].text = $"마나 {_statComponent.CurrentMp}/{_statComponent.FinalMaxMp}";
+            _textStat[(int)GlobalEnum.Stat.HpGeneration].text = $"체력 재생 {_statComponent.FinalHpGeneration}";
+            _textStat[(int)GlobalEnum.Stat.MpGeneration].text = $"마나 재생 {_statComponent.FinalMpGeneration}";
+            _textStat[(int)GlobalEnum.Stat.AttackMin].text = $"공격력 {_statComponent.FinalAttackMin} - {_statComponent.FinalAttackMax}";
             _textStat[(int)GlobalEnum.Stat.AttackMax].gameObject.SetActive(false);
-            _textStat[(int)GlobalEnum.Stat.CriRate].text = $"치명타 확률 {stat.CriRate}%";
-            _textStat[(int)GlobalEnum.Stat.CriDamageMul].text = $"치명타 피해 {stat.CriDamage}%";
-            _textStat[(int)GlobalEnum.Stat.MoveSpeed].text = $"이동 속도 {stat.MoveSpeed}";
-            _textStat[(int)GlobalEnum.Stat.AttackSpeed].text = $"공격 속도 {stat.AttackSpeed}";
-            _textStat[(int)GlobalEnum.Stat.CastSpeed].text = $"시전 속도 {stat.CastSpeed}";
-            _textStat[(int)GlobalEnum.Stat.Hp].text = $"방어력 {stat.Defense}";
-            _textStat[(int)GlobalEnum.Stat.Hp].text = $"화염 저항 {stat.FireResist}";
-            _textStat[(int)GlobalEnum.Stat.Hp].text = $"냉기 저항 {stat.IceResist}";
-            _textStat[(int)GlobalEnum.Stat.Hp].text = $"번개 저항 {stat.LightningResist}";
-            _textStat[(int)GlobalEnum.Stat.Hp].text = $"독 저항 {stat.PoisonResist}";
-            _textStat[(int)GlobalEnum.Stat.Hp].text = $"행운 {stat.Luck}";
+            _textStat[(int)GlobalEnum.Stat.CriRate].text = $"치명타 확률 {_statComponent.FinalCriRate}%";
+            _textStat[(int)GlobalEnum.Stat.CriDamageMul].text = $"치명타 피해 {_statComponent.FinalCriDamage}%";
+            _textStat[(int)GlobalEnum.Stat.MoveSpeed].text = $"이동 속도 {_statComponent.FinalMoveSpeed}";
+            _textStat[(int)GlobalEnum.Stat.AttackSpeed].text = $"공격 속도 {_statComponent.FinalAttackSpeed}";
+            _textStat[(int)GlobalEnum.Stat.CastSpeed].text = $"시전 속도 {_statComponent.FinalCastSpeed}";
+            _textStat[(int)GlobalEnum.Stat.Hp].text = $"방어력 {_statComponent.FinalDefense}";
+            _textStat[(int)GlobalEnum.Stat.Hp].text = $"화염 저항 {_statComponent.FinalFireResist}";
+            _textStat[(int)GlobalEnum.Stat.Hp].text = $"냉기 저항 {_statComponent.FinalIceResist}";
+            _textStat[(int)GlobalEnum.Stat.Hp].text = $"번개 저항 {_statComponent.FinalLightningResist}";
+            _textStat[(int)GlobalEnum.Stat.Hp].text = $"독 저항 {_statComponent.FinalPoisonResist}";
+            _textStat[(int)GlobalEnum.Stat.Hp].text = $"행운 {_statComponent.FinalLuck}";
         }
     }
 }
