@@ -146,6 +146,7 @@ namespace ARPG.Tables
         [JsonProperty("ItemType")] public GE.ItemType ItemType;
 
         [JsonProperty("Stackable")] public bool Stackable;
+        [JsonProperty("MaxStack")] public int MaxStack;
 
         [JsonProperty("Description")] public string Description = string.Empty;
 

@@ -39,7 +39,7 @@ namespace ARPG.Editor
 
             await DownloadTable<StatTable>("318209064&range=A:Y", 1, SaveType.String);
 
-            await DownloadTable<ItemTable>("2064107837&range=A:I", 1, SaveType.String);
+            await DownloadTable<ItemTable>("2064107837&range=A:J", 1, SaveType.String);
             
             await DownloadTable<EquipmentTable>("853198133&range=A:H", 1, SaveType.String);
 
@@ -266,9 +266,9 @@ namespace ARPG.Editor
 
         private static void ParseItemTable(ItemTable table, string[] values)
         {
-            if (values.Length < 9)
+            if (values.Length < 10)
             {
-                Debug.LogError($"[ParseItemTable] Invalid data length. Expected at least 9, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseItemTable] Invalid data length. Expected at least 10, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
@@ -276,10 +276,11 @@ namespace ARPG.Editor
             table.Name = values[2];
             table.ItemType = (GlobalEnum.ItemType)Enum.Parse(typeof(GlobalEnum.ItemType), values[3]);
             table.Stackable = values[4].Trim().ToUpper() == "TRUE";
-            table.Description = values[5];
-            table.DropRate = int.Parse(values[6]);
-            table.EquipmentId = int.Parse(values[7]);
-            table.SpriteName = values[8];
+            table.MaxStack = int.Parse(values[5]);
+            table.Description = values[6];
+            table.DropRate = int.Parse(values[7]);
+            table.EquipmentId = int.Parse(values[8]);
+            table.SpriteName = values[9];
         }
 
         private static void ParseEquipmentTable(EquipmentTable table, string[] values)
