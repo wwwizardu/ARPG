@@ -158,6 +158,14 @@ public class GlobalEnum
         Blooding,   // 출혈
     }
 
+    public enum InventoryType
+    {
+        Character = 0,  // 캐릭터 인벤토리
+        Stash = 1,      // 창고
+        Shop = 2,       // 상점
+        Loot = 3,       // 드랍 아이템
+    }
+
 
     static public ushort PLAYER_INVENTORY_SLOTCOUNT_MAX = 60;
 }

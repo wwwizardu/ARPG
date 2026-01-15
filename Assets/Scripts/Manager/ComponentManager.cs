@@ -44,6 +44,12 @@ namespace ARPG.Component
 
             // 매우 적게 사용되는 컴포넌트 (커맨드용, 일시적)
             { typeof(SkillCommandComponent), 20 },
+
+            // 인벤토리 컴포넌트
+            { typeof(InventoryComponent), 100 },              // 인벤토리 소유자 수
+            { typeof(InventorySlotComponent), 5000 },         // 100개 엔티티 * 50슬롯 평균
+            { typeof(EquipmentInstanceComponent), 1000 },     // 장비 아이템 수
+            { typeof(InventoryDirtyTag), 100 },               // 일시적 태그
         };
 
         /// <summary>
