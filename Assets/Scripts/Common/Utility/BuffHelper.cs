@@ -1,4 +1,5 @@
 using ARPG.Component;
+using ARPG.Tables;
 using ARPG.Utility;
 using UnityEngine;
 using GE = GlobalEnum;
@@ -83,25 +84,7 @@ namespace ARPG.Utility
             // 틱 데이터를 테이블에서 복사
             newBuff.TickInterval = buffTable.TickInterval;
 
-            if(buffTable.EffectType == GE.BuffEffectType.Blooding)
-            {
-                if (AR.s.Component.TryGetComponent<StatComponent>(targetEntityId, out StatComponent stat) == true)
-                {
-                    newBuff.DamageType = GE.DamageType.Physics;
-                    newBuff.TickDamage = (int)(stat.FinalMaxHp * buffTable.EffectValue * 0.01f); // 최대 체력의 퍼센트로 계산
-                }
-                else
-                {
-                    Debug.LogWarning($"[BuffHelper] Target entity has no StatComponent - TargetEntityId: {targetEntityId}, BuffTableId: {buffTableID}");
-                    newBuff.TickDamage = 0;
-                    newBuff.DamageType = 0;
-                }
-            }
-            else
-            {
-                newBuff.TickDamage = 0;
-                newBuff.DamageType = 0;
-            }
+            ApplyBuffEffect(ref newBuff, targetEntityId, buffTable);
 
             newBuff.LastTickTime = duration; // RemainTime 기준이므로 duration으로 초기화
 
@@ -243,6 +226,32 @@ namespace ARPG.Utility
             }
 
             return count;
+        }
+
+        /// <summary>
+        /// 버프 효과 타입에 따라 BuffInstance에 효과 데이터 설정
+        /// </summary>
+        private static void ApplyBuffEffect(ref BuffInstance buff, int targetEntityId, BuffTable buffTable)
+        {
+            if (buffTable.EffectType == GE.BuffEffectType.Blooding)
+            {
+                if (AR.s.Component.TryGetComponent<StatComponent>(targetEntityId, out StatComponent stat) == true)
+                {
+                    buff.DamageType = GE.DamageType.Physics;
+                    buff.TickDamage = (int)(stat.FinalMaxHp * buffTable.EffectValue * 0.01f); // 최대 체력의 퍼센트로 계산
+                }
+                else
+                {
+                    Debug.LogWarning($"[BuffHelper] Target entity has no StatComponent - TargetEntityId: {targetEntityId}, BuffTableId: {buffTable.Id}");
+                    buff.TickDamage = 0;
+                    buff.DamageType = 0;
+                }
+            }
+            else
+            {
+                buff.TickDamage = 0;
+                buff.DamageType = 0;
+            }
         }
 
         /// <summary>
