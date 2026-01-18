@@ -50,6 +50,9 @@ namespace ARPG.Component
             { typeof(InventorySlotComponent), 5000 },         // 100개 엔티티 * 50슬롯 평균
             { typeof(EquipmentInstanceComponent), 1000 },     // 장비 아이템 수
             { typeof(InventoryDirtyTag), 100 },               // 일시적 태그
+
+            // 월드 아이템 컴포넌트
+            { typeof(WorldItemComponent), 500 },              // 월드에 떨어진 아이템
         };
 
         /// <summary>

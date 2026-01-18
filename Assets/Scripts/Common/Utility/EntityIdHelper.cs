@@ -39,16 +39,6 @@ namespace ARPG.Utility
         private static readonly Dictionary<int, HashSet<int>> _ownerInventorySlots = new Dictionary<int, HashSet<int>>();
 
         /// <summary>
-        /// 장비 인스턴스 엔티티 ID 추적
-        /// </summary>
-        private static readonly HashSet<int> _equipmentEntityIds = new HashSet<int>();
-
-        /// <summary>
-        /// 다음 장비 인스턴스 엔티티 ID
-        /// </summary>
-        private static int _nextEquipmentEntityId = 2000000;
-
-        /// <summary>
         /// 재사용 가능한 엔티티 ID 풀 (삭제된 ID를 재활용)
         /// </summary>
         private static readonly Queue<int> _recycledEntityIds = new Queue<int>();
@@ -72,8 +62,6 @@ namespace ARPG.Utility
             _characterSkillSlots.Clear();
             _targetBuffTypes.Clear();
             _ownerInventorySlots.Clear();
-            _equipmentEntityIds.Clear();
-            _nextEquipmentEntityId = 2000000;
             _recycledEntityIds.Clear();
             Debug.Log("[EntityIdHelper] Reset - All entities cleared");
         }
@@ -619,55 +607,6 @@ namespace ARPG.Utility
                 return _ownerInventorySlots[ownerEntityId].Contains(slotIndex);
             }
             return false;
-        }
-
-        #endregion
-
-        #region Equipment Instance Entity Management
-
-        /// <summary>
-        /// 장비 인스턴스 엔티티 생성
-        /// </summary>
-        /// <returns>생성된 장비 인스턴스 엔티티 ID</returns>
-        public static int CreateEquipmentEntity()
-        {
-            int equipmentEntityId = _nextEquipmentEntityId++;
-
-            _registeredEntityIds.Add(equipmentEntityId);
-            _equipmentEntityIds.Add(equipmentEntityId);
-
-            Debug.Log($"[EntityIdHelper] Equipment entity created - ID: {equipmentEntityId}");
-            return equipmentEntityId;
-        }
-
-        /// <summary>
-        /// 장비 인스턴스 엔티티 제거
-        /// </summary>
-        /// <param name="equipmentEntityId">제거할 장비 엔티티 ID</param>
-        public static void DestroyEquipmentEntity(int equipmentEntityId)
-        {
-            if (_equipmentEntityIds.Contains(equipmentEntityId) == false)
-            {
-                Debug.LogWarning($"[EntityIdHelper] Equipment entity {equipmentEntityId} is not registered");
-                return;
-            }
-
-            // ECS 컴포넌트 일괄 제거
-            AR.s.Component.RemoveAllComponents(equipmentEntityId);
-
-            // 등록 해제
-            _registeredEntityIds.Remove(equipmentEntityId);
-            _equipmentEntityIds.Remove(equipmentEntityId);
-
-            Debug.Log($"[EntityIdHelper] Equipment entity destroyed - ID: {equipmentEntityId}");
-        }
-
-        /// <summary>
-        /// 장비 인스턴스 엔티티인지 확인
-        /// </summary>
-        public static bool IsEquipmentEntity(int entityId)
-        {
-            return _equipmentEntityIds.Contains(entityId);
         }
 
         #endregion

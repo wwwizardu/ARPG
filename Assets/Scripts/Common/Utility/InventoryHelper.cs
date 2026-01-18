@@ -157,13 +157,13 @@ namespace ARPG.Utility
             }
 
             // 3. 장비 인스턴스 엔티티 생성
-            int equipmentEntityId = EntityIdHelper.CreateEquipmentEntity();
+            int equipmentEntityId = EntityIdHelper.CreateEntity();
 
             // 4. 슬롯 엔티티 생성
             int slotEntityId = EntityIdHelper.CreateInventorySlotEntity(ownerEntityId, emptySlot);
             if (slotEntityId == -1)
             {
-                EntityIdHelper.DestroyEquipmentEntity(equipmentEntityId);
+                EntityIdHelper.DestroyEntity(equipmentEntityId);
                 Debug.LogError("[InventoryHelper] Failed to create slot entity");
                 return -1;
             }
@@ -262,7 +262,7 @@ namespace ARPG.Utility
             // 장비 인스턴스 엔티티 제거
             if (slot.EquipmentEntityId != 0)
             {
-                EntityIdHelper.DestroyEquipmentEntity(slot.EquipmentEntityId);
+                EntityIdHelper.DestroyEntity(slot.EquipmentEntityId);
             }
 
             // 슬롯 데이터 클리어
