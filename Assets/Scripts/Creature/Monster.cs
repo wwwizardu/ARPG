@@ -51,7 +51,7 @@ namespace ARPG.Creature
             {
                 BehaviorType = Component.AIBehaviorType.Melee,
                 AggroRange = 10f,
-                AttackRange = 2f
+                AttackRange = 1f
             });
             AR.s.Component.AddComponent<Component.AIStateComponent>(_entityId, new Component.AIStateComponent
             {

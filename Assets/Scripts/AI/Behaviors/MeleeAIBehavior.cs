@@ -22,6 +22,12 @@ namespace ARPG.AI.Behaviors
                     break;
 
                 case AIState.Attack:
+                    if(cm.TryGetComponent<VelocityComponent>(entityId, out var velocity) == true)
+                    {
+                        velocity.Direction = Vector2.zero;
+                        cm.SetComponent(entityId, velocity);
+                    }
+
                     Debug.Log($"Melee AI {entityId} started attacking");
                     break;
             }
@@ -125,13 +131,13 @@ namespace ARPG.AI.Behaviors
 
         private void UpdateAttack(int entityId, ComponentManager cm, float deltaTime)
         {
-            if (!cm.TryGetComponent<AIComponent>(entityId, out var ai))
+            if (cm.TryGetComponent<AIComponent>(entityId, out var ai) == false)
                 return;
 
-            if (!cm.TryGetComponent<TransformComponent>(entityId, out var transform))
+            if (cm.TryGetComponent<TransformComponent>(entityId, out var transform) == false)
                 return;
 
-            if (!cm.TryGetComponent<AIBehaviorTypeComponent>(entityId, out var behavior))
+            if (cm.TryGetComponent<AIBehaviorTypeComponent>(entityId, out var behavior) == false)
                 return;
 
             // 타겟이 없으면 Idle로 전환
@@ -142,7 +148,7 @@ namespace ARPG.AI.Behaviors
             }
 
             // 타겟 거리 확인
-            if (!cm.TryGetComponent<TransformComponent>(ai.TargetEntityId, out var targetTransform))
+            if (cm.TryGetComponent<TransformComponent>(ai.TargetEntityId, out var targetTransform) == false)
             {
                 TransitionToState(entityId, cm, AIState.Idle);
                 return;
@@ -159,13 +165,18 @@ namespace ARPG.AI.Behaviors
             {
                 // 근접 공격 실행
                 // TODO: 스킬 시스템과 연동하여 공격 스킬 발동
+                if(ARPG.Utility.SkillEntityIdHelper.GetSkillCommandComponent(0, entityId, targetTransform.Position, out var command) == true)
+                {
+                    AR.s.Component.SetComponent(entityId, command);
+                }
+
                 Debug.Log($"Melee AI {entityId} attacking target {ai.TargetEntityId}");
             }
         }
 
         private void TransitionToState(int entityId, ComponentManager cm, AIState newState)
         {
-            if (!cm.TryGetComponent<AIStateComponent>(entityId, out var stateComponent))
+            if (cm.TryGetComponent<AIStateComponent>(entityId, out var stateComponent) == false)
                 return;
 
             AIState oldState = stateComponent.CurrentState;
