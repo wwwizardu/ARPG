@@ -67,6 +67,8 @@ namespace ARPG.Creature
             _buffController.Initialize(this);
             _characterInfo.Initialize(this);
 
+            RegisterMessageHandler<Message.DamageMessage>(OnDamage);
+
             Reset();
         }
 
@@ -471,6 +473,12 @@ namespace ARPG.Creature
 
                 // TODO: StatComponent 기반 HP/MP 자연 회복 로직 구현 필요
             }
+        }
+
+        private void OnDamage(Message.DamageMessage msg)
+        {
+            Debug.Log($"데미지 받음: {msg.DamageAmount}, 치명타: {msg.IsCritical}");
+            _characterInfo.HpBar.fillAmount = (float)msg.CurrentHp / (float)msg.MaxHp;
         }
 
 		protected Vector2 _boundsTopLeftCorner;

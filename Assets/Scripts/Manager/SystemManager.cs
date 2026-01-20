@@ -54,6 +54,10 @@ namespace ARPG.Systems
             System_Render renderSystem = new();
             RegisterSystems(renderSystem);
 
+            // Priority 900: Entity Message System (LateUpdate) - 메시지 일괄 처리
+            System_EntityMessage entityMessageSystem = new();
+            RegisterSystems(entityMessageSystem);
+
             // Priority 값이 작은 순서대로 정렬
             _systems.Sort((a, b) => a.Priority.CompareTo(b.Priority));
             _updateSystems.Sort((a, b) => a.Priority.CompareTo(b.Priority));

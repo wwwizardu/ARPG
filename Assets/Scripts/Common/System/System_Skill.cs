@@ -508,6 +508,11 @@ namespace ARPG.Systems
                 return;
             }
 
+            if(skill.OwnerEntityId == 0)
+            {
+                int di = 0;
+            }
+
             // 스킬 타겟 타입에 따라 충돌 체크
             System.Collections.Generic.List<int> hitEntities = GetEntitiesInSkillRange(skill, target);
 
@@ -714,6 +719,17 @@ namespace ARPG.Systems
                     }
                 }
             }
+
+            Message.EntityMessenger.Send(new Message.DamageMessage
+            {
+                TargetEntityId = targetEntityId,
+                DamageAmount = damage,
+                AttackerEntityId = skill.OwnerEntityId,
+                DamageType = GlobalEnum.DamageType.Physics,
+                IsCritical = false,
+                CurrentHp = targetStat.CurrentHp,
+                MaxHp = targetStat.FinalMaxHp
+            });
 
             Debug.Log($"[System_Skill] ApplySkillEffectToEntity - SkillEntityId: {skillEntityId}, SkillId: {skill.SkillId}, TargetEntityId: {targetEntityId}, Damage: {damage}, RemainingHP: {targetStat.CurrentHp}");
 
