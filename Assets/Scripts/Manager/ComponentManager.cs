@@ -22,7 +22,6 @@ namespace ARPG.Component
             // 많이 사용되는 컴포넌트 (캐릭터/엔티티마다 1개씩)
             { typeof(TransformComponent), 1000 },
             { typeof(VelocityComponent), 500 },
-            { typeof(MovementComponent), 500 },
             { typeof(StateComponent), 300 },
             { typeof(StatComponent), 300 },
 
@@ -91,13 +90,6 @@ namespace ARPG.Component
 
             // Entity에 등록된 컴포넌트 타입 추적
             TrackComponentType<T>(entityId);
-        }
-
-        // 컴포넌트 조회
-        public T GetComponent<T>(int entityId) where T : struct
-        {
-            SparseSet<T> pool = GetPool<T>();
-            return pool != null ? pool.Get(entityId) : default;
         }
 
         // 컴포넌트 조회 시도 (Unity 패턴, 가장 효율적)

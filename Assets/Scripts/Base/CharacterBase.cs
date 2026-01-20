@@ -68,6 +68,7 @@ namespace ARPG.Creature
             _characterInfo.Initialize(this);
 
             RegisterMessageHandler<Message.DamageMessage>(OnDamage);
+            RegisterMessageHandler<Message.DeathMessage>(OnDead);
 
             Reset();
         }
@@ -102,7 +103,7 @@ namespace ARPG.Creature
             Component.VelocityComponent velocityComponent = new()
             {
                 Direction = Vector2.zero,
-                Speed = statComponent.FinalMoveSpeed, // CharacterBase의 MoveSpeed 사용
+                Speed = 0, // CharacterBase의 MoveSpeed 사용
                 SprintMultiplier = 2f
             };
             AR.s.Component.AddComponent(_entityId, velocityComponent);
@@ -336,13 +337,6 @@ namespace ARPG.Creature
 
         protected virtual void Dead()
         {
-            // if (IsOwner == true)
-            // {
-            //     _controller.SetHorizontalForce(0);
-            // }
-
-            //_characterInfo.SkillController.StopAllSkill();
-
             ChangeConditionState(CharacterConditions.Dead);
         }
 
@@ -479,6 +473,11 @@ namespace ARPG.Creature
         {
             Debug.Log($"데미지 받음: {msg.DamageAmount}, 치명타: {msg.IsCritical}");
             _characterInfo.HpBar.fillAmount = (float)msg.CurrentHp / (float)msg.MaxHp;
+        }
+
+        private void OnDead(Message.DeathMessage msg)
+        {
+            Dead();
         }
 
 		protected Vector2 _boundsTopLeftCorner;

@@ -113,14 +113,29 @@ namespace ARPG.Systems
             if (finalDamage > 0)
             {
                 // 데미지 처리
-                targetStat.CurrentHp = Mathf.Max(0, targetStat.CurrentHp - finalDamage);
+                int newHp = Mathf.Max(0, targetStat.CurrentHp - finalDamage);
+                targetStat.SetCurrentHp(buff.TargetEntityId, newHp);
+
+                // 데미지 메시지 전송(UI 변경 등)
+                Message.EntityMessenger.Send(new Message.DamageMessage
+                {
+                    TargetEntityId = buff.TargetEntityId,
+                    DamageAmount = finalDamage,
+                    AttackerEntityId = -1, // 버프로 인한 데미지이므로 공격자 없음
+                    DamageType = GlobalEnum.DamageType.Physics,
+                    IsCritical = false,
+                    CurrentHp = targetStat.CurrentHp,
+                    MaxHp = targetStat.FinalMaxHp
+                });
+                
                 Debug.Log($"[System_BuffUpdate] Tick Damage - BuffEntityId: {buffEntityId}, Target: {buff.TargetEntityId}, Damage: {finalDamage}, RemainingHP: {targetStat.CurrentHp}, Stack: {buff.StackCount}");
             }
             else if (finalDamage < 0)
             {
                 // 힐 처리
                 int healAmount = -finalDamage;
-                targetStat.CurrentHp = Mathf.Min(targetStat.FinalMaxHp, targetStat.CurrentHp + healAmount);
+                int newHp = Mathf.Min(targetStat.FinalMaxHp, targetStat.CurrentHp + healAmount);
+                targetStat.SetCurrentHp(buff.TargetEntityId, newHp);
                 Debug.Log($"[System_BuffUpdate] Tick Heal - BuffEntityId: {buffEntityId}, Target: {buff.TargetEntityId}, Heal: {healAmount}, CurrentHP: {targetStat.CurrentHp}, Stack: {buff.StackCount}");
             }
 

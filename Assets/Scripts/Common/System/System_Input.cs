@@ -99,7 +99,7 @@ namespace ARPG.Systems
                     }
 
                     command.SkillEntityId = skillEntityId;
-                    command.TargetPosition = inputComponent.MousePosition;
+                    command.TargetPosition = Camera.main.ScreenToWorldPoint(inputComponent.MousePosition);
 
                     // 캐릭터 엔티티에 커맨드 설정 (이미 있으면 최신 값으로 덮어쓰기)
                     _componentManager.SetComponent(_playerEntityId, command);

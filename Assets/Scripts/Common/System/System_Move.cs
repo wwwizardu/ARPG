@@ -23,6 +23,13 @@ namespace ARPG.Systems
         // FixedUpdate로 변경: 일정한 시간 간격으로 이동 처리
         public readonly void OnFixedUpdate(float inFixedDeltaTime)
         {
+
+            if(AR.s.Component.TryGetComponent<StatComponent>(0, out var stat) == false)
+            {
+                Debug.LogError("System_Move: StatComponent for entity 0 not found.");
+                return;
+            }   
+
             // ComponentManager에서 필요한 컴포넌트 풀 가져오기
             SparseSet<InputComponent> inputPool = AR.s.Component.GetComponentPool<InputComponent>();
 
@@ -42,6 +49,7 @@ namespace ARPG.Systems
                 {
                     // 방향 설정 (정규화된 입력)
                     velocity.Direction = input.MoveDirection;
+                    velocity.Speed = stat.FinalMoveSpeed;
 
                     // TODO: 여기서 물리 충돌 검사 후 Direction 조정
                     // velocity.Direction = ApplyCollision(velocity.Direction, transform.Position);
@@ -60,6 +68,8 @@ namespace ARPG.Systems
                     CheckStateChanges(entityId, ref velocity, ref state);
                 }
             }
+
+
         }
 
         private readonly void CheckStateChanges(int entityId, ref VelocityComponent refVelocity,  ref StateComponent refState)

@@ -80,10 +80,18 @@ namespace ARPG.Systems
                 // Velocity를 이용해 Position 업데이트
                 if (_componentManager.TryGetComponent<VelocityComponent>(entityId, out var velocity))
                 {
-                    transformComponent.Position += velocity.Velocity * inDeltaTime;
+                    if(0 < velocity.Speed)
+                    {
+                        if(entityId != 0)
+                        {
+                            int k = 0 ;
+                        }
 
-                    // 업데이트된 Position 저장
-                    _componentManager.AddComponent(entityId, transformComponent);
+                        transformComponent.Position += velocity.Velocity * inDeltaTime;
+
+                        // 업데이트된 Position 저장
+                        _componentManager.AddComponent(entityId, transformComponent);
+                    }
                 }
 
                 // ECS TransformComponent -> GameObject Transform 동기화

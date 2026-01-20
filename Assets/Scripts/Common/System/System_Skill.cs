@@ -333,7 +333,6 @@ namespace ARPG.Systems
             }
 
             // TODO: 시작 이펙트, 사운드 등
-            Debug.Log($"[System_Skill] Skill Start - SkillEntityId: {skillEntityId}");
         }
 
         /// <summary>
@@ -346,7 +345,7 @@ namespace ARPG.Systems
                 return;
         
 
-            Debug.Log($"[System_Skill] Skill Process - SkillEntityId: {skillEntityId}, Target: {target.TargetId}");
+            // Debug.Log($"[System_Skill] Skill Process - SkillEntityId: {skillEntityId}, Target: {target.TargetId}");
         }
 
         /// <summary>
@@ -355,7 +354,7 @@ namespace ARPG.Systems
         private readonly void OnEnterEndState(int skillEntityId, ref SkillComponent inSkill)
         {
             // TODO: 종료 이펙트, 사운드 등
-            Debug.Log($"[System_Skill] Skill End - SkillEntityId: {skillEntityId}");
+            // Debug.Log($"[System_Skill] Skill End - SkillEntityId: {skillEntityId}");
         }
 
         /// <summary>
@@ -684,7 +683,8 @@ namespace ARPG.Systems
             int damage = UnityEngine.Random.Range(skill.Table.DamageMin, skill.Table.DamageMax + 1);
 
             // HP 감소 (0 이하로 떨어지지 않도록 처리)
-            targetStat.CurrentHp = Mathf.Max(0, targetStat.CurrentHp - damage);
+            int newHp = Mathf.Max(0, targetStat.CurrentHp - damage);
+            targetStat.SetCurrentHp(targetEntityId, newHp);
 
             // 변경된 StatComponent 저장
             AR.s.Component.SetComponent(targetEntityId, targetStat);
@@ -720,6 +720,7 @@ namespace ARPG.Systems
                 }
             }
 
+            // 데미지 메시지 전송(UI 변경 등)
             Message.EntityMessenger.Send(new Message.DamageMessage
             {
                 TargetEntityId = targetEntityId,

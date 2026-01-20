@@ -7,29 +7,20 @@ namespace ARPG.AI.Behaviors
     {
         public void OnEnterState(int entityId, AIState state)
         {
-            ComponentManager cm = AR.s.Component;
-
-            switch (state)
-            {
-                case AIState.Chase:
-                    Debug.Log($"Melee AI {entityId} started chasing target");
-                    // 추격 시작 시 속도 증가
-                    if (cm.TryGetComponent<MovementComponent>(entityId, out var movement))
+            // 진입 시 특별한 동작 없음
+            if(state == AIState.Idle | state == AIState.Attack)
+            { 
+                var cm = AR.s.Component;
+                if (cm.TryGetComponent<VelocityComponent>(entityId, out var velocity) == true)
+                {
+                    if(cm.TryGetComponent<StatComponent>(entityId, out var stat) == true)
                     {
-                        //movement.MoveSpeed *= 1.2f;
-                        //cm.SetComponent(entityId, movement);
-                    }
-                    break;
-
-                case AIState.Attack:
-                    if(cm.TryGetComponent<VelocityComponent>(entityId, out var velocity) == true)
-                    {
+                        // 이동 속도 보정 (예: 이동 속도 버프/디버프 적용)
                         velocity.Direction = Vector2.zero;
+                        velocity.Speed = 0f;
                         cm.SetComponent(entityId, velocity);
-                    }
-
-                    Debug.Log($"Melee AI {entityId} started attacking");
-                    break;
+                    }                    
+                }
             }
         }
 
@@ -55,19 +46,7 @@ namespace ARPG.AI.Behaviors
 
         public void OnExitState(int entityId, AIState state)
         {
-            ComponentManager cm = AR.s.Component;
 
-            switch (state)
-            {
-                case AIState.Chase:
-                    // 추격 종료 시 속도 원복
-                    if (cm.TryGetComponent<MovementComponent>(entityId, out var movement))
-                    {
-                        //movement.MoveSpeed /= 1.2f;
-                        cm.SetComponent(entityId, movement);
-                    }
-                    break;
-            }
         }
 
         private void UpdateIdle(int entityId, ComponentManager cm, float deltaTime)
@@ -121,10 +100,15 @@ namespace ARPG.AI.Behaviors
                 // 타겟을 향해 이동
                 Vector2 direction = (targetTransform.Position - transform.Position).normalized;
 
-                if (cm.TryGetComponent<VelocityComponent>(entityId, out var velocity))
+                if (cm.TryGetComponent<VelocityComponent>(entityId, out var velocity) == true)
                 {
-                    velocity.Direction = direction;
-                    cm.SetComponent(entityId, velocity);
+                    if(cm.TryGetComponent<StatComponent>(entityId, out var stat) == true)
+                    {
+                        // 이동 속도 보정 (예: 이동 속도 버프/디버프 적용)
+                        velocity.Direction = direction;
+                        velocity.Speed = stat.FinalMoveSpeed;
+                        cm.SetComponent(entityId, velocity);
+                    }
                 }
             }
         }
@@ -170,7 +154,7 @@ namespace ARPG.AI.Behaviors
                     AR.s.Component.SetComponent(entityId, command);
                 }
 
-                Debug.Log($"Melee AI {entityId} attacking target {ai.TargetEntityId}");
+                //Debug.Log($"Melee AI {entityId} attacking target {ai.TargetEntityId}");
             }
         }
 

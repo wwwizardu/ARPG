@@ -61,8 +61,33 @@ namespace ARPG.Component
 
         // === 현재 상태 값 ===
         // 전투 중 변동되는 값들
-        public int CurrentHp;         // 현재 체력
+        private int _currentHp;       // 현재 체력 (SetCurrentHp로만 변경)
         public int CurrentMp;         // 현재 마나
+
+        /// <summary>
+        /// 현재 체력 (읽기 전용, 변경은 SetCurrentHp 사용)
+        /// </summary>
+        public readonly int CurrentHp => _currentHp;
+
+        /// <summary>
+        /// 현재 체력 설정 및 HpDirtyTag 추가
+        /// </summary>
+        /// <param name="entityId">엔티티 ID</param>
+        /// <param name="value">설정할 체력 값</param>
+        public void SetCurrentHp(int entityId, int value)
+        {
+            _currentHp = value;
+            AR.s.Component.AddComponent(entityId, new HpDirtyTag());
+        }
+
+        /// <summary>
+        /// 현재 체력 직접 설정 (초기화 전용, HpDirtyTag 추가 안함)
+        /// </summary>
+        /// <param name="value">설정할 체력 값</param>
+        public void SetCurrentHpDirect(int value)
+        {
+            _currentHp = value;
+        }
 
         /// <summary>
         /// StatTable로부터 기본 스탯을 초기화
@@ -96,7 +121,7 @@ namespace ARPG.Component
             CopyBaseToFinal();
 
             // 현재 체력/마나를 최대값으로 초기화
-            CurrentHp = FinalMaxHp;
+            SetCurrentHpDirect(FinalMaxHp);
             CurrentMp = FinalMaxMp;
         }
 
