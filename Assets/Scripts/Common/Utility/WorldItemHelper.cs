@@ -94,7 +94,6 @@ namespace ARPG.Utility
             if (isEquipment)
             {
                 EquipmentInstanceComponent equipData = equipmentData.Value;
-                equipData.SlotEntityId = 0;  // 아직 인벤토리에 없음
                 AR.s.Component.AddComponent(equipmentEntityId, equipData);
             }
 
@@ -106,170 +105,38 @@ namespace ARPG.Utility
 
         #region Pickup Item
 
-        /// <summary>
-        /// 월드 아이템 줍기 (인벤토리에 추가)
-        /// </summary>
-        /// <param name="worldItemEntityId">월드 아이템 엔티티 ID</param>
-        /// <param name="pickerEntityId">줍는 캐릭터 엔티티 ID</param>
-        /// <returns>인벤토리 슬롯 인덱스, 실패 시 -1</returns>
-        public static int PickupItem(int worldItemEntityId, int pickerEntityId)
-        {
-            // 1. 월드 아이템 컴포넌트 조회
-            if (AR.s.Component.TryGetComponent<WorldItemComponent>(worldItemEntityId, out WorldItemComponent worldItem) == false)
-            {
-                Debug.LogWarning($"[WorldItemHelper] World item not found: {worldItemEntityId}");
-                return -1;
-            }
+        // TODO: PlayerData 인벤토리 연동 구현 필요
+        // /// <summary>
+        // /// 월드 아이템 줍기 (인벤토리에 추가)
+        // /// </summary>
+        // public static int PickupItem(int worldItemEntityId, PlayerData playerData)
+        // {
+        //     // 월드 아이템 데이터 조회
+        //     if (TryGetWorldItem(worldItemEntityId, out WorldItemComponent worldItem) == false)
+        //     {
+        //         Debug.LogWarning($"[WorldItemHelper] PickupItem - World item not found: {worldItemEntityId}");
+        //         return 0;
+        //     }
 
-            // 2. 줍는 캐릭터의 인벤토리 확인
-            if (AR.s.Component.TryGetComponent<InventoryComponent>(pickerEntityId, out InventoryComponent inventory) == false)
-            {
-                Debug.LogWarning($"[WorldItemHelper] Picker has no inventory: {pickerEntityId}");
-                return -1;
-            }
+        //     AR.s.MyPlayer.Inventory.AddItem()
 
-            if (inventory.IsFull)
-            {
-                Debug.LogWarning("[WorldItemHelper] Inventory is full");
-                return -1;
-            }
+        // }
 
-            int slotIndex;
-
-            // 3. 장비 아이템인 경우
-            if (worldItem.IsEquipment)
-            {
-                // 장비 인스턴스 컴포넌트 조회
-                if (AR.s.Component.TryGetComponent<EquipmentInstanceComponent>(worldItem.EquipmentEntityId, out EquipmentInstanceComponent equipData) == false)
-                {
-                    Debug.LogError($"[WorldItemHelper] Equipment instance not found: {worldItem.EquipmentEntityId}");
-                    return -1;
-                }
-
-                // 인벤토리에 장비 추가
-                slotIndex = InventoryHelper.AddEquipmentItem(pickerEntityId, worldItem.ItemTableId, equipData);
-
-                if (slotIndex >= 0)
-                {
-                    // 기존 장비 엔티티 제거 (인벤토리에서 새로 생성됨)
-                    EntityIdHelper.DestroyEntity(worldItem.EquipmentEntityId);
-                }
-            }
-            else
-            {
-                // 4. 일반 아이템인 경우
-                slotIndex = InventoryHelper.AddItem(pickerEntityId, worldItem.ItemTableId, worldItem.Quantity);
-            }
-
-            // 5. 성공 시 월드 아이템 제거
-            if (slotIndex >= 0)
-            {
-                DestroyWorldItem(worldItemEntityId);
-                Debug.Log($"[WorldItemHelper] Item picked up - WorldItem: {worldItemEntityId} -> Inventory slot: {slotIndex}");
-            }
-
-            return slotIndex;
-        }
-
-        /// <summary>
-        /// 범위 내 자동 줍기 처리
-        /// </summary>
-        /// <param name="pickerEntityId">줍는 캐릭터 엔티티 ID</param>
-        /// <param name="pickerPosition">캐릭터 위치</param>
-        /// <returns>주운 아이템 개수</returns>
-        public static int AutoPickupInRange(int pickerEntityId, Vector2 pickerPosition)
-        {
-            int pickedCount = 0;
-
-            SparseSet<WorldItemComponent> worldItemPool = AR.s.Component.GetComponentPool<WorldItemComponent>();
-            if (worldItemPool == null || worldItemPool.Count == 0)
-                return 0;
-
-            // 역순으로 순회 (삭제 안전)
-            for (int i = worldItemPool.Count - 1; i >= 0; i--)
-            {
-                int entityId = worldItemPool.GetEntityId(i);
-                WorldItemComponent worldItem = worldItemPool.GetByIndex(i);
-
-                // 자동 줍기 비활성화면 스킵
-                if (worldItem.AutoPickupEnabled == false)
-                    continue;
-
-                // 위치 확인
-                if (AR.s.Component.TryGetComponent<TransformComponent>(entityId, out TransformComponent transform) == false)
-                    continue;
-
-                // 거리 체크 (SqrMagnitude 사용)
-                float sqrDistance = (transform.Position - pickerPosition).sqrMagnitude;
-                float sqrRange = worldItem.AutoPickupRange * worldItem.AutoPickupRange;
-
-                if (sqrDistance <= sqrRange)
-                {
-                    int result = PickupItem(entityId, pickerEntityId);
-                    if (result >= 0)
-                    {
-                        pickedCount++;
-                    }
-                }
-            }
-
-            return pickedCount;
-        }
+        // TODO: PlayerData 인벤토리 연동 구현 필요
+        // /// <summary>
+        // /// 범위 내 자동 줍기 처리
+        // /// </summary>
+        // public static int AutoPickupInRange(PlayerData playerData, Vector2 pickerPosition) { }
 
         #endregion
 
         #region Drop Item
 
-        /// <summary>
-        /// 인벤토리에서 아이템 버리기
-        /// </summary>
-        /// <param name="ownerEntityId">인벤토리 소유자 엔티티 ID</param>
-        /// <param name="slotIndex">버릴 슬롯 인덱스</param>
-        /// <param name="dropPosition">버릴 위치</param>
-        /// <param name="quantity">버릴 수량 (0이면 전부)</param>
-        /// <returns>생성된 월드 아이템 엔티티 ID, 실패 시 -1</returns>
-        public static int DropItemFromInventory(int ownerEntityId, int slotIndex, Vector2 dropPosition, int quantity = 0)
-        {
-            // 1. 슬롯 데이터 조회
-            if (InventoryHelper.TryGetSlot(ownerEntityId, slotIndex, out InventorySlotComponent slot) == false)
-            {
-                Debug.LogWarning($"[WorldItemHelper] Slot not found: owner={ownerEntityId}, slot={slotIndex}");
-                return -1;
-            }
-
-            if (slot.IsEmpty)
-            {
-                Debug.LogWarning("[WorldItemHelper] Slot is empty");
-                return -1;
-            }
-
-            // 수량 결정
-            int dropQuantity = (quantity <= 0 || quantity >= slot.Quantity) ? slot.Quantity : quantity;
-
-            // 2. 장비 데이터 조회 (장비인 경우)
-            EquipmentInstanceComponent? equipData = null;
-            if (slot.IsEquipment)
-            {
-                if (AR.s.Component.TryGetComponent<EquipmentInstanceComponent>(slot.EquipmentEntityId, out EquipmentInstanceComponent equipComponent) == false)
-                {
-                    Debug.LogError("[WorldItemHelper] Equipment data not found");
-                    return -1;
-                }
-                equipData = equipComponent;
-            }
-
-            // 3. 월드 아이템 생성
-            int worldItemEntityId = CreateWorldItem(dropPosition, slot.ItemTableId, dropQuantity, equipmentData: equipData);
-
-            // 4. 성공 시 인벤토리에서 제거
-            if (worldItemEntityId >= 0)
-            {
-                InventoryHelper.RemoveItem(ownerEntityId, slotIndex, dropQuantity);
-                Debug.Log($"[WorldItemHelper] Item dropped - Slot: {slotIndex} -> WorldItem: {worldItemEntityId}");
-            }
-
-            return worldItemEntityId;
-        }
+        // TODO: PlayerData 인벤토리 연동 구현 필요
+        // /// <summary>
+        // /// 인벤토리에서 아이템 버리기
+        // /// </summary>
+        // public static int DropItemFromInventory(PlayerData playerData, int slotIndex, Vector2 dropPosition, int quantity = 0) { }
 
         #endregion
 

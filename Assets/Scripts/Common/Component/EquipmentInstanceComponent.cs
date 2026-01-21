@@ -5,15 +5,10 @@ namespace ARPG.Component
     /// <summary>
     /// 장비 인스턴스 컴포넌트
     /// 장비 아이템의 고유 데이터 (품질, 접두사/접미사 스탯)를 저장
-    /// 인벤토리 슬롯과 별도 엔티티로 관리
+    /// 월드 아이템 장비용 ECS 컴포넌트
     /// </summary>
     public struct EquipmentInstanceComponent
     {
-        /// <summary>
-        /// 소속 슬롯 엔티티 ID
-        /// </summary>
-        public int SlotEntityId;
-
         /// <summary>
         /// 장비 품질 (1-100)
         /// </summary>
@@ -69,7 +64,6 @@ namespace ARPG.Component
         /// </summary>
         public void Clear()
         {
-            SlotEntityId = 0;
             Quality = 0;
             EnhanceLevel = 0;
             PrefixStat1Type = default;

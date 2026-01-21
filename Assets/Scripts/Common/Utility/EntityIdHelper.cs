@@ -34,11 +34,6 @@ namespace ARPG.Utility
         private static readonly Dictionary<int, HashSet<int>> _targetBuffTypes = new Dictionary<int, HashSet<int>>();
 
         /// <summary>
-        /// 소유자별 인벤토리 슬롯 추적 (ownerEntityId -> 사용중인 슬롯 인덱스들)
-        /// </summary>
-        private static readonly Dictionary<int, HashSet<int>> _ownerInventorySlots = new Dictionary<int, HashSet<int>>();
-
-        /// <summary>
         /// 재사용 가능한 엔티티 ID 풀 (삭제된 ID를 재활용)
         /// </summary>
         private static readonly Queue<int> _recycledEntityIds = new Queue<int>();
@@ -61,7 +56,6 @@ namespace ARPG.Utility
             _registeredEntityIds.Clear();
             _characterSkillSlots.Clear();
             _targetBuffTypes.Clear();
-            _ownerInventorySlots.Clear();
             _recycledEntityIds.Clear();
             Debug.Log("[EntityIdHelper] Reset - All entities cleared");
         }
@@ -441,173 +435,6 @@ namespace ARPG.Utility
             if (_targetBuffTypes.ContainsKey(targetEntityId))
             {
                 return _targetBuffTypes[targetEntityId].Contains(buffTableID);
-            }
-            return false;
-        }
-
-        #endregion
-
-        #region Inventory Slot Entity Management
-
-        /// <summary>
-        /// 인벤토리 슬롯 엔티티 생성 (결정적 ID 사용)
-        /// </summary>
-        /// <param name="ownerEntityId">인벤토리 소유자 엔티티 ID</param>
-        /// <param name="slotIndex">슬롯 인덱스 (0부터 시작)</param>
-        /// <returns>생성된 슬롯 엔티티 ID, 실패 시 -1</returns>
-        public static int CreateInventorySlotEntity(int ownerEntityId, int slotIndex)
-        {
-            // 소유자 엔티티가 등록되어 있는지 확인
-            if (_registeredEntityIds.Contains(ownerEntityId) == false)
-            {
-                Debug.LogError($"[EntityIdHelper] Owner entity {ownerEntityId} is not registered");
-                return -1;
-            }
-
-            // 슬롯 인덱스 유효성 검증
-            if (slotIndex < 0 || slotIndex >= InventorySlotEntityIdHelper.MAX_SLOTS)
-            {
-                Debug.LogError($"[EntityIdHelper] Invalid slot index: {slotIndex}. Must be between 0 and {InventorySlotEntityIdHelper.MAX_SLOTS - 1}");
-                return -1;
-            }
-
-            // 슬롯 엔티티 ID 생성
-            int slotEntityId = InventorySlotEntityIdHelper.GetSlotEntityId(ownerEntityId, slotIndex);
-            if (slotEntityId == -1)
-            {
-                Debug.LogError($"[EntityIdHelper] Failed to create inventory slot entity ID");
-                return -1;
-            }
-
-            // 이미 존재하는 슬롯인지 확인
-            if (_registeredEntityIds.Contains(slotEntityId))
-            {
-                // 이미 존재함 - 기존 ID 반환
-                return slotEntityId;
-            }
-
-            // 소유자의 슬롯 추적 초기화
-            if (_ownerInventorySlots.ContainsKey(ownerEntityId) == false)
-            {
-                _ownerInventorySlots[ownerEntityId] = new HashSet<int>();
-            }
-
-            // 등록
-            _registeredEntityIds.Add(slotEntityId);
-            _ownerInventorySlots[ownerEntityId].Add(slotIndex);
-
-            Debug.Log($"[EntityIdHelper] Inventory slot entity created - ID: {slotEntityId}, Owner: {ownerEntityId}, Slot: {slotIndex}");
-            return slotEntityId;
-        }
-
-        /// <summary>
-        /// 인벤토리 슬롯 엔티티 제거
-        /// </summary>
-        /// <param name="slotEntityId">제거할 슬롯 엔티티 ID</param>
-        public static void DestroyInventorySlotEntity(int slotEntityId)
-        {
-            if (_registeredEntityIds.Contains(slotEntityId) == false)
-            {
-                Debug.LogWarning($"[EntityIdHelper] Inventory slot entity {slotEntityId} is not registered");
-                return;
-            }
-
-            // 슬롯 엔티티 ID에서 정보 추출
-            int ownerEntityId = InventorySlotEntityIdHelper.GetOwnerEntityId(slotEntityId);
-            int slotIndex = InventorySlotEntityIdHelper.GetSlotIndex(slotEntityId);
-
-            // 유효성 검증
-            if (InventorySlotEntityIdHelper.IsValidSlotEntityId(slotEntityId) == false)
-            {
-                Debug.LogWarning($"[EntityIdHelper] Invalid inventory slot entity ID: {slotEntityId}");
-                return;
-            }
-
-            // ECS 컴포넌트 일괄 제거
-            AR.s.Component.RemoveAllComponents(slotEntityId);
-
-            // 등록 해제
-            _registeredEntityIds.Remove(slotEntityId);
-
-            // 슬롯 추적에서 제거
-            if (_ownerInventorySlots.ContainsKey(ownerEntityId))
-            {
-                _ownerInventorySlots[ownerEntityId].Remove(slotIndex);
-
-                // 소유자의 모든 슬롯이 제거되면 Dictionary에서도 제거
-                if (_ownerInventorySlots[ownerEntityId].Count == 0)
-                {
-                    _ownerInventorySlots.Remove(ownerEntityId);
-                }
-            }
-
-            Debug.Log($"[EntityIdHelper] Inventory slot entity destroyed - ID: {slotEntityId}, Owner: {ownerEntityId}, Slot: {slotIndex}");
-        }
-
-        /// <summary>
-        /// 소유자의 모든 인벤토리 슬롯 엔티티 제거
-        /// </summary>
-        /// <param name="ownerEntityId">소유자 엔티티 ID</param>
-        public static void DestroyAllInventorySlots(int ownerEntityId)
-        {
-            if (_ownerInventorySlots.ContainsKey(ownerEntityId) == false)
-            {
-                return;
-            }
-
-            HashSet<int> slots = _ownerInventorySlots[ownerEntityId];
-            List<int> slotEntitiesToRemove = new List<int>();
-
-            // 제거할 슬롯 엔티티 ID 수집
-            foreach (int slotIndex in slots)
-            {
-                int slotEntityId = InventorySlotEntityIdHelper.GetSlotEntityId(ownerEntityId, slotIndex);
-                slotEntitiesToRemove.Add(slotEntityId);
-            }
-
-            // 슬롯 엔티티들의 ECS 컴포넌트 제거
-            for (int i = 0; i < slotEntitiesToRemove.Count; i++)
-            {
-                int slotEntityId = slotEntitiesToRemove[i];
-                AR.s.Component.RemoveAllComponents(slotEntityId);
-                _registeredEntityIds.Remove(slotEntityId);
-            }
-
-            _ownerInventorySlots.Remove(ownerEntityId);
-            Debug.Log($"[EntityIdHelper] Removed {slotEntitiesToRemove.Count} inventory slot entities for owner {ownerEntityId}");
-        }
-
-        /// <summary>
-        /// 인벤토리 슬롯 엔티티 ID가 유효한지 확인
-        /// </summary>
-        public static bool IsValidInventorySlotEntity(int slotEntityId)
-        {
-            if (_registeredEntityIds.Contains(slotEntityId) == false)
-                return false;
-
-            return InventorySlotEntityIdHelper.IsValidSlotEntityId(slotEntityId);
-        }
-
-        /// <summary>
-        /// 소유자가 사용 중인 인벤토리 슬롯 개수 반환
-        /// </summary>
-        public static int GetUsedInventorySlotCount(int ownerEntityId)
-        {
-            if (_ownerInventorySlots.ContainsKey(ownerEntityId))
-            {
-                return _ownerInventorySlots[ownerEntityId].Count;
-            }
-            return 0;
-        }
-
-        /// <summary>
-        /// 소유자의 특정 슬롯이 사용 중인지 확인
-        /// </summary>
-        public static bool IsInventorySlotUsed(int ownerEntityId, int slotIndex)
-        {
-            if (_ownerInventorySlots.ContainsKey(ownerEntityId))
-            {
-                return _ownerInventorySlots[ownerEntityId].Contains(slotIndex);
             }
             return false;
         }
