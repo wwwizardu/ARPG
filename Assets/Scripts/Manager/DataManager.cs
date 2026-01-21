@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.IO;
 using System.Collections.Generic;
 using Newtonsoft.Json;
+using ARPG.Utility;
 
 namespace ARPG.Data
 {
@@ -14,7 +15,7 @@ namespace ARPG.Data
         private const ushort CURRENT_PLAYER_DATA_VERSION = 1;
         private WorldData _worldData = new();
         private List<PlayerData> _playerDataList = new();
-        private int _currentPlayerId = 0; // 현재 활성화된 플레이어 ID
+        private int _currentPlayerEntityId = 0; // 현재 활성화된 플레이어 ID
         
         private bool _isSaving = false;
         private bool _needsAnotherSave = false;
@@ -24,7 +25,7 @@ namespace ARPG.Data
         {
             get
             {
-                var player = GetPlayerData(_currentPlayerId);
+                var player = GetPlayerData(_currentPlayerEntityId);
                 if (player != null)
                     return player;
 
@@ -43,7 +44,7 @@ namespace ARPG.Data
         public List<PlayerData> PlayerDataList => _playerDataList;
 
         // 현재 활성 플레이어 ID
-        public int CurrentPlayerId => _currentPlayerId;
+        public int CurrentPlayerEntityId => _currentPlayerEntityId;
 
         public async Task Initialize()
         {
@@ -52,7 +53,7 @@ namespace ARPG.Data
 
             await LoadBaseSpriteAtlas();
 
-            Load();
+            await Load();
 
             Debug.Log("DataManager Initialized");
         }
@@ -63,7 +64,7 @@ namespace ARPG.Data
             Debug.Log("DataManager Reset");
         }
 
-        public bool Load()
+        public async Task<bool> Load()
         {
             string savePath = Path.Combine(Application.persistentDataPath, "Saved");
             string worldDataPath = Path.Combine(savePath, "WorldData.json");
@@ -127,6 +128,7 @@ namespace ARPG.Data
             }
 
             // PlayerData 로드 (여러 플레이어 지원)
+            _currentPlayerEntityId = EntityIdHelper.CreateEntity();
             _playerDataList.Clear();
             if (File.Exists(playerDataPath))
             {
@@ -140,18 +142,26 @@ namespace ARPG.Data
                         _playerDataList = loadedList;
 
                         // 각 플레이어 데이터의 버전 체크 및 마이그레이션
-                        foreach (var playerData in _playerDataList)
+                        for (int i = 0; i < _playerDataList.Count; i++)
                         {
+                            var playerData = _playerDataList[i];
                             if (playerData.Version < CURRENT_PLAYER_DATA_VERSION)
                             {
                                 MigratePlayerData(playerData, playerData.Version, CURRENT_PLAYER_DATA_VERSION);
                                 playerData.Version = CURRENT_PLAYER_DATA_VERSION;
                             }
+
+                            if(i == 0) // 첫 번째 플레이어를 현재 플레이어로 설정
+                            {
+                                playerData.PlayerId = _currentPlayerEntityId;
+                            }
+                            else // 나머지 플레이어는 새로운 엔티티 ID 할당
+                            {
+                                playerData.PlayerId = EntityIdHelper.CreateEntity();
+                            }
+
                             playerData.LoadCompleted();
                         }
-
-                        // 첫 번째 플레이어를 현재 플레이어로 설정
-                        _currentPlayerId = _playerDataList[0].PlayerId;
 
                         Debug.Log($"[DataManager] PlayerData loaded successfully. Player count: {_playerDataList.Count}");
                     }
@@ -159,9 +169,9 @@ namespace ARPG.Data
                     {
                         // 빈 리스트이거나 null인 경우 기본 플레이어 생성
                         var defaultPlayer = new PlayerData();
-                        defaultPlayer.Initialize(0);
+                        defaultPlayer.Initialize(_currentPlayerEntityId);
                         _playerDataList.Add(defaultPlayer);
-                        _currentPlayerId = 0;
+                        defaultPlayer.LoadCompleted();
                         Debug.Log("[DataManager] No player data found, created default player");
                     }
                 }
@@ -181,17 +191,26 @@ namespace ARPG.Data
                             {
                                 _playerDataList = loadedList;
 
-                                foreach (var playerData in _playerDataList)
+                                for (int i = 0; i < _playerDataList.Count; i++)
                                 {
+                                    var playerData = _playerDataList[i];
                                     if (playerData.Version < CURRENT_PLAYER_DATA_VERSION)
                                     {
                                         MigratePlayerData(playerData, playerData.Version, CURRENT_PLAYER_DATA_VERSION);
                                         playerData.Version = CURRENT_PLAYER_DATA_VERSION;
                                     }
+
+                                    if(i == 0) // 첫 번째 플레이어를 현재 플레이어로 설정
+                                    {
+                                        playerData.PlayerId = _currentPlayerEntityId;
+                                    }
+                                    else // 나머지 플레이어는 새로운 엔티티 ID 할당
+                                    {
+                                        playerData.PlayerId = EntityIdHelper.CreateEntity();
+                                    }
+
                                     playerData.LoadCompleted();
                                 }
-
-                                _currentPlayerId = _playerDataList[0].PlayerId;
 
                                 Debug.Log($"[DataManager] PlayerData loaded from backup. Player count: {_playerDataList.Count}");
                             }
@@ -202,9 +221,9 @@ namespace ARPG.Data
 
                             // 모든 복구 실패 시 기본 플레이어 생성
                             var defaultPlayer = new PlayerData();
-                            defaultPlayer.Initialize(0);
+                            defaultPlayer.Initialize(_currentPlayerEntityId);
                             _playerDataList.Add(defaultPlayer);
-                            _currentPlayerId = 0;
+                            defaultPlayer.LoadCompleted();
                         }
                     }
                 }
@@ -213,9 +232,9 @@ namespace ARPG.Data
             {
                 // 파일이 없는 경우 기본 플레이어 생성
                 var defaultPlayer = new PlayerData();
-                defaultPlayer.Initialize(0);
+                defaultPlayer.Initialize(_currentPlayerEntityId);
                 _playerDataList.Add(defaultPlayer);
-                _currentPlayerId = 0;
+                defaultPlayer.LoadCompleted();
                 Debug.Log("[DataManager] PlayerData file not found, created default player");
             }
 
@@ -281,7 +300,7 @@ namespace ARPG.Data
                     // 현재 활성 플레이어 저장
                     if (AR.s.MyPlayer != null)
                     {
-                        var currentPlayer = GetPlayerData(_currentPlayerId);
+                        var currentPlayer = GetPlayerData(_currentPlayerEntityId);
                         if (currentPlayer != null)
                         {
                             AR.s.MyPlayer.Save(currentPlayer);
@@ -416,15 +435,15 @@ namespace ARPG.Data
             _playerDataList.Remove(player);
 
             // 현재 플레이어가 제거된 경우 다른 플레이어로 전환
-            if (_currentPlayerId == inPlayerId)
+            if (_currentPlayerEntityId == inPlayerId)
             {
                 if (_playerDataList.Count > 0)
                 {
-                    _currentPlayerId = _playerDataList[0].PlayerId;
+                    _currentPlayerEntityId = _playerDataList[0].PlayerId;
                 }
                 else
                 {
-                    _currentPlayerId = 0;
+                    _currentPlayerEntityId = 0;
                 }
             }
 
@@ -444,7 +463,7 @@ namespace ARPG.Data
                 return false;
             }
 
-            _currentPlayerId = inPlayerId;
+            _currentPlayerEntityId = inPlayerId;
             Debug.Log($"[DataManager] Current player set to ID: {inPlayerId}");
             return true;
         }

@@ -161,9 +161,10 @@ public class GlobalEnum
     public enum InventoryType
     {
         Character = 0,  // 캐릭터 인벤토리
-        Stash = 1,      // 창고
-        Shop = 2,       // 상점
-        Loot = 3,       // 드랍 아이템
+        Equipment = 1,  // 장비 인벤토리
+        Stash = 2,      // 창고
+        Shop = 3,       // 상점
+        Loot = 4,       // 드랍 아이템
     }
 
 

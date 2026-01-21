@@ -106,7 +106,7 @@ namespace ARPG.UI
 
         private void UpdateCharacterStat()
         {
-            if(AR.s.TryGetComponent<Component.StatComponent>(out var _statComponent) == false)
+            if(AR.s.Component.TryGetComponent<Component.StatComponent>(AR.s.Data.Player.PlayerId, out var _statComponent) == false)
             {
                 Debug.LogError("[CharacterUI] UpdateCharacterStat - StatComponent not found");
                 return;

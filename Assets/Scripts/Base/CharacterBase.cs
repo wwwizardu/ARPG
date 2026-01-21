@@ -147,11 +147,11 @@ namespace ARPG.Creature
             return false;
         }
 
-        public virtual bool Load(int inId)
+        public virtual bool Load(int inTableId)
         {
-            if (LoadTable(inId) == false)
+            if (LoadTable(inTableId) == false)
             {
-                Debug.LogError($"[CharacterBase] LoadData - Failed to load table for Id: {inId}");
+                Debug.LogError($"[CharacterBase] LoadData - Failed to load table for Id: {inTableId}");
                 return false;
             }
 

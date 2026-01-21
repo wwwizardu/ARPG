@@ -60,8 +60,10 @@ namespace ARPG.Creature
             Debug.Log("ArpgPlayer reset.");
         }
 
-        private void OnDestroy()
+        protected override void OnDestroy()
         {
+            base.OnDestroy();
+
             // 엔티티 ID 제거 (스킬 엔티티도 함께 제거됨)
             if (_entityId != 0)
             {
@@ -82,30 +84,19 @@ namespace ARPG.Creature
             return true;
         }
 
-        public override bool Load(int inId)
+        public override bool Load(int inTableId)
         {
-            if (base.Load(inId) == false)
+            if (base.Load(inTableId) == false)
                 return false;
 
             if(AR.s?.Data?.Player == null)
             {
-                Debug.LogError($"[ArpgPlayer] Load - AR.s.Data.Player is null, Id({inId})");
+                Debug.LogError($"[ArpgPlayer] Load - AR.s.Data.Player is null, Id({inTableId})");
                 return false;
             }
 
             _playerData = AR.s.Data.Player;
-
-           // 기본 스킬을 추가한다.
-            //_characterInfo.SkillController.CreateSkill(1);
-
-            // 현재 체력과 마나 설정
-            // _statController.SetHp(_playerData.CurrentHp);
-            // _statController.SetMp(_playerData.CurrentMp);
-
-            // if (_characterInfo.HpBar != null)
-            // {
-            //     _characterInfo.HpBar.fillAmount = _statController.GetHpRatio();
-            // }
+            _entityId = _playerData.PlayerId;
 
             return true;
         }

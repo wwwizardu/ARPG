@@ -42,8 +42,12 @@ namespace ARPG.Base
 
         public virtual void InitializeECSComponents()
         {
-            // EntityId 생성
-            _entityId = EntityIdHelper.CreateEntity();
+            // EntityId가 할당되어 있지 않다면 생성
+            if(_entityId < 0)
+            {
+                _entityId = EntityIdHelper.CreateEntity();    
+            }
+            
             Debug.Log($"[EntityBase] Entity initialized with EntityId: {_entityId}");
 
             // EntityRegistry에 등록

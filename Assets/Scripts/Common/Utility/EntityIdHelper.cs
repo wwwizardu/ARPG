@@ -15,7 +15,7 @@ namespace ARPG.Utility
         /// <summary>
         /// 다음에 할당될 일반 엔티티 ID
         /// </summary>
-        private static int _nextEntityId = 0;
+        private static int _nextEntityId = 1;
 
         /// <summary>
         /// 등록된 모든 엔티티 ID를 추적하는 HashSet
@@ -57,7 +57,7 @@ namespace ARPG.Utility
         /// </summary>
         public static void Reset()
         {
-            _nextEntityId = 0;
+            _nextEntityId = 1;
             _registeredEntityIds.Clear();
             _characterSkillSlots.Clear();
             _targetBuffTypes.Clear();
@@ -101,6 +101,9 @@ namespace ARPG.Utility
         /// <param name="allowRecycle">ID 재활용 허용 여부 (기본값: true)</param>
         public static void DestroyEntity(int entityId, bool allowRecycle = true)
         {
+            if(AR.s == null || AR.s.Component == null)
+                return;
+
             if (_registeredEntityIds.Contains(entityId) == false)
             {
                 Debug.LogWarning($"[EntityIdHelper] Entity {entityId} is not registered");

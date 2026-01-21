@@ -131,6 +131,101 @@ namespace ARPG.Utility
         }
 
         /// <summary>
+        /// 특정 슬롯에 아이템 설정 (기존 데이터 덮어씀)
+        /// </summary>
+        /// <param name="ownerEntityId">인벤토리 소유자 엔티티 ID</param>
+        /// <param name="slotIndex">슬롯 인덱스</param>
+        /// <param name="itemTableId">아이템 테이블 ID</param>
+        /// <param name="quantity">수량</param>
+        /// <returns>성공 여부</returns>
+        public static bool SetItemAt(int ownerEntityId, int slotIndex, int itemTableId, int quantity)
+        {
+            if (quantity <= 0)
+            {
+                Debug.LogWarning("[InventoryHelper] Quantity must be greater than 0");
+                return false;
+            }
+
+            // 1. 인벤토리 컴포넌트 확인
+            if (AR.s.Component.TryGetComponent<InventoryComponent>(ownerEntityId, out InventoryComponent inventory) == false)
+            {
+                Debug.LogError($"[InventoryHelper] Owner {ownerEntityId} has no InventoryComponent");
+                return false;
+            }
+
+            if (inventory.IsLocked)
+            {
+                Debug.LogWarning("[InventoryHelper] Inventory is locked");
+                return false;
+            }
+
+            // 2. 슬롯 인덱스 범위 확인
+            if (slotIndex < 0 || slotIndex >= inventory.MaxSlotCount)
+            {
+                Debug.LogWarning($"[InventoryHelper] Slot index out of range: {slotIndex}");
+                return false;
+            }
+
+            // 3. 슬롯 엔티티 ID 조회
+            int slotEntityId = InventorySlotEntityIdHelper.GetSlotEntityId(ownerEntityId, slotIndex);
+
+            // 4. 기존 슬롯 데이터 확인 및 처리
+            bool slotExists = AR.s.Component.TryGetComponent<InventorySlotComponent>(slotEntityId, out InventorySlotComponent existingSlot);
+            bool wasEmpty = slotExists == false || existingSlot.IsEmpty;
+
+            if (slotExists && existingSlot.IsEmpty == false)
+            {
+                // 기존 장비 엔티티가 있으면 제거
+                if (existingSlot.EquipmentEntityId != 0)
+                {
+                    EntityIdHelper.DestroyEntity(existingSlot.EquipmentEntityId);
+                }
+            }
+
+            // 5. 슬롯 엔티티 생성 (없으면)
+            if (slotExists == false)
+            {
+                slotEntityId = EntityIdHelper.CreateInventorySlotEntity(ownerEntityId, slotIndex);
+                if (slotEntityId == -1)
+                {
+                    Debug.LogError("[InventoryHelper] Failed to create slot entity");
+                    return false;
+                }
+            }
+
+            // 6. 슬롯 데이터 설정
+            InventorySlotComponent newSlot = new InventorySlotComponent(ownerEntityId, slotIndex)
+            {
+                ItemTableId = itemTableId,
+                ItemInstanceId = GenerateItemInstanceId(),
+                Quantity = quantity,
+                EquipmentEntityId = 0
+            };
+
+            if (slotExists)
+            {
+                AR.s.Component.SetComponent(slotEntityId, newSlot);
+            }
+            else
+            {
+                AR.s.Component.AddComponent(slotEntityId, newSlot);
+            }
+
+            // 7. 인벤토리 메타데이터 업데이트 (빈 슬롯에 추가한 경우만)
+            if (wasEmpty)
+            {
+                inventory.UsedSlotCount++;
+                AR.s.Component.SetComponent(ownerEntityId, inventory);
+            }
+
+            // 8. UI 갱신 태그 추가
+            MarkDirty(ownerEntityId);
+
+            Debug.Log($"[InventoryHelper] Item set - Owner: {ownerEntityId}, Slot: {slotIndex}, ItemId: {itemTableId}, Qty: {quantity}");
+            return true;
+        }
+
+        /// <summary>
         /// 장비 아이템 추가 (장비 인스턴스 엔티티 포함)
         /// </summary>
         public static int AddEquipmentItem(int ownerEntityId, int itemTableId, EquipmentInstanceComponent equipmentData)
@@ -192,6 +287,102 @@ namespace ARPG.Utility
 
             Debug.Log($"[InventoryHelper] Equipment added - Owner: {ownerEntityId}, Slot: {emptySlot}, ItemId: {itemTableId}");
             return emptySlot;
+        }
+
+        /// <summary>
+        /// 특정 슬롯에 장비 아이템 설정 (기존 데이터 덮어씀)
+        /// </summary>
+        /// <param name="ownerEntityId">인벤토리 소유자 엔티티 ID</param>
+        /// <param name="slotIndex">슬롯 인덱스</param>
+        /// <param name="itemTableId">아이템 테이블 ID</param>
+        /// <param name="equipmentData">장비 인스턴스 데이터</param>
+        /// <returns>성공 여부</returns>
+        public static bool SetEquipmentItemAt(int ownerEntityId, int slotIndex, int itemTableId, EquipmentInstanceComponent equipmentData)
+        {
+            // 1. 인벤토리 컴포넌트 확인
+            if (AR.s.Component.TryGetComponent<InventoryComponent>(ownerEntityId, out InventoryComponent inventory) == false)
+            {
+                Debug.LogError($"[InventoryHelper] Owner {ownerEntityId} has no InventoryComponent");
+                return false;
+            }
+
+            if (inventory.IsLocked)
+            {
+                Debug.LogWarning("[InventoryHelper] Inventory is locked");
+                return false;
+            }
+
+            // 2. 슬롯 인덱스 범위 확인
+            if (slotIndex < 0 || slotIndex >= inventory.MaxSlotCount)
+            {
+                Debug.LogWarning($"[InventoryHelper] Slot index out of range: {slotIndex}");
+                return false;
+            }
+
+            // 3. 슬롯 엔티티 ID 조회
+            int slotEntityId = InventorySlotEntityIdHelper.GetSlotEntityId(ownerEntityId, slotIndex);
+
+            // 4. 기존 슬롯 데이터 확인 및 처리
+            bool slotExists = AR.s.Component.TryGetComponent<InventorySlotComponent>(slotEntityId, out InventorySlotComponent existingSlot);
+            bool wasEmpty = slotExists == false || existingSlot.IsEmpty;
+
+            if (slotExists && existingSlot.IsEmpty == false)
+            {
+                // 기존 장비 엔티티가 있으면 제거
+                if (existingSlot.EquipmentEntityId != 0)
+                {
+                    EntityIdHelper.DestroyEntity(existingSlot.EquipmentEntityId);
+                }
+            }
+
+            // 5. 슬롯 엔티티 생성 (없으면)
+            if (slotExists == false)
+            {
+                slotEntityId = EntityIdHelper.CreateInventorySlotEntity(ownerEntityId, slotIndex);
+                if (slotEntityId == -1)
+                {
+                    Debug.LogError("[InventoryHelper] Failed to create slot entity");
+                    return false;
+                }
+            }
+
+            // 6. 장비 인스턴스 엔티티 생성
+            int equipmentEntityId = EntityIdHelper.CreateEntity();
+
+            // 7. 장비 인스턴스 컴포넌트 설정
+            equipmentData.SlotEntityId = slotEntityId;
+            AR.s.Component.AddComponent(equipmentEntityId, equipmentData);
+
+            // 8. 슬롯 데이터 설정
+            InventorySlotComponent newSlot = new InventorySlotComponent(ownerEntityId, slotIndex)
+            {
+                ItemTableId = itemTableId,
+                ItemInstanceId = GenerateItemInstanceId(),
+                Quantity = 1,
+                EquipmentEntityId = equipmentEntityId
+            };
+
+            if (slotExists)
+            {
+                AR.s.Component.SetComponent(slotEntityId, newSlot);
+            }
+            else
+            {
+                AR.s.Component.AddComponent(slotEntityId, newSlot);
+            }
+
+            // 9. 인벤토리 메타데이터 업데이트 (빈 슬롯에 추가한 경우만)
+            if (wasEmpty)
+            {
+                inventory.UsedSlotCount++;
+                AR.s.Component.SetComponent(ownerEntityId, inventory);
+            }
+
+            // 10. UI 갱신 태그 추가
+            MarkDirty(ownerEntityId);
+
+            Debug.Log($"[InventoryHelper] Equipment set - Owner: {ownerEntityId}, Slot: {slotIndex}, ItemId: {itemTableId}");
+            return true;
         }
 
         #endregion
@@ -450,6 +641,30 @@ namespace ARPG.Utility
         {
             int slotEntityId = InventorySlotEntityIdHelper.GetSlotEntityId(ownerEntityId, slotIndex);
             return AR.s.Component.TryGetComponent(slotEntityId, out slot);
+        }
+
+        /// <summary>
+        /// 특정 슬롯의 장비 인스턴스 조회
+        /// </summary>
+        /// <param name="ownerEntityId">인벤토리 소유자 엔티티 ID</param>
+        /// <param name="slotIndex">슬롯 인덱스</param>
+        /// <param name="equipmentInstance">장비 인스턴스 데이터</param>
+        /// <returns>장비가 존재하면 true</returns>
+        public static bool TryGetEquipmentInstance(int ownerEntityId, int slotIndex, out EquipmentInstanceComponent equipmentInstance)
+        {
+            equipmentInstance = default;
+
+            if (TryGetSlot(ownerEntityId, slotIndex, out InventorySlotComponent slot) == false)
+            {
+                return false;
+            }
+
+            if (slot.IsEmpty || slot.IsEquipment == false)
+            {
+                return false;
+            }
+
+            return AR.s.Component.TryGetComponent(slot.EquipmentEntityId, out equipmentInstance);
         }
 
         /// <summary>

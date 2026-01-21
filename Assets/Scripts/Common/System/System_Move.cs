@@ -23,12 +23,8 @@ namespace ARPG.Systems
         // FixedUpdate로 변경: 일정한 시간 간격으로 이동 처리
         public readonly void OnFixedUpdate(float inFixedDeltaTime)
         {
-
-            if(AR.s.Component.TryGetComponent<StatComponent>(0, out var stat) == false)
-            {
-                Debug.LogError("System_Move: StatComponent for entity 0 not found.");
+            if(AR.s.Component.TryGetComponent<StatComponent>(AR.s.Data.Player.PlayerId, out var stat) == false)
                 return;
-            }   
 
             // ComponentManager에서 필요한 컴포넌트 풀 가져오기
             SparseSet<InputComponent> inputPool = AR.s.Component.GetComponentPool<InputComponent>();
