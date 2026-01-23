@@ -34,93 +34,63 @@ namespace ARPG.Utility
             _worldItemInstanceCounter = 0;
         }
 
-        #region Create World Item
-
-        /// <summary>
-        /// 월드 아이템 생성
-        /// 장비 아이템인 경우 equipmentData를 전달
-        /// </summary>
-        /// <param name="position">월드 위치</param>
-        /// <param name="itemTableId">아이템 테이블 ID</param>
-        /// <param name="quantity">수량 (장비는 무조건 1)</param>
-        /// <param name="autoPickup">자동 줍기 가능 여부</param>
-        /// <param name="expireTime">자동 소멸 시간 (0이면 소멸 안함)</param>
-        /// <param name="equipmentData">장비 데이터 (null이면 일반 아이템)</param>
-        /// <returns>생성된 월드 아이템 엔티티 ID, 실패 시 -1</returns>
-        public static int CreateWorldItem(
-            Vector2 position,
-            int itemTableId,
-            int quantity,
-            bool autoPickup = false,
-            float expireTime = DEFAULT_EXPIRE_TIME,
-            EquipmentInstanceComponent? equipmentData = null)
-        {
-            bool isEquipment = equipmentData.HasValue;
-            int equipmentEntityId = 0;
-
-            // 1. 장비인 경우 장비 인스턴스 엔티티 먼저 생성
-            if (isEquipment)
-            {
-                equipmentEntityId = EntityIdHelper.CreateEntity();
-            }
-
-            // 2. 월드 아이템 엔티티 생성
-            int entityId = EntityIdHelper.CreateEntity();
-
-            // 3. TransformComponent 추가
-            TransformComponent transform = new TransformComponent
-            {
-                Position = position,
-                Rotation = 0f,
-                Scale = Vector2.one
-            };
-            AR.s.Component.AddComponent(entityId, transform);
-
-            // 4. WorldItemComponent 추가
-            WorldItemComponent worldItem = new WorldItemComponent
-            {
-                ItemTableId = itemTableId,
-                ItemInstanceId = GenerateWorldItemInstanceId(),
-                Quantity = isEquipment ? 1 : quantity,  // 장비는 무조건 1개
-                EquipmentEntityId = equipmentEntityId,
-                DropTime = Time.time,
-                ExpireTime = expireTime,
-                AutoPickupEnabled = autoPickup,
-                AutoPickupRange = autoPickup ? DEFAULT_AUTO_PICKUP_RANGE : 0f
-            };
-            AR.s.Component.AddComponent(entityId, worldItem);
-
-            // 5. 장비인 경우 EquipmentInstanceComponent 추가
-            if (isEquipment)
-            {
-                EquipmentInstanceComponent equipData = equipmentData.Value;
-                AR.s.Component.AddComponent(equipmentEntityId, equipData);
-            }
-
-            Debug.Log($"[WorldItemHelper] World item created - EntityId: {entityId}, ItemId: {itemTableId}, Qty: {worldItem.Quantity}, IsEquip: {isEquipment}");
-            return entityId;
-        }
-
-        #endregion
-
         #region Pickup Item
 
-        // TODO: PlayerData 인벤토리 연동 구현 필요
-        // /// <summary>
-        // /// 월드 아이템 줍기 (인벤토리에 추가)
-        // /// </summary>
-        // public static int PickupItem(int worldItemEntityId, PlayerData playerData)
-        // {
-        //     // 월드 아이템 데이터 조회
-        //     if (TryGetWorldItem(worldItemEntityId, out WorldItemComponent worldItem) == false)
-        //     {
-        //         Debug.LogWarning($"[WorldItemHelper] PickupItem - World item not found: {worldItemEntityId}");
-        //         return 0;
-        //     }
+        /// <summary>
+        /// 월드 아이템 줍기 (인벤토리에 추가)
+        /// </summary>
+        /// <param name="worldItemEntityId">월드 아이템 엔티티 ID</param>
+        /// <returns>추가된 슬롯 인덱스, 실패 시 -1</returns>
+        public static int PickupItem(int worldItemEntityId)
+        {
+            // 월드 아이템 데이터 조회
+            // if (TryGetWorldItem(worldItemEntityId, out WorldItemComponent worldItem) == false)
+            // {
+            //     Debug.LogWarning($"[WorldItemHelper] PickupItem - World item not found: {worldItemEntityId}");
+            //     return -1;
+            // }
 
-        //     AR.s.MyPlayer.Inventory.AddItem()
+            // // ItemData 생성
+            // ItemData itemData = new ItemData
+            // {
+            //     Id = worldItem.ItemTableId,
+            //     ItemInstanceId = worldItem.EntityId,
+            //     Quantity = worldItem.Quantity
+            // };
 
-        // }
+            // // 장비인 경우 EquipmentData 생성
+            // if (worldItem.IsEquipment)
+            // {
+            //     if (AR.s.Component.TryGetComponent<EquipmentInstanceComponent>(worldItem.EquipmentEntityId, out EquipmentInstanceComponent equipInstance))
+            //     {
+            //         itemData.Equipment = ConvertToEquipmentData(worldItem.ItemTableId, equipInstance);
+            //     }
+            //     else
+            //     {
+            //         Debug.LogWarning($"[WorldItemHelper] PickupItem - Equipment instance not found: {worldItem.EquipmentEntityId}");
+            //     }
+            // }
+
+            // 테이블 데이터 세팅
+            // itemData.OnLoadCompleted();
+
+            // // 인벤토리에 추가
+            // int slotIndex = AR.s.MyPlayer.Inventory.AddItem(itemData);
+
+            // if (slotIndex >= 0)
+            // {
+            //     // 월드 아이템 제거
+            //     DestroyWorldItem(worldItemEntityId);
+            //     Debug.Log($"[WorldItemHelper] PickupItem - Item picked up to slot {slotIndex}: {worldItem.ItemTableId}");
+            // }
+            // else
+            // {
+            //     Debug.LogWarning($"[WorldItemHelper] PickupItem - Inventory full, cannot pick up item: {worldItem.ItemTableId}");
+            // }
+
+            // return slotIndex;
+            return 0;
+        }
 
         // TODO: PlayerData 인벤토리 연동 구현 필요
         // /// <summary>
@@ -148,13 +118,13 @@ namespace ARPG.Utility
         public static void DestroyWorldItem(int worldItemEntityId)
         {
             // 장비 엔티티가 있으면 함께 제거
-            if (AR.s.Component.TryGetComponent<WorldItemComponent>(worldItemEntityId, out WorldItemComponent worldItem))
-            {
-                if (worldItem.IsEquipment)
-                {
-                    EntityIdHelper.DestroyEntity(worldItem.EquipmentEntityId);
-                }
-            }
+            // if (AR.s.Component.TryGetComponent<WorldItemComponent>(worldItemEntityId, out WorldItemComponent worldItem))
+            // {
+            //     if (worldItem.IsEquipment)
+            //     {
+            //         EntityIdHelper.DestroyEntity(worldItem.EquipmentEntityId);
+            //     }
+            // }
 
             // 월드 아이템 엔티티 제거
             EntityIdHelper.DestroyEntity(worldItemEntityId);

@@ -44,9 +44,6 @@ namespace ARPG.Component
             // 매우 적게 사용되는 컴포넌트 (커맨드용, 일시적)
             { typeof(SkillCommandComponent), 20 },
 
-            // 장비 컴포넌트
-            { typeof(EquipmentInstanceComponent), 1000 },     // 장비 아이템 수
-
             // 월드 아이템 컴포넌트
             { typeof(WorldItemComponent), 500 },              // 월드에 떨어진 아이템
         };

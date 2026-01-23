@@ -70,13 +70,7 @@ namespace ARPG.Item
                 Quantity = inQuantity,
             };
 
-            // 아이템 데이터 세팅
-            if (item.SetItem(itemData) == false)
-            {
-                Addressables.ReleaseInstance(itemObject);
-                Debug.Log($"[Monster] Item SetItem failed, ID({inItemId})");
-                return false;
-            }
+            item.Initialize(itemData);
 
             // 아이템 인스턴스 등록
             if (_itemInstances.ContainsKey(itemData.ItemInstanceId))
@@ -103,6 +97,12 @@ namespace ARPG.Item
 
             // Dictionary에서 제거
             _itemInstances.Remove(inItemInstanceId);
+
+            // ECS 엔티티 제거 (WorldItemComponent 포함)
+            if (item != null && item.EntityId >= 0)
+            {
+                Utility.EntityIdHelper.DestroyEntity(item.EntityId);
+            }
 
             // Addressables로 생성한 오브젝트 해제
             if (item != null && item.gameObject != null)

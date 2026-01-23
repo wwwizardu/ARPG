@@ -16,19 +16,14 @@ namespace ARPG.Component
         public int ItemTableId;
 
         /// <summary>
-        /// 아이템 인스턴스 ID (고유 식별자)
+        /// 아이템 엔티티 ID (고유 식별자)
         /// </summary>
-        public int ItemInstanceId;
+        public int EntityId;
 
         /// <summary>
         /// 아이템 수량
         /// </summary>
         public int Quantity;
-
-        /// <summary>
-        /// 장비 엔티티 ID (장비 아이템인 경우, 0이면 일반 아이템)
-        /// </summary>
-        public int EquipmentEntityId;
 
         /// <summary>
         /// 드랍된 시간 (Time.time 기준)
@@ -49,11 +44,6 @@ namespace ARPG.Component
         /// 자동 줍기 범위 (AutoPickupEnabled가 true일 때만 사용)
         /// </summary>
         public float AutoPickupRange;
-
-        /// <summary>
-        /// 장비 아이템인지 확인
-        /// </summary>
-        public readonly bool IsEquipment => EquipmentEntityId != 0;
 
         /// <summary>
         /// 만료되었는지 확인
