@@ -129,14 +129,29 @@ namespace ARPG.Creature
 
         public void Save(PlayerData inPlayerData)
         {
-            if(AR.s.TryGetComponent<StatComponent>(out var _statComponent) == false)
+            if(AR.s.Component.TryGetComponent<StatComponent>(_entityId, out var statComponent) == false)
             {
                 Debug.LogError("[ArpgPlayer] Save - StatComponent not found");
                 return;
             }
 
-            inPlayerData.CurrentHp = _statComponent.CurrentHp;
-            inPlayerData.CurrentMp = _statComponent.CurrentMp;
+            inPlayerData.CurrentHp = statComponent.CurrentHp;
+            inPlayerData.CurrentMp = statComponent.CurrentMp;
+        }
+
+        public bool PickupItem(Item.ItemObject inItem)
+        {
+            if (inItem == null)
+                return false;
+
+            if (0 <= AR.s.MyPlayer?.Inventory?.AddItem(inItem.ItemData))
+            {
+                AR.s.Item.DestroyItem(inItem.ItemData.ItemInstanceId);
+
+                AR.s.Data.Save();
+            }
+
+            return false;
         }
 
         // protected override void InitializeSkill()
@@ -298,21 +313,6 @@ namespace ARPG.Creature
                         return PickupItem(item);
                     }
                 }
-            }
-
-            return false;
-        }
-
-        private bool PickupItem(Item.ItemObject inItem)
-        {
-            if (inItem == null)
-                return false;
-
-            if (0 <= AR.s.MyPlayer?.Inventory?.AddItem(inItem.ItemData))
-            {
-                AR.s.Item.DestroyItem(inItem.ItemData.ItemInstanceId);
-
-                AR.s.Data.Save();
             }
 
             return false;

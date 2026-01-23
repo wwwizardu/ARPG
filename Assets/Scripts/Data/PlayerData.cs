@@ -10,6 +10,7 @@ namespace ARPG.Data
     [Serializable]
     public class PlayerData
     {
+        
         public ushort Version = 1;
 
         public int PlayerId; // 고유 플레이어 ID

@@ -56,58 +56,102 @@ namespace ARPG.Systems
                     return;
             }
 
+            // if (_input.Value.UseItem.WasPressedThisFrame() == true) // 아이템 사용 시 그냥 리턴
+            // {
+            //     CharacterComponent.Toolbelt.UseHoldingItem();
+            //     return;
+            // }
+
             if (AR.s.Component.TryGetComponent<InputComponent>(_playerEntityId, out var inputComponent) == false)
                 return;
 
             inputComponent.MoveDirection = _input.Value.Move.ReadValue<Vector2>();
             inputComponent.MousePosition = _input.Value.MouseMove.ReadValue<Vector2>();
-            inputComponent.IsAttacking = _input.Value.Attack.IsPressed();
             inputComponent.IsInteracting = _input.Value.Interact.WasPressedThisFrame();
             inputComponent.IsSprinting = _input.Value.Sprint.IsPressed();
 
             // 업데이트된 입력 컴포넌트 저장
             _componentManager.SetComponent(_playerEntityId, inputComponent);
 
-            // 공격 입력 처리
-            if(inputComponent.IsAttacking == true)
+            if (_input.Value.Attack.IsPressed() == true)
             {
-                // 슬롯 인덱스로 스킬 엔티티 ID 즉시 계산
-                int slotIndex = 0; // 기본 공격 슬롯
-                int skillEntityId = SkillEntityIdHelper.GetSkillEntityId(_playerEntityId, slotIndex);
-
-                // 스킬이 실제로 존재하는지 확인
-                if (AR.s.Component.TryGetComponent<SkillComponent>(skillEntityId, out var skill) == true)
+                if (_input.Value.Attack.WasPressedThisFrame() == true && CheckPickupItem(inputComponent.MousePosition) == true)
                 {
-                    // 스킬이 실행 중이면 커맨드 생성하지 않음
-                    if (AR.s.Component.TryGetComponent<SkillStateComponent>(skillEntityId, out var skillState))
-                    {
-                        if (skillState.IsRunning)
-                        {
-                            return;
-                        }
-                    }
-
-                    // 마우스 위치로 스킬 커맨드 생성 (이미 있으면 최신 마우스 위치로 업데이트)
-                    SkillCommandComponent command = new SkillCommandComponent();
-                    if(skill.Table != null)
-                    {
-                        command.TargetType = skill.Table.SkillTargetType;
-                    }
-                    else
-                    {
-                        Debug.LogError($"[System_Input] Skill.Table is null for SkillId({skill.SkillId}), SkillEntityId({skillEntityId})");
-                    }
-
-                    command.SkillEntityId = skillEntityId;
-                    command.TargetPosition = Camera.main.ScreenToWorldPoint(inputComponent.MousePosition);
-
-                    // 캐릭터 엔티티에 커맨드 설정 (이미 있으면 최신 값으로 덮어쓰기)
-                    _componentManager.SetComponent(_playerEntityId, command);
+                    inputComponent.IsAttacking = false;
                 }
                 else
                 {
-                    Debug.LogWarning($"[System_Input] Skill not found at slot {slotIndex}");
+                    inputComponent.IsAttacking = _input.Value.Attack.IsPressed();
+
+                    // 공격 입력 처리
+                    if(inputComponent.IsAttacking == true)
+                    {
+                        UseSkill(ref inputComponent);
+                    }       
                 }
+            }
+        }
+
+        private bool CheckPickupItem(Vector3 inMousePos)
+        {
+            Vector3 mouseWorldPos = Camera.main.ScreenToWorldPoint(new Vector3(inMousePos.x, inMousePos.y, 0f));
+
+            // 2D 레이캐스트 (2D 게임의 경우)
+            RaycastHit2D hit = Physics2D.Raycast(mouseWorldPos, Vector2.zero);
+            if (hit.collider != null)
+            {
+                // 아이템 컴포넌트 확인
+                if (hit.collider.gameObject.CompareTag("DropedItem"))
+                {
+                    var item = hit.collider.gameObject.GetComponentInParent<Item.ItemObject>();
+                    if (item != null)
+                    {
+                        return AR.s.Item.PickupItem(item);
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private void UseSkill(ref InputComponent inInputComponent)
+        {
+            // 슬롯 인덱스로 스킬 엔티티 ID 즉시 계산
+            int slotIndex = 0; // 기본 공격 슬롯
+            int skillEntityId = SkillEntityIdHelper.GetSkillEntityId(_playerEntityId, slotIndex);
+
+            // 스킬이 실제로 존재하는지 확인
+            if (AR.s.Component.TryGetComponent<SkillComponent>(skillEntityId, out var skill) == true)
+            {
+                // 스킬이 실행 중이면 커맨드 생성하지 않음
+                if (AR.s.Component.TryGetComponent<SkillStateComponent>(skillEntityId, out var skillState))
+                {
+                    if (skillState.IsRunning)
+                    {
+                        return;
+                    }
+                }
+
+                // 마우스 위치로 스킬 커맨드 생성 (이미 있으면 최신 마우스 위치로 업데이트)
+                SkillCommandComponent command = new SkillCommandComponent();
+                if(skill.Table != null)
+                {
+                    command.TargetType = skill.Table.SkillTargetType;
+                }
+                else
+                {
+                    Debug.LogError($"[System_Input] Skill.Table is null for SkillId({skill.SkillId}), SkillEntityId({skillEntityId})");
+                }
+
+                command.SkillEntityId = skillEntityId;
+                command.TargetPosition = Camera.main.ScreenToWorldPoint(inInputComponent.MousePosition);
+
+                // 캐릭터 엔티티에 커맨드 설정 (이미 있으면 최신 값으로 덮어쓰기)
+                _componentManager.SetComponent(_playerEntityId, command);
+            }
+            else
+            {
+                Debug.LogWarning($"[System_Input] Skill not found at slot {slotIndex}");
             }
         }
     }
