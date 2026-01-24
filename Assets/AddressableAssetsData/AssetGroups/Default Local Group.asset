@@ -30,8 +30,18 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3fd2370bda823e44d8dde2495cc539d2
+    m_Address: Animation/Knight/Move
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 460dc19b749967d42a7aaba5b52e8a6c
     m_Address: TileSet/Base
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 48038c3b46ff8ed45bb7a919cf979cbc
+    m_Address: Animation/Knight/Attack
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -55,6 +65,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b24e7b3ae6aecb941ae6c2b9b8b29a7f
+    m_Address: Animation/Knight/Death
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b553a736b1dd77246a077c4c0ac530bd
     m_Address: UI/SlotUI
     m_ReadOnly: 0
@@ -67,6 +82,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: deb56b626166d8c4d837cbc5f65aa448
     m_Address: Item/Item
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: def967a83b43db54785a8aff08a0b520
+    m_Address: Animation/Knight/Idle
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

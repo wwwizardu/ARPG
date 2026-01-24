@@ -1,12 +1,16 @@
 #nullable enable
 using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Threading;
+using ARPG.Data;
 using ARPG.Tables;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
 using UnityEngine.UI;
 using UnityEngine.U2D.Animation;
-using System.Collections;
-using ARPG.Data;
-using System.Collections.Generic;
 
 namespace ARPG.Creature
 {
@@ -38,6 +42,9 @@ namespace ARPG.Creature
         protected WaitForSeconds _waitForSeconds = new WaitForSeconds(1f);
 
         protected Dictionary<GlobalEnum.BuffEffectType, GameObject> _buffIconDic = new();
+
+        protected PlayableAnimator? _playableAnimator;
+        protected CancellationTokenSource? _animationCts;
 
         public GlobalEnum.EntityType EntityType { get { return _entityType; } }
         public virtual CreatureTable Table { get {return _table!;} }
@@ -82,6 +89,16 @@ namespace ARPG.Creature
             //_characterInfo.SkillController.Reset();
         }
 
+        protected override void OnDestroy()
+        {
+            base.OnDestroy();
+
+            // 애니메이션 로드 취소
+            _animationCts?.Cancel();
+            _animationCts?.Dispose();
+            _animationCts = null;
+        }
+
         public override void InitializeECSComponents()
         {
             base.InitializeECSComponents();
@@ -117,15 +134,141 @@ namespace ARPG.Creature
                 Debug.Log($"GameObject registered to RenderSystem for Entity {_entityId}");
             }
 
-            // AnimationSystem에 Animator 등록 (Animator가 있는 경우)
-            if(_characterInfo.Animator != null)
+            // AnimationSystem에 PlayableAnimator 등록
+            var animSystem = AR.s.System.GetSystem<Systems.System_Animation>();
+            if (animSystem.HasValue)
             {
-                var animSystem = AR.s.System.GetSystem<Systems.System_Animation>();
-                if (animSystem.HasValue)
+                var system = animSystem.Value;
+
+                // PlayableAnimator 컴포넌트 추가
+                _playableAnimator = _characterInfo.gameObject.GetComponent<PlayableAnimator>();
+                if (_playableAnimator == null)
                 {
-                    var system = animSystem.Value;
-                    system.RegisterAnimator(_entityId, _characterInfo.Animator);
-                    Debug.Log($"Animator registered to AnimationSystem for Entity {_entityId}");
+                    _playableAnimator = _characterInfo.gameObject.AddComponent<PlayableAnimator>();
+                }
+
+                system.RegisterPlayableAnimator(_entityId, _playableAnimator);
+                Debug.Log($"PlayableAnimator registered to AnimationSystem for Entity {_entityId}");
+
+                // 비동기로 애니메이션 클립 로드 및 초기화
+                InitializeAnimationAsync().Forget();
+            }
+        }
+
+        /// <summary>
+        /// 애니메이션 클립을 Addressable에서 로드하고 PlayableAnimator를 초기화합니다.
+        /// </summary>
+        protected virtual async UniTaskVoid InitializeAnimationAsync()
+        {
+            if (_playableAnimator == null)
+            {
+                return;
+            }
+
+            _animationCts = new CancellationTokenSource();
+
+            try
+            {
+                string[] clipNames = GetAnimationClipNames();
+                if (clipNames == null || clipNames.Length == 0)
+                {
+                    Debug.LogWarning($"[{GetType().Name}] No animation clip names defined");
+                    return;
+                }
+
+                AnimationClip[] clips = await LoadAnimationClipsAsync(clipNames, _animationCts.Token);
+
+                // 로드 완료 후 객체가 파괴되었는지 확인
+                if (this == null || _playableAnimator == null)
+                {
+                    ReleaseAnimationClips(clips);
+                    return;
+                }
+
+                _playableAnimator.Initialize(clips);
+                Debug.Log($"PlayableAnimator initialized with {clips.Length} clips for Entity {_entityId}");
+            }
+            catch (OperationCanceledException)
+            {
+                // 취소됨 - 정상 종료
+                Debug.Log($"Animation initialization cancelled for Entity {_entityId}");
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[{GetType().Name}] Failed to initialize animation: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 로드할 애니메이션 클립 이름 목록을 반환합니다. 하위 클래스에서 오버라이드합니다.
+        /// </summary>
+        protected virtual string[] GetAnimationClipNames()
+        {
+            // 기본 애니메이션 클립 이름 (하위 클래스에서 오버라이드)
+            return new string[] { "Idle", "Move", "Attack", "Death" };
+        }
+
+        /// <summary>
+        /// Addressable에서 애니메이션 클립들을 로드합니다.
+        /// </summary>
+        protected virtual async UniTask<AnimationClip[]> LoadAnimationClipsAsync(string[] clipNames, CancellationToken cancellationToken)
+        {
+            List<AnimationClip> clips = new List<AnimationClip>();
+            string characterType = "Knight";
+
+            for (int i = 0; i < clipNames.Length; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                string path = $"Animation/{characterType}/{clipNames[i]}";
+                var handle = Addressables.LoadAssetAsync<AnimationClip>(path);
+
+                try
+                {
+                    AnimationClip clip = await handle.ToUniTask(cancellationToken: cancellationToken);
+
+                    if (handle.Status == AsyncOperationStatus.Succeeded && clip != null)
+                    {
+                        clips.Add(clip);
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[{GetType().Name}] Failed to load animation clip: {path}");
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    Addressables.Release(handle);
+                    throw;
+                }
+            }
+
+            return clips.ToArray();
+        }
+
+        /// <summary>
+        /// 애니메이션 에셋 경로를 반환합니다. 하위 클래스에서 오버라이드합니다.
+        /// </summary>
+        protected virtual string GetAnimationPath()
+        {
+            return "Default";
+        }
+
+        /// <summary>
+        /// 로드된 애니메이션 클립들을 해제합니다.
+        /// </summary>
+        protected void ReleaseAnimationClips(AnimationClip[] clips)
+        {
+            if (clips == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < clips.Length; i++)
+            {
+                if (clips[i] != null)
+                {
+                    Addressables.Release(clips[i]);
                 }
             }
         }

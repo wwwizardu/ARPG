@@ -317,6 +317,7 @@ namespace ARPG.Systems
                 if (inSkill.Table != null && string.IsNullOrEmpty(inSkill.Table.AnimationName) == false)
                 {
                     int animHash = UnityEngine.Animator.StringToHash(inSkill.Table.AnimationName);
+                    animatorComp.Force = true;
                     animatorComp.RequestAnimation(animHash);
                     AR.s.Component.SetComponent(inSkill.OwnerEntityId, animatorComp);
 
