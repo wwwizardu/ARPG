@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
-using ARPG.AI;
 using ARPG.Item;
 using ARPG.Tables;
 
@@ -12,10 +11,7 @@ namespace ARPG.Creature
     {
         protected Tables.MonsterTable? _monsterTable = null;
         private bool _activated = false;
-        private AIBase? _ai = null;
         private int _instanceId = -1;
-
-        private float _thinkTime = 0f;
 
         public MonsterTable MonsterTable => _monsterTable!;
         
@@ -66,8 +62,6 @@ namespace ARPG.Creature
         public override void Reset()
         {
             base.Reset();
-
-            _ai?.Reset();
         }
 
         public override bool LoadTable(int inId)
@@ -77,18 +71,6 @@ namespace ARPG.Creature
             {
                 Debug.LogError($"[Monster] LoadTable - MonsterTable not found for Id: {inId}");
                 return false;
-            }
-
-            // Ai Table에 따른 ai 생성
-            if (_monsterTable.AiTable == null)
-                return false;
-
-            if (_monsterTable.AiTable.AiType == GlobalEnum.AiType.NormalMonster)
-            {
-                _ai = new BasicMonsterAI(this, _monsterTable.AiTable);
-                _ai.Initialize();
-
-                //_characterInfo.SkillController.CreateSkill(_monsterTable.AiTable.SkillId1);
             }
 
             _table = _monsterTable;
@@ -154,47 +136,6 @@ namespace ARPG.Creature
         public int GetInstanceId()
         {
             return _instanceId;
-        }
-
-        protected override void OnUpdate()
-        {
-            if (_activated == false)
-                return;
-
-            base.OnUpdate();
-
-        }
-
-        protected override void OnFixedUpdateCharacter(float inDeltaTime)
-        {
-            if (_activated == false)
-                return;
-
-            base.OnFixedUpdateCharacter(inDeltaTime);
-
-            _thinkTime += inDeltaTime;
-            if(0.1f < _thinkTime)
-            {
-                _ai?.Think();
-                _thinkTime -= 0.1f;
-            }
-        }
-
-        protected override void UpdateInput()
-        {
-            // if (_activated == false || _ai == null)
-            //     return;
-
-            // var (inputDirection, velocity) = _ai.CalculateMove();
-
-            // _inputDirection = inputDirection;
-            // _velocity = velocity;
-
-            // if (_velocity.IsZero() == false)
-            // {
-            //     Vector3 movement = new Vector3(_velocity.x, _velocity.y, 0) * Time.deltaTime;
-            //     transform.position += movement;
-            // }
         }
 
         protected void DropItems()

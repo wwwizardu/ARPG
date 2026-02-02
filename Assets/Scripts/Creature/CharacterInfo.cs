@@ -14,7 +14,6 @@ namespace ARPG.Creature
         [SerializeField] protected SpriteRenderer _sr;
         [SerializeField] protected Animator _animator;
         [SerializeField] protected Image _hpBar;
-        [SerializeField] protected Skill.SkillController _skillController;
         [SerializeField] protected TMPro.TextMeshPro _textName;
         [SerializeField] protected Transform _buffImageRoot;
         [SerializeField] protected BoxCollider2D _boxCollider;
@@ -24,7 +23,7 @@ namespace ARPG.Creature
         public SpriteRenderer Sr => _sr;
         public Animator Animator => _animator;
         public Image HpBar => _hpBar;
-        //public Skill.SkillController SkillController => _skillController;
+        
         public TMPro.TextMeshPro TextName => _textName;
 
         public Transform BuffIconRoot => _buffImageRoot;
@@ -35,8 +34,6 @@ namespace ARPG.Creature
 
         public void Initialize(CharacterBase inCharacter)
         {
-            //SkillController.Initialize(inCharacter);
-
             AnimationClip? clip = GetAnimationClip("Attack");
             if (clip != null)
             {

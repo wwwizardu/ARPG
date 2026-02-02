@@ -14,15 +14,12 @@ using UnityEngine.U2D.Animation;
 
 namespace ARPG.Creature
 {
-    public abstract class CharacterBase : Base.EntityBase, IMovable, IHittable
+    public abstract class CharacterBase : Base.EntityBase, IHittable
     {
         [SerializeField] protected GlobalEnum.EntityType _entityType;
         [SerializeField] protected CharacterInfo _characterInfo;
 
         protected CreatureTable? _table;
-
-        protected BuffController _buffController = new BuffController();
-        protected MoveController _moveController = new();
 
         protected CharacterConditions _condition = CharacterConditions.None;
         protected MovementStates _moveState = MovementStates.None;
@@ -69,9 +66,7 @@ namespace ARPG.Creature
             _currentPos = transform.position;
 
             _condition = CharacterConditions.Normal;
-            OnChangeMovementState(MovementStates.Idle);
-
-            _buffController.Initialize(this);
+            
             _characterInfo.Initialize(this);
 
             RegisterMessageHandler<Message.DamageMessage>(OnDamage);
@@ -85,8 +80,6 @@ namespace ARPG.Creature
             // Reset character state
             // _characterInfo.TextName.text = string.Empty;
 
-            _buffController.Reset();
-            //_characterInfo.SkillController.Reset();
         }
 
         protected override void OnDestroy()
@@ -273,18 +266,6 @@ namespace ARPG.Creature
             }
         }
 
-        public Vector3 Vector3 { get {return _velocity;} }
-
-        public virtual void UpdateVelocity(float inDeltaTime)
-        {
-            
-        }
-
-        public virtual void UpdatePosition(float inDeltaTime)
-        {
-            
-        }
-
         public virtual bool LoadTable(int inId)
         {
             return false;
@@ -303,17 +284,9 @@ namespace ARPG.Creature
             //     _characterInfo.TextName.text = Table!.Name;
             // }
 
-            UpdateStat();
-
             _initialized = true;
 
             return true;
-        }
-
-        public virtual void UpdateStat()
-        {
-            // TODO: StatComponent 기반 스탯 업데이트 로직 구현 필요
-
         }
 
         public virtual void OnHit(CharacterBase? inAttacker, bool isOnHit, GlobalEnum.DamageType inDamageType, int inDamage)
@@ -330,32 +303,11 @@ namespace ARPG.Creature
         {
             // TODO: StatComponent 기반 MP 변경 로직 구현 필요
         }
-
-        protected virtual void UpdateInput()
-        {
-            // Handle character input here
-        }
         
         public virtual bool StartSkill(int inIndex)
         {
-            //_characterInfo.SkillController.StartSkill(inIndex);
+            
             return true;
-        }
-
-        public void PlayAnimation(Animation inAnimation, bool isLoop, int inTrackIndex = 0, float inSpeed = 1f, Action? onAnimDone = null)
-        {
-            if (inAnimation == Animation.Idle)
-            {
-                _characterInfo.Animator.SetTrigger("Idle");
-            }
-            else if (inAnimation == Animation.Walk)
-            {
-                _characterInfo.Animator.SetTrigger("Walk");
-            }
-            else if (inAnimation == Animation.Attack)
-            {
-                _characterInfo.Animator.SetTrigger("Attack");
-            }
         }
 
         public virtual float GetAttackSpeed()
@@ -373,30 +325,14 @@ namespace ARPG.Creature
 
         }
 
-        public void Stop()
-        {
-            // if (IsOwner == true)
-            // {
-            //     _controller.SetHorizontalForce(0f);
-            // }
-
-            OnChangeMovementState(MovementStates.Idle);
-            UpdateMovementState();
-        }
-
         public void OnCompleteSkill(int inSkillId)
         {
-            OnChangeMovementState(MovementStates.Idle);
+            
         }
 
         public void OnStopSkill(int inSkillId)
         {
             // Handle skill stop logic
-        }
-
-        public void AddBuff(int inBuffId, int inEffectValue = 0)
-        {
-            _buffController.AddBuff(inBuffId, inEffectValue);
         }
 
         public virtual void OnAddBuff(BuffEffect inBuff)
@@ -426,177 +362,9 @@ namespace ARPG.Creature
             }
         }
 
-        public virtual void UpdateAnimator()
-        {
-            if (CharacterConditions.BlockMoveAnimation <= _condition)
-                return;
-
-            if (_moveState == MovementStates.Idle)
-            {
-                // 스킬이 실행중일 때는 Idle 애니메이션을 실행하지 않음
-                // if (_characterInfo.SkillController.CurrentSkill != null && _characterInfo.SkillController.CurrentSkill.IsRunning == true)
-                // {
-
-                // }
-                // else
-                // {
-                //     PlayAnimation(Animation.Idle, true);
-                // }
-            }
-            else if (_moveState == MovementStates.Walking)
-            {
-                PlayAnimation(Animation.Walk, true);
-            }
-            else if (_moveState == MovementStates.Jumping)
-            {
-                PlayAnimation(Animation.Jump, false);
-            }
-            // else if (_moveState == MovementStates.Falling)
-            // {
-            //     PlayAnimation(Animation.Jump_Idle, true);
-            // }
-            // else if (_moveState == CharacterStates.MovementStates.Landing)
-            // {
-            //     PlayAnimation(Animation.Jump_Eed, false);
-            // }
-        }
-
-        public void ChangeConditionState(CharacterConditions inState, bool isForce = false)
-        {
-            if (_condition == inState) // 같은 상태면 변경할 필요 없음
-                return;
-
-            // Stunned, Dead 상태에서 다른 상태로 변하는 것은 이곳에서 처리하지 않고 따로 함수를 만들어서 처리한다.
-            if (_condition == CharacterConditions.Stunned || _condition == CharacterConditions.Dead)
-            {
-                return;
-            }
-
-            //if (IsOwner == true)
-            {
-                _condition = inState;
-            }
-        }
-
         protected virtual void Dead()
         {
-            ChangeConditionState(CharacterConditions.Dead);
-        }
-
-        void Update()
-        {
-            if (_initialized == false)
-                return;
-
-            OnUpdate();
-        }
-
-        private void FixedUpdate()
-        {
-            if (_initialized == false)
-                return;
-
-            OnFixedUpdateCharacter(Time.fixedDeltaTime);
-        }
-
-        protected virtual void OnUpdate()
-        {
-            UpdateInput(); // 입력 업데이트
-
-            UpdateConditionsState(); // 캐릭터 상태 업데이트
-
-            UpdateMovementState(); // 캐릭터 이동 상태 업데이트
-
-            //if (Input.GetKeyUp(KeyCode.U))
-            //{
-            //    Hub.s.uiman.Show<MerchantUI>("UI/MerchantUI", UIManager.Layer.Main);
-            //}
-        }
-
-        protected virtual void OnFixedUpdateCharacter(float inDeltaTime)
-        {
-            if (AR.s == null || AR.s.Map == null /*|| MapManager.mapInitialized == false*/)
-                return;
-
-            if (CharacterConditions.Dead <= _condition) // 캐릭터가 죽은 상태라면
-                return;
-
-            //_characterInfo.SkillController.SkillUpdate(inDeltaTime);
-
-            _buffController.UpdateTick(inDeltaTime);
-
-            
-
-            // if (IsOwner == true && GetPlayerTilePosition(out Vector2Int tilePos) == true)
-            // {
-            //     _currentMapTilePos = tilePos;
-
-            //     if (_currentMapTilePos != _prevMapTilePos) // 캐릭터 위치가 달라졌다면
-            //     {
-            //         //Debug.Log($"[Character] OnFixedUpdateCharacter - Pos({_currentMapTilePos.x}, {_currentMapTilePos.y})");
-
-            //         Vector2Int currentChunkIndex = GetPlayerChunk();
-            //         if (_currentChunkIndex != currentChunkIndex)
-            //         {
-            //             _currentChunkIndex = currentChunkIndex;
-            //             UpdateAroundChunk();
-            //         }
-
-            //         _currentChunkTilePos = _currentMapTilePos - (_currentChunkIndex * MapGenerator.CHUNK_SIZE);
-
-            //         CheckSpecialBlock(true); // 특수 블럭 체크(사다리, 바닥)
-            //         UpdateSight();
-
-            //         _prevMapTilePos = _currentMapTilePos;
-            //     }
-
-            //     _floorController.Update(Time.fixedDeltaTime);
-            // }
-        }
-
-        protected virtual bool UpdateConditionsState()
-        {
-            if (CharacterConditions.Dead <= _condition)
-                return false;
-
-            // float hp = Status.GetFloat(Shared.Status.StatusPropertyType.HpCurrent);
-            // if (Mathf.Approximately(hp, 0f) || hp <= 0f)
-            // {
-            //     Dead();
-            //     return false;
-            // }
-
-            // if (_conditionState.Value == CharacterStates.CharacterConditions.InstallStructure && _conditionTime + 0.2f < Time.time)
-            // {
-            //     ChangeConditionState(CharacterStates.CharacterConditions.Normal);
-            // }
-
-            return true;
-        }
-
-        protected virtual void UpdateMovementState()
-        {
-            if (_velocity.IsZero() == true)
-            {
-                OnChangeMovementState(MovementStates.Idle);
-            }
-            else
-            {
-                OnChangeMovementState(MovementStates.Walking);
-            }
-        }
-
-        protected void OnChangeMovementState(MovementStates inNew)
-        {
-            if (_moveState == inNew)
-                return;
-
-            //Debug.Log($"[Character] OnChangeMovementState - {_moveState} -> {inNew}");
-
-            _movementStatePrev = _moveState;
-            _moveState = inNew;
-
-            //UpdateAnimator();
+            _condition = CharacterConditions.Dead;
         }
 
         protected IEnumerator LoopUpdate()
