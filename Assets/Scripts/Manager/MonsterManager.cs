@@ -2,9 +2,11 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using ARPG.Component;
 using ARPG.Map;
 using ARPG.Creature;
 using ARPG.Scene;
+using ARPG.Utility;
 
 namespace ARPG.Monster
 {
@@ -46,8 +48,7 @@ namespace ARPG.Monster
             {
                 if (monster != null && monster.gameObject != null)
                 {
-                    // 리스트에서는 나중에 Clear()로 일괄 제거하므로 removeFromList = false
-                    DestroyMonster(monster, removeFromList: false);
+                    DestroyMonster(monster);
                 }
             }
 
@@ -83,29 +84,15 @@ namespace ARPG.Monster
             }
         }
 
-        public void RemoveMonster(Creature.Monster monster)
-        {
-            if (monster == null)
-                return;
-
-            _monsters.Remove(monster);
-        }
-
         /// <summary>
-        /// 몬스터를 완전히 제거합니다 (ECS 컴포넌트 + GameObject + 추적 정보)
+        /// 몬스터를 완전히 제거합니다 (Entity + ECS 컴포넌트 + GameObject + 추적 정보)
+        /// _monsters 리스트에서의 제거는 호출하는 쪽에서 처리해야 합니다.
         /// </summary>
         /// <param name="monster">제거할 몬스터</param>
-        /// <param name="removeFromList">_monsters 리스트에서도 제거할지 여부 (기본값: true)</param>
-        private void DestroyMonster(Creature.Monster monster, bool removeFromList = true)
+        private void DestroyMonster(Creature.Monster monster)
         {
             if (monster == null)
                 return;
-
-            // 리스트에서 제거
-            if (removeFromList)
-            {
-                _monsters.Remove(monster);
-            }
 
             // 인스턴스 딕셔너리에서 제거
             int instanceId = monster.GetInstanceId();
@@ -114,37 +101,11 @@ namespace ARPG.Monster
                 _monsterInstanceById.Remove(instanceId);
             }
 
-            // ECS 컴포넌트 일괄 제거
-            AR.s.Component.RemoveAllComponents(monster.EntityId);
+            // Entity 제거 (ECS 컴포넌트 + 스킬 엔티티 + EntityIdHelper 등록 해제 포함)
+            EntityIdHelper.DestroyEntity(monster.EntityId);
 
             // GameObject 파괴
             Destroy(monster.gameObject);
-        }
-
-        public List<Creature.Monster> GetAllMonsters()
-        {
-            return new List<Creature.Monster>(_monsters);
-        }
-
-        public Creature.Monster? GetNearestMonster(Vector3 position, float maxDistance = float.MaxValue)
-        {
-            Creature.Monster? nearest = null;
-            float nearestDistance = maxDistance;
-
-            foreach (var monster in _monsters)
-            {
-                if (monster == null)
-                    continue;
-
-                float distance = Vector3.Distance(position, monster.transform.position);
-                if (distance < nearestDistance)
-                {
-                    nearestDistance = distance;
-                    nearest = monster;
-                }
-            }
-
-            return nearest;
         }
 
         public void CleanupDestroyedMonsters()
@@ -175,20 +136,21 @@ namespace ARPG.Monster
                 var monster = _monsters[i];
                 if (monster != null)
                 {
-                    // 몬스터가 죽었는지 확인
-                    if (monster.State == CharacterConditions.Dead)
+                    // StateComponent를 통해 몬스터가 죽었는지 확인
+                    bool isDead = false;
+                    if (AR.s.Component.TryGetComponent<StateComponent>(monster.EntityId, out var stateComponent))
                     {
-                        // 리스트에서 직접 제거 (역순 순회 중이므로)
-                        _monsters.RemoveAt(i);
+                        isDead = stateComponent.Condition == CharacterConditions.Dead;
+                    }
 
-                        // 몬스터 완전 제거 (리스트는 이미 제거했으므로 removeFromList = false)
-                        DestroyMonster(monster, removeFromList: false);
+                    if (isDead)
+                    {
+                        _monsters.RemoveAt(i);
+                        DestroyMonster(monster);
                     }
                     else
                     {
                         UpdateMonsterActivationByDistance(monster, playerPosition);
-                        
-                        //monster.UpdateMonster(inDeltaTime); // 몬스터 업데이트 로직 호출
                     }
                 }
             }
@@ -441,8 +403,8 @@ namespace ARPG.Monster
                         {
                             if (monster != null)
                             {
-                                // 몬스터 완전 제거 (모든 정보 제거)
-                                DestroyMonster(monster, removeFromList: true);
+                                _monsters.Remove(monster);
+                                DestroyMonster(monster);
                             }
                             else
                             {

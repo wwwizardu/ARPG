@@ -16,26 +16,18 @@ namespace ARPG.Creature
 {
     public abstract class CharacterBase : Base.EntityBase, IHittable
     {
-        [SerializeField] protected GlobalEnum.EntityType _entityType;
         [SerializeField] protected CharacterInfo _characterInfo;
 
         protected CreatureTable? _table;
 
         protected CharacterConditions _condition = CharacterConditions.None;
-        protected MovementStates _moveState = MovementStates.None;
-        protected MovementStates _movementStatePrev = MovementStates.None;
-
+        
         protected SpriteLibrary _spriteLibrary;
-        protected Vector2 _inputDirection = Vector2.zero;
-        protected Vector2 _velocity = Vector2.zero;
 
         protected GlobalEnum.TeamType _team = GlobalEnum.TeamType.None;
 
-        protected Vector2 _pervPos;
-        protected Vector2 _currentPos;
         protected bool _initialized = false;
 
-        protected Coroutine? _LoopUpdateCo = null;
         protected WaitForSeconds _waitForSeconds = new WaitForSeconds(1f);
 
         protected Dictionary<GlobalEnum.BuffEffectType, GameObject> _buffIconDic = new();
@@ -43,14 +35,11 @@ namespace ARPG.Creature
         protected PlayableAnimator? _playableAnimator;
         protected CancellationTokenSource? _animationCts;
 
-        public GlobalEnum.EntityType EntityType { get { return _entityType; } }
         public virtual CreatureTable Table { get {return _table!;} }
 
         public CharacterConditions State { get { return _condition; } }
 
         public GlobalEnum.TeamType Team { get { return _team; } }
-
-        public CharacterInfo CharacterInfo { get { return _characterInfo; } }
 
         public override void Initialize()
         {
@@ -62,9 +51,6 @@ namespace ARPG.Creature
                 _spriteLibrary = sl;
             }
             
-            _pervPos = transform.position;
-            _currentPos = transform.position;
-
             _condition = CharacterConditions.Normal;
             
             _characterInfo.Initialize(this);
@@ -303,12 +289,6 @@ namespace ARPG.Creature
         {
             // TODO: StatComponent 기반 MP 변경 로직 구현 필요
         }
-        
-        public virtual bool StartSkill(int inIndex)
-        {
-            
-            return true;
-        }
 
         public virtual float GetAttackSpeed()
         {
@@ -318,21 +298,6 @@ namespace ARPG.Creature
         public virtual (int, int) GetAttackDamage()
         {
             return (0, 0);
-        }
-
-        protected virtual void SetAnimation(int inIndex)
-        {
-
-        }
-
-        public void OnCompleteSkill(int inSkillId)
-        {
-            
-        }
-
-        public void OnStopSkill(int inSkillId)
-        {
-            // Handle skill stop logic
         }
 
         public virtual void OnAddBuff(BuffEffect inBuff)
