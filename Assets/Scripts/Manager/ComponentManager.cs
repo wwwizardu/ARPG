@@ -50,6 +50,9 @@ namespace ARPG.Component
             // 애니메이션 컴포넌트
             { typeof(SpriteAnimationComponent), 300 },        // 스프라이트 애니메이션 설정 및 로딩 상태
             { typeof(AnimatorComponent), 300 },               // 애니메이션 재생 요청
+
+            // 맵 컴포넌트
+            { typeof(MapChunkLoaderComponent), 4 },           // 청크 로더 (플레이어 전용)
         };
 
         /// <summary>

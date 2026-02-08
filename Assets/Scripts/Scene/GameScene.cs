@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections;
+using ARPG.Component;
 using ARPG.Creature;
 
 namespace ARPG.Scene
@@ -37,6 +38,14 @@ namespace ARPG.Scene
             }
 
             AR.s.Map.CreateMap(12345, playerObject.transform.position);
+
+            // 맵 생성 완료 후 청크 로더 활성화
+            int playerEntityId = AR.s.Data.CurrentPlayerEntityId;
+            if (AR.s.Component.TryGetComponent<MapChunkLoaderComponent>(playerEntityId, out var chunkLoader))
+            {
+                chunkLoader.IsInitialized = true;
+                AR.s.Component.SetComponent(playerEntityId, chunkLoader);
+            }
 
             AR.s.OnLoadSceneComplete(this);
 

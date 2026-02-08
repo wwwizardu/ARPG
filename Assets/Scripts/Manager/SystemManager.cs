@@ -42,6 +42,10 @@ namespace ARPG.Systems
             System_Move moveSystem = new();
             RegisterSystems(moveSystem);
 
+            // Priority 120: Map Chunk Loader System (FixedUpdate) - 플레이어 위치 기반 청크 로딩/언로딩
+            System_MapChunkLoader mapChunkLoaderSystem = new();
+            RegisterSystems(mapChunkLoaderSystem);
+
             // Priority 200: Skill System (FixedUpdate) - 스킬 로직
             System_Skill skillSystem = new();
             RegisterSystems(skillSystem);

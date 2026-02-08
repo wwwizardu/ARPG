@@ -49,6 +49,15 @@ namespace ARPG.Creature
                 IsSprinting = false
             };
             AR.s.Component.AddComponent(_entityId, inputComponent);
+
+            // MapChunkLoaderComponent 추가
+            MapChunkLoaderComponent mapChunkLoader = new()
+            {
+                CurrentChunk = new Vector2Int(-100000, -100000),
+                LoadRadius = 2,
+                IsInitialized = false
+            };
+            AR.s.Component.AddComponent(_entityId, mapChunkLoader);
         }
 
         public override void Reset()
