@@ -24,8 +24,6 @@ namespace ARPG.Creature
 
         protected bool _initialized = false;
 
-        protected Dictionary<GlobalEnum.BuffEffectType, GameObject> _buffIconDic = new();
-
         protected PlayableAnimator? _playableAnimator;
         protected CancellationTokenSource? _animationCts;
 
@@ -301,26 +299,26 @@ namespace ARPG.Creature
             GameObject? iconObject = AR.s.Data.GetIconPrefab(inBuff);
             if(iconObject != null)
             {
-                if (_buffIconDic.ContainsKey(inBuff.Type) == true)
-                {
-                    AR.s.Data.RestoreIconPrefab(iconObject);
-                }
-                else
-                {
-                    iconObject.transform.SetParent(_characterInfo.BuffIconRoot);
-                    iconObject.transform.localScale = Vector3.one;
-                    _buffIconDic.Add(inBuff.Type, iconObject);
-                }
+                // if (_buffIconDic.ContainsKey(inBuff.Type) == true)
+                // {
+                //     AR.s.Data.RestoreIconPrefab(iconObject);
+                // }
+                // else
+                // {
+                //     iconObject.transform.SetParent(_characterInfo.BuffIconRoot);
+                //     iconObject.transform.localScale = Vector3.one;
+                //     _buffIconDic.Add(inBuff.Type, iconObject);
+                // }
             }
         }
         
         public virtual void OnRemoveBuff(BuffEffect inBuff)
         {
-            if (_buffIconDic.TryGetValue(inBuff.Type, out GameObject? iconObject))
-            {
-                AR.s.Data.RestoreIconPrefab(iconObject);
-                _buffIconDic.Remove(inBuff.Type);
-            }
+            // if (_buffIconDic.TryGetValue(inBuff.Type, out GameObject? iconObject))
+            // {
+            //     AR.s.Data.RestoreIconPrefab(iconObject);
+            //     _buffIconDic.Remove(inBuff.Type);
+            // }
         }
 
         protected virtual void Dead()
