@@ -23,8 +23,6 @@ namespace ARPG.Creature
         {
             base.Initialize();
 
-            _team = GlobalEnum.TeamType.Player;
-
             _input = AR.s.UI.Input.Player;
 
             transform.position = new Vector3(0, 0, -0.1f); // Set initial position

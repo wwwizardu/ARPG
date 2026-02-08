@@ -1,1 +1,1 @@
-[{"AiTableId":1,"DropId":1,"DropRateBonus":0,"DropRarityBonus":0,"Name":"Npc1","Stat":3001,"PrefabName":"0","Id":3001},{"AiTableId":1,"DropId":1,"DropRateBonus":0,"DropRarityBonus":0,"Name":"Npc2","Stat":3002,"PrefabName":"0","Id":3002}]
+[{"AiTableId":1,"DropId":1,"DropRateBonus":0,"DropRarityBonus":0,"Name":"Npc1","Stat":3001,"PrefabName":"0","AnimationId":0,"Id":3001},{"AiTableId":1,"DropId":1,"DropRateBonus":0,"DropRarityBonus":0,"Name":"Npc2","Stat":3002,"PrefabName":"0","AnimationId":0,"Id":3002}]

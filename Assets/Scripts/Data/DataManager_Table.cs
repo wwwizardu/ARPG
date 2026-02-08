@@ -25,6 +25,7 @@ namespace ARPG.Data
         private ImmutableDictionary<int, Tables.AiTable> _aiTable = null!;
         private ImmutableDictionary<int, Tables.BuffTable> _buffTable = null!;
         private ImmutableDictionary<int, Tables.BuffEffectTable> _buffEffectTable = null!;
+        private ImmutableDictionary<int, Tables.AnimationTable> _animationTable = null!;
 
         public async Task LoadTableAsync()
         {
@@ -43,7 +44,8 @@ namespace ARPG.Data
                 LoadTable<Tables.SkillTable>("SkillTable.bytes", tables => _skillTable = tables),
                 LoadTable<Tables.AiTable>("AiTable.bytes", tables => _aiTable = tables),
                 LoadTable<Tables.BuffTable>("BuffTable.bytes", tables => _buffTable = tables),
-                LoadTable<Tables.BuffEffectTable>("BuffEffectTable.bytes", tables => _buffEffectTable = tables)
+                LoadTable<Tables.BuffEffectTable>("BuffEffectTable.bytes", tables => _buffEffectTable = tables),
+                LoadTable<Tables.AnimationTable>("AnimationTable.bytes", tables => _animationTable = tables)
             );
 
             // 모든 테이블 로드 후 LoadLate 실행
@@ -108,6 +110,11 @@ namespace ARPG.Data
             }
 
             foreach (var table in _buffEffectTable.Values)
+            {
+                table.LoadLate();
+            }
+
+            foreach (var table in _animationTable.Values)
             {
                 table.LoadLate();
             }
@@ -248,6 +255,16 @@ namespace ARPG.Data
         public Tables.BuffEffectTable? GetBuffEffect(int id)
         {
             if (_buffEffectTable.TryGetValue(id, out var table))
+            {
+                return table;
+            }
+
+            return null;
+        }
+
+        public Tables.AnimationTable? GetAnimation(int id)
+        {
+            if (_animationTable.TryGetValue(id, out var table))
             {
                 return table;
             }

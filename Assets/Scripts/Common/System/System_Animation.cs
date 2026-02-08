@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace ARPG.Systems
 {
-    // AnimationSystem: StateComponent 기반으로 애니메이션 상태 결정 및 PlayableAnimator 제어
+    // AnimationSystem: SpriteAnimationComponent 기반으로 애니메이션 상태 결정 및 PlayableAnimator 제어
     public struct System_Animation : IUpdateSystem
     {
         public int Priority => 500; // Render 이전, Movement 이후 실행
@@ -75,7 +75,7 @@ namespace ARPG.Systems
             return _entityToPlayableAnimator.TryGetValue(entityId, out playableAnimator);
         }
 
-        // Update: StateComponent 기반으로 애니메이션 상태 결정
+        // Update: SpriteAnimationComponent 기반으로 애니메이션 상태 결정
         public readonly void OnUpdate(float inDeltaTime)
         {
             if (_componentManager == null || _entityToPlayableAnimator == null)
@@ -83,11 +83,24 @@ namespace ARPG.Systems
                 return;
             }
 
-            // PlayableAnimator가 등록된 엔티티들만 순회
-            foreach (var kvp in _entityToPlayableAnimator)
+            // SpriteAnimationComponent 풀 기반 순회 (for 루프)
+            SparseSet<SpriteAnimationComponent> pool = _componentManager.GetComponentPool<SpriteAnimationComponent>();
+
+            for (int i = 0; i < pool.Count; i++)
             {
-                int entityId = kvp.Key;
-                PlayableAnimator playableAnimator = kvp.Value;
+                int entityId = pool.GetEntityId(i);
+                SpriteAnimationComponent spriteAnim = pool.GetByIndex(i);
+
+                // 로드 완료된 엔티티만 처리
+                if (spriteAnim.LoadState != AnimationLoadState.Loaded)
+                {
+                    continue;
+                }
+
+                if (_entityToPlayableAnimator.TryGetValue(entityId, out var playableAnimator) == false)
+                {
+                    continue;
+                }
 
                 if (playableAnimator == null || playableAnimator.IsInitialized == false)
                 {

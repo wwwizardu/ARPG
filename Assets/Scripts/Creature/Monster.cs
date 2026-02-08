@@ -18,8 +18,6 @@ namespace ARPG.Creature
         public override void Initialize()
         {
             base.Initialize();
-
-            _team = GlobalEnum.TeamType.Monster;
         }
 
         public override void InitializeECSComponents()

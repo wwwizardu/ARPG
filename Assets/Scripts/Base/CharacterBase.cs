@@ -14,21 +14,15 @@ using UnityEngine.U2D.Animation;
 
 namespace ARPG.Creature
 {
-    public abstract class CharacterBase : Base.EntityBase, IHittable
+    public abstract class CharacterBase : Base.EntityBase
     {
         [SerializeField] protected CharacterInfo _characterInfo;
 
         protected CreatureTable? _table;
 
         protected CharacterConditions _condition = CharacterConditions.None;
-        
-        protected SpriteLibrary _spriteLibrary;
-
-        protected GlobalEnum.TeamType _team = GlobalEnum.TeamType.None;
 
         protected bool _initialized = false;
-
-        protected WaitForSeconds _waitForSeconds = new WaitForSeconds(1f);
 
         protected Dictionary<GlobalEnum.BuffEffectType, GameObject> _buffIconDic = new();
 
@@ -39,20 +33,12 @@ namespace ARPG.Creature
 
         public CharacterConditions State { get { return _condition; } }
 
-        public GlobalEnum.TeamType Team { get { return _team; } }
-
         public override void Initialize()
         {
             _characterInfo.Sr.sprite = _characterInfo.CharacterSprite;
-            SpriteLibrary sl = _characterInfo.Sr.GetComponent<SpriteLibrary>();
-            if (sl != null && _characterInfo.SpriteLibraryAsset != null)
-            {
-                sl.spriteLibraryAsset = _characterInfo.SpriteLibraryAsset;
-                _spriteLibrary = sl;
-            }
-            
+
             _condition = CharacterConditions.Normal;
-            
+
             _characterInfo.Initialize(this);
 
             RegisterMessageHandler<Message.DamageMessage>(OnDamage);
@@ -104,6 +90,15 @@ namespace ARPG.Creature
             };
             AR.s.Component.AddComponent(_entityId, velocityComponent);
 
+            // SpriteAnimationComponent 추가 (테이블 기반 애니메이션 설정)
+            Component.SpriteAnimationComponent spriteAnimComp = new()
+            {
+                AnimationTableId = Table.AnimationId,
+                LoadState = Component.AnimationLoadState.None,
+                PlaybackSpeed = 1f
+            };
+            AR.s.Component.AddComponent(_entityId, spriteAnimComp);
+
             // RenderSystem에 GameObject 등록
             var renderSystem = AR.s.System.GetSystem<Systems.System_Render>();
             if (renderSystem.HasValue)
@@ -114,136 +109,137 @@ namespace ARPG.Creature
             }
 
             // AnimationSystem에 PlayableAnimator 등록
+            _playableAnimator = _characterInfo.gameObject.GetComponent<PlayableAnimator>();
+            if (_playableAnimator == null)
+            {
+                _playableAnimator = _characterInfo.gameObject.AddComponent<PlayableAnimator>();
+            }
+
             var animSystem = AR.s.System.GetSystem<Systems.System_Animation>();
             if (animSystem.HasValue)
             {
                 var system = animSystem.Value;
-
-                // PlayableAnimator 컴포넌트 추가
-                _playableAnimator = _characterInfo.gameObject.GetComponent<PlayableAnimator>();
-                if (_playableAnimator == null)
-                {
-                    _playableAnimator = _characterInfo.gameObject.AddComponent<PlayableAnimator>();
-                }
-
                 system.RegisterPlayableAnimator(_entityId, _playableAnimator);
                 Debug.Log($"PlayableAnimator registered to AnimationSystem for Entity {_entityId}");
-
-                // 비동기로 애니메이션 클립 로드 및 초기화
-                InitializeAnimationAsync().Forget();
             }
+
+            AR.s.Component.AddComponent(_entityId, new Component.AnimatorComponent());
+
+            // 비동기로 애니메이션 클립 로드 및 초기화
+            InitializeAnimationAsync().Forget();
         }
 
         /// <summary>
-        /// 애니메이션 클립을 Addressable에서 로드하고 PlayableAnimator를 초기화합니다.
+        /// AnimationTable 데이터를 기반으로 SpriteLibraryAsset과 AnimationClip을 Addressable에서 로드합니다.
         /// </summary>
         protected virtual async UniTaskVoid InitializeAnimationAsync()
         {
-            if (_playableAnimator == null)
+            if (_playableAnimator == null || Table?.AnimationData == null)
             {
                 return;
             }
 
+            UpdateAnimationLoadState(Component.AnimationLoadState.Loading);
             _animationCts = new CancellationTokenSource();
 
             try
             {
-                string[] clipNames = GetAnimationClipNames();
+                Tables.AnimationTable animData = Table.AnimationData;
+
+                // 1. SpriteLibraryAsset 런타임 로드
+                if (string.IsNullOrEmpty(animData.SpriteLibraryPath) == false && _characterInfo.SpriteLibrary != null)
+                {
+                    var slAsset = await Addressables.LoadAssetAsync<SpriteLibraryAsset>(
+                        animData.SpriteLibraryPath).ToUniTask(cancellationToken: _animationCts.Token);
+                    if (slAsset != null)
+                    {
+                        _characterInfo.SpriteLibrary.spriteLibraryAsset = slAsset;
+                    }
+                }
+
+                // 2. AnimationClip 테이블 기반 로드
+                string[] clipNames = animData.ClipNameArray;
+                string clipPath = animData.AnimClipPath;
+
                 if (clipNames == null || clipNames.Length == 0)
                 {
-                    Debug.LogWarning($"[{GetType().Name}] No animation clip names defined");
+                    Debug.LogWarning($"[{GetType().Name}] No animation clip names in AnimationTable Id: {animData.Id}");
+                    UpdateAnimationLoadState(Component.AnimationLoadState.Failed);
                     return;
                 }
 
-                AnimationClip[] clips = await LoadAnimationClipsAsync(clipNames, _animationCts.Token);
+                List<AnimationClip> clips = new List<AnimationClip>();
 
-                // 로드 완료 후 객체가 파괴되었는지 확인
+                for (int i = 0; i < clipNames.Length; i++)
+                {
+                    _animationCts.Token.ThrowIfCancellationRequested();
+
+                    string path = $"{clipPath}/{clipNames[i]}";
+                    var handle = Addressables.LoadAssetAsync<AnimationClip>(path);
+
+                    try
+                    {
+                        AnimationClip clip = await handle.ToUniTask(cancellationToken: _animationCts.Token);
+
+                        if (handle.Status == AsyncOperationStatus.Succeeded && clip != null)
+                        {
+                            clips.Add(clip);
+                        }
+                        else
+                        {
+                            Debug.LogWarning($"[{GetType().Name}] Failed to load animation clip: {path}");
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        Addressables.Release(handle);
+                        throw;
+                    }
+                }
+
+                // 3. 로드 완료 후 객체가 파괴되었는지 확인
                 if (this == null || _playableAnimator == null)
                 {
                     ReleaseAnimationClips(clips);
                     return;
                 }
 
-                _playableAnimator.Initialize(clips);
-                Debug.Log($"PlayableAnimator initialized with {clips.Length} clips for Entity {_entityId}");
+                // 4. PlayableAnimator 초기화
+                _playableAnimator.Initialize(clips.ToArray());
+                UpdateAnimationLoadState(Component.AnimationLoadState.Loaded);
+                Debug.Log($"PlayableAnimator initialized with {clips.Count} clips for Entity {_entityId}");
             }
             catch (OperationCanceledException)
             {
-                // 취소됨 - 정상 종료
                 Debug.Log($"Animation initialization cancelled for Entity {_entityId}");
             }
             catch (Exception e)
             {
+                UpdateAnimationLoadState(Component.AnimationLoadState.Failed);
                 Debug.LogError($"[{GetType().Name}] Failed to initialize animation: {e.Message}");
             }
         }
 
-        /// <summary>
-        /// 로드할 애니메이션 클립 이름 목록을 반환합니다. 하위 클래스에서 오버라이드합니다.
-        /// </summary>
-        protected virtual string[] GetAnimationClipNames()
+        private void UpdateAnimationLoadState(Component.AnimationLoadState state)
         {
-            // 기본 애니메이션 클립 이름 (하위 클래스에서 오버라이드)
-            return new string[] { "Idle", "Move", "Attack", "Death" };
-        }
-
-        /// <summary>
-        /// Addressable에서 애니메이션 클립들을 로드합니다.
-        /// </summary>
-        protected virtual async UniTask<AnimationClip[]> LoadAnimationClipsAsync(string[] clipNames, CancellationToken cancellationToken)
-        {
-            List<AnimationClip> clips = new List<AnimationClip>();
-            string characterType = "Knight";
-
-            for (int i = 0; i < clipNames.Length; i++)
+            if (AR.s.Component.TryGetComponent<Component.SpriteAnimationComponent>(_entityId, out var comp))
             {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                string path = $"Animation/{characterType}/{clipNames[i]}";
-                var handle = Addressables.LoadAssetAsync<AnimationClip>(path);
-
-                try
-                {
-                    AnimationClip clip = await handle.ToUniTask(cancellationToken: cancellationToken);
-
-                    if (handle.Status == AsyncOperationStatus.Succeeded && clip != null)
-                    {
-                        clips.Add(clip);
-                    }
-                    else
-                    {
-                        Debug.LogWarning($"[{GetType().Name}] Failed to load animation clip: {path}");
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    Addressables.Release(handle);
-                    throw;
-                }
+                comp.LoadState = state;
+                AR.s.Component.SetComponent(_entityId, comp);
             }
-
-            return clips.ToArray();
-        }
-
-        /// <summary>
-        /// 애니메이션 에셋 경로를 반환합니다. 하위 클래스에서 오버라이드합니다.
-        /// </summary>
-        protected virtual string GetAnimationPath()
-        {
-            return "Default";
         }
 
         /// <summary>
         /// 로드된 애니메이션 클립들을 해제합니다.
         /// </summary>
-        protected void ReleaseAnimationClips(AnimationClip[] clips)
+        protected void ReleaseAnimationClips(List<AnimationClip> clips)
         {
             if (clips == null)
             {
                 return;
             }
 
-            for (int i = 0; i < clips.Length; i++)
+            for (int i = 0; i < clips.Count; i++)
             {
                 if (clips[i] != null)
                 {
@@ -330,19 +326,6 @@ namespace ARPG.Creature
         protected virtual void Dead()
         {
             _condition = CharacterConditions.Dead;
-        }
-
-        protected IEnumerator LoopUpdate()
-        {
-            while (true)
-            {
-                yield return _waitForSeconds;
-
-                if (_initialized == false) // 초기화가 안된 상태라면 대기
-                    continue;
-
-                // TODO: StatComponent 기반 HP/MP 자연 회복 로직 구현 필요
-            }
         }
 
         private void OnDamage(Message.DamageMessage msg)

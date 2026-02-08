@@ -29,7 +29,7 @@ namespace ARPG.Editor
         {
             _tableDic = new();
 
-            await DownloadTable<CreatureTable>("0&range=A:D", 1, SaveType.String);
+            await DownloadTable<CreatureTable>("0&range=A:E", 1, SaveType.String);
 
             await DownloadTable<AiTable>("947794841&range=A:F", 1, SaveType.String);
 
@@ -54,6 +54,8 @@ namespace ARPG.Editor
             await DownloadTable<SkillTable>("92727160&range=A:U", 1, SaveType.String);
 
             await DownloadTable<BuffTable>("127577579&range=A:J", 1, SaveType.String);
+
+            await DownloadTable<AnimationTable>("747631090&range=A:E", 1, SaveType.String);
             
             //await DownloadTable<BuffEffectTable>("2104311648&range=A:K", 1, SaveType.String);
 
@@ -169,6 +171,15 @@ namespace ARPG.Editor
                 {
                     ParseBuffEffectTable(buffEffectTable, values);
                 }
+                else if (table is AnimationTable animationTable)
+                {
+                    ParseAnimationTable(animationTable, values);
+                }
+                else
+                {
+                    Debug.LogError($"[DownloadTables] CreateTable - Unknown table type: {typeof(T)}");
+                    return false;
+                }
             }
             catch (Exception ex)
             {
@@ -182,15 +193,16 @@ namespace ARPG.Editor
 
         private static void ParseCreatureTable(CreatureTable table, string[] values)
         {
-            if (values.Length < 3)
+            if (values.Length < 5)
             {
-                Debug.LogError($"[ParseCreatureTable] Invalid data length. Expected at least 3, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseCreatureTable] Invalid data length. Expected at least 5, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
             table.Name = values[1];
             table.StatId = int.Parse(values[2]);
             table.PrefabName = values[3];
+            table.AnimationId = int.Parse(values[4]);
         }
 
         private static void ParseNpcTable(NpcTable table, string[] values)
@@ -469,6 +481,21 @@ namespace ARPG.Editor
             table.IsDispellable = values[7].Trim().ToUpper() == "TRUE";
             table.EffectType = (GlobalEnum.BuffEffectType)Enum.Parse(typeof(GlobalEnum.BuffEffectType), values[8]);
             table.EffectValue = int.Parse(values[9]);
+        }
+
+        private static void ParseAnimationTable(AnimationTable table, string[] values)
+        {
+            // 전체 범위: A:E = 5개 컬럼
+            if (values.Length < 5)
+            {
+                Debug.LogError($"[ParseAnimationTable] Invalid data length. Expected at least 5, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            table.Name = values[1];
+            table.SpriteLibraryPath = values[2];
+            table.AnimClipPath = values[3];
+            table.ClipNames = values[4];
         }
 
         private static void ParseBuffEffectTable(BuffEffectTable table, string[] values)

@@ -1,5 +1,4 @@
 #nullable enable
-using ARPG.Tables;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.U2D.Animation;
@@ -9,7 +8,6 @@ namespace ARPG.Creature
 {
     public class CharacterInfo : MonoBehaviour
     {
-        [SerializeField] protected SpriteLibraryAsset _spriteLibraryAsset;
         [SerializeField] protected Sprite _characterSprite;
         [SerializeField] protected SpriteRenderer _sr;
         [SerializeField] protected Animator _animator;
@@ -18,7 +16,6 @@ namespace ARPG.Creature
         [SerializeField] protected Transform _buffImageRoot;
         [SerializeField] protected BoxCollider2D _boxCollider;
 
-        public SpriteLibraryAsset SpriteLibraryAsset => _spriteLibraryAsset;
         public Sprite CharacterSprite => _characterSprite;
         public SpriteRenderer Sr => _sr;
         public Animator Animator => _animator;
@@ -30,10 +27,14 @@ namespace ARPG.Creature
 
         public BoxCollider2D BoxCollider => _boxCollider;
 
+        public SpriteLibrary? SpriteLibrary { get; private set; }
+
         private float _attackTime = -1;
 
         public void Initialize(CharacterBase inCharacter)
         {
+            SpriteLibrary = _sr.GetComponent<SpriteLibrary>();
+
             AnimationClip? clip = GetAnimationClip("Attack");
             if (clip != null)
             {

@@ -46,6 +46,10 @@ namespace ARPG.Component
 
             // 월드 아이템 컴포넌트
             { typeof(WorldItemComponent), 500 },              // 월드에 떨어진 아이템
+
+            // 애니메이션 컴포넌트
+            { typeof(SpriteAnimationComponent), 300 },        // 스프라이트 애니메이션 설정 및 로딩 상태
+            { typeof(AnimatorComponent), 300 },               // 애니메이션 재생 요청
         };
 
         /// <summary>

@@ -28,7 +28,10 @@ namespace ARPG.Tables
 
         [JsonProperty("PrefabName")] public string PrefabName = string.Empty;
 
+        [JsonProperty("AnimationId")] public int AnimationId;
+
         [JsonIgnore] public StatTable Stat = null!;
+        [JsonIgnore] public AnimationTable? AnimationData;
 
         public override void LoadLate()
         {
@@ -40,6 +43,12 @@ namespace ARPG.Tables
             else
             {
                 throw new Exception($"CreatureTable LoadLate - StatTable not found for Id: {StatId}");
+            }
+
+            AnimationTable? animTable = AR.s.Data?.GetAnimation(AnimationId);
+            if (animTable != null)
+            {
+                AnimationData = animTable;
             }
         }
     }
@@ -335,6 +344,25 @@ namespace ARPG.Tables
     {
         [JsonProperty("Type")] public GE.BuffEffectType Type;
         [JsonProperty("Value")] public ushort Value;
+    }
+
+    [Serializable]
+    public class AnimationTable : TableBase
+    {
+        [JsonProperty("Name")] public string Name = string.Empty;
+        [JsonProperty("SpriteLibraryPath")] public string SpriteLibraryPath = string.Empty;
+        [JsonProperty("AnimClipPath")] public string AnimClipPath = string.Empty;
+        [JsonProperty("ClipNames")] public string ClipNames = string.Empty;
+
+        [JsonIgnore] public string[] ClipNameArray = Array.Empty<string>();
+
+        public override void LoadLate()
+        {
+            if (string.IsNullOrEmpty(ClipNames) == false)
+            {
+                ClipNameArray = ClipNames.Split('|');
+            }
+        }
     }
 
 }

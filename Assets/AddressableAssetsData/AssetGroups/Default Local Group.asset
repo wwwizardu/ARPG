@@ -31,7 +31,12 @@ MonoBehaviour:
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3fd2370bda823e44d8dde2495cc539d2
-    m_Address: Animation/Knight/Move
+    m_Address: Humanoid/Move
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 42e502c96dce7174dbb0c8a6fc8f8bc1
+    m_Address: Animation/Knight
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -41,7 +46,7 @@ MonoBehaviour:
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 48038c3b46ff8ed45bb7a919cf979cbc
-    m_Address: Animation/Knight/Attack
+    m_Address: Humanoid/Attack
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -66,7 +71,7 @@ MonoBehaviour:
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b24e7b3ae6aecb941ae6c2b9b8b29a7f
-    m_Address: Animation/Knight/Death
+    m_Address: Humanoid/Dead
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -86,7 +91,7 @@ MonoBehaviour:
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: def967a83b43db54785a8aff08a0b520
-    m_Address: Animation/Knight/Idle
+    m_Address: Humanoid/Idle
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
