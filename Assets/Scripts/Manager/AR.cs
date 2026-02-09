@@ -111,9 +111,8 @@ namespace ARPG
             if (_currentScene.CurrentSceneType == Base.SceneBase.SceneType.Game)
             {
                 float deltaTime = Time.deltaTime;
-                
-                _mapManager.UpdateMapManager(deltaTime);
-                _monsterManager.UpdateMpnsterManager(deltaTime);                
+
+                _monsterManager.UpdateMpnsterManager(deltaTime);
             }
         }
     }

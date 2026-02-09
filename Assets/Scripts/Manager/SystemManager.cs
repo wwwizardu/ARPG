@@ -46,6 +46,10 @@ namespace ARPG.Systems
             System_MapChunkLoader mapChunkLoaderSystem = new();
             RegisterSystems(mapChunkLoaderSystem);
 
+            // Priority 130: Monster Respawn System (FixedUpdate) - 몬스터 리스폰 (5초 간격)
+            System_MonsterRespawn monsterRespawnSystem = new();
+            RegisterSystems(monsterRespawnSystem);
+
             // Priority 200: Skill System (FixedUpdate) - 스킬 로직
             System_Skill skillSystem = new();
             RegisterSystems(skillSystem);

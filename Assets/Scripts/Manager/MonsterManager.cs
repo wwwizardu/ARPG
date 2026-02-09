@@ -44,8 +44,9 @@ namespace ARPG.Monster
             StopAllCoroutines();
 
             // 모든 몬스터 제거
-            foreach (var monster in _monsters)
+            for (int i = 0; i < _monsters.Count; i++)
             {
+                var monster = _monsters[i];
                 if (monster != null && monster.gameObject != null)
                 {
                     DestroyMonster(monster);
@@ -234,8 +235,9 @@ namespace ARPG.Monster
 
             Vector3 playerPosition = player.transform.position;
 
-            foreach (int monsterId in chunkData.spawnedMonsterIds)
+            for (int i = 0; i < chunkData.spawnedMonsterIds.Count; i++)
             {
+                int monsterId = chunkData.spawnedMonsterIds[i];
                 if (_monsterInstanceById.TryGetValue(monsterId, out Creature.Monster monster))
                 {
                     if (monster != null && monster.gameObject != null)
@@ -254,8 +256,9 @@ namespace ARPG.Monster
             ChunkMonsterData chunkData = _chunkMonsters[chunkCoord];
             chunkData.lastActiveTime = Time.time;
 
-            foreach (int monsterId in chunkData.spawnedMonsterIds)
+            for (int i = 0; i < chunkData.spawnedMonsterIds.Count; i++)
             {
+                int monsterId = chunkData.spawnedMonsterIds[i];
                 if (_monsterInstanceById.TryGetValue(monsterId, out Creature.Monster monster))
                 {
                     if (monster != null && monster.gameObject != null)
@@ -279,8 +282,9 @@ namespace ARPG.Monster
             ChunkMonsterData chunkData = _chunkMonsters[chunkCoord];
             int aliveCount = 0;
 
-            foreach (int monsterId in chunkData.spawnedMonsterIds)
+            for (int i = 0; i < chunkData.spawnedMonsterIds.Count; i++)
             {
+                int monsterId = chunkData.spawnedMonsterIds[i];
                 if (_monsterInstanceById.TryGetValue(monsterId, out Creature.Monster monster))
                 {
                     if (monster != null && monster.State != CharacterConditions.Dead)
@@ -304,22 +308,26 @@ namespace ARPG.Monster
         public List<Vector2Int> GetActiveChunksWithMonsters()
         {
             List<Vector2Int> activeChunksWithMonsters = new List<Vector2Int>();
-            
-            // MapManager의 실제 활성 청크 중에서 몬스터가 스폰된 청크만 반환
-            if (AR.s.Map != null)
+            GetActiveChunksWithMonstersNonAlloc(activeChunksWithMonsters);
+            return activeChunksWithMonsters;
+        }
+
+        public void GetActiveChunksWithMonstersNonAlloc(List<Vector2Int> result)
+        {
+            result.Clear();
+
+            if (AR.s.Map == null)
+                return;
+
+            // Dictionary.KeyCollection의 foreach는 struct enumerator를 사용하므로 GC 할당 없음
+            var mapActiveChunkCoords = AR.s.Map.GetActiveChunkCoords();
+            foreach (var chunkCoord in mapActiveChunkCoords)
             {
-                var mapActiveChunkCoords = AR.s.Map.GetActiveChunkCoords();
-                foreach (var chunkCoord in mapActiveChunkCoords)
+                if (_chunkMonsters.ContainsKey(chunkCoord) && _chunkMonsters[chunkCoord].hasSpawned)
                 {
-                    // 해당 청크에 몬스터가 스폰된 적이 있는지 확인
-                    if (_chunkMonsters.ContainsKey(chunkCoord) && _chunkMonsters[chunkCoord].hasSpawned)
-                    {
-                        activeChunksWithMonsters.Add(chunkCoord);
-                    }
+                    result.Add(chunkCoord);
                 }
             }
-            
-            return activeChunksWithMonsters;
         }
 
         public int RespawnMonsterInChunk(GameObject monsterPrefab, Vector2Int chunkCoord, Vector2Int spawnPos)
@@ -387,18 +395,22 @@ namespace ARPG.Monster
             }
         }
 
+        private readonly List<Vector2Int> _expiredChunksCache = new();
+
         private void CleanupExpiredChunkMonsters()
         {
-            List<Vector2Int> expiredChunks = new List<Vector2Int>();
+            _expiredChunksCache.Clear();
 
+            // Dictionary의 foreach는 struct enumerator를 사용하므로 GC 할당 없음
             foreach (var kvp in _chunkMonsters)
             {
                 ChunkMonsterData chunkData = kvp.Value;
                 if (Time.time - chunkData.lastActiveTime > _chunkMonsterLifetime)
                 {
                     // 만료된 청크의 몬스터들 정리
-                    foreach (int monsterId in chunkData.spawnedMonsterIds)
+                    for (int i = 0; i < chunkData.spawnedMonsterIds.Count; i++)
                     {
+                        int monsterId = chunkData.spawnedMonsterIds[i];
                         if (_monsterInstanceById.TryGetValue(monsterId, out Creature.Monster monster))
                         {
                             if (monster != null)
@@ -408,18 +420,17 @@ namespace ARPG.Monster
                             }
                             else
                             {
-                                // monster가 null이면 딕셔너리에서만 제거
                                 _monsterInstanceById.Remove(monsterId);
                             }
                         }
                     }
-                    expiredChunks.Add(kvp.Key);
+                    _expiredChunksCache.Add(kvp.Key);
                 }
             }
 
-            foreach (Vector2Int chunkCoord in expiredChunks)
+            for (int i = 0; i < _expiredChunksCache.Count; i++)
             {
-                _chunkMonsters.Remove(chunkCoord);
+                _chunkMonsters.Remove(_expiredChunksCache[i]);
             }
         }
     }

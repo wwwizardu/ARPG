@@ -35,13 +35,10 @@ namespace ARPG.Map
         private int _loadRadius = 2;
         private const int POOL_SIZE = 20;
 
-        private bool _createMapCompleted = false;
-        
         public void Initialize()
         {
             _activeChunks = new Dictionary<Vector2Int, MapChunkData>();
             _chunkPool = new Stack<MapChunkData>();
-            _createMapCompleted = false;
 
             InitializeChunkPool();
         }
@@ -70,18 +67,8 @@ namespace ARPG.Map
             UpdateChunksAroundPlayer(playerPosition);
 
             OnResetSpawner();
-
-            _createMapCompleted = true;
         }
 
-        public void UpdateMapManager(float inDeltaTime)
-        {
-            if(_createMapCompleted == false)
-                return;
-
-            UpdateMonsterSpawner(inDeltaTime);
-        }
-        
         public void UpdateChunksAroundPlayer(Vector3 playerPosition)
         {
             Vector2Int playerChunk = WorldPositionToChunk(playerPosition);
@@ -132,6 +119,17 @@ namespace ARPG.Map
         public Dictionary<Vector2Int, MapChunkData>.KeyCollection GetActiveChunkCoords()
         {
             return _activeChunks.Keys;
+        }
+
+        public bool TryGetChunkSpawnPositions(Vector2Int chunkCoord, out List<Vector2Int> spawnPositions)
+        {
+            if (_activeChunks.ContainsKey(chunkCoord))
+            {
+                spawnPositions = _activeChunks[chunkCoord].monsterSpawnPositions;
+                return true;
+            }
+            spawnPositions = null;
+            return false;
         }
 
         public bool IsWalkable(Vector3 worldPosition)
