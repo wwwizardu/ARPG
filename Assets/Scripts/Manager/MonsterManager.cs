@@ -1,5 +1,4 @@
 #nullable enable
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using ARPG.Component;
@@ -19,7 +18,6 @@ namespace ARPG.Monster
         
         private Transform? _monsterParent;
 
-        private WaitForSeconds _cleanupInterval = new WaitForSeconds(1f);
 
         [Header("Monster Spawn")]
         [SerializeField] private List<GameObject> _monsterPrefabs = new();
@@ -33,8 +31,6 @@ namespace ARPG.Monster
         private float _activationDistanceSqr;
         private float _deactivationDistanceSqr;
         
-        private bool _initialized = false;
-
         public List<GameObject> MonsterPrefabs => _monsterPrefabs;
         public float MonsterSpawnRate => _monsterSpawnRate;
 
@@ -42,15 +38,10 @@ namespace ARPG.Monster
         {
             _activationDistanceSqr = _activationDistance * _activationDistance;
             _deactivationDistanceSqr = _deactivationDistance * _deactivationDistance;
-            
-            StartCoroutine(CleanupRoutine());
-            _initialized = true;
         }
 
         public void Reset()
         {
-            StopAllCoroutines();
-
             // 모든 몬스터 제거
             for (int i = 0; i < _monsters.Count; i++)
             {
@@ -70,11 +61,6 @@ namespace ARPG.Monster
             // ID 카운터 리셋
             _nextMonsterId = 1;
 
-            // 코루틴 다시 시작 (이미 초기화된 상태라면)
-            if (_initialized)
-            {
-                StartCoroutine(CleanupRoutine());
-            }
         }
 
         public void SetMorsterRoot(Transform inMonsterRoot)
@@ -111,27 +97,6 @@ namespace ARPG.Monster
             }
 
             _monsters.Remove(monster);
-        }
-
-        public void CleanupDestroyedMonsters()
-        {
-            for (int i = _monsters.Count - 1; i >= 0; i--)
-            {
-                if (_monsters[i] == null)
-                {
-                    _monsters.RemoveAt(i);
-                }
-            }
-        }
-
-        private IEnumerator CleanupRoutine()
-        {
-            while (_initialized)
-            {
-                yield return _cleanupInterval;
-                CleanupDestroyedMonsters();
-                CleanupExpiredChunkMonsters();
-            }
         }
 
         public int SpawnMonsterAtPosition(GameObject monsterPrefab, Vector3 position, Vector2Int chunkCoord, bool isOriginalSpawn = true)
@@ -330,7 +295,7 @@ namespace ARPG.Monster
 
         private readonly List<Vector2Int> _expiredChunksCache = new();
 
-        private void CleanupExpiredChunkMonsters()
+        public void CleanupExpiredChunkMonsters()
         {
             _expiredChunksCache.Clear();
 

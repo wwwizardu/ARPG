@@ -11,10 +11,12 @@ namespace ARPG.Systems
         private readonly List<Vector2Int> _activeChunksCache = new();
         private readonly List<Vector2Int> _availableSpawnCache = new();
         private float _respawnTimer;
+        private float _cleanupTimer;
 
         public void OnCreate()
         {
             _respawnTimer = 0f;
+            _cleanupTimer = 0f;
             Debug.Log("System_MonsterSpawn Created");
         }
 
@@ -23,6 +25,7 @@ namespace ARPG.Systems
             _activeChunksCache.Clear();
             _availableSpawnCache.Clear();
             _respawnTimer = 0f;
+            _cleanupTimer = 0f;
             Debug.Log("System_MonsterSpawn Reset called");
         }
 
@@ -31,7 +34,7 @@ namespace ARPG.Systems
             if (AR.s.Monster == null || AR.s.Map == null)
                 return;
 
-            // 1) 최초 스폰: 활성 청크 중 아직 스폰 안 된 청크 처리
+            // 1) 최초 스폰: 활성 청크 중 아직 스폰 안 된 청크 처리 (0.5초마다)
             CheckInitialSpawns();
 
             // 2) 리스폰: 5초마다 죽은 몬스터 보충
@@ -40,6 +43,14 @@ namespace ARPG.Systems
             {
                 _respawnTimer = 0f;
                 CheckRespawns();
+            }
+
+            // 3) 만료 청크 정리: 60초마다 오래된 청크 몬스터 제거
+            _cleanupTimer += 0.5f;
+            if (_cleanupTimer >= 60f)
+            {
+                _cleanupTimer = 0f;
+                AR.s.Monster.CleanupExpiredChunkMonsters();
             }
         }
 
