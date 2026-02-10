@@ -29,7 +29,7 @@ namespace ARPG.Systems
             Debug.Log("System_StatCalculation Reset called");
         }
 
-        public readonly void OnUpdate(float inDeltaTime)
+        public void OnUpdate(float inDeltaTime)
         {
             // StatDirtyTag가 있는 엔티티만 처리
             SparseSet<StatDirtyTag> dirtyPool = AR.s.Component.GetComponentPool<StatDirtyTag>();
@@ -124,7 +124,7 @@ namespace ARPG.Systems
         /// <summary>
         /// 개별 modifier를 스탯에 적용
         /// </summary>
-        private readonly void ApplyModifier(ref StatComponent stat, StatModifier modifier)
+        private void ApplyModifier(ref StatComponent stat, StatModifier modifier)
         {
             switch (modifier.StatType)
             {

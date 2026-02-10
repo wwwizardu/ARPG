@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace ARPG.Systems
 {
-    public struct System_AI_Behavior : IFixedUpdateSystem
+    public class System_AI_Behavior : IFixedUpdateSystem
     {
         public int Priority => 50;  // Perception(30) 이후, Movement(100) 이전
         public float UpdateInterval => 0f;

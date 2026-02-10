@@ -3,17 +3,14 @@ using UnityEngine;
 
 namespace ARPG.Systems
 {
-    public struct System_MonsterSpawn : IFixedUpdateSystem
+    public class System_MonsterSpawn : IFixedUpdateSystem
     {
         public int Priority => 130;
         public float UpdateInterval => 0.5f;
 
-        // static readonly: System은 struct이므로 instance 필드를 사용하면
-        // OnCreate() 호출 시 ValueType.GetHashCode()가 변경되어
-        // SystemManager의 Dictionary에서 KeyNotFoundException이 발생한다.
-        private static readonly List<Vector2Int> _activeChunksCache = new();
-        private static readonly List<Vector2Int> _availableSpawnCache = new();
-        private static float _respawnTimer;
+        private readonly List<Vector2Int> _activeChunksCache = new();
+        private readonly List<Vector2Int> _availableSpawnCache = new();
+        private float _respawnTimer;
 
         public void OnCreate()
         {
@@ -46,7 +43,7 @@ namespace ARPG.Systems
             }
         }
 
-        private static void CheckInitialSpawns()
+        private void CheckInitialSpawns()
         {
             var activeChunkCoords = AR.s.Map.GetActiveChunkCoords();
             foreach (var chunkCoord in activeChunkCoords)
@@ -58,7 +55,7 @@ namespace ARPG.Systems
             }
         }
 
-        private static void CheckRespawns()
+        private void CheckRespawns()
         {
             List<GameObject> monsterPrefabs = AR.s.Monster.MonsterPrefabs;
             if (monsterPrefabs == null || monsterPrefabs.Count == 0)

@@ -15,7 +15,7 @@ namespace ARPG.Systems
     /// 3. DeathMessage 전송
     /// 4. HpDirtyTag 제거
     /// </summary>
-    public struct System_HpCheck : IFixedUpdateSystem
+    public class System_HpCheck : IFixedUpdateSystem
     {
         /// <summary>
         /// Priority 250: 스킬 시스템(200) 이후, 데미지 처리 이후 실행
@@ -32,7 +32,7 @@ namespace ARPG.Systems
             Debug.Log("[System_HpCheck] Reset");
         }
 
-        public readonly void OnFixedUpdate(float inFixedDeltaTime)
+        public void OnFixedUpdate(float inFixedDeltaTime)
         {
             ComponentManager cm = AR.s.Component;
             SparseSet<HpDirtyTag> dirtyPool = cm.GetComponentPool<HpDirtyTag>();
@@ -79,7 +79,7 @@ namespace ARPG.Systems
         /// <summary>
         /// 해당 엔티티가 소유한 모든 스킬을 중지
         /// </summary>
-        private readonly void StopOwnerSkills(ComponentManager cm, int ownerEntityId)
+        private void StopOwnerSkills(ComponentManager cm, int ownerEntityId)
         {
             for (int slotIndex = 0; slotIndex < SkillEntityIdHelper.MAX_SKILL_SLOTS; slotIndex++)
             {

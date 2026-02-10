@@ -10,7 +10,7 @@ namespace ARPG.Systems
     /// 플레이어와의 거리를 체크하여 히스테리시스 방식으로 GameObject를 활성화/비활성화
     /// 몬스터, NPC, 아이템 등 모든 엔티티 타입에서 사용 가능
     /// </summary>
-    public struct System_EntityActivation : IFixedUpdateSystem
+    public class System_EntityActivation : IFixedUpdateSystem
     {
         /// <summary>
         /// Priority 500: 게임플레이 로직 이후, 렌더링 이전
@@ -32,7 +32,7 @@ namespace ARPG.Systems
             Debug.Log("[System_EntityActivation] Reset");
         }
 
-        public readonly void OnFixedUpdate(float inFixedDeltaTime)
+        public void OnFixedUpdate(float inFixedDeltaTime)
         {
             Creature.ArpgPlayer player = AR.s.MyPlayer;
             if (player == null)

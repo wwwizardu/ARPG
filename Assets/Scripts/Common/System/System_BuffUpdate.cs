@@ -27,7 +27,7 @@ namespace ARPG.Systems
             Debug.Log("[System_BuffUpdate] Reset called");
         }
 
-        public readonly void OnUpdate(float inDeltaTime)
+        public void OnUpdate(float inDeltaTime)
         {
             // BuffInstance 컴포넌트 풀 가져오기
             SparseSet<BuffInstance> buffPool = AR.s.Component.GetComponentPool<BuffInstance>();
@@ -66,7 +66,7 @@ namespace ARPG.Systems
         /// <summary>
         /// 버프 틱 처리 - 일정 간격마다 데미지/힐 적용
         /// </summary>
-        private readonly void ProcessBuffTick(int buffEntityId, ref BuffInstance buff, float deltaTime)
+        private void ProcessBuffTick(int buffEntityId, ref BuffInstance buff, float deltaTime)
         {
             // 마지막 틱 이후 경과 시간 계산 (RemainTime이 감소하므로 역방향 계산)
             // LastTickTime은 RemainTime 기준이므로, LastTickTime - RemainTime = 경과 시간
@@ -91,7 +91,7 @@ namespace ARPG.Systems
         /// <summary>
         /// 틱 데미지 적용 - 스택 수에 따라 데미지 증가
         /// </summary>
-        private readonly void ApplyTickDamage(int buffEntityId, ref BuffInstance buff)
+        private void ApplyTickDamage(int buffEntityId, ref BuffInstance buff)
         {
             // 타겟 엔티티의 StatComponent 가져오기
             if (AR.s.Component.TryGetComponent<StatComponent>(buff.TargetEntityId, out var targetStat) == false)

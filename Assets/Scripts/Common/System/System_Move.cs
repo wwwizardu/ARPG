@@ -21,7 +21,7 @@ namespace ARPG.Systems
         }
 
         // FixedUpdate로 변경: 일정한 시간 간격으로 이동 처리
-        public readonly void OnFixedUpdate(float inFixedDeltaTime)
+        public void OnFixedUpdate(float inFixedDeltaTime)
         {
             if(AR.s.Component.TryGetComponent<StatComponent>(AR.s.Data.Player.PlayerId, out var stat) == false)
                 return;
@@ -68,7 +68,7 @@ namespace ARPG.Systems
 
         }
 
-        private readonly void CheckStateChanges(int entityId, ref VelocityComponent refVelocity,  ref StateComponent refState)
+        private void CheckStateChanges(int entityId, ref VelocityComponent refVelocity,  ref StateComponent refState)
         {
             // 이동 상태 업데이트
             if (refVelocity.Velocity.sqrMagnitude > 0.001f)

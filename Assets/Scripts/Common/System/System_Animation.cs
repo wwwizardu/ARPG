@@ -5,7 +5,7 @@ using System.Collections.Generic;
 namespace ARPG.Systems
 {
     // AnimationSystem: SpriteAnimationComponent 기반으로 애니메이션 상태 결정 및 PlayableAnimator 제어
-    public struct System_Animation : IUpdateSystem
+    public class System_Animation : IUpdateSystem
     {
         public int Priority => 500; // Render 이전, Movement 이후 실행
 
@@ -63,7 +63,7 @@ namespace ARPG.Systems
         }
 
         // PlayableAnimator 가져오기
-        public readonly bool TryGetPlayableAnimator(int entityId, out PlayableAnimator playableAnimator)
+        public bool TryGetPlayableAnimator(int entityId, out PlayableAnimator playableAnimator)
         {
             playableAnimator = null;
 
@@ -76,7 +76,7 @@ namespace ARPG.Systems
         }
 
         // Update: SpriteAnimationComponent 기반으로 애니메이션 상태 결정
-        public readonly void OnUpdate(float inDeltaTime)
+        public void OnUpdate(float inDeltaTime)
         {
             if (_componentManager == null || _entityToPlayableAnimator == null)
             {
@@ -126,7 +126,7 @@ namespace ARPG.Systems
             }
         }
 
-        private readonly void UpdateAnimatorFromState(PlayableAnimator playableAnimator, ref StateComponent state, int entityId)
+        private void UpdateAnimatorFromState(PlayableAnimator playableAnimator, ref StateComponent state, int entityId)
         {
             if (state.Condition != state.ConditionPrev)
             {

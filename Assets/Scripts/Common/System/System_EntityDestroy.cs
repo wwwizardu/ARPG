@@ -16,7 +16,7 @@ namespace ARPG.Systems
     /// 4. EntityIdHelper.DestroyEntity() 호출 (ECS 컴포넌트 정리)
     /// 5. GameObject 파괴
     /// </summary>
-    public struct System_EntityDestroy : ILateUpdateSystem
+    public class System_EntityDestroy : ILateUpdateSystem
     {
         /// <summary>
         /// Priority 950: System_EntityMessage(900) 이후 실행
@@ -34,7 +34,7 @@ namespace ARPG.Systems
             Debug.Log("[System_EntityDestroy] Reset");
         }
 
-        public readonly void OnLateUpdate(float inDeltaTime)
+        public void OnLateUpdate(float inDeltaTime)
         {
             ComponentManager cm = AR.s.Component;
             SparseSet<DestroyTag> pool = cm.GetComponentPool<DestroyTag>();

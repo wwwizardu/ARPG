@@ -5,7 +5,7 @@ using System.Collections.Generic;
 namespace ARPG.Systems
 {
     // RenderSystem: ECS 데이터를 GameObject에 동기화
-    public struct System_Render : IUpdateSystem
+    public class System_Render : IUpdateSystem
     {
         public int Priority => 1000; // 가장 마지막에 실행 (다른 시스템들이 데이터 업데이트 완료 후)
 
@@ -57,7 +57,7 @@ namespace ARPG.Systems
         }
 
         // Update: Velocity를 이용해 Position 계산 후 GameObject 동기화
-        public readonly void OnUpdate(float inDeltaTime)
+        public void OnUpdate(float inDeltaTime)
         {
             if (_componentManager == null || _entityToGameObject == null)
                 return;

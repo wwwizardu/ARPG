@@ -43,7 +43,7 @@ Assets/Scripts/
 **Core Concepts:**
 - **Entity**: Integer ID
 - **Component**: Struct with data only (no logic)
-- **System**: Struct with logic (processes components)
+- **System**: Class with logic (processes components)
 - **SparseSet**: O(1) component storage
 
 ### ComponentManager API
@@ -158,13 +158,13 @@ public struct BadComponent
 
 ## Adding a New System
 
-1. Create system struct implementing `ISystem` interface
+1. Create system class implementing `ISystem` interface
 2. Register in `SystemManager.Initialize()` with priority comment
 3. Update `ComponentManager` pool sizes for new components
 
 ```csharp
 // In System file
-public struct System_MyFeature : IFixedUpdateSystem
+public class System_MyFeature : IFixedUpdateSystem
 {
     public int Priority => 150;
     public float UpdateInterval => 0f;

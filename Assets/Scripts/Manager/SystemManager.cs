@@ -11,10 +11,11 @@ namespace ARPG.Systems
         private readonly List<IFixedUpdateSystem> _fixedUpdateSystems = new();
         private readonly List<ILateUpdateSystem> _lateUpdateSystems = new();
 
-        // 각 시스템의 마지막 업데이트 시간 추적 (UpdateInterval 사용 시)
-        private readonly Dictionary<IUpdateSystem, float> _updateSystemTimers = new();
-        private readonly Dictionary<IFixedUpdateSystem, float> _fixedUpdateSystemTimers = new();
-        private readonly Dictionary<ILateUpdateSystem, float> _lateUpdateSystemTimers = new();
+        // 각 시스템의 UpdateInterval 타이머 (리스트 인덱스로 시스템과 1:1 매칭)
+        // Dictionary 대신 List를 사용하여 struct System의 GetHashCode() 변경에 영향받지 않음
+        private readonly List<float> _updateSystemTimers = new();
+        private readonly List<float> _fixedUpdateSystemTimers = new();
+        private readonly List<float> _lateUpdateSystemTimers = new();
 
         public void Initialize()
         {
@@ -78,16 +79,47 @@ namespace ARPG.Systems
             System_EntityDestroy entityDestroySystem = new();
             RegisterSystems(entityDestroySystem);
 
-            // Priority 값이 작은 순서대로 정렬
+            // Priority 값이 작은 순서대로 정렬 (타이머 리스트도 함께 정렬)
+            SortSystemsByPriority(_updateSystems, _updateSystemTimers);
+            SortSystemsByPriority(_fixedUpdateSystems, _fixedUpdateSystemTimers);
+            SortSystemsByPriority(_lateUpdateSystems, _lateUpdateSystemTimers);
             _systems.Sort((a, b) => a.Priority.CompareTo(b.Priority));
-            _updateSystems.Sort((a, b) => a.Priority.CompareTo(b.Priority));
-            _fixedUpdateSystems.Sort((a, b) => a.Priority.CompareTo(b.Priority));
-            _lateUpdateSystems.Sort((a, b) => a.Priority.CompareTo(b.Priority));
+        }
+
+        /// <summary>
+        /// 시스템 리스트를 Priority 기준으로 정렬하면서 타이머 리스트도 동기화
+        /// </summary>
+        private void SortSystemsByPriority<T>(List<T> systems, List<float> timers) where T : ISystem
+        {
+            // 인덱스 배열을 만들어 정렬 후 타이머도 같은 순서로 재배치
+            int count = systems.Count;
+            int[] indices = new int[count];
+            for (int i = 0; i < count; i++)
+            {
+                indices[i] = i;
+            }
+
+            // Priority 기준으로 인덱스 정렬
+            System.Array.Sort(indices, (a, b) => systems[a].Priority.CompareTo(systems[b].Priority));
+
+            // 정렬된 순서로 새 리스트 구성
+            List<T> sortedSystems = new(count);
+            List<float> sortedTimers = new(count);
+            for (int i = 0; i < count; i++)
+            {
+                sortedSystems.Add(systems[indices[i]]);
+                sortedTimers.Add(timers[indices[i]]);
+            }
+
+            // 원본에 반영
+            systems.Clear();
+            systems.AddRange(sortedSystems);
+            timers.Clear();
+            timers.AddRange(sortedTimers);
         }
 
         public void Reset()
         {
-            // 모든 시스템 정리
             for (int i = 0; i < _systems.Count; i++)
             {
                 _systems[i].OnReset();
@@ -97,6 +129,9 @@ namespace ARPG.Systems
             _updateSystems.Clear();
             _fixedUpdateSystems.Clear();
             _lateUpdateSystems.Clear();
+            _updateSystemTimers.Clear();
+            _fixedUpdateSystemTimers.Clear();
+            _lateUpdateSystemTimers.Clear();
 
             Debug.Log("SystemManager Reset - All systems disposed");
         }
@@ -105,25 +140,25 @@ namespace ARPG.Systems
         {
             _systems.Add(inSystem);
 
-            // Update System 분류
+            // Update System 분류 (시스템 리스트와 타이머 리스트를 같은 인덱스로 관리)
             if (inSystem is IUpdateSystem updateSystem)
             {
                 _updateSystems.Add(updateSystem);
-                _updateSystemTimers[updateSystem] = 0f;
+                _updateSystemTimers.Add(0f);
             }
 
             // FixedUpdate System 분류
             if (inSystem is IFixedUpdateSystem fixedUpdateSystem)
             {
                 _fixedUpdateSystems.Add(fixedUpdateSystem);
-                _fixedUpdateSystemTimers[fixedUpdateSystem] = 0f;
+                _fixedUpdateSystemTimers.Add(0f);
             }
 
             // LateUpdate System 분류
             if (inSystem is ILateUpdateSystem lateUpdateSystem)
             {
                 _lateUpdateSystems.Add(lateUpdateSystem);
-                _lateUpdateSystemTimers[lateUpdateSystem] = 0f;
+                _lateUpdateSystemTimers.Add(0f);
             }
 
             inSystem.OnCreate();
@@ -135,24 +170,36 @@ namespace ARPG.Systems
 
             if (inSystem is IUpdateSystem updateSystem)
             {
-                _updateSystems.Remove(updateSystem);
-                _updateSystemTimers.Remove(updateSystem);
+                int index = _updateSystems.IndexOf(updateSystem);
+                if (index >= 0)
+                {
+                    _updateSystems.RemoveAt(index);
+                    _updateSystemTimers.RemoveAt(index);
+                }
             }
 
             if (inSystem is IFixedUpdateSystem fixedUpdateSystem)
             {
-                _fixedUpdateSystems.Remove(fixedUpdateSystem);
-                _fixedUpdateSystemTimers.Remove(fixedUpdateSystem);
+                int index = _fixedUpdateSystems.IndexOf(fixedUpdateSystem);
+                if (index >= 0)
+                {
+                    _fixedUpdateSystems.RemoveAt(index);
+                    _fixedUpdateSystemTimers.RemoveAt(index);
+                }
             }
 
             if (inSystem is ILateUpdateSystem lateUpdateSystem)
             {
-                _lateUpdateSystems.Remove(lateUpdateSystem);
-                _lateUpdateSystemTimers.Remove(lateUpdateSystem);
+                int index = _lateUpdateSystems.IndexOf(lateUpdateSystem);
+                if (index >= 0)
+                {
+                    _lateUpdateSystems.RemoveAt(index);
+                    _lateUpdateSystemTimers.RemoveAt(index);
+                }
             }
         }
 
-        public T? GetSystem<T>() where T : struct, ISystem
+        public T? GetSystem<T>() where T : class, ISystem
         {
             for (int i = 0; i < _systems.Count; i++)
             {
@@ -165,8 +212,7 @@ namespace ARPG.Systems
             return null;
         }
 
-        // System 존재 확인
-        public bool HasSystem<T>() where T : struct, ISystem
+        public bool HasSystem<T>() where T : class, ISystem
         {
             for (int i = 0; i < _systems.Count; i++)
             {
@@ -179,7 +225,6 @@ namespace ARPG.Systems
             return false;
         }
 
-
         // Update: 매 프레임마다 실행 (입력, 렌더링, UI 등)
         private void Update()
         {
@@ -190,21 +235,18 @@ namespace ARPG.Systems
                 IUpdateSystem system = _updateSystems[i];
                 float updateInterval = system.UpdateInterval;
 
-                // UpdateInterval이 0이면 매 프레임 실행
                 if (updateInterval <= 0f)
                 {
                     system.OnUpdate(deltaTime);
                 }
                 else
                 {
-                    // 타이머 누적
-                    _updateSystemTimers[system] += deltaTime;
+                    _updateSystemTimers[i] += deltaTime;
 
-                    // 간격이 지났으면 실행
-                    if (_updateSystemTimers[system] >= updateInterval)
+                    if (_updateSystemTimers[i] >= updateInterval)
                     {
-                        system.OnUpdate(_updateSystemTimers[system]);
-                        _updateSystemTimers[system] = 0f;
+                        system.OnUpdate(_updateSystemTimers[i]);
+                        _updateSystemTimers[i] = 0f;
                     }
                 }
             }
@@ -220,21 +262,18 @@ namespace ARPG.Systems
                 IFixedUpdateSystem system = _fixedUpdateSystems[i];
                 float updateInterval = system.UpdateInterval;
 
-                // UpdateInterval이 0이면 매 프레임 실행
                 if (updateInterval <= 0f)
                 {
                     system.OnFixedUpdate(fixedDeltaTime);
                 }
                 else
                 {
-                    // 타이머 누적
-                    _fixedUpdateSystemTimers[system] += fixedDeltaTime;
+                    _fixedUpdateSystemTimers[i] += fixedDeltaTime;
 
-                    // 간격이 지났으면 실행
-                    if (_fixedUpdateSystemTimers[system] >= updateInterval)
+                    if (_fixedUpdateSystemTimers[i] >= updateInterval)
                     {
-                        system.OnFixedUpdate(_fixedUpdateSystemTimers[system]);
-                        _fixedUpdateSystemTimers[system] = 0f;
+                        system.OnFixedUpdate(_fixedUpdateSystemTimers[i]);
+                        _fixedUpdateSystemTimers[i] = 0f;
                     }
                 }
             }
@@ -250,26 +289,21 @@ namespace ARPG.Systems
                 ILateUpdateSystem system = _lateUpdateSystems[i];
                 float updateInterval = system.UpdateInterval;
 
-                // UpdateInterval이 0이면 매 프레임 실행
                 if (updateInterval <= 0f)
                 {
                     system.OnLateUpdate(deltaTime);
                 }
                 else
                 {
-                    // 타이머 누적
-                    _lateUpdateSystemTimers[system] += deltaTime;
+                    _lateUpdateSystemTimers[i] += deltaTime;
 
-                    // 간격이 지났으면 실행
-                    if (_lateUpdateSystemTimers[system] >= updateInterval)
+                    if (_lateUpdateSystemTimers[i] >= updateInterval)
                     {
-                        system.OnLateUpdate(_lateUpdateSystemTimers[system]);
-                        _lateUpdateSystemTimers[system] = 0f;
+                        system.OnLateUpdate(_lateUpdateSystemTimers[i]);
+                        _lateUpdateSystemTimers[i] = 0f;
                     }
                 }
             }
         }
     }
 }
-
-

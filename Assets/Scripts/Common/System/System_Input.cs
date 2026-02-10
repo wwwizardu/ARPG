@@ -7,7 +7,7 @@ using UnityEngine;
 namespace ARPG.Systems
 {
     // InputSystem은 매 프레임마다 실행 (즉각적인 입력 반응)
-    public struct System_Input : IUpdateSystem
+    public class System_Input : IUpdateSystem
     {
         public int Priority => 0; // 가장 먼저 실행 (다른 시스템들이 입력을 사용할 수 있도록)
 

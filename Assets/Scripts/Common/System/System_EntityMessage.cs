@@ -7,7 +7,7 @@ namespace ARPG.Systems
     /// 엔티티 메시지 처리 시스템
     /// LateUpdate에서 큐에 쌓인 메시지를 일괄 처리
     /// </summary>
-    public struct System_EntityMessage : ILateUpdateSystem
+    public class System_EntityMessage : ILateUpdateSystem
     {
         /// <summary>
         /// Priority 900: 다른 시스템 이후 실행

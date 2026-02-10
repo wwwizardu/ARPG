@@ -99,10 +99,9 @@ namespace ARPG.Creature
 
             // RenderSystem에 GameObject 등록
             var renderSystem = AR.s.System.GetSystem<Systems.System_Render>();
-            if (renderSystem.HasValue)
+            if (renderSystem != null)
             {
-                var system = renderSystem.Value;
-                system.RegisterGameObject(_entityId, gameObject);
+                renderSystem.RegisterGameObject(_entityId, gameObject);
                 Debug.Log($"GameObject registered to RenderSystem for Entity {_entityId}");
             }
 
@@ -114,10 +113,9 @@ namespace ARPG.Creature
             }
 
             var animSystem = AR.s.System.GetSystem<Systems.System_Animation>();
-            if (animSystem.HasValue)
+            if (animSystem != null)
             {
-                var system = animSystem.Value;
-                system.RegisterPlayableAnimator(_entityId, _playableAnimator);
+                animSystem.RegisterPlayableAnimator(_entityId, _playableAnimator);
                 Debug.Log($"PlayableAnimator registered to AnimationSystem for Entity {_entityId}");
             }
 

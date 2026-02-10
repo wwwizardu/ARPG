@@ -32,7 +32,7 @@ namespace ARPG.Systems
             Debug.Log("[System_AI_Perception] Reset called");
         }
 
-        public readonly void OnFixedUpdate(float inFixedDeltaTime)
+        public void OnFixedUpdate(float inFixedDeltaTime)
         {
             // AIPerceptionComponent 풀 가져오기
             SparseSet<AIPerceptionComponent> perceptionPool = AR.s.Component.GetComponentPool<AIPerceptionComponent>();

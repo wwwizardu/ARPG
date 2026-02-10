@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace ARPG.Systems
 {
-    public struct System_MapChunkLoader : IFixedUpdateSystem
+    public class System_MapChunkLoader : IFixedUpdateSystem
     {
         public int Priority => 120;
         public float UpdateInterval => 0.2f;
@@ -18,7 +18,7 @@ namespace ARPG.Systems
             Debug.Log("System_MapChunkLoader Reset called");
         }
 
-        public readonly void OnFixedUpdate(float inFixedDeltaTime)
+        public void OnFixedUpdate(float inFixedDeltaTime)
         {
             if (AR.s.Map == null)
                 return;
