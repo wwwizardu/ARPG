@@ -21,6 +21,11 @@ namespace ARPG.Monster
 
         private WaitForSeconds _cleanupInterval = new WaitForSeconds(1f);
 
+        [Header("Monster Spawn")]
+        [SerializeField] private List<GameObject> _monsterPrefabs = new();
+        [SerializeField] private float _monsterSpawnRate = 0.1f;
+
+        [Header("Monster Lifecycle")]
         [SerializeField] private float _chunkMonsterLifetime = 300f; // 5분
         [SerializeField] private float _activationDistance = 25f; // 몬스터 활성화 거리
         [SerializeField] private float _deactivationDistance = 30f; // 몬스터 비활성화 거리 (하이스테리시스)
@@ -29,6 +34,9 @@ namespace ARPG.Monster
         private float _deactivationDistanceSqr;
         
         private bool _initialized = false;
+
+        public List<GameObject> MonsterPrefabs => _monsterPrefabs;
+        public float MonsterSpawnRate => _monsterSpawnRate;
 
         public void Initialize()
         {
@@ -305,13 +313,6 @@ namespace ARPG.Monster
             return _chunkMonsters[chunkCoord].originalSpawnCount;
         }
 
-        public List<Vector2Int> GetActiveChunksWithMonsters()
-        {
-            List<Vector2Int> activeChunksWithMonsters = new List<Vector2Int>();
-            GetActiveChunksWithMonstersNonAlloc(activeChunksWithMonsters);
-            return activeChunksWithMonsters;
-        }
-
         public void GetActiveChunksWithMonstersNonAlloc(List<Vector2Int> result)
         {
             result.Clear();
@@ -326,6 +327,36 @@ namespace ARPG.Monster
                 if (_chunkMonsters.ContainsKey(chunkCoord) && _chunkMonsters[chunkCoord].hasSpawned)
                 {
                     result.Add(chunkCoord);
+                }
+            }
+        }
+
+        public void SpawnInitialMonstersInChunk(Vector2Int chunkCoord)
+        {
+            if (_monsterPrefabs.Count == 0)
+                return;
+
+            if (HasChunkSpawned(chunkCoord))
+                return;
+
+            if (AR.s.Map == null)
+                return;
+
+            if (AR.s.Map.TryGetChunkSpawnPositions(chunkCoord, out var spawnPositions) == false)
+                return;
+
+            for (int i = 0; i < spawnPositions.Count; i++)
+            {
+                Vector2Int spawnPos = spawnPositions[i];
+                if (Random.value < _monsterSpawnRate)
+                {
+                    GameObject randomPrefab = _monsterPrefabs[Random.Range(0, _monsterPrefabs.Count)];
+                    Vector3 worldPos = new Vector3(
+                        chunkCoord.x * AR.s.Map.chunkSize + spawnPos.x,
+                        chunkCoord.y * AR.s.Map.chunkSize + spawnPos.y,
+                        -0.05f
+                    );
+                    SpawnMonsterAtPosition(randomPrefab, worldPos, chunkCoord);
                 }
             }
         }

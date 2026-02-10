@@ -1,17 +1,9 @@
-using ARPG.Monster;
 using UnityEngine;
-using System.Collections.Generic;
 
 namespace ARPG.Map
 {
     public partial class MapManager : MonoBehaviour
     {
-        [Header("Monster Prefabs")]
-        [SerializeField] private List<GameObject> _monsterPrefabs = new List<GameObject>();
-
-        public List<GameObject> MonsterPrefabs => _monsterPrefabs;
-        public float MonsterSpawnRate => _monsterSpawnRate;
-
         private void OnResetSpawner()
         {
         }
@@ -21,13 +13,11 @@ namespace ARPG.Map
             if (AR.s.Monster == null)
                 return;
 
+            // 이미 스폰된 청크는 기존 몬스터 활성화만 수행
+            // 최초 스폰은 System_MonsterSpawn이 담당
             if (AR.s.Monster.HasChunkSpawned(chunkCoord))
             {
                 AR.s.Monster.ActivateChunkMonsters(chunkCoord);
-            }
-            else
-            {
-                SpawnMonstersInChunk(chunkCoord, chunkData);
             }
         }
 
@@ -37,28 +27,6 @@ namespace ARPG.Map
                 return;
 
             AR.s.Monster.DeactivateChunkMonsters(chunkCoord);
-        }
-
-        private void SpawnMonstersInChunk(Vector2Int chunkCoord, MapChunkData chunkData)
-        {
-            if (_monsterPrefabs.Count == 0)
-                return;
-
-            for (int i = 0; i < chunkData.monsterSpawnPositions.Count; i++)
-            {
-                Vector2Int spawnPos = chunkData.monsterSpawnPositions[i];
-                if (Random.value < _monsterSpawnRate)
-                {
-                    GameObject randomPrefab = _monsterPrefabs[Random.Range(0, _monsterPrefabs.Count)];
-                    Vector3 worldPos = new Vector3(
-                        chunkCoord.x * chunkSize + spawnPos.x,
-                        chunkCoord.y * chunkSize + spawnPos.y,
-                        0
-                    );
-
-                    AR.s.Monster.SpawnMonsterAtPosition(randomPrefab, worldPos, chunkCoord);
-                }
-            }
         }
     }
 }

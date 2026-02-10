@@ -3,27 +3,30 @@ using UnityEngine;
 
 namespace ARPG.Systems
 {
-    public struct System_MonsterRespawn : IFixedUpdateSystem
+    public struct System_MonsterSpawn : IFixedUpdateSystem
     {
         public int Priority => 130;
-        public float UpdateInterval => 5f;
+        public float UpdateInterval => 0.5f;
 
         // static readonly: System은 struct이므로 instance 필드를 사용하면
         // OnCreate() 호출 시 ValueType.GetHashCode()가 변경되어
         // SystemManager의 Dictionary에서 KeyNotFoundException이 발생한다.
         private static readonly List<Vector2Int> _activeChunksCache = new();
         private static readonly List<Vector2Int> _availableSpawnCache = new();
+        private static float _respawnTimer;
 
         public void OnCreate()
         {
-            Debug.Log("System_MonsterRespawn Created");
+            _respawnTimer = 0f;
+            Debug.Log("System_MonsterSpawn Created");
         }
 
         public void OnReset()
         {
             _activeChunksCache.Clear();
             _availableSpawnCache.Clear();
-            Debug.Log("System_MonsterRespawn Reset called");
+            _respawnTimer = 0f;
+            Debug.Log("System_MonsterSpawn Reset called");
         }
 
         public void OnFixedUpdate(float inFixedDeltaTime)
@@ -31,7 +34,33 @@ namespace ARPG.Systems
             if (AR.s.Monster == null || AR.s.Map == null)
                 return;
 
-            List<GameObject> monsterPrefabs = AR.s.Map.MonsterPrefabs;
+            // 1) 최초 스폰: 활성 청크 중 아직 스폰 안 된 청크 처리
+            CheckInitialSpawns();
+
+            // 2) 리스폰: 5초마다 죽은 몬스터 보충
+            _respawnTimer += 0.5f;
+            if (_respawnTimer >= 5f)
+            {
+                _respawnTimer = 0f;
+                CheckRespawns();
+            }
+        }
+
+        private static void CheckInitialSpawns()
+        {
+            var activeChunkCoords = AR.s.Map.GetActiveChunkCoords();
+            foreach (var chunkCoord in activeChunkCoords)
+            {
+                if (AR.s.Monster.HasChunkSpawned(chunkCoord) == false)
+                {
+                    AR.s.Monster.SpawnInitialMonstersInChunk(chunkCoord);
+                }
+            }
+        }
+
+        private static void CheckRespawns()
+        {
+            List<GameObject> monsterPrefabs = AR.s.Monster.MonsterPrefabs;
             if (monsterPrefabs == null || monsterPrefabs.Count == 0)
                 return;
 

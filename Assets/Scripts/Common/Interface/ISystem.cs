@@ -15,6 +15,13 @@ namespace ARPG.Systems
         /// </summary>
         public float UpdateInterval => 0f;  // 기본값: 매 프레임
 
+        /// <summary>
+        /// System 등록 시 1회 호출.
+        /// 주의: System은 struct이므로 이 함수 안에서 instance 필드 값을 변경하면
+        /// ValueType.GetHashCode()가 달라져 SystemManager의 Dictionary에서
+        /// KeyNotFoundException이 발생할 수 있다.
+        /// 캐시용 컬렉션 등은 반드시 static readonly로 선언할 것.
+        /// </summary>
         public void OnCreate()
         {
             Debug.Log("ISystem OnCreate called");
