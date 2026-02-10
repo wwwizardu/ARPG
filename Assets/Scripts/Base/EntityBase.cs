@@ -23,6 +23,14 @@ namespace ARPG.Base
 
         }
 
+        /// <summary>
+        /// System_EntityDestroy에서 엔티티 제거 시 호출
+        /// 서브클래스에서 override하여 타입별 정리 수행
+        /// </summary>
+        public virtual void OnEntityDestroy()
+        {
+        }
+
         public virtual void Reset()
         {
 

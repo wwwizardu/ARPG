@@ -53,6 +53,10 @@ namespace ARPG.Component
 
             // 맵 컴포넌트
             { typeof(MapChunkLoaderComponent), 4 },           // 청크 로더 (플레이어 전용)
+
+            // 엔티티 라이프사이클 컴포넌트
+            { typeof(DestroyTag), 100 },                       // 제거 예약 태그
+            { typeof(ActivationDistanceComponent), 500 },      // 거리 기반 활성화
         };
 
         /// <summary>

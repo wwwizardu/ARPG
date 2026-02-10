@@ -58,6 +58,10 @@ namespace ARPG.Systems
             System_HpCheck hpCheckSystem = new();
             RegisterSystems(hpCheckSystem);
 
+            // Priority 500: Entity Activation System (FixedUpdate) - 거리 기반 엔티티 활성화/비활성화 (0.5초 간격)
+            System_EntityActivation entityActivationSystem = new();
+            RegisterSystems(entityActivationSystem);
+
             // Priority 500: Animation System (Update) - 애니메이션 제어
             System_Animation animationSystem = new();
             RegisterSystems(animationSystem);
@@ -69,6 +73,10 @@ namespace ARPG.Systems
             // Priority 900: Entity Message System (LateUpdate) - 메시지 일괄 처리
             System_EntityMessage entityMessageSystem = new();
             RegisterSystems(entityMessageSystem);
+
+            // Priority 950: Entity Destroy System (LateUpdate) - DestroyTag 엔티티 제거
+            System_EntityDestroy entityDestroySystem = new();
+            RegisterSystems(entityDestroySystem);
 
             // Priority 값이 작은 순서대로 정렬
             _systems.Sort((a, b) => a.Priority.CompareTo(b.Priority));

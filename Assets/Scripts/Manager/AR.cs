@@ -110,9 +110,7 @@ namespace ARPG
 
             if (_currentScene.CurrentSceneType == Base.SceneBase.SceneType.Game)
             {
-                float deltaTime = Time.deltaTime;
-
-                _monsterManager.UpdateMpnsterManager(deltaTime);
+                // 몬스터 제거/활성화는 ECS 시스템(System_EntityDestroy, System_EntityActivation)이 처리
             }
         }
     }

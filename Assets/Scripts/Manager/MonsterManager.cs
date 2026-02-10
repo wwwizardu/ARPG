@@ -57,7 +57,8 @@ namespace ARPG.Monster
                 var monster = _monsters[i];
                 if (monster != null && monster.gameObject != null)
                 {
-                    DestroyMonster(monster);
+                    EntityIdHelper.DestroyEntity(monster.EntityId);
+                    Destroy(monster.gameObject);
                 }
             }
 
@@ -86,7 +87,7 @@ namespace ARPG.Monster
             if (monster == null)
                 return;
 
-            if (!_monsters.Contains(monster))
+            if (_monsters.Contains(monster) == false)
             {
                 _monsters.Add(monster);
                 monster.transform.SetParent(_monsterParent);
@@ -94,27 +95,22 @@ namespace ARPG.Monster
         }
 
         /// <summary>
-        /// 몬스터를 완전히 제거합니다 (Entity + ECS 컴포넌트 + GameObject + 추적 정보)
-        /// _monsters 리스트에서의 제거는 호출하는 쪽에서 처리해야 합니다.
+        /// Monster.OnEntityDestroy()에서 호출됨
+        /// MonsterManager의 추적 정보에서 몬스터를 제거
+        /// ECS 컴포넌트 정리와 GameObject 파괴는 System_EntityDestroy가 담당
         /// </summary>
-        /// <param name="monster">제거할 몬스터</param>
-        private void DestroyMonster(Creature.Monster monster)
+        public void UnregisterMonster(Creature.Monster monster)
         {
             if (monster == null)
                 return;
 
-            // 인스턴스 딕셔너리에서 제거
             int instanceId = monster.GetInstanceId();
             if (instanceId != -1)
             {
                 _monsterInstanceById.Remove(instanceId);
             }
 
-            // Entity 제거 (ECS 컴포넌트 + 스킬 엔티티 + EntityIdHelper 등록 해제 포함)
-            EntityIdHelper.DestroyEntity(monster.EntityId);
-
-            // GameObject 파괴
-            Destroy(monster.gameObject);
+            _monsters.Remove(monster);
         }
 
         public void CleanupDestroyedMonsters()
@@ -126,44 +122,6 @@ namespace ARPG.Monster
                     _monsters.RemoveAt(i);
                 }
             }
-        }
-
-        public void UpdateMpnsterManager(float inDeltaTime)
-        {
-            if (!_initialized)
-                return;
-                
-            ArpgPlayer? player = AR.s.MyPlayer;
-            if (player == null)
-                return;
-
-            Vector3 playerPosition = player.transform.position;
-
-            // 죽은 몬스터들을 제거하기 위해 역순으로 순회
-            for (int i = _monsters.Count - 1; i >= 0; i--)
-            {
-                var monster = _monsters[i];
-                if (monster != null)
-                {
-                    // StateComponent를 통해 몬스터가 죽었는지 확인
-                    bool isDead = false;
-                    if (AR.s.Component.TryGetComponent<StateComponent>(monster.EntityId, out var stateComponent))
-                    {
-                        isDead = stateComponent.Condition == CharacterConditions.Dead;
-                    }
-
-                    if (isDead)
-                    {
-                        _monsters.RemoveAt(i);
-                        DestroyMonster(monster);
-                    }
-                    else
-                    {
-                        UpdateMonsterActivationByDistance(monster, playerPosition);
-                    }
-                }
-            }
-
         }
 
         private IEnumerator CleanupRoutine()
@@ -210,10 +168,15 @@ namespace ARPG.Monster
             _monsterInstanceById[monsterId] = monster;
             AddMonster(monster);
 
-            // 스폰 시 플레이어와의 거리에 따라 초기 활성화 상태 결정
-            SetMonsterInitialActivationState(monster, spawnPos);
+            // ActivationDistanceComponent 추가 (System_EntityActivation이 거리 기반 활성화 처리)
+            AR.s.Component.AddComponent(monster.EntityId, new ActivationDistanceComponent
+            {
+                ActivationDistanceSqr = _activationDistanceSqr,
+                DeactivationDistanceSqr = _deactivationDistanceSqr,
+                IsActivated = false
+            });
 
-            if (!_chunkMonsters.ContainsKey(chunkCoord))
+            if (_chunkMonsters.ContainsKey(chunkCoord) == false)
             {
                 _chunkMonsters[chunkCoord] = new ChunkMonsterData(chunkCoord);
             }
@@ -231,34 +194,16 @@ namespace ARPG.Monster
 
         public void ActivateChunkMonsters(Vector2Int chunkCoord)
         {
-            if (!_chunkMonsters.ContainsKey(chunkCoord))
+            if (_chunkMonsters.ContainsKey(chunkCoord) == false)
                 return;
 
-            ChunkMonsterData chunkData = _chunkMonsters[chunkCoord];
-            chunkData.lastActiveTime = Time.time;
-
-            ArpgPlayer? player = AR.s.MyPlayer;
-            if (player == null)
-                return;
-
-            Vector3 playerPosition = player.transform.position;
-
-            for (int i = 0; i < chunkData.spawnedMonsterIds.Count; i++)
-            {
-                int monsterId = chunkData.spawnedMonsterIds[i];
-                if (_monsterInstanceById.TryGetValue(monsterId, out Creature.Monster monster))
-                {
-                    if (monster != null && monster.gameObject != null)
-                    {
-                        UpdateMonsterActivationByDistance(monster, playerPosition);
-                    }
-                }
-            }
+            // 시간 갱신만 수행, 거리 기반 활성화는 System_EntityActivation이 담당
+            _chunkMonsters[chunkCoord].lastActiveTime = Time.time;
         }
 
         public void DeactivateChunkMonsters(Vector2Int chunkCoord)
         {
-            if (!_chunkMonsters.ContainsKey(chunkCoord))
+            if (_chunkMonsters.ContainsKey(chunkCoord) == false)
                 return;
 
             ChunkMonsterData chunkData = _chunkMonsters[chunkCoord];
@@ -272,6 +217,14 @@ namespace ARPG.Monster
                     if (monster != null && monster.gameObject != null)
                     {
                         monster.gameObject.SetActive(false);
+
+                        // ECS 컴포넌트도 비활성화 상태로 동기화
+                        if (AR.s.Component.TryGetComponent<ActivationDistanceComponent>(
+                            monster.EntityId, out var activation))
+                        {
+                            activation.IsActivated = false;
+                            AR.s.Component.SetComponent(monster.EntityId, activation);
+                        }
                     }
                 }
             }
@@ -284,7 +237,7 @@ namespace ARPG.Monster
 
         public int GetAliveMonsterCountInChunk(Vector2Int chunkCoord)
         {
-            if (!_chunkMonsters.ContainsKey(chunkCoord))
+            if (_chunkMonsters.ContainsKey(chunkCoord) == false)
                 return 0;
 
             ChunkMonsterData chunkData = _chunkMonsters[chunkCoord];
@@ -307,7 +260,7 @@ namespace ARPG.Monster
 
         public int GetOriginalSpawnCountInChunk(Vector2Int chunkCoord)
         {
-            if (!_chunkMonsters.ContainsKey(chunkCoord))
+            if (_chunkMonsters.ContainsKey(chunkCoord) == false)
                 return 0;
 
             return _chunkMonsters[chunkCoord].originalSpawnCount;
@@ -375,57 +328,6 @@ namespace ARPG.Monster
             return SpawnMonsterAtPosition(monsterPrefab, worldPos, chunkCoord, false);
         }
 
-        private void UpdateMonsterActivationByDistance(Creature.Monster monster, Vector3 playerPosition)
-        {
-            if (monster == null)
-                return;
-
-            float distanceSqrToPlayer = (playerPosition - monster.transform.position).sqrMagnitude;
-            
-            // 하이스테리시스를 사용한 활성화/비활성화 로직
-            if (monster.IsActivated())
-            {
-                // 이미 활성화된 몬스터는 더 먼 거리에서 비활성화
-                if (distanceSqrToPlayer > _deactivationDistanceSqr)
-                {
-                    monster.Deactivate();
-                }
-            }
-            else
-            {
-                // 비활성화된 몬스터는 가까운 거리에서 활성화
-                if (distanceSqrToPlayer <= _activationDistanceSqr)
-                {
-                    monster.Activate();
-                }
-            }
-        }
-
-        private void SetMonsterInitialActivationState(Creature.Monster monster, Vector3 spawnPosition)
-        {
-            if (monster == null)
-                return;
-
-            ArpgPlayer? player = AR.s.MyPlayer;
-            if (player != null)
-            {
-                float distanceSqrToPlayer = (player.transform.position - spawnPosition).sqrMagnitude;
-                if (distanceSqrToPlayer <= _activationDistanceSqr)
-                {
-                    monster.Activate();
-                }
-                else
-                {
-                    monster.Deactivate();
-                }
-            }
-            else
-            {
-                // 플레이어가 없을 경우 기본적으로 비활성화
-                monster.Deactivate();
-            }
-        }
-
         private readonly List<Vector2Int> _expiredChunksCache = new();
 
         private void CleanupExpiredChunkMonsters()
@@ -447,7 +349,8 @@ namespace ARPG.Monster
                             if (monster != null)
                             {
                                 _monsters.Remove(monster);
-                                DestroyMonster(monster);
+                                EntityIdHelper.DestroyEntity(monster.EntityId);
+                                Destroy(monster.gameObject);
                             }
                             else
                             {

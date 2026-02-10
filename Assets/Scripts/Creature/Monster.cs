@@ -10,7 +10,6 @@ namespace ARPG.Creature
     public class Monster : CharacterBase
     {
         protected Tables.MonsterTable? _monsterTable = null;
-        private bool _activated = false;
         private int _instanceId = -1;
 
         public MonsterTable MonsterTable => _monsterTable!;
@@ -109,21 +108,12 @@ namespace ARPG.Creature
             DropItems();
         }
 
-        public void Activate()
+        public override void OnEntityDestroy()
         {
-            _activated = true;
-            gameObject.SetActive(true);
-        }
-
-        public void Deactivate()
-        {
-            _activated = false;
-            gameObject.SetActive(false);
-        }
-
-        public bool IsActivated()
-        {
-            return _activated;
+            if (AR.s.Monster != null)
+            {
+                AR.s.Monster.UnregisterMonster(this);
+            }
         }
 
         public void SetInstanceId(int instanceId)
