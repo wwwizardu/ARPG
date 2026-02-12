@@ -20,8 +20,6 @@ namespace ARPG.Creature
 
         protected CreatureTable? _table;
 
-        protected CharacterConditions _condition = CharacterConditions.None;
-
         protected bool _initialized = false;
 
         protected PlayableAnimator? _playableAnimator;
@@ -29,13 +27,9 @@ namespace ARPG.Creature
 
         public virtual CreatureTable Table { get {return _table!;} }
 
-        public CharacterConditions State { get { return _condition; } }
-
         public override void Initialize()
         {
             _characterInfo.Sr.sprite = _characterInfo.CharacterSprite;
-
-            _condition = CharacterConditions.Normal;
 
             _characterInfo.Initialize(this);
 
@@ -321,7 +315,7 @@ namespace ARPG.Creature
 
         protected virtual void Dead()
         {
-            _condition = CharacterConditions.Dead;
+            
         }
 
         private void OnDamage(Message.DamageMessage msg)

@@ -4,6 +4,7 @@ using UnityEngine;
 using ARPG.Component;
 using ARPG.Map;
 using ARPG.Creature;
+using ARPG.Message;
 using ARPG.Scene;
 using ARPG.Utility;
 
@@ -13,9 +14,6 @@ namespace ARPG.Monster
     {
         private List<Creature.Monster> _monsters = new();
         private Dictionary<Vector2Int, ChunkMonsterData> _chunkMonsters = new();
-        private Dictionary<int, Creature.Monster> _monsterInstanceById = new();
-        private int _nextMonsterId = 1;
-        
         private Transform? _monsterParent;
 
 
@@ -56,10 +54,6 @@ namespace ARPG.Monster
             // 컬렉션 정리
             _monsters.Clear();
             _chunkMonsters.Clear();
-            _monsterInstanceById.Clear();
-
-            // ID 카운터 리셋
-            _nextMonsterId = 1;
 
         }
 
@@ -89,12 +83,6 @@ namespace ARPG.Monster
         {
             if (monster == null)
                 return;
-
-            int instanceId = monster.GetInstanceId();
-            if (instanceId != -1)
-            {
-                _monsterInstanceById.Remove(instanceId);
-            }
 
             _monsters.Remove(monster);
         }
@@ -128,9 +116,7 @@ namespace ARPG.Monster
             }
             monster.InitializeECSComponents(); // ECS 컴포넌트 초기화
 
-            int monsterId = _nextMonsterId++;
-            monster.SetInstanceId(monsterId); // 몬스터에 인스턴스 ID 저장
-            _monsterInstanceById[monsterId] = monster;
+            int entityId = monster.EntityId;
             AddMonster(monster);
 
             // ActivationDistanceComponent 추가 (System_EntityActivation이 거리 기반 활성화 처리)
@@ -146,7 +132,7 @@ namespace ARPG.Monster
                 _chunkMonsters[chunkCoord] = new ChunkMonsterData(chunkCoord);
             }
 
-            _chunkMonsters[chunkCoord].spawnedMonsterIds.Add(monsterId);
+            _chunkMonsters[chunkCoord].spawnedMonsterIds.Add(entityId);
             _chunkMonsters[chunkCoord].hasSpawned = true;
             
             if (isOriginalSpawn)
@@ -154,7 +140,7 @@ namespace ARPG.Monster
                 _chunkMonsters[chunkCoord].originalSpawnCount++;
             }
 
-            return monsterId;
+            return entityId;
         }
 
         public void ActivateChunkMonsters(Vector2Int chunkCoord)
@@ -176,19 +162,18 @@ namespace ARPG.Monster
 
             for (int i = 0; i < chunkData.spawnedMonsterIds.Count; i++)
             {
-                int monsterId = chunkData.spawnedMonsterIds[i];
-                if (_monsterInstanceById.TryGetValue(monsterId, out Creature.Monster monster))
+                int entityId = chunkData.spawnedMonsterIds[i];
+                if (EntityRegistry.TryGet<Creature.Monster>(entityId, out var monster))
                 {
-                    if (monster != null && monster.gameObject != null)
+                    if (monster.gameObject != null)
                     {
                         monster.gameObject.SetActive(false);
 
                         // ECS 컴포넌트도 비활성화 상태로 동기화
-                        if (AR.s.Component.TryGetComponent<ActivationDistanceComponent>(
-                            monster.EntityId, out var activation))
+                        if (AR.s.Component.TryGetComponent<ActivationDistanceComponent>(entityId, out var activation))
                         {
                             activation.IsActivated = false;
-                            AR.s.Component.SetComponent(monster.EntityId, activation);
+                            AR.s.Component.SetComponent(entityId, activation);
                         }
                     }
                 }
@@ -210,10 +195,10 @@ namespace ARPG.Monster
 
             for (int i = 0; i < chunkData.spawnedMonsterIds.Count; i++)
             {
-                int monsterId = chunkData.spawnedMonsterIds[i];
-                if (_monsterInstanceById.TryGetValue(monsterId, out Creature.Monster monster))
+                int entityId = chunkData.spawnedMonsterIds[i];
+                if (AR.s.Component.TryGetComponent<StateComponent>(entityId, out var state))
                 {
-                    if (monster != null && monster.State != CharacterConditions.Dead)
+                    if (state.Condition != CharacterConditions.Dead)
                     {
                         aliveCount++;
                     }
@@ -308,19 +293,12 @@ namespace ARPG.Monster
                     // 만료된 청크의 몬스터들 정리
                     for (int i = 0; i < chunkData.spawnedMonsterIds.Count; i++)
                     {
-                        int monsterId = chunkData.spawnedMonsterIds[i];
-                        if (_monsterInstanceById.TryGetValue(monsterId, out Creature.Monster monster))
+                        int entityId = chunkData.spawnedMonsterIds[i];
+                        if (EntityRegistry.TryGet<Creature.Monster>(entityId, out var monster))
                         {
-                            if (monster != null)
-                            {
-                                _monsters.Remove(monster);
-                                EntityIdHelper.DestroyEntity(monster.EntityId);
-                                Destroy(monster.gameObject);
-                            }
-                            else
-                            {
-                                _monsterInstanceById.Remove(monsterId);
-                            }
+                            _monsters.Remove(monster);
+                            EntityIdHelper.DestroyEntity(entityId);
+                            Destroy(monster.gameObject);
                         }
                     }
                     _expiredChunksCache.Add(kvp.Key);

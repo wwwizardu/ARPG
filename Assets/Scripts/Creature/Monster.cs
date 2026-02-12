@@ -10,8 +10,6 @@ namespace ARPG.Creature
     public class Monster : CharacterBase
     {
         protected Tables.MonsterTable? _monsterTable = null;
-        private int _instanceId = -1;
-
         public MonsterTable MonsterTable => _monsterTable!;
         
         public override void Initialize()
@@ -114,16 +112,6 @@ namespace ARPG.Creature
             {
                 AR.s.Monster.UnregisterMonster(this);
             }
-        }
-
-        public void SetInstanceId(int instanceId)
-        {
-            _instanceId = instanceId;
-        }
-
-        public int GetInstanceId()
-        {
-            return _instanceId;
         }
 
         protected void DropItems()
