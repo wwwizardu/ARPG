@@ -10,6 +10,7 @@ namespace ARPG
 {
     public class AR : PrefabSingleton<AR>
     {
+        [SerializeField] private Manager.MessageManager _messageManager;
         [SerializeField] private Systems.SystemManager _systemManager;
         [SerializeField] private Component.ComponentManager _componentManager;
         [SerializeField] private Data.DataManager _dataManager;
@@ -18,8 +19,7 @@ namespace ARPG
         [SerializeField] private ARPG.Monster.MonsterManager _monsterManager;
 
         [SerializeField] private Item.ItemManager _itemManager;
-
-
+        
         private bool _initialized = false;
 
         private Base.SceneBase? _currentScene;
@@ -37,6 +37,7 @@ namespace ARPG
         public UIManager UI => _uiManager;
         public Monster.MonsterManager Monster => _monsterManager;
         public Item.ItemManager Item => _itemManager;
+        public Manager.MessageManager Message => _messageManager;
 
         public PlayerManager Player => _playerManager;
 
@@ -59,7 +60,8 @@ namespace ARPG
             _mapManager.Initialize();
             _itemManager.Initialize();
             _monsterManager.Initialize();
-            
+            _messageManager.Initialize();
+
             _initialized = true;
 
             Debug.Log("AR Initialized");
@@ -71,7 +73,7 @@ namespace ARPG
             _uiManager.Reset();
             _mapManager.Reset();
             _monsterManager.Reset();
-
+            _messageManager.Reset();
         }
         
         public void OnSceneLoadStart(Base.SceneBase inScene)

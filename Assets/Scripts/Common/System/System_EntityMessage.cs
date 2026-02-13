@@ -1,11 +1,11 @@
-using ARPG.Message;
 using UnityEngine;
 
 namespace ARPG.Systems
 {
     /// <summary>
-    /// 엔티티 메시지 처리 시스템
+    /// 메시지 처리 시스템
     /// LateUpdate에서 큐에 쌓인 메시지를 일괄 처리
+    /// AR.s.Message (MessageManager)에 위임
     /// </summary>
     public class System_EntityMessage : ILateUpdateSystem
     {
@@ -17,23 +17,17 @@ namespace ARPG.Systems
 
         public void OnCreate()
         {
-            EntityRegistry.Initialize();
-            EntityMessenger.Initialize();
-
             Debug.Log("[System_EntityMessage] Created");
         }
 
         public void OnReset()
         {
-            EntityMessenger.Reset();
-            EntityRegistry.Reset();
-
             Debug.Log("[System_EntityMessage] Reset");
         }
 
         public void OnLateUpdate(float inDeltaTime)
         {
-            EntityMessenger.ProcessAll();
+            AR.s.Message.ProcessAll();
         }
     }
 }

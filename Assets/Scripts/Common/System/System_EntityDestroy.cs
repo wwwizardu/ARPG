@@ -46,7 +46,7 @@ namespace ARPG.Systems
             {
                 int entityId = pool.GetEntityId(i);
 
-                if (EntityRegistry.TryGet(entityId, out var entity))
+                if (AR.s.Message.TryGetEntity(entityId, out var entity))
                 {
                     entity.OnEntityDestroy();
                     EntityIdHelper.DestroyEntity(entityId);

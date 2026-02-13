@@ -326,13 +326,8 @@ namespace ARPG.Creature
 
         private void OnDead(Message.DeathMessage msg)
         {
+            // 비주얼 사망 처리만 담당 (DestroyTag는 System_HpCheck에서 추가)
             Dead();
-
-            // 죽음 처리 후 제거 예약
-            if (_entityId >= 0)
-            {
-                AR.s.Component.AddComponent(_entityId, new Component.DestroyTag());
-            }
         }
 
 		protected Vector2 _boundsTopLeftCorner;

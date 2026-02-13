@@ -9,6 +9,14 @@ namespace ARPG.Base
 {
     public class EntityBase : MonoBehaviour
     {
+        [SerializeField] protected GameObject _visual;
+        [SerializeField] protected Sprite _entitySprite;
+        [SerializeField] protected SpriteRenderer _sr;
+        // [SerializeField] protected Image _hpBar;
+        // [SerializeField] protected TMPro.TextMeshPro _textName;
+        // [SerializeField] protected Transform _buffImageRoot;
+         
+
         protected int _entityId = -1; // ECS Entity ID
 
         public int EntityId { get { return _entityId; } }
@@ -38,14 +46,38 @@ namespace ARPG.Base
 
         protected virtual void OnDestroy()
         {
-            // EntityRegistry에서 등록 해제
-            if (_entityId >= 0)
+            // MessageManager에서 등록 해제 (앱 종료 시 AR이 먼저 파괴될 수 있음)
+            if (_entityId >= 0 && AR.s != null && AR.s.Message != null)
             {
-                EntityRegistry.Unregister(_entityId);
+                AR.s.Message.UnregisterEntity(_entityId);
             }
 
             // 핸들러 정리
             _messageHandlers?.Clear();
+        }
+
+        /// <summary>
+        /// EntityId 생성 + EntityRegistry 등록 + TransformComponent 추가만 수행
+        /// EntityFactory에서 사용. 하위 클래스의 컴포넌트 추가는 팩토리가 담당.
+        /// </summary>
+        public void SetupEntityId()
+        {
+            if (_entityId < 0)
+            {
+                _entityId = EntityIdHelper.CreateEntity();
+            }
+
+            AR.s.Message.RegisterEntity(_entityId, this);
+
+            TransformComponent transformComponent = new()
+            {
+                Position = new Vector2(transform.position.x, transform.position.y),
+                Rotation = 0f,
+                Scale = Vector2.one
+            };
+            AR.s.Component.AddComponent(_entityId, transformComponent);
+
+            Debug.Log($"[EntityBase] SetupEntityId - EntityId: {_entityId}");
         }
 
         public virtual void InitializeECSComponents()
@@ -53,13 +85,13 @@ namespace ARPG.Base
             // EntityId가 할당되어 있지 않다면 생성
             if(_entityId < 0)
             {
-                _entityId = EntityIdHelper.CreateEntity();    
+                _entityId = EntityIdHelper.CreateEntity();
             }
-            
+
             Debug.Log($"[EntityBase] Entity initialized with EntityId: {_entityId}");
 
-            // EntityRegistry에 등록
-            EntityRegistry.Register(_entityId, this);
+            // MessageManager에 등록
+            AR.s.Message.RegisterEntity(_entityId, this);
 
             // TransformComponent 추가
             TransformComponent transformComponent = new()
@@ -75,11 +107,11 @@ namespace ARPG.Base
 
         /// <summary>
         /// 메시지 핸들러 등록
-        /// 서브클래스에서 Initialize 시 호출하여 필요한 메시지만 등록
+        /// EntityFactory에서 호출하여 필요한 메시지만 선택적으로 등록
         /// </summary>
         /// <typeparam name="T">메시지 타입</typeparam>
         /// <param name="handler">핸들러 함수</param>
-        protected void RegisterMessageHandler<T>(Action<T> handler) where T : struct, IEntityMessage
+        public void RegisterMessageHandler<T>(Action<T> handler) where T : struct, IEntityMessage
         {
             if (_messageHandlers == null)
             {

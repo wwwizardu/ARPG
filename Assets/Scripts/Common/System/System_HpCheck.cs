@@ -7,13 +7,16 @@ namespace ARPG.Systems
 {
     /// <summary>
     /// HP 체크 시스템
-    /// HpDirtyTag가 있는 엔티티의 CurrentHp를 검사하여 0 이하일 경우 DeathMessage 전송
+    /// HpDirtyTag가 있는 엔티티의 CurrentHp를 검사하여 0 이하일 경우 사망 처리
     ///
     /// 실행 흐름:
     /// 1. HpDirtyTag가 있는 엔티티 순회
     /// 2. CurrentHp가 0 이하인 엔티티 탐지
-    /// 3. DeathMessage 전송
-    /// 4. HpDirtyTag 제거
+    /// 3. 상태 변경 (Dead) + 스킬 중지
+    /// 4. DropComponent가 있으면 아이템 드랍 처리
+    /// 5. DestroyTag 추가 (엔티티 제거 예약)
+    /// 6. DeathMessage 전송 (비주얼 이펙트용)
+    /// 7. HpDirtyTag 제거
     /// </summary>
     public class System_HpCheck : IFixedUpdateSystem
     {
@@ -51,8 +54,8 @@ namespace ARPG.Systems
                     continue;
                 }
 
-                // CurrentHp가 0 이하이면 DeathMessage 전송
-                if (stat.CurrentHp <= 0) // 죽음 처리
+                // CurrentHp가 0 이하이면 사망 처리
+                if (stat.CurrentHp <= 0)
                 {
                     // 상태 변경 (죽음)
                     if (cm.TryGetComponent<StateComponent>(entityId, out StateComponent state))
@@ -64,10 +67,24 @@ namespace ARPG.Systems
                     // 스킬 중지 처리
                     StopOwnerSkills(cm, entityId);
 
-                    EntityMessenger.Send(new DeathMessage
+                    // DropComponent가 있으면 아이템 드랍 처리
+                    if (cm.TryGetComponent<DropComponent>(entityId, out DropComponent drop))
+                    {
+                        if (cm.TryGetComponent<TransformComponent>(entityId, out TransformComponent transform))
+                        {
+                            Vector3 dropPosition = new Vector3(transform.Position.x, transform.Position.y, -0.01f);
+                            DropHelper.ProcessDrop(drop.DropId, dropPosition);
+                        }
+                    }
+
+                    // 엔티티 제거 예약
+                    cm.AddComponent(entityId, new DestroyTag());
+
+                    // 비주얼 이펙트용 DeathMessage 전송
+                    AR.s.Message.SendToEntity(new DeathMessage
                     {
                         TargetEntityId = entityId,
-                        KillerEntityId = 0 // TODO: 마지막 데미지를 준 엔티티 추적 필요 시 확장
+                        KillerEntityId = 0
                     });
                 }
 

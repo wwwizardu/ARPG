@@ -1,5 +1,4 @@
 using ARPG.Component;
-using ARPG.Message;
 using UnityEngine;
 
 namespace ARPG.Systems
@@ -60,7 +59,7 @@ namespace ARPG.Systems
                     if (distSqr > activation.DeactivationDistanceSqr)
                     {
                         activation.IsActivated = false;
-                        if (EntityRegistry.TryGet(entityId, out var entity))
+                        if (AR.s.Message.TryGetEntity(entityId, out var entity))
                         {
                             entity.gameObject.SetActive(false);
                         }
@@ -71,7 +70,7 @@ namespace ARPG.Systems
                     if (distSqr <= activation.ActivationDistanceSqr)
                     {
                         activation.IsActivated = true;
-                        if (EntityRegistry.TryGet(entityId, out var entity))
+                        if (AR.s.Message.TryGetEntity(entityId, out var entity))
                         {
                             entity.gameObject.SetActive(true);
                         }

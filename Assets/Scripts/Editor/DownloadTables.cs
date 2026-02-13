@@ -56,7 +56,7 @@ namespace ARPG.Editor
             await DownloadTable<BuffTable>("127577579&range=A:J", 1, SaveType.String);
 
             await DownloadTable<AnimationTable>("747631090&range=A:E", 1, SaveType.String);
-            
+
             //await DownloadTable<BuffEffectTable>("2104311648&range=A:K", 1, SaveType.String);
 
             foreach (var tableType in _tableDic.Keys)

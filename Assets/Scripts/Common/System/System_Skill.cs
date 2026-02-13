@@ -722,7 +722,7 @@ namespace ARPG.Systems
             }
 
             // 데미지 메시지 전송(UI 변경 등)
-            Message.EntityMessenger.Send(new Message.DamageMessage
+            AR.s.Message.SendToEntity(new Message.DamageMessage
             {
                 TargetEntityId = targetEntityId,
                 DamageAmount = damage,

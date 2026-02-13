@@ -4,7 +4,7 @@ using UnityEngine;
 using ARPG.Component;
 using ARPG.Map;
 using ARPG.Creature;
-using ARPG.Message;
+using ARPG.Factory;
 using ARPG.Scene;
 using ARPG.Utility;
 
@@ -26,16 +26,11 @@ namespace ARPG.Monster
         [SerializeField] private float _activationDistance = 25f; // 몬스터 활성화 거리
         [SerializeField] private float _deactivationDistance = 30f; // 몬스터 비활성화 거리 (하이스테리시스)
         
-        private float _activationDistanceSqr;
-        private float _deactivationDistanceSqr;
-        
         public List<GameObject> MonsterPrefabs => _monsterPrefabs;
         public float MonsterSpawnRate => _monsterSpawnRate;
 
         public void Initialize()
         {
-            _activationDistanceSqr = _activationDistance * _activationDistance;
-            _deactivationDistanceSqr = _deactivationDistance * _deactivationDistance;
         }
 
         public void Reset()
@@ -92,40 +87,22 @@ namespace ARPG.Monster
             if (monsterPrefab == null)
                 return -1;
 
-            if(AR.s.CurrentScene is GameScene gameScene == false)
+            if (AR.s.CurrentScene is GameScene gameScene == false)
                 return -1;
 
-            Vector3 spawnPos = new Vector3(position.x, position.y, -0.05f) ;
+            Vector3 spawnPos = new Vector3(position.x, position.y, -0.05f);
 
-            GameObject monsterObj = Instantiate(monsterPrefab, spawnPos, Quaternion.identity, gameScene.MonsterRoot);
-            Creature.Monster monster = monsterObj.GetComponent<Creature.Monster>();
-            
-            if (monster == null)
-            {
-                Destroy(monsterObj);
-                return -1;
-            }
-
+            // EntityFactory를 통해 몬스터 생성 (Initialize + Load + ECS 컴포넌트 추가)
             int monsterTableId = Random.Range(1001, 1003);
-            monster.Initialize();
-            if (monster.Load(monsterTableId) == false) // 임시로 ID 1 사용
-            {
-                Debug.LogError($"[MonsterManager] SpawnMonster - Failed to load monster with ID 1");
-                Destroy(monsterObj);
-                return -1;
-            }
-            monster.InitializeECSComponents(); // ECS 컴포넌트 초기화
+            int entityId = EntityFactory.CreateMonster(monsterTableId, monsterPrefab, spawnPos, gameScene.MonsterRoot, out var monster);
 
-            int entityId = monster.EntityId;
+            if (entityId < 0 || monster == null)
+                return -1;
+
             AddMonster(monster);
 
-            // ActivationDistanceComponent 추가 (System_EntityActivation이 거리 기반 활성화 처리)
-            AR.s.Component.AddComponent(monster.EntityId, new ActivationDistanceComponent
-            {
-                ActivationDistanceSqr = _activationDistanceSqr,
-                DeactivationDistanceSqr = _deactivationDistanceSqr,
-                IsActivated = false
-            });
+            // ActivationDistanceComponent 추가
+            EntityFactory.AddActivationComponent(entityId, _activationDistance, _deactivationDistance);
 
             if (_chunkMonsters.ContainsKey(chunkCoord) == false)
             {
@@ -134,7 +111,7 @@ namespace ARPG.Monster
 
             _chunkMonsters[chunkCoord].spawnedMonsterIds.Add(entityId);
             _chunkMonsters[chunkCoord].hasSpawned = true;
-            
+
             if (isOriginalSpawn)
             {
                 _chunkMonsters[chunkCoord].originalSpawnCount++;
@@ -163,7 +140,7 @@ namespace ARPG.Monster
             for (int i = 0; i < chunkData.spawnedMonsterIds.Count; i++)
             {
                 int entityId = chunkData.spawnedMonsterIds[i];
-                if (EntityRegistry.TryGet<Creature.Monster>(entityId, out var monster))
+                if (AR.s.Message.TryGetEntity<Creature.Monster>(entityId, out var monster))
                 {
                     if (monster.gameObject != null)
                     {
@@ -294,7 +271,7 @@ namespace ARPG.Monster
                     for (int i = 0; i < chunkData.spawnedMonsterIds.Count; i++)
                     {
                         int entityId = chunkData.spawnedMonsterIds[i];
-                        if (EntityRegistry.TryGet<Creature.Monster>(entityId, out var monster))
+                        if (AR.s.Message.TryGetEntity<Creature.Monster>(entityId, out var monster))
                         {
                             _monsters.Remove(monster);
                             EntityIdHelper.DestroyEntity(entityId);

@@ -30,6 +30,16 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2af892c1ee45a06499f732044f66da8b
+    m_Address: Prefabs/Entity
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3c98d39872317ac4ca4135d49a452b24
+    m_Address: Prefabs/UICanvas
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3fd2370bda823e44d8dde2495cc539d2
     m_Address: Humanoid/Move
     m_ReadOnly: 0

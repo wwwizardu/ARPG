@@ -2,6 +2,7 @@ using UnityEngine;
 using System.Collections;
 using ARPG.Component;
 using ARPG.Creature;
+using ARPG.Factory;
 
 namespace ARPG.Scene
 {
@@ -10,37 +11,27 @@ namespace ARPG.Scene
         [SerializeField] private CameraController _cameraController;
         [SerializeField] private Transform _monsterRoot;
         [SerializeField] private GameObject _playerPrefab;
-        
+
         public Transform MonsterRoot => _monsterRoot;
 
         protected override IEnumerator OnInitialize()
         {
             yield return base.OnInitialize();
 
-            GameObject playerObject = Instantiate(_playerPrefab);
-            if (playerObject != null)
+            // EntityFactory를 통해 플레이어 생성 (Initialize + Load + ECS 컴포넌트 추가)
+            int playerEntityId = EntityFactory.CreatePlayer(1, _playerPrefab, Vector3.zero, out var player);
+            if (playerEntityId < 0 || player == null)
             {
-                ArpgPlayer player = playerObject.GetComponent<ArpgPlayer>();
-                if (player != null)
-                {
-                    player.Initialize();
-                    player.Load(1); // 임시로 ID 1 사용
-                    player.InitializeECSComponents();
-
-                    _cameraController.Initialize(player);
-
-                    AR.s.Player.AddPlayer(player);
-                }
-            }
-            else
-            {
-                Debug.LogError("Failed to instantiate player object.");
+                Debug.LogError("Failed to create player entity.");
+                yield break;
             }
 
-            AR.s.Map.CreateMap(12345, playerObject.transform.position);
+            _cameraController.Initialize(player);
+            AR.s.Player.AddPlayer(player);
+
+            AR.s.Map.CreateMap(12345, player.transform.position);
 
             // 맵 생성 완료 후 청크 로더 활성화
-            int playerEntityId = AR.s.Data.CurrentPlayerEntityId;
             if (AR.s.Component.TryGetComponent<MapChunkLoaderComponent>(playerEntityId, out var chunkLoader))
             {
                 chunkLoader.IsInitialized = true;
@@ -51,8 +42,6 @@ namespace ARPG.Scene
 
             Debug.Log("GameScene initialized.");
         }
-        
-        
     }
 }
 

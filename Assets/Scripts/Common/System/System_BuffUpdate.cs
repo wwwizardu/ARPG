@@ -117,7 +117,7 @@ namespace ARPG.Systems
                 targetStat.SetCurrentHp(buff.TargetEntityId, newHp);
 
                 // 데미지 메시지 전송(UI 변경 등)
-                Message.EntityMessenger.Send(new Message.DamageMessage
+                AR.s.Message.SendToEntity(new Message.DamageMessage
                 {
                     TargetEntityId = buff.TargetEntityId,
                     DamageAmount = finalDamage,

@@ -11,9 +11,8 @@ namespace ARPG.Item
 {
     public class ItemObject : EntityBase
     {
-        [SerializeField] private GameObject _visual;
         [SerializeField] private TextMeshPro _text;
-        [SerializeField] private SpriteRenderer _sr;
+        
         private ItemData _itemData = null!;
         private ItemTable _table = null!;
         
