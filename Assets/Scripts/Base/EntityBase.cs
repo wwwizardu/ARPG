@@ -106,6 +106,19 @@ namespace ARPG.Base
         #region Message Handlers
 
         /// <summary>
+        /// 자식 GameObject에서 IEntityMessageHandler를 구현한 컴포넌트를 찾아 자동 등록
+        /// EntityFactory에서 프리팹 생성 후 호출
+        /// </summary>
+        public void AutoRegisterChildHandlers()
+        {
+            var handlers = GetComponentsInChildren<IEntityMessageHandler>();
+            for (int i = 0; i < handlers.Length; i++)
+            {
+                handlers[i].RegisterTo(this);
+            }
+        }
+
+        /// <summary>
         /// 메시지 핸들러 등록
         /// EntityFactory에서 호출하여 필요한 메시지만 선택적으로 등록
         /// </summary>

@@ -87,6 +87,9 @@ namespace ARPG.Factory
                 LoadAnimationAsync(entityId, obj, table.AnimationData).Forget();
             }
 
+            // 자식 프리팹의 IEntityMessageHandler 자동 등록
+            monster.AutoRegisterChildHandlers();
+
             Debug.Log($"[EntityFactory] Monster created - EntityId: {entityId}, TableId: {monsterTableId}, Name: {table.Name}");
             return entityId;
         }
@@ -156,6 +159,9 @@ namespace ARPG.Factory
             {
                 LoadAnimationAsync(entityId, obj, table.AnimationData).Forget();
             }
+
+            // 자식 프리팹의 IEntityMessageHandler 자동 등록
+            player.AutoRegisterChildHandlers();
 
             Debug.Log($"[EntityFactory] Player created - EntityId: {entityId}, TableId: {creatureTableId}, Name: {table.Name}");
             return entityId;
