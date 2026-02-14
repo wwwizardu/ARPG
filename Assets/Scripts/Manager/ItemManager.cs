@@ -92,7 +92,7 @@ namespace ARPG.Item
             if (inItem == null)
                 return false;
 
-            if (0 <= AR.s.MyPlayer?.Inventory?.AddItem(inItem.ItemData))
+            if (0 <= AR.s.Player?.Inventory?.AddItem(inItem.ItemData))
             {
                 AR.s.Item.DestroyItem(inItem.ItemData.ItemInstanceId);
 

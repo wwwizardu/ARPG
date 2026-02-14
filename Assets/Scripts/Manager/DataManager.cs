@@ -298,13 +298,10 @@ namespace ARPG.Data
 
                     // PlayerData 저장 (여러 플레이어 지원)
                     // 현재 활성 플레이어 저장
-                    if (AR.s.MyPlayer != null)
+                    var currentPlayer = GetPlayerData(_currentPlayerEntityId);
+                    if (currentPlayer != null)
                     {
-                        var currentPlayer = GetPlayerData(_currentPlayerEntityId);
-                        if (currentPlayer != null)
-                        {
-                            AR.s.MyPlayer.Save(currentPlayer);
-                        }
+                        AR.s.Player.Save(currentPlayer);
                     }
 
                     // 전체 플레이어 리스트 저장

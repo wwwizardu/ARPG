@@ -46,6 +46,12 @@ namespace ARPG.Systems
             {
                 int entityId = pool.GetEntityId(i);
 
+                // MonsterTag가 있으면 MonsterManager에서 제거
+                if (cm.HasComponent<MonsterTag>(entityId))
+                {
+                    AR.s.Monster.UnregisterMonsterByEntityId(entityId);
+                }
+
                 if (AR.s.Message.TryGetEntity(entityId, out var entity))
                 {
                     entity.OnEntityDestroy();

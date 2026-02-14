@@ -20,6 +20,16 @@ namespace ARPG.Base
         protected int _entityId = -1; // ECS Entity ID
 
         public int EntityId { get { return _entityId; } }
+        public GameObject Visual => _visual;
+
+        /// <summary>
+        /// 외부에서 EntityId를 설정 (플레이어 등 저장된 ID를 사용하는 경우)
+        /// SetupEntityId() 호출 전에 설정하면 새 ID 생성을 건너뜀
+        /// </summary>
+        public void SetEntityId(int entityId)
+        {
+            _entityId = entityId;
+        }
 
         /// <summary>
         /// 메시지 타입별 핸들러 딕셔너리

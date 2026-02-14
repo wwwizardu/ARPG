@@ -1,6 +1,4 @@
 #nullable enable
-using ARPG;
-using ARPG.Creature;
 using ARPG.Map;
 using ARPG.Manager;
 using Cysharp.Threading.Tasks;
@@ -41,7 +39,7 @@ namespace ARPG
 
         public PlayerManager Player => _playerManager;
 
-        public ArpgPlayer? MyPlayer => _playerManager.MyPlayers;
+        public Base.EntityBase? MyPlayer => _playerManager.MyPlayers;
 
         protected override void Awake()
         {

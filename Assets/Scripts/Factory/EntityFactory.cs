@@ -19,45 +19,49 @@ namespace ARPG.Factory
     /// </summary>
     public static class EntityFactory
     {
+        private const string ENTITY_PREFAB_KEY = "Prefabs/Entity";
+
         /// <summary>
         /// MonsterTable 기반 몬스터 엔티티 생성
-        /// MonsterTable → Stat + State + Velocity + AI + Skill + Activation
+        /// MonsterTable → Stat + State + Velocity + AI + Skill + Drop + MonsterTag
         /// </summary>
-        /// <param name="monster">out으로 생성된 Monster MonoBehaviour 참조 반환</param>
-        public static int CreateMonster(int monsterTableId, GameObject prefab, Vector3 position, Transform? parent, out Creature.Monster? monster)
+        /// <returns>(entityId, entity) 튜플. 실패 시 (-1, null)</returns>
+        public static async UniTask<(int entityId, EntityBase? entity)> CreateMonster(int monsterTableId, Vector3 position, Transform? parent = null)
         {
-            monster = null;
-
-            // 1. 프리팹 인스턴스 생성
-            GameObject obj = Object.Instantiate(prefab, position, Quaternion.identity, parent);
-            monster = obj.GetComponent<Creature.Monster>();
-            if (monster == null)
+            // 1. 테이블 로드
+            MonsterTable? table = AR.s.Data.GetMonster(monsterTableId);
+            if (table == null)
             {
-                Debug.LogError($"[EntityFactory] Monster component not found on prefab");
-                Object.Destroy(obj);
-                return -1;
+                Debug.LogError($"[EntityFactory] MonsterTable not found for Id: {monsterTableId}");
+                return (-1, null);
             }
 
-            // 2. MonoBehaviour 초기화 (스프라이트, 메시지 핸들러)
-            monster.Initialize();
-
-            // 3. 테이블 로드
-            if (monster.Load(monsterTableId) == false)
+            // 2. Addressable로 프리팹 인스턴스 생성
+            Vector3 spawnPos = new Vector3(position.x, position.y, -0.01f);
+            GameObject obj = await Addressables.InstantiateAsync(ENTITY_PREFAB_KEY, spawnPos, Quaternion.identity, parent).ToUniTask();
+            if (obj == null)
             {
-                Debug.LogError($"[EntityFactory] Failed to load MonsterTable Id: {monsterTableId}");
-                Object.Destroy(obj);
-                monster = null;
-                return -1;
+                Debug.LogError($"[EntityFactory] Failed to instantiate entity prefab");
+                return (-1, null);
             }
 
-            // 4. EntityId 발급 + TransformComponent만 (팩토리가 나머지 담당)
-            monster.SetupEntityId();
-            int entityId = monster.EntityId;
+            EntityBase? entity = obj.GetComponent<EntityBase>();
+            if (entity == null)
+            {
+                Debug.LogError($"[EntityFactory] EntityBase not found on prefab");
+                Object.Destroy(obj);
+                return (-1, null);
+            }
 
-            MonsterTable table = monster.MonsterTable;
+            // 3. EntityId 발급 + TransformComponent
+            entity.SetupEntityId();
+            int entityId = entity.EntityId;
 
-            // 5. 팩토리가 ECS 컴포넌트 추가
-            AddCreatureComponents(entityId, table);
+            // 4. ECS 컴포넌트 추가
+            await AddCreatureComponents(entityId, table, entity);
+
+            // MonsterTag (System_EntityDestroy에서 MonsterManager 연동에 사용)
+            AR.s.Component.AddComponent(entityId, new MonsterTag());
 
             if (table.AiTableId > 0)
             {
@@ -69,7 +73,6 @@ namespace ARPG.Factory
                 AddSkillsFromAiTable(entityId, table.AiTable);
             }
 
-            // DropComponent (DropId > 0이면 추가)
             if (table.DropId > 0)
             {
                 AR.s.Component.AddComponent(entityId, new DropComponent
@@ -88,51 +91,59 @@ namespace ARPG.Factory
             }
 
             // 자식 프리팹의 IEntityMessageHandler 자동 등록
-            monster.AutoRegisterChildHandlers();
+            entity.AutoRegisterChildHandlers();
 
             Debug.Log($"[EntityFactory] Monster created - EntityId: {entityId}, TableId: {monsterTableId}, Name: {table.Name}");
-            return entityId;
+            return (entityId, entity);
         }
 
         /// <summary>
         /// CreatureTable 기반 플레이어 엔티티 생성
         /// CreatureTable → Stat + State + Velocity + Input + ChunkLoader + Skill
         /// </summary>
-        /// <param name="player">out으로 생성된 ArpgPlayer MonoBehaviour 참조 반환</param>
-        public static int CreatePlayer(int creatureTableId, GameObject prefab, Vector3 position, out Creature.ArpgPlayer? player)
+        /// <returns>(entityId, entity) 튜플. 실패 시 (-1, null)</returns>
+        public static async UniTask<(int entityId, EntityBase? entity)> CreatePlayer(int creatureTableId, Vector3 position)
         {
-            player = null;
-
-            // 1. 프리팹 인스턴스 생성
-            GameObject obj = Object.Instantiate(prefab, position, Quaternion.identity);
-            player = obj.GetComponent<Creature.ArpgPlayer>();
-            if (player == null)
+            // 1. 테이블 로드
+            CreatureTable? table = AR.s.Data.GetPlayer(creatureTableId);
+            if (table == null)
             {
-                Debug.LogError($"[EntityFactory] ArpgPlayer component not found on prefab");
-                Object.Destroy(obj);
-                return -1;
+                Debug.LogError($"[EntityFactory] CreatureTable not found for Id: {creatureTableId}");
+                return (-1, null);
             }
 
-            // 2. MonoBehaviour 초기화
-            player.Initialize();
-
-            // 3. 테이블 로드 (내부에서 _entityId = PlayerData.PlayerId 설정)
-            if (player.Load(creatureTableId) == false)
+            // 2. Addressable로 프리팹 인스턴스 생성
+            Vector3 spawnPos = new Vector3(position.x, position.y, -0.01f);
+            GameObject obj = await Addressables.InstantiateAsync(ENTITY_PREFAB_KEY, spawnPos, Quaternion.identity).ToUniTask();
+            if (obj == null)
             {
-                Debug.LogError($"[EntityFactory] Failed to load CreatureTable Id: {creatureTableId}");
-                Object.Destroy(obj);
-                player = null;
-                return -1;
+                Debug.LogError($"[EntityFactory] Failed to instantiate entity prefab");
+                return (-1, null);
             }
 
-            // 4. EntityId 등록 + TransformComponent (Load에서 이미 _entityId 설정됨)
-            player.SetupEntityId();
-            int entityId = player.EntityId;
+            EntityBase? entity = obj.GetComponent<EntityBase>();
+            if (entity == null)
+            {
+                Debug.LogError($"[EntityFactory] EntityBase not found on prefab");
+                Object.Destroy(obj);
+                return (-1, null);
+            }
 
-            CreatureTable table = player.Table;
+            // 3. 저장된 PlayerId로 EntityId 설정
+            int savedPlayerId = AR.s.Player.GetSavedPlayerId();
+            if (savedPlayerId >= 0)
+            {
+                entity.SetEntityId(savedPlayerId);
+            }
 
-            // 5. 팩토리가 ECS 컴포넌트 추가
-            AddCreatureComponents(entityId, table);
+            entity.SetupEntityId();
+            int entityId = entity.EntityId;
+
+            // 4. PlayerData/인벤토리 초기화
+            AR.s.Player.InitializePlayerData();
+
+            // 5. ECS 컴포넌트 추가
+            await AddCreatureComponents(entityId, table, entity);
 
             AR.s.Component.AddComponent(entityId, new InputComponent
             {
@@ -161,18 +172,20 @@ namespace ARPG.Factory
             }
 
             // 자식 프리팹의 IEntityMessageHandler 자동 등록
-            player.AutoRegisterChildHandlers();
+            entity.AutoRegisterChildHandlers();
 
             Debug.Log($"[EntityFactory] Player created - EntityId: {entityId}, TableId: {creatureTableId}, Name: {table.Name}");
-            return entityId;
+            return (entityId, entity);
         }
 
         #region 공통 컴포넌트 추가 메서드
 
+        private const string UI_CANVAS_PREFAB_KEY = "Prefabs/UICanvas";
+
         /// <summary>
-        /// CreatureTable 기반 공통 컴포넌트 추가 (Stat + State + Velocity)
+        /// CreatureTable 기반 공통 컴포넌트 추가 (Stat + State + Velocity + HP바 프리팹 로드)
         /// </summary>
-        private static void AddCreatureComponents(int entityId, CreatureTable table)
+        private static async UniTask AddCreatureComponents(int entityId, CreatureTable table, EntityBase entity)
         {
             if (table.Stat == null)
                 return;
@@ -198,6 +211,20 @@ namespace ARPG.Factory
                 Speed = 0,
                 SprintMultiplier = 2f
             });
+
+            // HP바 프리팹 로드 → _visual 아래에 자식으로 추가
+            try
+            {
+                GameObject hpBarObj = await Addressables.InstantiateAsync(UI_CANVAS_PREFAB_KEY, entity.Visual.transform).ToUniTask();
+                if (hpBarObj != null)
+                {
+                    hpBarObj.transform.localPosition = Vector3.zero;
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"[EntityFactory] Failed to load HP bar prefab: {e.Message}");
+            }
         }
 
         /// <summary>

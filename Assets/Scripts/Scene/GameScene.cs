@@ -1,8 +1,8 @@
 using UnityEngine;
 using System.Collections;
 using ARPG.Component;
-using ARPG.Creature;
 using ARPG.Factory;
+using Cysharp.Threading.Tasks;
 
 namespace ARPG.Scene
 {
@@ -10,7 +10,6 @@ namespace ARPG.Scene
     {
         [SerializeField] private CameraController _cameraController;
         [SerializeField] private Transform _monsterRoot;
-        [SerializeField] private GameObject _playerPrefab;
 
         public Transform MonsterRoot => _monsterRoot;
 
@@ -18,12 +17,21 @@ namespace ARPG.Scene
         {
             yield return base.OnInitialize();
 
-            // EntityFactory를 통해 플레이어 생성 (Initialize + Load + ECS 컴포넌트 추가)
-            int playerEntityId = EntityFactory.CreatePlayer(1, _playerPrefab, Vector3.zero, out var player);
+            // EntityFactory를 통해 플레이어 생성 (Addressable 비동기)
+            yield return CreatePlayerAsync().ToCoroutine();
+
+            AR.s.OnLoadSceneComplete(this);
+
+            Debug.Log("GameScene initialized.");
+        }
+
+        private async UniTask CreatePlayerAsync()
+        {
+            var (playerEntityId, player) = await EntityFactory.CreatePlayer(1, Vector3.zero);
             if (playerEntityId < 0 || player == null)
             {
                 Debug.LogError("Failed to create player entity.");
-                yield break;
+                return;
             }
 
             _cameraController.Initialize(player);
@@ -37,12 +45,6 @@ namespace ARPG.Scene
                 chunkLoader.IsInitialized = true;
                 AR.s.Component.SetComponent(playerEntityId, chunkLoader);
             }
-
-            AR.s.OnLoadSceneComplete(this);
-
-            Debug.Log("GameScene initialized.");
         }
     }
 }
-
-

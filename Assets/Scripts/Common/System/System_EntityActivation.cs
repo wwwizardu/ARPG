@@ -33,7 +33,7 @@ namespace ARPG.Systems
 
         public void OnFixedUpdate(float inFixedDeltaTime)
         {
-            Creature.ArpgPlayer player = AR.s.MyPlayer;
+            var player = AR.s.MyPlayer;
             if (player == null)
                 return;
 

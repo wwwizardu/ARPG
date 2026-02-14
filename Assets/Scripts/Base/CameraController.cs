@@ -1,5 +1,5 @@
 #nullable enable
-using ARPG.Creature;
+using ARPG.Base;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
 
@@ -7,9 +7,9 @@ public class CameraController : MonoBehaviour
 {
     [SerializeField] private Camera _camera;
 
-    private ArpgPlayer? _player;
+    private EntityBase? _player;
 
-    public void Initialize(ArpgPlayer inPlayer)
+    public void Initialize(EntityBase inPlayer)
     {
         _player = inPlayer;
 

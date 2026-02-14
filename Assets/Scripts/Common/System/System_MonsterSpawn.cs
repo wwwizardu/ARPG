@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 namespace ARPG.Systems
@@ -68,10 +69,6 @@ namespace ARPG.Systems
 
         private void CheckRespawns()
         {
-            List<GameObject> monsterPrefabs = AR.s.Monster.MonsterPrefabs;
-            if (monsterPrefabs == null || monsterPrefabs.Count == 0)
-                return;
-
             AR.s.Monster.GetActiveChunksWithMonstersNonAlloc(_activeChunksCache);
 
             for (int i = 0; i < _activeChunksCache.Count; i++)
@@ -100,11 +97,10 @@ namespace ARPG.Systems
                 // 죽은 몬스터 수만큼 리스폰
                 for (int j = 0; j < deadCount && _availableSpawnCache.Count > 0; j++)
                 {
-                    GameObject randomPrefab = monsterPrefabs[Random.Range(0, monsterPrefabs.Count)];
                     int randomIndex = Random.Range(0, _availableSpawnCache.Count);
                     Vector2Int spawnPos = _availableSpawnCache[randomIndex];
 
-                    AR.s.Monster.RespawnMonsterInChunk(randomPrefab, chunkCoord, spawnPos);
+                    AR.s.Monster.RespawnMonsterInChunk(chunkCoord, spawnPos).Forget();
 
                     // 같은 위치에 중복 스폰 방지 (swap-and-pop)
                     int lastIndex = _availableSpawnCache.Count - 1;

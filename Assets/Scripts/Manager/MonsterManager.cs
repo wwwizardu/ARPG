@@ -1,10 +1,12 @@
 #nullable enable
 using System.Collections.Generic;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
+using ARPG.Base;
 using ARPG.Component;
-using ARPG.Map;
 using ARPG.Creature;
 using ARPG.Factory;
+using ARPG.Map;
 using ARPG.Scene;
 using ARPG.Utility;
 
@@ -12,7 +14,7 @@ namespace ARPG.Monster
 {
     public class MonsterManager : MonoBehaviour
     {
-        private List<Creature.Monster> _monsters = new();
+        private List<EntityBase> _monsters = new();
         private Dictionary<Vector2Int, ChunkMonsterData> _chunkMonsters = new();
         private Transform? _monsterParent;
 
@@ -25,7 +27,7 @@ namespace ARPG.Monster
         [SerializeField] private float _chunkMonsterLifetime = 300f; // 5분
         [SerializeField] private float _activationDistance = 25f; // 몬스터 활성화 거리
         [SerializeField] private float _deactivationDistance = 30f; // 몬스터 비활성화 거리 (하이스테리시스)
-        
+
         public List<GameObject> MonsterPrefabs => _monsterPrefabs;
         public float MonsterSpawnRate => _monsterSpawnRate;
 
@@ -38,18 +40,17 @@ namespace ARPG.Monster
             // 모든 몬스터 제거
             for (int i = 0; i < _monsters.Count; i++)
             {
-                var monster = _monsters[i];
-                if (monster != null && monster.gameObject != null)
+                var entity = _monsters[i];
+                if (entity != null && entity.gameObject != null)
                 {
-                    EntityIdHelper.DestroyEntity(monster.EntityId);
-                    Destroy(monster.gameObject);
+                    EntityIdHelper.DestroyEntity(entity.EntityId);
+                    Destroy(entity.gameObject);
                 }
             }
 
             // 컬렉션 정리
             _monsters.Clear();
             _chunkMonsters.Clear();
-
         }
 
         public void SetMorsterRoot(Transform inMonsterRoot)
@@ -57,49 +58,49 @@ namespace ARPG.Monster
             _monsterParent = inMonsterRoot;
         }
 
-        public void AddMonster(Creature.Monster monster)
+        public void AddMonster(EntityBase entity)
         {
-            if (monster == null)
+            if (entity == null)
                 return;
 
-            if (_monsters.Contains(monster) == false)
+            if (_monsters.Contains(entity) == false)
             {
-                _monsters.Add(monster);
-                monster.transform.SetParent(_monsterParent);
+                _monsters.Add(entity);
+                entity.transform.SetParent(_monsterParent);
             }
         }
 
         /// <summary>
-        /// Monster.OnEntityDestroy()에서 호출됨
+        /// System_EntityDestroy에서 MonsterTag 확인 후 호출
         /// MonsterManager의 추적 정보에서 몬스터를 제거
-        /// ECS 컴포넌트 정리와 GameObject 파괴는 System_EntityDestroy가 담당
         /// </summary>
-        public void UnregisterMonster(Creature.Monster monster)
+        public void UnregisterMonsterByEntityId(int entityId)
         {
-            if (monster == null)
-                return;
-
-            _monsters.Remove(monster);
+            for (int i = 0; i < _monsters.Count; i++)
+            {
+                if (_monsters[i] != null && _monsters[i].EntityId == entityId)
+                {
+                    _monsters.RemoveAt(i);
+                    return;
+                }
+            }
         }
 
-        public int SpawnMonsterAtPosition(GameObject monsterPrefab, Vector3 position, Vector2Int chunkCoord, bool isOriginalSpawn = true)
+        public async Cysharp.Threading.Tasks.UniTask<int> SpawnMonsterAtPosition(Vector3 position, Vector2Int chunkCoord, bool isOriginalSpawn = true)
         {
-            if (monsterPrefab == null)
-                return -1;
-
             if (AR.s.CurrentScene is GameScene gameScene == false)
                 return -1;
 
             Vector3 spawnPos = new Vector3(position.x, position.y, -0.05f);
 
-            // EntityFactory를 통해 몬스터 생성 (Initialize + Load + ECS 컴포넌트 추가)
+            // EntityFactory를 통해 몬스터 생성 (Addressable)
             int monsterTableId = Random.Range(1001, 1003);
-            int entityId = EntityFactory.CreateMonster(monsterTableId, monsterPrefab, spawnPos, gameScene.MonsterRoot, out var monster);
+            var (entityId, entity) = await EntityFactory.CreateMonster(monsterTableId, spawnPos, gameScene.MonsterRoot);
 
-            if (entityId < 0 || monster == null)
+            if (entityId < 0 || entity == null)
                 return -1;
 
-            AddMonster(monster);
+            AddMonster(entity);
 
             // ActivationDistanceComponent 추가
             EntityFactory.AddActivationComponent(entityId, _activationDistance, _deactivationDistance);
@@ -140,13 +141,12 @@ namespace ARPG.Monster
             for (int i = 0; i < chunkData.spawnedMonsterIds.Count; i++)
             {
                 int entityId = chunkData.spawnedMonsterIds[i];
-                if (AR.s.Message.TryGetEntity<Creature.Monster>(entityId, out var monster))
+                if (AR.s.Message.TryGetEntity(entityId, out var entity))
                 {
-                    if (monster.gameObject != null)
+                    if (entity.gameObject != null)
                     {
-                        monster.gameObject.SetActive(false);
+                        entity.gameObject.SetActive(false);
 
-                        // ECS 컴포넌트도 비활성화 상태로 동기화
                         if (AR.s.Component.TryGetComponent<ActivationDistanceComponent>(entityId, out var activation))
                         {
                             activation.IsActivated = false;
@@ -200,7 +200,6 @@ namespace ARPG.Monster
             if (AR.s.Map == null)
                 return;
 
-            // Dictionary.KeyCollection의 foreach는 struct enumerator를 사용하므로 GC 할당 없음
             var mapActiveChunkCoords = AR.s.Map.GetActiveChunkCoords();
             foreach (var chunkCoord in mapActiveChunkCoords)
             {
@@ -230,29 +229,25 @@ namespace ARPG.Monster
                 Vector2Int spawnPos = spawnPositions[i];
                 if (Random.value < _monsterSpawnRate)
                 {
-                    GameObject randomPrefab = _monsterPrefabs[Random.Range(0, _monsterPrefabs.Count)];
                     Vector3 worldPos = new Vector3(
                         chunkCoord.x * AR.s.Map.chunkSize + spawnPos.x,
                         chunkCoord.y * AR.s.Map.chunkSize + spawnPos.y,
                         -0.05f
                     );
-                    SpawnMonsterAtPosition(randomPrefab, worldPos, chunkCoord);
+                    SpawnMonsterAtPosition(worldPos, chunkCoord).Forget();
                 }
             }
         }
 
-        public int RespawnMonsterInChunk(GameObject monsterPrefab, Vector2Int chunkCoord, Vector2Int spawnPos)
+        public async Cysharp.Threading.Tasks.UniTask<int> RespawnMonsterInChunk(Vector2Int chunkCoord, Vector2Int spawnPos)
         {
-            if (monsterPrefab == null)
-                return -1;
-
             Vector3 worldPos = new Vector3(
                 chunkCoord.x * AR.s.Map.chunkSize + spawnPos.x,
                 chunkCoord.y * AR.s.Map.chunkSize + spawnPos.y,
                 -0.05f
             );
 
-            return SpawnMonsterAtPosition(monsterPrefab, worldPos, chunkCoord, false);
+            return await SpawnMonsterAtPosition(worldPos, chunkCoord, false);
         }
 
         private readonly List<Vector2Int> _expiredChunksCache = new();
@@ -261,7 +256,6 @@ namespace ARPG.Monster
         {
             _expiredChunksCache.Clear();
 
-            // Dictionary의 foreach는 struct enumerator를 사용하므로 GC 할당 없음
             foreach (var kvp in _chunkMonsters)
             {
                 ChunkMonsterData chunkData = kvp.Value;
@@ -271,11 +265,11 @@ namespace ARPG.Monster
                     for (int i = 0; i < chunkData.spawnedMonsterIds.Count; i++)
                     {
                         int entityId = chunkData.spawnedMonsterIds[i];
-                        if (AR.s.Message.TryGetEntity<Creature.Monster>(entityId, out var monster))
+                        if (AR.s.Message.TryGetEntity(entityId, out var entity))
                         {
-                            _monsters.Remove(monster);
+                            _monsters.Remove(entity);
                             EntityIdHelper.DestroyEntity(entityId);
-                            Destroy(monster.gameObject);
+                            Destroy(entity.gameObject);
                         }
                     }
                     _expiredChunksCache.Add(kvp.Key);
