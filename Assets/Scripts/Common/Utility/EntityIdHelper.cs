@@ -5,9 +5,19 @@ using UnityEngine;
 namespace ARPG.Utility
 {
     /// <summary>
+    /// 결정적 엔티티 ID 카테고리
+    /// 각 카테고리별 오프셋으로 ownerEntityId + (index+1) * offset 패턴으로 ID 생성
+    /// </summary>
+    public enum EntityIdCategory
+    {
+        Buff,   // offset: 100,000  / maxIndex: 9,999
+        Skill,  // offset: 1,000,000 / maxIndex: 99
+    }
+
+    /// <summary>
     /// 엔티티 ID를 중앙에서 관리하는 헬퍼 클래스
     /// - 일반 엔티티: 0부터 순차적으로 증가하는 ID 할당
-    /// - 스킬 엔티티: SkillEntityIdHelper를 사용하여 생성
+    /// - 결정적 엔티티: 카테고리별 오프셋 기반 ID (버프, 스킬 등)
     /// - 엔티티 ID 중복 방지 및 유효성 검증
     /// </summary>
     public static class EntityIdHelper
@@ -113,7 +123,7 @@ namespace ARPG.Utility
                 // 이 캐릭터의 모든 스킬 엔티티 ID 수집
                 foreach (int slotIndex in slots)
                 {
-                    int skillEntityId = SkillEntityIdHelper.GetSkillEntityId(entityId, slotIndex);
+                    int skillEntityId = GetDeterministicId(entityId, EntityIdCategory.Skill, slotIndex);
                     skillEntitiesToRemove.Add(skillEntityId);
                 }
 
@@ -153,6 +163,90 @@ namespace ARPG.Utility
 
         #endregion
 
+        #region Deterministic ID Calculation
+
+        /// <summary>
+        /// 카테고리별 오프셋 정의
+        /// </summary>
+        private static int GetOffset(EntityIdCategory category)
+        {
+            switch (category)
+            {
+                case EntityIdCategory.Buff:  return 100000;
+                case EntityIdCategory.Skill: return 1000000;
+                default:
+                    Debug.LogError($"[EntityIdHelper] Unknown category: {category}");
+                    return 0;
+            }
+        }
+
+        /// <summary>
+        /// 카테고리별 최대 인덱스 반환
+        /// </summary>
+        public static int GetMaxIndex(EntityIdCategory category)
+        {
+            switch (category)
+            {
+                case EntityIdCategory.Buff:  return 9999;
+                case EntityIdCategory.Skill: return 100;
+                default:
+                    Debug.LogError($"[EntityIdHelper] Unknown category: {category}");
+                    return 0;
+            }
+        }
+
+        /// <summary>
+        /// 결정적 ID 생성: ownerEntityId + (index + 1) * offset
+        /// </summary>
+        public static int GetDeterministicId(int ownerEntityId, EntityIdCategory category, int index)
+        {
+            int maxIndex = GetMaxIndex(category);
+            if (index < 0 || index > maxIndex)
+            {
+                Debug.LogError($"[EntityIdHelper] Invalid index: {index} for category {category}. Must be between 0 and {maxIndex}");
+                return -1;
+            }
+
+            return ownerEntityId + (index + 1) * GetOffset(category);
+        }
+
+        /// <summary>
+        /// 결정적 ID에서 소유자 엔티티 ID 추출
+        /// </summary>
+        public static int GetOwnerEntityId(int entityId, EntityIdCategory category)
+        {
+            return entityId % GetOffset(category);
+        }
+
+        /// <summary>
+        /// 결정적 ID에서 인덱스 추출
+        /// </summary>
+        public static int GetIndex(int entityId, EntityIdCategory category)
+        {
+            return (entityId / GetOffset(category)) - 1;
+        }
+
+        /// <summary>
+        /// 결정적 ID가 유효한지 확인
+        /// </summary>
+        public static bool IsValidDeterministicId(int entityId, EntityIdCategory category)
+        {
+            int index = GetIndex(entityId, category);
+            return index >= 0 && index <= GetMaxIndex(category);
+        }
+
+        /// <summary>
+        /// 디버그용: 결정적 ID 정보를 문자열로 반환
+        /// </summary>
+        public static string GetDebugString(int entityId, EntityIdCategory category)
+        {
+            int ownerId = GetOwnerEntityId(entityId, category);
+            int index = GetIndex(entityId, category);
+            return $"{category}EntityId={entityId} (OwnerId={ownerId}, Index={index})";
+        }
+
+        #endregion
+
         #region Skill Entity Management
 
         /// <summary>
@@ -171,9 +265,10 @@ namespace ARPG.Utility
             }
 
             // 슬롯 인덱스 유효성 검증
-            if (slotIndex < 0 || slotIndex >= SkillEntityIdHelper.MAX_SKILL_SLOTS)
+            int maxSkillSlots = GetMaxIndex(EntityIdCategory.Skill);
+            if (slotIndex < 0 || slotIndex >= maxSkillSlots)
             {
-                Debug.LogError($"[EntityIdHelper] Invalid slot index: {slotIndex}. Must be between 0 and {SkillEntityIdHelper.MAX_SKILL_SLOTS - 1}");
+                Debug.LogError($"[EntityIdHelper] Invalid slot index: {slotIndex}. Must be between 0 and {maxSkillSlots - 1}");
                 return -1;
             }
 
@@ -187,12 +282,12 @@ namespace ARPG.Utility
             if (usedSlots.Contains(slotIndex))
             {
                 Debug.LogWarning($"[EntityIdHelper] Slot {slotIndex} is already assigned to character {characterEntityId}");
-                int existingSkillId = SkillEntityIdHelper.GetSkillEntityId(characterEntityId, slotIndex);
+                int existingSkillId = GetDeterministicId(characterEntityId, EntityIdCategory.Skill, slotIndex);
                 return existingSkillId;
             }
 
             // 스킬 엔티티 ID 생성
-            int skillEntityId = SkillEntityIdHelper.GetSkillEntityId(characterEntityId, slotIndex);
+            int skillEntityId = GetDeterministicId(characterEntityId, EntityIdCategory.Skill, slotIndex);
             if (skillEntityId == -1)
             {
                 Debug.LogError($"[EntityIdHelper] Failed to create skill entity ID");
@@ -230,7 +325,8 @@ namespace ARPG.Utility
             HashSet<int> usedSlots = _characterSkillSlots[characterEntityId];
 
             // 사용 가능한 첫 번째 슬롯 찾기
-            for (int slotIndex = 0; slotIndex < SkillEntityIdHelper.MAX_SKILL_SLOTS; slotIndex++)
+            int maxSlots = GetMaxIndex(EntityIdCategory.Skill);
+            for (int slotIndex = 0; slotIndex < maxSlots; slotIndex++)
             {
                 if (usedSlots.Contains(slotIndex) == false)
                 {
@@ -238,7 +334,7 @@ namespace ARPG.Utility
                 }
             }
 
-            Debug.LogError($"[EntityIdHelper] No available skill slots for character {characterEntityId}. Max slots: {SkillEntityIdHelper.MAX_SKILL_SLOTS}");
+            Debug.LogError($"[EntityIdHelper] No available skill slots for character {characterEntityId}. Max slots: {maxSlots}");
             return -1;
         }
 
@@ -255,11 +351,11 @@ namespace ARPG.Utility
             }
 
             // 스킬 엔티티 ID에서 캐릭터 ID와 슬롯 인덱스 추출
-            int characterEntityId = SkillEntityIdHelper.GetCharacterEntityId(skillEntityId);
-            int slotIndex = SkillEntityIdHelper.GetSlotIndex(skillEntityId, characterEntityId);
+            int characterEntityId = GetOwnerEntityId(skillEntityId, EntityIdCategory.Skill);
+            int slotIndex = GetIndex(skillEntityId, EntityIdCategory.Skill);
 
             // 유효성 검증
-            if (SkillEntityIdHelper.IsValidSkillEntityId(skillEntityId, characterEntityId) == false)
+            if (IsValidDeterministicId(skillEntityId, EntityIdCategory.Skill) == false)
             {
                 Debug.LogWarning($"[EntityIdHelper] Invalid skill entity ID: {skillEntityId}");
                 return;
@@ -288,8 +384,7 @@ namespace ARPG.Utility
             if (_registeredEntityIds.Contains(skillEntityId) == false)
                 return false;
 
-            int characterEntityId = SkillEntityIdHelper.GetCharacterEntityId(skillEntityId);
-            return SkillEntityIdHelper.IsValidSkillEntityId(skillEntityId, characterEntityId);
+            return IsValidDeterministicId(skillEntityId, EntityIdCategory.Skill);
         }
 
         /// <summary>
@@ -337,14 +432,15 @@ namespace ARPG.Utility
             }
 
             // 버프 테이블 ID 유효성 검증
-            if (buffTableID < 0 || buffTableID > BuffEntityIdHelper.MAX_BUFF_TABLE_ID)
+            int maxBuffTableId = GetMaxIndex(EntityIdCategory.Buff);
+            if (buffTableID < 0 || buffTableID > maxBuffTableId)
             {
-                Debug.LogError($"[EntityIdHelper] Invalid buff table ID: {buffTableID}. Must be between 0 and {BuffEntityIdHelper.MAX_BUFF_TABLE_ID}");
+                Debug.LogError($"[EntityIdHelper] Invalid buff table ID: {buffTableID}. Must be between 0 and {maxBuffTableId}");
                 return -1;
             }
 
             // 버프 엔티티 ID 생성
-            int buffEntityId = BuffEntityIdHelper.GetBuffEntityId(targetEntityId, buffTableID);
+            int buffEntityId = GetDeterministicId(targetEntityId, EntityIdCategory.Buff, buffTableID);
             if (buffEntityId == -1)
             {
                 Debug.LogError($"[EntityIdHelper] Failed to create buff entity ID");
@@ -385,11 +481,11 @@ namespace ARPG.Utility
             }
 
             // 버프 엔티티 ID에서 정보 추출
-            int targetEntityId = BuffEntityIdHelper.GetTargetEntityId(buffEntityId);
-            int buffTableID = BuffEntityIdHelper.GetBuffTableID(buffEntityId);
+            int targetEntityId = GetOwnerEntityId(buffEntityId, EntityIdCategory.Buff);
+            int buffTableID = GetIndex(buffEntityId, EntityIdCategory.Buff);
 
             // 유효성 검증
-            if (BuffEntityIdHelper.IsValidBuffEntityId(buffEntityId) == false)
+            if (IsValidDeterministicId(buffEntityId, EntityIdCategory.Buff) == false)
             {
                 Debug.LogWarning($"[EntityIdHelper] Invalid buff entity ID: {buffEntityId}");
                 return;
@@ -424,7 +520,7 @@ namespace ARPG.Utility
             if (_registeredEntityIds.Contains(buffEntityId) == false)
                 return false;
 
-            return BuffEntityIdHelper.IsValidBuffEntityId(buffEntityId);
+            return IsValidDeterministicId(buffEntityId, EntityIdCategory.Buff);
         }
 
         /// <summary>

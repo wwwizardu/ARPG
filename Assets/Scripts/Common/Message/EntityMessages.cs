@@ -136,4 +136,17 @@ namespace ARPG.Message
         /// </summary>
         public int SlotIndex;
     }
+
+    /// <summary>
+    /// 스탯 재계산 완료 Broadcast 메시지
+    /// System_StatCalculation에서 Final 스탯 재계산 후 전송
+    /// UI 등 전역 구독자가 수신
+    /// </summary>
+    public struct StatRecalculatedMessage
+    {
+        /// <summary>
+        /// 스탯이 재계산된 엔티티 ID
+        /// </summary>
+        public int EntityId;
+    }
 }

@@ -1,7 +1,9 @@
 #nullable enable
 using System;
 using ARPG.Base;
+using ARPG.Message;
 using ARPG.Tables;
+using ARPG.Utility;
 using TMPro;
 using UnityEngine;
 
@@ -31,9 +33,12 @@ namespace ARPG.UI
                 _slots[i].Initialize(i, OnClickSlot);
             }
 
+            // 스탯 재계산 완료 메시지 구독
+            AR.s.Message.Subscribe<StatRecalculatedMessage>(OnStatRecalculated);
+
             UpdateCharacterStat();
         }
-
+        
         public void OnLoadCompleted()
         {
             if (_slots == null || _equippedItems == null)
@@ -74,12 +79,20 @@ namespace ARPG.UI
             if (AR.s.Data.Player.EquipItem(inEquipType, inItem, out replacedItem) == false)
                 return false;
 
+            int playerEntityId = AR.s.Data.Player.PlayerId;
+
+            // 교체되는 아이템이 있으면 기존 modifier 제거
+            if (replacedItem != null)
+            {
+                EquipHelper.RemoveEquipmentModifiers(playerEntityId, replacedItem.ItemInstanceId);
+            }
+
+            // 새 장비의 modifier 적용
+            EquipHelper.ApplyEquipmentModifiers(playerEntityId, inItem);
+
             // 새로운 아이템을 슬롯에 장착
             _slots[(int)inEquipType].SetItem(inItem);
 
-            // 캐릭터 스탯 업데이트
-            UpdateCharacterStat();
-            
             return true;
         }
 
@@ -95,13 +108,32 @@ namespace ARPG.UI
             if (AR.s.Data.Player.UnequipItem(inEquipType, out unequippedItem) == false)
                 return false;
 
+            // 해제된 장비의 modifier 제거
+            int playerEntityId = AR.s.Data.Player.PlayerId;
+            if (unequippedItem != null)
+            {
+                EquipHelper.RemoveEquipmentModifiers(playerEntityId, unequippedItem.ItemInstanceId);
+            }
+
             // 슬롯을 초기화하여 아이템 해제
             _slots[(int)inEquipType].Reset();
 
-            // 캐릭터 스탯 업데이트
-            UpdateCharacterStat();
-
             return true;
+        }
+
+        protected override void OnDestroy()
+        {
+            base.OnDestroy();
+
+            if (AR.s != null && AR.s.Message != null)
+            {
+                AR.s.Message.Unsubscribe<StatRecalculatedMessage>(OnStatRecalculated);
+            }
+        }
+
+        private void OnStatRecalculated(StatRecalculatedMessage msg)
+        {
+            UpdateCharacterStat();
         }
 
         private void UpdateCharacterStat()

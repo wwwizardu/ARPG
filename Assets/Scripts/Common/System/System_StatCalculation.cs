@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using ARPG.Component;
+using ARPG.Message;
+using ARPG.Utility;
 using UnityEngine;
 using GE = GlobalEnum;
 
@@ -51,8 +53,19 @@ namespace ARPG.Systems
                 // 1단계: Base를 Final로 복사 (초기화)
                 stat.CopyBaseToFinal();
 
-                // 2단계: StatModifierBuffer에서 모든 보정 가져오기
-                List<StatModifier> modifiers = GetAllModifiers(entityId);
+                // 2단계: StatModifierHelper에서 모든 보정 가져오기
+                List<StatModifier>? modifiers = StatModifierHelper.GetModifiers(entityId);
+                if (modifiers == null || modifiers.Count == 0)
+                {
+                    // modifier가 없으면 Base = Final 그대로 저장
+                    AR.s.Component.SetComponent(entityId, stat);
+                    AR.s.Component.RemoveComponent<StatDirtyTag>(entityId);
+                    if (entityId == AR.s.Data.CurrentPlayerEntityId)
+                    {
+                        AR.s.Message.Broadcast(new StatRecalculatedMessage { EntityId = entityId });
+                    }
+                    continue;
+                }
 
                 // 3단계: 우선순위 순으로 정렬 (낮은 숫자가 먼저)
                 modifiers.Sort((a, b) => a.Priority.CompareTo(b.Priority));
@@ -92,33 +105,13 @@ namespace ARPG.Systems
 
                 // 8단계: Dirty 태그 제거
                 AR.s.Component.RemoveComponent<StatDirtyTag>(entityId);
-            }
-        }
 
-        /// <summary>
-        /// 엔티티의 모든 StatModifier를 리스트로 가져오기
-        /// </summary>
-        private readonly List<StatModifier> GetAllModifiers(int entityId)
-        {
-            List<StatModifier> modifiers = new List<StatModifier>();
-
-            // StatModifierComponent 풀에서 이 엔티티에 적용되는 modifier들 찾기
-            SparseSet<StatModifierComponent> modifierPool = AR.s.Component.GetComponentPool<StatModifierComponent>();
-            if (modifierPool == null || modifierPool.Count == 0)
-                return modifiers;
-
-            // 모든 StatModifier를 순회하며 해당 엔티티의 것만 수집
-            for (int i = 0; i < modifierPool.Count; i++)
-            {
-                StatModifierComponent modComp = modifierPool.GetByIndex(i);
-
-                if (modComp.OwnerEntityId == entityId)
+                // 9단계: 플레이어 스탯 재계산 완료 Broadcast
+                if (entityId == AR.s.Data.CurrentPlayerEntityId)
                 {
-                    modifiers.Add(modComp.Modifier);
+                    AR.s.Message.Broadcast(new StatRecalculatedMessage { EntityId = entityId });
                 }
             }
-
-            return modifiers;
         }
 
         /// <summary>

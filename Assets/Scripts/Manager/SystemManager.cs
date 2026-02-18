@@ -35,6 +35,10 @@ namespace ARPG.Systems
             System_BuffUpdate buffUpdateSystem = new();
             RegisterSystems(buffUpdateSystem);
 
+            // Priority 50: Stat Calculation System (Update) - StatDirtyTag 기반 스탯 재계산
+            System_StatCalculation statCalculationSystem = new();
+            RegisterSystems(statCalculationSystem);
+
             // Priority 50: AI Behavior System (FixedUpdate) - AI 상태 머신 및 행동 로직
             System_AI_Behavior aiBehaviorSystem = new();
             RegisterSystems(aiBehaviorSystem);

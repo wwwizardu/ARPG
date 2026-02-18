@@ -69,8 +69,8 @@ namespace ARPG.Example
             Debug.Log($"Skill 3 entity ID (auto): {skillEntityId3}");
 
             // 스킬 엔티티 ID에서 정보 추출
-            int extractedCharId = SkillEntityIdHelper.GetCharacterEntityId(skillEntityId1);
-            int slotIndex = SkillEntityIdHelper.GetSlotIndex(skillEntityId1, extractedCharId);
+            int extractedCharId = EntityIdHelper.GetOwnerEntityId(skillEntityId1, EntityIdCategory.Skill);
+            int slotIndex = EntityIdHelper.GetIndex(skillEntityId1, EntityIdCategory.Skill);
             Debug.Log($"Extracted from skill entity {skillEntityId1}: Character={extractedCharId}, Slot={slotIndex}");
 
             // 스킬 슬롯 사용 현황 확인

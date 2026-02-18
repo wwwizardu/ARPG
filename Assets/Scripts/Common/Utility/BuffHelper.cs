@@ -39,7 +39,7 @@ namespace ARPG.Utility
             }
 
             // 3. 이미 같은 버프가 존재하는지 먼저 확인
-            int buffEntityId = BuffEntityIdHelper.GetBuffEntityId(targetEntityId, buffTableID);
+            int buffEntityId = EntityIdHelper.GetDeterministicId(targetEntityId, EntityIdCategory.Buff, buffTableID);
 
             if (EntityIdHelper.IsValidBuffEntity(buffEntityId))
             {
@@ -286,20 +286,7 @@ namespace ARPG.Utility
         /// </summary>
         private static void AddStatModifier(int targetEntityId, int sourceBuffEntityId, GE.Stat statType, StatModifierType modifierType, int value, int priority)
         {
-            StatModifier modifier = new StatModifier(
-                statType,
-                modifierType,
-                StatModifierSource.Buff,
-                sourceBuffEntityId,  // 버프 Entity ID를 SourceId로 사용
-                value,
-                priority
-            );
-
-            // StatModifier Entity 생성
-            int modifierEntityId = EntityIdHelper.CreateEntity();
-            AR.s.Component.AddComponent(modifierEntityId, new StatModifierComponent(targetEntityId, modifier));
-
-            Debug.Log($"[BuffHelper] StatModifier added - ModifierEntity: {modifierEntityId}, Target: {targetEntityId}, Stat: {statType}, Type: {modifierType}, Value: {value}");
+            StatModifierHelper.AddStatModifier(targetEntityId, StatModifierSource.Buff, sourceBuffEntityId, statType, modifierType, value, priority);
         }
 
         /// <summary>
@@ -307,34 +294,7 @@ namespace ARPG.Utility
         /// </summary>
         private static void RemoveBuffModifiers(int targetEntityId, int buffEntityId)
         {
-            // StatModifierComponent 풀에서 해당 버프로 인한 modifier들 찾아서 제거
-            SparseSet<StatModifierComponent> modifierPool = AR.s.Component.GetComponentPool<StatModifierComponent>();
-            if (modifierPool == null || modifierPool.Count == 0)
-                return;
-
-            int removedCount = 0;
-
-            // 역순으로 순회 (제거 중에도 안전)
-            for (int i = modifierPool.Count - 1; i >= 0; i--)
-            {
-                int modifierEntityId = modifierPool.GetEntityId(i);
-                StatModifierComponent modComp = modifierPool.GetByIndex(i);
-
-                // 이 modifier가 해당 버프로 인한 것인지 확인
-                if (modComp.OwnerEntityId == targetEntityId &&
-                    modComp.Modifier.Source == StatModifierSource.Buff &&
-                    modComp.Modifier.SourceId == buffEntityId)
-                {
-                    // StatModifierComponent 제거
-                    AR.s.Component.RemoveComponent<StatModifierComponent>(modifierEntityId);
-
-                    // Modifier Entity 삭제
-                    EntityIdHelper.DestroyEntity(modifierEntityId);
-
-                    removedCount++;
-                }
-            }
-
+            int removedCount = StatModifierHelper.RemoveModifiersBySource(targetEntityId, StatModifierSource.Buff, buffEntityId);
             Debug.Log($"[BuffHelper] StatModifiers removed - Target: {targetEntityId}, BuffEntity: {buffEntityId}, Removed: {removedCount}");
         }
     }

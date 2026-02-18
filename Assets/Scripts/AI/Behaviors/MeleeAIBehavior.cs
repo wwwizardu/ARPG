@@ -149,7 +149,7 @@ namespace ARPG.AI.Behaviors
             {
                 // 근접 공격 실행
                 // TODO: 스킬 시스템과 연동하여 공격 스킬 발동
-                if(ARPG.Utility.SkillEntityIdHelper.GetSkillCommandComponent(0, entityId, targetTransform.Position, out var command) == true)
+                if(ARPG.Utility.SkillHelper.GetSkillCommandComponent(0, entityId, targetTransform.Position, out var command) == true)
                 {
                     AR.s.Component.SetComponent(entityId, command);
                 }

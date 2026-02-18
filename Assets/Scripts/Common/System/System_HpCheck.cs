@@ -98,9 +98,9 @@ namespace ARPG.Systems
         /// </summary>
         private void StopOwnerSkills(ComponentManager cm, int ownerEntityId)
         {
-            for (int slotIndex = 0; slotIndex < SkillEntityIdHelper.MAX_SKILL_SLOTS; slotIndex++)
+            for (int slotIndex = 0; slotIndex < EntityIdHelper.GetMaxIndex(EntityIdCategory.Skill); slotIndex++)
             {
-                int skillEntityId = SkillEntityIdHelper.GetSkillEntityId(ownerEntityId, slotIndex);
+                int skillEntityId = EntityIdHelper.GetDeterministicId(ownerEntityId, EntityIdCategory.Skill, slotIndex);
                 if (skillEntityId == -1)
                     continue;
 

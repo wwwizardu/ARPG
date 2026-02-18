@@ -118,7 +118,7 @@ namespace ARPG.Systems
         {
             // 슬롯 인덱스로 스킬 엔티티 ID 즉시 계산
             int slotIndex = 0; // 기본 공격 슬롯
-            int skillEntityId = SkillEntityIdHelper.GetSkillEntityId(_playerEntityId, slotIndex);
+            int skillEntityId = EntityIdHelper.GetDeterministicId(_playerEntityId, EntityIdCategory.Skill, slotIndex);
 
             // 스킬이 실제로 존재하는지 확인
             if (AR.s.Component.TryGetComponent<SkillComponent>(skillEntityId, out var skill) == true)

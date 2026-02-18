@@ -161,6 +161,9 @@ namespace ARPG.Factory
                 IsInitialized = false
             });
 
+            // 저장된 장비의 스탯 modifier 복원
+            EquipHelper.ApplyAllEquipmentModifiers(entityId, AR.s.Data.Player._inventoryEquip);
+
             // 플레이어 스킬 (SkillId 1)
             CreateSkill(entityId, 0, 1);
 

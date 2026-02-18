@@ -51,7 +51,7 @@ namespace ARPG.Examples
             int skillEntityId = EntityIdHelper.CreateSkillEntity(_characterEntityId, slotIndex);
 
             // 디버그 정보 출력
-            Debug.Log($"[SkillSystemExample] Creating skill - {SkillEntityIdHelper.GetDebugString(skillEntityId)}");
+            Debug.Log($"[SkillSystemExample] Creating skill - {EntityIdHelper.GetDebugString(skillEntityId, EntityIdCategory.Skill)}");
 
             // SkillComponent 추가
             AR.s.Component.AddComponent(skillEntityId, new SkillComponent
@@ -92,7 +92,7 @@ namespace ARPG.Examples
         public void UseSkillAtPosition(int slotIndex, Vector2 targetPosition)
         {
             // 스킬 엔티티 ID 계산
-            int skillEntityId = SkillEntityIdHelper.GetSkillEntityId(_characterEntityId, slotIndex);
+            int skillEntityId = EntityIdHelper.GetDeterministicId(_characterEntityId, EntityIdCategory.Skill, slotIndex);
 
             // 스킬이 존재하는지 확인
             if (!AR.s.Component.HasComponent<SkillComponent>(skillEntityId))
@@ -115,7 +115,7 @@ namespace ARPG.Examples
         /// </summary>
         public void UseSkillInDirection(int slotIndex, Vector2 direction)
         {
-            int skillEntityId = SkillEntityIdHelper.GetSkillEntityId(_characterEntityId, slotIndex);
+            int skillEntityId = EntityIdHelper.GetDeterministicId(_characterEntityId, EntityIdCategory.Skill, slotIndex);
 
             if (!AR.s.Component.HasComponent<SkillComponent>(skillEntityId))
             {
@@ -136,7 +136,7 @@ namespace ARPG.Examples
         /// </summary>
         public void StopSkill(int slotIndex)
         {
-            int skillEntityId = SkillEntityIdHelper.GetSkillEntityId(_characterEntityId, slotIndex);
+            int skillEntityId = EntityIdHelper.GetDeterministicId(_characterEntityId, EntityIdCategory.Skill, slotIndex);
 
             var command = new SkillCommandComponent();
             //command.SetStopCommand(skillEntityId);
@@ -154,7 +154,7 @@ namespace ARPG.Examples
         /// </summary>
         public bool IsSkillRunning(int slotIndex)
         {
-            int skillEntityId = SkillEntityIdHelper.GetSkillEntityId(_characterEntityId, slotIndex);
+            int skillEntityId = EntityIdHelper.GetDeterministicId(_characterEntityId, EntityIdCategory.Skill, slotIndex);
 
             if (AR.s.Component.TryGetComponent<SkillStateComponent>(skillEntityId, out var state))
             {
@@ -169,7 +169,7 @@ namespace ARPG.Examples
         /// </summary>
         public SkillComponent? GetSkillInfo(int slotIndex)
         {
-            int skillEntityId = SkillEntityIdHelper.GetSkillEntityId(_characterEntityId, slotIndex);
+            int skillEntityId = EntityIdHelper.GetDeterministicId(_characterEntityId, EntityIdCategory.Skill, slotIndex);
 
             if (AR.s.Component.TryGetComponent<SkillComponent>(skillEntityId, out var skill))
             {
@@ -184,8 +184,8 @@ namespace ARPG.Examples
         /// </summary>
         public void PrintSkillDebugInfo(int slotIndex)
         {
-            int skillEntityId = SkillEntityIdHelper.GetSkillEntityId(_characterEntityId, slotIndex);
-            Debug.Log(SkillEntityIdHelper.GetDebugString(skillEntityId));
+            int skillEntityId = EntityIdHelper.GetDeterministicId(_characterEntityId, EntityIdCategory.Skill, slotIndex);
+            Debug.Log(EntityIdHelper.GetDebugString(skillEntityId, EntityIdCategory.Skill));
         }
 
 

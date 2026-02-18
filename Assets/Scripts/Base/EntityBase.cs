@@ -200,7 +200,7 @@ namespace ARPG.Base
             int skillEntityId = EntityIdHelper.CreateSkillEntity(_entityId, inSlotIndex);
 
             // 디버그 정보 출력
-            Debug.Log($"[EntityBase] Creating skill - {SkillEntityIdHelper.GetDebugString(skillEntityId)}");
+            Debug.Log($"[EntityBase] Creating skill - {EntityIdHelper.GetDebugString(skillEntityId, EntityIdCategory.Skill)}");
 
             var skillTable = AR.s.Data.GetSkill(inSkillId);
             if(skillTable == null)
