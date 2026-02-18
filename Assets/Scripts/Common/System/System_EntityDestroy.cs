@@ -52,6 +52,12 @@ namespace ARPG.Systems
                     AR.s.Monster.UnregisterMonsterByEntityId(entityId);
                 }
 
+                // NpcTag가 있으면 NpcManager에서 제거
+                if (cm.HasComponent<NpcTag>(entityId))
+                {
+                    AR.s.Npc.UnregisterNpcByEntityId(entityId);
+                }
+
                 if (AR.s.Message.TryGetEntity(entityId, out var entity))
                 {
                     entity.OnEntityDestroy();

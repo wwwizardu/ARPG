@@ -95,10 +95,17 @@ namespace ARPG.Map
                     {
                         TileBase objectTileBase = _tilemapObject.GetTile(tilemapPosition);
                         CustomTile objectCustomTile = objectTileBase as CustomTile;
-
                         if (objectCustomTile != null)
                         {
-                            objectId = (ulong)objectCustomTile.CustomData;
+                            // NPC는 ObjectLayerMask에 저장하지 않고 별도의 리스트로 관리한다. 그래서 ObjectId로 저장하지 않음
+                            if(objectCustomTile.Layer == GlobalEnum.TileLayer.Npc) 
+                            {
+                                mapFileData.AddObject(x, y, (int)GlobalEnum.ObjectType.Npc, (int)objectCustomTile.CustomData);
+                            }
+                            else
+                            {
+                                objectId = (ulong)objectCustomTile.CustomData;
+                            }
                         }
                     }
 
@@ -215,6 +222,21 @@ namespace ARPG.Map
                         {
                             _tilemapObject.SetTile(tilemapPosition, objectTile);
                         }
+                    }
+                }
+
+                // 2. Object 리스트 데이터 적용 (NPC 등)
+                List<MapFileObjectData> objects = mapFileData.GetObjects();
+                for (int i = 0; i < objects.Count; i++)
+                {
+                    MapFileObjectData obj = objects[i];
+                    int worldX = startX + obj.X;
+                    int worldY = startY + obj.Y;
+                    Vector3Int tilemapPosition = new Vector3Int(worldX, worldY, 0);
+
+                    if (obj.ObjectType == (int)GlobalEnum.ObjectType.Npc)
+                    {
+                        _tilemapObject.SetTile(tilemapPosition, _themeTileSet.NpcSet[0] as CustomTile);
                     }
                 }
 

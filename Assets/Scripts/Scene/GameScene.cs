@@ -10,8 +10,10 @@ namespace ARPG.Scene
     {
         [SerializeField] private CameraController _cameraController;
         [SerializeField] private Transform _monsterRoot;
+        [SerializeField] private Transform _npcRoot;
 
         public Transform MonsterRoot => _monsterRoot;
+        public Transform NpcRoot => _npcRoot;
 
         protected override IEnumerator OnInitialize()
         {

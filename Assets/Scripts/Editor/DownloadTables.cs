@@ -29,13 +29,13 @@ namespace ARPG.Editor
         {
             _tableDic = new();
 
-            await DownloadTable<CreatureTable>("0&range=A:E", 1, SaveType.String);
+            await DownloadTable<CreatureTable>("0&range=A:F", 1, SaveType.String);
 
             await DownloadTable<AiTable>("947794841&range=A:F", 1, SaveType.String);
 
-            await DownloadTable<MonsterTable>("483012127&range=A:J", 1, SaveType.String);
+            await DownloadTable<MonsterTable>("483012127&range=A:K", 1, SaveType.String);
 
-            await DownloadTable<NpcTable>("1460299278&range=A:H", 1, SaveType.String);
+            await DownloadTable<NpcTable>("1460299278&range=A:K", 1, SaveType.String);
 
             await DownloadTable<StatTable>("318209064&range=A:Y", 1, SaveType.String);
 
@@ -200,26 +200,30 @@ namespace ARPG.Editor
             }
 
             table.Name = values[1];
-            table.StatId = int.Parse(values[2]);
-            table.PrefabName = values[3];
-            table.AnimationId = int.Parse(values[4]);
+            // values[2]는 웹에서만 사용한다.
+            table.StatId = int.Parse(values[3]);
+            table.PrefabName = values[4];
+            table.AnimationId = int.Parse(values[5]);
         }
 
         private static void ParseNpcTable(NpcTable table, string[] values)
         {
-            if (values.Length < 7)
+            if (values.Length < 9)
             {
-                Debug.LogError($"[ParseNpcTable] Invalid data length. Expected at least 7, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseNpcTable] Invalid data length. Expected at least 9, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
             table.Name = values[1];
-            table.StatId = int.Parse(values[2]);
-            table.PrefabName = values[3];
-            table.AiTableId = int.Parse(values[4]);
-            table.DropId = int.Parse(values[5]);
-            table.DropRateBonus = int.Parse(values[6]);
-            table.DropRarityBonus = int.Parse(values[7]);
+            // values[2]는 웹에서만 사용한다.
+            table.StatId = int.Parse(values[3]);
+            table.PrefabName = values[4];
+            table.AnimationId = int.Parse(values[5]);
+            table.WeaponId = int.Parse(values[6]);
+            table.AiTableId = int.Parse(values[7]);
+            table.DropId = int.Parse(values[8]);
+            table.DropRateBonus = int.Parse(values[9]);
+            table.DropRarityBonus = int.Parse(values[10]);
         }
 
         private static void ParseStatTable(StatTable table, string[] values)
@@ -269,11 +273,12 @@ namespace ARPG.Editor
             // values[2]는 웹에서만 사용한다.
             table.StatId = int.Parse(values[3]);
             table.PrefabName = values[4];
-            table.WeaponId = int.Parse(values[5]);
-            table.AiTableId = int.Parse(values[6]);
-            table.DropId = int.Parse(values[7]);
-            table.DropRateBonus = int.Parse(values[8]);
-            table.DropRarityBonus = int.Parse(values[9]);
+            table.AnimationId = int.Parse(values[5]);
+            table.WeaponId = int.Parse(values[6]);
+            table.AiTableId = int.Parse(values[7]);
+            table.DropId = int.Parse(values[8]);
+            table.DropRateBonus = int.Parse(values[9]);
+            table.DropRarityBonus = int.Parse(values[10]);
         }
 
         private static void ParseItemTable(ItemTable table, string[] values)

@@ -19,6 +19,12 @@ namespace ARPG.Map
             {
                 AR.s.Monster.ActivateChunkMonsters(chunkCoord);
             }
+
+            // NPC 스폰/복원 (NpcManager의 SaveData 기반)
+            if (AR.s.Npc != null)
+            {
+                AR.s.Npc.OnChunkActivated(chunkCoord);
+            }
         }
 
         public void OnChunkDeactivated(Vector2Int chunkCoord)
@@ -27,6 +33,12 @@ namespace ARPG.Map
                 return;
 
             AR.s.Monster.DeactivateChunkMonsters(chunkCoord);
+
+            // NPC 상태 저장 및 비활성화 (NpcManager의 SaveData 기반)
+            if (AR.s.Npc != null)
+            {
+                AR.s.Npc.OnChunkDeactivated(chunkCoord);
+            }
         }
     }
 }

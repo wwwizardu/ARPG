@@ -125,9 +125,6 @@ namespace ARPG.Map
             // 2. MapFileData로 타일 데이터 덮어쓰기
             OverlayMapFileData(chunk);
 
-            // 2.1 MapFileData의 오브젝트 로드
-            //LoadMapFileObjects(chunk);
-
             // 3. 후보 위치 중 최종적으로 몬스터 스폰 플래그가 유지된 위치만 수집
             foreach (var pos in _candidateSpawnPositions)
             {
@@ -185,53 +182,6 @@ namespace ARPG.Map
                         {
                             chunk.tiles[chunkLocalX, chunkLocalY] = mapTileData;
                         }
-                    }
-                }
-            }
-        }
-
-        /// <summary>
-        /// MapFileData의 오브젝트 리스트를 로드하여 월드 좌표로 변환합니다.
-        /// </summary>
-        private void LoadMapFileObjects(MapChunkData chunk)
-        {
-            foreach (var mapFileEntry in _mapFileDataDic)
-            {
-                Vector2Int mapFileChunkPos = mapFileEntry.Key;
-                MapFileData mapFileData = mapFileEntry.Value;
-
-                // 오브젝트 리스트 가져오기
-                List<MapFileObjectData> objects = mapFileData.GetObjects();
-                if (objects == null || objects.Count == 0)
-                    continue;
-
-                // 현재 청크의 월드 좌표 범위
-                Vector2Int chunkWorldStart = new Vector2Int(chunk.chunkX * chunkSize, chunk.chunkY * chunkSize);
-                Vector2Int chunkWorldEnd = new Vector2Int(chunkWorldStart.x + chunkSize - 1, chunkWorldStart.y + chunkSize - 1);
-
-                Vector2Int mapFileWorldStart = mapFileData.StartPosition;
-
-                // 각 오브젝트를 순회하며 현재 청크에 해당하는 오브젝트 처리
-                foreach (var obj in objects)
-                {
-                    // 오브젝트의 월드 좌표 계산
-                    int objectWorldX = mapFileWorldStart.x + obj.X;
-                    int objectWorldY = mapFileWorldStart.y + obj.Y;
-
-                    // 현재 청크 범위 내에 있는지 확인
-                    if (objectWorldX >= chunkWorldStart.x && objectWorldX <= chunkWorldEnd.x &&
-                        objectWorldY >= chunkWorldStart.y && objectWorldY <= chunkWorldEnd.y)
-                    {
-                        // 청크 내 로컬 좌표로 변환
-                        int chunkLocalX = objectWorldX - chunkWorldStart.x;
-                        int chunkLocalY = objectWorldY - chunkWorldStart.y;
-
-                        // TODO: 오브젝트 처리 로직 추가
-                        // 예: 오브젝트 타입에 따라 NPC 스폰, 장식 배치 등
-                        Debug.Log($"[MapManager] Object loaded at chunk({chunk.chunkX}, {chunk.chunkY}) " +
-                                  $"local({chunkLocalX}, {chunkLocalY}) " +
-                                  $"world({objectWorldX}, {objectWorldY}) " +
-                                  $"Type: {obj.ObjectType}, Id: {obj.ObjectId}");
                     }
                 }
             }

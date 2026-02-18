@@ -64,9 +64,44 @@ namespace ARPG.Map
             _randomSeed = inSeed;
             _randomGenerator = new System.Random(_randomSeed);
 
+            // MapFileData의 NPC 오브젝트를 NpcManager에 1회 등록
+            RegisterAllNpcsToManager();
+
             UpdateChunksAroundPlayer(playerPosition);
 
             OnResetSpawner();
+        }
+
+        /// <summary>
+        /// 모든 MapFileData에서 NPC 오브젝트를 찾아 NpcManager에 등록한다. (맵 로드 시 1회)
+        /// </summary>
+        private void RegisterAllNpcsToManager()
+        {
+            if (AR.s.Npc == null)
+                return;
+
+            foreach (var mapFileEntry in _mapFileDataDic)
+            {
+                MapFileData mapFileData = mapFileEntry.Value;
+                List<MapFileObjectData> objects = mapFileData.GetObjects();
+                if (objects == null || objects.Count == 0)
+                    continue;
+
+                // NPC 타입만 필터링
+                List<MapFileObjectData> npcObjects = new();
+                for (int i = 0; i < objects.Count; i++)
+                {
+                    if (objects[i].ObjectType == (int)GlobalEnum.ObjectType.Npc)
+                    {
+                        npcObjects.Add(objects[i]);
+                    }
+                }
+
+                if (npcObjects.Count > 0)
+                {
+                    AR.s.Npc.RegisterNpcsFromMapFile(npcObjects, mapFileData.StartPosition, chunkSize);
+                }
+            }
         }
 
         public void UpdateChunksAroundPlayer(Vector3 playerPosition)

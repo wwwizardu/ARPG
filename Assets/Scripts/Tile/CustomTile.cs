@@ -10,6 +10,7 @@ public class CustomTile : TileBase
     [SerializeField] private bool _isWalkable = true;
 
     public Sprite Sprite => _sprite;
+    public GlobalEnum.TileLayer Layer => _layer;
     public uint CustomData => _customData;
     public bool IsWalkable => _isWalkable;
 

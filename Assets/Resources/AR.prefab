@@ -125,6 +125,7 @@ Transform:
   - {fileID: 3305105876520651340}
   - {fileID: 4127557824018551616}
   - {fileID: 163152631085100268}
+  - {fileID: 6006664769501381891}
   - {fileID: 3044714210340824762}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -140,14 +141,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4d63b384d23dfb34298597b0e3042976, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _messageManager: {fileID: 8510773822740371914}
   _systemManager: {fileID: 3678431746153749487}
   _componentManager: {fileID: 8514038192158076165}
   _dataManager: {fileID: 1418865202771926580}
   _mapManager: {fileID: 2135064203073992444}
   _uiManager: {fileID: 858626092241130880}
   _monsterManager: {fileID: 7236864687234034134}
+  _npcManager: {fileID: 1634794195815487357}
   _itemManager: {fileID: 2311453194463681167}
-  _messageManager: {fileID: 8510773822740371914}
 --- !u!1 &3539532602560519318
 GameObject:
   m_ObjectHideFlags: 0
@@ -264,6 +266,79 @@ MonoBehaviour:
 Transform:
   m_CorrespondingSourceObject: {fileID: 2412657624180463385, guid: 17563ebce9629b847929ba6ae2d876ec, type: 3}
   m_PrefabInstance: {fileID: 911243467747482965}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1001 &2307472558686081073
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 3160730113525791529}
+    m_Modifications:
+    - target: {fileID: 3867035614040533248, guid: ff2e13a7887c811448aaba826b5d55d1, type: 3}
+      propertyPath: m_Name
+      value: NpcManager
+      objectReference: {fileID: 0}
+    - target: {fileID: 8313152165351380274, guid: ff2e13a7887c811448aaba826b5d55d1, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8313152165351380274, guid: ff2e13a7887c811448aaba826b5d55d1, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8313152165351380274, guid: ff2e13a7887c811448aaba826b5d55d1, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8313152165351380274, guid: ff2e13a7887c811448aaba826b5d55d1, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8313152165351380274, guid: ff2e13a7887c811448aaba826b5d55d1, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8313152165351380274, guid: ff2e13a7887c811448aaba826b5d55d1, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8313152165351380274, guid: ff2e13a7887c811448aaba826b5d55d1, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8313152165351380274, guid: ff2e13a7887c811448aaba826b5d55d1, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8313152165351380274, guid: ff2e13a7887c811448aaba826b5d55d1, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8313152165351380274, guid: ff2e13a7887c811448aaba826b5d55d1, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: ff2e13a7887c811448aaba826b5d55d1, type: 3}
+--- !u!114 &1634794195815487357 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 3939029791986009932, guid: ff2e13a7887c811448aaba826b5d55d1, type: 3}
+  m_PrefabInstance: {fileID: 2307472558686081073}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8b97fab739ab0de438ccddd7fbf97e10, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ARPG.Npc.NpcManager
+--- !u!4 &6006664769501381891 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 8313152165351380274, guid: ff2e13a7887c811448aaba826b5d55d1, type: 3}
+  m_PrefabInstance: {fileID: 2307472558686081073}
   m_PrefabAsset: {fileID: 0}
 --- !u!1001 &3430898761264587789
 PrefabInstance:

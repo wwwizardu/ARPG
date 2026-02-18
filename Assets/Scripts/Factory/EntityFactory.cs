@@ -98,6 +98,73 @@ namespace ARPG.Factory
         }
 
         /// <summary>
+        /// NpcTable 기반 NPC 엔티티 생성
+        /// NpcTable → Stat + State + Velocity + AI
+        /// </summary>
+        /// <returns>(entityId, entity) 튜플. 실패 시 (-1, null)</returns>
+        public static async UniTask<(int entityId, EntityBase? entity)> CreateNpc(int npcTableId, Vector3 position, Transform? parent = null, int savedEntityId = -1)
+        {
+            // 1. 테이블 로드
+            NpcTable? table = AR.s.Data.GetNpc(npcTableId);
+            if (table == null)
+            {
+                Debug.LogError($"[EntityFactory] NpcTable not found for Id: {npcTableId}");
+                return (-1, null);
+            }
+
+            // 2. Addressable로 프리팹 인스턴스 생성
+            Vector3 spawnPos = new Vector3(position.x, position.y, -0.01f);
+            GameObject obj = await Addressables.InstantiateAsync(ENTITY_PREFAB_KEY, spawnPos, Quaternion.identity, parent).ToUniTask();
+            if (obj == null)
+            {
+                Debug.LogError($"[EntityFactory] Failed to instantiate entity prefab for NPC");
+                return (-1, null);
+            }
+
+            EntityBase? entity = obj.GetComponent<EntityBase>();
+            if (entity == null)
+            {
+                Debug.LogError($"[EntityFactory] EntityBase not found on prefab for NPC");
+                Object.Destroy(obj);
+                return (-1, null);
+            }
+
+            // 3. EntityId 설정 + TransformComponent
+            if (savedEntityId >= 0)
+            {
+                entity.SetEntityId(savedEntityId);
+            }
+            entity.SetupEntityId();
+            int entityId = entity.EntityId;
+
+            // 4. ECS 컴포넌트 추가
+            await AddCreatureComponents(entityId, table, entity);
+
+            if (table.AiTableId > 0)
+            {
+                AddAIComponents(entityId, table.AiTableId);
+            }
+
+            if (table.AiTable != null)
+            {
+                AddSkillsFromAiTable(entityId, table.AiTable);
+            }
+
+            RegisterToSystems(entityId, obj, table.AnimationId);
+
+            if (table.AnimationData != null)
+            {
+                LoadAnimationAsync(entityId, obj, table.AnimationData).Forget();
+            }
+
+            // 자식 프리팹의 IEntityMessageHandler 자동 등록
+            entity.AutoRegisterChildHandlers();
+
+            Debug.Log($"[EntityFactory] NPC created - EntityId: {entityId}, TableId: {npcTableId}, Name: {table.Name}");
+            return (entityId, entity);
+        }
+
+        /// <summary>
         /// CreatureTable 기반 플레이어 엔티티 생성
         /// CreatureTable → Stat + State + Velocity + Input + ChunkLoader + Skill
         /// </summary>

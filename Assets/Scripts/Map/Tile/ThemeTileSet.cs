@@ -15,4 +15,7 @@ public class ThemeTileSet : ScriptableObject
     [Header("Object")]
     public TileBase[] ObjectSet;
 
+    [Header("Npc")]
+    public TileBase[] NpcSet;
+
 }

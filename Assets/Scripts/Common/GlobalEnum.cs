@@ -13,6 +13,7 @@ public class GlobalEnum
     {
         Ground,
         Object,
+        Npc,
     }
 
     public enum TileType
@@ -28,6 +29,7 @@ public class GlobalEnum
     {
         None = 0,           // 빈 타일
         Stone = 1,          // 돌 벽
+        Npc = 2,            // NPC가 위치하는 타일 (맵 에디터에서만 사용)
     }
 
     public enum TileFlag : ulong
