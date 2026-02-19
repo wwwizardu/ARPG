@@ -1,1 +1,1 @@
-[{"Name":"Knight","SpriteLibraryPath":"Animation/Knight","AnimClipPath":"Humanoid","ClipNames":"Idle|Move|Attack|Dead","Id":1}]
+[{"Name":"Knight","SpriteLibraryPath":"Animation/Knight","AnimClipPath":"Humanoid","ClipNames":"Idle|Move|Attack|Dead","Id":1},{"Name":"Npc1","SpriteLibraryPath":"Animation/Npc","AnimClipPath":"Humanoid","ClipNames":"Idle|Move|Attack|Dead","Id":2}]

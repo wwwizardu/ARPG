@@ -4,6 +4,7 @@ using ARPG.Component;
 using ARPG.Message;
 using ARPG.Utility;
 using UnityEngine;
+using UnityEngine.U2D.Animation;
 
 namespace ARPG.Base
 {
@@ -21,6 +22,21 @@ namespace ARPG.Base
 
         public int EntityId { get { return _entityId; } }
         public GameObject Visual => _visual;
+
+        public void SetSpriteLibrary(SpriteLibraryAsset slAsset)
+        {
+            if (_sr == null)
+                return;
+
+            var spriteLibrary = _sr.GetComponent<SpriteLibrary>();
+            if (spriteLibrary == null)
+            {
+                spriteLibrary = _sr.gameObject.AddComponent<SpriteLibrary>();
+            }
+
+            spriteLibrary.spriteLibraryAsset = slAsset;
+        }
+
 
         /// <summary>
         /// 외부에서 EntityId를 설정 (플레이어 등 저장된 ID를 사용하는 경우)

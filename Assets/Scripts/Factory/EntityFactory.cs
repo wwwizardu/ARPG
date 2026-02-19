@@ -448,21 +448,19 @@ namespace ARPG.Factory
 
             try
             {
-                // 1. SpriteLibraryAsset 로드
+                // 1. SpriteLibraryAsset 로드 (_sr의 GameObject에 SpriteLibrary 설정)
                 if (string.IsNullOrEmpty(animData.SpriteLibraryPath) == false)
                 {
-                    var spriteLibrary = obj.GetComponent<SpriteLibrary>();
-                    if (spriteLibrary == null)
-                    {
-                        spriteLibrary = obj.AddComponent<SpriteLibrary>();
-                    }
-
                     var slAsset = await Addressables.LoadAssetAsync<SpriteLibraryAsset>(
                         animData.SpriteLibraryPath).ToUniTask(cancellationToken: cts.Token);
 
                     if (slAsset != null)
                     {
-                        spriteLibrary.spriteLibraryAsset = slAsset;
+                        EntityBase? entity = obj.GetComponent<EntityBase>();
+                        if (entity != null)
+                        {
+                            entity.SetSpriteLibrary(slAsset);
+                        }
                     }
                 }
 
