@@ -121,6 +121,7 @@ Transform:
   - {fileID: 8896052499424090771}
   - {fileID: 7136883352716746891}
   - {fileID: 3977619827678579805}
+  - {fileID: 6005378264461179387}
   - {fileID: 7330262817979170704}
   - {fileID: 3305105876520651340}
   - {fileID: 4127557824018551616}
@@ -150,6 +151,7 @@ MonoBehaviour:
   _monsterManager: {fileID: 7236864687234034134}
   _npcManager: {fileID: 1634794195815487357}
   _itemManager: {fileID: 2311453194463681167}
+  _llmManager: {fileID: 292700004610607739}
 --- !u!1 &3539532602560519318
 GameObject:
   m_ObjectHideFlags: 0
@@ -194,6 +196,50 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 37bf0f03d0c89ad49bc89d6c2d7bdc4b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ARPG.Manager.MessageManager
+--- !u!1 &4953521131629988474
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6005378264461179387}
+  - component: {fileID: 292700004610607739}
+  m_Layer: 0
+  m_Name: LLMManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6005378264461179387
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4953521131629988474}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 3160730113525791529}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &292700004610607739
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4953521131629988474}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8ef54ae0cb7c9634eafde4304474cbe4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ARPG.Manager.LLMManager
 --- !u!1001 &911243467747482965
 PrefabInstance:
   m_ObjectHideFlags: 0

@@ -18,7 +18,8 @@ namespace ARPG
         [SerializeField] private ARPG.Npc.NpcManager _npcManager;
 
         [SerializeField] private Item.ItemManager _itemManager;
-        
+        [SerializeField] private Manager.LLMManager _llmManager;
+
         private bool _initialized = false;
 
         private Base.SceneBase? _currentScene;
@@ -39,6 +40,7 @@ namespace ARPG
         public Item.ItemManager Item => _itemManager;
         public Manager.MessageManager Message => _messageManager;
 
+        public Manager.LLMManager LLM => _llmManager;
         public PlayerManager Player => _playerManager;
 
         public Base.EntityBase? MyPlayer => _playerManager.MyPlayers;
@@ -62,6 +64,7 @@ namespace ARPG
             _monsterManager.Initialize();
             _npcManager.Initialize();
             _messageManager.Initialize();
+            _llmManager.Initialize();
 
             _initialized = true;
 
