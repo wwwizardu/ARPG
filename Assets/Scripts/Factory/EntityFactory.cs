@@ -140,6 +140,15 @@ namespace ARPG.Factory
             // 4. ECS 컴포넌트 추가
             await AddCreatureComponents(entityId, table, entity);
 
+            // NPC 고유 성향 스탯 (랜덤 생성)
+            AR.s.Component.AddComponent(entityId, new NpcStatComponent
+            {
+                Friendliness = Random.Range(0, 101),
+                Honesty = Random.Range(0, 101),
+                Greed = Random.Range(0, 101),
+                Loyalty = Random.Range(0, 101)
+            });
+
             if (table.AiTableId > 0)
             {
                 AddAIComponents(entityId, table.AiTableId);

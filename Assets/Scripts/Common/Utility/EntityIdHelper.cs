@@ -10,8 +10,9 @@ namespace ARPG.Utility
     /// </summary>
     public enum EntityIdCategory
     {
-        Buff,   // offset: 100,000  / maxIndex: 9,999
-        Skill,  // offset: 1,000,000 / maxIndex: 99
+        Buff,           // offset: 100,000    / maxIndex: 9,999
+        Skill,          // offset: 1,000,000  / maxIndex: 99
+        Relationship,   // offset: 10,000,000 / maxIndex: 9,999
     }
 
     /// <summary>
@@ -49,6 +50,17 @@ namespace ARPG.Utility
         private static readonly Queue<int> _recycledEntityIds = new Queue<int>();
 
         /// <summary>
+        /// 관계 추적: fromEntityId -> 관계를 맺고 있는 toEntityId 집합
+        /// </summary>
+        private static readonly Dictionary<int, HashSet<int>> _relationshipTargets = new Dictionary<int, HashSet<int>>();
+
+        /// <summary>
+        /// 관계 역방향 추적: toEntityId -> 이 엔티티를 대상으로 관계를 맺고 있는 fromEntityId 집합
+        /// 엔티티 삭제 시 역방향 관계도 정리하기 위해 사용
+        /// </summary>
+        private static readonly Dictionary<int, HashSet<int>> _relationshipSources = new Dictionary<int, HashSet<int>>();
+
+        /// <summary>
         /// 헬퍼 초기화 (게임 시작 시 또는 씬 전환 시 호출)
         /// </summary>
         public static void Initialize()
@@ -67,6 +79,8 @@ namespace ARPG.Utility
             _characterSkillSlots.Clear();
             _targetBuffTypes.Clear();
             _recycledEntityIds.Clear();
+            _relationshipTargets.Clear();
+            _relationshipSources.Clear();
             Debug.Log("[EntityIdHelper] Reset - All entities cleared");
         }
 
@@ -139,6 +153,9 @@ namespace ARPG.Utility
                 Debug.Log($"[EntityIdHelper] Removed {skillEntitiesToRemove.Count} skill entities for character {entityId}");
             }
 
+            // 이 엔티티와 관련된 모든 관계 엔티티 제거
+            DestroyAllRelationshipsForEntity(entityId);
+
             // 메인 엔티티의 모든 ECS 컴포넌트 제거
             AR.s.Component.RemoveAllComponents(entityId);
 
@@ -172,8 +189,9 @@ namespace ARPG.Utility
         {
             switch (category)
             {
-                case EntityIdCategory.Buff:  return 100000;
-                case EntityIdCategory.Skill: return 1000000;
+                case EntityIdCategory.Buff:         return 100000;
+                case EntityIdCategory.Skill:        return 1000000;
+                case EntityIdCategory.Relationship: return 10000000;
                 default:
                     Debug.LogError($"[EntityIdHelper] Unknown category: {category}");
                     return 0;
@@ -187,8 +205,9 @@ namespace ARPG.Utility
         {
             switch (category)
             {
-                case EntityIdCategory.Buff:  return 9999;
-                case EntityIdCategory.Skill: return 100;
+                case EntityIdCategory.Buff:         return 9999;
+                case EntityIdCategory.Skill:        return 100;
+                case EntityIdCategory.Relationship: return 9999;
                 default:
                     Debug.LogError($"[EntityIdHelper] Unknown category: {category}");
                     return 0;
@@ -533,6 +552,218 @@ namespace ARPG.Utility
                 return _targetBuffTypes[targetEntityId].Contains(buffTableID);
             }
             return false;
+        }
+
+        #endregion
+
+        #region Relationship Entity Management
+
+        /// <summary>
+        /// 관계 엔티티 생성 (단방향: from → to)
+        /// from이 to에 대해 갖는 관계 데이터를 저장하는 엔티티
+        /// </summary>
+        /// <param name="fromEntityId">관계 주체 엔티티 ID</param>
+        /// <param name="toEntityId">관계 대상 엔티티 ID</param>
+        /// <returns>생성된 관계 엔티티 ID, 이미 존재하거나 실패시 -1</returns>
+        public static int CreateRelationshipEntity(int fromEntityId, int toEntityId)
+        {
+            if (_registeredEntityIds.Contains(fromEntityId) == false)
+            {
+                Debug.LogError($"[EntityIdHelper] From entity {fromEntityId} is not registered");
+                return -1;
+            }
+
+            if (_registeredEntityIds.Contains(toEntityId) == false)
+            {
+                Debug.LogError($"[EntityIdHelper] To entity {toEntityId} is not registered");
+                return -1;
+            }
+
+            int maxIndex = GetMaxIndex(EntityIdCategory.Relationship);
+            if (toEntityId < 0 || toEntityId > maxIndex)
+            {
+                Debug.LogError($"[EntityIdHelper] To entity ID {toEntityId} exceeds max index {maxIndex}");
+                return -1;
+            }
+
+            int relationshipEntityId = GetDeterministicId(fromEntityId, EntityIdCategory.Relationship, toEntityId);
+            if (relationshipEntityId == -1)
+            {
+                Debug.LogError($"[EntityIdHelper] Failed to create relationship entity ID");
+                return -1;
+            }
+
+            if (_registeredEntityIds.Contains(relationshipEntityId))
+            {
+                Debug.LogWarning($"[EntityIdHelper] Relationship already exists: {fromEntityId} → {toEntityId}");
+                return -1;
+            }
+
+            // 정방향 추적
+            if (_relationshipTargets.ContainsKey(fromEntityId) == false)
+            {
+                _relationshipTargets[fromEntityId] = new HashSet<int>();
+            }
+            _relationshipTargets[fromEntityId].Add(toEntityId);
+
+            // 역방향 추적
+            if (_relationshipSources.ContainsKey(toEntityId) == false)
+            {
+                _relationshipSources[toEntityId] = new HashSet<int>();
+            }
+            _relationshipSources[toEntityId].Add(fromEntityId);
+
+            _registeredEntityIds.Add(relationshipEntityId);
+
+            Debug.Log($"[EntityIdHelper] Relationship entity created - ID: {relationshipEntityId}, From: {fromEntityId}, To: {toEntityId}");
+            return relationshipEntityId;
+        }
+
+        /// <summary>
+        /// 관계 엔티티 제거
+        /// </summary>
+        /// <param name="relationshipEntityId">제거할 관계 엔티티 ID</param>
+        public static void DestroyRelationshipEntity(int relationshipEntityId)
+        {
+            if (_registeredEntityIds.Contains(relationshipEntityId) == false)
+            {
+                Debug.LogWarning($"[EntityIdHelper] Relationship entity {relationshipEntityId} is not registered");
+                return;
+            }
+
+            int fromEntityId = GetOwnerEntityId(relationshipEntityId, EntityIdCategory.Relationship);
+            int toEntityId = GetIndex(relationshipEntityId, EntityIdCategory.Relationship);
+
+            if (IsValidDeterministicId(relationshipEntityId, EntityIdCategory.Relationship) == false)
+            {
+                Debug.LogWarning($"[EntityIdHelper] Invalid relationship entity ID: {relationshipEntityId}");
+                return;
+            }
+
+            AR.s.Component.RemoveAllComponents(relationshipEntityId);
+            _registeredEntityIds.Remove(relationshipEntityId);
+
+            // 정방향 추적 제거
+            if (_relationshipTargets.ContainsKey(fromEntityId))
+            {
+                _relationshipTargets[fromEntityId].Remove(toEntityId);
+                if (_relationshipTargets[fromEntityId].Count == 0)
+                {
+                    _relationshipTargets.Remove(fromEntityId);
+                }
+            }
+
+            // 역방향 추적 제거
+            if (_relationshipSources.ContainsKey(toEntityId))
+            {
+                _relationshipSources[toEntityId].Remove(fromEntityId);
+                if (_relationshipSources[toEntityId].Count == 0)
+                {
+                    _relationshipSources.Remove(toEntityId);
+                }
+            }
+
+            Debug.Log($"[EntityIdHelper] Relationship entity destroyed - ID: {relationshipEntityId}, From: {fromEntityId}, To: {toEntityId}");
+        }
+
+        /// <summary>
+        /// from → to 관계의 엔티티 ID 조회
+        /// </summary>
+        /// <returns>관계 엔티티 ID, 존재하지 않으면 -1</returns>
+        public static int GetRelationshipEntityId(int fromEntityId, int toEntityId)
+        {
+            int relationshipEntityId = GetDeterministicId(fromEntityId, EntityIdCategory.Relationship, toEntityId);
+            if (relationshipEntityId == -1)
+                return -1;
+
+            if (_registeredEntityIds.Contains(relationshipEntityId) == false)
+                return -1;
+
+            return relationshipEntityId;
+        }
+
+        /// <summary>
+        /// from → to 관계가 존재하는지 확인
+        /// </summary>
+        public static bool HasRelationship(int fromEntityId, int toEntityId)
+        {
+            if (_relationshipTargets.ContainsKey(fromEntityId))
+            {
+                return _relationshipTargets[fromEntityId].Contains(toEntityId);
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 관계 엔티티 ID가 유효한지 확인
+        /// </summary>
+        public static bool IsValidRelationshipEntity(int relationshipEntityId)
+        {
+            if (_registeredEntityIds.Contains(relationshipEntityId) == false)
+                return false;
+
+            return IsValidDeterministicId(relationshipEntityId, EntityIdCategory.Relationship);
+        }
+
+        /// <summary>
+        /// 특정 엔티티가 관련된 모든 관계 엔티티를 제거
+        /// (엔티티 삭제 시 호출)
+        /// </summary>
+        public static void DestroyAllRelationshipsForEntity(int entityId)
+        {
+            // 이 엔티티가 "from"인 관계 모두 제거
+            if (_relationshipTargets.ContainsKey(entityId))
+            {
+                HashSet<int> targets = _relationshipTargets[entityId];
+                List<int> toRemove = new List<int>(targets);
+                for (int i = 0; i < toRemove.Count; i++)
+                {
+                    int toEntityId = toRemove[i];
+                    int relEntityId = GetDeterministicId(entityId, EntityIdCategory.Relationship, toEntityId);
+                    if (relEntityId != -1 && _registeredEntityIds.Contains(relEntityId))
+                    {
+                        AR.s.Component.RemoveAllComponents(relEntityId);
+                        _registeredEntityIds.Remove(relEntityId);
+                    }
+
+                    if (_relationshipSources.ContainsKey(toEntityId))
+                    {
+                        _relationshipSources[toEntityId].Remove(entityId);
+                        if (_relationshipSources[toEntityId].Count == 0)
+                        {
+                            _relationshipSources.Remove(toEntityId);
+                        }
+                    }
+                }
+                _relationshipTargets.Remove(entityId);
+            }
+
+            // 이 엔티티가 "to"인 관계 모두 제거
+            if (_relationshipSources.ContainsKey(entityId))
+            {
+                HashSet<int> sources = _relationshipSources[entityId];
+                List<int> toRemove = new List<int>(sources);
+                for (int i = 0; i < toRemove.Count; i++)
+                {
+                    int fromEntityId = toRemove[i];
+                    int relEntityId = GetDeterministicId(fromEntityId, EntityIdCategory.Relationship, entityId);
+                    if (relEntityId != -1 && _registeredEntityIds.Contains(relEntityId))
+                    {
+                        AR.s.Component.RemoveAllComponents(relEntityId);
+                        _registeredEntityIds.Remove(relEntityId);
+                    }
+
+                    if (_relationshipTargets.ContainsKey(fromEntityId))
+                    {
+                        _relationshipTargets[fromEntityId].Remove(entityId);
+                        if (_relationshipTargets[fromEntityId].Count == 0)
+                        {
+                            _relationshipTargets.Remove(fromEntityId);
+                        }
+                    }
+                }
+                _relationshipSources.Remove(entityId);
+            }
         }
 
         #endregion
