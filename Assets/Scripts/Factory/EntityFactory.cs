@@ -146,7 +146,22 @@ namespace ARPG.Factory
                 Friendliness = Random.Range(0, 101),
                 Honesty = Random.Range(0, 101),
                 Greed = Random.Range(0, 101),
-                Loyalty = Random.Range(0, 101)
+                Loyalty = Random.Range(0, 101),
+                Courage = Random.Range(0, 101),
+                Curiosity = Random.Range(0, 101),
+                Pride = Random.Range(0, 101),
+                Patience = Random.Range(0, 101)
+            });
+
+            // 마을 NPC 컴포넌트
+            AR.s.Component.AddComponent(entityId, new NpcVillageComponent());
+            AR.s.Component.AddComponent(entityId, new NpcJobComponent());
+            AR.s.Component.AddComponent(entityId, new NpcScheduleComponent
+            {
+                CurrentActivity = ActivityType.FreeTime,
+                ActivityTimer = 0f,
+                ActivityTarget = Vector2.zero,
+                ActivityTargetEntityId = -1
             });
 
             if (table.AiTableId > 0)

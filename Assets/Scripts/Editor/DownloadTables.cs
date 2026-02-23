@@ -35,7 +35,7 @@ namespace ARPG.Editor
 
             await DownloadTable<MonsterTable>("483012127&range=A:K", 1, SaveType.String);
 
-            await DownloadTable<NpcTable>("1460299278&range=A:K", 1, SaveType.String);
+            await DownloadTable<NpcTable>("1460299278&range=A:L", 1, SaveType.String);
 
             await DownloadTable<StatTable>("318209064&range=A:Y", 1, SaveType.String);
 
@@ -208,9 +208,9 @@ namespace ARPG.Editor
 
         private static void ParseNpcTable(NpcTable table, string[] values)
         {
-            if (values.Length < 9)
+            if (values.Length < 12)
             {
-                Debug.LogError($"[ParseNpcTable] Invalid data length. Expected at least 9, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseNpcTable] Invalid data length. Expected at least 12, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
@@ -219,11 +219,12 @@ namespace ARPG.Editor
             table.StatId = int.Parse(values[3]);
             table.PrefabName = values[4];
             table.AnimationId = int.Parse(values[5]);
-            table.WeaponId = int.Parse(values[6]);
-            table.AiTableId = int.Parse(values[7]);
-            table.DropId = int.Parse(values[8]);
-            table.DropRateBonus = int.Parse(values[9]);
-            table.DropRarityBonus = int.Parse(values[10]);
+            table.JobType = (GlobalEnum.JobType)Enum.Parse(typeof(GlobalEnum.JobType), values[6]);
+            table.WeaponId = int.Parse(values[7]);
+            table.AiTableId = int.Parse(values[8]);
+            table.DropId = int.Parse(values[9]);
+            table.DropRateBonus = int.Parse(values[10]);
+            table.DropRarityBonus = int.Parse(values[11]);
         }
 
         private static void ParseStatTable(StatTable table, string[] values)
@@ -309,7 +310,7 @@ namespace ARPG.Editor
             }
 
             // values[1] 은 웹에서만 사용한다.
-            table.EquipType = (GlobalEnum.EquipSlotType)Enum.Parse(typeof(GlobalEnum.EquipSlotType), values[2]);
+            table.EquipType = (GlobalEnum.EquipmentType)Enum.Parse(typeof(GlobalEnum.EquipmentType), values[2]);
             table.AttackSpeed = float.Parse(values[3]);
             table.Critical = int.Parse(values[4]);
             table.DamageMin = int.Parse(values[5]);

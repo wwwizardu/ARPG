@@ -144,8 +144,7 @@ namespace ARPG.Data
                 return;
             }
 
-            if (Table.EquipType == GlobalEnum.EquipSlotType.WeaponLeft ||
-            Table.EquipType == GlobalEnum.EquipSlotType.WeaponRight)
+            if (Table.EquipType == GlobalEnum.EquipmentType.Weapon)
             {
                 if (WeaponData == null)
                 {

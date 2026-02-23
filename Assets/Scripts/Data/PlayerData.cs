@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using ARPG.Tables;
+using ARPG.Utility;
 using UnityEditorInternal.Profiling.Memory.Experimental;
 
 namespace ARPG.Data
@@ -91,7 +92,7 @@ namespace ARPG.Data
             if (inItem?.Equipment?.Table == null)
                 return false;
 
-            if (inItem.Equipment.Table.EquipType != inEquipType)
+            if (inItem.Equipment.Table.EquipType != EquipHelper.SlotToEquipmentType(inEquipType))
                 return false;
 
             // 기존에 장착된 아이템이 있는 경우 교체할 아이템으로 설정

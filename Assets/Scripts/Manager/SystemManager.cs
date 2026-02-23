@@ -23,6 +23,10 @@ namespace ARPG.Systems
 
             // Systems 등록 (Priority 순서대로 주석)
 
+            // Priority 5: Time System (Update) - 게임 시간 진행
+            System_Time timeSystem = new();
+            RegisterSystems(timeSystem);
+
             // Priority 0: Input System (Update) - 입력 수집
             System_Input inputSystem = new();
             RegisterSystems(inputSystem);
@@ -42,6 +46,18 @@ namespace ARPG.Systems
             // Priority 50: AI Behavior System (FixedUpdate) - AI 상태 머신 및 행동 로직
             System_AI_Behavior aiBehaviorSystem = new();
             RegisterSystems(aiBehaviorSystem);
+
+            // Priority 55: NPC Schedule System (FixedUpdate, 1.0s) - NPC 성격 기반 활동 결정
+            System_NpcSchedule npcScheduleSystem = new();
+            RegisterSystems(npcScheduleSystem);
+
+            // Priority 57: Village Resource System (FixedUpdate, 5.0s) - 작업 중인 NPC의 자원 생산
+            System_VillageResource villageResourceSystem = new();
+            RegisterSystems(villageResourceSystem);
+
+            // Priority 58: Relationship System (FixedUpdate, 3.0s) - 관계 패시브 변동
+            System_Relationship relationshipSystem = new();
+            RegisterSystems(relationshipSystem);
 
             // Priority 100: Movement System (FixedUpdate) - 이동 로직
             System_Move moveSystem = new();

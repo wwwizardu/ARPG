@@ -57,8 +57,7 @@ namespace ARPG.UI
 
         private void SetEquipment(ItemData inItemData)
         {
-            if (inItemData.Equipment.Table.EquipType == GlobalEnum.EquipSlotType.WeaponLeft ||
-            inItemData.Equipment.Table.EquipType == GlobalEnum.EquipSlotType.WeaponRight)
+            if (inItemData.Equipment.Table.EquipType == GlobalEnum.EquipmentType.Weapon)
             {
                 _weapon.Show(true, inItemData);
                 _armor.Show(false, null);

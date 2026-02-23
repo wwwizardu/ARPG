@@ -9,7 +9,9 @@ namespace ARPG.Component
     {
         public int FromEntityId;
         public int ToEntityId;
-        public int Affinity;        // 친밀도 (0~100)
-        
+        public int Affinity;        // 친밀도 (-100~100)
+        public int Trust;           // 신뢰도 (0~100)
+        public int Fear;            // 공포 (0~100)
+        public int Intimacy;        // 친밀도 깊이 (0~100)
     }
 }

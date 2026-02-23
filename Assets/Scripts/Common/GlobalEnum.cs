@@ -98,12 +98,32 @@ public class GlobalEnum
         Max,
     }
 
+    public enum EquipmentType
+    {
+        Weapon,         // 무기
+        Helmet,         // 투구
+        Armor,          // 갑옷
+        Gloves,         // 장갑
+        Boots,          // 부츠
+        Necklace,       // 목걸이
+        Ring,           // 반지
+        Belt,           // 허리띠
+        Earring,        // 귀걸이
+    }
+
     public enum ItemType
     {
         Currency = 1,
         Equipment = 2,
         Consumable = 3,
         Quest = 4,
+        Food = 5,       // 식량
+        Wood = 6,       // 목재
+        Stone = 7,      // 석재
+        Copper = 8,     // 구리
+        Iron = 9,       // 철
+        Gold = 10,      // 골드 (화폐)
+        Herb = 11,      // 약초/마법 재료
     }
 
     public enum TeamType
@@ -138,6 +158,19 @@ public class GlobalEnum
     {
         None = 0,
         NormalMonster,
+    }
+
+    public enum JobType
+    {
+        None,           // 무직
+        Farmer,         // 농부 (식량 생산)
+        Blacksmith,     // 대장장이 (도구/무기 제작)
+        Merchant,       // 상인 (교역)
+        Hunter,         // 사냥꾼 (식량/가죽 획득)
+        Builder,        // 건축가 (건설)
+        Scholar,        // 학자 (연구)
+        Guard,          // 경비병 (방어)
+        Chief           // 촌장 (마을 관리)
     }
 
     public enum DamageType

@@ -11,6 +11,36 @@ namespace ARPG.Utility
     /// </summary>
     public static class EquipHelper
     {
+        public static GlobalEnum.EquipmentType SlotToEquipmentType(GlobalEnum.EquipSlotType slotType)
+        {
+            switch (slotType)
+            {
+                case GlobalEnum.EquipSlotType.WeaponLeft:
+                case GlobalEnum.EquipSlotType.WeaponRight:
+                    return GlobalEnum.EquipmentType.Weapon;
+                case GlobalEnum.EquipSlotType.Helmet:
+                    return GlobalEnum.EquipmentType.Helmet;
+                case GlobalEnum.EquipSlotType.Armor:
+                    return GlobalEnum.EquipmentType.Armor;
+                case GlobalEnum.EquipSlotType.Gloves:
+                    return GlobalEnum.EquipmentType.Gloves;
+                case GlobalEnum.EquipSlotType.Boots:
+                    return GlobalEnum.EquipmentType.Boots;
+                case GlobalEnum.EquipSlotType.Necklace:
+                    return GlobalEnum.EquipmentType.Necklace;
+                case GlobalEnum.EquipSlotType.RingLeft:
+                case GlobalEnum.EquipSlotType.RingRight:
+                    return GlobalEnum.EquipmentType.Ring;
+                case GlobalEnum.EquipSlotType.Belt:
+                    return GlobalEnum.EquipmentType.Belt;
+                case GlobalEnum.EquipSlotType.EarringLeft:
+                case GlobalEnum.EquipSlotType.EarringRight:
+                    return GlobalEnum.EquipmentType.Earring;
+                default:
+                    return GlobalEnum.EquipmentType.Weapon;
+            }
+        }
+
         /// <summary>
         /// 장비 아이템의 Prefix/Postfix 스탯을 StatModifier로 등록
         /// </summary>

@@ -19,6 +19,8 @@ namespace ARPG
 
         [SerializeField] private Item.ItemManager _itemManager;
         [SerializeField] private Manager.LLMManager _llmManager;
+        [SerializeField] private Manager.TimeManager _timeManager;
+        [SerializeField] private Village.VillageManager _villageManager;
 
         private bool _initialized = false;
 
@@ -41,6 +43,8 @@ namespace ARPG
         public Manager.MessageManager Message => _messageManager;
 
         public Manager.LLMManager LLM => _llmManager;
+        public Manager.TimeManager Time => _timeManager;
+        public Village.VillageManager Village => _villageManager;
         public PlayerManager Player => _playerManager;
 
         public Base.EntityBase? MyPlayer => _playerManager.MyPlayers;
@@ -65,6 +69,8 @@ namespace ARPG
             _npcManager.Initialize();
             _messageManager.Initialize();
             _llmManager.Initialize();
+            _timeManager.Initialize();
+            _villageManager.Initialize();
 
             _initialized = true;
 
@@ -79,6 +85,8 @@ namespace ARPG
             _monsterManager.Reset();
             _npcManager.Reset();
             _messageManager.Reset();
+            _timeManager.Reset();
+            _villageManager.Reset();
         }
         
         public void OnSceneLoadStart(Base.SceneBase inScene)

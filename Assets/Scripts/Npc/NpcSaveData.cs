@@ -17,6 +17,11 @@ namespace ARPG.Npc
         public int EntityId;
         public bool IsActive;
 
+        // 마을 시스템 데이터
+        public int VillageId;
+        public GlobalEnum.JobType JobType;
+        public int SkillLevel;
+
         public NpcSaveData(int npcTableId, Vector2 position)
         {
             NpcTableId = npcTableId;
@@ -24,6 +29,9 @@ namespace ARPG.Npc
             Condition = CharacterConditions.Normal;
             EntityId = -1;
             IsActive = false;
+            VillageId = 0;
+            JobType = GlobalEnum.JobType.None;
+            SkillLevel = 0;
         }
     }
 }

@@ -152,6 +152,20 @@ namespace ARPG.Npc
             AR.s.Component.AddComponent(createdId, new NpcTag());
             EntityFactory.AddActivationComponent(createdId, _activationDistance, _deactivationDistance);
 
+            // 마을 데이터 복원
+            if (AR.s.Component.TryGetComponent<NpcVillageComponent>(createdId, out var village))
+            {
+                village.VillageId = saveData.VillageId;
+                AR.s.Component.SetComponent(createdId, village);
+            }
+
+            if (AR.s.Component.TryGetComponent<NpcJobComponent>(createdId, out var job))
+            {
+                job.JobType = saveData.JobType;
+                job.SkillLevel = saveData.SkillLevel;
+                AR.s.Component.SetComponent(createdId, job);
+            }
+
             saveData.EntityId = createdId;
             saveData.IsActive = true;
         }
@@ -170,6 +184,18 @@ namespace ARPG.Npc
             if (AR.s.Component.TryGetComponent<StateComponent>(entityId, out var state))
             {
                 saveData.Condition = state.Condition;
+            }
+
+            // 마을 데이터 스냅샷
+            if (AR.s.Component.TryGetComponent<NpcVillageComponent>(entityId, out var village))
+            {
+                saveData.VillageId = village.VillageId;
+            }
+
+            if (AR.s.Component.TryGetComponent<NpcJobComponent>(entityId, out var job))
+            {
+                saveData.JobType = job.JobType;
+                saveData.SkillLevel = job.SkillLevel;
             }
 
             // 청크 매핑 갱신 (이동으로 청크가 바뀌었으면)

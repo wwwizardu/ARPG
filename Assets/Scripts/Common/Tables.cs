@@ -122,6 +122,7 @@ namespace ARPG.Tables
     [Serializable]
     public class NpcTable : CreatureTable
     {
+        [JsonProperty("JobType")] public GE.JobType JobType;
         [JsonProperty("WeaponId")] public int WeaponId;
         [JsonProperty("AiTableId")] public int AiTableId;
         [JsonProperty("DropId")] public int DropId;
@@ -196,7 +197,7 @@ namespace ARPG.Tables
     [Serializable]
     public class EquipmentTable : TableBase
     {
-        [JsonProperty("EquipType")] public GE.EquipSlotType EquipType;
+        [JsonProperty("EquipType")] public GE.EquipmentType EquipType;
         [JsonProperty("AttackSpeed")] public float AttackSpeed;
         [JsonProperty("Critical")] public int Critical;
         [JsonProperty("DamageMin")] public int DamageMin;

@@ -39,7 +39,7 @@ namespace ARPG.UI
                 return false;
             }
 
-            if (itemTable.Equipment.EquipType != _equipSlotType)
+            if (itemTable.Equipment.EquipType != Utility.EquipHelper.SlotToEquipmentType(_equipSlotType))
                 return false;
 
             return true;

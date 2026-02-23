@@ -57,6 +57,11 @@ namespace ARPG.Component
             // 엔티티 라이프사이클 컴포넌트
             { typeof(DestroyTag), 100 },                       // 제거 예약 태그
             { typeof(ActivationDistanceComponent), 500 },      // 거리 기반 활성화
+
+            // 마을 시스템 컴포넌트
+            { typeof(NpcJobComponent), 200 },
+            { typeof(NpcScheduleComponent), 200 },
+            { typeof(NpcVillageComponent), 200 },
         };
 
         /// <summary>

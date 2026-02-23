@@ -181,5 +181,14 @@ namespace ARPG
 
             return _data[index];
         }
+
+        // 인덱스로 데이터 설정
+        public void SetByIndex(int index, T value)
+        {
+            if (index < 0 || index >= _count)
+                return;
+
+            _data[index] = value;
+        }
     }
 }
