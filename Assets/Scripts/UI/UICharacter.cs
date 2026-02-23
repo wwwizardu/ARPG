@@ -4,6 +4,7 @@ using UnityEngine;
 using Cysharp.Threading.Tasks;
 using System.Collections.Generic;
 using ARPG.Data;
+using ARPG.Utility;
 
 namespace ARPG.UI
 {
@@ -119,7 +120,15 @@ namespace ARPG.UI
                 if (itemData == null || itemData.Table == null || itemData.Equipment == null) // 아이템이 없거나 장비 아이템이 아닌 경우
                     return;
 
-                if (_characterUI != null && _characterUI.EquipItem(GlobalEnum.EquipSlotType.WeaponLeft, itemData, out var replacedItem))
+                if (itemData.Equipment.Table == null)
+                    return;
+
+                GlobalEnum.EquipSlotType targetSlot = EquipHelper.GetBestSlot(
+                    itemData.Equipment.Table.EquipType,
+                    AR.s.Data.Player._inventoryEquip
+                );
+
+                if (_characterUI != null && _characterUI.EquipItem(targetSlot, itemData, out var replacedItem))
                 {
                     if (replacedItem != null)
                     {

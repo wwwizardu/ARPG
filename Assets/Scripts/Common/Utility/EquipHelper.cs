@@ -1,3 +1,4 @@
+#nullable enable
 using ARPG.Component;
 using ARPG.Data;
 using ARPG.Tables;
@@ -39,6 +40,44 @@ namespace ARPG.Utility
                 default:
                     return GlobalEnum.EquipmentType.Weapon;
             }
+        }
+
+        public static GlobalEnum.EquipSlotType GetBestSlot(GlobalEnum.EquipmentType inEquipType, ItemData?[] inEquippedItems)
+        {
+            switch (inEquipType)
+            {
+                case GlobalEnum.EquipmentType.Weapon:
+                    return GetDualSlot(inEquippedItems, GlobalEnum.EquipSlotType.WeaponLeft, GlobalEnum.EquipSlotType.WeaponRight);
+                case GlobalEnum.EquipmentType.Ring:
+                    return GetDualSlot(inEquippedItems, GlobalEnum.EquipSlotType.RingLeft, GlobalEnum.EquipSlotType.RingRight);
+                case GlobalEnum.EquipmentType.Earring:
+                    return GetDualSlot(inEquippedItems, GlobalEnum.EquipSlotType.EarringLeft, GlobalEnum.EquipSlotType.EarringRight);
+                case GlobalEnum.EquipmentType.Helmet:
+                    return GlobalEnum.EquipSlotType.Helmet;
+                case GlobalEnum.EquipmentType.Armor:
+                    return GlobalEnum.EquipSlotType.Armor;
+                case GlobalEnum.EquipmentType.Gloves:
+                    return GlobalEnum.EquipSlotType.Gloves;
+                case GlobalEnum.EquipmentType.Boots:
+                    return GlobalEnum.EquipSlotType.Boots;
+                case GlobalEnum.EquipmentType.Necklace:
+                    return GlobalEnum.EquipSlotType.Necklace;
+                case GlobalEnum.EquipmentType.Belt:
+                    return GlobalEnum.EquipSlotType.Belt;
+                default:
+                    return GlobalEnum.EquipSlotType.WeaponLeft;
+            }
+        }
+
+        private static GlobalEnum.EquipSlotType GetDualSlot(ItemData?[] inEquippedItems, GlobalEnum.EquipSlotType inLeftSlot, GlobalEnum.EquipSlotType inRightSlot)
+        {
+            if (inEquippedItems[(int)inLeftSlot] == null)
+                return inLeftSlot;
+
+            if (inEquippedItems[(int)inRightSlot] == null)
+                return inRightSlot;
+
+            return inLeftSlot;
         }
 
         /// <summary>
