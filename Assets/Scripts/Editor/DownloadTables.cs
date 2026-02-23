@@ -39,9 +39,11 @@ namespace ARPG.Editor
 
             await DownloadTable<StatTable>("318209064&range=A:Y", 1, SaveType.String);
 
-            await DownloadTable<ItemTable>("2064107837&range=A:J", 1, SaveType.String);
+            await DownloadTable<ItemTable>("2064107837&range=A:K", 1, SaveType.String);
             
-            await DownloadTable<EquipmentTable>("853198133&range=A:H", 1, SaveType.String);
+            await DownloadTable<WeaponBaseStatTable>("853198133&range=A:H", 1, SaveType.String);
+
+            await DownloadTable<ApparelBaseStatTable>("1025028412&range=A:E", 1, SaveType.String);
 
             await DownloadTable<EquipmentStatTable>("488047668&range=A:Q", 1, SaveType.String);
             
@@ -135,9 +137,13 @@ namespace ARPG.Editor
                 {
                     ParseItemTable(itemTable, values);
                 }
-                else if (table is EquipmentTable equipmentTable)
+                else if (table is WeaponBaseStatTable weaponBaseStatTable)
                 {
-                    ParseEquipmentTable(equipmentTable, values);
+                    ParseWeaponBaseStatTable(weaponBaseStatTable, values);
+                }
+                else if (table is ApparelBaseStatTable apparelBaseStatTable)
+                {
+                    ParseApparelBaseStatTable(apparelBaseStatTable, values);
                 }
                 else if (table is EquipmentStatTable equipmentStatTable)
                 {
@@ -284,28 +290,29 @@ namespace ARPG.Editor
 
         private static void ParseItemTable(ItemTable table, string[] values)
         {
-            if (values.Length < 10)
+            if (values.Length < 11)
             {
-                Debug.LogError($"[ParseItemTable] Invalid data length. Expected at least 10, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseItemTable] Invalid data length. Expected at least 11, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
             table.Tier = int.Parse(values[1]);
             table.Name = values[2];
             table.ItemType = (GlobalEnum.ItemType)Enum.Parse(typeof(GlobalEnum.ItemType), values[3]);
-            table.Stackable = values[4].Trim().ToUpper() == "TRUE";
-            table.MaxStack = int.Parse(values[5]);
-            table.Description = values[6];
-            table.DropRate = int.Parse(values[7]);
-            table.EquipmentId = int.Parse(values[8]);
-            table.SpriteName = values[9];
+            table.Category = (GlobalEnum.ItemCategory)Enum.Parse(typeof(GlobalEnum.ItemCategory), values[4]);
+            table.Stackable = values[5].Trim().ToUpper() == "TRUE";
+            table.MaxStack = int.Parse(values[6]);
+            table.Description = values[7];
+            table.DropRate = int.Parse(values[8]);
+            table.EquipmentStatId = int.Parse(values[9]);
+            table.SpriteName = values[10];
         }
 
-        private static void ParseEquipmentTable(EquipmentTable table, string[] values)
+        private static void ParseWeaponBaseStatTable(WeaponBaseStatTable table, string[] values)
         {
-            if (values.Length < 8)
+            if (values.Length < 7)
             {
-                Debug.LogError($"[ParseEquipmentTable] Invalid data length. Expected at least 7, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseWeaponBaseStatTable] Invalid data length. Expected at least 7, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
@@ -315,7 +322,20 @@ namespace ARPG.Editor
             table.Critical = int.Parse(values[4]);
             table.DamageMin = int.Parse(values[5]);
             table.DamageMax = int.Parse(values[6]);
-            table.EquipmentStatId = int.Parse(values[7]);
+        }
+
+        private static void ParseApparelBaseStatTable(ApparelBaseStatTable table, string[] values)
+        {
+            if (values.Length < 5)
+            {
+                Debug.LogError($"[ParseApparelBaseStatTable] Invalid data length. Expected at least 5, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            table.Name = values[1];
+            table.Category = (GlobalEnum.ItemCategory)Enum.Parse(typeof(GlobalEnum.ItemCategory), values[2]);
+            table.Armor = int.Parse(values[3]);
+            table.Evasion = int.Parse(values[4]);
         }
 
         private static void ParseEquipmentStatTable(EquipmentStatTable table, string[] values)

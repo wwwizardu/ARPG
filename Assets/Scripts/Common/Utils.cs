@@ -11,4 +11,19 @@ public static class Utils
 
         return true;
     }
+
+    public static bool IsApparel(this GlobalEnum.ItemCategory inCategory)
+    {
+        switch (inCategory)
+        {
+            case GlobalEnum.ItemCategory.Helmet:
+            case GlobalEnum.ItemCategory.Armor:
+            case GlobalEnum.ItemCategory.Gloves:
+            case GlobalEnum.ItemCategory.Boots:
+            case GlobalEnum.ItemCategory.Shield:
+                return true;
+            default:
+                return false;
+        }
+    }
 }

@@ -126,6 +126,33 @@ public class GlobalEnum
         Herb = 11,      // 약초/마법 재료
     }
 
+    public enum ItemCategory
+    {
+        // 장비
+        Weapon,             // 무기
+        Helmet,             // 투구
+        Armor,              // 갑옷
+        Gloves,             // 장갑
+        Boots,              // 부츠
+        Belt,               // 허리띠
+        Necklace,           // 목걸이
+        Ring,               // 반지
+        Earring,            // 귀걸이
+        Shield,             // 방패
+
+        // 자원
+        Currency,           // 화폐
+        Wood,               // 목재
+        Stone,              // 석재
+        Ore,                // 광석
+
+        // 소비/기타
+        Food,               // 식량
+        Herb,               // 약초
+        Consumable,         // 소모품
+        Quest,              // 퀘스트
+    }
+
     public enum TeamType
     {
         None = 0,       // 중립

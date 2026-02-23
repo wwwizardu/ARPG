@@ -42,7 +42,7 @@ namespace ARPG.Data
 
         public EquipmentStatData? StatData;
 
-        [NonSerialized] public EquipmentTable? Table;
+        [NonSerialized] public WeaponBaseStatTable? Table;
 
         [NonSerialized] public WeaponData? WeaponData;
         
@@ -51,7 +51,7 @@ namespace ARPG.Data
         {
             if (Table == null)
             {
-                Table = AR.s.Data.GetEquipment(Id);
+                Table = AR.s.Data.WeaponBaseStatTable(Id);
             }
 
             Update();            

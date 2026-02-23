@@ -133,41 +133,23 @@ namespace ARPG.Item
             if (inTable == null || inTable.Equipment == null)
                 return null;
 
-            EquipmentData? equipmentData = null;
-            if (inTable.Equipment.EquipmentStat != null) // 옵션이 정해져 있는 장비
+            EquipmentData equipmentData = new EquipmentData()
             {
-                equipmentData = new EquipmentData()
-                {
-                    Id = inTable.Equipment.Id,
-                    Table = inTable.Equipment
-                };
+                Id = inTable.Equipment.Id,
+                Table = inTable.Equipment
+            };
 
-                equipmentData.StatData = new()
-                {
-                    Prefix = inTable.Equipment.EquipmentStat.Prefix != null ? new List<Stat>(inTable.Equipment.EquipmentStat.Prefix) : new List<Stat>(),
-                    Postfix = inTable.Equipment.EquipmentStat.Postfix != null ? new List<Stat>(inTable.Equipment.EquipmentStat.Postfix) : new List<Stat>(),
-                };
-            }
-            else // 옵션이 생성되어야 하는 장비
+            equipmentData.StatData = new()
             {
-                equipmentData = new EquipmentData()
-                {
-                    Id = inTable.Equipment.Id,
-                    Table = inTable.Equipment
-                };
+                Prefix = new List<Stat>(),
+                Postfix = new List<Stat>(),
+            };
 
-                equipmentData.StatData = new()
-                {
-                    Prefix = new List<Stat>(),
-                    Postfix = new List<Stat>(),
-                };
+            // 접두사 옵션 생성
+            CreatePrefixOptions(equipmentData.StatData);
 
-                // 접두사 옵션 생성
-                CreatePrefixOptions(equipmentData.StatData);
-
-                // 접미사 옵션 생성
-                CreatePostfixOptions(equipmentData.StatData);
-            }
+            // 접미사 옵션 생성
+            CreatePostfixOptions(equipmentData.StatData);
 
             equipmentData.Quality = Random.Range(1, 101); // 1~100 사이의 품질 값 설정
             equipmentData.Update();

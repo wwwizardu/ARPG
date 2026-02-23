@@ -89,7 +89,7 @@ namespace ARPG.Tables
         [JsonProperty("DropRateBonus")] public int DropRateBonus;
         [JsonProperty("DropRarityBonus")] public int DropRarityBonus;
 
-        [JsonIgnore] public EquipmentTable? Weapon;
+        [JsonIgnore] public WeaponBaseStatTable? Weapon;
         [JsonIgnore] public AiTable? AiTable;
 
 
@@ -97,7 +97,7 @@ namespace ARPG.Tables
         {
             base.LoadLate();
 
-            EquipmentTable? equipmentTable = AR.s.Data?.GetEquipment(WeaponId);
+            WeaponBaseStatTable? equipmentTable = AR.s.Data?.WeaponBaseStatTable(WeaponId);
             if (equipmentTable != null)
             {
                 Weapon = equipmentTable;
@@ -129,14 +129,14 @@ namespace ARPG.Tables
         [JsonProperty("DropRateBonus")] public int DropRateBonus;
         [JsonProperty("DropRarityBonus")] public int DropRarityBonus;
 
-        [JsonIgnore] public EquipmentTable? Weapon;
+        [JsonIgnore] public WeaponBaseStatTable? Weapon;
         [JsonIgnore] public AiTable? AiTable;
 
         public override void LoadLate()
         {
             base.LoadLate();
 
-            EquipmentTable? equipmentTable = AR.s.Data?.GetEquipment(WeaponId);
+            WeaponBaseStatTable? equipmentTable = AR.s.Data?.WeaponBaseStatTable(WeaponId);
             if (equipmentTable != null)
             {
                 Weapon = equipmentTable;
@@ -166,6 +166,7 @@ namespace ARPG.Tables
         [JsonProperty("Name")] public string Name = string.Empty;
 
         [JsonProperty("ItemType")] public GE.ItemType ItemType;
+        [JsonProperty("Category")] public GE.ItemCategory Category;
 
         [JsonProperty("Stackable")] public bool Stackable;
         [JsonProperty("MaxStack")] public int MaxStack;
@@ -174,56 +175,65 @@ namespace ARPG.Tables
 
         [JsonProperty("DropRate")] public int DropRate;
 
-        [JsonProperty("EquipmentId")] public int EquipmentId;
+        [JsonProperty("EquipmentStatId")] public int EquipmentStatId;
 
         [JsonProperty("SpriteName")] public string SpriteName = string.Empty;
 
-        [JsonIgnore] public EquipmentTable? Equipment;
+        [JsonIgnore] public WeaponBaseStatTable? Equipment;
+        [JsonIgnore] public ApparelBaseStatTable? ApparelEquipment;
+        
 
         public override void LoadLate()
         {
-            EquipmentTable? equipmentTable = AR.s.Data?.GetEquipment(EquipmentId);
-            if (equipmentTable != null)
+            Equipment = null;
+            ApparelEquipment = null;
+
+            if(Category == GE.ItemCategory.Weapon)
             {
-                Equipment = equipmentTable;
+                WeaponBaseStatTable? equipmentTable = AR.s.Data?.WeaponBaseStatTable(EquipmentStatId);
+                if (equipmentTable != null)
+                {
+                    Equipment = equipmentTable;
+                }
             }
-            else
+            else if(Utils.IsApparel(Category) == true)
             {
-                Equipment = null;
+                ApparelBaseStatTable? apparelTable = AR.s.Data?.GetApparelBaseStatTable(EquipmentStatId);
+                if (apparelTable != null)
+                {
+                    ApparelEquipment = apparelTable;
+                }
             }
         }
     }
 
     [Serializable]
-    public class EquipmentTable : TableBase
+    public class WeaponBaseStatTable : TableBase
     {
         [JsonProperty("EquipType")] public GE.EquipmentType EquipType;
         [JsonProperty("AttackSpeed")] public float AttackSpeed;
         [JsonProperty("Critical")] public int Critical;
         [JsonProperty("DamageMin")] public int DamageMin;
         [JsonProperty("DamageMax")] public int DamageMax;
-        [JsonProperty("EquipmentStatId")] public int EquipmentStatId;
 
-        [JsonIgnore] public EquipmentStatTable? EquipmentStat;
-
-        public EquipmentTable()
+        public WeaponBaseStatTable()
         {
 
         }
+    }
 
-        public override void LoadLate()
+    [Serializable]
+    public class ApparelBaseStatTable : TableBase
+    {
+        [JsonProperty("Name")] public string Name = string.Empty;
+        [JsonProperty("Category")] public GE.ItemCategory Category;
+        [JsonProperty("Armor")] public int Armor;
+        [JsonProperty("Evasion")] public int Evasion;
+
+        public ApparelBaseStatTable()
         {
-            EquipmentStatTable? equipmentStatTable = AR.s.Data.GetEquipmentStat(EquipmentStatId);
-            if (equipmentStatTable != null)
-            {
-                EquipmentStat = equipmentStatTable;
-            }
-            else
-            {
-                EquipmentStat = null;
-            }
-        }
 
+        }
     }
 
     [Serializable]
