@@ -281,6 +281,19 @@ namespace ARPG.Map
             return new List<Vector2Int>(_activeChunks.Keys);
         }
 
+        public List<MapFileData> GetMapFileDataByType(MapType mapType)
+        {
+            List<MapFileData> result = new List<MapFileData>();
+            foreach (var pair in _mapFileDataDic)
+            {
+                if (pair.Value.MapType == mapType)
+                {
+                    result.Add(pair.Value);
+                }
+            }
+            return result;
+        }
+
         private void LoadFixedMapFiles()
         {
             _mapFileDataDic.Clear();
@@ -304,15 +317,6 @@ namespace ARPG.Map
                         }
 
                         _mapFileDataDic[mapKey] = mapFileData;
-
-                        if (mapFileData.MapType == MapType.Village)
-                        {
-                            Vector2 villageCenter = new Vector2(
-                                mapFileData.StartPosition.x + mapFileData.Width * 0.5f,
-                                mapFileData.StartPosition.y + mapFileData.Height * 0.5f
-                            );
-                            AR.s.Village.RegisterVillage(AR.s.Village.GetVillageCount(), villageCenter);
-                        }
 
                         Debug.Log($"[MapManager] Loaded BaseTown.bytes - Size: {mapFileData.Width}x{mapFileData.Height}, Start: {mapFileData.StartPosition}, MapType: {mapFileData.MapType}, MapKey: {mapKey}");
                     }

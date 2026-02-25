@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.IO;
 using System.Collections.Generic;
 using Newtonsoft.Json;
+using ARPG.Npc;
 using ARPG.Utility;
 
 namespace ARPG.Data
@@ -45,6 +46,7 @@ namespace ARPG.Data
 
         // 현재 활성 플레이어 ID
         public int CurrentPlayerEntityId => _currentPlayerEntityId;
+        public Dictionary<int, NpcSaveData> NpcSaveDatas => _worldData.NpcSaveDatas;
 
         public async Task Initialize()
         {
@@ -95,7 +97,8 @@ namespace ARPG.Data
                     }
 
                     _worldData.LoadCompleted();
-                    Debug.Log($"[DataManager] WorldData loaded successfully (Version: {_worldData.Version})");
+                    AR.s.Village.Load(_worldData.VillageDatas);
+                    Debug.Log($"[DataManager] WorldData loaded successfully (Version: {_worldData.Version}. Npcs: {_worldData.NpcSaveDatas.Count})");
                 }
                 catch (System.Exception ex)
                 {
@@ -117,6 +120,7 @@ namespace ARPG.Data
                             }
 
                             _worldData.LoadCompleted();
+                            AR.s.Village.Load(_worldData.VillageDatas);
                             Debug.Log($"[DataManager] WorldData loaded from backup (Version: {_worldData.Version})");
                         }
                         catch (System.Exception backupEx)
@@ -287,6 +291,12 @@ namespace ARPG.Data
                     {
                         File.Copy(playerDataPath, playerDataBackupPath, true);
                     }
+
+                    // VillageData 저장
+                    _worldData.VillageDatas = AR.s.Village.Save();
+
+                    // NpcData 저장
+                    _worldData.NpcSaveDatas = AR.s.Npc.Save();
 
                     // WorldData 저장
                     string worldDataJson = JsonConvert.SerializeObject(_worldData, Formatting.Indented, new JsonSerializerSettings

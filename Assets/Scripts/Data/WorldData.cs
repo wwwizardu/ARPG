@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using ARPG.Npc;
+using ARPG.Village;
 using UnityEngine;
 
 namespace ARPG.Data
@@ -10,6 +12,8 @@ namespace ARPG.Data
         public ushort Version = 1;
 
         public List<WorldDropItemData> WorldDropItemDatas = new();
+        public List<VillageData> VillageDatas = new();
+        public Dictionary<int, NpcSaveData> NpcSaveDatas = new();
 
         public void Initialize()
         {

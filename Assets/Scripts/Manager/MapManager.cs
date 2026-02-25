@@ -80,6 +80,7 @@ namespace ARPG.Map
             if (AR.s.Npc == null)
                 return;
 
+            int villageIndex = 0;
             foreach (var mapFileEntry in _mapFileDataDic)
             {
                 MapFileData mapFileData = mapFileEntry.Value;
@@ -97,9 +98,17 @@ namespace ARPG.Map
                     }
                 }
 
+                // Village 타입이면 villageId 전달, 아니면 -1
+                int villageId = -1;
+                if (mapFileData.MapType == MapType.Village)
+                {
+                    villageId = villageIndex;
+                    villageIndex++;
+                }
+
                 if (npcObjects.Count > 0)
                 {
-                    AR.s.Npc.RegisterNpcsFromMapFile(npcObjects, mapFileData.StartPosition, chunkSize);
+                    AR.s.Npc.RegisterNpcsFromMapFile(npcObjects, mapFileData.StartPosition, chunkSize, villageId);
                 }
             }
         }

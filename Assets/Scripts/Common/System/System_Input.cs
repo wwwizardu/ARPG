@@ -19,6 +19,7 @@ namespace ARPG.Systems
         public void OnCreate()
         {
             _input = AR.s.UI.Input.Player;
+            
             _componentManager = AR.s.Component;
             _playerEntityId = -1;
 
@@ -34,6 +35,9 @@ namespace ARPG.Systems
         public void OnUpdate(float inDeltaTime)
         {
             if (_input == null || _componentManager == null)
+                return;
+
+            if(AR.s.UI.UpdateInput() == false) // UI가 입력을 처리한 경우 Player Input을 처리하지 않음
                 return;
 
             if (_playerEntityId == -1)

@@ -1,5 +1,6 @@
 #nullable enable
 using ARPG.Creature;
+using Newtonsoft.Json;
 using UnityEngine;
 
 namespace ARPG.Npc
@@ -12,7 +13,8 @@ namespace ARPG.Npc
     public class NpcSaveData
     {
         public int NpcTableId;
-        public Vector2 Position;
+        public float PositionX;
+        public float PositionY;
         public CharacterConditions Condition;
         public int EntityId;
         public bool IsActive;
@@ -21,6 +23,13 @@ namespace ARPG.Npc
         public int VillageId;
         public GlobalEnum.JobType JobType;
         public int SkillLevel;
+
+        [JsonIgnore]
+        public Vector2 Position
+        {
+            get => new Vector2(PositionX, PositionY);
+            set { PositionX = value.x; PositionY = value.y; }
+        }
 
         public NpcSaveData(int npcTableId, Vector2 position)
         {

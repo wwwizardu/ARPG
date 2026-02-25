@@ -1079,15 +1079,20 @@ namespace ARPG
             //OnLangugeChanged?.Invoke();
         }
 
-        private void Update()
-        {
-            UpdateInput();
-        }
-
-        private void UpdateInput()
+        public bool UpdateInput() // false를 리턴하면 Player Input을 처리하지 않는다.
         {
             if (_isLocked == true)
-                return;
+                return false;
+
+            // 아무 UI가 활성화되어 있지 않은 상태에서 Menu(ESC) 입력이 들어오면 메인 메뉴를 연다.
+            if(_input.Player.Menu.WasReleasedThisFrame() == true)
+            {
+                if(_uiCurrentList.Count == 0)
+                {
+                    Show<UIMainMenu>("UI/UIMainMenu", Layer.MainBase);
+                    return false;
+                }
+            }
 
             bool isAllPass = true;
             for (int i = _uiCurrentList.Count - 1; 0 <= i; i--) // 활성화된 UI Input 처리
@@ -1111,39 +1116,7 @@ namespace ARPG
                 }
             }
 
-            if (isAllPass == true) // Player Input 처리
-            {
-                if (_input.UI.RightClick.WasReleasedThisFrame() == true) // 
-                {
-                    // RobotController? robot = Hub.s?.pdata?.OwnerRobot;
-                    // if (robot == null)
-                    //     return;
-                    //
-                    // Shared.Item.ItemInstance? holdingItem = robot.Toolbelt?.HoldingItemInstance;
-                    // if (holdingItem != null && holdingItem.ConsumableComponent != null && holdingItem.IsRobotItem == true)
-                    // {
-                    //     robot.ConsumeItemRpc(robot.Toolbelt!.HoldingItemInventorySlotIndex);
-                    // }
-                }
-                // else if(_input.Player.UseItem.WasReleasedThisFrame() == true)
-                // {
-                //     if (Hub.s?.pdata?.OwnerPlayer == null)
-                //         return;
-
-                //     Shared.Item.ItemInstance? holdingItem = Hub.s.pdata.OwnerPlayer?.Toolbelt?.HoldingItemInstance;
-                //     if(holdingItem != null && holdingItem.ConsumableComponent != null) 
-                //     {
-                //         Hub.s.pdata.OwnerPlayer!.UseItem(holdingItem.ItemInstanceId);
-                //     }
-                // }
-                // else if (_input.Player.ShowMenu.WasReleasedThisFrame())
-                // {
-                //     if (Hub.isUnderGround == false)
-                //         return;
-
-                //     Show<UIPrefab_Menu>(AddressablePath.UIPrefab_Menu, Layer.Top);
-                // }
-            }
+            return isAllPass;
         }
 
         private void ReleaseDummySlot()

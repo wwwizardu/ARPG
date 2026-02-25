@@ -35,6 +35,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3525a999834a52e4fbe344acd64748ef
+    m_Address: UI/UIMainMenu
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3c98d39872317ac4ca4135d49a452b24
     m_Address: Prefabs/UICanvas
     m_ReadOnly: 0

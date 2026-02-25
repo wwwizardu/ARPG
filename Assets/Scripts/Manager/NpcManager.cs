@@ -25,6 +25,11 @@ namespace ARPG.Npc
 
         public void Initialize()
         {
+            var savedNpcs = AR.s.Data.NpcSaveDatas;
+            if (savedNpcs != null && savedNpcs.Count > 0)
+            {
+                Load(savedNpcs, AR.s.Map.chunkSize);
+            }
         }
 
         public void Reset()
@@ -57,7 +62,7 @@ namespace ARPG.Npc
         /// 맵 로드 시 1회 호출. MapFileData의 모든 NPC에 EntityId를 발급하고
         /// NpcSaveData로 등록, 청크별 매핑(_chunkNpcs)을 생성한다.
         /// </summary>
-        public void RegisterNpcsFromMapFile(List<MapFileObjectData> allNpcObjects, Vector2Int mapFileStartPos, int chunkSize)
+        public void RegisterNpcsFromMapFile(List<MapFileObjectData> allNpcObjects, Vector2Int mapFileStartPos, int chunkSize, int villageId = -1)
         {
             if (_isInitialLoaded)
                 return;
@@ -77,6 +82,13 @@ namespace ARPG.Npc
                 int entityId = EntityIdHelper.CreateEntity();
 
                 NpcSaveData saveData = new NpcSaveData(obj.ObjectId, worldPos);
+
+                if (villageId >= 0)
+                {
+                    saveData.VillageId = villageId;
+                    AR.s.Village.RegisterNpcToVillage(villageId, entityId);
+                }
+
                 _npcSaveDict[entityId] = saveData;
 
                 Vector2Int chunkCoord = PositionToChunk(worldPos);
@@ -270,6 +282,45 @@ namespace ARPG.Npc
                     saveData.Condition = state.Condition;
                 }
             }
+        }
+
+        public Dictionary<int, NpcSaveData> Save()
+        {
+            SaveAllActiveNpcs();
+            return new Dictionary<int, NpcSaveData>(_npcSaveDict);
+        }
+
+        public void Load(Dictionary<int, NpcSaveData> npcSaveDatas, int chunkSize)
+        {
+            _npcSaveDict.Clear();
+            _chunkNpcs.Clear();
+
+            if (npcSaveDatas == null || npcSaveDatas.Count == 0)
+                return;
+
+            _chunkSize = chunkSize;
+
+            foreach (var kvp in npcSaveDatas)
+            {
+                NpcSaveData saveData = kvp.Value;
+
+                int entityId = EntityIdHelper.CreateEntity();
+                saveData.IsActive = false;
+                saveData.EntityId = entityId;
+
+                _npcSaveDict[entityId] = saveData;
+
+                Vector2Int chunkCoord = PositionToChunk(saveData.Position);
+                AddNpcToChunk(chunkCoord, entityId);
+
+                if (saveData.VillageId >= 0)
+                {
+                    AR.s.Village.RegisterNpcToVillage(saveData.VillageId, entityId);
+                }
+            }
+
+            _isInitialLoaded = true;
+            Debug.Log($"[NpcManager] Loaded {_npcSaveDict.Count} NPCs from save data");
         }
 
         #region 유틸리티
