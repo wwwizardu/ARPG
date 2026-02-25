@@ -305,7 +305,16 @@ namespace ARPG.Map
 
                         _mapFileDataDic[mapKey] = mapFileData;
 
-                        Debug.Log($"[MapManager] Loaded BaseTown.bytes - Size: {mapFileData.Width}x{mapFileData.Height}, Start: {mapFileData.StartPosition}, MapKey: {mapKey}");
+                        if (mapFileData.MapType == MapType.Village)
+                        {
+                            Vector2 villageCenter = new Vector2(
+                                mapFileData.StartPosition.x + mapFileData.Width * 0.5f,
+                                mapFileData.StartPosition.y + mapFileData.Height * 0.5f
+                            );
+                            AR.s.Village.RegisterVillage(AR.s.Village.GetVillageCount(), villageCenter);
+                        }
+
+                        Debug.Log($"[MapManager] Loaded BaseTown.bytes - Size: {mapFileData.Width}x{mapFileData.Height}, Start: {mapFileData.StartPosition}, MapType: {mapFileData.MapType}, MapKey: {mapKey}");
                     }
                 }
                 catch (System.Exception e)

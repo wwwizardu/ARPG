@@ -78,6 +78,11 @@ namespace ARPG.Village
             return 0;
         }
 
+        public Dictionary<int, VillageData>.ValueCollection GetAllVillages()
+        {
+            return _villages.Values;
+        }
+
         public int GetVillageCount()
         {
             return _villages.Count;

@@ -1,11 +1,12 @@
 #nullable enable
-using ARPG.Component;
+using ARPG.Village;
+using UnityEngine;
 
 namespace ARPG.Systems
 {
     /// <summary>
-    /// 작업 중인 NPC의 마을 자원 생산 시스템
-    /// CurrentActivity == Working인 NPC만 직업에 따라 자원 생산
+    /// 마을 인구 기반 자원 자동 생산 시스템
+    /// 5초마다 각 마을의 Population에 비례하여 Food, Wood, Stone 생산
     /// </summary>
     public class System_VillageResource : IFixedUpdateSystem
     {
@@ -16,26 +17,20 @@ namespace ARPG.Systems
 
         public void OnFixedUpdate(float inFixedDeltaTime)
         {
-            ComponentManager cm = AR.s.Component;
-            SparseSet<NpcJobComponent> pool = cm.GetComponentPool<NpcJobComponent>();
+            var villages = AR.s.Village.GetAllVillages();
 
-            for (int i = 0; i < pool.Count; i++)
+            foreach (VillageData village in villages)
             {
-                int entityId = pool.GetEntityId(i);
-
-                if (cm.TryGetComponent<NpcScheduleComponent>(entityId, out var schedule) == false)
+                if (village.Population <= 0)
                     continue;
 
-                if (schedule.CurrentActivity != ActivityType.Working)
-                    continue;
+                int amount = village.Population;
 
-                if (cm.TryGetComponent<NpcVillageComponent>(entityId, out var village) == false)
-                    continue;
+                AR.s.Village.ProduceResource(village.VillageId, GlobalEnum.ItemType.Food, amount);
+                AR.s.Village.ProduceResource(village.VillageId, GlobalEnum.ItemType.Wood, amount);
+                AR.s.Village.ProduceResource(village.VillageId, GlobalEnum.ItemType.Stone, amount);
 
-                NpcJobComponent job = pool.GetByIndex(i);
-
-                // TODO: JobType + SkillLevel 기반 자원 생산량 계산
-                // AR.s.Village.ProduceResource(village.VillageId, itemType, amount);
+                Debug.Log($"[VillageResource] Village {village.VillageId} produced - Pop: {village.Population}, Food: +{amount}, Wood: +{amount}, Stone: +{amount}");
             }
         }
 

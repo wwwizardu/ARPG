@@ -18,7 +18,8 @@ namespace ARPG.Map
         [SerializeField] private string _fileName = "MapData";
         [SerializeField] private string _folderName = "SavedMaps";
 
-        [Header("Theme Settings")]
+        [Header("Map Settings")]
+        [SerializeField] private MapType _mapType;
         [SerializeField] private ThemeTileSet _themeTileSet;
 
         [Header("Editor Only")]
@@ -60,7 +61,7 @@ namespace ARPG.Map
             
             string saveFileName = fileName ?? _fileName;
             Vector2Int startPosition = new Vector2Int(bounds.xMin, bounds.yMin);
-            MapFileData mapFileData = new MapFileData(bounds.size.x, bounds.size.y, startPosition);
+            MapFileData mapFileData = new MapFileData(_mapType, bounds.size.x, bounds.size.y, startPosition);
             
             // 타일맵의 전체 영역의 타일 데이터를 수집
             // 좌표계 변환: 왼쪽 아래가 (0,0)이 되도록 Y축을 뒤집어서 저장

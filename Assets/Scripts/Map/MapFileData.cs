@@ -5,9 +5,17 @@ using System.Collections.Generic;
 
 namespace ARPG.Map
 {
+    public enum MapType
+    {
+        Village,
+        Dungeon,
+        Field,
+    }
+
     [System.Serializable]
     public class MapFileData
     {
+        [SerializeField] private MapType _mapType;
         [SerializeField] private int _width;
         [SerializeField] private int _height;
         [SerializeField] private Vector2Int _startPosition;
@@ -17,12 +25,14 @@ namespace ARPG.Map
 
         [SerializeField] List<MapFileObjectData> _objectList = new();
 
+        public MapType MapType => _mapType;
         public int Width => _width;
         public int Height => _height;
         public Vector2Int StartPosition => _startPosition;
 
-        public MapFileData(int width, int height, Vector2Int startPosition)
+        public MapFileData(MapType mapType, int width, int height, Vector2Int startPosition)
         {
+            _mapType = mapType;
             _width = width;
             _height = height;
             _startPosition = startPosition;

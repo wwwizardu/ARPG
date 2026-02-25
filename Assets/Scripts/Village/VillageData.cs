@@ -17,7 +17,7 @@ namespace ARPG.Village
             VillageId = villageId;
             Position = position;
             Stage = VillageStage.Settlement;
-            Population = 0;
+            Population = 1;
         }
     }
 }
