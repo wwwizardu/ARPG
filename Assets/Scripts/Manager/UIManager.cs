@@ -1084,8 +1084,9 @@ namespace ARPG
             if (_isLocked == true)
                 return false;
 
+#if UNITY_EDITOR
             // ~ 키 입력 시 치트 UI 토글
-            if (_input.Player.Cheat.WasReleasedThisFrame() == true)
+            if (UnityEngine.Input.GetKeyDown(KeyCode.BackQuote) == true)
             {
                 if (IsShow("UI/UICheat") == true)
                 {
@@ -1097,6 +1098,7 @@ namespace ARPG
                 }
                 return false;
             }
+#endif
 
             // 아무 UI가 활성화되어 있지 않은 상태에서 Menu(ESC) 입력이 들어오면 메인 메뉴를 연다.
             if(_input.Player.Menu.WasReleasedThisFrame() == true)

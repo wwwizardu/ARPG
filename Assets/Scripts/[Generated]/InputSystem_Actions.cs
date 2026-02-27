@@ -228,15 +228,6 @@ namespace ARPG.Input
                     ""processors"": """",
                     ""interactions"": """",
                     ""initialStateCheck"": false
-                },
-                {
-                    ""name"": ""Cheat"",
-                    ""type"": ""Button"",
-                    ""id"": ""f7a8b9c0-d1e2-3456-7890-abcdef123456"",
-                    ""expectedControlType"": """",
-                    ""processors"": """",
-                    ""interactions"": """",
-                    ""initialStateCheck"": false
                 }
             ],
             ""bindings"": [
@@ -743,17 +734,6 @@ namespace ARPG.Input
                     ""processors"": """",
                     ""groups"": "";Keyboard&Mouse"",
                     ""action"": ""Menu"",
-                    ""isComposite"": false,
-                    ""isPartOfComposite"": false
-                },
-                {
-                    ""name"": """",
-                    ""id"": ""c3d4e5f6-a7b8-9012-cdef-234567890abc"",
-                    ""path"": ""<Keyboard>/backquote"",
-                    ""interactions"": """",
-                    ""processors"": """",
-                    ""groups"": "";Keyboard&Mouse"",
-                    ""action"": ""Cheat"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
                 }
@@ -1376,7 +1356,6 @@ namespace ARPG.Input
             m_Player_Right = m_Player.FindAction("Right", throwIfNotFound: true);
             m_Player_Inventory = m_Player.FindAction("Inventory", throwIfNotFound: true);
             m_Player_Menu = m_Player.FindAction("Menu", throwIfNotFound: true);
-            m_Player_Cheat = m_Player.FindAction("Cheat", throwIfNotFound: true);
             // UI
             m_UI = asset.FindActionMap("UI", throwIfNotFound: true);
             m_UI_Navigate = m_UI.FindAction("Navigate", throwIfNotFound: true);
@@ -1486,7 +1465,6 @@ namespace ARPG.Input
         private readonly InputAction m_Player_Right;
         private readonly InputAction m_Player_Inventory;
         private readonly InputAction m_Player_Menu;
-        private readonly InputAction m_Player_Cheat;
         /// <summary>
         /// Provides access to input actions defined in input action map "Player".
         /// </summary>
@@ -1559,10 +1537,6 @@ namespace ARPG.Input
             /// </summary>
             public InputAction @Menu => m_Wrapper.m_Player_Menu;
             /// <summary>
-            /// Provides access to the underlying input action "Player/Cheat".
-            /// </summary>
-            public InputAction @Cheat => m_Wrapper.m_Player_Cheat;
-            /// <summary>
             /// Provides access to the underlying input action map instance.
             /// </summary>
             public InputActionMap Get() { return m_Wrapper.m_Player; }
@@ -1633,9 +1607,6 @@ namespace ARPG.Input
                 @Menu.started += instance.OnMenu;
                 @Menu.performed += instance.OnMenu;
                 @Menu.canceled += instance.OnMenu;
-                @Cheat.started += instance.OnCheat;
-                @Cheat.performed += instance.OnCheat;
-                @Cheat.canceled += instance.OnCheat;
             }
 
             /// <summary>
@@ -1692,9 +1663,6 @@ namespace ARPG.Input
                 @Menu.started -= instance.OnMenu;
                 @Menu.performed -= instance.OnMenu;
                 @Menu.canceled -= instance.OnMenu;
-                @Cheat.started -= instance.OnCheat;
-                @Cheat.performed -= instance.OnCheat;
-                @Cheat.canceled -= instance.OnCheat;
             }
 
             /// <summary>
@@ -2111,13 +2079,6 @@ namespace ARPG.Input
             /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
             /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
             void OnMenu(InputAction.CallbackContext context);
-            /// <summary>
-            /// Method invoked when associated input action "Cheat" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
-            /// </summary>
-            /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
-            /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
-            /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
-            void OnCheat(InputAction.CallbackContext context);
         }
         /// <summary>
         /// Interface to implement callback methods for all input action callbacks associated with input actions defined by "UI" which allows adding and removing callbacks.
