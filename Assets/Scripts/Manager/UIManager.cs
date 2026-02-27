@@ -1084,6 +1084,20 @@ namespace ARPG
             if (_isLocked == true)
                 return false;
 
+            // ~ 키 입력 시 치트 UI 토글
+            if (_input.Player.Cheat.WasReleasedThisFrame() == true)
+            {
+                if (IsShow("UI/UICheat") == true)
+                {
+                    Close("UI/UICheat");
+                }
+                else
+                {
+                    Show<UICheat>("UI/UICheat", Layer.Top);
+                }
+                return false;
+            }
+
             // 아무 UI가 활성화되어 있지 않은 상태에서 Menu(ESC) 입력이 들어오면 메인 메뉴를 연다.
             if(_input.Player.Menu.WasReleasedThisFrame() == true)
             {

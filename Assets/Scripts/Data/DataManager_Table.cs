@@ -16,6 +16,7 @@ namespace ARPG.Data
         private ImmutableDictionary<int, Tables.NpcTable> _npcTable = null!;
         private ImmutableDictionary<int, Tables.StatTable> _statTable = null!;
         private ImmutableDictionary<int, Tables.ItemTable> _itemTable = null!;
+        private ImmutableDictionary<int, Tables.BuildableItemTable> _buildableItemTable = null!;
         private ImmutableDictionary<int, Tables.WeaponBaseStatTable> _equipmentTable = null!;
         private ImmutableDictionary<int, Tables.ApparelBaseStatTable> _apparelBaseStatTable = null!;
         private ImmutableDictionary<int, Tables.EquipmentStatTable> _equipmentStatTable = null!;
@@ -37,6 +38,7 @@ namespace ARPG.Data
                 LoadTable<Tables.NpcTable>("NpcTable.bytes", tables => _npcTable = tables),
                 LoadTable<Tables.StatTable>("StatTable.bytes", tables => _statTable = tables),
                 LoadTable<Tables.ItemTable>("ItemTable.bytes", tables => _itemTable = tables),
+                LoadTable<Tables.BuildableItemTable>("BuildableItemTable.bytes", tables => _buildableItemTable = tables),
                 LoadTable<Tables.WeaponBaseStatTable>("WeaponBaseStatTable.bytes", tables => _equipmentTable = tables),
                 LoadTable<Tables.ApparelBaseStatTable>("ApparelBaseStatTable.bytes", tables => _apparelBaseStatTable = tables),
                 LoadTable<Tables.EquipmentStatTable>("EquipmentStatTable.bytes", tables => _equipmentStatTable = tables),
@@ -172,6 +174,16 @@ namespace ARPG.Data
         public Tables.ItemTable? GetItem(int id)
         {
             if (_itemTable.TryGetValue(id, out var table))
+            {
+                return table;
+            }
+
+            return null;
+        }
+
+        public Tables.BuildableItemTable? GetBuildableItem(int id)
+        {
+            if (_buildableItemTable.TryGetValue(id, out var table))
             {
                 return table;
             }

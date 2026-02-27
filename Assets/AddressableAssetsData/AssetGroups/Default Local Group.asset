@@ -115,6 +115,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ef0eaf139fc4856438136f2ab4b6c5ff
+    m_Address: UI/UICheat
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f6bf4160ce2dba44db9bfc8cac1f132d
     m_Address: Atlas/Icon
     m_ReadOnly: 0

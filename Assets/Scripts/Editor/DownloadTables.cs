@@ -39,7 +39,9 @@ namespace ARPG.Editor
 
             await DownloadTable<StatTable>("318209064&range=A:Y", 1, SaveType.String);
 
-            await DownloadTable<ItemTable>("2064107837&range=A:K", 1, SaveType.String);
+            await DownloadTable<ItemTable>("2064107837&range=A:L", 1, SaveType.String);
+
+            await DownloadTable<BuildableItemTable>("534887250&range=A:K", 1, SaveType.String);           
             
             await DownloadTable<WeaponBaseStatTable>("853198133&range=A:H", 1, SaveType.String);
 
@@ -136,6 +138,10 @@ namespace ARPG.Editor
                 else if (table is ItemTable itemTable)
                 {
                     ParseItemTable(itemTable, values);
+                }
+                else if (table is BuildableItemTable buildableItemTable)
+                {
+                    ParseBuildableItemTable(buildableItemTable, values);
                 }
                 else if (table is WeaponBaseStatTable weaponBaseStatTable)
                 {
@@ -290,9 +296,9 @@ namespace ARPG.Editor
 
         private static void ParseItemTable(ItemTable table, string[] values)
         {
-            if (values.Length < 11)
+            if (values.Length < 12)
             {
-                Debug.LogError($"[ParseItemTable] Invalid data length. Expected at least 11, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseItemTable] Invalid data length. Expected at least 12, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
@@ -304,8 +310,30 @@ namespace ARPG.Editor
             table.MaxStack = int.Parse(values[6]);
             table.Description = values[7];
             table.DropRate = int.Parse(values[8]);
-            table.EquipmentStatId = int.Parse(values[9]);
-            table.SpriteName = values[10];
+            table.BuildableItemId = int.Parse(values[9]);
+            table.EquipmentStatId = int.Parse(values[10]);
+            table.SpriteName = values[11];
+        }
+
+        private static void ParseBuildableItemTable(BuildableItemTable table, string[] values)
+        {
+            // 전체 범위: A:K = 11개 컬럼
+            if (values.Length < 11)
+            {
+                Debug.LogError($"[ParseBuildableItemTable] Invalid data length. Expected at least 11, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            table.Name = values[1];
+            table.Tooltip = values[2];
+            table.IsBreakable = values[3].Trim().ToUpper() == "TRUE";
+            table.HP = int.Parse(values[4]);
+            table.DropItemId = int.Parse(values[5]);
+            table.Size_Width = int.Parse(values[6]);
+            table.Size_Height = int.Parse(values[7]);
+            table.Recipe = int.Parse(values[8]);
+            table.Function = int.Parse(values[9]);
+            table.ResourceName = values[10];
         }
 
         private static void ParseWeaponBaseStatTable(WeaponBaseStatTable table, string[] values)

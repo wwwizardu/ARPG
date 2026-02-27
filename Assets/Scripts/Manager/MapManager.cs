@@ -29,6 +29,7 @@ namespace ARPG.Map
         private int _randomSeed = 12345;
         private Dictionary<Vector2Int, MapChunkData> _activeChunks;
         private Dictionary<Vector2Int, MapFileData> _mapFileDataDic = new();
+        private Dictionary<Vector2Int, List<TileModification>> _tileModifications = new();
         private Stack<MapChunkData> _chunkPool;
         private System.Random _randomGenerator;
         private Vector2Int _currentPlayerChunk = new Vector2Int(-100000, -100000);
@@ -54,6 +55,7 @@ namespace ARPG.Map
             }
 
             _activeChunks.Clear();
+            _tileModifications.Clear();
             _currentPlayerChunk = Vector2Int.zero;
 
             OnResetSpawner();
@@ -204,6 +206,162 @@ namespace ARPG.Map
         {
             Vector3Int cellPos = _tileMap.WorldToCell(worldPosition);
             return _tileMap.GetCellCenterWorld(cellPos);
+        }
+
+        // ==================== 타일 수정 (오브젝트 배치/제거) ====================
+
+        /// <summary>
+        /// 월드 좌표에 오브젝트를 배치한다.
+        /// </summary>
+        public bool PlaceObject(int worldX, int worldY, int objectId)
+        {
+            if (objectId <= 0)
+                return false;
+
+            int chunkX = Mathf.FloorToInt((float)worldX / chunkSize);
+            int chunkY = Mathf.FloorToInt((float)worldY / chunkSize);
+            int localX = worldX - (chunkX * chunkSize);
+            int localY = worldY - (chunkY * chunkSize);
+
+            if (localX < 0) { chunkX--; localX += chunkSize; }
+            if (localY < 0) { chunkY--; localY += chunkSize; }
+
+            Vector2Int chunkCoord = new Vector2Int(chunkX, chunkY);
+
+            // 수정 기록 저장 (같은 위치면 덮어쓰기)
+            SetTileModification(chunkCoord, localX, localY, objectId, false);
+
+            // 활성 청크면 즉시 반영
+            if (_activeChunks.TryGetValue(chunkCoord, out MapChunkData chunk))
+            {
+                // 타일 데이터 갱신
+                ulong currentTile = chunk.tiles[localX, localY];
+                currentTile &= ~(ulong)GlobalEnum.TileFlag.ObjectLayerMask;
+                currentTile |= ((ulong)objectId << 10) & (ulong)GlobalEnum.TileFlag.ObjectLayerMask;
+                currentTile |= (ulong)GlobalEnum.TileFlag.Blocked;
+                currentTile &= ~(ulong)GlobalEnum.TileFlag.MonsterSpawn;
+                chunk.tiles[localX, localY] = currentTile;
+
+                // 타일맵에 즉시 렌더링
+                RenderSingleObjectTile(worldX, worldY, (ulong)objectId);
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// 월드 좌표의 플레이어 배치 오브젝트를 제거한다.
+        /// </summary>
+        public bool RemoveObject(int worldX, int worldY)
+        {
+            int chunkX = Mathf.FloorToInt((float)worldX / chunkSize);
+            int chunkY = Mathf.FloorToInt((float)worldY / chunkSize);
+            int localX = worldX - (chunkX * chunkSize);
+            int localY = worldY - (chunkY * chunkSize);
+
+            if (localX < 0) { chunkX--; localX += chunkSize; }
+            if (localY < 0) { chunkY--; localY += chunkSize; }
+
+            Vector2Int chunkCoord = new Vector2Int(chunkX, chunkY);
+
+            // 수정 기록 저장
+            SetTileModification(chunkCoord, localX, localY, 0, true);
+
+            // 활성 청크면 즉시 반영
+            if (_activeChunks.TryGetValue(chunkCoord, out MapChunkData chunk))
+            {
+                ulong currentTile = chunk.tiles[localX, localY];
+                currentTile &= ~(ulong)GlobalEnum.TileFlag.ObjectLayerMask;
+                currentTile &= ~(ulong)GlobalEnum.TileFlag.Blocked;
+                chunk.tiles[localX, localY] = currentTile;
+
+                RenderSingleObjectTile(worldX, worldY, 0);
+            }
+
+            return true;
+        }
+
+        private void SetTileModification(Vector2Int chunkCoord, int localX, int localY, int objectId, bool isRemoval)
+        {
+            if (_tileModifications.TryGetValue(chunkCoord, out List<TileModification> modifications) == false)
+            {
+                modifications = new List<TileModification>();
+                _tileModifications[chunkCoord] = modifications;
+            }
+
+            // 같은 위치에 기존 수정이 있으면 덮어쓰기
+            for (int i = 0; i < modifications.Count; i++)
+            {
+                if (modifications[i].LocalX == localX && modifications[i].LocalY == localY)
+                {
+                    modifications[i].ObjectId = objectId;
+                    modifications[i].IsRemoval = isRemoval;
+                    return;
+                }
+            }
+
+            modifications.Add(new TileModification
+            {
+                LocalX = localX,
+                LocalY = localY,
+                ObjectId = objectId,
+                IsRemoval = isRemoval,
+            });
+        }
+
+        private void RenderSingleObjectTile(int worldX, int worldY, ulong objectId)
+        {
+            if (_tileMap_Object == null)
+                return;
+
+            Vector3Int cellPos = new Vector3Int(worldX, worldY, 0);
+
+            if (objectId > 0 && _themeTileSet != null && _themeTileSet.ObjectSet != null && objectId < (ulong)_themeTileSet.ObjectSet.Length)
+            {
+                _tileMap_Object.SetTile(cellPos, _themeTileSet.ObjectSet[objectId]);
+            }
+            else
+            {
+                _tileMap_Object.SetTile(cellPos, null);
+            }
+        }
+
+        // ==================== 타일 수정 저장/로드 ====================
+
+        public List<ChunkModificationData> SaveTileModifications()
+        {
+            List<ChunkModificationData> result = new List<ChunkModificationData>();
+
+            foreach (var kvp in _tileModifications)
+            {
+                if (kvp.Value.Count == 0)
+                    continue;
+
+                ChunkModificationData data = new ChunkModificationData
+                {
+                    ChunkX = kvp.Key.x,
+                    ChunkY = kvp.Key.y,
+                    Modifications = new List<TileModification>(kvp.Value),
+                };
+                result.Add(data);
+            }
+
+            return result;
+        }
+
+        public void LoadTileModifications(List<ChunkModificationData> modifications)
+        {
+            _tileModifications.Clear();
+
+            if (modifications == null)
+                return;
+
+            for (int i = 0; i < modifications.Count; i++)
+            {
+                ChunkModificationData data = modifications[i];
+                Vector2Int chunkCoord = new Vector2Int(data.ChunkX, data.ChunkY);
+                _tileModifications[chunkCoord] = new List<TileModification>(data.Modifications);
+            }
         }
 
     }

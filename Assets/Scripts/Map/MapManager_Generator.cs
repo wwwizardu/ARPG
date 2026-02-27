@@ -125,7 +125,10 @@ namespace ARPG.Map
             // 2. MapFileData로 타일 데이터 덮어쓰기
             OverlayMapFileData(chunk);
 
-            // 3. 후보 위치 중 최종적으로 몬스터 스폰 플래그가 유지된 위치만 수집
+            // 3. 플레이어 배치 오브젝트 오버레이
+            OverlayTileModifications(chunk);
+
+            // 4. 후보 위치 중 최종적으로 몬스터 스폰 플래그가 유지된 위치만 수집
             foreach (var pos in _candidateSpawnPositions)
             {
                 ulong tileData = chunk.tiles[pos.x, pos.y];
@@ -184,6 +187,36 @@ namespace ARPG.Map
                         }
                     }
                 }
+            }
+        }
+
+        private void OverlayTileModifications(MapChunkData chunk)
+        {
+            Vector2Int chunkCoord = new Vector2Int(chunk.chunkX, chunk.chunkY);
+            if (_tileModifications.TryGetValue(chunkCoord, out List<TileModification> modifications) == false)
+                return;
+
+            for (int i = 0; i < modifications.Count; i++)
+            {
+                TileModification mod = modifications[i];
+                ulong currentTile = chunk.tiles[mod.LocalX, mod.LocalY];
+
+                if (mod.IsRemoval)
+                {
+                    // 오브젝트 비트 및 Blocked 플래그 클리어
+                    currentTile &= ~(ulong)GlobalEnum.TileFlag.ObjectLayerMask;
+                    currentTile &= ~(ulong)GlobalEnum.TileFlag.Blocked;
+                }
+                else
+                {
+                    // 기존 오브젝트 비트 클리어 후 새 오브젝트 설정
+                    currentTile &= ~(ulong)GlobalEnum.TileFlag.ObjectLayerMask;
+                    currentTile |= ((ulong)mod.ObjectId << 10) & (ulong)GlobalEnum.TileFlag.ObjectLayerMask;
+                    currentTile |= (ulong)GlobalEnum.TileFlag.Blocked;
+                    currentTile &= ~(ulong)GlobalEnum.TileFlag.MonsterSpawn;
+                }
+
+                chunk.tiles[mod.LocalX, mod.LocalY] = currentTile;
             }
         }
 

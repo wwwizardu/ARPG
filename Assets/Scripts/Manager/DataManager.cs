@@ -12,7 +12,7 @@ namespace ARPG.Data
 {
     public partial class DataManager : MonoBehaviour
     {
-        private const ushort CURRENT_WORLD_DATA_VERSION = 1;
+        private const ushort CURRENT_WORLD_DATA_VERSION = 2;
         private const ushort CURRENT_PLAYER_DATA_VERSION = 1;
         private WorldData _worldData = new();
         private List<PlayerData> _playerDataList = new();
@@ -98,6 +98,7 @@ namespace ARPG.Data
 
                     _worldData.LoadCompleted();
                     AR.s.Village.Load(_worldData.VillageDatas);
+                    AR.s.Map.LoadTileModifications(_worldData.TileModifications);
                     Debug.Log($"[DataManager] WorldData loaded successfully (Version: {_worldData.Version}. Npcs: {_worldData.NpcSaveDatas.Count})");
                 }
                 catch (System.Exception ex)
@@ -121,6 +122,7 @@ namespace ARPG.Data
 
                             _worldData.LoadCompleted();
                             AR.s.Village.Load(_worldData.VillageDatas);
+                            AR.s.Map.LoadTileModifications(_worldData.TileModifications);
                             Debug.Log($"[DataManager] WorldData loaded from backup (Version: {_worldData.Version})");
                         }
                         catch (System.Exception backupEx)
@@ -297,6 +299,9 @@ namespace ARPG.Data
 
                     // NpcData 저장
                     _worldData.NpcSaveDatas = AR.s.Npc.Save();
+
+                    // TileModification 저장
+                    _worldData.TileModifications = AR.s.Map.SaveTileModifications();
 
                     // WorldData 저장
                     string worldDataJson = JsonConvert.SerializeObject(_worldData, Formatting.Indented, new JsonSerializerSettings
@@ -501,17 +506,14 @@ namespace ARPG.Data
         {
             Debug.Log($"[DataManager] Migrating WorldData from version {fromVersion} to {toVersion}");
 
-            // 예시: 버전 1 -> 2 마이그레이션
-            // if (fromVersion == 1 && toVersion >= 2)
-            // {
-            //     // 새로운 필드 초기화 또는 데이터 변환
-            // }
-
-            // 예시: 버전 2 -> 3 마이그레이션
-            // if (fromVersion <= 2 && toVersion >= 3)
-            // {
-            //     // 추가 마이그레이션 로직
-            // }
+            // 버전 1 -> 2: TileModifications 필드 추가
+            if (fromVersion < 2 && toVersion >= 2)
+            {
+                if (_worldData.TileModifications == null)
+                {
+                    _worldData.TileModifications = new();
+                }
+            }
         }
 
         // PlayerData 버전 마이그레이션

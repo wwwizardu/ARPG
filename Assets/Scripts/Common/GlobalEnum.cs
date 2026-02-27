@@ -30,6 +30,7 @@ public class GlobalEnum
         None = 0,           // 빈 타일
         Stone = 1,          // 돌 벽
         Npc = 2,            // NPC가 위치하는 타일 (맵 에디터에서만 사용)
+        WoodWall = 3,       // 나무 벽
     }
 
     public enum TileFlag : ulong
@@ -124,6 +125,8 @@ public class GlobalEnum
         Iron = 9,       // 철
         Gold = 10,      // 골드 (화폐)
         Herb = 11,      // 약초/마법 재료
+        Object = 12,    // 건축 자재
+
     }
 
     public enum ItemCategory
@@ -151,6 +154,9 @@ public class GlobalEnum
         Herb,               // 약초
         Consumable,         // 소모품
         Quest,              // 퀘스트
+
+        // 건축 자재
+        WoodWall,           // 나무 벽 (건축 자재)
     }
 
     public enum TeamType

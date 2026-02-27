@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using ARPG.Map;
 using ARPG.Npc;
 using ARPG.Village;
 using UnityEngine;
@@ -14,10 +15,12 @@ namespace ARPG.Data
         public List<WorldDropItemData> WorldDropItemDatas = new();
         public List<VillageData> VillageDatas = new();
         public Dictionary<int, NpcSaveData> NpcSaveDatas = new();
+        public List<ChunkModificationData> TileModifications = new();
 
         public void Initialize()
         {
             WorldDropItemDatas.Clear();
+            TileModifications.Clear();
         }
 
         public void LoadCompleted()

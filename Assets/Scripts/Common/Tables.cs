@@ -175,6 +175,8 @@ namespace ARPG.Tables
 
         [JsonProperty("DropRate")] public int DropRate;
 
+        [JsonProperty("BuildableItemId")] public int BuildableItemId;
+
         [JsonProperty("EquipmentStatId")] public int EquipmentStatId;
 
         [JsonProperty("SpriteName")] public string SpriteName = string.Empty;
@@ -205,6 +207,21 @@ namespace ARPG.Tables
                 }
             }
         }
+    }
+
+     [Serializable]
+    public class BuildableItemTable : TableBase
+    {
+        [JsonProperty("Name")] public string Name = string.Empty;
+        [JsonProperty("Tooltip")] public string Tooltip = string.Empty;
+        [JsonProperty("IsBreakable")] public bool IsBreakable = false;
+        [JsonProperty("HP")] public int HP = 1;
+        [JsonProperty("DropItemId")] public int DropItemId = 0;
+        [JsonProperty("Size_Width")] public int Size_Width = 1;
+        [JsonProperty("Size_Height")] public int Size_Height = 1;
+        [JsonProperty("Recipe")] public int Recipe = 0;
+        [JsonProperty("Function")] public int Function = 0;
+        [JsonProperty("ResourceName")] public string ResourceName = string.Empty;
     }
 
     [Serializable]
