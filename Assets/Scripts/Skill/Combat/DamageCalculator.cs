@@ -192,6 +192,104 @@ namespace ARPG.Skill.Combat
                 CurrentHp = targetStat.CurrentHp,
                 MaxHp = targetStat.FinalMaxHp
             });
+
+            // ========== 상태 이상 발동 (데미지 타입별) ==========
+            if (result.IsEvaded == false) // 회피하지 않은 경우만 상태 이상 적용
+            {
+                ApplyStatusEffects(attackerId, targetId, result);
+            }
+        }
+
+        /// <summary>
+        /// 데미지 타입에 따라 상태 이상 적용
+        /// </summary>
+        private static void ApplyStatusEffects(int attackerId, int targetId, DamageResult result)
+        {
+            if (AR.s.Component.TryGetComponent<StatComponent>(attackerId, out var attackerStat) == false)
+                return;
+
+            switch (result.DamageType)
+            {
+                case GlobalEnum.DamageType.Fire:
+                    ApplyIgnite(attackerId, targetId, attackerStat, result.FinalDamage);
+                    break;
+
+                case GlobalEnum.DamageType.Ice:
+                    ApplyChill(targetId);
+                    break;
+
+                case GlobalEnum.DamageType.Poison:
+                    ApplyPoison(targetId, result.FinalDamage);
+                    break;
+
+                // Physics 타입의 출혈은 System_Skill.cs에서 이미 처리 중
+            }
+        }
+
+        /// <summary>
+        /// 점화 발동 (화염 DoT, 스택 가능)
+        /// </summary>
+        private static void ApplyIgnite(int attackerId, int targetId, StatComponent attackerStat, float damage)
+        {
+            int igniteRate = attackerStat.FinalIgniteRate;
+            if (Random.Range(0, 100) < igniteRate)
+            {
+                // 점화 데미지: 원본 데미지의 50%, 4초간, 1초마다 틱
+                int totalIgniteDamage = Mathf.FloorToInt(damage * 0.5f);
+                int tickDamage = totalIgniteDamage / 4; // 4초간 나눠서
+
+                int igniteBuffId = 2;
+                float igniteDuration = 4f;
+
+                // 버프 추가
+                int buffEntityId = Utility.BuffHelper.AddBuff(targetId, igniteBuffId, igniteDuration);
+
+                // BuffInstance의 TickDamage 설정 (스택별로 적용됨)
+                if (buffEntityId != -1 && AR.s.Component.TryGetComponent<BuffInstance>(buffEntityId, out var buff))
+                {
+                    buff.TickDamage = tickDamage;
+                    AR.s.Component.SetComponent(buffEntityId, buff);
+                }
+
+                Debug.Log($"[DamageCalculator] 점화 발동 - Target: {targetId}, TotalDamage: {totalIgniteDamage}, TickDamage: {tickDamage}/초");
+            }
+        }
+
+        /// <summary>
+        /// 냉기 적용 (이동/공격 속도 감소, 자동 발동)
+        /// </summary>
+        private static void ApplyChill(int targetId)
+        {
+            int chillBuffId = 3;
+            float chillDuration = 2f;
+
+            Utility.BuffHelper.AddBuff(targetId, chillBuffId, chillDuration);
+            Debug.Log($"[DamageCalculator] 냉기 적용 - Target: {targetId}, Duration: {chillDuration}초");
+        }
+
+        /// <summary>
+        /// 중독 적용 (독 DoT + HP 재생 감소, 자동 발동, 스택 가능)
+        /// </summary>
+        private static void ApplyPoison(int targetId, float damage)
+        {
+            // 중독 데미지: 원본 데미지의 20%, 10초간, 1초마다 틱
+            int totalPoisonDamage = Mathf.FloorToInt(damage * 0.2f);
+            int tickDamage = totalPoisonDamage / 10; // 10초간 나눠서
+
+            int poisonBuffId = 5;
+            float poisonDuration = 10f;
+
+            // 버프 추가
+            int buffEntityId = Utility.BuffHelper.AddBuff(targetId, poisonBuffId, poisonDuration);
+
+            // BuffInstance의 TickDamage 설정
+            if (buffEntityId != -1 && AR.s.Component.TryGetComponent<BuffInstance>(buffEntityId, out var buff))
+            {
+                buff.TickDamage = tickDamage;
+                AR.s.Component.SetComponent(buffEntityId, buff);
+            }
+
+            Debug.Log($"[DamageCalculator] 중독 적용 - Target: {targetId}, TotalDamage: {totalPoisonDamage}, TickDamage: {tickDamage}/초");
         }
     }
 }

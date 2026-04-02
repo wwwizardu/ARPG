@@ -223,7 +223,10 @@ public class GlobalEnum
 
     public enum BuffEffectType
     {
-        Blooding,   // 출혈
+        Blooding,   // 출혈 (물리 DoT)
+        Ignite,     // 점화 (화염 DoT, 스택 가능)
+        Poison,     // 중독 (독 DoT + HP 재생 감소, 스택 가능)
+        Chill,      // 냉기 (이동/공격 속도 감소)
     }
 
     public enum InventoryType

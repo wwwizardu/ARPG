@@ -233,39 +233,72 @@ namespace ARPG.Utility
         /// </summary>
         private static void ApplyBuffEffect(ref BuffInstance buff, int targetEntityId, BuffTable buffTable)
         {
-            if (buffTable.EffectType == GE.BuffEffectType.Blooding)
+            if (AR.s.Component.TryGetComponent<StatComponent>(targetEntityId, out StatComponent stat) == false)
             {
-                if (AR.s.Component.TryGetComponent<StatComponent>(targetEntityId, out StatComponent stat) == true)
-                {
-                    buff.DamageType = GE.DamageType.Physics;
-                    buff.TickDamage = (int)(stat.FinalMaxHp * buffTable.EffectValue * 0.01f); // 최대 체력의 퍼센트로 계산
-                }
-                else
-                {
-                    Debug.LogWarning($"[BuffHelper] Target entity has no StatComponent - TargetEntityId: {targetEntityId}, BuffTableId: {buffTable.Id}");
-                    buff.TickDamage = 0;
-                    buff.DamageType = 0;
-                }
-            }
-            else
-            {
+                Debug.LogWarning($"[BuffHelper] Target entity has no StatComponent - TargetEntityId: {targetEntityId}, BuffTableId: {buffTable.Id}");
                 buff.TickDamage = 0;
                 buff.DamageType = 0;
+                return;
+            }
+
+            switch (buffTable.EffectType)
+            {
+                case GE.BuffEffectType.Blooding:
+                    // 출혈: 최대 체력의 퍼센트로 계산
+                    buff.DamageType = GE.DamageType.Physics;
+                    buff.TickDamage = (int)(stat.FinalMaxHp * buffTable.EffectValue * 0.01f);
+                    break;
+
+                case GE.BuffEffectType.Ignite:
+                    // 점화: EffectValue에 DoT 데미지 저장 (DamageCalculator에서 계산)
+                    buff.DamageType = GE.DamageType.Fire;
+                    buff.TickDamage = buffTable.EffectValue;
+                    break;
+
+                case GE.BuffEffectType.Poison:
+                    // 중독: EffectValue에 DoT 데미지 저장
+                    buff.DamageType = GE.DamageType.Poison;
+                    buff.TickDamage = buffTable.EffectValue;
+                    break;
+
+                case GE.BuffEffectType.Chill:
+                    // 냉기: DoT 없음, StatModifier만 사용
+                    buff.DamageType = 0;
+                    buff.TickDamage = 0;
+                    break;
+
+                default:
+                    buff.TickDamage = 0;
+                    buff.DamageType = 0;
+                    break;
             }
         }
 
         /// <summary>
         /// 버프 효과를 테이블에서 로드하여 StatModifier 추가
-        /// TODO: 실제 버프 테이블 구현 시 수정 필요
         /// </summary>
         private static void LoadBuffEffects(int buffEntityId, int targetEntityId, int buffTableID)
         {
-            // TODO: 버프 테이블에서 효과 데이터 로드
-            // 현재는 예시로 간단한 효과 추가
-
-            // 예시: buffTableID에 따라 다른 효과 적용
+            // buffTableID에 따라 다른 효과 적용
             switch (buffTableID)
             {
+                // ========== 상태 이상 버프 ==========
+                case 1: // 출혈 (DoT만, StatModifier 없음)
+                    break;
+
+                case 2: // 점화 (DoT만, StatModifier 없음)
+                    break;
+
+                case 3: // 냉기 (이동/공격 속도 감소)
+                    AddStatModifier(targetEntityId, buffEntityId, GE.Stat.MoveSpeed, StatModifierType.Multiply, -30, 0); // -30%
+                    AddStatModifier(targetEntityId, buffEntityId, GE.Stat.AttackSpeed, StatModifierType.Multiply, -20, 0); // -20%
+                    break;
+
+                case 5: // 중독 (DoT + HP 재생 감소)
+                    AddStatModifier(targetEntityId, buffEntityId, GE.Stat.HpGeneration, StatModifierType.Multiply, -50, 0); // HP 재생 -50%
+                    break;
+
+                // ========== 일반 버프 (예시) ==========
                 case 1001: // 공격력 버프
                     AddStatModifier(targetEntityId, buffEntityId, GE.Stat.AttackMin, StatModifierType.Add, 10, 0);
                     AddStatModifier(targetEntityId, buffEntityId, GE.Stat.AttackMax, StatModifierType.Add, 10, 0);
