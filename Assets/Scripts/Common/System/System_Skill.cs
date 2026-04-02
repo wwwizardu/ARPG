@@ -1,5 +1,6 @@
 #nullable enable
 using ARPG.Component;
+using ARPG.Skill.Combat;
 using Mono.Cecil.Cil;
 using UnityEngine;
 
@@ -680,17 +681,11 @@ namespace ARPG.Systems
                 return;
             }
 
-            // 데미지 계산 (DamageMin ~ DamageMax 사이의 랜덤 값)
-            int damage = UnityEngine.Random.Range(skill.Table.DamageMin, skill.Table.DamageMax + 1);
+            // ========== DamageCalculator를 사용한 데미지 계산 ==========
+            DamageResult damageResult = DamageCalculator.Calculate(skill.OwnerEntityId, targetEntityId, skill.Table);
 
-            // HP 감소 (0 이하로 떨어지지 않도록 처리)
-            int newHp = Mathf.Max(0, targetStat.CurrentHp - damage);
-            targetStat.SetCurrentHp(targetEntityId, newHp);
-
-            // 변경된 StatComponent 저장
-            AR.s.Component.SetComponent(targetEntityId, targetStat);
-
-            if(skill.Table.DamageType == GlobalEnum.DamageType.Physics)
+            // ========== 물리 데미지: 출혈 처리 (회피하지 않은 경우만) ==========
+            if(skill.Table.DamageType == GlobalEnum.DamageType.Physics && damageResult.IsEvaded == false)
             {
                 // 물리 데미지 처리
                 if(AR.s.Component.TryGetComponent<StatComponent>(skill.OwnerEntityId, out var attackerStat) == false)
@@ -702,7 +697,7 @@ namespace ARPG.Systems
                 int BloodingRate = attackerStat.FinalBloodingRate + 50;
                 if(UnityEngine.Random.Range(0, 100) < BloodingRate)
                 {
-                    int bloodingDamage = Mathf.FloorToInt(damage * 0.3f);
+                    int bloodingDamage = Mathf.FloorToInt(damageResult.FinalDamage * 0.3f);
 
                     // 출혈 버프 추가 (BuffTableID: 1 = 출혈 버프, duration: 5초)
                     // TODO: BuffTableID는 실제 테이블 데이터에 맞게 수정 필요
@@ -721,19 +716,17 @@ namespace ARPG.Systems
                 }
             }
 
-            // 데미지 메시지 전송(UI 변경 등)
-            AR.s.Message.SendToEntity(new Message.DamageMessage
-            {
-                TargetEntityId = targetEntityId,
-                DamageAmount = damage,
-                AttackerEntityId = skill.OwnerEntityId,
-                DamageType = GlobalEnum.DamageType.Physics,
-                IsCritical = false,
-                CurrentHp = targetStat.CurrentHp,
-                MaxHp = targetStat.FinalMaxHp
-            });
+            // ========== 데미지 적용 (HP 감소, 흡혈, 반사, 메시지 전송) ==========
+            DamageCalculator.ApplyDamageResult(skill.OwnerEntityId, targetEntityId, damageResult);
 
-            Debug.Log($"[System_Skill] ApplySkillEffectToEntity - SkillEntityId: {skillEntityId}, SkillId: {skill.SkillId}, TargetEntityId: {targetEntityId}, Damage: {damage}, RemainingHP: {targetStat.CurrentHp}");
+            // 타겟 StatComponent 다시 가져오기 (ApplyDamageResult에서 HP가 변경됨)
+            if (AR.s.Component.TryGetComponent<StatComponent>(targetEntityId, out targetStat) == false)
+            {
+                Debug.LogWarning($"[System_Skill] Target StatComponent lost after damage - TargetEntityId: {targetEntityId}");
+                return;
+            }
+
+            Debug.Log($"[System_Skill] ApplySkillEffectToEntity - SkillEntityId: {skillEntityId}, SkillId: {skill.SkillId}, TargetEntityId: {targetEntityId}, Damage: {Mathf.RoundToInt(damageResult.FinalDamage)}, Critical: {damageResult.IsCritical}, Evaded: {damageResult.IsEvaded}, Blocked: {damageResult.IsBlocked}, RemainingHP: {targetStat.CurrentHp}/{targetStat.FinalMaxHp}");
 
             // TODO: 추가 구현 필요
             // - 버프/디버프 적용

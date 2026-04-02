@@ -34,6 +34,15 @@ namespace ARPG.Component
         public int BaseBloodingRate;    // 기본 출혈 확률
         public int BaseIgniteRate;      // 기본 점화 확률
 
+        // 전투 시스템 확장 스탯 (2026-04-01 추가)
+        public int BaseEvasion;              // 기본 회피율 (%)
+        public int BaseBlockChance;          // 기본 막기 확률 (%)
+        public int BaseBlockReduction;       // 기본 막기 데미지 감소 (%)
+        public int BaseSkillDamage;          // 기본 스킬 데미지 배율 (%)
+        public int BaseCooldownReduction;    // 기본 쿨타임 감소 (%)
+        public int BaseLifeSteal;            // 기본 생명력 흡수 (%)
+        public int BaseThorns;               // 기본 반사 데미지 (고정값)
+
         // === 최종 스탯 (Final Stats) ===
         // Base + 장비 + 버프 등 모든 보정이 적용된 최종값 (읽기 전용으로 사용)
         public int FinalStr;
@@ -58,6 +67,15 @@ namespace ARPG.Component
         public int FinalLuck;
         public int FinalBloodingRate;
         public int FinalIgniteRate;
+
+        // 전투 시스템 확장 스탯 (2026-04-01 추가)
+        public int FinalEvasion;             // 최종 회피율 (%)
+        public int FinalBlockChance;         // 최종 막기 확률 (%)
+        public int FinalBlockReduction;      // 최종 막기 데미지 감소 (%)
+        public int FinalSkillDamage;         // 최종 스킬 데미지 배율 (%)
+        public int FinalCooldownReduction;   // 최종 쿨타임 감소 (%)
+        public int FinalLifeSteal;           // 최종 생명력 흡수 (%)
+        public int FinalThorns;              // 최종 반사 데미지 (고정값)
 
         // === 현재 상태 값 ===
         // 전투 중 변동되는 값들
@@ -117,6 +135,15 @@ namespace ARPG.Component
             BaseBloodingRate = statTable.BloodingRate;
             BaseIgniteRate = statTable.IgniteRate;
 
+            // 전투 시스템 확장 스탯 (2026-04-01 추가)
+            BaseEvasion = statTable.Evasion;
+            BaseBlockChance = statTable.BlockChance;
+            BaseBlockReduction = statTable.BlockReduction;
+            BaseSkillDamage = statTable.SkillDamage;
+            BaseCooldownReduction = statTable.CooldownReduction;
+            BaseLifeSteal = statTable.LifeSteal;
+            BaseThorns = statTable.Thorns;
+
             // 초기에는 Final = Base로 설정
             CopyBaseToFinal();
 
@@ -152,6 +179,15 @@ namespace ARPG.Component
             FinalLuck = BaseLuck;
             FinalBloodingRate = BaseBloodingRate;
             FinalIgniteRate = BaseIgniteRate;
+
+            // 전투 시스템 확장 스탯 (2026-04-01 추가)
+            FinalEvasion = BaseEvasion;
+            FinalBlockChance = BaseBlockChance;
+            FinalBlockReduction = BaseBlockReduction;
+            FinalSkillDamage = BaseSkillDamage;
+            FinalCooldownReduction = BaseCooldownReduction;
+            FinalLifeSteal = BaseLifeSteal;
+            FinalThorns = BaseThorns;
         }
     }
 }

@@ -78,6 +78,15 @@ namespace ARPG.Tables
         [JsonProperty("Luck")] public int Luck;
         [JsonProperty("BloodingRate")] public int BloodingRate;
         [JsonProperty("IgniteRate")] public int IgniteRate;
+
+        // 전투 시스템 확장 스탯 (2026-04-01 추가)
+        [JsonProperty("Evasion")] public int Evasion;                     // 회피율 (%)
+        [JsonProperty("BlockChance")] public int BlockChance;             // 막기 확률 (%)
+        [JsonProperty("BlockReduction")] public int BlockReduction;       // 막기 데미지 감소 (%)
+        [JsonProperty("SkillDamage")] public int SkillDamage;             // 스킬 데미지 배율 (%)
+        [JsonProperty("CooldownReduction")] public int CooldownReduction; // 쿨타임 감소 (%)
+        [JsonProperty("LifeSteal")] public int LifeSteal;                 // 생명력 흡수 (%)
+        [JsonProperty("Thorns")] public int Thorns;                       // 반사 데미지 (고정값)
     }
 
     [Serializable]
