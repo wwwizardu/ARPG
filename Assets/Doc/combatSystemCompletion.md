@@ -1,9 +1,10 @@
 # 전투 시스템 완성 계획 (Combat System Completion Plan)
 
 **작성일**: 2026-04-01
-**현재 진행도**: 40%
+**최종 업데이트**: 2026-04-07
+**현재 진행도**: 80%
 **목표 진행도**: 100%
-**예상 소요 시간**: 8~10일
+**남은 소요 시간**: 4~5일 (AI 통합 + 피드백)
 
 ---
 
@@ -63,21 +64,25 @@
 
 ### ❌ 미구현 기능 (60%)
 
-#### Phase 1: 고급 데미지 계산 (20%)
-- [ ] 치명타 시스템 (CriticalChance, CriticalDamage)
-- [ ] 방어력 감소 공식 (Defense / (Defense + 100))
-- [ ] 회피 판정 (Evasion)
-- [ ] 막기 판정 (BlockChance, BlockReduction)
-- [ ] 스킬 데미지 배율 (SkillDamage %)
-- [ ] 생명력 흡수 (LifeSteal)
-- [ ] 반사 데미지 (Thorns)
+#### Phase 1: 고급 데미지 계산 ✅ (완료 - 2026-04-07)
+- [X] 치명타 시스템 (CriticalChance, CriticalDamage)
+- [X] 방어력 감소 공식 (Defense / (Defense + 100))
+- [X] 회피 판정 (Evasion)
+- [X] 막기 판정 (BlockChance, BlockReduction)
+- [X] 스킬 데미지 배율 (SkillDamage %)
+- [X] 생명력 흡수 (LifeSteal)
+- [X] 반사 데미지 (Thorns)
+- **구현 파일**: `DamageCalculator.cs`
 
-#### Phase 2: AI 전투 통합 (15%)
-- [ ] AI 상태 머신 (Idle/Chase/Attack/Retreat)
-- [ ] AI 스킬 사용 로직
-- [ ] AI 공격 범위 체크
+#### Phase 2: AI 전투 통합 (대부분 완료 - 2026-04-07)
+- [X] AI 상태 머신 (Idle/Patrol/Chase/Attack/Retreat/Return)
+- [X] AI 스킬 사용 로직 (근접 - SkillHelper 연동)
+- [X] AI 공격 범위 체크 (AIBehaviorTypeComponent.AttackRange)
+- [X] MeleeAIBehavior / RangedAIBehavior 구현
+- [ ] 원거리 AI 스킬 발동 (TODO)
 - [ ] AI 쿨타임 관리
-- [ ] 몬스터 종류별 AI 패턴
+- [ ] 몬스터 종류별 세부 AI 패턴
+- **구현 파일**: `MeleeAIBehavior.cs`, `RangedAIBehavior.cs`, `System_AI_Behavior.cs`
 
 #### Phase 3: 전투 피드백 (15%)
 - [ ] VFX 통합:
@@ -93,7 +98,7 @@
 
 #### Phase 4: 고급 전투 기능 (10%)
 - [ ] 넉백 시스템
-- [ ] 상태이상 (독, 화상, 빙결)
+- [X] 상태이상 (점화, 냉기, 중독) - **완료 (2026-04-07)**
 - [ ] 발사체 스킬 (Projectile)
 - [ ] 범위 스킬 (AoE) 개선
 - [ ] 콤보 시스템

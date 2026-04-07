@@ -1,6 +1,6 @@
 # 구현 현황 및 우선순위 (Implementation Status & Roadmap)
 
-**Last Updated**: 2026-04-01
+**Last Updated**: 2026-04-07
 **Project**: ARPG with Village Simulation
 **Engine**: Unity 6000.0.42f1 (LTS)
 
@@ -17,11 +17,11 @@
 
 ## 1. 전체 구현 현황
 
-### 진행도 요약 (2026-04-01 기준)
+### 진행도 요약 (2026-04-07 기준)
 ```
-전체 진행도: ████████████░░░░░░░░░░░░░░░░░░ 35%
+전체 진행도: ██████████████░░░░░░░░░░░░░░░░ 45%
 
-핵심 시스템: ███████████████████░░░░░░░░░░░ 60%
+핵심 시스템: ███████████████████████░░░░░░░ 75%
 콘텐츠:      ████████░░░░░░░░░░░░░░░░░░░░░░ 25%
 UI/UX:       ██████████████░░░░░░░░░░░░░░░░ 45%
 ```
@@ -149,24 +149,38 @@ UI/UX:       ██████████████░░░░░░░░�
 #### 13. 전투 시스템 🚧
 - [X] 스킬 시스템 (완료)
 - [X] 스탯 시스템 (완료)
-- [ ] 데미지 계산 로직
-- [ ] 히트 판정 (Collider2D)
-- [ ] HP 감소 및 사망 처리
+- [X] 데미지 계산 로직 (DamageCalculator - 6단계 공식)
+- [X] 히트 판정 (System_Skill - GetEntitiesInSkillRange)
+- [X] HP 감소 및 사망 처리 (System_HpCheck)
+- [X] 치명타/회피/막기 판정
+- [X] 방어력 감소 공식
+- [X] 생명력 흡수 / 반사 데미지
+- [X] 상태이상 (점화, 냉기, 중독)
+- [X] AI 전투 통합 (근접 AI 스킬 사용 완료)
+- [ ] AI 전투 통합 - 원거리 AI 스킬 발동
 - [ ] VFX/사운드 통합
-- **현재 진행도**: 40%
-- **다음 작업**: 데미지 계산 및 히트 판정 구현
+- [ ] 데미지 텍스트 표시
+- [ ] 넉백 시스템
+- **현재 진행도**: 80%
+- **다음 작업**: 전투 피드백 (VFX/데미지 텍스트/넉백)
+- **파일**: `DamageCalculator.cs`, `System_Skill.cs`, `System_HpCheck.cs`
 - **문서**: `combatSystem.md`
 
 #### 14. AI 시스템 🚧
 - [X] AIComponent 정의
-- [X] System_AI_Perception (기본 구조)
-- [X] System_AI_Behavior (기본 구조)
+- [X] System_AI_Perception (타겟 감지 - 시야각/거리/타겟 잃음)
+- [X] System_AI_Behavior (행동 팩토리 패턴)
 - [X] AICanSeeTargetTag
-- [ ] AI 상태 머신 (Idle/Chase/Attack)
-- [ ] AI 타겟 감지 로직
-- [ ] AI 스킬 사용 로직
-- **현재 진행도**: 30%
-- **다음 작업**: AI 상태 머신 구현
+- [X] AIState enum (Idle/Patrol/Chase/Attack/Retreat/Return)
+- [X] AIStateComponent (상태 전환, 진입 시간 추적)
+- [X] AIBehaviorFactory (행동 타입별 분기)
+- [X] MeleeAIBehavior (Idle→Chase→Attack, 스킬 사용)
+- [X] RangedAIBehavior (거리 유지, 후퇴 로직)
+- [ ] 원거리 AI 스킬 발동 (TODO 상태)
+- [ ] 몬스터 종류별 AI 패턴 (슬라임, 고블린 등)
+- **현재 진행도**: 75%
+- **다음 작업**: 원거리 AI 스킬 발동, 몬스터별 AI 패턴
+- **파일**: `System_AI_Perception.cs`, `System_AI_Behavior.cs`, `MeleeAIBehavior.cs`, `RangedAIBehavior.cs`
 
 #### 15. NPC 시스템 🚧
 - [X] NpcStatComponent (8가지 성격)
@@ -529,80 +543,75 @@ NPC 일일 루틴 → 관계 시스템 → 상호작용 시스템 → 동료 시
 
 ## 5. 다음 작업 리스트
 
-### 🔥 이번 주 (Week 1-2)
-**목표**: 전투 시스템 완성
+### ✅ 완료된 주 (Week 1-2)
+**목표**: 전투 시스템 완성 → **핵심 로직 완료!**
 
-#### Task 1: 데미지 계산 로직
-- [ ] `DamageCalculator.cs` 생성
-- [ ] 기본 데미지 공식 구현
-- [ ] 치명타 판정
-- [ ] 방어력 감소
-- [ ] 회피/막기 판정
-- **예상 시간**: 2일
+#### Task 1: 데미지 계산 로직 ✅
+- [X] `DamageCalculator.cs` 생성
+- [X] 기본 데미지 공식 구현 (6단계)
+- [X] 치명타 판정
+- [X] 방어력 감소
+- [X] 회피/막기 판정
+- [X] 생명력 흡수 / 반사 데미지
 
-#### Task 2: 히트 판정 시스템
-- [ ] Collider2D 기반 히트박스
-- [ ] `System_Skill`에 히트 체크 로직 추가
-- [ ] 히트 시 데미지 적용
-- **예상 시간**: 2일
+#### Task 2: 히트 판정 시스템 ✅
+- [X] System_Skill에 히트 체크 로직 (GetEntitiesInSkillRange)
+- [X] 히트 시 DamageCalculator를 통한 데미지 적용
+- [X] DamageMessage 전송
 
-#### Task 3: HP 감소 및 사망
-- [ ] `System_HpCheck` 개선
-- [ ] HP 감소 로직
-- [ ] 사망 처리 (DestroyTag 추가)
+#### Task 3: HP 감소 및 사망 ✅
+- [X] System_HpCheck (HP 체크 및 사망 처리)
+- [X] 사망 처리 (DestroyTag 추가)
+- [X] 드랍 아이템 처리
+
+#### Task 4: 상태이상 시스템 ✅
+- [X] 점화 (화염 DoT, 스택 가능)
+- [X] 냉기 (이동/공격 속도 감소)
+- [X] 중독 (독 DoT + HP 재생 감소)
+
+#### Task 5: 미완료 항목 (다음 단계로 이월)
+- [ ] VFX (히트/사망/스킬 이펙트)
+- [ ] 사운드 통합
+- [ ] 데미지 텍스트 표시
+- [ ] 넉백 시스템
 - [ ] 플레이어 사망 시 리스폰
-- **예상 시간**: 1일
-
-#### Task 4: 기본 VFX
-- [ ] 히트 이펙트 (Particle System)
-- [ ] 사망 이펙트
-- [ ] 스킬 이펙트 (기본 공격)
-- **예상 시간**: 2일
-
-#### Task 5: 테스트 & 밸런싱
-- [ ] 테스트 씬 구성
-- [ ] 전투 밸런싱 (데미지, HP)
-- [ ] 버그 수정
-- **예상 시간**: 1일
-
-**총 예상**: 8일 (1주 조금 넘음)
 
 ---
 
-### 📅 다음 주 (Week 3-4)
-**목표**: AI 시스템 완성
+### ✅ 완료된 주 (Week 3-4)
+**목표**: AI 시스템 완성 → **핵심 로직 완료!**
 
-#### Task 1: AI 상태 머신
-- [ ] AIState enum 구현
-- [ ] `System_AI_Behavior` 개선
-- [ ] Idle → Chase → Attack 전환 로직
-- **예상 시간**: 3일
+#### Task 1: AI 상태 머신 ✅
+- [X] AIState enum 구현 (Idle/Patrol/Chase/Attack/Retreat/Return)
+- [X] AIStateComponent (상태 전환, 진입 시간 추적)
+- [X] AIBehaviorFactory (행동 타입별 분기)
+- [X] TransitionToState 로직
 
-#### Task 2: AI 타겟 감지
-- [ ] `System_AI_Perception` 개선
-- [ ] 시야 범위 내 타겟 감지
-- [ ] 장애물 체크 (Raycast)
-- **예상 시간**: 2일
+#### Task 2: AI 타겟 감지 ✅
+- [X] System_AI_Perception (0.2초 간격 실행)
+- [X] 시야 범위 + 시야각 기반 감지
+- [X] 타겟 잃음 처리 (거리/시간 기반)
 
-#### Task 3: AI 스킬 사용
-- [ ] AI가 스킬 사용하도록 수정
+#### Task 3: AI 스킬 사용 (부분 완료)
+- [X] 근접 AI 스킬 발동 (SkillHelper.GetSkillCommandComponent 연동)
+- [ ] 원거리 AI 스킬 발동 (RangedAIBehavior - TODO)
 - [ ] 쿨타임 관리
 - [ ] 스킬 선택 로직
-- **예상 시간**: 2일
 
-#### Task 4: 몬스터 AI 패턴
-- [ ] 슬라임 (근접, 단순)
-- [ ] 고블린 (근접, 그룹)
-- [ ] 박쥐 (원거리, 빠름)
-- **예상 시간**: 3일
+#### Task 4: AI 행동 패턴 (부분 완료)
+- [X] MeleeAIBehavior (Idle→Chase→Attack)
+- [X] RangedAIBehavior (거리 유지 + 후퇴)
+- [ ] 몬스터 종류별 세부 패턴 (슬라임, 고블린, 박쥐)
 
 ---
 
 ### 🎯 이번 달 목표
 1. ✅ 기획 문서 작성 (완료!)
-2. 🚧 전투 시스템 완성 (진행 중)
-3. ⏳ AI 시스템 완성
-4. ⏳ 던전 생성 시스템 (기본)
+2. ✅ 전투 시스템 핵심 로직 (완료! - DamageCalculator, 상태이상)
+3. ✅ AI 시스템 핵심 로직 (완료! - 상태 머신, 근접/원거리 AI)
+4. 🚧 전투 피드백 (VFX, 데미지 텍스트, 넉백)
+5. ⏳ 원거리 AI 스킬 발동 / 몬스터별 세부 패턴
+6. ⏳ 던전 생성 시스템 (기본)
 
 ---
 
@@ -670,7 +679,8 @@ NPC 일일 루틴 → 관계 시스템 → 상호작용 시스템 → 동료 시
 ### 진행도 추적
 ```
 2026-04-01: 35% 완료
-2026-05-01: 예상 45%
+2026-04-07: 45% 완료 (전투 + AI 핵심 로직 완성)
+2026-05-01: 예상 50%
 2026-06-01: 예상 55%
 2026-07-01: 예상 65%
 ...
@@ -700,5 +710,5 @@ NPC 일일 루틴 → 관계 시스템 → 상호작용 시스템 → 동료 시
 - 새 시스템 완료 시: 상태 변경 (🚧 → ✅)
 - Milestone 완료 시: 로드맵 업데이트
 
-**마지막 업데이트**: 2026-04-01
-**다음 업데이트**: 2026-04-08
+**마지막 업데이트**: 2026-04-07
+**다음 업데이트**: 2026-04-14
