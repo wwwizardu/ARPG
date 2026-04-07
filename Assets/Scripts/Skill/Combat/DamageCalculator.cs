@@ -136,7 +136,23 @@ namespace ARPG.Skill.Combat
             if (result.IsEvaded)
             {
                 Debug.Log($"[DamageCalculator] 회피! TargetId: {targetId}");
-                // TODO: 회피 이펙트/사운드
+
+                if (AR.s.Component.TryGetComponent<StatComponent>(targetId, out var evadeStat))
+                {
+                    AR.s.Message.SendToEntity(new Message.DamageMessage
+                    {
+                        TargetEntityId = targetId,
+                        DamageAmount = 0,
+                        AttackerEntityId = attackerId,
+                        DamageType = result.DamageType,
+                        IsCritical = false,
+                        IsEvaded = true,
+                        IsBlocked = false,
+                        CurrentHp = evadeStat.CurrentHp,
+                        MaxHp = evadeStat.FinalMaxHp
+                    });
+                }
+
                 return; // 회피 시 데미지 없음
             }
 
@@ -189,6 +205,8 @@ namespace ARPG.Skill.Combat
                 AttackerEntityId = attackerId,
                 DamageType = result.DamageType,
                 IsCritical = result.IsCritical,
+                IsEvaded = false,
+                IsBlocked = result.IsBlocked,
                 CurrentHp = targetStat.CurrentHp,
                 MaxHp = targetStat.FinalMaxHp
             });

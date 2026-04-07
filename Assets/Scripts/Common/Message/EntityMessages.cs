@@ -28,6 +28,16 @@ namespace ARPG.Message
         /// </summary>
         public bool IsCritical;
 
+        /// <summary>
+        /// 회피 여부
+        /// </summary>
+        public bool IsEvaded;
+
+        /// <summary>
+        /// 막기 여부
+        /// </summary>
+        public bool IsBlocked;
+
         public int CurrentHp;
         public int MaxHp;
     }

@@ -26,6 +26,18 @@ namespace ARPG.UI
                 return;
 
             _hpBar.fillAmount = (float)msg.CurrentHp / (float)msg.MaxHp;
+
+            Vector3 damagePos = _hpBar.transform.position;
+            damagePos.y -= 0.25f; // HP바 아래에 데미지 텍스트 표시
+
+            AR.s.FloatingText.ShowDamageText(
+                damagePos,
+                msg.DamageAmount,
+                msg.DamageType,
+                msg.IsCritical,
+                msg.IsEvaded,
+                msg.IsBlocked
+            );
         }
     }
 }
