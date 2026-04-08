@@ -183,8 +183,8 @@ public class GlobalEnum
 
     public enum SkillTargetType
     {
-        Target,
-        Range_Circle,
+        SingleEntity,
+        Direction,
     }
 
     public enum AiType

@@ -94,7 +94,7 @@ namespace ARPG.Monster
             Vector3 spawnPos = new Vector3(position.x, position.y, -0.05f);
 
             // EntityFactory를 통해 몬스터 생성 (Addressable)
-            int monsterTableId = Random.Range(1001, 1003);
+            int monsterTableId = 1003; //Random.Range(1001, 1004);
             var (entityId, entity) = await EntityFactory.CreateMonster(monsterTableId, spawnPos, gameScene.MonsterRoot);
 
             if (entityId < 0 || entity == null)

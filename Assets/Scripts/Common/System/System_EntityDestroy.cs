@@ -66,7 +66,19 @@ namespace ARPG.Systems
                 }
                 else
                 {
-                    // EntityBase 없이 ECS만 있는 엔티티
+                    // EntityBase 없이 ECS만 있는 엔티티 (발사체 등)
+                    // System_Render에 등록된 GameObject 정리
+                    var renderSystem = AR.s.System.GetSystem<System_Render>();
+                    if (renderSystem != null)
+                    {
+                        GameObject go = renderSystem.GetGameObject(entityId);
+                        if (go != null)
+                        {
+                            Object.Destroy(go);
+                        }
+                        renderSystem.UnregisterGameObject(entityId);
+                    }
+
                     EntityIdHelper.DestroyEntity(entityId);
                 }
             }

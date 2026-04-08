@@ -62,6 +62,10 @@ namespace ARPG.Component
             { typeof(NpcJobComponent), 200 },
             { typeof(NpcScheduleComponent), 200 },
             { typeof(NpcVillageComponent), 200 },
+
+            // 발사체 컴포넌트
+            { typeof(ProjectileComponent), 100 },
+            { typeof(ProjectileTag), 100 },
         };
 
         /// <summary>

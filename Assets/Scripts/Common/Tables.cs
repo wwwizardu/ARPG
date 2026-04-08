@@ -321,8 +321,20 @@ namespace ARPG.Tables
         [JsonProperty("StartEffectName")] public string StartEffectName = string.Empty; // 애니메이션 이름
         [JsonProperty("ActivateName")] public string ActivateName = string.Empty;       // 애니메이션 이름
         [JsonProperty("HitEffect")] public string HitEffect = string.Empty;             // 애니메이션 이름
-        
-        
+        [JsonProperty("ProjectileId")] public int ProjectileId;                          // 발사체 테이블 ID (0이면 즉발)
+
+
+    }
+
+    [Serializable]
+    public class ProjectileTable : TableBase
+    {
+        [JsonProperty("Name")] public string Name = string.Empty;           // 이름
+        [JsonProperty("Speed")] public float Speed;                         // 이동 속도
+        [JsonProperty("LifeTime")] public float LifeTime;                   // 최대 수명 (초)
+        [JsonProperty("HitRadius")] public float HitRadius;                 // 충돌 반경
+        [JsonProperty("IsPiercing")] public bool IsPiercing;                // 관통 여부
+        [JsonProperty("PrefabKey")] public string PrefabKey = string.Empty; // Addressable 프리팹 키
     }
 
     [Serializable]
@@ -330,6 +342,8 @@ namespace ARPG.Tables
     {
         [JsonProperty("Name")] public string Name = string.Empty;   // 이름
         [JsonProperty("AiType")] public GE.AiType AiType;           // Ai 타입
+        [JsonProperty("BehaviorType")] public ARPG.Component.AIBehaviorType BehaviorType; // 행동 타입 (Melee/Ranged 등)
+        [JsonProperty("DetectionRange")] public float DetectionRange; // 감지 범위
         [JsonProperty("SkillId1")] public int SkillId1;             // 스킬 1
         [JsonProperty("SkillId2")] public int SkillId2;             // 스킬 2
         [JsonProperty("SkillId3")] public int SkillId3;             // 스킬 3

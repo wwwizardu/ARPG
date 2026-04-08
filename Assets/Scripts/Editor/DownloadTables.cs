@@ -31,7 +31,7 @@ namespace ARPG.Editor
 
             await DownloadTable<CreatureTable>("0&range=A:F", 1, SaveType.String);
 
-            await DownloadTable<AiTable>("947794841&range=A:F", 1, SaveType.String);
+            await DownloadTable<AiTable>("947794841&range=A:H", 1, SaveType.String);
 
             await DownloadTable<MonsterTable>("483012127&range=A:K", 1, SaveType.String);
 
@@ -55,11 +55,13 @@ namespace ARPG.Editor
 
             await DownloadTable<DropEquipmentTable>("1267382287&range=A:V", 1, SaveType.String);
 
-            await DownloadTable<SkillTable>("92727160&range=A:U", 1, SaveType.String);
+            await DownloadTable<SkillTable>("92727160&range=A:V", 1, SaveType.String);
 
             await DownloadTable<BuffTable>("127577579&range=A:J", 1, SaveType.String);
 
             await DownloadTable<AnimationTable>("747631090&range=A:E", 1, SaveType.String);
+
+            await DownloadTable<ProjectileTable>("1810235418&range=A:G", 1, SaveType.String);
 
             //await DownloadTable<BuffEffectTable>("2104311648&range=A:K", 1, SaveType.String);
 
@@ -186,6 +188,10 @@ namespace ARPG.Editor
                 else if (table is AnimationTable animationTable)
                 {
                     ParseAnimationTable(animationTable, values);
+                }
+                else if (table is ProjectileTable projectileTable)
+                {
+                    ParseProjectileTable(projectileTable, values);
                 }
                 else
                 {
@@ -509,21 +515,24 @@ namespace ARPG.Editor
             table.StartEffectName = values[18];
             table.ActivateName = values[19];
             table.HitEffect = values[20];
+            table.ProjectileId = values.Length > 21 ? int.Parse(values[21]) : 0;
         }
 
         private static void ParseAiTable(AiTable table, string[] values)
         {
-            if (values.Length < 5)
+            if (values.Length < 7)
             {
-                Debug.LogError($"[ParseAiTable] Invalid data length. Expected at least 5, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseAiTable] Invalid data length. Expected at least 7, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
             table.Name = values[1];
             table.AiType = (GlobalEnum.AiType)Enum.Parse(typeof(GlobalEnum.AiType), values[2]);
-            table.SkillId1 = int.Parse(values[3]);
-            table.SkillId2 = int.Parse(values[4]);
-            table.SkillId3 = int.Parse(values[5]);
+            table.BehaviorType = (ARPG.Component.AIBehaviorType)Enum.Parse(typeof(ARPG.Component.AIBehaviorType), values[3]);
+            table.DetectionRange = float.Parse(values[4]);
+            table.SkillId1 = int.Parse(values[5]);
+            table.SkillId2 = int.Parse(values[6]);
+            table.SkillId3 = int.Parse(values[7]);
         }
 
         private static void ParseBuffTable(BuffTable table, string[] values)
@@ -559,6 +568,23 @@ namespace ARPG.Editor
             table.SpriteLibraryPath = values[2];
             table.AnimClipPath = values[3];
             table.ClipNames = values[4];
+        }
+
+        private static void ParseProjectileTable(ProjectileTable table, string[] values)
+        {
+            // 전체 범위: A:G = 7개 컬럼 (Id, Name, Speed, LifeTime, HitRadius, IsPiercing, PrefabKey)
+            if (values.Length < 7)
+            {
+                Debug.LogError($"[ParseProjectileTable] Invalid data length. Expected at least 7, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            table.Name = values[1];
+            table.Speed = float.Parse(values[2]);
+            table.LifeTime = float.Parse(values[3]);
+            table.HitRadius = float.Parse(values[4]);
+            table.IsPiercing = values[5].Trim().ToUpper() == "TRUE";
+            table.PrefabKey = values[6];
         }
 
         private static void ParseBuffEffectTable(BuffEffectTable table, string[] values)

@@ -71,6 +71,10 @@ namespace ARPG.Systems
             System_MonsterSpawn monsterSpawnSystem = new();
             RegisterSystems(monsterSpawnSystem);
 
+            // Priority 150: Projectile System (FixedUpdate) - 발사체 이동 및 충돌
+            System_Projectile projectileSystem = new();
+            RegisterSystems(projectileSystem);
+
             // Priority 200: Skill System (FixedUpdate) - 스킬 로직
             System_Skill skillSystem = new();
             RegisterSystems(skillSystem);

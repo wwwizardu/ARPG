@@ -5,7 +5,9 @@ namespace ARPG.AI.Behaviors
 {
     public class RangedAIBehavior : IAIBehavior
     {
-        private const float KEEP_DISTANCE = 7f;  // 유지할 거리
+        private const float KEEP_DISTANCE = 7f;     // 유지할 거리
+        private const float RETREAT_MAX_TIME = 0.5f; // 최대 후퇴 시간 (초)
+        private const float ATTACK_MIN_TIME = 1.5f;  // Attack 진입 후 최소 유지 시간 (Retreat 방지)
 
         public void OnEnterState(int entityId, AIState state)
         {
@@ -102,8 +104,12 @@ namespace ARPG.AI.Behaviors
 
                 if (cm.TryGetComponent<VelocityComponent>(entityId, out var velocity))
                 {
-                    velocity.Direction = direction;
-                    cm.SetComponent(entityId, velocity);
+                    if (cm.TryGetComponent<StatComponent>(entityId, out var stat))
+                    {
+                        velocity.Direction = direction;
+                        velocity.Speed = stat.FinalMoveSpeed;
+                        cm.SetComponent(entityId, velocity);
+                    }
                 }
             }
         }
@@ -135,36 +141,44 @@ namespace ARPG.AI.Behaviors
             float sqrDistance = (targetTransform.Position - transform.Position).sqrMagnitude;
             float keepDistanceSqr = KEEP_DISTANCE * KEEP_DISTANCE;
 
-            // 타겟이 너무 가까우면 후퇴
-            if (sqrDistance < keepDistanceSqr * 0.5f)
-            {
-                TransitionToState(entityId, cm, AIState.Retreat);
-            }
             // 공격 범위 밖으로 나가면 추격
-            else if (sqrDistance > behavior.AttackRange * behavior.AttackRange)
+            if (sqrDistance > behavior.AttackRange * behavior.AttackRange)
             {
                 TransitionToState(entityId, cm, AIState.Chase);
+                return;
             }
-            else
-            {
-                // 원거리 공격 실행 (정지 상태에서)
-                if (cm.TryGetComponent<VelocityComponent>(entityId, out var velocity))
-                {
-                    velocity.Direction = Vector2.zero;
-                    cm.SetComponent(entityId, velocity);
-                }
 
-                // TODO: 원거리 스킬 발동
-                Debug.Log($"Ranged AI {entityId} attacking target {ai.TargetEntityId}");
+            // 타겟이 너무 가까우면 후퇴 (Attack 최소 유지 시간 이후에만)
+            if (cm.TryGetComponent<AIStateComponent>(entityId, out var stateComp))
+            {
+                float timeInAttack = Time.time - stateComp.StateEnterTime;
+                if (sqrDistance < keepDistanceSqr * 0.5f && timeInAttack >= ATTACK_MIN_TIME)
+                {
+                    TransitionToState(entityId, cm, AIState.Retreat);
+                    return;
+                }
+            }
+
+            // 원거리 공격 실행 (정지 상태에서)
+            if (cm.TryGetComponent<VelocityComponent>(entityId, out var velocity))
+            {
+                velocity.Direction = Vector2.zero;
+                velocity.Speed = 0f;
+                cm.SetComponent(entityId, velocity);
+            }
+
+            if (ARPG.Utility.SkillHelper.GetSkillCommandComponent(0, entityId, targetTransform.Position, out var command) == true)
+            {
+                AR.s.Component.SetComponent(entityId, command);
             }
         }
 
         private void UpdateRetreat(int entityId, ComponentManager cm, float deltaTime)
         {
-            if (!cm.TryGetComponent<AIComponent>(entityId, out var ai))
+            if (cm.TryGetComponent<AIComponent>(entityId, out var ai) == false)
                 return;
 
-            if (!cm.TryGetComponent<TransformComponent>(entityId, out var transform))
+            if (cm.TryGetComponent<TransformComponent>(entityId, out var transform) == false)
                 return;
 
             // 타겟이 없으면 Idle로 전환
@@ -174,10 +188,20 @@ namespace ARPG.AI.Behaviors
                 return;
             }
 
-            if (!cm.TryGetComponent<TransformComponent>(ai.TargetEntityId, out var targetTransform))
+            if (cm.TryGetComponent<TransformComponent>(ai.TargetEntityId, out var targetTransform) == false)
             {
                 TransitionToState(entityId, cm, AIState.Idle);
                 return;
+            }
+
+            // 후퇴 시간 초과 시 Attack으로 강제 전환
+            if (cm.TryGetComponent<AIStateComponent>(entityId, out var stateComponent))
+            {
+                if (Time.time - stateComponent.StateEnterTime >= RETREAT_MAX_TIME)
+                {
+                    TransitionToState(entityId, cm, AIState.Attack);
+                    return;
+                }
             }
 
             float sqrDistance = (targetTransform.Position - transform.Position).sqrMagnitude;
@@ -195,8 +219,12 @@ namespace ARPG.AI.Behaviors
 
                 if (cm.TryGetComponent<VelocityComponent>(entityId, out var velocity))
                 {
-                    velocity.Direction = direction;
-                    cm.SetComponent(entityId, velocity);
+                    if (cm.TryGetComponent<StatComponent>(entityId, out var stat))
+                    {
+                        velocity.Direction = direction;
+                        velocity.Speed = stat.FinalMoveSpeed;
+                        cm.SetComponent(entityId, velocity);
+                    }
                 }
             }
         }

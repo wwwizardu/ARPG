@@ -46,6 +46,17 @@ namespace ARPG.Systems
             Debug.Log($"GameObject registered for Entity {entityId}: {gameObject.name}");
         }
 
+        public GameObject GetGameObject(int entityId)
+        {
+            if (_entityToGameObject == null)
+                return null;
+
+            if (_entityToGameObject.TryGetValue(entityId, out GameObject go))
+                return go;
+
+            return null;
+        }
+
         // GameObject 해제 (Entity 삭제 시 호출)
         public void UnregisterGameObject(int entityId)
         {

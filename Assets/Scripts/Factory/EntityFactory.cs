@@ -326,6 +326,22 @@ namespace ARPG.Factory
         /// </summary>
         private static void AddAIComponents(int entityId, int aiTableId)
         {
+            Tables.AiTable? aiTable = AR.s.Data.GetAiTable(aiTableId);
+
+            float detectionRange = aiTable != null ? aiTable.DetectionRange : 5f;
+            AIBehaviorType behaviorType = aiTable != null ? aiTable.BehaviorType : AIBehaviorType.Melee;
+
+            // AttackRange는 SkillId1의 SkillRangeMax에서 가져옴
+            float attackRange = 0.8f;
+            if (aiTable != null && aiTable.SkillId1 > 0)
+            {
+                Tables.SkillTable? skillTable = AR.s.Data.GetSkill(aiTable.SkillId1);
+                if (skillTable != null)
+                {
+                    attackRange = skillTable.SkillRangeMax;
+                }
+            }
+
             AR.s.Component.AddComponent(entityId, new AIComponent
             {
                 AITableID = aiTableId,
@@ -335,18 +351,18 @@ namespace ARPG.Factory
 
             AR.s.Component.AddComponent(entityId, new AIPerceptionComponent
             {
-                DetectionRange = 5f,
-                AttackRange = 0.8f,
-                LoseTargetRange = 10f,
+                DetectionRange = detectionRange,
+                AttackRange = attackRange,
+                LoseTargetRange = detectionRange * 2f,
                 FieldOfView = 360f,
                 LastDetectionTime = 0f
             });
 
             AR.s.Component.AddComponent(entityId, new AIBehaviorTypeComponent
             {
-                BehaviorType = AIBehaviorType.Melee,
-                AggroRange = 10f,
-                AttackRange = 1f
+                BehaviorType = behaviorType,
+                AggroRange = detectionRange,
+                AttackRange = attackRange
             });
 
             AR.s.Component.AddComponent(entityId, new AIStateComponent

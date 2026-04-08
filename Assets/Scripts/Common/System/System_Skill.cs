@@ -108,7 +108,7 @@ namespace ARPG.Systems
             // 커맨드 타입에 따라 처리
             switch (inCommand.TargetType)
             {
-                case GlobalEnum.SkillTargetType.Target:
+                case GlobalEnum.SkillTargetType.SingleEntity:
                     // 마우스 포지션과 가장 가까운 엔티티를 찾아 타겟으로 설정
                     int closestEntityId = FindClosestEntity(inCommand.TargetPosition, inSkill.OwnerEntityId);
                     if (closestEntityId != 0)
@@ -124,7 +124,7 @@ namespace ARPG.Systems
                     }
                     break;
 
-                case GlobalEnum.SkillTargetType.Range_Circle:
+                case GlobalEnum.SkillTargetType.Direction:
                     // 오너 엔티티의 위치와 마우스 위치로 방향 계산
                     if (AR.s.Component.TryGetComponent<TransformComponent>(inSkill.OwnerEntityId, out var ownerTransform))
                     {
@@ -509,27 +509,32 @@ namespace ARPG.Systems
                 return;
             }
 
-            if(skill.OwnerEntityId == 0)
+            // 발사체 스킬인 경우 발사체 생성
+            if (skill.Table.ProjectileId > 0)
             {
-                int di = 0;
+                if (AR.s.Component.TryGetComponent<TransformComponent>(skill.OwnerEntityId, out var ownerTransform))
+                {
+                    Vector2 direction = (target.TargetPosition - ownerTransform.Position).normalized;
+                    Utility.ProjectileHelper.SpawnProjectile(
+                        skill.OwnerEntityId,
+                        skillEntityId,
+                        skill.Table.ProjectileId,
+                        ownerTransform.Position,
+                        direction
+                    );
+                }
+
+                return;
             }
 
-            // 스킬 타겟 타입에 따라 충돌 체크
+            // 즉발 스킬: 기존 로직
             System.Collections.Generic.List<int> hitEntities = GetEntitiesInSkillRange(skill, target);
 
-            // 충돌한 엔티티들에게 스킬 효과 적용
             for (int i = 0; i < hitEntities.Count; i++)
             {
                 int hitEntityId = hitEntities[i];
                 ApplySkillEffectToEntity(skillEntityId, skill, hitEntityId);
             }
-
-            // TODO: 실제 스킬 효과 처리 구현
-            // - 데미지 계산 및 적용
-            // - 이펙트 생성
-            // - 사운드 재생
-            // - 버프/디버프 적용
-            // - 넉백, CC 효과 등
 
             Debug.Log($"[System_Skill] ProcessSkillHit - SkillEntityId: {skillEntityId}, OwnerEntityId: {skill.OwnerEntityId}, HitCount: {hitEntities.Count}");
         }
@@ -584,7 +589,7 @@ namespace ARPG.Systems
             // 스킬 타겟 타입에 따라 분기
             switch (skill.Table.SkillTargetType)
             {
-                case GlobalEnum.SkillTargetType.Target:
+                case GlobalEnum.SkillTargetType.SingleEntity:
                     // 단일 타겟 - TargetId만 체크
                     if (target.TargetId != 0)
                     {
@@ -592,7 +597,7 @@ namespace ARPG.Systems
                     }
                     break;
 
-                case GlobalEnum.SkillTargetType.Range_Circle:
+                case GlobalEnum.SkillTargetType.Direction:
                     // 범위 원형 - TargetPosition 중심으로 범위 내 엔티티 체크
                     CheckCircleRangeEntities(skill, target, hitEntities);
                     break;

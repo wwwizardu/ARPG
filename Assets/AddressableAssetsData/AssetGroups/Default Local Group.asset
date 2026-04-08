@@ -75,6 +75,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 763d2617fc333a74994816aad537cf2b
+    m_Address: Projectile/Projectile_Test
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 866a25d384bd4ad41809716fb6fd09e7
     m_Address: Animation/Npc
     m_ReadOnly: 0
