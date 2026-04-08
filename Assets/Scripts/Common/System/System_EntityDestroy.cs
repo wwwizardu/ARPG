@@ -67,14 +67,29 @@ namespace ARPG.Systems
                 else
                 {
                     // EntityBase 없이 ECS만 있는 엔티티 (발사체 등)
-                    // System_Render에 등록된 GameObject 정리
                     var renderSystem = AR.s.System.GetSystem<System_Render>();
                     if (renderSystem != null)
                     {
                         GameObject go = renderSystem.GetGameObject(entityId);
                         if (go != null)
                         {
-                            Object.Destroy(go);
+                            // 발사체는 AddressablePool에 반환
+                            if (cm.TryGetComponent<ProjectileComponent>(entityId, out var proj))
+                            {
+                                var projTable = AR.s.Data.GetProjectile(proj.ProjectileTableId);
+                                if (projTable != null && string.IsNullOrEmpty(projTable.PrefabKey) == false)
+                                {
+                                    AddressablePool.Return(projTable.PrefabKey, go);
+                                }
+                                else
+                                {
+                                    Object.Destroy(go);
+                                }
+                            }
+                            else
+                            {
+                                Object.Destroy(go);
+                            }
                         }
                         renderSystem.UnregisterGameObject(entityId);
                     }
