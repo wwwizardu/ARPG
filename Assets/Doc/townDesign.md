@@ -112,133 +112,81 @@ NPC들이 자율적으로 행동하며 마을을 발전시키는 RPG 게임. 유
 ## 7. 시간 시스템
 
 - 게임 내 시간은 존재하지만 밤/낮 구분 없음
-- NPC 행동은 시간대가 아닌 **상태(Needs)** 기반으로 구동
-- System_NpcSchedule이 주기적으로(1~2초 간격) NPC 상태를 평가하여 행동 결정
+- NPC 행동은 AI State Strategy 패턴으로 구동 (System_AI_Behavior + IAIStateHandler)
 
 ---
 
-## 8. NPC 상태 기반 행동 시스템
+## 8. NPC 기본 행동 패턴
 
 ### 핵심 개념
-NPC는 밤/낮 시간표를 따르지 않고, **현재 Needs(욕구)** 상태에 따라 자율적으로 행동을 선택한다.
+NPC는 기존 AI 행동 시스템(System_AI_Behavior)을 확장하여 동작한다.
+각 AI 상태(Idle, Patrol, Chase, Attack, Retreat, Flee)는 독립된 StateHandler 클래스로 구현되며,
+AIBehaviorFactory가 (BehaviorType, AIState) 조합으로 적절한 핸들러를 선택한다.
 
-### NPC Needs (욕구 수치, 0~100)
-
-| 욕구 | 설명 | 자연 감소 | 회복 방법 |
-|------|------|-----------|-----------|
-| Hunger (배고픔) | 0이면 포만, 100이면 굶주림 | 시간 경과 시 증가 | 식사 (식량 소비) |
-| Fatigue (피로) | 0이면 활력, 100이면 탈진 | 활동 시 증가 | 휴식 (특정 장소에서 대기) |
-| Morale (사기) | 100이면 최고, 0이면 최저 | 나쁜 상황 시 감소 | 사회 활동, 목표 달성 |
-
-### 행동 결정 우선순위
-
-NPC는 매 평가 주기마다 아래 우선순위로 행동을 결정:
+### AI State Strategy 구조
 
 ```
-1순위: 위기 대응 (HP 낮음 → 도주/치료, 위협 감지 → 대피)
-2순위: 생존 욕구 (Hunger >= 70 → 식사, Fatigue >= 80 → 휴식)
-3순위: 직업 활동 (Fatigue < 60 → 직업 수행, 자원 생산)
-4순위: 개인 목표 (숙련도 향상, 집 업그레이드 등)
-5순위: 자유 행동 (배회, NPC 간 교류, 상점 방문)
+IAIStateHandler (인터페이스)
+  ├── IdleStateHandler          — 공통: 대기, 타겟 감지 → Chase
+  ├── PatrolStateHandler        — NPC: 스폰 위치 근처 배회, 위협 → Flee/Chase
+  ├── ChaseStateHandler         — 공통: 타겟 추적, 공격 범위 도달 → Attack
+  ├── MeleeAttackStateHandler   — 근접: 정지 + 스킬, KeepDistance 체크
+  ├── RangedAttackStateHandler  — 원거리: 정지 + 스킬, KeepDistance 체크
+  ├── RetreatStateHandler       — 공통: 타겟 반대 방향 이동
+  └── FleeStateHandler          — NPC: 위협 반대 방향 도주
 ```
 
-### 활동 타입 (ActivityType)
+### 프로필 매핑
 
-| 활동 | 트리거 조건 | 행동 | 결과 |
-|------|------------|------|------|
-| Eat | Hunger >= 70 | 식량 저장소로 이동 → 식사 | Hunger 감소, 식량 소비 |
-| Rest | Fatigue >= 80 | 집/휴식 장소로 이동 → 대기 | Fatigue 감소 |
-| Work | Fatigue < 60, Hunger < 70 | 작업장으로 이동 → 직업 활동 | 자원 생산, Fatigue 증가 |
-| Socialize | 다른 욕구 충족 시 | 다른 NPC에게 이동 → 교류 | Morale 증가 |
-| Wander | 할 일 없을 때 | 랜덤 위치로 이동 | 없음 |
-| Flee | 위협 감지 | 위협 반대 방향으로 이동 | 안전 확보 |
-| PersonalGoal | 여유 있을 때 | 목표에 따라 다름 | 숙련도/자원 등 |
+| BehaviorType | Idle | Patrol | Chase | Attack | Retreat | Flee |
+|-------------|------|--------|-------|--------|---------|------|
+| Melee (근접 몬스터) | Idle | - | Chase | MeleeAttack | Retreat | - |
+| Ranged (원거리 몬스터) | Idle | - | Chase | RangedAttack | Retreat | - |
+| Patrol (NPC) | Idle | Patrol | Chase | MeleeAttack | Retreat | Flee |
 
-### 성격에 따른 가중치
-
-성격 스탯이 행동 선택의 **임계값**과 **확률**에 영향:
-- **greed 높음**: Work 우선순위 상승, Socialize 임계값 높아짐 (덜 어울림)
-- **friendliness 높음**: Socialize 우선순위 상승, 교류 빈도 증가
-- **curiosity 높음**: Wander 시 탐험 범위 증가, PersonalGoal 우선순위 상승
-- **patience 높음**: Work 지속 시간 증가 (Fatigue 임계값 높아짐)
-- **courage 높음**: Flee 대신 전투 선택 가능
-
-### 상태 전환 흐름 예시
+### 상태 흐름
 
 ```
-NPC 평가 → Hunger=85 → Eat 선택
-  → 식량 저장소로 이동 (ActivityTarget 세팅)
-  → 도착 → 식사 (ActivityTimer 동안 대기)
-  → Hunger 감소 → 다시 평가
-  → Fatigue=40, Hunger=20 → Work 선택
-  → 작업장으로 이동 → 자원 생산
-  → Fatigue 증가 → Fatigue=82 → Rest 선택
-  → 집으로 이동 → 휴식
-  → 반복
+몬스터:  Idle → (타겟 감지) → Chase → Attack ↔ Retreat → (타겟 상실) → Idle
+NPC:     Patrol → (위협 감지) → Flee or Chase → Attack ↔ Retreat → (해소) → Patrol
 ```
+
+### NPC vs 몬스터 구분
+- NpcTag 보유 여부로 판별
+- NPC: 기본 상태 = Patrol, 위협 시 Courage < 70이면 Flee, 아니면 Chase
+- 몬스터: 기본 상태 = Idle, 위협 시 항상 Chase
+
+### 성격 스탯 영향 (현재)
+- **courage 높음**: Flee 대신 전투(Chase) 선택
+- 나머지 성격 스탯은 추후 상호작용/관계 시스템에서 활용 예정
+
+### 직업 활동 (향후 확장)
+건물/작업장 시스템 구현 후 Work 상태와 직업별 StateHandler를 추가하여 확장 예정.
 
 ---
 
-## 9. NPC 자율 의사결정 (상태 기반)
+## 9. NPC AI 거리 기반 LOD (향후 구현)
 
 ### 거리 기반 LOD 업데이트
 
-NPC 수가 많아지면 매 주기마다 전원을 평가하는 것은 비효율적이다.
-플레이어와의 거리에 따라 **업데이트 주기를 차등 적용**하고, 먼 NPC는 경과 시간을 합산하여 한 번에 처리한다.
+NPC 수가 많아지면 매 프레임 전원을 처리하는 것은 비효율적이다.
+플레이어와의 거리에 따라 **업데이트 주기를 차등 적용**한다.
 
 #### 업데이트 티어
 
 | 티어 | 거리 | 업데이트 주기 | 처리 방식 |
 |------|------|--------------|-----------|
-| **Near** | 0 ~ 15 | 1초 | 실시간 평가. 이동/애니메이션 정상 동작 |
+| **Near** | 0 ~ 15 | 매 프레임 | 실시간 이동/애니메이션 정상 동작 |
 | **Mid** | 15 ~ 40 | 5초 | 경과 시간 합산 후 일괄 처리. 이동은 텔레포트 방식 |
-| **Far** | 40+ | 15초 | 경과 시간 합산 후 일괄 처리. 비주얼 비활성화 |
-
-#### 합산 처리 방식
-
-먼 거리의 NPC는 마지막 업데이트 이후 경과한 시간(deltaTime)을 누적하여 한 번에 반영한다:
-
-```
-예: Far 티어 NPC, 15초 경과
-  → Hunger += hungerRate * 15초  (한 번에 증가)
-  → Fatigue += fatigueRate * 15초
-  → Work 결과: 자원 생산량 * 15초분 일괄 적용
-  → 이동: 현재 활동 목적지로 즉시 텔레포트 (중간 이동 생략)
-```
-
-#### NpcScheduleComponent 추가 필드
-
-```
-LastUpdateTime     — 마지막 업데이트 시각 (Time.time)
-UpdateTier         — 현재 업데이트 티어 (Near/Mid/Far)
-```
-
-#### 티어 판정 타이밍
-- `System_EntityActivation`이 이미 거리 기반으로 엔티티를 관리하므로 이를 활용
-- 또는 System_NpcSchedule 내부에서 플레이어 거리를 체크하여 티어 결정
+| **Far** | 40+ | 15초 | 비주얼 비활성화, 결과만 적용 |
 
 #### 티어 전환 시 처리
 - **Far → Near**: 합산된 결과를 즉시 적용 후 실시간 모드로 전환
 - **Near → Far**: 현재 활동 상태를 저장하고 합산 모드로 전환
 - 히스테리시스 적용: Near→Mid 전환은 17, Mid→Near 전환은 13 (떨림 방지)
 
-### System_NpcSchedule 동작 방식
-- System_NpcSchedule은 매 프레임(또는 짧은 간격) 실행
-- NPC별로 `LastUpdateTime`과 `UpdateTier`를 확인하여 업데이트 주기 도래 여부 판단
-- 주기가 도래한 NPC만 처리: Needs 평가 → 활동 선택 → 활동 진행
-- 먼 NPC는 경과 시간(Time.time - LastUpdateTime)을 deltaTime으로 전달하여 합산 처리
-
-### 구현 구조
-```
-System_NpcSchedule (IFixedUpdateSystem, UpdateInterval=0.5s)
-  ├── UpdateTier() — 플레이어 거리 기반 티어 판정
-  ├── CheckUpdateDue() — 티어별 주기 도래 확인
-  ├── CalculateDeltaTime() — 경과 시간 계산 (합산용)
-  ├── EvaluateNeeds(deltaTime) — 욕구 수치 증감 (deltaTime 반영)
-  ├── SelectActivity() — 우선순위 기반 활동 선택
-  ├── SetActivityTarget() — 이동 목적지 계산
-  └── UpdateActivity(deltaTime) — 활동 진행 (Near: 실시간 이동, Far: 결과만 적용)
-```
+#### 티어 판정
+- `System_EntityActivation`이 이미 거리 기반으로 엔티티를 관리하므로 이를 활용
 
 ---
 

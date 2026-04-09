@@ -24,15 +24,20 @@ namespace ARPG.Systems
                 int entityId = behaviorPool.GetEntityId(i);
 
                 // AI 상태 컴포넌트 확인
-                if (!componentManager.TryGetComponent<AIStateComponent>(entityId, out var stateComponent))
+                if (componentManager.TryGetComponent<AIStateComponent>(entityId, out var stateComponent) == false)
                     continue;
 
                 // 행동 타입 가져오기
                 AIBehaviorTypeComponent behaviorType = behaviorPool.GetByIndex(i);
 
-                // 해당 타입의 행동 실행
-                IAIBehavior behavior = AIBehaviorFactory.GetBehavior(behaviorType.BehaviorType);
-                behavior.OnUpdateState(entityId, stateComponent.CurrentState, inFixedDeltaTime);
+                // 현재 상태에 맞는 핸들러 가져오기
+                IAIStateHandler handler = AIBehaviorFactory.GetStateHandler(
+                    behaviorType.BehaviorType, stateComponent.CurrentState);
+
+                if (handler != null)
+                {
+                    handler.OnUpdate(entityId, inFixedDeltaTime);
+                }
             }
         }
 

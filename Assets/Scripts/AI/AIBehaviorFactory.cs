@@ -1,32 +1,59 @@
 using ARPG.Component;
-using ARPG.AI.Behaviors;
+using ARPG.AI.StateHandlers;
 using System.Collections.Generic;
 
 namespace ARPG.AI
 {
+    /// <summary>
+    /// AI 행동 프로필 팩토리
+    /// (AIBehaviorType, AIState) 조합으로 적절한 IAIStateHandler를 반환
+    /// 각 BehaviorType별로 상태 핸들러 배열(프로필)을 등록
+    /// </summary>
     public static class AIBehaviorFactory
     {
-        private static readonly Dictionary<AIBehaviorType, IAIBehavior> _behaviors = new Dictionary<AIBehaviorType, IAIBehavior>();
+        // AIState enum 인덱스로 접근하는 핸들러 배열
+        private static readonly Dictionary<AIBehaviorType, IAIStateHandler[]> _profiles = new Dictionary<AIBehaviorType, IAIStateHandler[]>();
 
         static AIBehaviorFactory()
         {
-            // 행동 인스턴스 등록
-            _behaviors[AIBehaviorType.Melee] = new MeleeAIBehavior();
-            _behaviors[AIBehaviorType.Ranged] = new RangedAIBehavior();
-            // _behaviors[AIBehaviorType.Patrol] = new PatrolAIBehavior();
-            // _behaviors[AIBehaviorType.Defensive] = new DefensiveAIBehavior();
-            // 필요한 행동 타입 추가...
+            // 공통 핸들러 (인스턴스 재사용)
+            var idle = new IdleStateHandler();
+            var patrol = new PatrolStateHandler();
+            var chase = new ChaseStateHandler();
+            var meleeAttack = new MeleeAttackStateHandler();
+            var rangedAttack = new RangedAttackStateHandler();
+            var retreat = new RetreatStateHandler();
+            var flee = new FleeStateHandler();
+
+            // AIState enum 순서: Idle=0, Patrol=1, Chase=2, Attack=3, Retreat=4, Flee=5, Return=6
+            _profiles[AIBehaviorType.Melee] = new IAIStateHandler[]
+                { idle, null, chase, meleeAttack, retreat, null, null };
+
+            _profiles[AIBehaviorType.Ranged] = new IAIStateHandler[]
+                { idle, null, chase, rangedAttack, retreat, null, null };
+
+            _profiles[AIBehaviorType.Patrol] = new IAIStateHandler[]
+                { idle, patrol, chase, meleeAttack, retreat, flee, null };
+
+            _profiles[AIBehaviorType.PatrolRanged] = new IAIStateHandler[]
+                { idle, patrol, chase, rangedAttack, retreat, flee, null };
         }
 
-        public static IAIBehavior GetBehavior(AIBehaviorType behaviorType)
+        /// <summary>
+        /// BehaviorType과 현재 AIState에 맞는 핸들러 반환
+        /// </summary>
+        public static IAIStateHandler GetStateHandler(AIBehaviorType type, AIState state)
         {
-            if (_behaviors.TryGetValue(behaviorType, out IAIBehavior behavior))
+            if (_profiles.TryGetValue(type, out var handlers))
             {
-                return behavior;
+                int index = (int)state;
+                if (index >= 0 && index < handlers.Length)
+                {
+                    return handlers[index];
+                }
             }
 
-            UnityEngine.Debug.LogWarning($"Behavior type {behaviorType} not found, using Melee as default");
-            return _behaviors[AIBehaviorType.Melee];
+            return null;
         }
     }
 }

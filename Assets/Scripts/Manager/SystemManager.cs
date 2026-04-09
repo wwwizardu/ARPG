@@ -47,10 +47,6 @@ namespace ARPG.Systems
             System_AI_Behavior aiBehaviorSystem = new();
             RegisterSystems(aiBehaviorSystem);
 
-            // Priority 55: NPC Schedule System (FixedUpdate, 1.0s) - NPC 성격 기반 활동 결정
-            System_NpcSchedule npcScheduleSystem = new();
-            RegisterSystems(npcScheduleSystem);
-
             // Priority 57: Village Resource System (FixedUpdate, 5.0s) - 작업 중인 NPC의 자원 생산
             System_VillageResource villageResourceSystem = new();
             RegisterSystems(villageResourceSystem);

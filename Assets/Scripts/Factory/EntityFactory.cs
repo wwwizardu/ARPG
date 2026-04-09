@@ -156,17 +156,15 @@ namespace ARPG.Factory
             // 마을 NPC 컴포넌트
             AR.s.Component.AddComponent(entityId, new NpcVillageComponent());
             AR.s.Component.AddComponent(entityId, new NpcJobComponent());
-            AR.s.Component.AddComponent(entityId, new NpcScheduleComponent
-            {
-                CurrentActivity = ActivityType.FreeTime,
-                ActivityTimer = 0f,
-                ActivityTarget = Vector2.zero,
-                ActivityTargetEntityId = -1
-            });
 
             if (table.AiTableId > 0)
             {
                 AddAIComponents(entityId, table.AiTableId);
+            }
+            else
+            {
+                // AI 테이블이 없는 NPC: 기본 Patrol 행동 세팅
+                AddDefaultNpcAIComponents(entityId, position);
             }
 
             if (table.AiTable != null)
@@ -345,7 +343,7 @@ namespace ARPG.Factory
             AR.s.Component.AddComponent(entityId, new AIComponent
             {
                 AITableID = aiTableId,
-                TargetEntityId = 0,
+                TargetEntityId = -1,
                 LastKnownTargetPos = Vector2.zero
             });
 
@@ -358,17 +356,74 @@ namespace ARPG.Factory
                 LastDetectionTime = 0f
             });
 
+            float keepDistance = (behaviorType == AIBehaviorType.Ranged) ? 7f : 1.5f;
+
+            // NPC는 Patrol/PatrolRanged 프로필, 몬스터는 원래 BehaviorType 사용
+            bool isNpc = AR.s.Component.HasComponent<NpcTag>(entityId);
+            AIBehaviorType finalBehaviorType = behaviorType;
+            if (isNpc)
+            {
+                finalBehaviorType = (behaviorType == AIBehaviorType.Ranged)
+                    ? AIBehaviorType.PatrolRanged
+                    : AIBehaviorType.Patrol;
+            }
+            AIState initialState = isNpc ? AIState.Patrol : AIState.Idle;
+
             AR.s.Component.AddComponent(entityId, new AIBehaviorTypeComponent
             {
-                BehaviorType = behaviorType,
+                BehaviorType = finalBehaviorType,
                 AggroRange = detectionRange,
-                AttackRange = attackRange
+                AttackRange = attackRange,
+                KeepDistance = keepDistance
+            });
+
+            // TransformComponent에서 현재 위치 가져오기
+            Vector2 spawnPos = Vector2.zero;
+            if (AR.s.Component.TryGetComponent<TransformComponent>(entityId, out var transformComp))
+            {
+                spawnPos = transformComp.Position;
+            }
+
+            AR.s.Component.AddComponent(entityId, new AIStateComponent
+            {
+                CurrentState = initialState,
+                SpawnPosition = spawnPos
+            });
+        }
+
+        /// <summary>
+        /// AI 테이블이 없는 NPC용 기본 AI 컴포넌트 추가 (Patrol 전용)
+        /// </summary>
+        private static void AddDefaultNpcAIComponents(int entityId, Vector3 position)
+        {
+            AR.s.Component.AddComponent(entityId, new AIComponent
+            {
+                AITableID = 0,
+                TargetEntityId = -1,
+                LastKnownTargetPos = Vector2.zero
+            });
+
+            AR.s.Component.AddComponent(entityId, new AIPerceptionComponent
+            {
+                DetectionRange = 8f,
+                AttackRange = 0f,
+                LoseTargetRange = 16f,
+                FieldOfView = 360f,
+                LastDetectionTime = 0f
+            });
+
+            AR.s.Component.AddComponent(entityId, new AIBehaviorTypeComponent
+            {
+                BehaviorType = AIBehaviorType.Patrol,
+                AggroRange = 8f,
+                AttackRange = 0f,
+                KeepDistance = 0f
             });
 
             AR.s.Component.AddComponent(entityId, new AIStateComponent
             {
-                CurrentState = AIState.Idle,
-                SpawnPosition = Vector2.zero
+                CurrentState = AIState.Patrol,
+                SpawnPosition = new Vector2(position.x, position.y)
             });
         }
 

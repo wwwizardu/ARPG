@@ -60,7 +60,6 @@ namespace ARPG.Component
 
             // 마을 시스템 컴포넌트
             { typeof(NpcJobComponent), 200 },
-            { typeof(NpcScheduleComponent), 200 },
             { typeof(NpcVillageComponent), 200 },
 
             // 발사체 컴포넌트
