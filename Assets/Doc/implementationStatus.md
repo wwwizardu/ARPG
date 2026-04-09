@@ -17,11 +17,11 @@
 
 ## 1. 전체 구현 현황
 
-### 진행도 요약 (2026-04-07 기준)
+### 진행도 요약 (2026-04-08 기준)
 ```
-전체 진행도: ██████████████░░░░░░░░░░░░░░░░ 45%
+전체 진행도: ███████████████░░░░░░░░░░░░░░░ 48%
 
-핵심 시스템: ███████████████████████░░░░░░░ 75%
+핵심 시스템: ████████████████████████░░░░░░ 78%
 콘텐츠:      ████████░░░░░░░░░░░░░░░░░░░░░░ 25%
 UI/UX:       ██████████████░░░░░░░░░░░░░░░░ 45%
 ```
@@ -30,8 +30,8 @@ UI/UX:       ██████████████░░░░░░░░�
 | 상태 | 개수 | 비율 |
 |------|------|------|
 | ✅ 완료 | 12개 시스템 | 35% |
-| 🚧 진행 중 | 8개 시스템 | 25% |
-| ❌ 미구현 | 14개 시스템 | 40% |
+| 🚧 진행 중 | 9개 시스템 | 26% |
+| ❌ 미구현 | 13개 시스템 | 39% |
 
 ---
 
@@ -156,15 +156,16 @@ UI/UX:       ██████████████░░░░░░░░�
 - [X] 방어력 감소 공식
 - [X] 생명력 흡수 / 반사 데미지
 - [X] 상태이상 (점화, 냉기, 중독)
-- [X] AI 전투 통합 (근접 AI 스킬 사용 완료)
+- [X] AI 전투 통합 (근접/원거리 AI 스킬 사용 완료)
 - [X] 데미지 텍스트 표시 (FloatingTextManager + HpBarView 연동)
-- [ ] AI 전투 통합 - 원거리 AI 스킬 발동
+- [X] 발사체 시스템 (System_Projectile - 이동/충돌/수명/데미지)
+- [X] 발사체 오브젝트 풀링 (AddressablePool - string 키 기반 공용 풀)
 - [ ] VFX/사운드 통합 (후순위)
 - [ ] 넉백 시스템 (후순위)
 - [ ] 히트/사망 이펙트 (후순위)
-- **현재 진행도**: 85%
-- **다음 작업**: 원거리 AI 스킬 발동, 던전 시스템
-- **파일**: `DamageCalculator.cs`, `System_Skill.cs`, `System_HpCheck.cs`, `FloatingTextManager.cs`
+- **현재 진행도**: 90%
+- **다음 작업**: VFX/사운드, 넉백 (후순위)
+- **파일**: `DamageCalculator.cs`, `System_Skill.cs`, `System_HpCheck.cs`, `System_Projectile.cs`, `AddressablePool.cs`
 - **문서**: `combatSystem.md`
 
 #### 14. AI 시스템 🚧
@@ -176,11 +177,12 @@ UI/UX:       ██████████████░░░░░░░░�
 - [X] AIStateComponent (상태 전환, 진입 시간 추적)
 - [X] AIBehaviorFactory (행동 타입별 분기)
 - [X] MeleeAIBehavior (Idle→Chase→Attack, 스킬 사용)
-- [X] RangedAIBehavior (거리 유지, 후퇴 로직)
-- [ ] 원거리 AI 스킬 발동 (TODO 상태)
+- [X] RangedAIBehavior (거리 유지, 후퇴, Retreat 시간 제한, Attack 최소 유지)
+- [X] AiTable 기반 AI 세팅 (BehaviorType, DetectionRange, AttackRange 테이블 참조)
+- [X] 원거리 AI 스킬 발동 (SkillHelper.GetSkillCommandComponent 연동)
 - [ ] 몬스터 종류별 AI 패턴 (슬라임, 고블린 등)
-- **현재 진행도**: 75%
-- **다음 작업**: 원거리 AI 스킬 발동, 몬스터별 AI 패턴
+- **현재 진행도**: 85%
+- **다음 작업**: 몬스터별 AI 패턴
 - **파일**: `System_AI_Perception.cs`, `System_AI_Behavior.cs`, `MeleeAIBehavior.cs`, `RangedAIBehavior.cs`
 
 #### 15. NPC 시스템 🚧
@@ -257,15 +259,9 @@ UI/UX:       ██████████████░░░░░░░░�
 
 ### ❌ 미구현 시스템 (14개)
 
-#### 21. 던전 시스템 ❌
-- [ ] 절차적 던전 생성
-- [ ] Room + Corridor 알고리즘
-- [ ] 보스룸 배치
-- [ ] 던전 입장/퇴장
-- [ ] 미니맵 & 안개
-- **예상 소요 시간**: 3~4주
-- **문서**: `dungeonSystem.md`
-- **의존성**: 맵 시스템, 전투 시스템
+#### ~~21. 던전 시스템~~ (보류)
+- 오픈월드 맵 구조로 별도 던전 생성 불필요
+- 필요 시 추후 재검토
 
 #### 22. 동료 시스템 ❌
 - [ ] CompanionComponent
@@ -370,10 +366,12 @@ UI/UX:       ██████████████░░░░░░░░�
 - **예상 소요 시간**: 1주
 - **의존성**: 없음
 
-#### 34. 최적화 ❌
-- [ ] 오브젝트 풀링
+#### 34. 최적화 🚧
+- [X] 오브젝트 풀링 (AddressablePool - string 키 기반 공용 풀, 발사체 적용)
+- [ ] 몬스터/아이템 오브젝트 풀링 확장
 - [ ] 메모리 프로파일링
 - [ ] 성능 최적화
+- **현재 진행도**: 15%
 - **예상 소요 시간**: 지속적
 - **의존성**: 모든 시스템
 
@@ -398,19 +396,18 @@ UI/UX:       ██████████████░░░░░░░░�
 - [ ] 몬스터 3종 AI 구현
 - **결과**: 몬스터가 플레이어를 추격하고 공격
 
-#### Week 5-6: 던전 시스템 (1차)
-- [ ] 기본 던전 생성 (Room + Corridor)
-- [ ] 입구/출구 배치
-- [ ] 보스룸 생성
-- [ ] 던전 입장/퇴장
-- **결과**: 절차적 생성 던전 클리어 가능
+#### Week 5-6: 몬스터 종류 확장 & 스킬 고도화
+- [ ] 몬스터 3종 AI 패턴 (슬라임, 고블린, 박쥐 등)
+- [ ] 스킬 쿨타임 관리
+- [ ] 다중 스킬 선택 로직 (AiTable SkillId1~3 활용)
+- [ ] 보스급 몬스터 AI (다페이즈)
+- **결과**: 다양한 몬스터와 전투 가능
 
-#### Week 7-8: 보스 & 보상
-- [ ] 보스 1종 구현
-- [ ] 보스 AI 패턴 (3페이즈)
-- [ ] 보물 상자 배치
-- [ ] 보상 시스템
-- **결과**: 던전 클리어 → 보상 획득
+#### Week 7-8: NPC 일일 루틴 (1차)
+- [ ] System_NpcSchedule 구현
+- [ ] NPC 직업별 기본 행동
+- [ ] 시간대별 루틴
+- **결과**: NPC가 자율적으로 행동 시작
 
 ---
 
@@ -512,7 +509,7 @@ UI/UX:       ██████████████░░░░░░░░�
 
 ### Critical Path (최우선)
 ```
-전투 시스템 → AI 시스템 → 던전 시스템
+전투 시스템 → AI 시스템 → 몬스터 종류 확장 → NPC 시스템
 ```
 **이유**: 핵심 게임플레이. 이것 없이는 게임이 성립 안 됨.
 
@@ -600,16 +597,24 @@ NPC 일일 루틴 → 관계 시스템 → 상호작용 시스템 → 동료 시
 - [X] 시야 범위 + 시야각 기반 감지
 - [X] 타겟 잃음 처리 (거리/시간 기반)
 
-#### Task 3: AI 스킬 사용 (부분 완료)
+#### Task 3: AI 스킬 사용 ✅
 - [X] 근접 AI 스킬 발동 (SkillHelper.GetSkillCommandComponent 연동)
-- [ ] 원거리 AI 스킬 발동 (RangedAIBehavior - TODO)
-- [ ] 쿨타임 관리
-- [ ] 스킬 선택 로직
+- [X] 원거리 AI 스킬 발동 (RangedAIBehavior - 발사체 연동)
+- [X] 쿨타임 관리 (SkillStateComponent.CooldownRemaining)
+- [ ] 스킬 선택 로직 (다중 스킬 AI) - 후순위
 
-#### Task 4: AI 행동 패턴 (부분 완료)
-- [X] MeleeAIBehavior (Idle→Chase→Attack)
-- [X] RangedAIBehavior (거리 유지 + 후퇴)
+#### Task 4: AI 행동 패턴 ✅
+- [X] MeleeAIBehavior (Idle→Chase→Attack, Speed 설정)
+- [X] RangedAIBehavior (거리 유지 + 후퇴 + 시간 제한 + Attack 최소 유지)
+- [X] AiTable 기반 AI 세팅 (BehaviorType, DetectionRange, AttackRange)
 - [ ] 몬스터 종류별 세부 패턴 (슬라임, 고블린, 박쥐)
+
+#### Task 5: 발사체 시스템 ✅
+- [X] ProjectileComponent / ProjectileTag / ProjectileTable
+- [X] System_Projectile (이동/충돌/수명/데미지)
+- [X] ProjectileHelper (스폰 + System_Render 등록)
+- [X] System_EntityDestroy 발사체 파괴 처리
+- [X] AddressablePool (string 키 기반 공용 오브젝트 풀)
 
 ---
 
@@ -618,9 +623,11 @@ NPC 일일 루틴 → 관계 시스템 → 상호작용 시스템 → 동료 시
 2. ✅ 전투 시스템 핵심 로직 (완료! - DamageCalculator, 상태이상)
 3. ✅ AI 시스템 핵심 로직 (완료! - 상태 머신, 근접/원거리 AI)
 4. ✅ 데미지 텍스트 표시 (완료! - FloatingTextManager + HpBarView)
-5. ⏳ 원거리 AI 스킬 발동 / 몬스터별 세부 패턴
-6. ⏳ 던전 생성 시스템 (기본)
-7. ⏳ VFX/사운드/넉백 (후순위)
+5. ✅ 원거리 AI 스킬 발동 (완료! - RangedAIBehavior + 발사체 시스템)
+6. ✅ 발사체 시스템 + 오브젝트 풀링 (완료! - AddressablePool)
+7. ✅ 스킬 쿨타임 관리 (완료! - SkillStateComponent.CooldownRemaining)
+8. ⏳ 다중 스킬 선택 로직 / 몬스터 종류별 AI 패턴 (후순위)
+9. ⏳ VFX/사운드/넉백 (후순위)
 
 ---
 
@@ -689,6 +696,7 @@ NPC 일일 루틴 → 관계 시스템 → 상호작용 시스템 → 동료 시
 ```
 2026-04-01: 35% 완료
 2026-04-07: 47% 완료 (전투 + AI 핵심 로직 + 데미지 텍스트 완성)
+2026-04-08: 48% 완료 (원거리 AI + 발사체 시스템 + AddressablePool 완성)
 2026-05-01: 예상 50%
 2026-06-01: 예상 55%
 2026-07-01: 예상 65%
@@ -719,5 +727,5 @@ NPC 일일 루틴 → 관계 시스템 → 상호작용 시스템 → 동료 시
 - 새 시스템 완료 시: 상태 변경 (🚧 → ✅)
 - Milestone 완료 시: 로드맵 업데이트
 
-**마지막 업데이트**: 2026-04-07
+**마지막 업데이트**: 2026-04-08
 **다음 업데이트**: 2026-04-14

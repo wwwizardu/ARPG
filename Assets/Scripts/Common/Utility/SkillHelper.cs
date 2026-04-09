@@ -34,10 +34,15 @@ namespace ARPG.Utility
                 return false;
             }
 
-            // 스킬이 실행 중이면 커맨드 생성하지 않음
+            // 스킬이 실행 중이거나 쿨타임 중이면 커맨드 생성하지 않음
             if (AR.s.Component.TryGetComponent<SkillStateComponent>(skillEntityId, out var skillState))
             {
                 if (skillState.IsRunning)
+                {
+                    return false;
+                }
+
+                if (skillState.IsCooldownReady == false)
                 {
                     return false;
                 }

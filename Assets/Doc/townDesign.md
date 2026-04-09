@@ -111,36 +111,133 @@ NPC들이 자율적으로 행동하며 마을을 발전시키는 RPG 게임. 유
 
 ## 7. 시간 시스템
 
-- 실시간 1분 = 게임 내 1시간 (조절 가능)
-- 하루 4단계: morning, afternoon, evening, night
-- 선택적: 계절 시스템 (spring, summer, autumn, winter)
-- 매 틱(시간 단위)마다 NPC 행동 연산
+- 게임 내 시간은 존재하지만 밤/낮 구분 없음
+- NPC 행동은 시간대가 아닌 **상태(Needs)** 기반으로 구동
+- System_NpcSchedule이 주기적으로(1~2초 간격) NPC 상태를 평가하여 행동 결정
 
 ---
 
-## 8. NPC 일일 루틴
+## 8. NPC 상태 기반 행동 시스템
+
+### 핵심 개념
+NPC는 밤/낮 시간표를 따르지 않고, **현재 Needs(욕구)** 상태에 따라 자율적으로 행동을 선택한다.
+
+### NPC Needs (욕구 수치, 0~100)
+
+| 욕구 | 설명 | 자연 감소 | 회복 방법 |
+|------|------|-----------|-----------|
+| Hunger (배고픔) | 0이면 포만, 100이면 굶주림 | 시간 경과 시 증가 | 식사 (식량 소비) |
+| Fatigue (피로) | 0이면 활력, 100이면 탈진 | 활동 시 증가 | 휴식 (특정 장소에서 대기) |
+| Morale (사기) | 100이면 최고, 0이면 최저 | 나쁜 상황 시 감소 | 사회 활동, 목표 달성 |
+
+### 행동 결정 우선순위
+
+NPC는 매 평가 주기마다 아래 우선순위로 행동을 결정:
 
 ```
-morning   → 기상 → 식사 (hunger 회복, 식량 소모)
-afternoon → 직업 활동 수행 (자원 생산/건설/순찰)
-evening   → 자유 행동 (NPC 간 교류, 상점 방문, 개인 목표 추구)
-night     → 귀가 → 수면 (hp, morale 회복)
+1순위: 위기 대응 (HP 낮음 → 도주/치료, 위협 감지 → 대피)
+2순위: 생존 욕구 (Hunger >= 70 → 식사, Fatigue >= 80 → 휴식)
+3순위: 직업 활동 (Fatigue < 60 → 직업 수행, 자원 생산)
+4순위: 개인 목표 (숙련도 향상, 집 업그레이드 등)
+5순위: 자유 행동 (배회, NPC 간 교류, 상점 방문)
 ```
 
-성격에 따른 변동:
-- greed 높은 상인: 밤에도 장사
-- curiosity 높은 학자: 밤에 탐험
-- friendliness 높은 NPC: 저녁에 여러 NPC와 교류
+### 활동 타입 (ActivityType)
+
+| 활동 | 트리거 조건 | 행동 | 결과 |
+|------|------------|------|------|
+| Eat | Hunger >= 70 | 식량 저장소로 이동 → 식사 | Hunger 감소, 식량 소비 |
+| Rest | Fatigue >= 80 | 집/휴식 장소로 이동 → 대기 | Fatigue 감소 |
+| Work | Fatigue < 60, Hunger < 70 | 작업장으로 이동 → 직업 활동 | 자원 생산, Fatigue 증가 |
+| Socialize | 다른 욕구 충족 시 | 다른 NPC에게 이동 → 교류 | Morale 증가 |
+| Wander | 할 일 없을 때 | 랜덤 위치로 이동 | 없음 |
+| Flee | 위협 감지 | 위협 반대 방향으로 이동 | 안전 확보 |
+| PersonalGoal | 여유 있을 때 | 목표에 따라 다름 | 숙련도/자원 등 |
+
+### 성격에 따른 가중치
+
+성격 스탯이 행동 선택의 **임계값**과 **확률**에 영향:
+- **greed 높음**: Work 우선순위 상승, Socialize 임계값 높아짐 (덜 어울림)
+- **friendliness 높음**: Socialize 우선순위 상승, 교류 빈도 증가
+- **curiosity 높음**: Wander 시 탐험 범위 증가, PersonalGoal 우선순위 상승
+- **patience 높음**: Work 지속 시간 증가 (Fatigue 임계값 높아짐)
+- **courage 높음**: Flee 대신 전투 선택 가능
+
+### 상태 전환 흐름 예시
+
+```
+NPC 평가 → Hunger=85 → Eat 선택
+  → 식량 저장소로 이동 (ActivityTarget 세팅)
+  → 도착 → 식사 (ActivityTimer 동안 대기)
+  → Hunger 감소 → 다시 평가
+  → Fatigue=40, Hunger=20 → Work 선택
+  → 작업장으로 이동 → 자원 생산
+  → Fatigue 증가 → Fatigue=82 → Rest 선택
+  → 집으로 이동 → 휴식
+  → 반복
+```
 
 ---
 
-## 9. NPC 자율 의사결정 우선순위
+## 9. NPC 자율 의사결정 (상태 기반)
+
+### 거리 기반 LOD 업데이트
+
+NPC 수가 많아지면 매 주기마다 전원을 평가하는 것은 비효율적이다.
+플레이어와의 거리에 따라 **업데이트 주기를 차등 적용**하고, 먼 NPC는 경과 시간을 합산하여 한 번에 처리한다.
+
+#### 업데이트 티어
+
+| 티어 | 거리 | 업데이트 주기 | 처리 방식 |
+|------|------|--------------|-----------|
+| **Near** | 0 ~ 15 | 1초 | 실시간 평가. 이동/애니메이션 정상 동작 |
+| **Mid** | 15 ~ 40 | 5초 | 경과 시간 합산 후 일괄 처리. 이동은 텔레포트 방식 |
+| **Far** | 40+ | 15초 | 경과 시간 합산 후 일괄 처리. 비주얼 비활성화 |
+
+#### 합산 처리 방식
+
+먼 거리의 NPC는 마지막 업데이트 이후 경과한 시간(deltaTime)을 누적하여 한 번에 반영한다:
 
 ```
-1순위: 생존 (배고프면 식량 확보, 위험하면 대피)
-2순위: 직업 의무 (할당된 작업 수행)
-3순위: 개인 목표 (집 업그레이드, 스킬 연마, 관계 형성)
-4순위: 사회 활동 (대화, 술집 방문)
+예: Far 티어 NPC, 15초 경과
+  → Hunger += hungerRate * 15초  (한 번에 증가)
+  → Fatigue += fatigueRate * 15초
+  → Work 결과: 자원 생산량 * 15초분 일괄 적용
+  → 이동: 현재 활동 목적지로 즉시 텔레포트 (중간 이동 생략)
+```
+
+#### NpcScheduleComponent 추가 필드
+
+```
+LastUpdateTime     — 마지막 업데이트 시각 (Time.time)
+UpdateTier         — 현재 업데이트 티어 (Near/Mid/Far)
+```
+
+#### 티어 판정 타이밍
+- `System_EntityActivation`이 이미 거리 기반으로 엔티티를 관리하므로 이를 활용
+- 또는 System_NpcSchedule 내부에서 플레이어 거리를 체크하여 티어 결정
+
+#### 티어 전환 시 처리
+- **Far → Near**: 합산된 결과를 즉시 적용 후 실시간 모드로 전환
+- **Near → Far**: 현재 활동 상태를 저장하고 합산 모드로 전환
+- 히스테리시스 적용: Near→Mid 전환은 17, Mid→Near 전환은 13 (떨림 방지)
+
+### System_NpcSchedule 동작 방식
+- System_NpcSchedule은 매 프레임(또는 짧은 간격) 실행
+- NPC별로 `LastUpdateTime`과 `UpdateTier`를 확인하여 업데이트 주기 도래 여부 판단
+- 주기가 도래한 NPC만 처리: Needs 평가 → 활동 선택 → 활동 진행
+- 먼 NPC는 경과 시간(Time.time - LastUpdateTime)을 deltaTime으로 전달하여 합산 처리
+
+### 구현 구조
+```
+System_NpcSchedule (IFixedUpdateSystem, UpdateInterval=0.5s)
+  ├── UpdateTier() — 플레이어 거리 기반 티어 판정
+  ├── CheckUpdateDue() — 티어별 주기 도래 확인
+  ├── CalculateDeltaTime() — 경과 시간 계산 (합산용)
+  ├── EvaluateNeeds(deltaTime) — 욕구 수치 증감 (deltaTime 반영)
+  ├── SelectActivity() — 우선순위 기반 활동 선택
+  ├── SetActivityTarget() — 이동 목적지 계산
+  └── UpdateActivity(deltaTime) — 활동 진행 (Near: 실시간 이동, Far: 결과만 적용)
 ```
 
 ---

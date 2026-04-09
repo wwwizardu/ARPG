@@ -32,10 +32,18 @@ namespace ARPG.Component
         /// <summary>Single 타입 스킬의 효과가 이미 적용되었는지 여부</summary>
         public bool IsEffectApplied;
 
+        /// <summary>남은 쿨타임 (초). 0 이하면 사용 가능</summary>
+        public float CooldownRemaining;
+
         /// <summary>
         /// 스킬이 실행 중인지 여부
         /// </summary>
         public readonly bool IsRunning => State != SkillState.None;
+
+        /// <summary>
+        /// 쿨타임이 끝났는지 여부
+        /// </summary>
+        public readonly bool IsCooldownReady => CooldownRemaining <= 0f;
 
         /// <summary>
         /// 상태를 변경하고 경과 시간을 초기화
@@ -56,6 +64,7 @@ namespace ARPG.Component
             PreviousState = SkillState.None;
             ElapsedTime = 0f;
             IsEffectApplied = false;
+            CooldownRemaining = 0f;
         }
     }
 }

@@ -58,7 +58,18 @@ namespace ARPG.Systems
                     // 3. 실행 중인 스킬 업데이트
                     UpdateSkillState(skillEntityId, ref skillState, ref timing, inFixedDeltaTime);
                 }
-                else // 실행중이 아니라면 커맨드 처리(스킬 실행 체크)
+                else // 실행중이 아니라면 쿨타임 감소 + 커맨드 처리
+                {
+                    // 쿨타임 감소
+                    if (skillState.CooldownRemaining > 0f)
+                    {
+                        skillState.CooldownRemaining -= inFixedDeltaTime;
+                        AR.s.Component.SetComponent(skillEntityId, skillState);
+                    }
+                }
+
+                // 스킬이 실행중이 아닐 때 커맨드 처리(스킬 실행 체크)
+                if (skillState.IsRunning == false)
                 {
                     // 캐릭터 엔티티에서 커맨드 확인
                     if (AR.s.Component.TryGetComponent<SkillCommandComponent>(skill.OwnerEntityId, out var command) == false)
@@ -370,6 +381,13 @@ namespace ARPG.Systems
 
             // 스킬 상태 초기화
             inSkillState.Reset();
+
+            // 쿨타임 세팅 (SkillTable.Cooltime에서 읽기)
+            if (inSkill.Table != null && inSkill.Table.Cooltime > 0f)
+            {
+                inSkillState.CooldownRemaining = inSkill.Table.Cooltime;
+            }
+
             AR.s.Component.SetComponent(skillEntityId, inSkillState);
 
             // 캐릭터 상태 초기화
@@ -381,11 +399,6 @@ namespace ARPG.Systems
 
             charState.Condition = Creature.CharacterConditions.Normal;
             AR.s.Component.SetComponent(inSkill.OwnerEntityId, charState);
-
-            // TODO: 스킬 완료 콜백 처리
-            // - 쿨다운 시작
-            // - 스킬 슬롯 해제
-            // - UI 업데이트 등
 
             Debug.Log($"[System_Skill] Skill Complete - SkillEntityId: {skillEntityId}");
         }
