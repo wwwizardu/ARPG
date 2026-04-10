@@ -87,24 +87,42 @@ namespace ARPG.Utility
         /// <param name="item">장착할 아이템 데이터</param>
         public static void ApplyEquipmentModifiers(int playerEntityId, ItemData item)
         {
-            if (item == null || item.Equipment == null || item.Equipment.StatData == null)
+            if (item == null || item.Equipment == null)
                 return;
 
-            EquipmentStatData statData = item.Equipment.StatData;
             int sourceId = item.ItemInstanceId;
 
-            // Prefix 스탯 적용
-            for (int i = 0; i < statData.Prefix.Count; i++)
+            // 무기 기본 공격력 적용
+            if (item.Equipment.WeaponData != null)
             {
-                Stat stat = statData.Prefix[i];
-                StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId, stat.Type, StatModifierType.Add, stat.Value);
+                var (physMin, physMax) = item.Equipment.GetPhysicsDamage();
+                if (physMin > 0 || physMax > 0)
+                {
+                    StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId, GlobalEnum.Stat.AttackMin, StatModifierType.Add, physMin);
+                    StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId, GlobalEnum.Stat.AttackMax, StatModifierType.Add, physMax);
+                }
+
+                if (item.Equipment.WeaponData.CriticalRate > 0)
+                {
+                    StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId, GlobalEnum.Stat.CriRate, StatModifierType.Add, item.Equipment.WeaponData.CriticalRate);
+                }
             }
 
-            // Postfix 스탯 적용
-            for (int i = 0; i < statData.Postfix.Count; i++)
+            // Prefix/Postfix 스탯 적용
+            EquipmentStatData? statData = item.Equipment.StatData;
+            if (statData != null)
             {
-                Stat stat = statData.Postfix[i];
-                StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId, stat.Type, StatModifierType.Add, stat.Value);
+                for (int i = 0; i < statData.Prefix.Count; i++)
+                {
+                    Stat stat = statData.Prefix[i];
+                    StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId, stat.Type, StatModifierType.Add, stat.Value);
+                }
+
+                for (int i = 0; i < statData.Postfix.Count; i++)
+                {
+                    Stat stat = statData.Postfix[i];
+                    StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId, stat.Type, StatModifierType.Add, stat.Value);
+                }
             }
 
             // 스탯 재계산 요청

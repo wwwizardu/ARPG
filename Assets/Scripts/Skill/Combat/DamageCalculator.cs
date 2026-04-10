@@ -29,6 +29,39 @@ namespace ARPG.Skill.Combat
     public static class DamageCalculator
     {
         /// <summary>
+        /// 스킬 데미지 배율 (공통)
+        /// </summary>
+        private static float GetSkillDamageMultiplier(StatComponent stat)
+        {
+            return stat.FinalSkillDamage > 0 ? stat.FinalSkillDamage / 100f : 1f;
+        }
+
+        /// <summary>
+        /// 치명타 배율 (공통)
+        /// </summary>
+        private static float GetCritMultiplier(StatComponent stat)
+        {
+            return stat.FinalCriDamage > 0 ? stat.FinalCriDamage / 100f : 1.5f;
+        }
+
+        /// <summary>
+        /// UI용 예상 데미지 범위 (타겟 없이 공격자 스탯만으로 계산)
+        /// Calculate와 동일한 1~3단계 공식 사용, 방어력/회피/막기 미적용
+        /// 치명타는 기대값으로 반영: damage × (1 + critRate/100 × (critMultiplier - 1))
+        /// </summary>
+        public static (int min, int max) Calculate(StatComponent attackerStat)
+        {
+            float skillMultiplier = GetSkillDamageMultiplier(attackerStat);
+            float critRate = Mathf.Clamp(attackerStat.FinalCriRate, 0, 100) / 100f;
+            float critMultiplier = GetCritMultiplier(attackerStat);
+            float critExpected = 1f + critRate * (critMultiplier - 1f);
+
+            int min = Mathf.RoundToInt(attackerStat.FinalAttackMin * skillMultiplier * critExpected);
+            int max = Mathf.RoundToInt(attackerStat.FinalAttackMax * skillMultiplier * critExpected);
+            return (min, max);
+        }
+
+        /// <summary>
         /// 데미지 계산 메인 메서드
         /// </summary>
         /// <param name="attackerId">공격자 엔티티 ID</param>
@@ -59,10 +92,7 @@ namespace ARPG.Skill.Combat
             float baseDamage = Random.Range(attackerStat.FinalAttackMin, attackerStat.FinalAttackMax);
 
             // ========== 2단계: 스킬 배율 적용 ==========
-            // 스킬 데미지 배율이 0이면 100으로 처리 (기본값)
-            float skillDamageMultiplier = attackerStat.FinalSkillDamage > 0
-                ? attackerStat.FinalSkillDamage / 100f
-                : 1f;
+            float skillDamageMultiplier = GetSkillDamageMultiplier(attackerStat);
 
             // 스킬 테이블의 데미지 범위 (DamageMin ~ DamageMax)를 기본 데미지에 더함
             float skillBaseDamage = Random.Range(skillData.DamageMin, skillData.DamageMax + 1);
@@ -74,12 +104,7 @@ namespace ARPG.Skill.Combat
             bool isCrit = Random.Range(0f, 100f) < attackerStat.FinalCriRate;
             if (isCrit)
             {
-                // 치명타 데미지가 0이면 150으로 처리 (기본값)
-                float critMultiplier = attackerStat.FinalCriDamage > 0
-                    ? attackerStat.FinalCriDamage / 100f
-                    : 1.5f;
-
-                skillDamage *= critMultiplier;
+                skillDamage *= GetCritMultiplier(attackerStat);
                 result.IsCritical = true;
             }
 

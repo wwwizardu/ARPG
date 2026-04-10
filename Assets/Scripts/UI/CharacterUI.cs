@@ -2,6 +2,7 @@
 using System;
 using ARPG.Base;
 using ARPG.Message;
+using ARPG.Skill.Combat;
 using ARPG.Tables;
 using ARPG.Utility;
 using TMPro;
@@ -144,26 +145,29 @@ namespace ARPG.UI
                 return;
             }
 
-            _textStat[(int)GlobalEnum.Stat.Str].text = $"힘 {_statComponent.FinalStr}";
-            _textStat[(int)GlobalEnum.Stat.Dex].text = $"민첩 {_statComponent.FinalDex}";
-            _textStat[(int)GlobalEnum.Stat.Int].text = $"지능 {_statComponent.FinalInt}";
-            _textStat[(int)GlobalEnum.Stat.Hp].text = $"체력 {_statComponent.CurrentHp}/{_statComponent.FinalMaxHp}";
-            _textStat[(int)GlobalEnum.Stat.Mp].text = $"마나 {_statComponent.CurrentMp}/{_statComponent.FinalMaxMp}";
-            _textStat[(int)GlobalEnum.Stat.HpGeneration].text = $"체력 재생 {_statComponent.FinalHpGeneration}";
-            _textStat[(int)GlobalEnum.Stat.MpGeneration].text = $"마나 재생 {_statComponent.FinalMpGeneration}";
-            _textStat[(int)GlobalEnum.Stat.AttackMin].text = $"공격력 {_statComponent.FinalAttackMin} - {_statComponent.FinalAttackMax}";
-            _textStat[(int)GlobalEnum.Stat.AttackMax].gameObject.SetActive(false);
-            _textStat[(int)GlobalEnum.Stat.CriRate].text = $"치명타 확률 {_statComponent.FinalCriRate}%";
-            _textStat[(int)GlobalEnum.Stat.CriDamageMul].text = $"치명타 피해 {_statComponent.FinalCriDamage}%";
-            _textStat[(int)GlobalEnum.Stat.MoveSpeed].text = $"이동 속도 {_statComponent.FinalMoveSpeed}";
-            _textStat[(int)GlobalEnum.Stat.AttackSpeed].text = $"공격 속도 {_statComponent.FinalAttackSpeed}";
-            _textStat[(int)GlobalEnum.Stat.CastSpeed].text = $"시전 속도 {_statComponent.FinalCastSpeed}";
-            _textStat[(int)GlobalEnum.Stat.Hp].text = $"방어력 {_statComponent.FinalDefense}";
-            _textStat[(int)GlobalEnum.Stat.Hp].text = $"화염 저항 {_statComponent.FinalFireResist}";
-            _textStat[(int)GlobalEnum.Stat.Hp].text = $"냉기 저항 {_statComponent.FinalIceResist}";
-            _textStat[(int)GlobalEnum.Stat.Hp].text = $"번개 저항 {_statComponent.FinalLightningResist}";
-            _textStat[(int)GlobalEnum.Stat.Hp].text = $"독 저항 {_statComponent.FinalPoisonResist}";
-            _textStat[(int)GlobalEnum.Stat.Hp].text = $"행운 {_statComponent.FinalLuck}";
+            _textStat[0].text = $"힘 {_statComponent.FinalStr}";
+            _textStat[1].text = $"민첩 {_statComponent.FinalDex}";
+            _textStat[2].text = $"지능 {_statComponent.FinalInt}";
+            _textStat[3].text = $"체력 {_statComponent.CurrentHp}/{_statComponent.FinalMaxHp}";
+            _textStat[4].text = $"마나 {_statComponent.CurrentMp}/{_statComponent.FinalMaxMp}";
+            _textStat[5].text = $"체력 재생 {_statComponent.FinalHpGeneration}";
+            _textStat[6].text = $"마나 재생 {_statComponent.FinalMpGeneration}";
+
+            var (estimatedMin, estimatedMax) = DamageCalculator.Calculate(_statComponent);
+            _textStat[7].text = $"공격력 {estimatedMin} - {estimatedMax}";
+            _textStat[8].gameObject.SetActive(false);
+
+            _textStat[9].text = $"치명타 확률 {_statComponent.FinalCriRate}%";
+            _textStat[10].text = $"치명타 피해 {_statComponent.FinalCriDamage}%";
+            _textStat[11].text = $"이동 속도 {_statComponent.FinalMoveSpeed}";
+            _textStat[12].text = $"공격 속도 {_statComponent.FinalAttackSpeed}";
+            _textStat[13].text = $"시전 속도 {_statComponent.FinalCastSpeed}";
+            _textStat[14].text = $"방어력 {_statComponent.FinalDefense}";
+            _textStat[15].text = $"화염 저항 {_statComponent.FinalFireResist}";
+            _textStat[16].text = $"냉기 저항 {_statComponent.FinalIceResist}";
+            _textStat[17].text = $"번개 저항 {_statComponent.FinalLightningResist}";
+            _textStat[18].text = $"독 저항 {_statComponent.FinalPoisonResist}";
+            _textStat[19].text = $"행운 {_statComponent.FinalLuck}";
         }
     }
 }

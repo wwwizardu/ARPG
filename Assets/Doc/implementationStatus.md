@@ -188,15 +188,12 @@ UI/UX:       ██████████████░░░░░░░░�
 #### 15. NPC 시스템 🚧
 - [X] NpcStatComponent (8가지 성격)
 - [X] NpcJobComponent
-- [X] NpcScheduleComponent
 - [X] NpcVillageComponent
 - [X] NpcTag
-- [ ] NPC 일일 루틴 로직
 - [ ] NPC 직업별 행동
 - [ ] NPC 자율 의사결정
 - **현재 진행도**: 35%
-- **다음 작업**: NPC 스케줄 로직 구현
-- **파일**: `System_NpcSchedule.cs` (TODO 상태)
+- **다음 작업**: NPC 직업별 행동 구현
 
 #### 16. 관계 시스템 🚧
 - [X] RelationshipComponent (4가지 관계)
@@ -403,10 +400,9 @@ UI/UX:       ██████████████░░░░░░░░�
 - [ ] 보스급 몬스터 AI (다페이즈)
 - **결과**: 다양한 몬스터와 전투 가능
 
-#### Week 7-8: NPC 일일 루틴 (1차)
-- [ ] System_NpcSchedule 구현
+#### Week 7-8: NPC 직업별 행동
 - [ ] NPC 직업별 기본 행동
-- [ ] 시간대별 루틴
+- [ ] NPC 자율 의사결정
 - **결과**: NPC가 자율적으로 행동 시작
 
 ---
@@ -414,10 +410,8 @@ UI/UX:       ██████████████░░░░░░░░�
 ### Milestone 2: NPC 시스템 (6주)
 **목표**: NPC와 상호작용하고 마을이 발전함
 
-#### Week 9-10: NPC 일일 루틴
-- [ ] System_NpcSchedule 구현
+#### Week 9-10: NPC 직업별 행동
 - [ ] NPC 직업별 행동
-- [ ] 시간대별 루틴
 - [ ] NPC 자율 의사결정
 - **결과**: NPC가 자율적으로 행동
 
