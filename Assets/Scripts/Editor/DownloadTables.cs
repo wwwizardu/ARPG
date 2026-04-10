@@ -497,25 +497,45 @@ namespace ARPG.Editor
 
             table.Name = values[1];
             table.Desctiption = values[2];
-            table.SkillType = (GlobalEnum.SkillType)Enum.Parse(typeof(GlobalEnum.SkillType), values[3]);
-            table.SubType = (GlobalEnum.SkillSubType)Enum.Parse(typeof(GlobalEnum.SkillSubType), values[4]);
-            table.SkillRangeMin = float.Parse(values[5]);
-            table.SkillRangeMax = float.Parse(values[6]);
-            table.Cooltime = float.Parse(values[7]);
-            table.Mana = int.Parse(values[8]);
-            table.DamageTime = float.Parse(values[9]);
-            table.DamageType = (GlobalEnum.DamageType)Enum.Parse(typeof(GlobalEnum.DamageType), values[10]);
-            table.DamageMin = int.Parse(values[11]);
-            table.DamageMax = int.Parse(values[12]);
-            table.Duration = int.Parse(values[13]);
-            table.SkillTargetType = (GlobalEnum.SkillTargetType)Enum.Parse(typeof(GlobalEnum.SkillTargetType), values[14]);
-            table.SkillTargetRange1 = float.Parse(values[15]);
-            table.SkillTargetRange2 = float.Parse(values[16]);
-            table.AnimationName = values[17];
-            table.StartEffectName = values[18];
-            table.ActivateName = values[19];
-            table.HitEffect = values[20];
-            table.ProjectileId = values.Length > 21 ? int.Parse(values[21]) : 0;
+            table.TagsRaw = values[3];
+            table.Tags = ParseSkillTags(table.TagsRaw);
+            table.SkillType = (GlobalEnum.SkillType)Enum.Parse(typeof(GlobalEnum.SkillType), values[4]);
+            table.SubType = (GlobalEnum.SkillSubType)Enum.Parse(typeof(GlobalEnum.SkillSubType), values[5]);
+            table.SkillRangeMin = float.Parse(values[6]);
+            table.SkillRangeMax = float.Parse(values[7]);
+            table.Cooltime = float.Parse(values[8]);
+            table.Mana = int.Parse(values[9]);
+            table.DamageTime = float.Parse(values[10]);
+            table.DamageType = (GlobalEnum.DamageType)Enum.Parse(typeof(GlobalEnum.DamageType), values[11]);
+            table.DamageMin = int.Parse(values[12]);
+            table.DamageMax = int.Parse(values[13]);
+            table.Duration = int.Parse(values[14]);
+            table.SkillTargetType = (GlobalEnum.SkillTargetType)Enum.Parse(typeof(GlobalEnum.SkillTargetType), values[15]);
+            table.SkillTargetRange1 = float.Parse(values[16]);
+            table.SkillTargetRange2 = float.Parse(values[17]);
+            table.AnimationName = values[18];
+            table.StartEffectName = values[19];
+            table.ActivateName = values[20];
+            table.HitEffect = values[21];
+            table.ProjectileId = values.Length > 22 ? int.Parse(values[22]) : 0;
+        }
+
+        private static GlobalEnum.SkillTag ParseSkillTags(string tagsRaw)
+        {
+            if (string.IsNullOrEmpty(tagsRaw))
+                return GlobalEnum.SkillTag.None;
+
+            GlobalEnum.SkillTag result = GlobalEnum.SkillTag.None;
+            string[] tags = tagsRaw.Split(',');
+            for (int i = 0; i < tags.Length; i++)
+            {
+                string tag = tags[i].Trim();
+                if (System.Enum.TryParse<GlobalEnum.SkillTag>(tag, true, out var parsed))
+                {
+                    result |= parsed;
+                }
+            }
+            return result;
         }
 
         private static void ParseAiTable(AiTable table, string[] values)

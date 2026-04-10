@@ -702,39 +702,7 @@ namespace ARPG.Systems
             // ========== DamageCalculator를 사용한 데미지 계산 ==========
             DamageResult damageResult = DamageCalculator.Calculate(skill.OwnerEntityId, targetEntityId, skill.Table);
 
-            // ========== 물리 데미지: 출혈 처리 (회피하지 않은 경우만) ==========
-            if(skill.Table.DamageType == GlobalEnum.DamageType.Physics && damageResult.IsEvaded == false)
-            {
-                // 물리 데미지 처리
-                if(AR.s.Component.TryGetComponent<StatComponent>(skill.OwnerEntityId, out var attackerStat) == false)
-                {
-                    Debug.LogError($"[System_Skill] Attacker StatComponent not found - OwnerEntityId: {skill.OwnerEntityId}");
-                    return;
-                }
-
-                int BloodingRate = attackerStat.FinalBloodingRate + 50;
-                if(UnityEngine.Random.Range(0, 100) < BloodingRate)
-                {
-                    int bloodingDamage = Mathf.FloorToInt(damageResult.FinalDamage * 0.3f);
-
-                    // 출혈 버프 추가 (BuffTableID: 1 = 출혈 버프, duration: 5초)
-                    // TODO: BuffTableID는 실제 테이블 데이터에 맞게 수정 필요
-                    int bloodingBuffTableId = 1;  // 출혈 버프의 테이블 ID
-                    float bloodingDuration = 5f;   // 출혈 지속 시간
-
-                    int buffEntityId = Utility.BuffHelper.AddBuff(targetEntityId, bloodingBuffTableId, bloodingDuration);
-                    if(buffEntityId != -1)
-                    {
-                        Debug.Log($"[System_Skill] Blooding applied - TargetEntityId: {targetEntityId}, BuffEntityId: {buffEntityId}, Damage: {bloodingDamage}");
-                    }
-                    else
-                    {
-                        Debug.LogWarning($"[System_Skill] Failed to apply blooding buff - TargetEntityId: {targetEntityId}");
-                    }
-                }
-            }
-
-            // ========== 데미지 적용 (HP 감소, 흡혈, 반사, 메시지 전송) ==========
+            // ========== 데미지 적용 (HP 감소, 흡혈, 반사, 메시지 전송, 상태이상) ==========
             DamageCalculator.ApplyDamageResult(skill.OwnerEntityId, targetEntityId, damageResult);
 
             // 타겟 StatComponent 다시 가져오기 (ApplyDamageResult에서 HP가 변경됨)

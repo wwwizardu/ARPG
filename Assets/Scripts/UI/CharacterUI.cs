@@ -153,21 +153,24 @@ namespace ARPG.UI
             _textStat[5].text = $"체력 재생 {_statComponent.FinalHpGeneration}";
             _textStat[6].text = $"마나 재생 {_statComponent.FinalMpGeneration}";
 
-            var (estimatedMin, estimatedMax) = DamageCalculator.Calculate(_statComponent);
-            _textStat[7].text = $"공격력 {estimatedMin} - {estimatedMax}";
-            _textStat[8].gameObject.SetActive(false);
+            var est = DamageCalculator.Calculate(_statComponent);
+            _textStat[7].text = $"물리 데미지 {est.PhysMin} - {est.PhysMax}";
+            _textStat[8].text = $"화염 데미지 {est.FireMin} - {est.FireMax}";
+            _textStat[9].text = $"냉기 데미지 {est.IceMin} - {est.IceMax}";
+            _textStat[10].text = $"번개 데미지 {est.LightningMin} - {est.LightningMax}";
+            _textStat[11].text = $"독 데미지 {est.PoisonMin} - {est.PoisonMax}";
 
-            _textStat[9].text = $"치명타 확률 {_statComponent.FinalCriRate}%";
-            _textStat[10].text = $"치명타 피해 {_statComponent.FinalCriDamage}%";
-            _textStat[11].text = $"이동 속도 {_statComponent.FinalMoveSpeed}";
-            _textStat[12].text = $"공격 속도 {_statComponent.FinalAttackSpeed}";
-            _textStat[13].text = $"시전 속도 {_statComponent.FinalCastSpeed}";
-            _textStat[14].text = $"방어력 {_statComponent.FinalDefense}";
-            _textStat[15].text = $"화염 저항 {_statComponent.FinalFireResist}";
-            _textStat[16].text = $"냉기 저항 {_statComponent.FinalIceResist}";
-            _textStat[17].text = $"번개 저항 {_statComponent.FinalLightningResist}";
-            _textStat[18].text = $"독 저항 {_statComponent.FinalPoisonResist}";
-            _textStat[19].text = $"행운 {_statComponent.FinalLuck}";
+            _textStat[12].text = $"치명타 확률 {_statComponent.FinalCriRate}%";
+            _textStat[13].text = $"치명타 피해 {_statComponent.FinalCriDamage}%";
+            _textStat[14].text = $"이동 속도 {_statComponent.FinalMoveSpeed}";
+            _textStat[15].text = $"공격 속도 {_statComponent.FinalAttackSpeed}";
+            _textStat[16].text = $"시전 속도 {_statComponent.FinalCastSpeed}";
+            _textStat[17].text = $"방어력 {_statComponent.FinalDefense}";
+            _textStat[18].text = $"화염 저항 {_statComponent.FinalFireResist}";
+            _textStat[19].text = $"냉기 저항 {_statComponent.FinalIceResist}";
+            _textStat[20].text = $"번개 저항 {_statComponent.FinalLightningResist}";
+            _textStat[21].text = $"독 저항 {_statComponent.FinalPoisonResist}";
+            _textStat[22].text = $"행운 {_statComponent.FinalLuck}";
         }
     }
 }

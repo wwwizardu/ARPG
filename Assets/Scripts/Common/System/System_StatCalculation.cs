@@ -190,6 +190,30 @@ namespace ARPG.Systems
                 case GE.Stat.IgniteRate:
                     stat.FinalIgniteRate = ApplyValue(stat.FinalIgniteRate, modifier);
                     break;
+                case GE.Stat.FireAttackMin:
+                    stat.FinalFireAttackMin = ApplyValue(stat.FinalFireAttackMin, modifier);
+                    break;
+                case GE.Stat.FireAttackMax:
+                    stat.FinalFireAttackMax = ApplyValue(stat.FinalFireAttackMax, modifier);
+                    break;
+                case GE.Stat.IceAttackMin:
+                    stat.FinalIceAttackMin = ApplyValue(stat.FinalIceAttackMin, modifier);
+                    break;
+                case GE.Stat.IceAttackMax:
+                    stat.FinalIceAttackMax = ApplyValue(stat.FinalIceAttackMax, modifier);
+                    break;
+                case GE.Stat.LightningAttackMin:
+                    stat.FinalLightningAttackMin = ApplyValue(stat.FinalLightningAttackMin, modifier);
+                    break;
+                case GE.Stat.LightningAttackMax:
+                    stat.FinalLightningAttackMax = ApplyValue(stat.FinalLightningAttackMax, modifier);
+                    break;
+                case GE.Stat.PoisonAttackMin:
+                    stat.FinalPoisonAttackMin = ApplyValue(stat.FinalPoisonAttackMin, modifier);
+                    break;
+                case GE.Stat.PoisonAttackMax:
+                    stat.FinalPoisonAttackMax = ApplyValue(stat.FinalPoisonAttackMax, modifier);
+                    break;
             }
         }
 

@@ -106,6 +106,32 @@ namespace ARPG.Utility
                 {
                     StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId, GlobalEnum.Stat.CriRate, StatModifierType.Add, item.Equipment.WeaponData.CriticalRate);
                 }
+
+                // 속성 데미지 적용
+                WeaponData weaponData = item.Equipment.WeaponData;
+                if (weaponData.FireDamage.DamageMin > 0 || weaponData.FireDamage.DamageMax > 0)
+                {
+                    StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId, GlobalEnum.Stat.FireAttackMin, StatModifierType.Add, weaponData.FireDamage.DamageMin);
+                    StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId, GlobalEnum.Stat.FireAttackMax, StatModifierType.Add, weaponData.FireDamage.DamageMax);
+                }
+
+                if (weaponData.IceDamage.DamageMin > 0 || weaponData.IceDamage.DamageMax > 0)
+                {
+                    StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId, GlobalEnum.Stat.IceAttackMin, StatModifierType.Add, weaponData.IceDamage.DamageMin);
+                    StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId, GlobalEnum.Stat.IceAttackMax, StatModifierType.Add, weaponData.IceDamage.DamageMax);
+                }
+
+                if (weaponData.LightningDamage.DamageMin > 0 || weaponData.LightningDamage.DamageMax > 0)
+                {
+                    StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId, GlobalEnum.Stat.LightningAttackMin, StatModifierType.Add, weaponData.LightningDamage.DamageMin);
+                    StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId, GlobalEnum.Stat.LightningAttackMax, StatModifierType.Add, weaponData.LightningDamage.DamageMax);
+                }
+
+                if (weaponData.PoisonDamage.DamageMin > 0 || weaponData.PoisonDamage.DamageMax > 0)
+                {
+                    StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId, GlobalEnum.Stat.PoisonAttackMin, StatModifierType.Add, weaponData.PoisonDamage.DamageMin);
+                    StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId, GlobalEnum.Stat.PoisonAttackMax, StatModifierType.Add, weaponData.PoisonDamage.DamageMax);
+                }
             }
 
             // Prefix/Postfix 스탯 적용

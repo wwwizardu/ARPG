@@ -20,6 +20,14 @@ namespace ARPG.Component
         public int BaseMpGeneration;    // 기본 마나 재생
         public int BaseAttackMin;       // 기본 최소 공격력
         public int BaseAttackMax;       // 기본 최대 공격력
+        public int BaseFireAttackMin;       // 기본 화염 최소 공격력
+        public int BaseFireAttackMax;       // 기본 화염 최대 공격력
+        public int BaseIceAttackMin;        // 기본 냉기 최소 공격력
+        public int BaseIceAttackMax;        // 기본 냉기 최대 공격력
+        public int BaseLightningAttackMin;  // 기본 번개 최소 공격력
+        public int BaseLightningAttackMax;  // 기본 번개 최대 공격력
+        public int BasePoisonAttackMin;     // 기본 독 최소 공격력
+        public int BasePoisonAttackMax;     // 기본 독 최대 공격력
         public int BaseCriRate;         // 기본 치명타 확률
         public int BaseCriDamage;       // 기본 치명타 피해
         public int BaseMoveSpeed;       // 기본 이동 속도
@@ -33,6 +41,7 @@ namespace ARPG.Component
         public int BaseLuck;            // 기본 행운
         public int BaseBloodingRate;    // 기본 출혈 확률
         public int BaseIgniteRate;      // 기본 점화 확률
+
 
         // 전투 시스템 확장 스탯 (2026-04-01 추가)
         public int BaseEvasion;              // 기본 회피율 (%)
@@ -54,6 +63,14 @@ namespace ARPG.Component
         public int FinalMpGeneration;
         public int FinalAttackMin;
         public int FinalAttackMax;
+        public int FinalFireAttackMin;
+        public int FinalFireAttackMax;
+        public int FinalIceAttackMin;
+        public int FinalIceAttackMax;
+        public int FinalLightningAttackMin;
+        public int FinalLightningAttackMax;
+        public int FinalPoisonAttackMin;
+        public int FinalPoisonAttackMax;
         public int FinalCriRate;
         public int FinalCriDamage;
         public int FinalMoveSpeed;
@@ -179,6 +196,14 @@ namespace ARPG.Component
             FinalLuck = BaseLuck;
             FinalBloodingRate = BaseBloodingRate;
             FinalIgniteRate = BaseIgniteRate;
+            FinalFireAttackMin = BaseFireAttackMin;
+            FinalFireAttackMax = BaseFireAttackMax;
+            FinalIceAttackMin = BaseIceAttackMin;
+            FinalIceAttackMax = BaseIceAttackMax;
+            FinalLightningAttackMin = BaseLightningAttackMin;
+            FinalLightningAttackMax = BaseLightningAttackMax;
+            FinalPoisonAttackMin = BasePoisonAttackMin;
+            FinalPoisonAttackMax = BasePoisonAttackMax;
 
             // 전투 시스템 확장 스탯 (2026-04-01 추가)
             FinalEvasion = BaseEvasion;

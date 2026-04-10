@@ -303,6 +303,8 @@ namespace ARPG.Tables
     {
         [JsonProperty("Name")] public string Name = string.Empty;               // 이름
         [JsonProperty("Desctiption")] public string Desctiption = string.Empty; // 설명
+        [JsonProperty("Tags")] public string TagsRaw = string.Empty;              // 스킬 태그 (콤마 구분 문자열)
+        [NonSerialized] public GE.SkillTag Tags;                                   // 파싱된 스킬 태그 (비트 플래그)
         [JsonProperty("SkillType")] public GE.SkillType SkillType;              // 스킬 타입
         [JsonProperty("SubType")] public GE.SkillSubType SubType;               // 스킬 서브 타입
         [JsonProperty("SkillRangeMin")] public float SkillRangeMin;             // 스킬 최소 사정 거리

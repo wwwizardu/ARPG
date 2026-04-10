@@ -109,12 +109,12 @@ namespace ARPG.Data
             return true;
         }
 
-        public bool IsPositionDamage()
+        public bool IsPoisonDamage()
         {
             if (WeaponData == null)
                 return false;
 
-            if (WeaponData.PositionDamage.DamageMin == 0 && WeaponData.PositionDamage.DamageMax == 0)
+            if (WeaponData.PoisonDamage.DamageMin == 0 && WeaponData.PoisonDamage.DamageMax == 0)
                 return false;
 
             return true;
@@ -159,6 +159,23 @@ namespace ARPG.Data
                 int physicsDamageMax = Mathf.FloorToInt((Table.DamageMax + physicsDamageFromStat.Item2) * physicsDamageMultiplierFromStat);
 
                 WeaponData.PhysicsDamage.SetDamage(physicsDamageMin, physicsDamageMax);
+
+                // 속성 데미지 계산 (Prefix/Postfix 스탯에서 가져옴)
+                int fireMin = GetStatValue(GlobalEnum.Stat.FireAttackMin);
+                int fireMax = GetStatValue(GlobalEnum.Stat.FireAttackMax);
+                WeaponData.FireDamage.SetDamage(fireMin, fireMax);
+
+                int iceMin = GetStatValue(GlobalEnum.Stat.IceAttackMin);
+                int iceMax = GetStatValue(GlobalEnum.Stat.IceAttackMax);
+                WeaponData.IceDamage.SetDamage(iceMin, iceMax);
+
+                int lightningMin = GetStatValue(GlobalEnum.Stat.LightningAttackMin);
+                int lightningMax = GetStatValue(GlobalEnum.Stat.LightningAttackMax);
+                WeaponData.LightningDamage.SetDamage(lightningMin, lightningMax);
+
+                int poisonMin = GetStatValue(GlobalEnum.Stat.PoisonAttackMin);
+                int poisonMax = GetStatValue(GlobalEnum.Stat.PoisonAttackMax);
+                WeaponData.PoisonDamage.SetDamage(poisonMin, poisonMax);
 
                 // 공격 속도 계산
                 float attackSpeedMultiplier = 1f + (GetStatValue(GlobalEnum.Stat.AttackSpeedMul) * 0.01f);
@@ -232,7 +249,7 @@ namespace ARPG.Data
         public DamageData FireDamage = new DamageData(0, 0);
         public DamageData IceDamage = new DamageData(0, 0);
         public DamageData LightningDamage = new DamageData(0, 0);
-        public DamageData PositionDamage = new DamageData(0, 0);
+        public DamageData PoisonDamage = new DamageData(0, 0);
 
         public float AttackSpeed;
         public int CriticalRate;

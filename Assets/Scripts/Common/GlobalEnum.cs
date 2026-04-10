@@ -80,6 +80,14 @@ public class GlobalEnum
         Luck,               // 행운
         BloodingRate,       // 출혈 확률
         IgniteRate,         // 점화 확률
+        FireAttackMin,      // 화염 최소 공격력
+        FireAttackMax,      // 화염 최대 공격력
+        IceAttackMin,       // 냉기 최소 공격력
+        IceAttackMax,       // 냉기 최대 공격력
+        LightningAttackMin, // 번개 최소 공격력
+        LightningAttackMax, // 번개 최대 공격력
+        PoisonAttackMin,    // 독 최소 공격력
+        PoisonAttackMax,    // 독 최대 공격력
     }
 
     public enum EquipSlotType
@@ -164,6 +172,25 @@ public class GlobalEnum
         None = 0,       // 중립
         Player = 1,     // 플레이어 팀
         Monster = 2,    // 몬스터 팀
+    }
+
+    [System.Flags]
+    public enum SkillTag
+    {
+        None        = 0,
+        Attack      = 1 << 0,
+        Spell       = 1 << 1,
+        Physics     = 1 << 2,
+        Fire        = 1 << 3,
+        Ice         = 1 << 4,
+        Lightning   = 1 << 5,
+        Poison      = 1 << 6,
+        Melee       = 1 << 7,
+        Ranged      = 1 << 8,
+        AoE         = 1 << 9,
+        Projectile  = 1 << 10,
+        Buff        = 1 << 11,
+        Debuff      = 1 << 12,
     }
 
     public enum SkillType

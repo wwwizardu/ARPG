@@ -100,43 +100,65 @@ WindUp: 0.5~2.0s (차지 시간) → Active: 0.1s → Recovery: 0.5s
 
 ## 4. 데미지 계산 공식
 
-### 기본 데미지 계산
-```csharp
-// 1단계: 기본 데미지 (랜덤)
-float baseDamage = Random.Range(attacker.AttackMin, attacker.AttackMax);
+### 속성별 독립 계산 후 합산 방식
+무기는 물리 + 속성 데미지를 동시에 가질 수 있음. 스킬 데미지는 스킬의 DamageType에 해당하는 속성에만 합산.
 
-// 2단계: 스킬 배율 적용
-float skillMultiplier = skillData.DamageMultiplier; // 예: 1.5 (150%)
-float skillDamage = baseDamage * skillMultiplier * (attacker.SkillDamage / 100f);
-
-// 3단계: 치명타 판정
-bool isCrit = Random.Range(0f, 100f) < attacker.CriticalChance;
-if (isCrit)
-    skillDamage *= (attacker.CriticalDamage / 100f);
-
-// 4단계: 방어력 감소
-float defense = target.Defense;
-float damageReduction = defense / (defense + 100f); // 방어력 100 = 50% 감소
-float finalDamage = skillDamage * (1f - damageReduction);
-
-// 5단계: 회피/막기 판정
-if (Random.Range(0f, 100f) < target.Evasion)
-    return 0; // 회피
-
-if (Random.Range(0f, 100f) < target.BlockChance)
-    finalDamage *= (1f - target.BlockReduction / 100f); // 막기
-
-// 6단계: 최소 데미지 보장
-finalDamage = Mathf.Max(finalDamage, 1f);
-
-return finalDamage;
 ```
+예시: 무기(물리 20-30, 화염 10-15), Fire 스킬(데미지 5-10)
+
+1단계: 속성별 기본 데미지
+  물리 = Random(FinalAttackMin, FinalAttackMax)
+  화염 = Random(FinalFireAttackMin, FinalFireAttackMax)
+  냉기/번개/독 = 각각 Random(Final[속성]AttackMin, Max)
+
+2단계: 스킬 데미지를 해당 속성에 합산
+  스킬 DamageType = Fire → 화염에만 합산
+  화염 += Random(SkillDamageMin, SkillDamageMax)
+
+3단계: 스킬 배율 (모든 속성에 동일)
+  각 속성 × (SkillDamage / 100)
+
+4단계: 치명타 (모든 속성에 동일)
+  각 속성 × (CriticalDamage / 100)
+
+5단계: 속성별 저항 감소 (공식: resistance / (resistance + 100))
+  물리 × (1 - Defense / (Defense + 100))
+  화염 × (1 - FireResist / (FireResist + 100))
+  냉기 × (1 - IceResist / (IceResist + 100))
+  번개 × (1 - LightningResist / (LightningResist + 100))
+  독   × (1 - PoisonResist / (PoisonResist + 100))
+
+6단계: 합산
+  totalDamage = 물리 + 화염 + 냉기 + 번개 + 독
+
+7단계: 회피/막기 (합산 후 적용)
+  회피 → totalDamage = 0
+  막기 → totalDamage × (1 - BlockReduction/100)
+
+8단계: 최소 데미지 보장
+  Max(totalDamage, 1)
+```
+
+### 상태이상 독립 판정
+데미지가 존재하는 각 속성별로 독립적으로 상태이상 발동:
+- 물리 > 0 → 출혈 판정 (BloodingRate%)
+- 화염 > 0 → 점화 판정 (IgniteRate%)
+- 냉기 > 0 → 냉기 자동 적용
+- 독 > 0 → 중독 자동 적용
+- 한 번의 공격으로 여러 상태이상이 동시에 걸릴 수 있음
+
+### 저항 공식 참고
+| 저항값 | 감소율 |
+|--------|--------|
+| 50 | 33.3% |
+| 100 | 50.0% |
+| 200 | 66.6% |
+| 500 | 83.3% |
 
 ### 특수 효과
 ```csharp
-// 생명력 흡수
-float healAmount = finalDamage * (attacker.LifeSteal / 100f);
-attacker.CurrentHp += healAmount;
+// 생명력 흡수 (합산 데미지 기준)
+float healAmount = totalDamage * (attacker.LifeSteal / 100f);
 
 // 반사 데미지
 if (target.Thorns > 0)
