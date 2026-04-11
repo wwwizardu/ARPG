@@ -39,13 +39,14 @@ namespace ARPG.Editor
 
             await DownloadTable<StatTable>("318209064&range=A:AF", 1, SaveType.String);
 
-            await DownloadTable<ItemTable>("2064107837&range=A:L", 1, SaveType.String);
+            await DownloadTable<ItemTable>("2064107837&range=A:M", 1, SaveType.String);
 
             await DownloadTable<BuildableItemTable>("534887250&range=A:K", 1, SaveType.String);           
+
+            await DownloadTable<EquipmentBaseStatTable>("972309111&range=A:K", 1, SaveType.String);           
             
             await DownloadTable<WeaponBaseStatTable>("853198133&range=A:H", 1, SaveType.String);
 
-            await DownloadTable<ApparelBaseStatTable>("1025028412&range=A:E", 1, SaveType.String);
 
             await DownloadTable<EquipmentStatTable>("488047668&range=A:Q", 1, SaveType.String);
             
@@ -145,13 +146,13 @@ namespace ARPG.Editor
                 {
                     ParseBuildableItemTable(buildableItemTable, values);
                 }
+                else if (table is EquipmentBaseStatTable equipmentBaseStatTable)
+                {
+                    ParseEquipmentBaseStatTable(equipmentBaseStatTable, values);
+                }
                 else if (table is WeaponBaseStatTable weaponBaseStatTable)
                 {
                     ParseWeaponBaseStatTable(weaponBaseStatTable, values);
-                }
-                else if (table is ApparelBaseStatTable apparelBaseStatTable)
-                {
-                    ParseApparelBaseStatTable(apparelBaseStatTable, values);
                 }
                 else if (table is EquipmentStatTable equipmentStatTable)
                 {
@@ -311,9 +312,9 @@ namespace ARPG.Editor
 
         private static void ParseItemTable(ItemTable table, string[] values)
         {
-            if (values.Length < 12)
+            if (values.Length < 13)
             {
-                Debug.LogError($"[ParseItemTable] Invalid data length. Expected at least 12, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseItemTable] Invalid data length. Expected at least 13, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
@@ -326,8 +327,9 @@ namespace ARPG.Editor
             table.Description = values[7];
             table.DropRate = int.Parse(values[8]);
             table.BuildableItemId = int.Parse(values[9]);
-            table.EquipmentStatId = int.Parse(values[10]);
-            table.SpriteName = values[11];
+            table.EquipmentBastStatId = int.Parse(values[10]);
+            table.EquipmentStatId = int.Parse(values[11]);
+            table.SpriteName = values[12];
         }
 
         private static void ParseBuildableItemTable(BuildableItemTable table, string[] values)
@@ -351,6 +353,23 @@ namespace ARPG.Editor
             table.ResourceName = values[10];
         }
 
+        private static void ParseEquipmentBaseStatTable(EquipmentBaseStatTable table, string[] values)
+        {
+            // 컬럼 구조: Id, Description, Type1, Value1, Type2, Value2, Type3, Value3, Type4, Value4
+            table.Stats.Clear();
+
+            for (int i = 2; i + 1 < values.Length; i += 2)
+            {
+                if (string.IsNullOrEmpty(values[i]) == true)
+                    break;
+
+                GlobalEnum.Stat statType = (GlobalEnum.Stat)Enum.Parse(typeof(GlobalEnum.Stat), values[i]);
+                ushort statValue = ushort.Parse(values[i + 1]);
+
+                table.Stats.Add(new Stat() { Type = statType, Value = statValue });
+            }
+        }
+
         private static void ParseWeaponBaseStatTable(WeaponBaseStatTable table, string[] values)
         {
             if (values.Length < 7)
@@ -367,19 +386,6 @@ namespace ARPG.Editor
             table.DamageMax = int.Parse(values[6]);
         }
 
-        private static void ParseApparelBaseStatTable(ApparelBaseStatTable table, string[] values)
-        {
-            if (values.Length < 5)
-            {
-                Debug.LogError($"[ParseApparelBaseStatTable] Invalid data length. Expected at least 5, got {values.Length}. Id: {table.Id}");
-                return;
-            }
-
-            table.Name = values[1];
-            table.Category = (GlobalEnum.ItemCategory)Enum.Parse(typeof(GlobalEnum.ItemCategory), values[2]);
-            table.Armor = int.Parse(values[3]);
-            table.Evasion = int.Parse(values[4]);
-        }
 
         private static void ParseEquipmentStatTable(EquipmentStatTable table, string[] values)
         {
@@ -392,11 +398,15 @@ namespace ARPG.Editor
             table.Prefix = new List<Stat>();
             table.Postfix = new List<Stat>();
 
-            // Prefix 시작 인덱스
-            int prefixStartIndex = 1;
+            // 컬럼 구조: Id, Description, Type1, Value1, ... Type4, Value4, Type5, Value5, ... Type8, Value8
+            // Prefix 시작 인덱스 (Description 다음)
+            int prefixStartIndex = 2;
             for (int i = 0; i < 4; i++)
             {
                 int index = prefixStartIndex + (i * 2);
+                if (index + 1 >= values.Length || string.IsNullOrEmpty(values[index]) == true)
+                    break;
+
                 Stat stat = new Stat();
                 stat.Type = (GlobalEnum.Stat)Enum.Parse(typeof(GlobalEnum.Stat), values[index]);
                 stat.Value = ushort.Parse(values[index + 1]);
@@ -408,6 +418,9 @@ namespace ARPG.Editor
             for (int i = 0; i < 4; i++)
             {
                 int index = postfixStartIndex + (i * 2);
+                if (index + 1 >= values.Length || string.IsNullOrEmpty(values[index]) == true)
+                    break;
+
                 Stat stat = new Stat();
                 stat.Type = (GlobalEnum.Stat)Enum.Parse(typeof(GlobalEnum.Stat), values[index]);
                 stat.Value = ushort.Parse(values[index + 1]);

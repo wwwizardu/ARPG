@@ -17,8 +17,8 @@ namespace ARPG.Data
         private ImmutableDictionary<int, Tables.StatTable> _statTable = null!;
         private ImmutableDictionary<int, Tables.ItemTable> _itemTable = null!;
         private ImmutableDictionary<int, Tables.BuildableItemTable> _buildableItemTable = null!;
+        private ImmutableDictionary<int, Tables.EquipmentBaseStatTable> _equipmentBaseStatTable = null!;
         private ImmutableDictionary<int, Tables.WeaponBaseStatTable> _equipmentTable = null!;
-        private ImmutableDictionary<int, Tables.ApparelBaseStatTable> _apparelBaseStatTable = null!;
         private ImmutableDictionary<int, Tables.EquipmentStatTable> _equipmentStatTable = null!;
         private ImmutableDictionary<int, Tables.DropTable> _dropTable = null!;
         private ImmutableDictionary<int, Tables.DropCurrencyTable> _dropCurrencyTable = null!;
@@ -40,8 +40,8 @@ namespace ARPG.Data
                 LoadTable<Tables.StatTable>("StatTable.bytes", tables => _statTable = tables),
                 LoadTable<Tables.ItemTable>("ItemTable.bytes", tables => _itemTable = tables),
                 LoadTable<Tables.BuildableItemTable>("BuildableItemTable.bytes", tables => _buildableItemTable = tables),
+                LoadTable<Tables.EquipmentBaseStatTable>("EquipmentBaseStatTable.bytes", tables => _equipmentBaseStatTable = tables),
                 LoadTable<Tables.WeaponBaseStatTable>("WeaponBaseStatTable.bytes", tables => _equipmentTable = tables),
-                LoadTable<Tables.ApparelBaseStatTable>("ApparelBaseStatTable.bytes", tables => _apparelBaseStatTable = tables),
                 LoadTable<Tables.EquipmentStatTable>("EquipmentStatTable.bytes", tables => _equipmentStatTable = tables),
                 LoadTable<Tables.DropTable>("DropTable.bytes", tables => _dropTable = tables),
                 LoadTable<Tables.DropCurrencyTable>("DropCurrencyTable.bytes", tables => _dropCurrencyTable = tables),
@@ -85,10 +85,6 @@ namespace ARPG.Data
                 table.LoadLate();
             }
 
-            foreach (var table in _apparelBaseStatTable.Values)
-            {
-                table.LoadLate();
-            }
 
             foreach (var table in _dropTable.Values)
             {
@@ -198,6 +194,16 @@ namespace ARPG.Data
             return null;
         }
 
+        public Tables.EquipmentBaseStatTable? GetEquipmentBaseStat(int id)
+        {
+            if (_equipmentBaseStatTable.TryGetValue(id, out var table))
+            {
+                return table;
+            }
+
+            return null;
+        }
+
         public Tables.WeaponBaseStatTable? WeaponBaseStatTable(int id)
         {
             if (_equipmentTable.TryGetValue(id, out var table))
@@ -208,15 +214,6 @@ namespace ARPG.Data
             return null;
         }
 
-        public Tables.ApparelBaseStatTable? GetApparelBaseStatTable(int id)
-        {
-            if (_apparelBaseStatTable.TryGetValue(id, out var table))
-            {
-                return table;
-            }
-
-            return null;
-        }
 
         public Tables.EquipmentStatTable? GetEquipmentStat(int id)
         {

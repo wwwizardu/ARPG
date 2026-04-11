@@ -89,10 +89,10 @@ namespace ARPG.Data
             if (inItem == null)
                 return false;
 
-            if (inItem?.Equipment?.Table == null)
+            if (inItem?.Equipment == null)
                 return false;
 
-            if (inItem.Equipment.Table.EquipType != EquipHelper.SlotToEquipmentType(inEquipType))
+            if (inItem.Equipment.EquipType != EquipHelper.SlotToEquipmentType(inEquipType))
                 return false;
 
             // 기존에 장착된 아이템이 있는 경우 교체할 아이템으로 설정

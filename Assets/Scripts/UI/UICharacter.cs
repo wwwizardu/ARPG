@@ -120,11 +120,8 @@ namespace ARPG.UI
                 if (itemData == null || itemData.Table == null || itemData.Equipment == null) // 아이템이 없거나 장비 아이템이 아닌 경우
                     return;
 
-                if (itemData.Equipment.Table == null)
-                    return;
-
                 GlobalEnum.EquipSlotType targetSlot = EquipHelper.GetBestSlot(
-                    itemData.Equipment.Table.EquipType,
+                    itemData.Equipment.EquipType,
                     AR.s.Data.Player._inventoryEquip
                 );
 

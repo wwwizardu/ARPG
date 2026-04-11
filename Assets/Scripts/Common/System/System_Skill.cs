@@ -465,9 +465,11 @@ namespace ARPG.Systems
                 Data.ItemData? rightWeapon = equip[(int)GlobalEnum.EquipSlotType.WeaponRight];
 
                 Data.ItemData? weapon = leftWeapon ?? rightWeapon;
-                if (weapon != null && weapon.Equipment != null && weapon.Equipment.WeaponData != null)
+                if (weapon != null && weapon.Equipment != null)
                 {
-                    return weapon.Equipment.WeaponData.AttackSpeed;
+                    float attackSpeed = weapon.Equipment.GetAttackSpeed();
+                    if (attackSpeed > 0)
+                        return attackSpeed;
                 }
             }
 

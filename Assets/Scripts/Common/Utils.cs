@@ -12,6 +12,18 @@ public static class Utils
         return true;
     }
 
+    public static GlobalEnum.EquipmentType CategoryToEquipmentType(GlobalEnum.ItemCategory inCategory)
+    {
+        switch (inCategory)
+        {
+            case GlobalEnum.ItemCategory.Helmet: return GlobalEnum.EquipmentType.Helmet;
+            case GlobalEnum.ItemCategory.Armor: return GlobalEnum.EquipmentType.Armor;
+            case GlobalEnum.ItemCategory.Gloves: return GlobalEnum.EquipmentType.Gloves;
+            case GlobalEnum.ItemCategory.Boots: return GlobalEnum.EquipmentType.Boots;
+            default: return GlobalEnum.EquipmentType.Weapon;
+        }
+    }
+
     public static bool IsApparel(this GlobalEnum.ItemCategory inCategory)
     {
         switch (inCategory)

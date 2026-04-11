@@ -1,4 +1,5 @@
 #nullable enable
+using System.Collections.Generic;
 using ARPG.Component;
 using ARPG.Data;
 using ARPG.Tables;
@@ -91,63 +92,17 @@ namespace ARPG.Utility
                 return;
 
             int sourceId = item.ItemInstanceId;
+            List<Stat> computed = item.Equipment.ComputedStats;
 
-            // 무기 기본 공격력 적용
-            if (item.Equipment.WeaponData != null)
+            for (int i = 0; i < computed.Count; i++)
             {
-                var (physMin, physMax) = item.Equipment.GetPhysicsDamage();
-                if (physMin > 0 || physMax > 0)
-                {
-                    StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId, GlobalEnum.Stat.AttackMin, StatModifierType.Add, physMin);
-                    StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId, GlobalEnum.Stat.AttackMax, StatModifierType.Add, physMax);
-                }
+                // AttackSpeed는 무기 고유 절대값이므로 StatModifier에 등록하지 않음 (GetAttackSpeed()로 직접 조회)
+                if (computed[i].Type == GlobalEnum.Stat.AttackSpeed)
+                    continue;
 
-                if (item.Equipment.WeaponData.CriticalRate > 0)
+                if (computed[i].Value > 0)
                 {
-                    StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId, GlobalEnum.Stat.CriRate, StatModifierType.Add, item.Equipment.WeaponData.CriticalRate);
-                }
-
-                // 속성 데미지 적용
-                WeaponData weaponData = item.Equipment.WeaponData;
-                if (weaponData.FireDamage.DamageMin > 0 || weaponData.FireDamage.DamageMax > 0)
-                {
-                    StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId, GlobalEnum.Stat.FireAttackMin, StatModifierType.Add, weaponData.FireDamage.DamageMin);
-                    StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId, GlobalEnum.Stat.FireAttackMax, StatModifierType.Add, weaponData.FireDamage.DamageMax);
-                }
-
-                if (weaponData.IceDamage.DamageMin > 0 || weaponData.IceDamage.DamageMax > 0)
-                {
-                    StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId, GlobalEnum.Stat.IceAttackMin, StatModifierType.Add, weaponData.IceDamage.DamageMin);
-                    StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId, GlobalEnum.Stat.IceAttackMax, StatModifierType.Add, weaponData.IceDamage.DamageMax);
-                }
-
-                if (weaponData.LightningDamage.DamageMin > 0 || weaponData.LightningDamage.DamageMax > 0)
-                {
-                    StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId, GlobalEnum.Stat.LightningAttackMin, StatModifierType.Add, weaponData.LightningDamage.DamageMin);
-                    StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId, GlobalEnum.Stat.LightningAttackMax, StatModifierType.Add, weaponData.LightningDamage.DamageMax);
-                }
-
-                if (weaponData.PoisonDamage.DamageMin > 0 || weaponData.PoisonDamage.DamageMax > 0)
-                {
-                    StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId, GlobalEnum.Stat.PoisonAttackMin, StatModifierType.Add, weaponData.PoisonDamage.DamageMin);
-                    StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId, GlobalEnum.Stat.PoisonAttackMax, StatModifierType.Add, weaponData.PoisonDamage.DamageMax);
-                }
-            }
-
-            // Prefix/Postfix 스탯 적용
-            EquipmentStatData? statData = item.Equipment.StatData;
-            if (statData != null)
-            {
-                for (int i = 0; i < statData.Prefix.Count; i++)
-                {
-                    Stat stat = statData.Prefix[i];
-                    StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId, stat.Type, StatModifierType.Add, stat.Value);
-                }
-
-                for (int i = 0; i < statData.Postfix.Count; i++)
-                {
-                    Stat stat = statData.Postfix[i];
-                    StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId, stat.Type, StatModifierType.Add, stat.Value);
+                    StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId, computed[i].Type, StatModifierType.Add, computed[i].Value);
                 }
             }
 

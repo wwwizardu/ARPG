@@ -158,11 +158,9 @@ namespace ARPG.Systems
                 case GE.Stat.MoveSpeedMul:
                     stat.FinalMoveSpeed = ApplyValue(stat.FinalMoveSpeed, modifier);
                     break;
-                case GE.Stat.AttackSpeed:
                 case GE.Stat.AttackSpeedMul:
                     stat.FinalAttackSpeed = ApplyValue(stat.FinalAttackSpeed, modifier);
                     break;
-                case GE.Stat.CastSpeed:
                 case GE.Stat.CastSpeedMul:
                     stat.FinalCastSpeed = ApplyValue(stat.FinalCastSpeed, modifier);
                     break;

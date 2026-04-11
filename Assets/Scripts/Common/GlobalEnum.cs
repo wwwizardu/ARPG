@@ -66,11 +66,10 @@ public class GlobalEnum
         AttackMax,          // 물리 최대 공격력
         CriRate,            // 치명타 확률
         CriDamageMul,       // 치명타 피해 배율
-        MoveSpeed,          // 이동 속도
+        MoveSpeed,          // 이동 속도 (1초당 이동 거리)
         MoveSpeedMul,       // 이동 속도 증가 배율
-        AttackSpeed,        // 공격 속도
+        AttackSpeed,        // 공격 속도 (초당 공격 횟수, 100배 정수: 1.2 → 120)
         AttackSpeedMul,     // 공격 속도 증가 배율
-        CastSpeed,          // 시전 속도
         CastSpeedMul,       // 시전 속도 증가 배율
         Defense,            // 방어력
         FireResist,         // 화염 저항
@@ -88,6 +87,8 @@ public class GlobalEnum
         LightningAttackMax, // 번개 최대 공격력
         PoisonAttackMin,    // 독 최소 공격력
         PoisonAttackMax,    // 독 최대 공격력
+        Evasion,            // 회피
+        BlockChance,        // 블록 확률
     }
 
     public enum EquipSlotType

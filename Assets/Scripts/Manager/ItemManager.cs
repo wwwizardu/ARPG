@@ -130,14 +130,19 @@ namespace ARPG.Item
 
         private EquipmentData? CreateEquipmentData(ItemTable inTable)
         {
-            if (inTable == null || inTable.Equipment == null)
+            if (inTable == null)
+                return null;
+
+            if (inTable.EquipmentBaseStat == null)
                 return null;
 
             EquipmentData equipmentData = new EquipmentData()
             {
-                Id = inTable.Equipment.Id,
-                Table = inTable.Equipment
+                Id = inTable.EquipmentBastStatId,
             };
+
+            // EquipType 설정
+            equipmentData.EquipType = Utils.CategoryToEquipmentType(inTable.Category);
 
             equipmentData.StatData = new()
             {
@@ -152,7 +157,12 @@ namespace ARPG.Item
             CreatePostfixOptions(equipmentData.StatData);
 
             equipmentData.Quality = Random.Range(1, 101); // 1~100 사이의 품질 값 설정
-            equipmentData.Update();
+
+            // BaseStats 생성 (테이블에서)
+            equipmentData.InitBaseStats(inTable);
+
+            // ComputedStats 계산 (BaseStats + StatData 합산)
+            equipmentData.ComputeStats();
 
             return equipmentData;
         }
