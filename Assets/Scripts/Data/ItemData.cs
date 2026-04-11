@@ -179,7 +179,7 @@ namespace ARPG.Data
 
                 // 공격 속도 계산
                 float attackSpeedMultiplier = 1f + (GetStatValue(GlobalEnum.Stat.AttackSpeedMul) * 0.01f);
-                WeaponData.AttackSpeed = Table.AttackSpeed / attackSpeedMultiplier;
+                WeaponData.AttackSpeed = Table.AttackSpeed * attackSpeedMultiplier;
 
                 // 크리티컬 확률 계산
                 WeaponData.CriticalRate = Table.Critical + GetStatValue(GlobalEnum.Stat.CriRate);

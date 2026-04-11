@@ -497,8 +497,7 @@ namespace ARPG.Editor
 
             table.Name = values[1];
             table.Desctiption = values[2];
-            table.TagsRaw = values[3];
-            table.Tags = ParseSkillTags(table.TagsRaw);
+            table.Tags = ParseSkillTags(values[3]);
             table.SkillType = (GlobalEnum.SkillType)Enum.Parse(typeof(GlobalEnum.SkillType), values[4]);
             table.SubType = (GlobalEnum.SkillSubType)Enum.Parse(typeof(GlobalEnum.SkillSubType), values[5]);
             table.SkillRangeMin = float.Parse(values[6]);

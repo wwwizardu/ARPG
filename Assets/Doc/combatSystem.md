@@ -165,6 +165,35 @@ if (target.Thorns > 0)
     attacker.CurrentHp -= target.Thorns;
 ```
 
+### 공격 속도 / 시전 속도
+스킬 태그(SkillTag)에 따라 적용되는 속도 스탯이 다름.
+
+#### Attack 태그 스킬
+- 스킬 기본 시간 = `1 / WeaponAttackSpeed` (무기 초당 공격 횟수 기반)
+  - 무기 공속 1.5 → 기본 시간 0.667초
+- 속도 배율 = `(100 + FinalAttackSpeed) / 100` (0이 기본, 50이면 1.5배속)
+- 최종 스킬 시간 = 기본 시간 / 속도 배율
+- 무기의 AttackSpeedMul 옵션: `WeaponAttackSpeed = Table.AttackSpeed × (1 + Mul/100)`
+
+#### Spell 태그 스킬
+- 스킬 기본 시간 = `SkillTable.Duration` (테이블 고정값)
+- 속도 배율 = `(100 + FinalCastSpeed) / 100`
+- 최종 스킬 시간 = 기본 시간 / 속도 배율
+
+#### 공통
+- 배율이 적용되면 Start/Process/End Duration이 모두 비율 유지하며 조절
+- 애니메이션 속도도 동일 배율로 조절 (PlaybackSpeed)
+- 배율 범위: 최소 0.1x ~ 최대 5.0x (클램프)
+- 쿨타임 감소: `실제 쿨타임 = Table.Cooltime × (1 - CooldownReduction / 100)` (최대 90%)
+
+#### 스킬 태그 (SkillTag)
+`[Flags]` enum으로 비트 플래그 조합. 테이블에서 콤마 구분 문자열로 입력, 저장 시 int로 변환.
+```
+Attack, Spell, Physics, Fire, Ice, Lightning, Poison,
+Melee, Ranged, AoE, Projectile, Buff, Debuff
+```
+예시: `Attack,Physics,Melee` → 근접 물리 공격 스킬
+
 ---
 
 ## 5. 히트 판정 시스템

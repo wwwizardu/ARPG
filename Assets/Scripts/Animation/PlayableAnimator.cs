@@ -121,6 +121,14 @@ namespace ARPG
             }
         }
 
+        public void SetSpeed(float speed)
+        {
+            if (_graph.IsValid() == false)
+                return;
+
+            _graph.GetRootPlayable(0).SetSpeed(speed);
+        }
+
         public void Reset()
         {
             if (_graph.IsValid())

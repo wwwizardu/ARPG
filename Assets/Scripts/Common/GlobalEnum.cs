@@ -62,8 +62,8 @@ public class GlobalEnum
         Mp,                 // 마나
         HpGeneration,       // 체력 재생
         MpGeneration,       // 마나 재생
-        AttackMin,          // 최소 공격력
-        AttackMax,          // 최대 공격력
+        AttackMin,          // 물리 최소 공격력
+        AttackMax,          // 물리 최대 공격력
         CriRate,            // 치명타 확률
         CriDamageMul,       // 치명타 피해 배율
         MoveSpeed,          // 이동 속도

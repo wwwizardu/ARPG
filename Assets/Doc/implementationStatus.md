@@ -160,10 +160,17 @@ UI/UX:       ██████████████░░░░░░░░�
 - [X] 데미지 텍스트 표시 (FloatingTextManager + HpBarView 연동)
 - [X] 발사체 시스템 (System_Projectile - 이동/충돌/수명/데미지)
 - [X] 발사체 오브젝트 풀링 (AddressablePool - string 키 기반 공용 풀)
+- [X] 속성 데미지 시스템 (물리/화염/냉기/번개/독 독립 계산 + 저항 적용)
+- [X] 무기 속성 데미지 연동 (EquipHelper → StatModifier → FinalElementAttack)
+- [X] 상태이상 독립 판정 (속성별 출혈/점화/냉기/중독 동시 발동)
+- [X] 스킬 태그 시스템 (SkillTag - Flags enum, 콤마 구분 문자열 → 비트 플래그)
+- [X] 공격 속도 / 시전 속도 연동 (Attack 태그 → 무기 공속 + FinalAttackSpeed, Spell 태그 → FinalCastSpeed)
+- [X] 애니메이션 속도 연동 (PlaybackSpeed → PlayableAnimator.SetSpeed)
+- [X] 쿨타임 감소 (FinalCooldownReduction 적용)
 - [ ] VFX/사운드 통합 (후순위)
 - [ ] 넉백 시스템 (후순위)
 - [ ] 히트/사망 이펙트 (후순위)
-- **현재 진행도**: 90%
+- **현재 진행도**: 95%
 - **다음 작업**: VFX/사운드, 넉백 (후순위)
 - **파일**: `DamageCalculator.cs`, `System_Skill.cs`, `System_HpCheck.cs`, `System_Projectile.cs`, `AddressablePool.cs`
 - **문서**: `combatSystem.md`

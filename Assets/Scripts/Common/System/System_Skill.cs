@@ -155,6 +155,42 @@ namespace ARPG.Systems
             // 타겟 설정
             AR.s.Component.SetComponent(skillEntityId, target);
 
+            // 속도 배율 적용 (Attack → 무기 공속 기반 + 공격 속도%, Spell → 시전 속도%)
+            if (AR.s.Component.TryGetComponent<SkillTimingComponent>(skillEntityId, out var timing))
+            {
+                // Attack 태그: 무기 공속으로 Base Duration 재계산
+                GlobalEnum.SkillTag tags = inSkill.Table != null ? inSkill.Table.Tags : GlobalEnum.SkillTag.None;
+                bool isAttack = (tags & GlobalEnum.SkillTag.Attack) != 0;
+
+                if (isAttack)
+                {
+                    float weaponAttackSpeed = GetWeaponAttackSpeed(inSkill.OwnerEntityId);
+                    if (weaponAttackSpeed > 0f)
+                    {
+                        float totalTime = 1f / weaponAttackSpeed;
+                        float damageTimeRatio = timing.BaseStartDuration / (timing.BaseStartDuration + timing.BaseProcessDuration + timing.BaseEndDuration);
+                        float processRatio = timing.BaseProcessDuration / (timing.BaseStartDuration + timing.BaseProcessDuration + timing.BaseEndDuration);
+
+                        timing.BaseStartDuration = totalTime * damageTimeRatio;
+                        timing.BaseProcessDuration = totalTime * processRatio;
+                        timing.BaseEndDuration = totalTime * (1f - damageTimeRatio - processRatio);
+                    }
+                }
+
+                float speedMultiplier = GetSkillSpeedMultiplier(inSkill);
+                timing.ApplySpeedMultiplier(speedMultiplier);
+                AR.s.Component.SetComponent(skillEntityId, timing);
+
+                Debug.Log($"<color=yellow>[System_Skill] Speed applied - SkillId: {inSkill.SkillId}, Tags: {tags}, IsAttack: {isAttack}, SpeedMul: {speedMultiplier:F2}, Duration: {timing.StartDuration:F3}/{timing.ProcessDuration:F3}/{timing.EndDuration:F3} (Total: {timing.TotalDuration:F3}s)</color>");
+
+                // 애니메이션 속도 설정
+                if (AR.s.Component.TryGetComponent<SpriteAnimationComponent>(inSkill.OwnerEntityId, out var spriteAnim))
+                {
+                    spriteAnim.PlaybackSpeed = speedMultiplier;
+                    AR.s.Component.SetComponent(inSkill.OwnerEntityId, spriteAnim);
+                }
+            }
+
             // 스킬 시작
             OnChangeState(skillEntityId, ref skillState, ref inSkill, SkillState.Start);
             AR.s.Component.SetComponent(skillEntityId, skillState);
@@ -382,13 +418,26 @@ namespace ARPG.Systems
             // 스킬 상태 초기화
             inSkillState.Reset();
 
-            // 쿨타임 세팅 (SkillTable.Cooltime에서 읽기)
+            // 쿨타임 세팅 (CooldownReduction 적용)
             if (inSkill.Table != null && inSkill.Table.Cooltime > 0f)
             {
-                inSkillState.CooldownRemaining = inSkill.Table.Cooltime;
+                float cooldown = inSkill.Table.Cooltime;
+                if (AR.s.Component.TryGetComponent<StatComponent>(inSkill.OwnerEntityId, out var ownerStat))
+                {
+                    float cdr = Mathf.Clamp(ownerStat.FinalCooldownReduction, 0, 90) / 100f;
+                    cooldown *= (1f - cdr);
+                }
+                inSkillState.CooldownRemaining = cooldown;
             }
 
             AR.s.Component.SetComponent(skillEntityId, inSkillState);
+
+            // 애니메이션 속도 복구
+            if (AR.s.Component.TryGetComponent<SpriteAnimationComponent>(inSkill.OwnerEntityId, out var spriteAnim))
+            {
+                spriteAnim.PlaybackSpeed = 1f;
+                AR.s.Component.SetComponent(inSkill.OwnerEntityId, spriteAnim);
+            }
 
             // 캐릭터 상태 초기화
             if(AR.s.Component.TryGetComponent<StateComponent>(inSkill.OwnerEntityId, out var charState) == false)
@@ -401,6 +450,63 @@ namespace ARPG.Systems
             AR.s.Component.SetComponent(inSkill.OwnerEntityId, charState);
 
             Debug.Log($"[System_Skill] Skill Complete - SkillEntityId: {skillEntityId}");
+        }
+
+        /// <summary>
+        /// 엔티티의 장착 무기 공격 속도 (초당 공격 횟수) 반환
+        /// 플레이어: PlayerData에서 장착 무기 조회, 몬스터: 기본값 1.0
+        /// </summary>
+        private float GetWeaponAttackSpeed(int ownerEntityId)
+        {
+            if (ownerEntityId == AR.s.Data.CurrentPlayerEntityId)
+            {
+                Data.ItemData?[] equip = AR.s.Data.Player._inventoryEquip;
+                Data.ItemData? leftWeapon = equip[(int)GlobalEnum.EquipSlotType.WeaponLeft];
+                Data.ItemData? rightWeapon = equip[(int)GlobalEnum.EquipSlotType.WeaponRight];
+
+                Data.ItemData? weapon = leftWeapon ?? rightWeapon;
+                if (weapon != null && weapon.Equipment != null && weapon.Equipment.WeaponData != null)
+                {
+                    return weapon.Equipment.WeaponData.AttackSpeed;
+                }
+            }
+
+            return 1f;
+        }
+
+        /// <summary>
+        /// 스킬 태그에 따라 속도 배율 결정
+        /// Attack → (100 + FinalAttackSpeed) / 100, Spell → (100 + FinalCastSpeed) / 100
+        /// </summary>
+        /// <summary>
+        /// 스킬 태그에 따라 속도 배율 결정
+        /// Attack → (100 + FinalAttackSpeed) / 100, Spell → (100 + FinalCastSpeed) / 100
+        /// FinalAttackSpeed 0 = 기본 1배속, 50 = 1.5배속, 100 = 2배속, -20 = 0.8배속
+        /// </summary>
+        private float GetSkillSpeedMultiplier(SkillComponent skill)
+        {
+            if (skill.Table == null)
+                return 1f;
+
+            if (AR.s.Component.TryGetComponent<StatComponent>(skill.OwnerEntityId, out var stat) == false)
+                return 1f;
+
+            GlobalEnum.SkillTag tags = skill.Table.Tags;
+            bool isAttack = (tags & GlobalEnum.SkillTag.Attack) != 0;
+            bool isSpell = (tags & GlobalEnum.SkillTag.Spell) != 0;
+
+            float multiplier = 1f;
+
+            if (isAttack && isSpell == false)
+            {
+                multiplier = (100 + stat.FinalAttackSpeed) / 100f;
+            }
+            else if (isSpell && isAttack == false)
+            {
+                multiplier = (100 + stat.FinalCastSpeed) / 100f;
+            }
+
+            return Mathf.Clamp(multiplier, 0.1f, 5f);
         }
 
         #region Skill Type Processing Methods

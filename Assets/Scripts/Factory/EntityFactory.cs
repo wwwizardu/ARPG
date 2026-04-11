@@ -480,6 +480,9 @@ namespace ARPG.Factory
 
             AR.s.Component.AddComponent(skillEntityId, new SkillTimingComponent
             {
+                BaseStartDuration = skillTable.DamageTime,
+                BaseProcessDuration = 0.1f,
+                BaseEndDuration = skillTable.Duration - skillTable.DamageTime,
                 StartDuration = skillTable.DamageTime,
                 ProcessDuration = 0.1f,
                 EndDuration = skillTable.Duration - skillTable.DamageTime,

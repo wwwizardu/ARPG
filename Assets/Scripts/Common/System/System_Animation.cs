@@ -118,7 +118,10 @@ namespace ARPG.Systems
                     }
                 }
 
-                // 2. StateComponent 기반 애니메이션 처리
+                // 2. PlaybackSpeed 반영
+                playableAnimator.SetSpeed(spriteAnim.PlaybackSpeed);
+
+                // 3. StateComponent 기반 애니메이션 처리
                 if (_componentManager.TryGetComponent<StateComponent>(entityId, out var state) == true)
                 {
                     UpdateAnimatorFromState(playableAnimator, ref state, entityId);
