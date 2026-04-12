@@ -43,12 +43,12 @@ namespace ARPG.Editor
 
             await DownloadTable<BuildableItemTable>("534887250&range=A:K", 1, SaveType.String);           
 
-            await DownloadTable<EquipmentBaseStatTable>("972309111&range=A:K", 1, SaveType.String);           
+            await DownloadTable<EquipmentBaseStatTable>("972309111&range=A:L", 1, SaveType.String);           
             
             await DownloadTable<WeaponBaseStatTable>("853198133&range=A:H", 1, SaveType.String);
 
 
-            await DownloadTable<EquipmentStatTable>("488047668&range=A:Q", 1, SaveType.String);
+            await DownloadTable<EquipmentStatTable>("488047668&range=A:R", 1, SaveType.String);
             
             await DownloadTable<DropTable>("1241586373&range=A:J", 1, SaveType.String);
 
@@ -56,7 +56,7 @@ namespace ARPG.Editor
 
             await DownloadTable<DropEquipmentTable>("1267382287&range=A:V", 1, SaveType.String);
 
-            await DownloadTable<SkillTable>("92727160&range=A:V", 1, SaveType.String);
+            await DownloadTable<SkillTable>("92727160&range=A:W", 1, SaveType.String);
 
             await DownloadTable<BuffTable>("127577579&range=A:J", 1, SaveType.String);
 
@@ -355,10 +355,10 @@ namespace ARPG.Editor
 
         private static void ParseEquipmentBaseStatTable(EquipmentBaseStatTable table, string[] values)
         {
-            // 컬럼 구조: Id, Description, Type1, Value1, Type2, Value2, Type3, Value3, Type4, Value4
+            // 컬럼 구조: Id, Name, Description, Type1, Value1, Type2, Value2, Type3, Value3, Type4, Value4
             table.Stats.Clear();
 
-            for (int i = 2; i + 1 < values.Length; i += 2)
+            for (int i = 3; i + 1 < values.Length; i += 2)
             {
                 if (string.IsNullOrEmpty(values[i]) == true)
                     break;
@@ -398,9 +398,9 @@ namespace ARPG.Editor
             table.Prefix = new List<Stat>();
             table.Postfix = new List<Stat>();
 
-            // 컬럼 구조: Id, Description, Type1, Value1, ... Type4, Value4, Type5, Value5, ... Type8, Value8
-            // Prefix 시작 인덱스 (Description 다음)
-            int prefixStartIndex = 2;
+            // 컬럼 구조: Id, Name, Description, Type1, Value1, ... Type4, Value4, Type5, Value5, ... Type8, Value8
+            // Prefix 시작 인덱스 (Name, Description 다음)
+            int prefixStartIndex = 3;
             for (int i = 0; i < 4; i++)
             {
                 int index = prefixStartIndex + (i * 2);
@@ -502,9 +502,9 @@ namespace ARPG.Editor
 
         private static void ParseSkillTable(SkillTable table, string[] values)
         {
-            if (values.Length < 19)
+            if (values.Length < 23)
             {
-                Debug.LogError($"[ParseSkillTable] Invalid data length. Expected at least 19, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseSkillTable] Invalid data length. Expected at least 23, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
@@ -529,7 +529,7 @@ namespace ARPG.Editor
             table.StartEffectName = values[19];
             table.ActivateName = values[20];
             table.HitEffect = values[21];
-            table.ProjectileId = values.Length > 22 ? int.Parse(values[22]) : 0;
+            table.ProjectileId = int.Parse(values[22]);
         }
 
         private static GlobalEnum.SkillTag ParseSkillTags(string tagsRaw)
