@@ -267,5 +267,54 @@ public class GlobalEnum
     }
 
 
+    /// <summary>
+    /// Mod 효과 종류
+    /// </summary>
+    public enum ModEffectType
+    {
+        // ===== Passive - 장착 시 StatModifier로 변환 =====
+        FlatStat,              // 단일 스탯 증가 (+50 HP, +20 방어력)
+        AddedPhysDamage,       // 물리 데미지 추가 (Value1=Min, Value2=Max)
+        AddedFireDamage,       // 화염 데미지 추가
+        AddedIceDamage,        // 냉기 데미지 추가
+        AddedLightningDamage,  // 번개 데미지 추가
+        AddedPoisonDamage,     // 독 데미지 추가
+        IncreasedStat,         // 스탯 % 증가 (+10% 공격 속도)
+
+        // ===== OnCalculate - 데미지 계산 시 조회 =====
+        IncreasedDamage,       // 조건부 데미지 증가 (Tags 매칭)
+        DamageConversion,      // 데미지 속성 전환 (물리→화염 10%)
+        ResistPenetration,     // 저항 관통
+
+        // ===== OnEvent - 이벤트 발생 시 조회 =====
+        BleedOnHit,            // 타격 시 출혈 (Value1=확률%)
+        IgniteOnHit,           // 타격 시 점화
+        FreezeOnHit,           // 타격 시 동결
+        PoisonOnHit,           // 타격 시 중독
+        LifeOnKill,            // 처치 시 HP 회복
+        ManaOnHit,             // 타격 시 MP 회복
+        LifeOnHit,             // 타격 시 HP 회복
+    }
+
+    /// <summary>
+    /// Mod 적용 시점
+    /// </summary>
+    public enum ModApplyType
+    {
+        Passive,       // 장착 시 StatModifier로 자동 등록
+        OnCalculate,   // 데미지 계산 시 조회
+        OnEvent,       // 히트/킬 등 이벤트 시 조회
+    }
+
+    /// <summary>
+    /// Mod 슬롯 종류
+    /// </summary>
+    public enum ModSlot
+    {
+        Implicit,      // 기본 내장 (아이템 타입에 고정)
+        Prefix,        // 접두
+        Postfix,       // 접미
+    }
+
     static public ushort PLAYER_INVENTORY_SLOTCOUNT_MAX = 60;
 }

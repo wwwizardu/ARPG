@@ -1,4 +1,5 @@
 using ARPG.Component;
+using ARPG.Skill.Combat;
 using ARPG.Utility;
 using UnityEngine;
 
@@ -103,11 +104,10 @@ namespace ARPG.Systems
             // 스택에 따른 총 데미지 계산
             int totalDamage = buff.TickDamage * buff.StackCount;
 
-            // TODO: 속성 저항 적용 (DamageType에 따라 저항 계산)
-            // int finalDamage = CalculateDamageWithResistance(totalDamage, buff.DamageType, targetStat);
-
-            // 현재는 단순 데미지 적용
-            int finalDamage = totalDamage;
+            // 속성 저항 적용 (DamageType에 따라 저항 계산)
+            int resistance = GetResistanceForDamageType(buff.DamageType, targetStat);
+            float reduction = DamageCalculator.GetResistanceReduction(resistance);
+            int finalDamage = Mathf.Max(1, Mathf.RoundToInt(totalDamage * (1f - reduction)));
 
             // 데미지 적용 (양수면 데미지, 음수면 힐)
             if (finalDamage > 0)
@@ -122,13 +122,18 @@ namespace ARPG.Systems
                     TargetEntityId = buff.TargetEntityId,
                     DamageAmount = finalDamage,
                     AttackerEntityId = -1, // 버프로 인한 데미지이므로 공격자 없음
-                    DamageType = GlobalEnum.DamageType.Physics,
+                    DamageType = buff.DamageType,
                     IsCritical = false,
                     CurrentHp = targetStat.CurrentHp,
                     MaxHp = targetStat.FinalMaxHp
                 });
-                
-                Debug.Log($"[System_BuffUpdate] Tick Damage - BuffEntityId: {buffEntityId}, Target: {buff.TargetEntityId}, Damage: {finalDamage}, RemainingHP: {targetStat.CurrentHp}, Stack: {buff.StackCount}");
+
+#if UNITY_EDITOR
+                var buffTable = AR.s.Data.GetBuff(buff.BuffTableID);
+                Debug.Log($"[System_BuffUpdate] Tick Damage - Buff: {buffTable?.Name}, BuffEntityId: {buffEntityId}, Target: {buff.TargetEntityId}, Damage: {finalDamage}, Type: {buff.DamageType}, RemainingHP: {targetStat.CurrentHp}, Stack: {buff.StackCount}");
+#else
+                Debug.Log($"[System_BuffUpdate] Tick Damage - BuffEntityId: {buffEntityId}, Target: {buff.TargetEntityId}, Damage: {finalDamage}, Type: {buff.DamageType}, RemainingHP: {targetStat.CurrentHp}, Stack: {buff.StackCount}");
+#endif
             }
             else if (finalDamage < 0)
             {
@@ -141,6 +146,22 @@ namespace ARPG.Systems
 
             // 변경된 StatComponent 저장
             AR.s.Component.SetComponent(buff.TargetEntityId, targetStat);
+        }
+
+        /// <summary>
+        /// DamageType에 대응하는 타겟의 저항값 반환
+        /// </summary>
+        private int GetResistanceForDamageType(GlobalEnum.DamageType damageType, StatComponent targetStat)
+        {
+            switch (damageType)
+            {
+                case GlobalEnum.DamageType.Physics:   return targetStat.FinalDefense;
+                case GlobalEnum.DamageType.Fire:       return targetStat.FinalFireResist;
+                case GlobalEnum.DamageType.Ice:        return targetStat.FinalIceResist;
+                case GlobalEnum.DamageType.Lightning:  return targetStat.FinalLightningResist;
+                case GlobalEnum.DamageType.Poison:     return targetStat.FinalPoisonResist;
+                default:                               return 0;
+            }
         }
     }
 }

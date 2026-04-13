@@ -133,79 +133,71 @@ namespace ARPG.Item
             if (inTable == null)
                 return null;
 
-            if (inTable.EquipmentBaseStat == null)
+            // Implicit Mod가 없는 아이템은 장비가 아님
+            var implicits = AR.s.Data.GetItemImplicits(inTable.Id);
+            if (implicits.Count == 0)
                 return null;
 
             EquipmentData equipmentData = new EquipmentData()
             {
-                Id = inTable.EquipmentBastStatId,
+                Id = inTable.Id,
             };
 
             // EquipType 설정
             equipmentData.EquipType = Utils.CategoryToEquipmentType(inTable.Category);
+            equipmentData.Quality = Random.Range(1, 101);
 
-            equipmentData.StatData = new()
+            // 1. Implicit Mod 생성 (아이템 고정 옵션)
+            equipmentData.InitImplicitMods(inTable.Id);
+
+            // 2. Prefix Mod 랜덤 생성
+            RollRandomMods(equipmentData, GlobalEnum.ModSlot.Prefix, Random.Range(1, 3));
+
+            // 3. Postfix Mod 랜덤 생성
+            RollRandomMods(equipmentData, GlobalEnum.ModSlot.Postfix, Random.Range(1, 3));
+
+            // 4. 생성된 Mod들의 테이블 참조 연결
+            for (int i = 0; i < equipmentData.Mods.Count; i++)
             {
-                Prefix = new List<Stat>(),
-                Postfix = new List<Stat>(),
-            };
-
-            // 접두사 옵션 생성
-            CreatePrefixOptions(equipmentData.StatData);
-
-            // 접미사 옵션 생성
-            CreatePostfixOptions(equipmentData.StatData);
-
-            equipmentData.Quality = Random.Range(1, 101); // 1~100 사이의 품질 값 설정
-
-            // BaseStats 생성 (테이블에서)
-            equipmentData.InitBaseStats(inTable);
-
-            // ComputedStats 계산 (BaseStats + StatData 합산)
-            equipmentData.ComputeStats();
+                equipmentData.Mods[i].OnLoadCompleted();
+            }
 
             return equipmentData;
         }
-        
-        private void CreatePrefixOptions(EquipmentStatData equipmentStatData)
+
+        /// <summary>
+        /// 지정 슬롯에 랜덤 Mod를 롤링하여 추가
+        /// </summary>
+        private void RollRandomMods(EquipmentData equipment, GlobalEnum.ModSlot slot, int count)
         {
-            int prefixCount = Random.Range(1, 3); // 접두사 옵션 개수 (1~2개)
-            for (int i = 0; i < prefixCount; i++)
+            List<ModTable> modPool = AR.s.Data.GetModPool(slot);
+            if (modPool.Count == 0)
+                return;
+
+            for (int i = 0; i < count; i++)
             {
-                // 랜덤 스탯 타입 선택
-                GlobalEnum.Stat randomStatType = (GlobalEnum.Stat)Random.Range(0, System.Enum.GetValues(typeof(GlobalEnum.Stat)).Length);
+                // 랜덤 Mod 선택
+                ModTable selectedMod = modPool[Random.Range(0, modPool.Count)];
 
-                // 랜덤 스탯 값 (1~5)
-                ushort randomStatValue = (ushort)Random.Range(1, 6);
+                // 해당 Mod의 티어 목록에서 랜덤 선택
+                List<ModTierTable> tiers = AR.s.Data.GetModTiers(selectedMod.Id);
+                if (tiers.Count == 0)
+                    continue;
 
-                Stat newStat = new Stat()
+                ModTierTable selectedTier = tiers[Random.Range(0, tiers.Count)];
+
+                // 값 롤링
+                ushort value1 = (ushort)Random.Range(selectedTier.Min1, selectedTier.Max1 + 1);
+                ushort value2 = (ushort)Random.Range(selectedTier.Min2, selectedTier.Max2 + 1);
+
+                equipment.Mods.Add(new ModInstance
                 {
-                    Type = randomStatType,
-                    Value = randomStatValue
-                };
-
-                equipmentStatData.Prefix.Add(newStat);
-            }
-        }
-
-        private void CreatePostfixOptions(EquipmentStatData equipmentStatData)
-        {
-            int postfixCount = Random.Range(1, 3); // 접미사 옵션 개수 (1~2개)
-            for (int i = 0; i < postfixCount; i++)
-            {
-                // 랜덤 스탯 타입 선택
-                GlobalEnum.Stat randomStatType = (GlobalEnum.Stat)Random.Range(0, System.Enum.GetValues(typeof(GlobalEnum.Stat)).Length);
-
-                // 랜덤 스탯 값 (1~5)
-                ushort randomStatValue = (ushort)Random.Range(1, 6);
-
-                Stat newStat = new Stat()
-                {
-                    Type = randomStatType,
-                    Value = randomStatValue
-                };
-
-                equipmentStatData.Postfix.Add(newStat);
+                    ModTableId = selectedMod.Id,
+                    Slot = slot,
+                    Tier = selectedTier.Tier,
+                    Value1 = value1,
+                    Value2 = value2,
+                });
             }
         }
 

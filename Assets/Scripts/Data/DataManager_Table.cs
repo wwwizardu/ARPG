@@ -17,9 +17,9 @@ namespace ARPG.Data
         private ImmutableDictionary<int, Tables.StatTable> _statTable = null!;
         private ImmutableDictionary<int, Tables.ItemTable> _itemTable = null!;
         private ImmutableDictionary<int, Tables.BuildableItemTable> _buildableItemTable = null!;
-        private ImmutableDictionary<int, Tables.EquipmentBaseStatTable> _equipmentBaseStatTable = null!;
+        // EquipmentBaseStatTable 제거됨 → ModTable + ItemImplicitTable로 대체
         private ImmutableDictionary<int, Tables.WeaponBaseStatTable> _equipmentTable = null!;
-        private ImmutableDictionary<int, Tables.EquipmentStatTable> _equipmentStatTable = null!;
+        // EquipmentStatTable 제거됨 → ModTable (Prefix/Postfix)로 대체
         private ImmutableDictionary<int, Tables.DropTable> _dropTable = null!;
         private ImmutableDictionary<int, Tables.DropCurrencyTable> _dropCurrencyTable = null!;
         private ImmutableDictionary<int, Tables.DropEquipmentTable> _dropWeaponBaseStatTable = null!;
@@ -29,6 +29,9 @@ namespace ARPG.Data
         private ImmutableDictionary<int, Tables.BuffEffectTable> _buffEffectTable = null!;
         private ImmutableDictionary<int, Tables.AnimationTable> _animationTable = null!;
         private ImmutableDictionary<int, Tables.ProjectileTable> _projectileTable = null!;
+        private ImmutableDictionary<int, Tables.ModTable> _modTable = null!;
+        private ImmutableDictionary<int, Tables.ModTierTable> _modTierTable = null!;
+        private ImmutableDictionary<int, Tables.ItemImplicitTable> _itemImplicitTable = null!;
 
         public async Task LoadTableAsync()
         {
@@ -40,9 +43,7 @@ namespace ARPG.Data
                 LoadTable<Tables.StatTable>("StatTable.bytes", tables => _statTable = tables),
                 LoadTable<Tables.ItemTable>("ItemTable.bytes", tables => _itemTable = tables),
                 LoadTable<Tables.BuildableItemTable>("BuildableItemTable.bytes", tables => _buildableItemTable = tables),
-                LoadTable<Tables.EquipmentBaseStatTable>("EquipmentBaseStatTable.bytes", tables => _equipmentBaseStatTable = tables),
                 LoadTable<Tables.WeaponBaseStatTable>("WeaponBaseStatTable.bytes", tables => _equipmentTable = tables),
-                LoadTable<Tables.EquipmentStatTable>("EquipmentStatTable.bytes", tables => _equipmentStatTable = tables),
                 LoadTable<Tables.DropTable>("DropTable.bytes", tables => _dropTable = tables),
                 LoadTable<Tables.DropCurrencyTable>("DropCurrencyTable.bytes", tables => _dropCurrencyTable = tables),
                 LoadTable<Tables.DropEquipmentTable>("DropEquipmentTable.bytes", tables => _dropWeaponBaseStatTable = tables),
@@ -51,7 +52,10 @@ namespace ARPG.Data
                 LoadTable<Tables.BuffTable>("BuffTable.bytes", tables => _buffTable = tables),
                 LoadTable<Tables.BuffEffectTable>("BuffEffectTable.bytes", tables => _buffEffectTable = tables),
                 LoadTable<Tables.AnimationTable>("AnimationTable.bytes", tables => _animationTable = tables),
-                LoadTable<Tables.ProjectileTable>("ProjectileTable.bytes", tables => _projectileTable = tables)
+                LoadTable<Tables.ProjectileTable>("ProjectileTable.bytes", tables => _projectileTable = tables),
+                LoadTable<Tables.ModTable>("ModTable.bytes", tables => _modTable = tables),
+                LoadTable<Tables.ModTierTable>("ModTierTable.bytes", tables => _modTierTable = tables),
+                LoadTable<Tables.ItemImplicitTable>("ItemImplicitTable.bytes", tables => _itemImplicitTable = tables)
             );
 
             // 모든 테이블 로드 후 LoadLate 실행
@@ -131,6 +135,18 @@ namespace ARPG.Data
                 table.LoadLate();
             }
 
+            // ModTierTable → ModTable 참조 연결
+            foreach (var table in _modTierTable.Values)
+            {
+                table.LoadLate();
+            }
+
+            // ItemImplicitTable → ModTable/ModTierTable 참조 연결
+            foreach (var table in _itemImplicitTable.Values)
+            {
+                table.LoadLate();
+            }
+
             Debug.Log("Data Tables Loaded");
         }
 
@@ -194,15 +210,7 @@ namespace ARPG.Data
             return null;
         }
 
-        public Tables.EquipmentBaseStatTable? GetEquipmentBaseStat(int id)
-        {
-            if (_equipmentBaseStatTable.TryGetValue(id, out var table))
-            {
-                return table;
-            }
-
-            return null;
-        }
+        // GetEquipmentBaseStat 제거됨 → GetMod + GetItemImplicits로 대체
 
         public Tables.WeaponBaseStatTable? WeaponBaseStatTable(int id)
         {
@@ -215,15 +223,7 @@ namespace ARPG.Data
         }
 
 
-        public Tables.EquipmentStatTable? GetEquipmentStat(int id)
-        {
-            if (_equipmentStatTable.TryGetValue(id, out var table))
-            {
-                return table;
-            }
-
-            return null;
-        }
+        // GetEquipmentStat 제거됨 → GetMod + GetModTiers로 대체
 
         public Tables.DropTable? GetDrop(int id)
         {
@@ -313,6 +313,72 @@ namespace ARPG.Data
             }
 
             return null;
+        }
+
+        public Tables.ModTable? GetMod(int id)
+        {
+            if (_modTable.TryGetValue(id, out var table))
+            {
+                return table;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// ModId + Tier 조합으로 ModTierTable 조회
+        /// </summary>
+        public Tables.ModTierTable? GetModTier(int modId, int tier)
+        {
+            foreach (var table in _modTierTable.Values)
+            {
+                if (table.ModId == modId && table.Tier == tier)
+                    return table;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// 특정 ModId의 모든 티어 목록 반환
+        /// </summary>
+        public List<Tables.ModTierTable> GetModTiers(int modId)
+        {
+            List<Tables.ModTierTable> result = new();
+            foreach (var table in _modTierTable.Values)
+            {
+                if (table.ModId == modId)
+                    result.Add(table);
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// 특정 아이템의 Implicit Mod 목록 반환
+        /// </summary>
+        public List<Tables.ItemImplicitTable> GetItemImplicits(int itemId)
+        {
+            List<Tables.ItemImplicitTable> result = new();
+            foreach (var table in _itemImplicitTable.Values)
+            {
+                if (table.ItemId == itemId)
+                    result.Add(table);
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// 특정 슬롯/조건에 맞는 Mod 풀 반환 (랜덤 롤링용)
+        /// </summary>
+        public List<Tables.ModTable> GetModPool(GlobalEnum.ModSlot slot)
+        {
+            List<Tables.ModTable> result = new();
+            foreach (var table in _modTable.Values)
+            {
+                if (table.Slot == slot)
+                    result.Add(table);
+            }
+            return result;
         }
 
         private async Task LoadTable<T>(string fileName, System.Action<ImmutableDictionary<int, T>> setTable) where T : Tables.TableBase

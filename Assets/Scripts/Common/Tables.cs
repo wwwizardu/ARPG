@@ -188,14 +188,6 @@ namespace ARPG.Tables
         [JsonProperty("EquipmentFixedStatId")] public int EquipmentBastStatId;
         [JsonProperty("EquipmentStatId")] public int EquipmentStatId;
         [JsonProperty("SpriteName")] public string SpriteName = string.Empty;
-
-        [JsonIgnore] public EquipmentBaseStatTable? EquipmentBaseStat;
-
-
-        public override void LoadLate()
-        {
-            EquipmentBaseStat = AR.s.Data?.GetEquipmentBaseStat(EquipmentBastStatId);
-        }
     }
 
      [Serializable]
@@ -213,11 +205,7 @@ namespace ARPG.Tables
         [JsonProperty("ResourceName")] public string ResourceName = string.Empty;
     }
 
-    [Serializable]
-    public class EquipmentBaseStatTable : TableBase
-    {
-        [JsonProperty("Stats")] public List<Stat> Stats = new();
-    }
+    // EquipmentBaseStatTable 제거됨 → ModTable + ItemImplicitTable로 대체
 
     [Serializable]
     public class WeaponBaseStatTable : TableBase
@@ -235,13 +223,7 @@ namespace ARPG.Tables
     }
 
 
-    [Serializable]
-    public class EquipmentStatTable : TableBase
-    {
-        [JsonProperty("Prefix")] public List<Stat>? Prefix;
-        [JsonProperty("Postfix")] public List<Stat>? Postfix;
-
-    }
+    // EquipmentStatTable 제거됨 → ModTable (Prefix/Postfix)로 대체
 
     [Serializable]
     public class DropTable : TableBase
@@ -362,12 +344,7 @@ namespace ARPG.Tables
         [JsonProperty("BuffEffectList")] public List<BuffEffect>? BuffEffectList = null;          // 스탯 리스트
     }
 
-    [Serializable]
-    public class Stat
-    {
-        [JsonProperty("Type")] public GE.Stat Type;
-        [JsonProperty("Value")] public ushort Value;
-    }
+    // Stat 구조체 제거됨 → ModInstance로 대체
 
     [Serializable]
     public class DropInfo
@@ -381,6 +358,85 @@ namespace ARPG.Tables
     {
         [JsonProperty("Type")] public GE.BuffEffectType Type;
         [JsonProperty("Value")] public ushort Value;
+    }
+
+    /// <summary>
+    /// Mod 정의 테이블 - 모든 장비 옵션의 기본 정보
+    /// </summary>
+    [Serializable]
+    public class ModTable : TableBase
+    {
+        [JsonProperty("Name")] public string Name = string.Empty;
+        [JsonProperty("EffectType")] public GE.ModEffectType EffectType;
+        [JsonProperty("ApplyType")] public GE.ModApplyType ApplyType;
+        [JsonProperty("Slot")] public GE.ModSlot Slot;
+        [JsonProperty("Group")] public string Group = string.Empty;         // 같은 그룹 중복 불가
+        [JsonProperty("Element")] public GE.DamageType Element;             // 속성 (데미지 계열)
+        [JsonProperty("Tags")] public GE.SkillTag Tags;                     // 적용 조건 (Attack, Spell 등)
+        [JsonProperty("TargetStat")] public GE.Stat TargetStat;             // FlatStat/IncreasedStat 대상
+    }
+
+    /// <summary>
+    /// Mod 티어 테이블 - Mod별 값 범위 정의
+    /// </summary>
+    [Serializable]
+    public class ModTierTable : TableBase
+    {
+        [JsonProperty("ModId")] public int ModId;
+        [JsonProperty("Tier")] public int Tier;
+        [JsonProperty("Min1")] public int Min1;               // Value1 최소
+        [JsonProperty("Max1")] public int Max1;               // Value1 최대
+        [JsonProperty("Min2")] public int Min2;               // Value2 최소 (데미지 Max 등)
+        [JsonProperty("Max2")] public int Max2;               // Value2 최대
+        [JsonProperty("RequiredLevel")] public int RequiredLevel;
+        [JsonProperty("Weight")] public int Weight;           // 롤링 가중치
+
+        [JsonIgnore] public ModTable? Mod;
+
+        public override void LoadLate()
+        {
+            Mod = AR.s.Data?.GetMod(ModId);
+        }
+    }
+
+    /// <summary>
+    /// 아이템별 기본 내장(Implicit) Mod 매핑
+    /// </summary>
+    [Serializable]
+    public class ItemImplicitTable : TableBase
+    {
+        [JsonProperty("ItemId")] public int ItemId;
+        [JsonProperty("ModId")] public int ModId;
+        [JsonProperty("Tier")] public int Tier;
+
+        [JsonIgnore] public ModTable? Mod;
+        [JsonIgnore] public ModTierTable? TierData;
+
+        public override void LoadLate()
+        {
+            Mod = AR.s.Data?.GetMod(ModId);
+            TierData = AR.s.Data?.GetModTier(ModId, Tier);
+        }
+    }
+
+    /// <summary>
+    /// 아이템에 실제로 부여된 Mod 인스턴스 (저장 대상)
+    /// </summary>
+    [Serializable]
+    public class ModInstance
+    {
+        [JsonProperty("ModTableId")] public int ModTableId;
+        [JsonProperty("Slot")] public GE.ModSlot Slot;
+        [JsonProperty("Tier")] public int Tier;
+        [JsonProperty("Value1")] public ushort Value1;
+        [JsonProperty("Value2")] public ushort Value2;
+
+        [JsonIgnore] public ModTable? Table;
+
+        public void OnLoadCompleted()
+        {
+            Table = AR.s.Data?.GetMod(ModTableId);
+        }
     }
 
     [Serializable]

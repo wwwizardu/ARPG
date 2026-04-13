@@ -19,31 +19,31 @@ namespace ARPG.UI
         {
             _textName.text = inItemData.Table.Name;
 
-            if (inItemData.Equipment?.StatData == null)
+            if (inItemData.Equipment == null)
                 return;
 
             SetEquipment(inItemData);
 
             int statIndex = 0;
+            var mods = inItemData.Equipment.Mods;
 
-            // Prefix 옵션들을 _textStat에 추가
-            foreach (var stat in inItemData.Equipment.StatData.Prefix)
+            for (int i = 0; i < mods.Count; i++)
             {
+                var mod = mods[i];
+                if (mod.Table == null)
+                    continue;
+
+                if (mod.Slot == GlobalEnum.ModSlot.Implicit)
+                    continue;
+
                 if (statIndex >= _textStat.Count)
                     break;
 
-                _textStat[statIndex].text = $"{stat.Type}: +{stat.Value}";
-                _textStat[statIndex].gameObject.SetActive(true);
-                statIndex++;
-            }
+                string text = mod.Value2 > 0
+                    ? $"{mod.Table.Name}: +{mod.Value1}~{mod.Value2}"
+                    : $"{mod.Table.Name}: +{mod.Value1}";
 
-            // Postfix 옵션들을 _textStat에 추가
-            foreach (var stat in inItemData.Equipment.StatData.Postfix)
-            {
-                if (statIndex >= _textStat.Count)
-                    break;
-
-                _textStat[statIndex].text = $"{stat.Type}: +{stat.Value}";
+                _textStat[statIndex].text = text;
                 _textStat[statIndex].gameObject.SetActive(true);
                 statIndex++;
             }

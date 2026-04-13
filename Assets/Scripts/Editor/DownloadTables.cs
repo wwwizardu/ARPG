@@ -43,12 +43,7 @@ namespace ARPG.Editor
 
             await DownloadTable<BuildableItemTable>("534887250&range=A:K", 1, SaveType.String);           
 
-            await DownloadTable<EquipmentBaseStatTable>("972309111&range=A:L", 1, SaveType.String);           
-            
             await DownloadTable<WeaponBaseStatTable>("853198133&range=A:H", 1, SaveType.String);
-
-
-            await DownloadTable<EquipmentStatTable>("488047668&range=A:R", 1, SaveType.String);
             
             await DownloadTable<DropTable>("1241586373&range=A:J", 1, SaveType.String);
 
@@ -63,6 +58,11 @@ namespace ARPG.Editor
             await DownloadTable<AnimationTable>("747631090&range=A:E", 1, SaveType.String);
 
             await DownloadTable<ProjectileTable>("1810235418&range=A:G", 1, SaveType.String);
+
+            // TODO: Google Sheet gid 설정 필요
+            await DownloadTable<ModTable>("1571193978&range=A:I", 1, SaveType.String);
+            await DownloadTable<ModTierTable>("1782637736&range=A:I", 1, SaveType.String);
+            await DownloadTable<ItemImplicitTable>("547967325&range=A:D", 1, SaveType.String);
 
             //await DownloadTable<BuffEffectTable>("2104311648&range=A:K", 1, SaveType.String);
 
@@ -146,17 +146,9 @@ namespace ARPG.Editor
                 {
                     ParseBuildableItemTable(buildableItemTable, values);
                 }
-                else if (table is EquipmentBaseStatTable equipmentBaseStatTable)
-                {
-                    ParseEquipmentBaseStatTable(equipmentBaseStatTable, values);
-                }
                 else if (table is WeaponBaseStatTable weaponBaseStatTable)
                 {
                     ParseWeaponBaseStatTable(weaponBaseStatTable, values);
-                }
-                else if (table is EquipmentStatTable equipmentStatTable)
-                {
-                    ParseEquipmentStatTable(equipmentStatTable, values);
                 }
                 else if (table is DropTable dropTable)
                 {
@@ -193,6 +185,18 @@ namespace ARPG.Editor
                 else if (table is ProjectileTable projectileTable)
                 {
                     ParseProjectileTable(projectileTable, values);
+                }
+                else if (table is ModTable modTable)
+                {
+                    ParseModTable(modTable, values);
+                }
+                else if (table is ModTierTable modTierTable)
+                {
+                    ParseModTierTable(modTierTable, values);
+                }
+                else if (table is ItemImplicitTable itemImplicitTable)
+                {
+                    ParseItemImplicitTable(itemImplicitTable, values);
                 }
                 else
                 {
@@ -353,23 +357,6 @@ namespace ARPG.Editor
             table.ResourceName = values[10];
         }
 
-        private static void ParseEquipmentBaseStatTable(EquipmentBaseStatTable table, string[] values)
-        {
-            // 컬럼 구조: Id, Name, Description, Type1, Value1, Type2, Value2, Type3, Value3, Type4, Value4
-            table.Stats.Clear();
-
-            for (int i = 3; i + 1 < values.Length; i += 2)
-            {
-                if (string.IsNullOrEmpty(values[i]) == true)
-                    break;
-
-                GlobalEnum.Stat statType = (GlobalEnum.Stat)Enum.Parse(typeof(GlobalEnum.Stat), values[i]);
-                ushort statValue = ushort.Parse(values[i + 1]);
-
-                table.Stats.Add(new Stat() { Type = statType, Value = statValue });
-            }
-        }
-
         private static void ParseWeaponBaseStatTable(WeaponBaseStatTable table, string[] values)
         {
             if (values.Length < 7)
@@ -386,47 +373,6 @@ namespace ARPG.Editor
             table.DamageMax = int.Parse(values[6]);
         }
 
-
-        private static void ParseEquipmentStatTable(EquipmentStatTable table, string[] values)
-        {
-            if (values.Length < 17)
-            {
-                Debug.LogError($"[ParseEquipmentStatTable] Invalid data length. Expected at least 17, got {values.Length}. Id: {table.Id}");
-                return;
-            }
-
-            table.Prefix = new List<Stat>();
-            table.Postfix = new List<Stat>();
-
-            // 컬럼 구조: Id, Name, Description, Type1, Value1, ... Type4, Value4, Type5, Value5, ... Type8, Value8
-            // Prefix 시작 인덱스 (Name, Description 다음)
-            int prefixStartIndex = 3;
-            for (int i = 0; i < 4; i++)
-            {
-                int index = prefixStartIndex + (i * 2);
-                if (index + 1 >= values.Length || string.IsNullOrEmpty(values[index]) == true)
-                    break;
-
-                Stat stat = new Stat();
-                stat.Type = (GlobalEnum.Stat)Enum.Parse(typeof(GlobalEnum.Stat), values[index]);
-                stat.Value = ushort.Parse(values[index + 1]);
-                table.Prefix.Add(stat);
-            }
-
-            // Postfix 시작 인덱스 (Prefix 4개 스탯 이후)
-            int postfixStartIndex = prefixStartIndex + 8;
-            for (int i = 0; i < 4; i++)
-            {
-                int index = postfixStartIndex + (i * 2);
-                if (index + 1 >= values.Length || string.IsNullOrEmpty(values[index]) == true)
-                    break;
-
-                Stat stat = new Stat();
-                stat.Type = (GlobalEnum.Stat)Enum.Parse(typeof(GlobalEnum.Stat), values[index]);
-                stat.Value = ushort.Parse(values[index + 1]);
-                table.Postfix.Add(stat);
-            }
-        }
 
         private static void ParseDropTable(DropTable table, string[] values)
         {
@@ -617,6 +563,62 @@ namespace ARPG.Editor
             table.HitRadius = float.Parse(values[4]);
             table.IsPiercing = values[5].Trim().ToUpper() == "TRUE";
             table.PrefabKey = values[6];
+        }
+
+        private static void ParseModTable(ModTable table, string[] values)
+        {
+            // 컬럼: Id, Name, EffectType, ApplyType, Slot, Group, Element, Tags, TargetStat
+            if (values.Length < 9)
+            {
+                Debug.LogError($"[ParseModTable] Invalid data length. Expected at least 9, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            table.Name = values[1];
+            table.EffectType = (GlobalEnum.ModEffectType)Enum.Parse(typeof(GlobalEnum.ModEffectType), values[2]);
+            table.ApplyType = (GlobalEnum.ModApplyType)Enum.Parse(typeof(GlobalEnum.ModApplyType), values[3]);
+            table.Slot = (GlobalEnum.ModSlot)Enum.Parse(typeof(GlobalEnum.ModSlot), values[4]);
+            table.Group = values[5];
+            table.Element = string.IsNullOrEmpty(values[6]) == false
+                ? (GlobalEnum.DamageType)Enum.Parse(typeof(GlobalEnum.DamageType), values[6])
+                : GlobalEnum.DamageType.Physics;
+            table.Tags = ParseSkillTags(values[7]);
+            table.TargetStat = string.IsNullOrEmpty(values[8]) == false
+                ? (GlobalEnum.Stat)Enum.Parse(typeof(GlobalEnum.Stat), values[8])
+                : default;
+        }
+
+        private static void ParseModTierTable(ModTierTable table, string[] values)
+        {
+            // 컬럼: Id, ModId, Tier, Min1, Max1, Min2, Max2, RequiredLevel, Weight
+            if (values.Length < 9)
+            {
+                Debug.LogError($"[ParseModTierTable] Invalid data length. Expected at least 9, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            table.ModId = int.Parse(values[1]);
+            table.Tier = int.Parse(values[2]);
+            table.Min1 = int.Parse(values[3]);
+            table.Max1 = int.Parse(values[4]);
+            table.Min2 = int.Parse(values[5]);
+            table.Max2 = int.Parse(values[6]);
+            table.RequiredLevel = int.Parse(values[7]);
+            table.Weight = int.Parse(values[8]);
+        }
+
+        private static void ParseItemImplicitTable(ItemImplicitTable table, string[] values)
+        {
+            // 컬럼: Id, ItemId, ModId, Tier
+            if (values.Length < 4)
+            {
+                Debug.LogError($"[ParseItemImplicitTable] Invalid data length. Expected at least 4, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            table.ItemId = int.Parse(values[1]);
+            table.ModId = int.Parse(values[2]);
+            table.Tier = int.Parse(values[3]);
         }
 
         private static void ParseBuffEffectTable(BuffEffectTable table, string[] values)

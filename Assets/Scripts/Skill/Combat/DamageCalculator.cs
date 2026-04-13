@@ -62,17 +62,19 @@ namespace ARPG.Skill.Combat
 
         /// <summary>
         /// 치명타 배율 (공통)
+        /// 기본 1.5배 + FinalCriDamage/100
+        /// 예: FinalCriDamage 10 → 1.5 + 0.1 = 1.6배
         /// </summary>
         private static float GetCritMultiplier(StatComponent stat)
         {
-            return stat.FinalCriDamage > 0 ? stat.FinalCriDamage / 100f : 1.5f;
+            return 1.5f + stat.FinalCriDamage / 100f;
         }
 
         /// <summary>
         /// 저항 감소율 (공통) - resistance / (resistance + 100)
         /// resistance 100 = 50% 감소, 200 = 66.6% 감소
         /// </summary>
-        private static float GetResistanceReduction(int resistance)
+        public static float GetResistanceReduction(int resistance)
         {
             if (resistance <= 0) return 0f;
             return resistance / (resistance + 100f);
@@ -91,15 +93,15 @@ namespace ARPG.Skill.Combat
 
             EstimatedDamage result;
             result.PhysMin = Mathf.RoundToInt(attackerStat.FinalAttackMin * m);
-            result.PhysMax = Mathf.RoundToInt((attackerStat.FinalAttackMax + 1) * m);
+            result.PhysMax = Mathf.RoundToInt(attackerStat.FinalAttackMax * m);
             result.FireMin = Mathf.RoundToInt(attackerStat.FinalFireAttackMin * m);
-            result.FireMax = Mathf.RoundToInt((attackerStat.FinalFireAttackMax + 1) * m);
+            result.FireMax = Mathf.RoundToInt(attackerStat.FinalFireAttackMax * m);
             result.IceMin = Mathf.RoundToInt(attackerStat.FinalIceAttackMin * m);
-            result.IceMax = Mathf.RoundToInt((attackerStat.FinalIceAttackMax + 1) * m);
+            result.IceMax = Mathf.RoundToInt(attackerStat.FinalIceAttackMax * m);
             result.LightningMin = Mathf.RoundToInt(attackerStat.FinalLightningAttackMin * m);
-            result.LightningMax = Mathf.RoundToInt((attackerStat.FinalLightningAttackMax + 1) * m);
+            result.LightningMax = Mathf.RoundToInt(attackerStat.FinalLightningAttackMax * m);
             result.PoisonMin = Mathf.RoundToInt(attackerStat.FinalPoisonAttackMin * m);
-            result.PoisonMax = Mathf.RoundToInt((attackerStat.FinalPoisonAttackMax + 1) * m);
+            result.PoisonMax = Mathf.RoundToInt(attackerStat.FinalPoisonAttackMax * m);
             result.TotalMin = result.PhysMin + result.FireMin + result.IceMin + result.LightningMin + result.PoisonMin;
             result.TotalMax = result.PhysMax + result.FireMax + result.IceMax + result.LightningMax + result.PoisonMax;
             return result;
@@ -355,8 +357,12 @@ namespace ARPG.Skill.Combat
                 float bloodingDuration = 5f;
 
                 int buffEntityId = Utility.BuffHelper.AddBuff(targetId, bloodingBuffTableId, bloodingDuration);
-                if (buffEntityId != -1)
+
+                if (buffEntityId != -1 && AR.s.Component.TryGetComponent<BuffInstance>(buffEntityId, out var buff))
                 {
+                    buff.TickDamage = bloodingDamage;
+                    AR.s.Component.SetComponent(buffEntityId, buff);
+
                     Debug.Log($"[DamageCalculator] 출혈 발동 - Target: {targetId}, PhysDamage: {physDamage:F0}, BloodingDamage: {bloodingDamage}");
                 }
             }

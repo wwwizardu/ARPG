@@ -41,13 +41,12 @@ namespace ARPG.Data
 
         public int Quality;
 
-        public List<Stat> BaseStats = new();
-
-        public EquipmentStatData? StatData;
+        /// <summary>
+        /// 모든 Mod (Implicit + Prefix + Postfix) - 저장 대상
+        /// </summary>
+        public List<ModInstance> Mods = new();
 
         public GE.EquipmentType EquipType { get; set; }
-
-        [NonSerialized] public List<Stat> ComputedStats = new();
 
         public void OnLoadCompleted(ItemTable? inItemTable)
         {
@@ -59,145 +58,134 @@ namespace ARPG.Data
 
             EquipType = Utils.CategoryToEquipmentType(inItemTable.Category);
 
-            // 기존 세이브 데이터 마이그레이션: BaseStats가 비어있으면 테이블에서 생성
-            if (BaseStats.Count == 0)
+            // ModInstance의 테이블 참조 연결
+            for (int i = 0; i < Mods.Count; i++)
             {
-                InitBaseStats(inItemTable);
-            }
-
-            ComputeStats();
-        }
-
-        public void InitBaseStats(ItemTable inItemTable)
-        {
-            BaseStats.Clear();
-
-            var baseStatTable = inItemTable.EquipmentBaseStat;
-            if (baseStatTable == null)
-                return;
-
-            for (int i = 0; i < baseStatTable.Stats.Count; i++)
-            {
-                AddBaseStat(baseStatTable.Stats[i].Type, baseStatTable.Stats[i].Value);
+                Mods[i].OnLoadCompleted();
             }
         }
 
-        public void ComputeStats()
+        /// <summary>
+        /// ItemImplicitTable 기반으로 Implicit Mod 초기화
+        /// </summary>
+        public void InitImplicitMods(int itemId)
         {
-            if (ComputedStats == null)
-                ComputedStats = new List<Stat>();
+            var implicits = AR.s.Data.GetItemImplicits(itemId);
 
-            ComputedStats.Clear();
-
-            // 1. BaseStats 복사
-            for (int i = 0; i < BaseStats.Count; i++)
+            for (int i = 0; i < implicits.Count; i++)
             {
-                AddComputedStat(BaseStats[i].Type, BaseStats[i].Value);
-            }
+                var imp = implicits[i];
+                if (imp.TierData == null)
+                    continue;
 
-            // 2. Prefix/Postfix 합산
-            if (StatData != null)
-            {
-                for (int i = 0; i < StatData.Prefix.Count; i++)
+                ushort value1 = (ushort)UnityEngine.Random.Range(imp.TierData.Min1, imp.TierData.Max1 + 1);
+                ushort value2 = (ushort)UnityEngine.Random.Range(imp.TierData.Min2, imp.TierData.Max2 + 1);
+
+                Mods.Add(new ModInstance
                 {
-                    AddComputedStat(StatData.Prefix[i].Type, StatData.Prefix[i].Value);
-                }
-
-                for (int i = 0; i < StatData.Postfix.Count; i++)
-                {
-                    AddComputedStat(StatData.Postfix[i].Type, StatData.Postfix[i].Value);
-                }
+                    ModTableId = imp.ModId,
+                    Slot = GE.ModSlot.Implicit,
+                    Tier = imp.Tier,
+                    Value1 = value1,
+                    Value2 = value2,
+                });
             }
-
-            // 배율(Mul) 스탯은 캐릭터 스탯 시스템(System_StatCalculation)에서 처리
         }
 
-        public ushort GetComputedStatValue(GE.Stat inStatType)
+        /// <summary>
+        /// 특정 EffectType의 Mod 검색 (Value1 합산)
+        /// </summary>
+        public ushort GetModValue(GE.ModEffectType effectType)
         {
-            for (int i = 0; i < ComputedStats.Count; i++)
+            ushort total = 0;
+            for (int i = 0; i < Mods.Count; i++)
             {
-                if (ComputedStats[i].Type == inStatType)
-                    return ComputedStats[i].Value;
+                if (Mods[i].Table != null && Mods[i].Table.EffectType == effectType)
+                    total += Mods[i].Value1;
             }
-            return 0;
+            return total;
+        }
+
+        /// <summary>
+        /// 특정 EffectType의 Mod 데미지 범위 합산
+        /// </summary>
+        public (int min, int max) GetDamageRange(GE.ModEffectType effectType)
+        {
+            int min = 0, max = 0;
+            for (int i = 0; i < Mods.Count; i++)
+            {
+                if (Mods[i].Table != null && Mods[i].Table.EffectType == effectType)
+                {
+                    min += Mods[i].Value1;
+                    max += Mods[i].Value2;
+                }
+            }
+            return (min, max);
         }
 
         public (int, int) GetPhysicsDamage()
         {
-            ushort min = GetComputedStatValue(GE.Stat.AttackMin);
-            ushort max = GetComputedStatValue(GE.Stat.AttackMax);
-            return (min, max);
+            return GetDamageRange(GE.ModEffectType.AddedPhysDamage);
         }
 
         public bool IsPhysicsDamage()
         {
-            return GetComputedStatValue(GE.Stat.AttackMin) > 0 || GetComputedStatValue(GE.Stat.AttackMax) > 0;
+            var (min, max) = GetPhysicsDamage();
+            return min > 0 || max > 0;
         }
 
         public bool IsFireDamage()
         {
-            return GetComputedStatValue(GE.Stat.FireAttackMin) > 0 || GetComputedStatValue(GE.Stat.FireAttackMax) > 0;
+            var (min, max) = GetDamageRange(GE.ModEffectType.AddedFireDamage);
+            return min > 0 || max > 0;
         }
 
         public bool IsIceDamage()
         {
-            return GetComputedStatValue(GE.Stat.IceAttackMin) > 0 || GetComputedStatValue(GE.Stat.IceAttackMax) > 0;
+            var (min, max) = GetDamageRange(GE.ModEffectType.AddedIceDamage);
+            return min > 0 || max > 0;
         }
 
         public bool IsLightningDamage()
         {
-            return GetComputedStatValue(GE.Stat.LightningAttackMin) > 0 || GetComputedStatValue(GE.Stat.LightningAttackMax) > 0;
+            var (min, max) = GetDamageRange(GE.ModEffectType.AddedLightningDamage);
+            return min > 0 || max > 0;
         }
 
         public bool IsPoisonDamage()
         {
-            return GetComputedStatValue(GE.Stat.PoisonAttackMin) > 0 || GetComputedStatValue(GE.Stat.PoisonAttackMax) > 0;
+            var (min, max) = GetDamageRange(GE.ModEffectType.AddedPoisonDamage);
+            return min > 0 || max > 0;
         }
 
-        public float GetCriticalRate()
+        public int GetCriticalRate()
         {
-            return GetComputedStatValue(GE.Stat.CriRate);
+            int val = 0;
+            for (int i = 0; i < Mods.Count; i++)
+            {
+                if (Mods[i].Table != null
+                    && Mods[i].Table.EffectType == GE.ModEffectType.FlatStat
+                    && Mods[i].Table.TargetStat == GE.Stat.CriRate)
+                {
+                    val += Mods[i].Value1;
+                }
+            }
+            return val;
         }
 
         public float GetAttackSpeed()
         {
-            return GetComputedStatValue(GE.Stat.AttackSpeed) * 0.01f;
-        }
-
-        private void AddBaseStat(GE.Stat inType, ushort inValue)
-        {
-            if (inValue == 0)
-                return;
-
-            BaseStats.Add(new Stat() { Type = inType, Value = inValue });
-        }
-
-        private void AddComputedStat(GE.Stat inType, ushort inValue)
-        {
-            // 기존 스탯이 있으면 합산
-            for (int i = 0; i < ComputedStats.Count; i++)
+            ushort val = 0;
+            for (int i = 0; i < Mods.Count; i++)
             {
-                if (ComputedStats[i].Type == inType)
+                if (Mods[i].Table != null
+                    && Mods[i].Table.EffectType == GE.ModEffectType.FlatStat
+                    && Mods[i].Table.TargetStat == GE.Stat.AttackSpeed)
                 {
-                    ComputedStats[i] = new Stat()
-                    {
-                        Type = inType,
-                        Value = (ushort)(ComputedStats[i].Value + inValue)
-                    };
-                    return;
+                    val += Mods[i].Value1;
                 }
             }
-
-            ComputedStats.Add(new Stat() { Type = inType, Value = inValue });
+            return val * 0.01f;
         }
-
-    }
-
-    [Serializable]
-    public class EquipmentStatData
-    {
-        public List<Stat> Prefix = new();
-
-        public List<Stat> Postfix = new();
     }
 }

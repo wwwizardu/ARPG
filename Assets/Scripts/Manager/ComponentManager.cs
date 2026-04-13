@@ -65,6 +65,9 @@ namespace ARPG.Component
             // 발사체 컴포넌트
             { typeof(ProjectileComponent), 100 },
             { typeof(ProjectileTag), 100 },
+
+            // 장비 Mod 풀 컴포넌트
+            { typeof(ModPoolComponent), 10 },
         };
 
         /// <summary>

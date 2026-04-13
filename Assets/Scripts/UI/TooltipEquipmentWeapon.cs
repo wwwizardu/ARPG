@@ -54,7 +54,7 @@ public class TooltipEquipmentWeapon : MonoBehaviour
                     TextDamageLightning.gameObject.SetActive(false);
                     TextDamagePosition.gameObject.SetActive(false);
 
-                    TexttCriticalRate.text = $"치명타 확률: {inItemData.Equipment.GetCriticalRate()}"; 
+                    TexttCriticalRate.text = $"치명타 확률: {inItemData.Equipment.GetCriticalRate()}%"; 
                     TexttAttackSpeed.text = $"초당 공격 횟수: {inItemData.Equipment.GetAttackSpeed()}";
                 }
             }
