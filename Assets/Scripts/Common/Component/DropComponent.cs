@@ -5,5 +5,6 @@ namespace ARPG.Component
         public int DropId;
         public int DropRateBonus;
         public int DropRarityBonus;
+        public int MonsterLevel;
     }
 }

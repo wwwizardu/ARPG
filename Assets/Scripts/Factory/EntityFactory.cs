@@ -26,7 +26,7 @@ namespace ARPG.Factory
         /// MonsterTable → Stat + State + Velocity + AI + Skill + Drop + MonsterTag
         /// </summary>
         /// <returns>(entityId, entity) 튜플. 실패 시 (-1, null)</returns>
-        public static async UniTask<(int entityId, EntityBase? entity)> CreateMonster(int monsterTableId, Vector3 position, Transform? parent = null)
+        public static async UniTask<(int entityId, EntityBase? entity)> CreateMonster(int monsterTableId, Vector3 position, Transform? parent = null, int level = 0)
         {
             // 1. 테이블 로드
             MonsterTable? table = AR.s.Data.GetMonster(monsterTableId);
@@ -79,7 +79,8 @@ namespace ARPG.Factory
                 {
                     DropId = table.DropId,
                     DropRateBonus = table.DropRateBonus,
-                    DropRarityBonus = table.DropRarityBonus
+                    DropRarityBonus = table.DropRarityBonus,
+                    MonsterLevel = level > 0 ? level : table.Level
                 });
             }
 

@@ -33,13 +33,13 @@ namespace ARPG.Editor
 
             await DownloadTable<AiTable>("947794841&range=A:H", 1, SaveType.String);
 
-            await DownloadTable<MonsterTable>("483012127&range=A:K", 1, SaveType.String);
+            await DownloadTable<MonsterTable>("483012127&range=A:L", 1, SaveType.String);
 
             await DownloadTable<NpcTable>("1460299278&range=A:L", 1, SaveType.String);
 
             await DownloadTable<StatTable>("318209064&range=A:AF", 1, SaveType.String);
 
-            await DownloadTable<ItemTable>("2064107837&range=A:M", 1, SaveType.String);
+            await DownloadTable<ItemTable>("2064107837&range=A:N", 1, SaveType.String);
 
             await DownloadTable<BuildableItemTable>("534887250&range=A:K", 1, SaveType.String);           
 
@@ -61,7 +61,7 @@ namespace ARPG.Editor
 
             // TODO: Google Sheet gid 설정 필요
             await DownloadTable<ModTable>("1571193978&range=A:I", 1, SaveType.String);
-            await DownloadTable<ModTierTable>("1782637736&range=A:I", 1, SaveType.String);
+            await DownloadTable<ModTierTable>("1782637736&range=A:J", 1, SaveType.String);
             await DownloadTable<ItemImplicitTable>("547967325&range=A:D", 1, SaveType.String);
 
             //await DownloadTable<BuffEffectTable>("2104311648&range=A:K", 1, SaveType.String);
@@ -296,9 +296,9 @@ namespace ARPG.Editor
 
         private static void ParseMonsterTable(MonsterTable table, string[] values)
         {
-            if (values.Length < 9)
+            if (values.Length < 12)
             {
-                Debug.LogError($"[ParseMonsterTable] Invalid data length. Expected at least 9, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseMonsterTable] Invalid data length. Expected at least 12, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
@@ -312,13 +312,14 @@ namespace ARPG.Editor
             table.DropId = int.Parse(values[8]);
             table.DropRateBonus = int.Parse(values[9]);
             table.DropRarityBonus = int.Parse(values[10]);
+            table.Level = int.Parse(values[11]);
         }
 
         private static void ParseItemTable(ItemTable table, string[] values)
         {
-            if (values.Length < 13)
+            if (values.Length < 14)
             {
-                Debug.LogError($"[ParseItemTable] Invalid data length. Expected at least 13, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseItemTable] Invalid data length. Expected at least 14, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
@@ -334,6 +335,7 @@ namespace ARPG.Editor
             table.EquipmentBastStatId = int.Parse(values[10]);
             table.EquipmentStatId = int.Parse(values[11]);
             table.SpriteName = values[12];
+            table.DropLevel = int.Parse(values[13]);
         }
 
         private static void ParseBuildableItemTable(BuildableItemTable table, string[] values)
@@ -376,9 +378,9 @@ namespace ARPG.Editor
 
         private static void ParseDropTable(DropTable table, string[] values)
         {
-            if (values.Length < 7)
+            if (values.Length < 9)
             {
-                Debug.LogError($"[ParseDropTable] Invalid data length. Expected at least 7, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseDropTable] Invalid data length. Expected at least 9, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
@@ -388,6 +390,8 @@ namespace ARPG.Editor
             table.CurrencyId = int.Parse(values[4]);
             table.EquipmentRate = int.Parse(values[5]);
             table.EquipmentId = int.Parse(values[6]);
+            table.CurrencyPoolMode = int.Parse(values[7]);
+            table.EquipmentPoolMode = int.Parse(values[8]);
         }
 
         private static void ParseDropCurrencyTable(DropCurrencyTable table, string[] values)
@@ -590,21 +594,22 @@ namespace ARPG.Editor
 
         private static void ParseModTierTable(ModTierTable table, string[] values)
         {
-            // 컬럼: Id, ModId, Tier, Min1, Max1, Min2, Max2, RequiredLevel, Weight
-            if (values.Length < 9)
+            // 컬럼: Id, ModName(설명용-스킵), ModId, Tier, Min1, Max1, Min2, Max2, RequiredLevel, Weight
+            if (values.Length < 10)
             {
-                Debug.LogError($"[ParseModTierTable] Invalid data length. Expected at least 9, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseModTierTable] Invalid data length. Expected at least 10, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
-            table.ModId = int.Parse(values[1]);
-            table.Tier = int.Parse(values[2]);
-            table.Min1 = int.Parse(values[3]);
-            table.Max1 = int.Parse(values[4]);
-            table.Min2 = int.Parse(values[5]);
-            table.Max2 = int.Parse(values[6]);
-            table.RequiredLevel = int.Parse(values[7]);
-            table.Weight = int.Parse(values[8]);
+            // values[1]은 ModName (시트 열람용 설명 컬럼, 파싱 스킵)
+            table.ModId = int.Parse(values[2]);
+            table.Tier = int.Parse(values[3]);
+            table.Min1 = int.Parse(values[4]);
+            table.Max1 = int.Parse(values[5]);
+            table.Min2 = int.Parse(values[6]);
+            table.Max2 = int.Parse(values[7]);
+            table.RequiredLevel = int.Parse(values[8]);
+            table.Weight = int.Parse(values[9]);
         }
 
         private static void ParseItemImplicitTable(ItemImplicitTable table, string[] values)

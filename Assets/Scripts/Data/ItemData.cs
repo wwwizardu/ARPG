@@ -27,6 +27,14 @@ namespace ARPG.Data
                 Table = AR.s.Data.GetItem(Id);
             }
 
+#if UNITY_EDITOR
+            if (Equipment == null && Table != null && Table.ItemType == GlobalEnum.ItemType.Equipment)
+            {
+                // 테이블 업데이트 등으로 Equipment가 누락된 경우 복구 (에디터 전용)
+                Equipment = AR.s.Item.RepairEquipmentData(Table);
+            }
+#endif
+
             if (Equipment != null)
             {
                 Equipment.OnLoadCompleted(Table);

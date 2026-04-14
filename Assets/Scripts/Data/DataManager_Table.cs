@@ -200,6 +200,14 @@ namespace ARPG.Data
             return null;
         }
 
+        /// <summary>
+        /// 전체 아이템 테이블 목록 반환 (드롭 풀 빌드용)
+        /// </summary>
+        public List<Tables.ItemTable> GetAllItems()
+        {
+            return new List<Tables.ItemTable>(_itemTable.Values);
+        }
+
         public Tables.BuildableItemTable? GetBuildableItem(int id)
         {
             if (_buildableItemTable.TryGetValue(id, out var table))

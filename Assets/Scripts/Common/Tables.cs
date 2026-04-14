@@ -97,6 +97,7 @@ namespace ARPG.Tables
         [JsonProperty("DropId")] public int DropId;
         [JsonProperty("DropRateBonus")] public int DropRateBonus;
         [JsonProperty("DropRarityBonus")] public int DropRarityBonus;
+        [JsonProperty("Level")] public int Level;
 
         [JsonIgnore] public WeaponBaseStatTable? Weapon;
         [JsonIgnore] public AiTable? AiTable;
@@ -183,6 +184,7 @@ namespace ARPG.Tables
         [JsonProperty("Description")] public string Description = string.Empty;
 
         [JsonProperty("DropRate")] public int DropRate;
+        [JsonProperty("DropLevel")] public int DropLevel;
 
         [JsonProperty("BuildableItemId")] public int BuildableItemId;
         [JsonProperty("EquipmentFixedStatId")] public int EquipmentBastStatId;
@@ -228,12 +230,14 @@ namespace ARPG.Tables
     [Serializable]
     public class DropTable : TableBase
     {
-        [JsonProperty("Tier")] public int Tier;                     // Drop 아이템 티어
-        [JsonProperty("DropRate")] public int NothingRate;          // 아무것도 안떨어질 확률
-        [JsonProperty("CurrencyRate")] public int CurrencyRate;     // Drop 화폐 확률
-        [JsonProperty("CurrencyId")] public int CurrencyId;         // Drop 화폐 테이블 Id
-        [JsonProperty("EquipmentRate")] public int EquipmentRate;   // Drop 장비 확률
-        [JsonProperty("EquipmentId")] public int EquipmentId;       // Drop 장비 테이블 Id
+        [JsonProperty("Tier")] public int Tier;                             // Drop 아이템 티어
+        [JsonProperty("DropRate")] public int NothingRate;                  // 아무것도 안떨어질 확률
+        [JsonProperty("CurrencyRate")] public int CurrencyRate;             // Drop 화폐 확률
+        [JsonProperty("CurrencyId")] public int CurrencyId;                 // Drop 화폐 테이블 Id
+        [JsonProperty("CurrencyPoolMode")] public int CurrencyPoolMode;     // 0=Explicit, 1=Pool
+        [JsonProperty("EquipmentRate")] public int EquipmentRate;           // Drop 장비 확률
+        [JsonProperty("EquipmentId")] public int EquipmentId;               // Drop 장비 테이블 Id
+        [JsonProperty("EquipmentPoolMode")] public int EquipmentPoolMode;   // 0=Explicit, 1=Pool
     }
 
     [Serializable]

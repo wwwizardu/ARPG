@@ -20,6 +20,10 @@ public static class Utils
             case GlobalEnum.ItemCategory.Armor: return GlobalEnum.EquipmentType.Armor;
             case GlobalEnum.ItemCategory.Gloves: return GlobalEnum.EquipmentType.Gloves;
             case GlobalEnum.ItemCategory.Boots: return GlobalEnum.EquipmentType.Boots;
+            case GlobalEnum.ItemCategory.Belt: return GlobalEnum.EquipmentType.Belt;
+            case GlobalEnum.ItemCategory.Necklace: return GlobalEnum.EquipmentType.Necklace;
+            case GlobalEnum.ItemCategory.Ring: return GlobalEnum.EquipmentType.Ring;
+            case GlobalEnum.ItemCategory.Earring: return GlobalEnum.EquipmentType.Earring;
             default: return GlobalEnum.EquipmentType.Weapon;
         }
     }

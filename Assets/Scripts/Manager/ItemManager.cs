@@ -128,6 +128,16 @@ namespace ARPG.Item
             return true;
         }
 
+#if UNITY_EDITOR
+        /// <summary>
+        /// 테이블 업데이트 등으로 Equipment가 누락된 기존 아이템 복구용 (에디터 전용)
+        /// </summary>
+        public EquipmentData? RepairEquipmentData(ItemTable inTable)
+        {
+            return CreateEquipmentData(inTable);
+        }
+#endif
+
         private EquipmentData? CreateEquipmentData(ItemTable inTable)
         {
             if (inTable == null)
