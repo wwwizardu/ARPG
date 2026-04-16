@@ -22,6 +22,7 @@ namespace ARPG.Base
 
         public int EntityId { get { return _entityId; } }
         public GameObject Visual => _visual;
+        public SpriteRenderer SpriteRenderer => _sr;
 
         public void SetSpriteLibrary(SpriteLibraryAsset slAsset)
         {
@@ -250,11 +251,17 @@ namespace ARPG.Base
             });
 
             // SkillTimingComponent 추가
+            // DamageTime은 비율(0~1): 전체 Duration 중 데미지 시점 비율
+            float damageRatio = UnityEngine.Mathf.Clamp01(skillTable.DamageTime);
+            float baseDuration = skillTable.Duration;
             AR.s.Component.AddComponent(skillEntityId, new SkillTimingComponent
             {
-                StartDuration = skillTable.DamageTime,
+                BaseStartDuration = baseDuration * damageRatio,
+                BaseProcessDuration = 0.1f,
+                BaseEndDuration = baseDuration * (1f - damageRatio),
+                StartDuration = baseDuration * damageRatio,
                 ProcessDuration = 0.1f,
-                EndDuration = skillTable.Duration - skillTable.DamageTime,
+                EndDuration = baseDuration * (1f - damageRatio),
             });
 
             // SkillTargetComponent 추가

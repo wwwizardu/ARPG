@@ -316,5 +316,16 @@ public class GlobalEnum
         Postfix,       // 접미
     }
 
+    /// <summary>
+    /// 애니메이션 카테고리 (SpriteLibraryAsset 카테고리명과 1:1 매핑)
+    /// </summary>
+    public enum AnimCategory : byte
+    {
+        Idle = 0,
+        Move = 1,
+        Attack = 2,
+        Dead = 3,
+    }
+
     static public ushort PLAYER_INVENTORY_SLOTCOUNT_MAX = 60;
 }

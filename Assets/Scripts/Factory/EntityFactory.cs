@@ -1,5 +1,4 @@
 #nullable enable
-using System.Collections.Generic;
 using System.Threading;
 using ARPG.Base;
 using ARPG.Component;
@@ -8,7 +7,6 @@ using ARPG.Utility;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
-using UnityEngine.ResourceManagement.AsyncOperations;
 using UnityEngine.U2D.Animation;
 
 namespace ARPG.Factory
@@ -528,7 +526,13 @@ namespace ARPG.Factory
                 {
                     AnimationTableId = animationId,
                     LoadState = AnimationLoadState.None,
-                    PlaybackSpeed = 1f
+                    PlaybackSpeed = 1f,
+                    CurrentCategory = GlobalEnum.AnimCategory.Idle,
+                    CurrentFrame = 0,
+                    FrameTimer = 0f,
+                    FrameDuration = 0.1f,
+                    IsLooping = true,
+                    IsPlaying = true
                 });
 
                 AR.s.Component.AddComponent(entityId, new AnimatorComponent());
@@ -547,86 +551,65 @@ namespace ARPG.Factory
 
             try
             {
-                // 1. SpriteLibraryAsset 로드 (_sr의 GameObject에 SpriteLibrary 설정)
-                if (string.IsNullOrEmpty(animData.SpriteLibraryPath) == false)
+                // 1. SpriteLibraryAsset 로드
+                if (string.IsNullOrEmpty(animData.SpriteLibraryPath) == true)
                 {
-                    var slAsset = await Addressables.LoadAssetAsync<SpriteLibraryAsset>(
-                        animData.SpriteLibraryPath).ToUniTask(cancellationToken: cts.Token);
-
-                    if (slAsset != null)
-                    {
-                        EntityBase? entity = obj.GetComponent<EntityBase>();
-                        if (entity != null)
-                        {
-                            entity.SetSpriteLibrary(slAsset);
-                        }
-                    }
-                }
-
-                // 2. AnimationClip 로드
-                string[] clipNames = animData.ClipNameArray;
-                string clipPath = animData.AnimClipPath;
-
-                if (clipNames == null || clipNames.Length == 0)
-                {
-                    Debug.LogWarning($"[EntityFactory] No animation clip names for AnimationTable Id: {animData.Id}");
+                    Debug.LogWarning($"[EntityFactory] No SpriteLibraryPath for AnimationTable Id: {animData.Id}");
                     UpdateAnimationLoadState(entityId, AnimationLoadState.Failed);
                     return;
                 }
 
-                List<AnimationClip> clips = new();
+                var slAsset = await Addressables.LoadAssetAsync<SpriteLibraryAsset>(
+                    animData.SpriteLibraryPath).ToUniTask(cancellationToken: cts.Token);
 
-                for (int i = 0; i < clipNames.Length; i++)
+                if (slAsset == null)
                 {
-                    cts.Token.ThrowIfCancellationRequested();
+                    Debug.LogWarning($"[EntityFactory] Failed to load SpriteLibraryAsset: {animData.SpriteLibraryPath}");
+                    UpdateAnimationLoadState(entityId, AnimationLoadState.Failed);
+                    return;
+                }
 
-                    string path = $"{clipPath}/{clipNames[i]}";
-                    var handle = Addressables.LoadAssetAsync<AnimationClip>(path);
-
-                    try
-                    {
-                        AnimationClip clip = await handle.ToUniTask(cancellationToken: cts.Token);
-                        if (handle.Status == AsyncOperationStatus.Succeeded && clip != null)
-                        {
-                            clips.Add(clip);
-                        }
-                        else
-                        {
-                            Debug.LogWarning($"[EntityFactory] Failed to load animation clip: {path}");
-                        }
-                    }
-                    catch (System.OperationCanceledException)
-                    {
-                        Addressables.Release(handle);
-                        throw;
-                    }
+                // 2. EntityBase에 SpriteLibrary 설정
+                EntityBase? entity = obj.GetComponent<EntityBase>();
+                if (entity != null)
+                {
+                    entity.SetSpriteLibrary(slAsset);
                 }
 
                 // 3. 오브젝트 파괴 확인
                 if (obj == null)
                 {
-                    ReleaseClips(clips);
                     return;
                 }
 
-                // 4. PlayableAnimator 초기화
-                PlayableAnimator playableAnimator = obj.GetComponent<PlayableAnimator>();
-                if (playableAnimator == null)
+                // 4. SpriteAnimationData 생성 및 System_Animation에 등록
+                SpriteRenderer? sr = entity != null ? entity.SpriteRenderer : obj.GetComponentInChildren<SpriteRenderer>();
+                if (sr == null)
                 {
-                    playableAnimator = obj.AddComponent<PlayableAnimator>();
+                    Debug.LogWarning($"[EntityFactory] SpriteRenderer not found for Entity {entityId}");
+                    UpdateAnimationLoadState(entityId, AnimationLoadState.Failed);
+                    return;
                 }
 
-                playableAnimator.Initialize(clips.ToArray());
+                SpriteAnimationData animDataCache = new SpriteAnimationData(sr, slAsset);
 
-                // System_Animation에 등록
+                // AnimationTable에서 기본 FrameDuration 배열 생성
+                float[] defaultFrameDurations = new float[]
+                {
+                    animData.IdleFrame,    // AnimCategory.Idle = 0
+                    animData.MoveFrame,    // AnimCategory.Move = 1
+                    animData.AttackFrame,  // AnimCategory.Attack = 2
+                    animData.DeadFrame,    // AnimCategory.Dead = 3
+                };
+
                 var animSystem = AR.s.System.GetSystem<Systems.System_Animation>();
                 if (animSystem != null)
                 {
-                    animSystem.RegisterPlayableAnimator(entityId, playableAnimator);
+                    animSystem.RegisterSpriteAnimation(entityId, animDataCache, defaultFrameDurations);
                 }
 
                 UpdateAnimationLoadState(entityId, AnimationLoadState.Loaded);
-                Debug.Log($"[EntityFactory] Animation loaded for Entity {entityId} with {clips.Count} clips");
+                Debug.Log($"[EntityFactory] SpriteAnimation loaded for Entity {entityId}");
             }
             catch (System.OperationCanceledException)
             {
@@ -649,17 +632,6 @@ namespace ARPG.Factory
             {
                 comp.LoadState = state;
                 AR.s.Component.SetComponent(entityId, comp);
-            }
-        }
-
-        private static void ReleaseClips(List<AnimationClip> clips)
-        {
-            for (int i = 0; i < clips.Count; i++)
-            {
-                if (clips[i] != null)
-                {
-                    Addressables.Release(clips[i]);
-                }
             }
         }
 

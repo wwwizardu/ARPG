@@ -55,7 +55,7 @@ namespace ARPG.Editor
 
             await DownloadTable<BuffTable>("127577579&range=A:J", 1, SaveType.String);
 
-            await DownloadTable<AnimationTable>("747631090&range=A:E", 1, SaveType.String);
+            await DownloadTable<AnimationTable>("747631090&range=A:G", 1, SaveType.String);
 
             await DownloadTable<ProjectileTable>("1810235418&range=A:G", 1, SaveType.String);
 
@@ -539,17 +539,19 @@ namespace ARPG.Editor
 
         private static void ParseAnimationTable(AnimationTable table, string[] values)
         {
-            // 전체 범위: A:E = 5개 컬럼
-            if (values.Length < 5)
+            // 전체 범위: A:G = 7개 컬럼 (Id, Name, SpriteLibraryPath, IdleFrame, MoveFrame, AttackFrame, DeadFrame)
+            if (values.Length < 7)
             {
-                Debug.LogError($"[ParseAnimationTable] Invalid data length. Expected at least 5, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseAnimationTable] Invalid data length. Expected at least 7, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
             table.Name = values[1];
             table.SpriteLibraryPath = values[2];
-            table.AnimClipPath = values[3];
-            table.ClipNames = values[4];
+            table.IdleFrame = float.Parse(values[3]);
+            table.MoveFrame = float.Parse(values[4]);
+            table.AttackFrame = float.Parse(values[5]);
+            table.DeadFrame = float.Parse(values[6]);
         }
 
         private static void ParseProjectileTable(ProjectileTable table, string[] values)

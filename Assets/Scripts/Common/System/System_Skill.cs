@@ -158,22 +158,22 @@ namespace ARPG.Systems
             // 속도 배율 적용 (Attack → 무기 공속 기반 + 공격 속도%, Spell → 시전 속도%)
             if (AR.s.Component.TryGetComponent<SkillTimingComponent>(skillEntityId, out var timing))
             {
-                // Attack 태그: 무기 공속으로 Base Duration 재계산
                 GlobalEnum.SkillTag tags = inSkill.Table != null ? inSkill.Table.Tags : GlobalEnum.SkillTag.None;
                 bool isAttack = (tags & GlobalEnum.SkillTag.Attack) != 0;
 
+                // Attack 태그: 무기 공속으로 Base Duration 재계산
+                // DamageTime은 비율(0~1)이므로 totalTime에 비율을 곱해 Start/End 배분
                 if (isAttack)
                 {
                     float weaponAttackSpeed = GetWeaponAttackSpeed(inSkill.OwnerEntityId);
                     if (weaponAttackSpeed > 0f)
                     {
                         float totalTime = 1f / weaponAttackSpeed;
-                        float damageTimeRatio = timing.BaseStartDuration / (timing.BaseStartDuration + timing.BaseProcessDuration + timing.BaseEndDuration);
-                        float processRatio = timing.BaseProcessDuration / (timing.BaseStartDuration + timing.BaseProcessDuration + timing.BaseEndDuration);
+                        float damageRatio = inSkill.Table != null ? UnityEngine.Mathf.Clamp01(inSkill.Table.DamageTime) : 0.7f;
 
-                        timing.BaseStartDuration = totalTime * damageTimeRatio;
-                        timing.BaseProcessDuration = totalTime * processRatio;
-                        timing.BaseEndDuration = totalTime * (1f - damageTimeRatio - processRatio);
+                        timing.BaseStartDuration = totalTime * damageRatio;
+                        timing.BaseProcessDuration = 0.1f;
+                        timing.BaseEndDuration = totalTime * (1f - damageRatio);
                     }
                 }
 
@@ -182,13 +182,6 @@ namespace ARPG.Systems
                 AR.s.Component.SetComponent(skillEntityId, timing);
 
                 Debug.Log($"<color=yellow>[System_Skill] Speed applied - SkillId: {inSkill.SkillId}, Tags: {tags}, IsAttack: {isAttack}, SpeedMul: {speedMultiplier:F2}, Duration: {timing.StartDuration:F3}/{timing.ProcessDuration:F3}/{timing.EndDuration:F3} (Total: {timing.TotalDuration:F3}s)</color>");
-
-                // 애니메이션 속도 설정
-                if (AR.s.Component.TryGetComponent<SpriteAnimationComponent>(inSkill.OwnerEntityId, out var spriteAnim))
-                {
-                    spriteAnim.PlaybackSpeed = speedMultiplier;
-                    AR.s.Component.SetComponent(inSkill.OwnerEntityId, spriteAnim);
-                }
             }
 
             // 스킬 시작
@@ -364,12 +357,25 @@ namespace ARPG.Systems
             {
                 if (inSkill.Table != null && string.IsNullOrEmpty(inSkill.Table.AnimationName) == false)
                 {
-                    int animHash = UnityEngine.Animator.StringToHash(inSkill.Table.AnimationName);
-                    animatorComp.Force = true;
-                    animatorComp.RequestAnimation(animHash);
-                    AR.s.Component.SetComponent(inSkill.OwnerEntityId, animatorComp);
+                    // AnimationName(string)을 AnimCategory enum으로 변환
+                    if (System.Enum.TryParse<GlobalEnum.AnimCategory>(inSkill.Table.AnimationName, out var category))
+                    {
+                        // StartDuration을 전달하여 마지막 프레임이 DamageTime에 맞춰짐
+                        float duration = 0f;
+                        if (AR.s.Component.TryGetComponent<SkillTimingComponent>(skillEntityId, out var timing))
+                        {
+                            duration = timing.StartDuration;
+                        }
 
-                    Debug.Log($"[System_Skill] Requested animation '{inSkill.Table.AnimationName}' (Hash: {animHash}) - SkillEntityId: {skillEntityId}, OwnerEntityId: {inSkill.OwnerEntityId}");
+                        animatorComp.RequestAnimation(category, true, duration);
+                        AR.s.Component.SetComponent(inSkill.OwnerEntityId, animatorComp);
+
+                        Debug.Log($"[System_Skill] Requested animation '{category}' (Duration: {duration:F3}) - SkillEntityId: {skillEntityId}, OwnerEntityId: {inSkill.OwnerEntityId}");
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[System_Skill] Invalid AnimCategory name: '{inSkill.Table.AnimationName}' for SkillId: {inSkill.SkillId}");
+                    }
                 }
                 else
                 {
@@ -431,13 +437,6 @@ namespace ARPG.Systems
             }
 
             AR.s.Component.SetComponent(skillEntityId, inSkillState);
-
-            // 애니메이션 속도 복구
-            if (AR.s.Component.TryGetComponent<SpriteAnimationComponent>(inSkill.OwnerEntityId, out var spriteAnim))
-            {
-                spriteAnim.PlaybackSpeed = 1f;
-                AR.s.Component.SetComponent(inSkill.OwnerEntityId, spriteAnim);
-            }
 
             // 캐릭터 상태 초기화
             if(AR.s.Component.TryGetComponent<StateComponent>(inSkill.OwnerEntityId, out var charState) == false)

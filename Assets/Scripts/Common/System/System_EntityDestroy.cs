@@ -58,6 +58,13 @@ namespace ARPG.Systems
                     AR.s.Npc.UnregisterNpcByEntityId(entityId);
                 }
 
+                // System_Animation에서 애니메이션 데이터 해제
+                var animSystem = AR.s.System.GetSystem<System_Animation>();
+                if (animSystem != null)
+                {
+                    animSystem.UnregisterSpriteAnimation(entityId);
+                }
+
                 if (AR.s.Message.TryGetEntity(entityId, out var entity))
                 {
                     entity.OnEntityDestroy();

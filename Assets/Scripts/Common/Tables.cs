@@ -448,16 +448,23 @@ namespace ARPG.Tables
     {
         [JsonProperty("Name")] public string Name = string.Empty;
         [JsonProperty("SpriteLibraryPath")] public string SpriteLibraryPath = string.Empty;
-        [JsonProperty("AnimClipPath")] public string AnimClipPath = string.Empty;
-        [JsonProperty("ClipNames")] public string ClipNames = string.Empty;
+        [JsonProperty("IdleFrame")] public float IdleFrame;        // Idle 프레임당 시간 (초)
+        [JsonProperty("MoveFrame")] public float MoveFrame;        // Move 프레임당 시간 (초)
+        [JsonProperty("AttackFrame")] public float AttackFrame;    // Attack 프레임당 시간 (초)
+        [JsonProperty("DeadFrame")] public float DeadFrame;        // Dead 프레임당 시간 (초)
 
-        [JsonIgnore] public string[] ClipNameArray = Array.Empty<string>();
-
-        public override void LoadLate()
+        /// <summary>
+        /// AnimCategory에 해당하는 기본 FrameDuration 반환
+        /// </summary>
+        public float GetFrameDuration(GlobalEnum.AnimCategory category)
         {
-            if (string.IsNullOrEmpty(ClipNames) == false)
+            switch (category)
             {
-                ClipNameArray = ClipNames.Split('|');
+                case GlobalEnum.AnimCategory.Idle: return IdleFrame;
+                case GlobalEnum.AnimCategory.Move: return MoveFrame;
+                case GlobalEnum.AnimCategory.Attack: return AttackFrame;
+                case GlobalEnum.AnimCategory.Dead: return DeadFrame;
+                default: return 0.1f;
             }
         }
     }
