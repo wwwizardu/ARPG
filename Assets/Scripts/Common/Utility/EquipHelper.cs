@@ -96,6 +96,7 @@ namespace ARPG.Utility
 
             int sourceId = item.ItemInstanceId;
             List<ModInstance> mods = item.Equipment.Mods;
+            bool isWeapon = item.Equipment.EquipType == GE.EquipmentType.Weapon;
 
             for (int i = 0; i < mods.Count; i++)
             {
@@ -110,7 +111,7 @@ namespace ARPG.Utility
                 switch (mod.Table.ApplyType)
                 {
                     case GE.ModApplyType.Passive:
-                        ApplyPassiveMod(playerEntityId, sourceId, mod);
+                        ApplyPassiveMod(playerEntityId, sourceId, mod, isWeapon);
                         break;
 
                     case GE.ModApplyType.OnCalculate:
@@ -128,10 +129,15 @@ namespace ARPG.Utility
 
         /// <summary>
         /// Passive Mod → StatModifier 변환 등록
+        /// 단, 무기 아이템의 무기 전용 Mod는 StatModifier 등록 스킵 (WeaponHelper가 EquipmentData.WeaponStats 캐시에서 직접 조회)
         /// </summary>
-        private static void ApplyPassiveMod(int playerEntityId, int sourceId, ModInstance mod)
+        private static void ApplyPassiveMod(int playerEntityId, int sourceId, ModInstance mod, bool isWeapon)
         {
             if (mod.Table == null)
+                return;
+
+            // 무기 아이템의 무기 전용 Mod는 스킵 (WeaponHelper 경로로 적용됨)
+            if (isWeapon && WeaponHelper.IsWeaponExclusiveMod(mod.Table.EffectType, mod.Table.TargetStat))
                 return;
 
             switch (mod.Table.EffectType)

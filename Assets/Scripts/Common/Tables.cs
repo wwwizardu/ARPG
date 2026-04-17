@@ -275,6 +275,7 @@ namespace ARPG.Tables
         [JsonProperty("DamageTime")] public float DamageTime;                   // Process 내부 히트 오프셋 비율 (0~1)
         [JsonProperty("HitCount")] public int HitCount;                         // 히트 횟수 (1=단발, 2+=멀티히트)
         [JsonProperty("HitInterval")] public float HitInterval;                 // 멀티히트 간격 (초)
+        [JsonProperty("BaseCriRate")] public int BaseCriRate;                   // Spell 스킬 베이스 치명타 확률 (%, Attack 스킬은 무기에서 가져오므로 무시)
         [JsonProperty("DamageType")] public GE.DamageType DamageType;           // 데미지 속성
         [JsonProperty("DamageMin")] public int DamageMin;                       // 데미지 최소값
         [JsonProperty("DamageMax")] public int DamageMax;                       // 데미지 최대값

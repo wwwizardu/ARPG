@@ -42,6 +42,45 @@ namespace ARPG.Data
         }
     }
 
+    /// <summary>
+    /// 데미지 범위 (Min, Max)
+    /// </summary>
+    [Serializable]
+    public struct DamageRange
+    {
+        public int Min;
+        public int Max;
+
+        public void Add(int min, int max)
+        {
+            Min += min;
+            Max += max;
+        }
+
+        public void ApplyIncrease(int percent)
+        {
+            if (percent <= 0) return;
+            float mul = 1f + percent / 100f;
+            Min = Mathf.RoundToInt(Min * mul);
+            Max = Mathf.RoundToInt(Max * mul);
+        }
+    }
+
+    /// <summary>
+    /// 무기 Local 파이프라인 계산 결과 캐시
+    /// Flat Mod + Increased% Mod 모두 반영된 최종 무기 스탯
+    /// </summary>
+    public struct WeaponStatCache
+    {
+        public DamageRange Physics;
+        public DamageRange Fire;
+        public DamageRange Ice;
+        public DamageRange Lightning;
+        public DamageRange Poison;
+        public int CriRate;            // % (예: 5 = 5%)
+        public float AttackSpeed;      // 초당 공격 횟수 (예: 1.2)
+    }
+
     [Serializable]
     public class EquipmentData
     {
@@ -55,6 +94,35 @@ namespace ARPG.Data
         public List<ModInstance> Mods = new();
 
         public GE.EquipmentType EquipType { get; set; }
+
+        // ========== 무기 스탯 캐시 (NonSerialized) ==========
+        [NonSerialized] private WeaponStatCache _weaponStats;
+        [NonSerialized] private bool _weaponStatsDirty = true;
+
+        /// <summary>
+        /// 무기 Local 파이프라인 완료 스탯 (최초 접근 시 lazy 계산, 이후 캐시 사용)
+        /// Mod 변경 시 InvalidateWeaponStats() 호출 필요
+        /// </summary>
+        public WeaponStatCache WeaponStats
+        {
+            get
+            {
+                if (_weaponStatsDirty)
+                {
+                    RecomputeWeaponStats();
+                    _weaponStatsDirty = false;
+                }
+                return _weaponStats;
+            }
+        }
+
+        /// <summary>
+        /// 캐시 무효화. Mod 추가/제거/수정 시 호출.
+        /// </summary>
+        public void InvalidateWeaponStats()
+        {
+            _weaponStatsDirty = true;
+        }
 
         public void OnLoadCompleted(ItemTable? inItemTable)
         {
@@ -70,6 +138,166 @@ namespace ARPG.Data
             for (int i = 0; i < Mods.Count; i++)
             {
                 Mods[i].OnLoadCompleted();
+            }
+
+            InvalidateWeaponStats();
+        }
+
+        /// <summary>
+        /// 무기 Local 파이프라인 계산:
+        /// 1. Flat Mod 누적 (Added*, FlatStat TargetStat=무기전용)
+        /// 2. Increased% Mod 누적
+        /// 3. Flat × (1 + Increased%/100)
+        /// </summary>
+        private void RecomputeWeaponStats()
+        {
+            WeaponStatCache cache = new WeaponStatCache();
+
+            // 속성별 Increased% 누적용 (FlatStat Target=AttackMin/Max 와 IncreasedStat Target=AttackMin/Max 모두 합산)
+            int physIncPct = 0, fireIncPct = 0, iceIncPct = 0, lightIncPct = 0, poisonIncPct = 0;
+            int critIncPct = 0;
+            int asIncPct = 0;
+
+            for (int i = 0; i < Mods.Count; i++)
+            {
+                ModInstance mod = Mods[i];
+                if (mod.Table == null)
+                    continue;
+
+                switch (mod.Table.EffectType)
+                {
+                    // Added 데미지 (Value1=min, Value2=max)
+                    case GE.ModEffectType.AddedPhysDamage:
+                        cache.Physics.Add(mod.Value1, mod.Value2);
+                        break;
+                    case GE.ModEffectType.AddedFireDamage:
+                        cache.Fire.Add(mod.Value1, mod.Value2);
+                        break;
+                    case GE.ModEffectType.AddedIceDamage:
+                        cache.Ice.Add(mod.Value1, mod.Value2);
+                        break;
+                    case GE.ModEffectType.AddedLightningDamage:
+                        cache.Lightning.Add(mod.Value1, mod.Value2);
+                        break;
+                    case GE.ModEffectType.AddedPoisonDamage:
+                        cache.Poison.Add(mod.Value1, mod.Value2);
+                        break;
+
+                    // Flat Stat: 단일 스탯 Add
+                    case GE.ModEffectType.FlatStat:
+                        AccumulateFlatStat(ref cache, mod);
+                        break;
+
+                    // Increased% Stat: 단일 스탯 비율 증가
+                    case GE.ModEffectType.IncreasedStat:
+                        AccumulateIncreasedStat(mod,
+                            ref physIncPct, ref fireIncPct, ref iceIncPct, ref lightIncPct, ref poisonIncPct,
+                            ref critIncPct, ref asIncPct);
+                        break;
+                }
+            }
+
+            // Increased% 적용 (Local 파이프라인의 마지막 단계)
+            cache.Physics.ApplyIncrease(physIncPct);
+            cache.Fire.ApplyIncrease(fireIncPct);
+            cache.Ice.ApplyIncrease(iceIncPct);
+            cache.Lightning.ApplyIncrease(lightIncPct);
+            cache.Poison.ApplyIncrease(poisonIncPct);
+
+            if (critIncPct > 0)
+            {
+                cache.CriRate = Mathf.RoundToInt(cache.CriRate * (1f + critIncPct / 100f));
+            }
+
+            if (asIncPct > 0)
+            {
+                cache.AttackSpeed *= (1f + asIncPct / 100f);
+            }
+
+            _weaponStats = cache;
+        }
+
+        private static void AccumulateFlatStat(ref WeaponStatCache cache, ModInstance mod)
+        {
+            if (mod.Table == null) return;
+
+            switch (mod.Table.TargetStat)
+            {
+                case GE.Stat.AttackMin:
+                    cache.Physics.Min += mod.Value1;
+                    break;
+                case GE.Stat.AttackMax:
+                    cache.Physics.Max += mod.Value1;
+                    break;
+                case GE.Stat.FireAttackMin:
+                    cache.Fire.Min += mod.Value1;
+                    break;
+                case GE.Stat.FireAttackMax:
+                    cache.Fire.Max += mod.Value1;
+                    break;
+                case GE.Stat.IceAttackMin:
+                    cache.Ice.Min += mod.Value1;
+                    break;
+                case GE.Stat.IceAttackMax:
+                    cache.Ice.Max += mod.Value1;
+                    break;
+                case GE.Stat.LightningAttackMin:
+                    cache.Lightning.Min += mod.Value1;
+                    break;
+                case GE.Stat.LightningAttackMax:
+                    cache.Lightning.Max += mod.Value1;
+                    break;
+                case GE.Stat.PoisonAttackMin:
+                    cache.Poison.Min += mod.Value1;
+                    break;
+                case GE.Stat.PoisonAttackMax:
+                    cache.Poison.Max += mod.Value1;
+                    break;
+                case GE.Stat.CriRate:
+                    cache.CriRate += mod.Value1;
+                    break;
+                case GE.Stat.AttackSpeed:
+                    // 100배 정수 저장 → 초당 횟수로 변환 (1.2 공속 = 120)
+                    cache.AttackSpeed += mod.Value1 * 0.01f;
+                    break;
+            }
+        }
+
+        private static void AccumulateIncreasedStat(ModInstance mod,
+            ref int physIncPct, ref int fireIncPct, ref int iceIncPct, ref int lightIncPct, ref int poisonIncPct,
+            ref int critIncPct, ref int asIncPct)
+        {
+            if (mod.Table == null) return;
+
+            switch (mod.Table.TargetStat)
+            {
+                case GE.Stat.AttackMin:
+                case GE.Stat.AttackMax:
+                    physIncPct += mod.Value1;
+                    break;
+                case GE.Stat.FireAttackMin:
+                case GE.Stat.FireAttackMax:
+                    fireIncPct += mod.Value1;
+                    break;
+                case GE.Stat.IceAttackMin:
+                case GE.Stat.IceAttackMax:
+                    iceIncPct += mod.Value1;
+                    break;
+                case GE.Stat.LightningAttackMin:
+                case GE.Stat.LightningAttackMax:
+                    lightIncPct += mod.Value1;
+                    break;
+                case GE.Stat.PoisonAttackMin:
+                case GE.Stat.PoisonAttackMax:
+                    poisonIncPct += mod.Value1;
+                    break;
+                case GE.Stat.CriRate:
+                    critIncPct += mod.Value1;
+                    break;
+                case GE.Stat.AttackSpeed:
+                case GE.Stat.AttackSpeedMul:
+                    asIncPct += mod.Value1;
+                    break;
             }
         }
 

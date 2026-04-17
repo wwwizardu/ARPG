@@ -548,26 +548,13 @@ namespace ARPG.Systems
 
         /// <summary>
         /// 엔티티의 장착 무기 공격 속도 (초당 공격 횟수) 반환
-        /// 플레이어: PlayerData에서 장착 무기 조회, 몬스터: 기본값 1.0
+        /// WeaponHelper가 캐시된 Local 파이프라인 결과를 반환
+        /// 무기 없으면 1.0 (맨손 기본값)
         /// </summary>
         private float GetWeaponAttackSpeed(int ownerEntityId)
         {
-            if (ownerEntityId == AR.s.Data.CurrentPlayerEntityId)
-            {
-                Data.ItemData?[] equip = AR.s.Data.Player._inventoryEquip;
-                Data.ItemData? leftWeapon = equip[(int)GlobalEnum.EquipSlotType.WeaponLeft];
-                Data.ItemData? rightWeapon = equip[(int)GlobalEnum.EquipSlotType.WeaponRight];
-
-                Data.ItemData? weapon = leftWeapon ?? rightWeapon;
-                if (weapon != null && weapon.Equipment != null)
-                {
-                    float attackSpeed = weapon.Equipment.GetAttackSpeed();
-                    if (attackSpeed > 0)
-                        return attackSpeed;
-                }
-            }
-
-            return 1f;
+            float weaponAS = Utility.WeaponHelper.GetWeaponAttackSpeed(ownerEntityId);
+            return weaponAS > 0f ? weaponAS : 1f;
         }
 
         /// <summary>

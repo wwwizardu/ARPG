@@ -1,4 +1,5 @@
 #nullable enable
+using ARPG.Data;
 using UnityEngine;
 
 public class TooltipEquipmentWeapon : MonoBehaviour
@@ -7,57 +8,57 @@ public class TooltipEquipmentWeapon : MonoBehaviour
     [SerializeField] public TMPro.TextMeshProUGUI TextDamageFire;
     [SerializeField] public TMPro.TextMeshProUGUI TextDamageIce;
     [SerializeField] public TMPro.TextMeshProUGUI TextDamageLightning;
-    [SerializeField] public TMPro.TextMeshProUGUI TextDamagePosition;
+    [SerializeField] public TMPro.TextMeshProUGUI TextDamagePosition;  // 독(Poison) 데미지 텍스트
     [SerializeField] public TMPro.TextMeshProUGUI TexttCriticalRate;
     [SerializeField] public TMPro.TextMeshProUGUI TexttAttackSpeed;
 
-    public void Show(bool isShow, ARPG.Data.ItemData? inItemData)
+    public void Show(bool isShow, ItemData? inItemData)
     {
-        if (isShow == false)
+        if (isShow == false || inItemData == null || inItemData.Equipment == null)
         {
-            TextDamage.gameObject.SetActive(isShow);
-            TextDamageFire.gameObject.SetActive(isShow);
-            TextDamageIce.gameObject.SetActive(isShow);
-            TextDamageLightning.gameObject.SetActive(isShow);
-            TextDamagePosition.gameObject.SetActive(isShow);
-            TexttCriticalRate.gameObject.SetActive(isShow);
-            TexttAttackSpeed.gameObject.SetActive(isShow);
+            HideAll();
+            return;
         }
-        else
-        {
-            if(inItemData != null)
-            {
-                TexttCriticalRate.gameObject.SetActive(inItemData?.Equipment != null);
-                TexttAttackSpeed.gameObject.SetActive(inItemData?.Equipment != null);
-                    
-                if (inItemData?.Equipment == null)
-                {
-                    TextDamage.gameObject.SetActive(false);
-                    TextDamageFire.gameObject.SetActive(false);
-                    TextDamageIce.gameObject.SetActive(false);
-                    TextDamageLightning.gameObject.SetActive(false);
-                    TextDamagePosition.gameObject.SetActive(false);
-                }
-                else
-                {
-                    bool isPhysicsDamage = inItemData.Equipment.IsPhysicsDamage();
-                    TextDamage.gameObject.SetActive(isPhysicsDamage);
 
-                    if (isPhysicsDamage == true)
-                    {
-                        var physicsDamage = inItemData.Equipment.GetPhysicsDamage();
-                        TextDamage.text = $"물리 피해: {physicsDamage.Item1}~{physicsDamage.Item2}";
-                    }
+        // EquipmentData.WeaponStats 캐시에서 Local 파이프라인 완료된 최종 스탯 조회
+        WeaponStatCache stats = inItemData.Equipment.WeaponStats;
 
-                    TextDamageFire.gameObject.SetActive(false);
-                    TextDamageIce.gameObject.SetActive(false);
-                    TextDamageLightning.gameObject.SetActive(false);
-                    TextDamagePosition.gameObject.SetActive(false);
+        UpdateDamageText(TextDamage, "물리 피해", stats.Physics);
+        UpdateDamageText(TextDamageFire, "화염 피해", stats.Fire);
+        UpdateDamageText(TextDamageIce, "냉기 피해", stats.Ice);
+        UpdateDamageText(TextDamageLightning, "번개 피해", stats.Lightning);
+        UpdateDamageText(TextDamagePosition, "독 피해", stats.Poison);
 
-                    TexttCriticalRate.text = $"치명타 확률: {inItemData.Equipment.GetCriticalRate()}%"; 
-                    TexttAttackSpeed.text = $"초당 공격 횟수: {inItemData.Equipment.GetAttackSpeed()}";
-                }
-            }
-        }
+        bool hasCrit = stats.CriRate > 0;
+        TexttCriticalRate.gameObject.SetActive(hasCrit);
+        if (hasCrit)
+            TexttCriticalRate.text = $"치명타 확률: {stats.CriRate}%";
+
+        bool hasAttackSpeed = stats.AttackSpeed > 0f;
+        TexttAttackSpeed.gameObject.SetActive(hasAttackSpeed);
+        if (hasAttackSpeed)
+            TexttAttackSpeed.text = $"초당 공격 횟수: {stats.AttackSpeed:F2}";
+    }
+
+    /// <summary>
+    /// 데미지 범위가 있으면 표시, 없으면 숨김
+    /// </summary>
+    private void UpdateDamageText(TMPro.TextMeshProUGUI target, string label, DamageRange range)
+    {
+        bool hasDamage = range.Max > 0;
+        target.gameObject.SetActive(hasDamage);
+        if (hasDamage)
+            target.text = $"{label}: {range.Min}~{range.Max}";
+    }
+
+    private void HideAll()
+    {
+        TextDamage.gameObject.SetActive(false);
+        TextDamageFire.gameObject.SetActive(false);
+        TextDamageIce.gameObject.SetActive(false);
+        TextDamageLightning.gameObject.SetActive(false);
+        TextDamagePosition.gameObject.SetActive(false);
+        TexttCriticalRate.gameObject.SetActive(false);
+        TexttAttackSpeed.gameObject.SetActive(false);
     }
 }

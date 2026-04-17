@@ -139,7 +139,9 @@ namespace ARPG.UI
 
         private void UpdateCharacterStat()
         {
-            if(AR.s.Component.TryGetComponent<Component.StatComponent>(AR.s.Data.Player.PlayerId, out var _statComponent) == false)
+            int playerId = AR.s.Data.Player.PlayerId;
+
+            if(AR.s.Component.TryGetComponent<Component.StatComponent>(playerId, out var _statComponent) == false)
             {
                 Debug.LogError("[CharacterUI] UpdateCharacterStat - StatComponent not found");
                 return;
@@ -153,17 +155,40 @@ namespace ARPG.UI
             _textStat[5].text = $"체력 재생 {_statComponent.FinalHpGeneration}";
             _textStat[6].text = $"마나 재생 {_statComponent.FinalMpGeneration}";
 
-            var est = DamageCalculator.Calculate(_statComponent);
+            // 기본 스킬(슬롯 0) 기준 예상 데미지/치명타 계산
+            int basicSkillEntityId = EntityIdHelper.GetDeterministicId(playerId, EntityIdCategory.Skill, 0);
+            SkillTable? basicSkill = null;
+            if (AR.s.Component.TryGetComponent<Component.SkillComponent>(basicSkillEntityId, out var skillComp))
+            {
+                basicSkill = skillComp.Table;
+            }
+
+            EstimatedDamage est;
+            int estimatedCritRate;
+            if (basicSkill != null)
+            {
+                est = DamageCalculator.CalculateForSkill(_statComponent, playerId, basicSkill);
+                estimatedCritRate = DamageCalculator.EstimateCritRate(_statComponent, playerId, basicSkill);
+            }
+            else
+            {
+                est = DamageCalculator.Calculate(_statComponent);
+                estimatedCritRate = _statComponent.FinalCriRate;
+            }
+
             _textStat[7].text = $"물리 데미지 {est.PhysMin} - {est.PhysMax}";
             _textStat[8].text = $"화염 데미지 {est.FireMin} - {est.FireMax}";
             _textStat[9].text = $"냉기 데미지 {est.IceMin} - {est.IceMax}";
             _textStat[10].text = $"번개 데미지 {est.LightningMin} - {est.LightningMax}";
             _textStat[11].text = $"독 데미지 {est.PoisonMin} - {est.PoisonMax}";
 
-            _textStat[12].text = $"치명타 확률 {_statComponent.FinalCriRate}%";
+            _textStat[12].text = $"치명타 확률 {estimatedCritRate}%";
             _textStat[13].text = $"치명타 피해 {_statComponent.FinalCriDamage}%";
             _textStat[14].text = $"이동 속도 {_statComponent.FinalMoveSpeed}";
-            _textStat[15].text = $"공격 속도 {_statComponent.FinalAttackSpeed}";
+
+            // 공격 속도: 무기 AS × (1 + 캐릭터 공속%/100)
+            float estAttackSpeed = DamageCalculator.EstimateAttackSpeed(_statComponent, playerId);
+            _textStat[15].text = $"공격 속도 {estAttackSpeed:F2}";
             _textStat[16].text = $"시전 속도 {_statComponent.FinalCastSpeed}";
             _textStat[17].text = $"방어력 {_statComponent.FinalDefense}";
             _textStat[18].text = $"화염 저항 {_statComponent.FinalFireResist}";
