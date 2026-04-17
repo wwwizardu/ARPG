@@ -51,7 +51,7 @@ namespace ARPG.Editor
 
             await DownloadTable<DropEquipmentTable>("1267382287&range=A:V", 1, SaveType.String);
 
-            await DownloadTable<SkillTable>("92727160&range=A:W", 1, SaveType.String);
+            await DownloadTable<SkillTable>("92727160&range=A:X", 1, SaveType.String);
 
             await DownloadTable<BuffTable>("127577579&range=A:J", 1, SaveType.String);
 
@@ -452,9 +452,9 @@ namespace ARPG.Editor
 
         private static void ParseSkillTable(SkillTable table, string[] values)
         {
-            if (values.Length < 23)
+            if (values.Length < 24)
             {
-                Debug.LogError($"[ParseSkillTable] Invalid data length. Expected at least 23, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseSkillTable] Invalid data length. Expected at least 24, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
@@ -480,6 +480,7 @@ namespace ARPG.Editor
             table.ActivateName = values[20];
             table.HitEffect = values[21];
             table.ProjectileId = int.Parse(values[22]);
+            table.ArcHeight = float.Parse(values[23]);
         }
 
         private static GlobalEnum.SkillTag ParseSkillTags(string tagsRaw)

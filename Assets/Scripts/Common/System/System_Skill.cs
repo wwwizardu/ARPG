@@ -150,6 +150,22 @@ namespace ARPG.Systems
                         return;
                     }
                     break;
+
+                case GlobalEnum.SkillTargetType.Position:
+                    // 지점 지정 - 마우스 위치를 타겟으로 (점프 스킬의 Leap Slam 등)
+                    if (AR.s.Component.TryGetComponent<TransformComponent>(inSkill.OwnerEntityId, out var ownerTransformPos))
+                    {
+                        Vector2 dirToTarget = (inCommand.TargetPosition - ownerTransformPos.Position).normalized;
+                        target.SetPositionTarget(inCommand.TargetPosition);
+                        target.SetDirectionTarget(dirToTarget);
+                    }
+                    else
+                    {
+                        Debug.LogError($"[System_Skill] Owner TransformComponent not found - OwnerEntityId: {inSkill.OwnerEntityId}");
+                        AR.s.Component.RemoveComponent<SkillCommandComponent>(inSkill.OwnerEntityId);
+                        return;
+                    }
+                    break;
             }
 
             // 타겟 설정
@@ -352,6 +368,12 @@ namespace ARPG.Systems
         /// </summary>
         private void OnEnterStartState(int skillEntityId, ref SkillComponent inSkill)
         {
+            // 점프 스킬이면 JumpComponent 생성
+            if (inSkill.Table != null && inSkill.Table.SkillType == GlobalEnum.SkillType.Jump && inSkill.Table.ArcHeight > 0f)
+            {
+                StartJump(skillEntityId, ref inSkill);
+            }
+
             // AnimatorComponent를 통해 애니메이션 재생 요청
             if (AR.s.Component.TryGetComponent<AnimatorComponent>(inSkill.OwnerEntityId, out var animatorComp))
             {
@@ -388,6 +410,91 @@ namespace ARPG.Systems
             }
 
             // TODO: 시작 이펙트, 사운드 등
+        }
+
+        /// <summary>
+        /// 점프 스킬 시작 - JumpComponent 생성 및 파라미터 세팅
+        /// 체공 시간은 SkillTiming의 TotalDuration, 착지 위치는 SkillTargetType에 따라 결정
+        /// </summary>
+        private void StartJump(int skillEntityId, ref SkillComponent inSkill)
+        {
+            ComponentManager cm = AR.s.Component;
+
+            if (cm.TryGetComponent<TransformComponent>(inSkill.OwnerEntityId, out var ownerTransform) == false)
+            {
+                Debug.LogError($"[System_Skill] StartJump - Owner TransformComponent not found, OwnerEntityId: {inSkill.OwnerEntityId}");
+                return;
+            }
+
+            if (cm.TryGetComponent<SkillTimingComponent>(skillEntityId, out var timing) == false)
+            {
+                Debug.LogError($"[System_Skill] StartJump - SkillTimingComponent not found, SkillEntityId: {skillEntityId}");
+                return;
+            }
+
+            if (inSkill.Table == null)
+                return;
+
+            Vector2 startPos = ownerTransform.Position;
+            Vector2 endPos = startPos;
+
+            // 착지 위치는 SkillTargetType에 따라 결정
+            if (cm.TryGetComponent<SkillTargetComponent>(skillEntityId, out var target) == true)
+            {
+                float maxDistance = inSkill.Table.SkillRangeMax;
+
+                switch (inSkill.Table.SkillTargetType)
+                {
+                    case GlobalEnum.SkillTargetType.Direction:
+                        // 방향으로 최대 거리만큼 이동
+                        if (maxDistance > 0f)
+                        {
+                            endPos = startPos + target.TargetDirection * maxDistance;
+                        }
+                        break;
+
+                    case GlobalEnum.SkillTargetType.Position:
+                        // 지점으로 이동 (최대 거리 제한)
+                        Vector2 toTarget = target.TargetPosition - startPos;
+                        float distSqr = toTarget.sqrMagnitude;
+                        if (maxDistance > 0f && distSqr > maxDistance * maxDistance)
+                        {
+                            endPos = startPos + toTarget.normalized * maxDistance;
+                        }
+                        else
+                        {
+                            endPos = target.TargetPosition;
+                        }
+                        break;
+
+                    case GlobalEnum.SkillTargetType.SingleEntity:
+                        // 제자리 점프
+                        endPos = startPos;
+                        break;
+                }
+            }
+
+            // JumpComponent 생성
+            JumpComponent jump = new JumpComponent
+            {
+                Height = 0f,
+                Elapsed = 0f,
+                Duration = timing.TotalDuration,
+                MaxHeight = inSkill.Table.ArcHeight,
+                StartPosition = startPos,
+                EndPosition = endPos,
+            };
+            cm.AddComponent(inSkill.OwnerEntityId, jump);
+
+            // 이동 상태 변경
+            if (cm.TryGetComponent<StateComponent>(inSkill.OwnerEntityId, out var state) == true)
+            {
+                state.MovementStatePrev = state.MoveState;
+                state.MoveState = Creature.MovementStates.Jumping;
+                cm.SetComponent(inSkill.OwnerEntityId, state);
+            }
+
+            Debug.Log($"[System_Skill] StartJump - EntityId: {inSkill.OwnerEntityId}, Start: {startPos}, End: {endPos}, MaxHeight: {jump.MaxHeight}, Duration: {jump.Duration:F2}s");
         }
 
         /// <summary>

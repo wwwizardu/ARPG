@@ -25,6 +25,9 @@ namespace ARPG.Component
             { typeof(StateComponent), 300 },
             { typeof(StatComponent), 300 },
 
+            // 점프 컴포넌트 (점프 중인 엔티티만)
+            { typeof(JumpComponent), 50 },
+
             // 보통 사용되는 컴포넌트
             { typeof(InputComponent), 100 },
 

@@ -16,13 +16,23 @@ namespace ARPG.Base
         // [SerializeField] protected Image _hpBar;
         // [SerializeField] protected TMPro.TextMeshPro _textName;
         // [SerializeField] protected Transform _buffImageRoot;
-         
+
+        protected GameObject _shadow;  // 런타임에 Addressable로 로드되는 그림자 프리팹
 
         protected int _entityId = -1; // ECS Entity ID
 
         public int EntityId { get { return _entityId; } }
         public GameObject Visual => _visual;
         public SpriteRenderer SpriteRenderer => _sr;
+        public GameObject Shadow => _shadow;
+
+        /// <summary>
+        /// 그림자 GameObject 등록 (EntityFactory가 Shadow 프리팹 로드 후 호출)
+        /// </summary>
+        public void SetShadow(GameObject shadow)
+        {
+            _shadow = shadow;
+        }
 
         public void SetSpriteLibrary(SpriteLibraryAsset slAsset)
         {
@@ -251,18 +261,37 @@ namespace ARPG.Base
             });
 
             // SkillTimingComponent 추가
-            // DamageTime은 비율(0~1): 전체 Duration 중 데미지 시점 비율
-            float damageRatio = UnityEngine.Mathf.Clamp01(skillTable.DamageTime);
-            float baseDuration = skillTable.Duration;
-            AR.s.Component.AddComponent(skillEntityId, new SkillTimingComponent
+            SkillTimingComponent timing;
+            if (skillTable.SkillType == GlobalEnum.SkillType.Jump)
             {
-                BaseStartDuration = baseDuration * damageRatio,
-                BaseProcessDuration = 0.1f,
-                BaseEndDuration = baseDuration * (1f - damageRatio),
-                StartDuration = baseDuration * damageRatio,
-                ProcessDuration = 0.1f,
-                EndDuration = baseDuration * (1f - damageRatio),
-            });
+                // 점프 스킬: DamageTime을 전체 체공시간(초)로 사용, Process 단계에 몰아넣음
+                float jumpDuration = skillTable.DamageTime;
+                timing = new SkillTimingComponent
+                {
+                    BaseStartDuration = 0f,
+                    BaseProcessDuration = jumpDuration,
+                    BaseEndDuration = 0f,
+                    StartDuration = 0f,
+                    ProcessDuration = jumpDuration,
+                    EndDuration = 0f,
+                };
+            }
+            else
+            {
+                // DamageTime은 비율(0~1): 전체 Duration 중 데미지 시점 비율
+                float damageRatio = UnityEngine.Mathf.Clamp01(skillTable.DamageTime);
+                float baseDuration = skillTable.Duration;
+                timing = new SkillTimingComponent
+                {
+                    BaseStartDuration = baseDuration * damageRatio,
+                    BaseProcessDuration = 0.1f,
+                    BaseEndDuration = baseDuration * (1f - damageRatio),
+                    StartDuration = baseDuration * damageRatio,
+                    ProcessDuration = 0.1f,
+                    EndDuration = baseDuration * (1f - damageRatio),
+                };
+            }
+            AR.s.Component.AddComponent(skillEntityId, timing);
 
             // SkillTargetComponent 추가
             AR.s.Component.AddComponent(skillEntityId, new SkillTargetComponent());

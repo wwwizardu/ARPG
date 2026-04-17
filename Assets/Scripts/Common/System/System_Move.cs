@@ -40,8 +40,11 @@ namespace ARPG.Systems
 
                 InputComponent input = inputPool.GetByIndex(i);
 
+                // 점프(공중) 중에는 System_Jump가 위치를 직접 제어하므로 velocity 이동 정지
+                bool isAirborne = AR.s.Component.HasComponent<JumpComponent>(entityId);
+
                 // 이동 로직: Direction과 Speed 설정 (Position은 System_Render에서 계산)
-                if (input.MoveDirection.sqrMagnitude > 0.0001f)
+                if (isAirborne == false && input.MoveDirection.sqrMagnitude > 0.0001f)
                 {
                     // 방향 설정 (정규화된 입력)
                     velocity.Direction = input.MoveDirection;
@@ -52,7 +55,7 @@ namespace ARPG.Systems
                 }
                 else
                 {
-                    // 입력이 없으면 정지 (방향을 0으로)
+                    // 입력이 없거나 공중이면 정지 (방향을 0으로)
                     velocity.Direction = Vector2.zero;
                 }
 

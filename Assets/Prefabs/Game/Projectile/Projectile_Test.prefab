@@ -9,6 +9,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1719781999232424695}
+  - component: {fileID: -5020225087395910272}
   m_Layer: 0
   m_Name: Projectile_Test
   m_TagString: Untagged
@@ -32,6 +33,21 @@ Transform:
   - {fileID: 2725331340108660613}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &-5020225087395910272
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1070882212113263473}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8ea7a83c20475a4089f0e9508d5ea18, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ARPG.Base.EntityBase
+  _visual: {fileID: 4154438952642915409}
+  _entitySprite: {fileID: -240271522, guid: fdd4c584e3b56e94fb236f0b76e9f497, type: 3}
+  _sr: {fileID: 9174022351142800765}
 --- !u!1 &1371815918710598747
 GameObject:
   m_ObjectHideFlags: 0
@@ -66,6 +82,7 @@ Transform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!212 &9174022351142800765
 SpriteRenderer:
+  serializedVersion: 2
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
@@ -111,6 +128,7 @@ SpriteRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
+  m_MaskInteraction: 0
   m_Sprite: {fileID: 2102484004, guid: fdd4c584e3b56e94fb236f0b76e9f497, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
@@ -120,7 +138,6 @@ SpriteRenderer:
   m_AdaptiveModeThreshold: 0.5
   m_SpriteTileMode: 0
   m_WasSpriteAssigned: 1
-  m_MaskInteraction: 0
   m_SpriteSortPoint: 0
 --- !u!1 &4154438952642915409
 GameObject:

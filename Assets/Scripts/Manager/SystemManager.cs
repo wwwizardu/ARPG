@@ -75,6 +75,10 @@ namespace ARPG.Systems
             System_Skill skillSystem = new();
             RegisterSystems(skillSystem);
 
+            // Priority 220: Jump System (FixedUpdate) - 점프 궤적 갱신 및 착지 처리
+            System_Jump jumpSystem = new();
+            RegisterSystems(jumpSystem);
+
             // Priority 250: HP Check System (FixedUpdate) - HP 0 체크 및 DeathMessage 전송
             System_HpCheck hpCheckSystem = new();
             RegisterSystems(hpCheckSystem);

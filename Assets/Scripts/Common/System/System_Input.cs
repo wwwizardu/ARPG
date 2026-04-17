@@ -90,9 +90,15 @@ namespace ARPG.Systems
                     // 공격 입력 처리
                     if(inputComponent.IsAttacking == true)
                     {
-                        UseSkill(ref inputComponent);
-                    }       
+                        UseSkill(ref inputComponent, 0);
+                    }
                 }
+            }
+
+            // 점프 입력 처리 (슬롯 1 스킬 발동)
+            if (_input.Value.Jump.WasPressedThisFrame() == true)
+            {
+                UseSkill(ref inputComponent, 1);
             }
         }
 
@@ -118,10 +124,9 @@ namespace ARPG.Systems
             return false;
         }
 
-        private void UseSkill(ref InputComponent inInputComponent)
+        private void UseSkill(ref InputComponent inInputComponent, int slotIndex)
         {
             // 슬롯 인덱스로 스킬 엔티티 ID 즉시 계산
-            int slotIndex = 0; // 기본 공격 슬롯
             int skillEntityId = EntityIdHelper.GetDeterministicId(_playerEntityId, EntityIdCategory.Skill, slotIndex);
 
             // 스킬이 실제로 존재하는지 확인

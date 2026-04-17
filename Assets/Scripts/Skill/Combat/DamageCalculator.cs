@@ -1,5 +1,6 @@
 using UnityEngine;
 using ARPG.Component;
+using ARPG.Systems;
 using ARPG.Tables;
 
 namespace ARPG.Skill.Combat
@@ -117,6 +118,16 @@ namespace ARPG.Skill.Combat
             {
                 DamageType = skillData.DamageType
             };
+
+            // 공중 무적 판정: 타겟이 일정 높이 이상 점프 중이면 회피 처리
+            if (AR.s.Component.TryGetComponent<JumpComponent>(targetId, out var jump) == true)
+            {
+                if (jump.Height >= System_Jump.InvincibleHeight)
+                {
+                    result.IsEvaded = true;
+                    return result;
+                }
+            }
 
             // 공격자/타겟 스탯 가져오기
             if (AR.s.Component.TryGetComponent<StatComponent>(attackerId, out var attackerStat) == false)

@@ -282,6 +282,7 @@ namespace ARPG.Tables
         [JsonProperty("ActivateName")] public string ActivateName = string.Empty;       // 애니메이션 이름
         [JsonProperty("HitEffect")] public string HitEffect = string.Empty;             // 애니메이션 이름
         [JsonProperty("ProjectileId")] public int ProjectileId;                          // 발사체 테이블 ID (0이면 즉발)
+        [JsonProperty("ArcHeight")] public float ArcHeight;                              // 포물선 최대 높이 (점프, Arc 투사체 등에 사용. 0이면 지면 유지)
 
 
     }

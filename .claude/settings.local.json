@@ -3,7 +3,9 @@
     "allow": [
       "mcp__google-sheets__sheets_read",
       "mcp__google-sheets__sheets_write",
-      "mcp__google-sheets__sheets_list"
+      "mcp__google-sheets__sheets_list",
+      "Bash(xargs grep *)",
+      "Bash(find /c/Projects/ARPG/Assets/Scripts -name \"*.cs\" -type f -exec grep -l \"Jumping\\\\|Airborne\\\\|Grounded\\\\|IsGround\" {} \\\\;)"
     ]
   }
 }

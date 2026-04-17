@@ -279,6 +279,10 @@ namespace ARPG.Systems
                             ChangeCategory(entityId, ref spriteAnim, GlobalEnum.AnimCategory.Move, animData, true);
                             changed = true;
                             break;
+                        case Creature.MovementStates.Jumping:
+                            ChangeCategory(entityId, ref spriteAnim, GlobalEnum.AnimCategory.Jump, animData, false);
+                            changed = true;
+                            break;
                     }
 
                     state.MovementStatePrev = state.MoveState;

@@ -1,3 +1,4 @@
+using ARPG.Base;
 using ARPG.Component;
 using UnityEngine;
 using System.Collections.Generic;
@@ -10,12 +11,12 @@ namespace ARPG.Systems
         public int Priority => 1000; // 가장 마지막에 실행 (다른 시스템들이 데이터 업데이트 완료 후)
 
         private ComponentManager _componentManager;
-        private Dictionary<int, GameObject> _entityToGameObject; // EntityId -> GameObject 매핑
+        private Dictionary<int, EntityBase> _entityToBase; // EntityId -> EntityBase 매핑 (gameObject, _sr, _shadow 모두 접근 가능)
 
         public void OnCreate()
         {
             _componentManager = AR.s.Component;
-            _entityToGameObject = new Dictionary<int, GameObject>();
+            _entityToBase = new Dictionary<int, EntityBase>();
 
             Debug.Log("System_Render Created");
         }
@@ -32,45 +33,55 @@ namespace ARPG.Systems
 
         public void Reset()
         {
-            _entityToGameObject.Clear();
-            Debug.Log("System_Render Reset - Entity to GameObject mapping cleared");
+            _entityToBase.Clear();
+            Debug.Log("System_Render Reset - Entity to EntityBase mapping cleared");
         }
 
-        // GameObject 등록 (Entity 생성 시 호출)
-        public void RegisterGameObject(int entityId, GameObject gameObject)
+        // EntityBase 등록 (Entity 생성 시 호출)
+        public void RegisterEntity(int entityId, EntityBase entityBase)
         {
-            if (_entityToGameObject == null)
-                _entityToGameObject = new Dictionary<int, GameObject>();
+            if (_entityToBase == null)
+                _entityToBase = new Dictionary<int, EntityBase>();
 
-            _entityToGameObject[entityId] = gameObject;
-            Debug.Log($"GameObject registered for Entity {entityId}: {gameObject.name}");
+            if (entityBase == null)
+            {
+                Debug.LogWarning($"[System_Render] RegisterEntity - EntityBase is null for EntityId: {entityId}");
+                return;
+            }
+
+            _entityToBase[entityId] = entityBase;
+            Debug.Log($"Entity registered for {entityId}: {entityBase.gameObject.name}");
+        }
+
+        public EntityBase GetEntity(int entityId)
+        {
+            if (_entityToBase == null)
+                return null;
+
+            _entityToBase.TryGetValue(entityId, out EntityBase entityBase);
+            return entityBase;
         }
 
         public GameObject GetGameObject(int entityId)
         {
-            if (_entityToGameObject == null)
-                return null;
-
-            if (_entityToGameObject.TryGetValue(entityId, out GameObject go))
-                return go;
-
-            return null;
+            EntityBase entityBase = GetEntity(entityId);
+            return entityBase != null ? entityBase.gameObject : null;
         }
 
-        // GameObject 해제 (Entity 삭제 시 호출)
-        public void UnregisterGameObject(int entityId)
+        // EntityBase 해제 (Entity 삭제 시 호출)
+        public void UnregisterEntity(int entityId)
         {
-            if (_entityToGameObject == null)
+            if (_entityToBase == null)
                 return;
 
-            _entityToGameObject.Remove(entityId);
-            Debug.Log($"GameObject unregistered for Entity {entityId}");
+            _entityToBase.Remove(entityId);
+            Debug.Log($"Entity unregistered for {entityId}");
         }
 
         // Update: Velocity를 이용해 Position 계산 후 GameObject 동기화
         public void OnUpdate(float inDeltaTime)
         {
-            if (_componentManager == null || _entityToGameObject == null)
+            if (_componentManager == null || _entityToBase == null)
                 return;
 
             SparseSet<TransformComponent> transformPool = _componentManager.GetComponentPool<TransformComponent>();
@@ -81,23 +92,20 @@ namespace ARPG.Systems
                 int entityId = transformPool.GetEntityId(i);
                 TransformComponent transformComponent = transformPool.GetByIndex(i);
 
-                // EntityId에 해당하는 GameObject가 있는지 확인
-                if (_entityToGameObject.TryGetValue(entityId, out GameObject gameObject) == false)
+                // EntityId에 해당하는 EntityBase가 있는지 확인
+                if (_entityToBase.TryGetValue(entityId, out EntityBase entityBase) == false)
                     continue;
 
-                if (gameObject == null)
+                if (entityBase == null)
                     continue;
+
+                GameObject gameObject = entityBase.gameObject;
 
                 // Velocity를 이용해 Position 업데이트
                 if (_componentManager.TryGetComponent<VelocityComponent>(entityId, out var velocity))
                 {
-                    if(0 < velocity.Speed)
+                    if (0 < velocity.Speed)
                     {
-                        if(entityId != 0)
-                        {
-                            int k = 0 ;
-                        }
-
                         transformComponent.Position += velocity.Velocity * inDeltaTime;
 
                         // 업데이트된 Position 저장
@@ -105,7 +113,7 @@ namespace ARPG.Systems
                     }
                 }
 
-                // ECS TransformComponent -> GameObject Transform 동기화
+                // 루트 GameObject는 지면 위치 (판정 기준 그대로)
                 gameObject.transform.position = new Vector3(
                     transformComponent.Position.x,
                     transformComponent.Position.y,
@@ -119,22 +127,63 @@ namespace ARPG.Systems
                     transformComponent.Scale.y,
                     1f
                 );
+
+                // 점프 중이면 스프라이트만 위로 띄움 (그림자는 지면에 그대로)
+                ApplyJumpHeight(entityId, entityBase);
             }
         }
 
-        public bool RegisterEntity(IEntity inEntity)
+        /// <summary>
+        /// 점프 높이를 스프라이트에 적용. 그림자는 지면에 고정되므로 건드리지 않음.
+        /// 그림자 스케일은 높이에 따라 축소 (깊이감)
+        /// </summary>
+        private void ApplyJumpHeight(int entityId, EntityBase entityBase)
         {
-            return false;
-        }
+            if (entityBase.SpriteRenderer == null)
+                return;
 
-        public bool UnregisterEntity(IEntity inEntity)
-        {
-            return false;
+            Transform spriteTransform = entityBase.SpriteRenderer.transform;
+
+            if (_componentManager.TryGetComponent<JumpComponent>(entityId, out var jump))
+            {
+                // 스프라이트만 위로 오프셋
+                Vector3 localPos = spriteTransform.localPosition;
+                localPos.y = jump.Height;
+                spriteTransform.localPosition = localPos;
+
+                // 그림자 스케일 축소 (Height=0 → 1.0배, Height=MaxHeight → 0.7배)
+                if (entityBase.Shadow != null && jump.MaxHeight > 0f)
+                {
+                    float heightRatio = jump.Height / jump.MaxHeight;
+                    float shadowScale = 1f - heightRatio * 0.3f;
+                    entityBase.Shadow.transform.localScale = new Vector3(shadowScale, shadowScale, 1f);
+                }
+            }
+            else
+            {
+                // 점프 중이 아니면 스프라이트 Y는 0
+                if (spriteTransform.localPosition.y != 0f)
+                {
+                    Vector3 localPos = spriteTransform.localPosition;
+                    localPos.y = 0f;
+                    spriteTransform.localPosition = localPos;
+                }
+
+                // 그림자 스케일 원복
+                if (entityBase.Shadow != null)
+                {
+                    Vector3 scale = entityBase.Shadow.transform.localScale;
+                    if (scale.x != 1f || scale.y != 1f)
+                    {
+                        entityBase.Shadow.transform.localScale = Vector3.one;
+                    }
+                }
+            }
         }
 
         public void Dispose()
         {
-            _entityToGameObject?.Clear();
+            _entityToBase?.Clear();
             _componentManager = null;
         }
     }

@@ -76,7 +76,15 @@ namespace ARPG.Utility
             var renderSystem = AR.s.System.GetSystem<Systems.System_Render>();
             if (renderSystem != null)
             {
-                renderSystem.RegisterGameObject(entityId, obj);
+                var entityBase = obj.GetComponent<Base.EntityBase>();
+                if (entityBase != null)
+                {
+                    renderSystem.RegisterEntity(entityId, entityBase);
+                }
+                else
+                {
+                    Debug.LogError($"[ProjectileHelper] EntityBase component not found on projectile prefab. Add EntityBase to {obj.name}.");
+                }
             }
 
             Debug.Log($"[ProjectileHelper] Spawned projectile - EntityId: {entityId}, TableId: {projectileTableId}, Owner: {ownerEntityId}, Direction: {direction}");

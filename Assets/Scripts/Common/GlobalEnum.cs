@@ -192,6 +192,7 @@ public class GlobalEnum
         Projectile  = 1 << 10,
         Buff        = 1 << 11,
         Debuff      = 1 << 12,
+        Move        = 1 << 13,  // 이동 계열 (점프, 대시, 순간이동 등)
     }
 
     public enum SkillType
@@ -201,6 +202,7 @@ public class GlobalEnum
         Range,
         Buff,
         Summon,
+        Jump,       // 점프 스킬 (시전자를 포물선 궤적으로 이동)
     }
 
     public enum SkillSubType
@@ -213,6 +215,7 @@ public class GlobalEnum
     {
         SingleEntity,
         Direction,
+        Position,   // 지점 지정 (마우스 위치로 도약하는 Leap Slam 등)
     }
 
     public enum AiType
@@ -325,6 +328,7 @@ public class GlobalEnum
         Move = 1,
         Attack = 2,
         Dead = 3,
+        Jump = 4,
     }
 
     static public ushort PLAYER_INVENTORY_SLOTCOUNT_MAX = 60;

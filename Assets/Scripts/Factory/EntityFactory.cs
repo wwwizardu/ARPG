@@ -252,8 +252,9 @@ namespace ARPG.Factory
             // 저장된 장비의 스탯 modifier 복원
             EquipHelper.ApplyAllEquipmentModifiers(entityId, AR.s.Data.Player._inventoryEquip);
 
-            // 플레이어 스킬 (SkillId 1)
-            CreateSkill(entityId, 0, 1);
+            // 플레이어 스킬
+            CreateSkill(entityId, 0, 1); // 슬롯 0: Strike
+            CreateSkill(entityId, 1, 5); // 슬롯 1: QuickHop (Space 키로 발동)
 
             RegisterToSystems(entityId, obj, table.AnimationId);
 
@@ -272,6 +273,7 @@ namespace ARPG.Factory
         #region 공통 컴포넌트 추가 메서드
 
         private const string UI_CANVAS_PREFAB_KEY = "Prefabs/UICanvas";
+        private const string SHADOW_PREFAB_KEY = "Prefabs/Shadow";
 
         /// <summary>
         /// CreatureTable 기반 공통 컴포넌트 추가 (Stat + State + Velocity + HP바 프리팹 로드)
@@ -315,6 +317,21 @@ namespace ARPG.Factory
             catch (System.Exception e)
             {
                 Debug.LogWarning($"[EntityFactory] Failed to load HP bar prefab: {e.Message}");
+            }
+
+            // 그림자 프리팹 로드 → _visual 아래 자식으로 추가 (지면 고정)
+            try
+            {
+                GameObject shadowObj = await Addressables.InstantiateAsync(SHADOW_PREFAB_KEY, entity.Visual.transform).ToUniTask();
+                if (shadowObj != null)
+                {
+                    shadowObj.transform.localPosition = Vector3.zero;
+                    entity.SetShadow(shadowObj);
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"[EntityFactory] Failed to load Shadow prefab: {e.Message}");
             }
         }
 
@@ -477,15 +494,34 @@ namespace ARPG.Factory
                 ElapsedTime = 0f
             });
 
-            AR.s.Component.AddComponent(skillEntityId, new SkillTimingComponent
+            SkillTimingComponent timing;
+            if (skillTable.SkillType == GlobalEnum.SkillType.Jump)
             {
-                BaseStartDuration = skillTable.DamageTime,
-                BaseProcessDuration = 0.1f,
-                BaseEndDuration = skillTable.Duration - skillTable.DamageTime,
-                StartDuration = skillTable.DamageTime,
-                ProcessDuration = 0.1f,
-                EndDuration = skillTable.Duration - skillTable.DamageTime,
-            });
+                // 점프 스킬: DamageTime을 전체 체공시간(초)로 사용, Process 단계에 몰아넣음
+                float jumpDuration = skillTable.DamageTime;
+                timing = new SkillTimingComponent
+                {
+                    BaseStartDuration = 0f,
+                    BaseProcessDuration = jumpDuration,
+                    BaseEndDuration = 0f,
+                    StartDuration = 0f,
+                    ProcessDuration = jumpDuration,
+                    EndDuration = 0f,
+                };
+            }
+            else
+            {
+                timing = new SkillTimingComponent
+                {
+                    BaseStartDuration = skillTable.DamageTime,
+                    BaseProcessDuration = 0.1f,
+                    BaseEndDuration = skillTable.Duration - skillTable.DamageTime,
+                    StartDuration = skillTable.DamageTime,
+                    ProcessDuration = 0.1f,
+                    EndDuration = skillTable.Duration - skillTable.DamageTime,
+                };
+            }
+            AR.s.Component.AddComponent(skillEntityId, timing);
 
             AR.s.Component.AddComponent(skillEntityId, new SkillTargetComponent());
         }
@@ -512,11 +548,19 @@ namespace ARPG.Factory
 
         private static void RegisterToSystems(int entityId, GameObject obj, int animationId)
         {
-            // System_Render에 등록
+            // System_Render에 등록 (EntityBase 기반)
             var renderSystem = AR.s.System.GetSystem<Systems.System_Render>();
             if (renderSystem != null)
             {
-                renderSystem.RegisterGameObject(entityId, obj);
+                var entityBase = obj.GetComponent<Base.EntityBase>();
+                if (entityBase != null)
+                {
+                    renderSystem.RegisterEntity(entityId, entityBase);
+                }
+                else
+                {
+                    Debug.LogError($"[EntityFactory] EntityBase component not found on {obj.name}. Add EntityBase to the prefab.");
+                }
             }
 
             // 애니메이션이 있는 경우 SpriteAnimationComponent 추가

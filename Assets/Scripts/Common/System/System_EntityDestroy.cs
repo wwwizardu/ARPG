@@ -69,11 +69,19 @@ namespace ARPG.Systems
                 {
                     entity.OnEntityDestroy();
                     EntityIdHelper.DestroyEntity(entityId);
+
+                    // System_Render에서도 등록 해제 (딕셔너리 정리)
+                    var renderSystem = AR.s.System.GetSystem<System_Render>();
+                    if (renderSystem != null)
+                    {
+                        renderSystem.UnregisterEntity(entityId);
+                    }
+
                     Object.Destroy(entity.gameObject);
                 }
                 else
                 {
-                    // EntityBase 없이 ECS만 있는 엔티티 (발사체 등)
+                    // MessageManager에 등록되지 않은 엔티티 (발사체 등)
                     var renderSystem = AR.s.System.GetSystem<System_Render>();
                     if (renderSystem != null)
                     {
@@ -98,7 +106,7 @@ namespace ARPG.Systems
                                 Object.Destroy(go);
                             }
                         }
-                        renderSystem.UnregisterGameObject(entityId);
+                        renderSystem.UnregisterEntity(entityId);
                     }
 
                     EntityIdHelper.DestroyEntity(entityId);
