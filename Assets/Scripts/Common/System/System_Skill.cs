@@ -182,6 +182,8 @@ namespace ARPG.Systems
                 if (isAttack && inSkill.Table != null)
                 {
                     float weaponAttackSpeed = GetWeaponAttackSpeed(inSkill.OwnerEntityId);
+                    // 스킬 고유 공속 배율 (예: Cleave 80%)을 무기 공속에 먼저 곱함
+                    weaponAttackSpeed *= inSkill.Table.BaseAttackSpeedMul / 100f;
                     if (weaponAttackSpeed > 0f)
                     {
                         float weaponMultiplier = 1f / weaponAttackSpeed;

@@ -145,11 +145,12 @@ namespace ARPG.Skill.Combat
             poisMin += attackerStat.FinalPoisonAttackMin;
             poisMax += attackerStat.FinalPoisonAttackMax;
 
-            // 배율 + 치명타 기대값
+            // 배율 + 치명타 기대값 (스킬 베이스 배율은 플랫 합산 후 적용)
+            float baseDmgMul = skillData.BaseDamageMul / 100f;
             float mul = GetSkillDamageMultiplier(attackerStat);
             int totalCritRate = Mathf.Clamp(baseCritRate + attackerStat.FinalCriRate, 0, 100);
             float critExpected = 1f + (totalCritRate / 100f) * (GetCritMultiplier(attackerStat) - 1f);
-            float m = mul * critExpected;
+            float m = baseDmgMul * mul * critExpected;
 
             EstimatedDamage result;
             result.PhysMin = Mathf.RoundToInt(physMin * m);
@@ -220,12 +221,14 @@ namespace ARPG.Skill.Combat
         /// <summary>
         /// UI용 예상 공격 속도 (초당 공격 횟수, Attack 기준)
         /// Spell은 시전 속도 별도 표시하므로 여기선 Attack만
+        /// skillData 전달 시 BaseAttackSpeedMul 반영 (스킬 고유 공속 배율)
         /// </summary>
-        public static float EstimateAttackSpeed(StatComponent attackerStat, int attackerId)
+        public static float EstimateAttackSpeed(StatComponent attackerStat, int attackerId, Tables.SkillTable skillData = null)
         {
             float weaponAS = Utility.WeaponHelper.GetWeaponAttackSpeed(attackerId);
             if (weaponAS <= 0f) weaponAS = 1f;
-            return weaponAS * (1f + attackerStat.FinalAttackSpeed / 100f);
+            float skillMul = skillData != null ? skillData.BaseAttackSpeedMul / 100f : 1f;
+            return weaponAS * skillMul * (1f + attackerStat.FinalAttackSpeed / 100f);
         }
 
         /// <summary>
@@ -347,6 +350,17 @@ namespace ARPG.Skill.Combat
                     case GlobalEnum.DamageType.Lightning: lightningDamage += skillAdded; break;
                     case GlobalEnum.DamageType.Poison:    poisonDamage += skillAdded; break;
                 }
+            }
+
+            // ========== 2-2단계: 스킬 베이스 데미지 배율 (플랫 합산 후, 스킬 배율/치명타 전) ==========
+            if (skillData.BaseDamageMul != 100)
+            {
+                float baseDmgMul = skillData.BaseDamageMul / 100f;
+                physDamage *= baseDmgMul;
+                fireDamage *= baseDmgMul;
+                iceDamage *= baseDmgMul;
+                lightningDamage *= baseDmgMul;
+                poisonDamage *= baseDmgMul;
             }
 
             // ========== 3단계: 스킬 배율 (모든 속성에 동일 적용) ==========

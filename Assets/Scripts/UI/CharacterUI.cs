@@ -186,8 +186,8 @@ namespace ARPG.UI
             _textStat[13].text = $"치명타 피해 {_statComponent.FinalCriDamage}%";
             _textStat[14].text = $"이동 속도 {_statComponent.FinalMoveSpeed}";
 
-            // 공격 속도: 무기 AS × (1 + 캐릭터 공속%/100)
-            float estAttackSpeed = DamageCalculator.EstimateAttackSpeed(_statComponent, playerId);
+            // 공격 속도: 무기 AS × 스킬 BaseAttackSpeedMul × (1 + 캐릭터 공속%/100)
+            float estAttackSpeed = DamageCalculator.EstimateAttackSpeed(_statComponent, playerId, basicSkill);
             _textStat[15].text = $"공격 속도 {estAttackSpeed:F2}";
             _textStat[16].text = $"시전 속도 {_statComponent.FinalCastSpeed}";
             _textStat[17].text = $"방어력 {_statComponent.FinalDefense}";
