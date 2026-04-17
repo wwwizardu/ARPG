@@ -269,18 +269,22 @@ namespace ARPG.Tables
         [JsonProperty("SkillRangeMax")] public float SkillRangeMax;             // 스킬 최대 사정 거리
         [JsonProperty("Cooltime")] public float Cooltime;                       // 쿨 타임
         [JsonProperty("Mana")] public int Mana;                                 // 마나 소모량
-        [JsonProperty("DamageTime")] public float DamageTime;                   // 데미지 입히는 시간
-        [JsonProperty("DamageType")] public GE.DamageType DamageType;           // 데미지 입히는 시간
+        [JsonProperty("StartTime")] public float StartTime;                     // Start 상태 지속 시간 (초) - 대부분 0
+        [JsonProperty("ProcessTime")] public float ProcessTime;                 // Process 상태 지속 시간 (초) - 애니메이션 재생 시간
+        [JsonProperty("EndTime")] public float EndTime;                         // End 상태 지속 시간 (초) - 대부분 0
+        [JsonProperty("DamageTime")] public float DamageTime;                   // Process 내부 히트 오프셋 비율 (0~1)
+        [JsonProperty("HitCount")] public int HitCount;                         // 히트 횟수 (1=단발, 2+=멀티히트)
+        [JsonProperty("HitInterval")] public float HitInterval;                 // 멀티히트 간격 (초)
+        [JsonProperty("DamageType")] public GE.DamageType DamageType;           // 데미지 속성
         [JsonProperty("DamageMin")] public int DamageMin;                       // 데미지 최소값
         [JsonProperty("DamageMax")] public int DamageMax;                       // 데미지 최대값
-        [JsonProperty("Duration")] public int Duration;                         // 지속 시간
         [JsonProperty("SkillTargetType")] public GE.SkillTargetType SkillTargetType; // 스킬 타겟 타입
         [JsonProperty("SkillTargetRange1")] public float SkillTargetRange1;     // 스킬 타겟 타입 범위 1
         [JsonProperty("SkillTargetRange2")] public float SkillTargetRange2;     // 스킬 타겟 타입 범위 2
         [JsonProperty("AnimationName")] public string AnimationName = string.Empty;     // 애니메이션 이름
-        [JsonProperty("StartEffectName")] public string StartEffectName = string.Empty; // 애니메이션 이름
-        [JsonProperty("ActivateName")] public string ActivateName = string.Empty;       // 애니메이션 이름
-        [JsonProperty("HitEffect")] public string HitEffect = string.Empty;             // 애니메이션 이름
+        [JsonProperty("StartEffectName")] public string StartEffectName = string.Empty; // 시작 이펙트
+        [JsonProperty("ActivateName")] public string ActivateName = string.Empty;       // 활성 이펙트
+        [JsonProperty("HitEffect")] public string HitEffect = string.Empty;             // 히트 이펙트
         [JsonProperty("ProjectileId")] public int ProjectileId;                          // 발사체 테이블 ID (0이면 즉발)
         [JsonProperty("ArcHeight")] public float ArcHeight;                              // 포물선 최대 높이 (점프, Arc 투사체 등에 사용. 0이면 지면 유지)
 

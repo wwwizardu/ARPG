@@ -105,6 +105,13 @@ namespace ARPG.Systems
                 if (cm.HasComponent<StatComponent>(targetId) == false)
                     continue;
 
+                // 공중 무적 상태면 투사체가 아래로 통과 (충돌 자체 스킵)
+                if (cm.TryGetComponent<JumpComponent>(targetId, out var targetJump))
+                {
+                    if (targetJump.Height >= System_Jump.InvincibleHeight)
+                        continue;
+                }
+
                 TransformComponent targetTransform = transformPool.GetByIndex(i);
                 float sqrDistance = (targetTransform.Position - position).sqrMagnitude;
 

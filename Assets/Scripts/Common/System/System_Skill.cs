@@ -177,19 +177,17 @@ namespace ARPG.Systems
                 GlobalEnum.SkillTag tags = inSkill.Table != null ? inSkill.Table.Tags : GlobalEnum.SkillTag.None;
                 bool isAttack = (tags & GlobalEnum.SkillTag.Attack) != 0;
 
-                // Attack 태그: 무기 공속으로 Base Duration 재계산
-                // DamageTime은 비율(0~1)이므로 totalTime에 비율을 곱해 Start/End 배분
-                if (isAttack)
+                // Attack 태그: 무기 공속으로 Base Duration 균등 스케일
+                // StartTime/ProcessTime/EndTime을 무기 공속 배율로 모두 스케일 (DamageTime은 비율이라 불변)
+                if (isAttack && inSkill.Table != null)
                 {
                     float weaponAttackSpeed = GetWeaponAttackSpeed(inSkill.OwnerEntityId);
                     if (weaponAttackSpeed > 0f)
                     {
-                        float totalTime = 1f / weaponAttackSpeed;
-                        float damageRatio = inSkill.Table != null ? UnityEngine.Mathf.Clamp01(inSkill.Table.DamageTime) : 0.7f;
-
-                        timing.BaseStartDuration = totalTime * damageRatio;
-                        timing.BaseProcessDuration = 0.1f;
-                        timing.BaseEndDuration = totalTime * (1f - damageRatio);
+                        float weaponMultiplier = 1f / weaponAttackSpeed;
+                        timing.BaseStartDuration = inSkill.Table.StartTime * weaponMultiplier;
+                        timing.BaseProcessDuration = inSkill.Table.ProcessTime * weaponMultiplier;
+                        timing.BaseEndDuration = inSkill.Table.EndTime * weaponMultiplier;
                     }
                 }
 
@@ -364,7 +362,8 @@ namespace ARPG.Systems
 
 
         /// <summary>
-        /// Start 상태 진입 시 호출 - 스킬 준비 모션 시작
+        /// Start 상태 진입 시 호출 - 스킬 준비 함수 호출
+        /// 현재는 애니메이션 없이 준비 로직만 실행 (StartTime이 0이면 즉시 Process로 전환됨)
         /// </summary>
         private void OnEnterStartState(int skillEntityId, ref SkillComponent inSkill)
         {
@@ -374,41 +373,7 @@ namespace ARPG.Systems
                 StartJump(skillEntityId, ref inSkill);
             }
 
-            // AnimatorComponent를 통해 애니메이션 재생 요청
-            if (AR.s.Component.TryGetComponent<AnimatorComponent>(inSkill.OwnerEntityId, out var animatorComp))
-            {
-                if (inSkill.Table != null && string.IsNullOrEmpty(inSkill.Table.AnimationName) == false)
-                {
-                    // AnimationName(string)을 AnimCategory enum으로 변환
-                    if (System.Enum.TryParse<GlobalEnum.AnimCategory>(inSkill.Table.AnimationName, out var category))
-                    {
-                        // StartDuration을 전달하여 마지막 프레임이 DamageTime에 맞춰짐
-                        float duration = 0f;
-                        if (AR.s.Component.TryGetComponent<SkillTimingComponent>(skillEntityId, out var timing))
-                        {
-                            duration = timing.StartDuration;
-                        }
-
-                        animatorComp.RequestAnimation(category, true, duration);
-                        AR.s.Component.SetComponent(inSkill.OwnerEntityId, animatorComp);
-
-                        Debug.Log($"[System_Skill] Requested animation '{category}' (Duration: {duration:F3}) - SkillEntityId: {skillEntityId}, OwnerEntityId: {inSkill.OwnerEntityId}");
-                    }
-                    else
-                    {
-                        Debug.LogWarning($"[System_Skill] Invalid AnimCategory name: '{inSkill.Table.AnimationName}' for SkillId: {inSkill.SkillId}");
-                    }
-                }
-                else
-                {
-                    Debug.LogWarning($"[System_Skill] No animation name set for SkillId: {inSkill.SkillId}");
-                }
-            }
-            else
-            {
-                Debug.LogWarning($"[System_Skill] AnimatorComponent not found for OwnerEntityId: {inSkill.OwnerEntityId}");
-            }
-
+            // TODO: 나중에 준비 애니메이션이 생기면 여기서 재생 (StartDuration 기준)
             // TODO: 시작 이펙트, 사운드 등
         }
 
@@ -498,16 +463,39 @@ namespace ARPG.Systems
         }
 
         /// <summary>
-        /// Process 상태 진입 시 호출 - 실제 스킬 효과 발생
+        /// Process 상태 진입 시 호출 - 실제 스킬 효과 발생 + 애니메이션 재생
         /// </summary>
         private void OnEnterProcessState(int skillEntityId, ref SkillComponent inSkill)
         {
             // SkillTarget 컴포넌트에서 타겟 정보 가져오기
             if (!AR.s.Component.TryGetComponent<SkillTargetComponent>(skillEntityId, out var target))
                 return;
-        
 
-            // Debug.Log($"[System_Skill] Skill Process - SkillEntityId: {skillEntityId}, Target: {target.TargetId}");
+            // Process 기간 동안 애니메이션 재생 요청
+            // DamageTime(비율) * ProcessDuration 지점에서 타격 프레임이 나오도록 에셋을 구성
+            if (AR.s.Component.TryGetComponent<AnimatorComponent>(inSkill.OwnerEntityId, out var animatorComp))
+            {
+                if (inSkill.Table != null && string.IsNullOrEmpty(inSkill.Table.AnimationName) == false)
+                {
+                    if (System.Enum.TryParse<GlobalEnum.AnimCategory>(inSkill.Table.AnimationName, out var category))
+                    {
+                        float duration = 0f;
+                        if (AR.s.Component.TryGetComponent<SkillTimingComponent>(skillEntityId, out var timing))
+                        {
+                            duration = timing.ProcessDuration;
+                        }
+
+                        animatorComp.RequestAnimation(category, true, duration);
+                        AR.s.Component.SetComponent(inSkill.OwnerEntityId, animatorComp);
+
+                        Debug.Log($"[System_Skill] Requested animation '{category}' (ProcessDuration: {duration:F3}) - SkillEntityId: {skillEntityId}, OwnerEntityId: {inSkill.OwnerEntityId}");
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[System_Skill] Invalid AnimCategory name: '{inSkill.Table.AnimationName}' for SkillId: {inSkill.SkillId}");
+                    }
+                }
+            }
         }
 
         /// <summary>
@@ -620,7 +608,7 @@ namespace ARPG.Systems
         #region Skill Type Processing Methods
 
         /// <summary>
-        /// MultiHit 타입 스킬 처리 - 일정 간격으로 여러 번 타격
+        /// MultiHit 타입 스킬 처리 - DamageTime(Process 내부 비율) 지점에서 첫 히트, HitInterval 간격으로 반복
         /// Single 타입은 HitCount=1, HitInterval=0으로 동작
         /// </summary>
         private void ProcessMultiHitSkill(int skillEntityId, ref SkillStateComponent state, ref SkillComponent skill)
@@ -629,8 +617,17 @@ namespace ARPG.Systems
             if (skill.CurrentHitIndex >= skill.HitCount)
                 return;
 
-            // 다음 히트 타이밍 계산
-            float nextHitTime = skill.CurrentHitIndex * skill.HitInterval;
+            // Process 기간 가져오기
+            float processDuration = 0f;
+            if (AR.s.Component.TryGetComponent<SkillTimingComponent>(skillEntityId, out var timing))
+            {
+                processDuration = timing.ProcessDuration;
+            }
+
+            // DamageTime(비율) * ProcessDuration = 첫 히트 오프셋
+            float damageRatio = skill.Table != null ? Mathf.Clamp01(skill.Table.DamageTime) : 0f;
+            float firstHitOffset = damageRatio * processDuration;
+            float nextHitTime = firstHitOffset + skill.CurrentHitIndex * skill.HitInterval;
 
             // 다음 히트 시간이 되었으면 효과 적용
             if (state.ElapsedTime >= nextHitTime)
@@ -638,7 +635,7 @@ namespace ARPG.Systems
                 ProcessSkillHit(skillEntityId, skill);
                 skill.CurrentHitIndex++;
 
-                Debug.Log($"[System_Skill] MultiHit {skill.CurrentHitIndex}/{skill.HitCount} - SkillEntityId: {skillEntityId}");
+                Debug.Log($"[System_Skill] MultiHit {skill.CurrentHitIndex}/{skill.HitCount} at {state.ElapsedTime:F3}s - SkillEntityId: {skillEntityId}");
             }
         }
 

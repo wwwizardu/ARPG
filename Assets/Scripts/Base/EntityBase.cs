@@ -249,8 +249,8 @@ namespace ARPG.Base
                 IsInitialized = true,
                 IsEnabled = true,
                 ExecutionType = SkillExecutionType.MultiHit,
-                HitCount = 1,
-                HitInterval = 0,
+                HitCount = skillTable.HitCount > 0 ? skillTable.HitCount : 1,
+                HitInterval = skillTable.HitInterval,
             });
 
             // SkillStateComponent 추가
@@ -261,37 +261,15 @@ namespace ARPG.Base
             });
 
             // SkillTimingComponent 추가
-            SkillTimingComponent timing;
-            if (skillTable.SkillType == GlobalEnum.SkillType.Jump)
+            AR.s.Component.AddComponent(skillEntityId, new SkillTimingComponent
             {
-                // 점프 스킬: DamageTime을 전체 체공시간(초)로 사용, Process 단계에 몰아넣음
-                float jumpDuration = skillTable.DamageTime;
-                timing = new SkillTimingComponent
-                {
-                    BaseStartDuration = 0f,
-                    BaseProcessDuration = jumpDuration,
-                    BaseEndDuration = 0f,
-                    StartDuration = 0f,
-                    ProcessDuration = jumpDuration,
-                    EndDuration = 0f,
-                };
-            }
-            else
-            {
-                // DamageTime은 비율(0~1): 전체 Duration 중 데미지 시점 비율
-                float damageRatio = UnityEngine.Mathf.Clamp01(skillTable.DamageTime);
-                float baseDuration = skillTable.Duration;
-                timing = new SkillTimingComponent
-                {
-                    BaseStartDuration = baseDuration * damageRatio,
-                    BaseProcessDuration = 0.1f,
-                    BaseEndDuration = baseDuration * (1f - damageRatio),
-                    StartDuration = baseDuration * damageRatio,
-                    ProcessDuration = 0.1f,
-                    EndDuration = baseDuration * (1f - damageRatio),
-                };
-            }
-            AR.s.Component.AddComponent(skillEntityId, timing);
+                BaseStartDuration = skillTable.StartTime,
+                BaseProcessDuration = skillTable.ProcessTime,
+                BaseEndDuration = skillTable.EndTime,
+                StartDuration = skillTable.StartTime,
+                ProcessDuration = skillTable.ProcessTime,
+                EndDuration = skillTable.EndTime,
+            });
 
             // SkillTargetComponent 추가
             AR.s.Component.AddComponent(skillEntityId, new SkillTargetComponent());

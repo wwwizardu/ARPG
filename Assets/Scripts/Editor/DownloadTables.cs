@@ -51,7 +51,7 @@ namespace ARPG.Editor
 
             await DownloadTable<DropEquipmentTable>("1267382287&range=A:V", 1, SaveType.String);
 
-            await DownloadTable<SkillTable>("92727160&range=A:X", 1, SaveType.String);
+            await DownloadTable<SkillTable>("92727160&range=A:AB", 1, SaveType.String);
 
             await DownloadTable<BuffTable>("127577579&range=A:J", 1, SaveType.String);
 
@@ -452,9 +452,9 @@ namespace ARPG.Editor
 
         private static void ParseSkillTable(SkillTable table, string[] values)
         {
-            if (values.Length < 24)
+            if (values.Length < 28)
             {
-                Debug.LogError($"[ParseSkillTable] Invalid data length. Expected at least 24, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseSkillTable] Invalid data length. Expected at least 28, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
@@ -467,20 +467,24 @@ namespace ARPG.Editor
             table.SkillRangeMax = float.Parse(values[7]);
             table.Cooltime = float.Parse(values[8]);
             table.Mana = int.Parse(values[9]);
-            table.DamageTime = float.Parse(values[10]);
-            table.DamageType = (GlobalEnum.DamageType)Enum.Parse(typeof(GlobalEnum.DamageType), values[11]);
-            table.DamageMin = int.Parse(values[12]);
-            table.DamageMax = int.Parse(values[13]);
-            table.Duration = int.Parse(values[14]);
-            table.SkillTargetType = (GlobalEnum.SkillTargetType)Enum.Parse(typeof(GlobalEnum.SkillTargetType), values[15]);
-            table.SkillTargetRange1 = float.Parse(values[16]);
-            table.SkillTargetRange2 = float.Parse(values[17]);
-            table.AnimationName = values[18];
-            table.StartEffectName = values[19];
-            table.ActivateName = values[20];
-            table.HitEffect = values[21];
-            table.ProjectileId = int.Parse(values[22]);
-            table.ArcHeight = float.Parse(values[23]);
+            table.StartTime = float.Parse(values[10]);
+            table.ProcessTime = float.Parse(values[11]);
+            table.EndTime = float.Parse(values[12]);
+            table.DamageTime = float.Parse(values[13]);
+            table.HitCount = int.Parse(values[14]);
+            table.HitInterval = float.Parse(values[15]);
+            table.DamageType = (GlobalEnum.DamageType)Enum.Parse(typeof(GlobalEnum.DamageType), values[16]);
+            table.DamageMin = int.Parse(values[17]);
+            table.DamageMax = int.Parse(values[18]);
+            table.SkillTargetType = (GlobalEnum.SkillTargetType)Enum.Parse(typeof(GlobalEnum.SkillTargetType), values[19]);
+            table.SkillTargetRange1 = float.Parse(values[20]);
+            table.SkillTargetRange2 = float.Parse(values[21]);
+            table.AnimationName = values[22];
+            table.StartEffectName = values[23];
+            table.ActivateName = values[24];
+            table.HitEffect = values[25];
+            table.ProjectileId = int.Parse(values[26]);
+            table.ArcHeight = float.Parse(values[27]);
         }
 
         private static GlobalEnum.SkillTag ParseSkillTags(string tagsRaw)

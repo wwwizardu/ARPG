@@ -142,12 +142,13 @@ namespace ARPG.Skill.Combat
                 return result;
             }
 
-            // ========== 1단계: 속성별 기본 데미지 ==========
-            float physDamage = Random.Range(attackerStat.FinalAttackMin, attackerStat.FinalAttackMax + 1);
-            float fireDamage = Random.Range(attackerStat.FinalFireAttackMin, attackerStat.FinalFireAttackMax + 1);
-            float iceDamage = Random.Range(attackerStat.FinalIceAttackMin, attackerStat.FinalIceAttackMax + 1);
-            float lightningDamage = Random.Range(attackerStat.FinalLightningAttackMin, attackerStat.FinalLightningAttackMax + 1);
-            float poisonDamage = Random.Range(attackerStat.FinalPoisonAttackMin, attackerStat.FinalPoisonAttackMax + 1);
+            // ========== 1단계: 속성별 기본 데미지 (Attack 태그가 있을 때만 무기 공격력 적용) ==========
+            bool isAttackSkill = (skillData.Tags & GlobalEnum.SkillTag.Attack) != 0;
+            float physDamage = isAttackSkill ? Random.Range(attackerStat.FinalAttackMin, attackerStat.FinalAttackMax + 1) : 0f;
+            float fireDamage = isAttackSkill ? Random.Range(attackerStat.FinalFireAttackMin, attackerStat.FinalFireAttackMax + 1) : 0f;
+            float iceDamage = isAttackSkill ? Random.Range(attackerStat.FinalIceAttackMin, attackerStat.FinalIceAttackMax + 1) : 0f;
+            float lightningDamage = isAttackSkill ? Random.Range(attackerStat.FinalLightningAttackMin, attackerStat.FinalLightningAttackMax + 1) : 0f;
+            float poisonDamage = isAttackSkill ? Random.Range(attackerStat.FinalPoisonAttackMin, attackerStat.FinalPoisonAttackMax + 1) : 0f;
 
             // ========== 2단계: 스킬 데미지를 해당 속성에 합산 ==========
             float skillBaseDamage = Random.Range(skillData.DamageMin, skillData.DamageMax + 1);
