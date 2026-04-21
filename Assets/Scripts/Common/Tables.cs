@@ -313,8 +313,11 @@ namespace ARPG.Tables
         [JsonProperty("BehaviorType")] public ARPG.Component.AIBehaviorType BehaviorType; // 행동 타입 (Melee/Ranged 등)
         [JsonProperty("DetectionRange")] public float DetectionRange; // 감지 범위
         [JsonProperty("SkillId1")] public int SkillId1;             // 스킬 1
+        [JsonProperty("SkillWeight1")] public int SkillWeight1;     // 스킬 1 선택 가중치 (0이면 선택 안함)
         [JsonProperty("SkillId2")] public int SkillId2;             // 스킬 2
+        [JsonProperty("SkillWeight2")] public int SkillWeight2;     // 스킬 2 선택 가중치
         [JsonProperty("SkillId3")] public int SkillId3;             // 스킬 3
+        [JsonProperty("SkillWeight3")] public int SkillWeight3;     // 스킬 3 선택 가중치
     }
 
     [Serializable]

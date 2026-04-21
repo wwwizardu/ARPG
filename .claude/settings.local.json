@@ -5,7 +5,8 @@
       "mcp__google-sheets__sheets_write",
       "mcp__google-sheets__sheets_list",
       "Bash(xargs grep *)",
-      "Bash(find /c/Projects/ARPG/Assets/Scripts -name \"*.cs\" -type f -exec grep -l \"Jumping\\\\|Airborne\\\\|Grounded\\\\|IsGround\" {} \\\\;)"
+      "Bash(find /c/Projects/ARPG/Assets/Scripts -name \"*.cs\" -type f -exec grep -l \"Jumping\\\\|Airborne\\\\|Grounded\\\\|IsGround\" {} \\\\;)",
+      "Bash(python -c 'import json,sys; data=json.load\\(sys.stdin\\); *)"
     ]
   }
 }

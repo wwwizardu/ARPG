@@ -31,7 +31,7 @@ namespace ARPG.Editor
 
             await DownloadTable<CreatureTable>("0&range=A:F", 1, SaveType.String);
 
-            await DownloadTable<AiTable>("947794841&range=A:H", 1, SaveType.String);
+            await DownloadTable<AiTable>("947794841&range=A:K", 1, SaveType.String);
 
             await DownloadTable<MonsterTable>("483012127&range=A:L", 1, SaveType.String);
 
@@ -510,9 +510,9 @@ namespace ARPG.Editor
 
         private static void ParseAiTable(AiTable table, string[] values)
         {
-            if (values.Length < 7)
+            if (values.Length < 11)
             {
-                Debug.LogError($"[ParseAiTable] Invalid data length. Expected at least 7, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseAiTable] Invalid data length. Expected at least 11, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
@@ -521,8 +521,11 @@ namespace ARPG.Editor
             table.BehaviorType = (ARPG.Component.AIBehaviorType)Enum.Parse(typeof(ARPG.Component.AIBehaviorType), values[3]);
             table.DetectionRange = float.Parse(values[4]);
             table.SkillId1 = int.Parse(values[5]);
-            table.SkillId2 = int.Parse(values[6]);
-            table.SkillId3 = int.Parse(values[7]);
+            table.SkillWeight1 = int.Parse(values[6]);
+            table.SkillId2 = int.Parse(values[7]);
+            table.SkillWeight2 = int.Parse(values[8]);
+            table.SkillId3 = int.Parse(values[9]);
+            table.SkillWeight3 = int.Parse(values[10]);
         }
 
         private static void ParseBuffTable(BuffTable table, string[] values)

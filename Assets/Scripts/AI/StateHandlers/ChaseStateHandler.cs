@@ -1,4 +1,5 @@
 using ARPG.Component;
+using ARPG.Utility;
 
 namespace ARPG.AI.StateHandlers
 {
@@ -18,7 +19,6 @@ namespace ARPG.AI.StateHandlers
 
             if (cm.TryGetComponent<AIComponent>(entityId, out var ai) == false) return;
             if (cm.TryGetComponent<TransformComponent>(entityId, out var transform) == false) return;
-            if (cm.TryGetComponent<AIBehaviorTypeComponent>(entityId, out var behavior) == false) return;
 
             // 타겟이 없으면 기본 상태로 복귀
             if (ai.TargetEntityId == -1)
@@ -36,8 +36,9 @@ namespace ARPG.AI.StateHandlers
 
             float sqrDistance = (targetTransform.Position - transform.Position).sqrMagnitude;
 
-            // 공격 범위 내면 Attack
-            if (sqrDistance <= behavior.AttackRange * behavior.AttackRange)
+            // 교전 사거리(쓸 수 있는 스킬의 최대 사거리) 안이면 Attack 전이
+            float engagementSqr = SkillHelper.GetEngagementRangeSqr(entityId, SkillHelper.AiSkillSlotCount);
+            if (engagementSqr > 0f && sqrDistance <= engagementSqr)
             {
                 AIStateHelper.TransitionToState(entityId, AIState.Attack);
             }

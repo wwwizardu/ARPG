@@ -176,11 +176,11 @@ namespace ARPG.UI
                 estimatedCritRate = _statComponent.FinalCriRate;
             }
 
-            _textStat[7].text = $"물리 데미지 {est.PhysMin} - {est.PhysMax}";
-            _textStat[8].text = $"화염 데미지 {est.FireMin} - {est.FireMax}";
-            _textStat[9].text = $"냉기 데미지 {est.IceMin} - {est.IceMax}";
-            _textStat[10].text = $"번개 데미지 {est.LightningMin} - {est.LightningMax}";
-            _textStat[11].text = $"독 데미지 {est.PoisonMin} - {est.PoisonMax}";
+            _textStat[7].text = $"예상 물리 데미지 {est.PhysMin} - {est.PhysMax}";
+            _textStat[8].text = $"예상 화염 데미지 {est.FireMin} - {est.FireMax}";
+            _textStat[9].text = $"예상 냉기 데미지 {est.IceMin} - {est.IceMax}";
+            _textStat[10].text = $"예상 번개 데미지 {est.LightningMin} - {est.LightningMax}";
+            _textStat[11].text = $"예상 독 데미지 {est.PoisonMin} - {est.PoisonMax}";
 
             _textStat[12].text = $"치명타 확률 {estimatedCritRate}%";
             _textStat[13].text = $"치명타 피해 {_statComponent.FinalCriDamage}%";

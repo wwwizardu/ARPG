@@ -126,42 +126,13 @@ namespace ARPG.Systems
 
         private void UseSkill(ref InputComponent inInputComponent, int slotIndex)
         {
-            // 슬롯 인덱스로 스킬 엔티티 ID 즉시 계산
-            int skillEntityId = EntityIdHelper.GetDeterministicId(_playerEntityId, EntityIdCategory.Skill, slotIndex);
+            Vector2 targetPosition = Camera.main.ScreenToWorldPoint(inInputComponent.MousePosition);
 
-            // 스킬이 실제로 존재하는지 확인
-            if (AR.s.Component.TryGetComponent<SkillComponent>(skillEntityId, out var skill) == true)
-            {
-                // 스킬이 실행 중이면 커맨드 생성하지 않음
-                if (AR.s.Component.TryGetComponent<SkillStateComponent>(skillEntityId, out var skillState))
-                {
-                    if (skillState.IsRunning)
-                    {
-                        return;
-                    }
-                }
+            if (SkillHelper.GetSkillCommandComponent(slotIndex, _playerEntityId, targetPosition, out var command) == false)
+                return;
 
-                // 마우스 위치로 스킬 커맨드 생성 (이미 있으면 최신 마우스 위치로 업데이트)
-                SkillCommandComponent command = new SkillCommandComponent();
-                if(skill.Table != null)
-                {
-                    command.TargetType = skill.Table.SkillTargetType;
-                }
-                else
-                {
-                    Debug.LogError($"[System_Input] Skill.Table is null for SkillId({skill.SkillId}), SkillEntityId({skillEntityId})");
-                }
-
-                command.SkillEntityId = skillEntityId;
-                command.TargetPosition = Camera.main.ScreenToWorldPoint(inInputComponent.MousePosition);
-
-                // 캐릭터 엔티티에 커맨드 설정 (이미 있으면 최신 값으로 덮어쓰기)
-                _componentManager.SetComponent(_playerEntityId, command);
-            }
-            else
-            {
-                Debug.LogWarning($"[System_Input] Skill not found at slot {slotIndex}");
-            }
+            // 캐릭터 엔티티에 커맨드 설정 (이미 있으면 최신 값으로 덮어쓰기)
+            _componentManager.SetComponent(_playerEntityId, command);
         }
     }
 }

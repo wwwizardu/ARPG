@@ -1,4 +1,5 @@
 using ARPG.Component;
+using ARPG.Utility;
 using UnityEngine;
 
 namespace ARPG.AI.StateHandlers
@@ -38,8 +39,9 @@ namespace ARPG.AI.StateHandlers
 
             float sqrDistance = (targetTransform.Position - transform.Position).sqrMagnitude;
 
-            // 공격 범위 밖이면 Chase
-            if (sqrDistance > behavior.AttackRange * behavior.AttackRange)
+            // 교전 사거리(쓸 수 있는 스킬 기준) 밖이면 Chase
+            float engagementSqr = SkillHelper.GetEngagementRangeSqr(entityId, SkillHelper.AiSkillSlotCount);
+            if (engagementSqr > 0f && sqrDistance > engagementSqr)
             {
                 AIStateHelper.TransitionToState(entityId, AIState.Chase);
                 return;
@@ -60,8 +62,12 @@ namespace ARPG.AI.StateHandlers
                 }
             }
 
-            // 스킬 사용 (OnEnter에서 이미 정지)
-            if (ARPG.Utility.SkillHelper.GetSkillCommandComponent(0, entityId, targetTransform.Position, out var command))
+            // 스킬 발동 - AiTable 가중치 기반 랜덤 선택
+            int slotIndex = SkillHelper.PickFireSkill(entityId, targetTransform.Position, SkillHelper.AiSkillSlotCount);
+            if (slotIndex < 0)
+                return;
+
+            if (SkillHelper.GetSkillCommandComponent(slotIndex, entityId, targetTransform.Position, out var command))
             {
                 cm.SetComponent(entityId, command);
             }
