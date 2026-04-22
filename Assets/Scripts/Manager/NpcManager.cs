@@ -7,7 +7,9 @@ using ARPG.Creature;
 using ARPG.Factory;
 using ARPG.Map;
 using ARPG.Scene;
+using ARPG.Tables;
 using ARPG.Utility;
+using ARPG.Village;
 
 namespace ARPG.Npc
 {
@@ -25,6 +27,9 @@ namespace ARPG.Npc
 
         public void Initialize()
         {
+            // RegisterNpcsFromMapFile/Load 경로를 타지 않아도 SpawnNewNpc가 바로 동작하도록 항상 세팅
+            _chunkSize = AR.s.Map.chunkSize;
+
             var savedNpcs = AR.s.Data.NpcSaveDatas;
             if (savedNpcs != null && savedNpcs.Count > 0)
             {
@@ -145,6 +150,132 @@ namespace ARPG.Npc
             }
         }
 
+        /// <summary>
+        /// 런타임에 새 NPC를 생성하는 통합 진입점.
+        /// SaveData/_chunkNpcs/VillageData 등록을 모두 처리하며,
+        /// 해당 청크가 활성 상태면 실제 엔티티도 즉시 생성한다.
+        /// </summary>
+        public int SpawnNewNpc(int npcTableId, Vector2 position, int villageId = -1)
+        {
+            int entityId = EntityIdHelper.CreateEntity();
+            NpcSaveData saveData = new NpcSaveData(npcTableId, position)
+            {
+                EntityId = entityId,
+                VillageId = villageId
+            };
+
+            _npcSaveDict[entityId] = saveData;
+
+            Vector2Int chunkCoord = PositionToChunk(position);
+            AddNpcToChunk(chunkCoord, entityId);
+
+            if (villageId >= 0)
+                AR.s.Village.RegisterNpcToVillage(villageId, entityId);
+
+            if (AR.s.Map.IsChunkActive(chunkCoord))
+                SpawnNpc(entityId, saveData).Forget();
+
+            return entityId;
+        }
+
+        /// <summary>
+        /// 마을이 비어있으면(or 최초) 기본 NPC를 스폰한다.
+        /// - 최초: 즉시 스폰
+        /// - 전멸 후: 쿨타임 경과 시 재스폰
+        /// </summary>
+        public void EnsureVillagePopulated(int villageId)
+        {
+            VillageData? village = AR.s.Village.GetVillage(villageId);
+            if (village == null)
+                return;
+
+            if (village.TableId <= 0)
+                return;
+
+            int aliveCount = CountAliveNpcs(village);
+            if (aliveCount > 0)
+                return;
+
+            VillageTable? table = AR.s.Data.GetVillageTable(village.TableId);
+            if (table == null || table.DefaultNpcIds.Count == 0)
+            {
+                Debug.LogWarning($"[EnsureVillagePopulated] v{villageId} TableId={village.TableId} 테이블 없음 or DefaultNpcList 비어있음");
+                return;
+            }
+
+            if (village.HasBeenPopulated == false)
+            {
+                // 최초 생성 → 즉시 스폰
+                SpawnDefaultNpcsForVillage(village, table);
+                village.HasBeenPopulated = true;
+                village.DepletedAt = 0f;
+                return;
+            }
+
+            // 전멸 상태 → 쿨타임 체크
+            float now = AR.s.Time.CurrentGameTime;
+            float elapsed = now - village.DepletedAt;
+            if (elapsed >= table.RespawnCooldown)
+            {
+                Debug.Log($"[EnsureVillagePopulated] v{villageId} 쿨타임 만료, 재스폰 (elapsed={elapsed:F2}h, cooldown={table.RespawnCooldown}h)");
+                SpawnDefaultNpcsForVillage(village, table);
+                village.DepletedAt = 0f;
+            }
+            else
+            {
+                Debug.Log($"[EnsureVillagePopulated] v{villageId} 쿨타임 대기 중 (elapsed={elapsed:F2}h / cooldown={table.RespawnCooldown}h, DepletedAt={village.DepletedAt:F2}, now={now:F2})");
+            }
+        }
+
+        /// <summary>
+        /// 등록된 모든 마을에 대해 EnsureVillagePopulated 호출.
+        /// </summary>
+        public void EnsureAllVillagesPopulated()
+        {
+            var villages = AR.s.Village.GetAllVillages();
+            foreach (var village in villages)
+            {
+                EnsureVillagePopulated(village.VillageId);
+            }
+        }
+
+        private void SpawnDefaultNpcsForVillage(VillageData village, VillageTable table)
+        {
+            for (int i = 0; i < table.DefaultNpcIds.Count; i++)
+            {
+                int npcTableId = table.DefaultNpcIds[i];
+                Vector2 spawnPos = GetRandomSpawnPositionInVillage(village, table.SpawnRadius);
+                SpawnNewNpc(npcTableId, spawnPos, village.VillageId);
+            }
+
+            Debug.Log($"[NpcManager] Spawned {table.DefaultNpcIds.Count} default NPCs for village {village.VillageId}");
+        }
+
+        private Vector2 GetRandomSpawnPositionInVillage(VillageData village, float radius)
+        {
+            if (radius <= 0f)
+                return village.Position;
+
+            float angle = Random.Range(0f, Mathf.PI * 2f);
+            float r = Random.Range(0f, radius);
+            return village.Position + new Vector2(Mathf.Cos(angle) * r, Mathf.Sin(angle) * r);
+        }
+
+        private int CountAliveNpcs(VillageData village)
+        {
+            int count = 0;
+            for (int i = 0; i < village.NpcEntityIds.Count; i++)
+            {
+                int eid = village.NpcEntityIds[i];
+                if (_npcSaveDict.TryGetValue(eid, out NpcSaveData? saveData) == false)
+                    continue;
+
+                if (saveData.Condition != CharacterConditions.Dead)
+                    count++;
+            }
+            return count;
+        }
+
         private async UniTask SpawnNpc(int entityId, NpcSaveData saveData)
         {
             if (AR.s.CurrentScene is GameScene == false)
@@ -257,6 +388,17 @@ namespace ARPG.Npc
             }
 
             saveData.IsActive = false;
+
+            // 사망이면 마을 전멸 체크
+            if (saveData.Condition == CharacterConditions.Dead && saveData.VillageId >= 0)
+            {
+                VillageData? village = AR.s.Village.GetVillage(saveData.VillageId);
+                if (village != null && village.DepletedAt <= 0f && CountAliveNpcs(village) == 0)
+                {
+                    village.DepletedAt = AR.s.Time.CurrentGameTime;
+                    Debug.Log($"[NpcManager] Village {saveData.VillageId} depleted at game time {village.DepletedAt}");
+                }
+            }
         }
 
         /// <summary>

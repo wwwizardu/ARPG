@@ -22,8 +22,10 @@ namespace ARPG.Village
                     mapFileData.StartPosition.x + mapFileData.Width * 0.5f,
                     mapFileData.StartPosition.y + mapFileData.Height * 0.5f
                 );
-                RegisterVillage(i, villageCenter);
-                Debug.Log($"[VillageManager] Initial village {i} created at {villageCenter}");
+                // 마을 인덱스 + 1 을 VillageTableId로 사용 (관례). 없으면 기본 스폰은 no-op.
+                int tableId = i + 1;
+                RegisterVillage(i, villageCenter, tableId);
+                Debug.Log($"[VillageManager] Initial village {i} created at {villageCenter} (TableId={tableId})");
             }
         }
 
@@ -32,7 +34,7 @@ namespace ARPG.Village
             _villages.Clear();
         }
 
-        public void RegisterVillage(int villageId, Vector2 position)
+        public void RegisterVillage(int villageId, Vector2 position, int tableId = 0)
         {
             if (_villages.ContainsKey(villageId))
             {
@@ -40,7 +42,11 @@ namespace ARPG.Village
                 return;
             }
 
-            _villages[villageId] = new VillageData(villageId, position);
+            VillageData data = new VillageData(villageId, position)
+            {
+                TableId = tableId
+            };
+            _villages[villageId] = data;
         }
 
         public VillageData? GetVillage(int villageId)
@@ -135,6 +141,11 @@ namespace ARPG.Village
             for (int i = 0; i < villageDatas.Count; i++)
             {
                 VillageData data = villageDatas[i];
+
+                // 하위 호환: TableId 필드 없이 저장된 구 세이브 → VillageId+1 관례로 자동 부여
+                if (data.TableId <= 0)
+                    data.TableId = data.VillageId + 1;
+
                 _villages[data.VillageId] = data;
             }
 

@@ -59,10 +59,13 @@ namespace ARPG.Editor
 
             await DownloadTable<ProjectileTable>("1810235418&range=A:G", 1, SaveType.String);
 
-            // TODO: Google Sheet gid 설정 필요
             await DownloadTable<ModTable>("1571193978&range=A:I", 1, SaveType.String);
+
             await DownloadTable<ModTierTable>("1782637736&range=A:J", 1, SaveType.String);
+            
             await DownloadTable<ItemImplicitTable>("547967325&range=A:D", 1, SaveType.String);
+
+            await DownloadTable<VillageTable>("441028134&range=A:F", 1, SaveType.String);
 
             //await DownloadTable<BuffEffectTable>("2104311648&range=A:K", 1, SaveType.String);
 
@@ -198,6 +201,10 @@ namespace ARPG.Editor
                 {
                     ParseItemImplicitTable(itemImplicitTable, values);
                 }
+                else if (table is VillageTable villageTable)
+                {
+                    ParseVillageTable(villageTable, values);
+                }
                 else
                 {
                     Debug.LogError($"[DownloadTables] CreateTable - Unknown table type: {typeof(T)}");
@@ -227,6 +234,21 @@ namespace ARPG.Editor
             table.StatId = int.Parse(values[3]);
             table.PrefabName = values[4];
             table.AnimationId = int.Parse(values[5]);
+        }
+
+        private static void ParseVillageTable(VillageTable table, string[] values)
+        {
+            if (values.Length < 6)
+            {
+                Debug.LogError($"[ParseVillageTable] Invalid data length. Expected at least 6, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            table.Name = values[1];
+            // values[2]는 웹에서만 사용한다.
+            table.DefaultNpcList = values[3];
+            table.RespawnCooldown = float.Parse(values[4]);
+            table.SpawnRadius = float.Parse(values[5]);
         }
 
         private static void ParseNpcTable(NpcTable table, string[] values)

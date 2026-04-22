@@ -32,6 +32,7 @@ namespace ARPG.Data
         private ImmutableDictionary<int, Tables.ModTable> _modTable = null!;
         private ImmutableDictionary<int, Tables.ModTierTable> _modTierTable = null!;
         private ImmutableDictionary<int, Tables.ItemImplicitTable> _itemImplicitTable = null!;
+        private ImmutableDictionary<int, Tables.VillageTable> _villageTable = null!;
 
         public async Task LoadTableAsync()
         {
@@ -55,7 +56,8 @@ namespace ARPG.Data
                 LoadTable<Tables.ProjectileTable>("ProjectileTable.bytes", tables => _projectileTable = tables),
                 LoadTable<Tables.ModTable>("ModTable.bytes", tables => _modTable = tables),
                 LoadTable<Tables.ModTierTable>("ModTierTable.bytes", tables => _modTierTable = tables),
-                LoadTable<Tables.ItemImplicitTable>("ItemImplicitTable.bytes", tables => _itemImplicitTable = tables)
+                LoadTable<Tables.ItemImplicitTable>("ItemImplicitTable.bytes", tables => _itemImplicitTable = tables),
+                LoadTable<Tables.VillageTable>("VillageTable.bytes", tables => _villageTable = tables)
             );
 
             // 모든 테이블 로드 후 LoadLate 실행
@@ -143,6 +145,11 @@ namespace ARPG.Data
 
             // ItemImplicitTable → ModTable/ModTierTable 참조 연결
             foreach (var table in _itemImplicitTable.Values)
+            {
+                table.LoadLate();
+            }
+
+            foreach (var table in _villageTable.Values)
             {
                 table.LoadLate();
             }
@@ -276,6 +283,16 @@ namespace ARPG.Data
         public Tables.AiTable? GetAiTable(int id)
         {
             if (_aiTable.TryGetValue(id, out var table))
+            {
+                return table;
+            }
+
+            return null;
+        }
+
+        public Tables.VillageTable? GetVillageTable(int id)
+        {
+            if (_villageTable.TryGetValue(id, out var table))
             {
                 return table;
             }

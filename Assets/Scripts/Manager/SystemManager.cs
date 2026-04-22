@@ -55,6 +55,10 @@ namespace ARPG.Systems
             System_Relationship relationshipSystem = new();
             RegisterSystems(relationshipSystem);
 
+            // Priority 59: Village Respawn System (FixedUpdate, 5.0s) - 마을 기본 NPC 스폰 및 쿨타임 재스폰
+            System_VillageRespawn villageRespawnSystem = new();
+            RegisterSystems(villageRespawnSystem);
+
             // Priority 100: Movement System (FixedUpdate) - 이동 로직
             System_Move moveSystem = new();
             RegisterSystems(moveSystem);

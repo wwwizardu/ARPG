@@ -69,6 +69,9 @@ namespace ARPG.Map
             // MapFileData의 NPC 오브젝트를 NpcManager에 1회 등록
             RegisterAllNpcsToManager();
 
+            // MapFileData에 배치된 NPC가 없는 마을은 VillageTable 기반으로 기본 NPC 스폰 (쿨타임 포함)
+            AR.s.Npc.EnsureAllVillagesPopulated();
+
             UpdateChunksAroundPlayer(playerPosition);
 
             OnResetSpawner();
@@ -165,6 +168,11 @@ namespace ARPG.Map
         public Dictionary<Vector2Int, MapChunkData>.KeyCollection GetActiveChunkCoords()
         {
             return _activeChunks.Keys;
+        }
+
+        public bool IsChunkActive(Vector2Int chunkCoord)
+        {
+            return _activeChunks.ContainsKey(chunkCoord);
         }
 
         public bool TryGetChunkSpawnPositions(Vector2Int chunkCoord, out List<Vector2Int> spawnPositions)

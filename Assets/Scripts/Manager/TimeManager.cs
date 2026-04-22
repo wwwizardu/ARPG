@@ -16,9 +16,14 @@ namespace ARPG.Manager
         private float _accumulator;         // 실시간 누적기
 
         /// <summary>
-        /// 누적 게임 시간 (시간 단위)
+        /// 누적 게임 시간 (시간 단위, 정수 부분만)
         /// </summary>
         public float ElapsedGameTime => _elapsedGameTime;
+
+        /// <summary>
+        /// 누적 게임 시간 (시간 단위, 소수점 포함). 쿨타임 비교 등 고해상도 비교용.
+        /// </summary>
+        public float CurrentGameTime => _elapsedGameTime + (_accumulator / _realSecondsPerGameHour);
 
         public void Initialize()
         {

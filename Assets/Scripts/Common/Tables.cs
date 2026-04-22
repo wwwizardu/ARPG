@@ -306,6 +306,35 @@ namespace ARPG.Tables
     }
 
     [Serializable]
+    public class VillageTable : TableBase
+    {
+        [JsonProperty("Name")] public string Name = string.Empty;                 // 마을 이름
+        [JsonProperty("DefaultNpcList")] public string DefaultNpcList = string.Empty; // 스폰할 NpcTableId 목록 (CSV, 예: "1,2,3")
+        [JsonProperty("RespawnCooldown")] public float RespawnCooldown;           // 전멸 후 재스폰 대기 (게임 시간, 시간 단위)
+        [JsonProperty("SpawnRadius")] public float SpawnRadius = 3f;              // 마을 중심 기준 스폰 반경
+
+        [JsonIgnore] public List<int> DefaultNpcIds = new();
+
+        public override void LoadLate()
+        {
+            DefaultNpcIds.Clear();
+            if (string.IsNullOrEmpty(DefaultNpcList))
+                return;
+
+            string[] tokens = DefaultNpcList.Split(',');
+            for (int i = 0; i < tokens.Length; i++)
+            {
+                string trimmed = tokens[i].Trim();
+                if (string.IsNullOrEmpty(trimmed))
+                    continue;
+
+                if (int.TryParse(trimmed, out int id))
+                    DefaultNpcIds.Add(id);
+            }
+        }
+    }
+
+    [Serializable]
     public class AiTable : TableBase
     {
         [JsonProperty("Name")] public string Name = string.Empty;   // 이름
