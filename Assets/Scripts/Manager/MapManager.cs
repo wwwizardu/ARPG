@@ -42,6 +42,9 @@ namespace ARPG.Map
             _chunkPool = new Stack<MapChunkData>();
 
             InitializeChunkPool();
+
+            // BuildableTileRegistry 로드 완료 시 활성 청크 재렌더 (lazy Addressable 로드 대응)
+            BuildableTileRegistry.TileLoaded += OnBuildableTileLoaded;
         }
 
         public void Reset()
@@ -59,6 +62,20 @@ namespace ARPG.Map
             _currentPlayerChunk = Vector2Int.zero;
 
             OnResetSpawner();
+
+            BuildableTileRegistry.TileLoaded -= OnBuildableTileLoaded;
+        }
+
+        /// <summary>
+        /// BuildableTileRegistry 로드 완료 콜백.
+        /// Phase A는 단순하게 활성 청크 전부 재렌더. 규모가 커지면 Id → 청크 역인덱스로 세분화.
+        /// </summary>
+        private void OnBuildableTileLoaded(int buildableId)
+        {
+            foreach (var chunk in _activeChunks.Values)
+            {
+                RenderChunkToTilemap(chunk);
+            }
         }
 
         public void CreateMap(int inSeed, Vector3 playerPosition)
@@ -163,6 +180,17 @@ namespace ARPG.Map
             }
 
             return chunk.tiles[localX, localY];
+        }
+
+        /// <summary>
+        /// 월드 좌표의 ObjectLayer 비트에 기록된 오브젝트 Id를 조회한다.
+        /// 0 = 빈 타일. 0 초과 = BuildableItemTable.Id 또는 레거시 ObjectType 값.
+        /// PlaceObject가 (objectId &lt;&lt; 10) & ObjectLayerMask로 기록하는 것의 대칭 연산.
+        /// </summary>
+        public int GetObjectIdAt(int worldX, int worldY)
+        {
+            ulong tile = GetTileAt(worldX, worldY);
+            return (int)((tile & (ulong)GlobalEnum.TileFlag.ObjectLayerMask) >> 10);
         }
 
         public Dictionary<Vector2Int, MapChunkData>.KeyCollection GetActiveChunkCoords()
@@ -324,9 +352,19 @@ namespace ARPG.Map
 
             Vector3Int cellPos = new Vector3Int(worldX, worldY, 0);
 
-            if (objectId > 0 && _themeTileSet != null && _themeTileSet.ObjectSet != null && objectId < (ulong)_themeTileSet.ObjectSet.Length)
+            if (objectId > 0)
             {
-                _tileMap_Object.SetTile(cellPos, _themeTileSet.ObjectSet[objectId]);
+                // 1) BuildableTileRegistry 우선 (Addressable 로드 캐시)
+                // 2) 미스 시 레거시 ThemeTileSet.ObjectSet fallback
+                TileBase tile = BuildableTileRegistry.Get((int)objectId);
+                if (tile == null
+                    && _themeTileSet != null
+                    && _themeTileSet.ObjectSet != null
+                    && objectId < (ulong)_themeTileSet.ObjectSet.Length)
+                {
+                    tile = _themeTileSet.ObjectSet[objectId];
+                }
+                _tileMap_Object.SetTile(cellPos, tile);
             }
             else
             {

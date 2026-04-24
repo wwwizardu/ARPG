@@ -89,9 +89,18 @@ namespace ARPG.Map
                     }
 
                     // 오브젝트 타일 설정
-                    if (objectId > 0 && _themeTileSet.ObjectSet != null && objectId < (ulong)_themeTileSet.ObjectSet.Length)
+                    // 1) BuildableTileRegistry (BuildableItemTable.Id → Addressable 로드) 우선 조회
+                    // 2) 미스 시 레거시 ThemeTileSet.ObjectSet fallback (Stone/Npc/WoodWall 등)
+                    if (objectId > 0)
                     {
-                        _tempObjectTileArray[index] = _themeTileSet.ObjectSet[objectId];
+                        TileBase tile = BuildableTileRegistry.Get((int)objectId);
+                        if (tile == null
+                            && _themeTileSet.ObjectSet != null
+                            && objectId < (ulong)_themeTileSet.ObjectSet.Length)
+                        {
+                            tile = _themeTileSet.ObjectSet[objectId];
+                        }
+                        _tempObjectTileArray[index] = tile;
                     }
                     else
                     {

@@ -47,11 +47,15 @@ namespace ARPG.Systems
             System_AI_Behavior aiBehaviorSystem = new();
             RegisterSystems(aiBehaviorSystem);
 
-            // Priority 57: Village Resource System (FixedUpdate, 5.0s) - 작업 중인 NPC의 자원 생산
-            System_VillageResource villageResourceSystem = new();
-            RegisterSystems(villageResourceSystem);
+            // Priority 57: Village Passive Production (FixedUpdate, 5.0s) - 정수 기반 자원 생산/소비
+            System_VillagePassiveProduction villagePassiveProductionSystem = new();
+            RegisterSystems(villagePassiveProductionSystem);
 
-            // Priority 58: Relationship System (FixedUpdate, 3.0s) - 관계 패시브 변동
+            // Priority 58: Village First Build (FixedUpdate, 5.0s) - Phase A MVP: 첫 Campfire 제작 루프
+            System_VillageFirstBuild villageFirstBuildSystem = new();
+            RegisterSystems(villageFirstBuildSystem);
+
+            // Priority 58.5: Relationship System (FixedUpdate, 3.0s) - 관계 패시브 변동
             System_Relationship relationshipSystem = new();
             RegisterSystems(relationshipSystem);
 

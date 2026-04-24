@@ -1,12 +1,16 @@
 #nullable enable
 using System.Collections.Generic;
+using ARPG.Component;
 using ARPG.Map;
+using ARPG.Utility;
 using UnityEngine;
 
 namespace ARPG.Village
 {
     public class VillageManager : MonoBehaviour
     {
+        private const int DEFAULT_RESOURCE_CAP = 50;
+
         private Dictionary<int, VillageData> _villages = new();
 
         public void Initialize()
@@ -31,6 +35,14 @@ namespace ARPG.Village
 
         public void Reset()
         {
+            foreach (VillageData data in _villages.Values)
+            {
+                if (data.EntityId >= 0)
+                {
+                    EntityIdHelper.DestroyEntity(data.EntityId, false);
+                    data.EntityId = -1;
+                }
+            }
             _villages.Clear();
         }
 
@@ -44,9 +56,12 @@ namespace ARPG.Village
 
             VillageData data = new VillageData(villageId, position)
             {
-                TableId = tableId
+                TableId = tableId,
+                RegisteredAt = AR.s.Time.CurrentGameTime,
             };
             _villages[villageId] = data;
+
+            CreateStorageEntity(data);
         }
 
         public VillageData? GetVillage(int villageId)
@@ -63,14 +78,13 @@ namespace ARPG.Village
             if (_villages.TryGetValue(villageId, out VillageData? data) == false)
                 return;
 
-            if (data.Resources.ContainsKey(type))
-            {
-                data.Resources[type] += amount;
-            }
-            else
-            {
-                data.Resources[type] = amount;
-            }
+            int cap = GetCap(data, type);
+            int current = data.Resources.TryGetValue(type, out int c) ? c : 0;
+            int newAmount = Mathf.Min(current + amount, cap);
+
+            data.Resources[type] = newAmount;
+
+            SyncStorageComponent(data);
         }
 
         public bool ConsumeResource(int villageId, GlobalEnum.ItemType type, int amount)
@@ -78,13 +92,13 @@ namespace ARPG.Village
             if (_villages.TryGetValue(villageId, out VillageData? data) == false)
                 return false;
 
-            if (data.Resources.TryGetValue(type, out int current) == false)
-                return false;
-
+            int current = data.Resources.TryGetValue(type, out int c) ? c : 0;
             if (current < amount)
                 return false;
 
             data.Resources[type] = current - amount;
+
+            SyncStorageComponent(data);
             return true;
         }
 
@@ -146,10 +160,67 @@ namespace ARPG.Village
                 if (data.TableId <= 0)
                     data.TableId = data.VillageId + 1;
 
+                if (data.ResourceCaps == null)
+                    data.ResourceCaps = new Dictionary<GlobalEnum.ItemType, int>();
+                if (data.RegisteredAt <= 0f)
+                    data.RegisteredAt = AR.s.Time.CurrentGameTime;
+
+                // Phase A: FirstBuildStartedAt 기본 -1 보정 (구 세이브는 0으로 역직렬화될 수 있음)
+                if (data.HasCampfire == false && data.FirstBuildStartedAt == 0f)
+                    data.FirstBuildStartedAt = -1f;
+
                 _villages[data.VillageId] = data;
+                CreateStorageEntity(data);
             }
 
             Debug.Log($"[VillageManager] Loaded {_villages.Count} villages");
+        }
+
+        private void CreateStorageEntity(VillageData data)
+        {
+            int entityId = EntityIdHelper.CreateEntity();
+            data.EntityId = entityId;
+
+            VillageStorageComponent storage = new VillageStorageComponent
+            {
+                VillageId = data.VillageId,
+                FoodAmount = GetInt(data, GlobalEnum.ItemType.Food),
+                WoodAmount = GetInt(data, GlobalEnum.ItemType.Wood),
+                StoneAmount = GetInt(data, GlobalEnum.ItemType.Stone),
+                FoodCap = GetCap(data, GlobalEnum.ItemType.Food),
+                WoodCap = GetCap(data, GlobalEnum.ItemType.Wood),
+                StoneCap = GetCap(data, GlobalEnum.ItemType.Stone),
+                StoneTimer = data.StoneTimer,
+                HungerHoursAccumulated = data.HungerHoursAccumulated,
+                SurplusFlags = 0,
+            };
+            AR.s.Component.AddComponent(entityId, storage);
+        }
+
+        private void SyncStorageComponent(VillageData data)
+        {
+            if (data.EntityId < 0)
+                return;
+
+            if (AR.s.Component.TryGetComponent<VillageStorageComponent>(data.EntityId, out var storage) == false)
+                return;
+
+            storage.FoodAmount = GetInt(data, GlobalEnum.ItemType.Food);
+            storage.WoodAmount = GetInt(data, GlobalEnum.ItemType.Wood);
+            storage.StoneAmount = GetInt(data, GlobalEnum.ItemType.Stone);
+            AR.s.Component.SetComponent(data.EntityId, storage);
+        }
+
+        private static int GetInt(VillageData data, GlobalEnum.ItemType type)
+        {
+            return data.Resources.TryGetValue(type, out int v) ? v : 0;
+        }
+
+        private static int GetCap(VillageData data, GlobalEnum.ItemType type)
+        {
+            if (data.ResourceCaps.TryGetValue(type, out int cap))
+                return cap;
+            return DEFAULT_RESOURCE_CAP;
         }
     }
 }

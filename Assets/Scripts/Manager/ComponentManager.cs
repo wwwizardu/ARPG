@@ -64,6 +64,7 @@ namespace ARPG.Component
             // 마을 시스템 컴포넌트
             { typeof(NpcJobComponent), 200 },
             { typeof(NpcVillageComponent), 200 },
+            { typeof(VillageStorageComponent), 32 },   // 마을 1개당 1개, 현재 <10, 여유 32
 
             // 발사체 컴포넌트
             { typeof(ProjectileComponent), 100 },
