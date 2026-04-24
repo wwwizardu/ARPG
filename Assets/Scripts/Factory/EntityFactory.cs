@@ -139,6 +139,10 @@ namespace ARPG.Factory
             // 4. ECS 컴포넌트 추가
             await AddCreatureComponents(entityId, table, entity);
 
+            // NpcTag는 AI 컴포넌트 부착보다 먼저 등록해야 AddAIComponents의 isNpc 판정이 정상 동작
+            // (Patrol/PatrolRanged BehaviorType 강제 + Patrol 초기 상태)
+            AR.s.Component.AddComponent(entityId, new NpcTag());
+
             // NPC 고유 성향 스탯 (랜덤 생성)
             AR.s.Component.AddComponent(entityId, new NpcStatComponent
             {
@@ -594,12 +598,8 @@ namespace ARPG.Factory
                     return;
                 }
 
-                // 2. EntityBase에 SpriteLibrary 설정
+                // 2. EntityBase 조회 (SpriteAnimationData가 slAsset을 직접 사용하므로 컴포넌트 세팅 불필요)
                 EntityBase? entity = obj.GetComponent<EntityBase>();
-                if (entity != null)
-                {
-                    entity.SetSpriteLibrary(slAsset);
-                }
 
                 // 3. 오브젝트 파괴 확인
                 if (obj == null)

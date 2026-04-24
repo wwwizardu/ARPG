@@ -58,6 +58,12 @@ namespace ARPG.Systems
                     AR.s.Npc.UnregisterNpcByEntityId(entityId);
                 }
 
+                // BuildingTag가 있으면 BuildingManager에서 제거
+                if (cm.HasComponent<BuildingTag>(entityId))
+                {
+                    AR.s.Building.UnregisterBuildingByEntityId(entityId);
+                }
+
                 // System_Animation에서 애니메이션 데이터 해제
                 var animSystem = AR.s.System.GetSystem<System_Animation>();
                 if (animSystem != null)

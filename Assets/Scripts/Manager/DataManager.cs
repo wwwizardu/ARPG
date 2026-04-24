@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using Newtonsoft.Json;
 using ARPG.Npc;
 using ARPG.Utility;
+using ARPG.Village;
 
 namespace ARPG.Data
 {
@@ -47,6 +48,7 @@ namespace ARPG.Data
         // 현재 활성 플레이어 ID
         public int CurrentPlayerEntityId => _currentPlayerEntityId;
         public Dictionary<int, NpcSaveData> NpcSaveDatas => _worldData.NpcSaveDatas;
+        public Dictionary<int, BuildingSaveData> BuildingSaveDatas => _worldData.BuildingSaveDatas;
 
         public async Task Initialize()
         {
@@ -294,11 +296,15 @@ namespace ARPG.Data
                         File.Copy(playerDataPath, playerDataBackupPath, true);
                     }
 
-                    // VillageData 저장
+                    // VillageData 저장 (세이브 직전 진행 중 태스크를 정본 필드로 동기화)
+                    AR.s.Village.SyncTaskToData();
                     _worldData.VillageDatas = AR.s.Village.Save();
 
                     // NpcData 저장
                     _worldData.NpcSaveDatas = AR.s.Npc.Save();
+
+                    // BuildingData 저장
+                    _worldData.BuildingSaveDatas = AR.s.Building.Save();
 
                     // TileModification 저장
                     _worldData.TileModifications = AR.s.Map.SaveTileModifications();

@@ -51,9 +51,9 @@ namespace ARPG.Systems
             System_VillagePassiveProduction villagePassiveProductionSystem = new();
             RegisterSystems(villagePassiveProductionSystem);
 
-            // Priority 58: Village First Build (FixedUpdate, 5.0s) - Phase A MVP: 첫 Campfire 제작 루프
-            System_VillageFirstBuild villageFirstBuildSystem = new();
-            RegisterSystems(villageFirstBuildSystem);
+            // Priority 58: Village Build Queue (FixedUpdate, 5.0s) - Phase B: 범용 오브젝트 배치 큐 (Roadmap 기반)
+            System_VillageBuildQueue villageBuildQueueSystem = new();
+            RegisterSystems(villageBuildQueueSystem);
 
             // Priority 58.5: Relationship System (FixedUpdate, 3.0s) - 관계 패시브 변동
             System_Relationship relationshipSystem = new();

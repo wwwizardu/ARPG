@@ -33,6 +33,12 @@ public class GlobalEnum
         WoodWall = 3,       // 나무 벽
     }
 
+    public enum BuildableSpawnType
+    {
+        Tile = 0,           // Tilemap 셀로 렌더, objectId를 타일 비트에 기록
+        Entity = 1,         // EntityBase GameObject로 스폰, BuildingManager가 관리
+    }
+
     public enum TileFlag : ulong
     {
         None = 0,

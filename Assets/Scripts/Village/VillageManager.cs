@@ -123,6 +123,39 @@ namespace ARPG.Village
             return _villages.Count;
         }
 
+        /// <summary>
+        /// 월드 좌표가 소속된 마을 Id 반환. SpawnRadius 이내에서 가장 가까운 마을 선택.
+        /// 해당 범위 내 마을이 없으면 -1.
+        /// </summary>
+        public int FindVillageContaining(int worldX, int worldY)
+        {
+            float bestSqrDist = float.MaxValue;
+            int bestId = -1;
+
+            foreach (VillageData data in _villages.Values)
+            {
+                Tables.VillageTable? table = AR.s.Data.GetVillageTable(data.TableId);
+                float radius = table != null ? table.SpawnRadius : 0f;
+                if (radius <= 0f)
+                    continue;
+
+                float dx = data.PositionX - worldX;
+                float dy = data.PositionY - worldY;
+                float sqr = dx * dx + dy * dy;
+
+                if (sqr > radius * radius)
+                    continue;
+
+                if (sqr < bestSqrDist)
+                {
+                    bestSqrDist = sqr;
+                    bestId = data.VillageId;
+                }
+            }
+
+            return bestId;
+        }
+
         public void RegisterNpcToVillage(int villageId, int npcEntityId)
         {
             if (_villages.TryGetValue(villageId, out VillageData? data) == false)
@@ -169,8 +202,28 @@ namespace ARPG.Village
                 if (data.HasCampfire == false && data.FirstBuildStartedAt == 0f)
                     data.FirstBuildStartedAt = -1f;
 
+                // Phase B 마이그레이션
+                if (data.PlacedObjectTypeIds == null)
+                    data.PlacedObjectTypeIds = new List<int>();
+
+                // HasCampfire == true → PlacedObjectTypeIds에 100 추가 (중복 방지)
+                if (data.HasCampfire && data.PlacedObjectTypeIds.Contains(100) == false)
+                    data.PlacedObjectTypeIds.Add(100);
+
+                // FirstBuild* 진행 중이던 Campfire 태스크 → CurrentBuild* 필드로 승격
+                if (data.CurrentBuildTableId == 0 && data.FirstBuildStartedAt >= 0f)
+                {
+                    data.CurrentBuildTableId = 100;
+                    data.CurrentBuildStartedAt = data.FirstBuildStartedAt;
+                    data.CurrentBuildTileX = data.FirstBuildTileX;
+                    data.CurrentBuildTileY = data.FirstBuildTileY;
+                    data.CurrentBuildReservedWood = 3;  // Phase A CAMPFIRE_WOOD_COST
+                    data.CurrentBuildReservedStone = 0;
+                }
+
                 _villages[data.VillageId] = data;
                 CreateStorageEntity(data);
+                RestoreTaskFromData(data);
             }
 
             Debug.Log($"[VillageManager] Loaded {_villages.Count} villages");
@@ -221,6 +274,109 @@ namespace ARPG.Village
             if (data.ResourceCaps.TryGetValue(type, out int cap))
                 return cap;
             return DEFAULT_RESOURCE_CAP;
+        }
+
+        // ========== Phase B: 오브젝트 배치 콜백 ==========
+
+        /// <summary>
+        /// 오브젝트 배치 완료 시 호출. 데이터 주도 Cap 확장 + 향후 효과 훅.
+        /// </summary>
+        public void OnObjectPlaced(int villageId, int tableId)
+        {
+            if (_villages.TryGetValue(villageId, out VillageData? v) == false)
+                return;
+
+            Tables.BuildableItemTable? t = AR.s.Data.GetBuildableItem(tableId);
+            if (t == null)
+                return;
+
+            // Cap 확장: 테이블 컬럼 그대로 가산
+            if (t.StorageCap_Food > 0)
+                AddCap(v, GlobalEnum.ItemType.Food, t.StorageCap_Food);
+            if (t.StorageCap_Wood > 0)
+                AddCap(v, GlobalEnum.ItemType.Wood, t.StorageCap_Wood);
+            if (t.StorageCap_Stone > 0)
+                AddCap(v, GlobalEnum.ItemType.Stone, t.StorageCap_Stone);
+
+            // Function 3 (CropPlot 생산 보너스), 4 (Well 생산 ×1.05) 는 Phase D에서 본격 처리
+        }
+
+        private void AddCap(VillageData v, GlobalEnum.ItemType type, int delta)
+        {
+            int cur = v.ResourceCaps.TryGetValue(type, out int c) ? c : DEFAULT_RESOURCE_CAP;
+            int next = cur + delta;
+            v.ResourceCaps[type] = next;
+
+            // VillageStorageComponent 동기화
+            if (v.EntityId >= 0 &&
+                AR.s.Component.TryGetComponent<VillageStorageComponent>(v.EntityId, out var s))
+            {
+                if (type == GlobalEnum.ItemType.Wood) s.WoodCap = next;
+                else if (type == GlobalEnum.ItemType.Stone) s.StoneCap = next;
+                else if (type == GlobalEnum.ItemType.Food) s.FoodCap = next;
+                AR.s.Component.SetComponent(v.EntityId, s);
+            }
+
+            Debug.Log($"[Cap] v{v.VillageId} {type} +{delta} → {next}");
+        }
+
+        // ========== Phase B: 진행 중 태스크 세이브 동기화 ==========
+
+        /// <summary>
+        /// 세이브 직전 호출. 활성 ObjectPlacementTaskComponent → VillageData.CurrentBuild* 필드.
+        /// </summary>
+        public void SyncTaskToData()
+        {
+            foreach (VillageData v in _villages.Values)
+            {
+                if (v.EntityId < 0)
+                {
+                    v.CurrentBuildTableId = 0;
+                    v.CurrentBuildStartedAt = -1f;
+                    continue;
+                }
+
+                if (AR.s.Component.TryGetComponent<ObjectPlacementTaskComponent>(v.EntityId, out var task))
+                {
+                    v.CurrentBuildTableId = task.TargetTableId;
+                    v.CurrentBuildStartedAt = task.StartedAt;
+                    v.CurrentBuildTileX = task.TileX;
+                    v.CurrentBuildTileY = task.TileY;
+                    v.CurrentBuildReservedWood = task.ReservedWoodCost;
+                    v.CurrentBuildReservedStone = task.ReservedStoneCost;
+                }
+                else
+                {
+                    v.CurrentBuildTableId = 0;
+                    v.CurrentBuildStartedAt = -1f;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 로드 후 호출. VillageData.CurrentBuild* → ObjectPlacementTaskComponent 재구성.
+        /// </summary>
+        public void RestoreTaskFromData(VillageData v)
+        {
+            if (v.EntityId < 0)
+                return;
+            if (v.CurrentBuildTableId <= 0)
+                return;
+
+            ObjectPlacementTaskComponent task = new ObjectPlacementTaskComponent
+            {
+                VillageId = v.VillageId,
+                TargetTableId = v.CurrentBuildTableId,
+                TileX = v.CurrentBuildTileX,
+                TileY = v.CurrentBuildTileY,
+                StartedAt = v.CurrentBuildStartedAt,
+                BuildDurationHours = VillageBuildRoadmap.GetBuildHours(v.CurrentBuildTableId),
+                ReservedWoodCost = v.CurrentBuildReservedWood,
+                ReservedStoneCost = v.CurrentBuildReservedStone,
+            };
+            AR.s.Component.AddComponent(v.EntityId, task);
+
+            Debug.Log($"[BuildQueue] v{v.VillageId} 로드 후 태스크 복원: TableId={task.TargetTableId}, tile=({task.TileX},{task.TileY}), 시작={task.StartedAt:F1}h");
         }
     }
 }

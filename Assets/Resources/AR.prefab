@@ -131,6 +131,7 @@ Transform:
   - {fileID: 163152631085100268}
   - {fileID: 6006664769501381891}
   - {fileID: 3044714210340824762}
+  - {fileID: 6141178472829971184}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &4782366772405765878
@@ -153,6 +154,7 @@ MonoBehaviour:
   _uiManager: {fileID: 858626092241130880}
   _monsterManager: {fileID: 7236864687234034134}
   _npcManager: {fileID: 1634794195815487357}
+  _buildingManager: {fileID: 5112318681396571582}
   _itemManager: {fileID: 2311453194463681167}
   _llmManager: {fileID: 292700004610607739}
   _timeManager: {fileID: 8814880666769639597}
@@ -202,7 +204,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 389f96e1286f21044a39349af2580130, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ARPG.Manager.TimeManager
-  _realSecondsPerGameHour: 60
+  _realSecondsPerGameHour: 5
 --- !u!1 &3517141142459644193
 GameObject:
   m_ObjectHideFlags: 0
@@ -335,6 +337,50 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8ef54ae0cb7c9634eafde4304474cbe4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ARPG.Manager.LLMManager
+--- !u!1 &5067665441337165921
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6141178472829971184}
+  - component: {fileID: 5112318681396571582}
+  m_Layer: 0
+  m_Name: BuildingManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6141178472829971184
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5067665441337165921}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 3160730113525791529}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &5112318681396571582
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5067665441337165921}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4ba25eaf78eebd648959eaa08547d63d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ARPG.Building.BuildingManager
 --- !u!1 &5530767162653558007
 GameObject:
   m_ObjectHideFlags: 0

@@ -205,6 +205,17 @@ namespace ARPG.Tables
         [JsonProperty("Recipe")] public int Recipe = 0;
         [JsonProperty("Function")] public int Function = 0;
         [JsonProperty("ResourceName")] public string ResourceName = string.Empty;
+        [JsonProperty("SpawnType")] public GE.BuildableSpawnType SpawnType = GE.BuildableSpawnType.Tile;
+        [JsonProperty("AnimationId")] public int AnimationId = 0;
+
+        // Phase B: 마을 자가 건설 비용 (NPC가 짓기 위해 필요한 자원)
+        [JsonProperty("Cost_Wood")] public int Cost_Wood = 0;
+        [JsonProperty("Cost_Stone")] public int Cost_Stone = 0;
+
+        // Phase B: 완성 시 마을의 해당 자원 Cap에 가산되는 양 (Woodpile, Chest 등)
+        [JsonProperty("StorageCap_Food")] public int StorageCap_Food = 0;
+        [JsonProperty("StorageCap_Wood")] public int StorageCap_Wood = 0;
+        [JsonProperty("StorageCap_Stone")] public int StorageCap_Stone = 0;
     }
 
     // EquipmentBaseStatTable 제거됨 → ModTable + ItemImplicitTable로 대체

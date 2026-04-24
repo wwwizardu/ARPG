@@ -248,12 +248,29 @@ namespace ARPG.Map
 
         /// <summary>
         /// 월드 좌표에 오브젝트를 배치한다.
+        /// SpawnType=Entity인 건물은 타일 비트를 건드리지 않고 BuildingManager에 전적으로 위임한다.
         /// </summary>
         public bool PlaceObject(int worldX, int worldY, int objectId)
         {
             if (objectId <= 0)
                 return false;
 
+            // SpawnType=Entity면 타일 비트 무변경, BuildingManager에 위임
+            Tables.BuildableItemTable table = AR.s.Data.GetBuildableItem(objectId);
+            if (table != null && table.SpawnType == GlobalEnum.BuildableSpawnType.Entity)
+            {
+                // AR 프리팹에 BuildingManager 컴포넌트 연결이 누락되면 NullReference 방지
+                if (AR.s.Building == null)
+                {
+                    Debug.LogError($"[MapManager] PlaceObject - AR.s.Building is null. AR 프리팹에 BuildingManager 컴포넌트 연결 확인 필요. objectId={objectId}");
+                    return false;
+                }
+                int villageId = AR.s.Village != null ? AR.s.Village.FindVillageContaining(worldX, worldY) : -1;
+                int entityId = AR.s.Building.PlaceBuilding(worldX, worldY, objectId, villageId);
+                return entityId >= 0;
+            }
+
+            // Tile 경로: 기존 로직 (objectId + Blocked 비트 기록 + Tilemap 렌더)
             int chunkX = Mathf.FloorToInt((float)worldX / chunkSize);
             int chunkY = Mathf.FloorToInt((float)worldY / chunkSize);
             int localX = worldX - (chunkX * chunkSize);

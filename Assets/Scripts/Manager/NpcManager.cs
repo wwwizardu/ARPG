@@ -118,7 +118,8 @@ namespace ARPG.Npc
                 if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
                     continue;
 
-                if (saveData.IsActive)
+                // IsSpawning: 이전 호출의 CreateNpc가 아직 대기 중 → 재호출 차단 (이중 스폰 방지)
+                if (saveData.IsActive || saveData.IsSpawning)
                     continue;
 
                 if (saveData.Condition == CharacterConditions.Dead)
@@ -276,41 +277,65 @@ namespace ARPG.Npc
             return count;
         }
 
+        /// <summary>
+        /// 비동기 NPC 엔티티 생성.
+        /// await 도중 청크가 비활성화되거나 재활성화 레이스가 발생해도 일관성 유지:
+        ///   1) IsSpawning 플래그로 중복 호출 차단 (이중 스폰 방지)
+        ///   2) CreateNpc 완료 후 청크 상태 재확인 → 비활성이면 GameObject 즉시 폐기 (orphan 방지)
+        /// </summary>
         private async UniTask SpawnNpc(int entityId, NpcSaveData saveData)
         {
             if (AR.s.CurrentScene is GameScene == false)
                 return;
 
-            if (saveData.IsActive)
+            if (saveData.IsActive || saveData.IsSpawning)
                 return;
+            saveData.IsSpawning = true;
 
-            Vector3 spawnPos3D = new Vector3(saveData.Position.x, saveData.Position.y, -0.05f);
-
-            // 발급된 EntityId를 전달하여 동일한 ID로 엔티티 생성
-            var (createdId, entity) = await EntityFactory.CreateNpc(saveData.NpcTableId, spawnPos3D, _npcParent, entityId);
-
-            if (createdId < 0 || entity == null)
-                return;
-
-            AR.s.Component.AddComponent(createdId, new NpcTag());
-            EntityFactory.AddActivationComponent(createdId, _activationDistance, _deactivationDistance);
-
-            // 마을 데이터 복원
-            if (AR.s.Component.TryGetComponent<NpcVillageComponent>(createdId, out var village))
+            try
             {
-                village.VillageId = saveData.VillageId;
-                AR.s.Component.SetComponent(createdId, village);
-            }
+                Vector3 spawnPos3D = new Vector3(saveData.Position.x, saveData.Position.y, -0.05f);
 
-            if (AR.s.Component.TryGetComponent<NpcJobComponent>(createdId, out var job))
+                // 발급된 EntityId를 전달하여 동일한 ID로 엔티티 생성
+                var (createdId, entity) = await EntityFactory.CreateNpc(saveData.NpcTableId, spawnPos3D, _npcParent, entityId);
+
+                if (createdId < 0 || entity == null)
+                    return;
+
+                // await 도중 청크가 비활성화되었으면 GameObject 폐기 (orphan 방지)
+                Vector2Int chunkCoord = PositionToChunk(saveData.Position);
+                if (AR.s.Map == null || AR.s.Map.IsChunkActive(chunkCoord) == false)
+                {
+                    EntityIdHelper.DestroyEntity(createdId, false);
+                    if (entity != null)
+                        Destroy(entity.gameObject);
+                    return;
+                }
+
+                // NpcTag는 EntityFactory.CreateNpc가 AI 컴포넌트 부착 전에 추가함 (isNpc 판정용)
+                EntityFactory.AddActivationComponent(createdId, _activationDistance, _deactivationDistance);
+
+                // 마을 데이터 복원
+                if (AR.s.Component.TryGetComponent<NpcVillageComponent>(createdId, out var village))
+                {
+                    village.VillageId = saveData.VillageId;
+                    AR.s.Component.SetComponent(createdId, village);
+                }
+
+                if (AR.s.Component.TryGetComponent<NpcJobComponent>(createdId, out var job))
+                {
+                    job.JobType = saveData.JobType;
+                    job.SkillLevel = saveData.SkillLevel;
+                    AR.s.Component.SetComponent(createdId, job);
+                }
+
+                saveData.EntityId = createdId;
+                saveData.IsActive = true;
+            }
+            finally
             {
-                job.JobType = saveData.JobType;
-                job.SkillLevel = saveData.SkillLevel;
-                AR.s.Component.SetComponent(createdId, job);
+                saveData.IsSpawning = false;
             }
-
-            saveData.EntityId = createdId;
-            saveData.IsActive = true;
         }
 
         /// <summary>

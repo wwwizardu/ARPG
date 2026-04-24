@@ -15,6 +15,7 @@ namespace ARPG.Data
         public List<WorldDropItemData> WorldDropItemDatas = new();
         public List<VillageData> VillageDatas = new();
         public Dictionary<int, NpcSaveData> NpcSaveDatas = new();
+        public Dictionary<int, BuildingSaveData> BuildingSaveDatas = new();
         public List<ChunkModificationData> TileModifications = new();
 
         public void Initialize()

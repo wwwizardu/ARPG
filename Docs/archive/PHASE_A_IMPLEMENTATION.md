@@ -1,7 +1,7 @@
 # Phase A — 구현 문서
 
-> 기획 근거: [PHASE_A_DESIGN.md](PHASE_A_DESIGN.md)
-> 상위 비전: [VILLAGE_GROWTH_STAGES.md §10](VILLAGE_GROWTH_STAGES.md)
+> 기획 근거: [../PHASE_A_DESIGN.md](../PHASE_A_DESIGN.md)
+> 상위 비전: [../VILLAGE_GROWTH_STAGES.md §10](../VILLAGE_GROWTH_STAGES.md)
 >
 > 이 문서는 **실제 코드 변경 가이드**다. 파일 단위로 "무엇을 / 어디에 / 어떻게" 수정할지 기술한다.
 

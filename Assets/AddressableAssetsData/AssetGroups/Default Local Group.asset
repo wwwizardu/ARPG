@@ -25,6 +25,16 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 129e10fa9fdbc334680c1f57b4a04ef1
+    m_Address: Sprites/Items/CropPlot
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 206f5d6b047a4094cb009545d978aa05
+    m_Address: Sprites/Items/Well
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 21fcae8338717c34586e97a993d4afee
     m_Address: UI/Character
     m_ReadOnly: 0
@@ -75,6 +85,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 655633fc0242a184188ff0b68704521a
+    m_Address: Tile/WoodWall
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 67e8b3db722c2c44b8daf70e09c44e42
     m_Address: UI/Inventory
     m_ReadOnly: 0
@@ -85,13 +100,28 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7c427aeacf06dde43ac3b30bb18968cc
+    m_Address: Sprites/Items/Woodpile
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 866a25d384bd4ad41809716fb6fd09e7
     m_Address: Animation/Npc
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8915c31f92be31b428d8b7b217666895
+    m_Address: Sprites/Items/Bed
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 98787bc7e144ce1408c5c6220d9fba34
     m_Address: Atlas/Base
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a283c4ab6d85cc748818ce4a2d54251c
+    m_Address: Sprites/Items/Chest
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -115,6 +145,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d8b631bdf4eae644992d0fa651e38d6b
+    m_Address: Sprites/Items/Campfire
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: deb56b626166d8c4d837cbc5f65aa448
     m_Address: Item/Item
     m_ReadOnly: 0
@@ -122,6 +157,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: def967a83b43db54785a8aff08a0b520
     m_Address: Humanoid/Idle
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e7ca75a3c61dfbe41b5c967ba4b9a2ca
+    m_Address: Sprites/Items/Bedroll
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

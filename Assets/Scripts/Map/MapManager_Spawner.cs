@@ -25,6 +25,12 @@ namespace ARPG.Map
             {
                 AR.s.Npc.OnChunkActivated(chunkCoord);
             }
+
+            // 건물 엔티티 스폰/복원 (BuildingManager의 SaveData 기반)
+            if (AR.s.Building != null)
+            {
+                AR.s.Building.OnChunkActivated(chunkCoord);
+            }
         }
 
         public void OnChunkDeactivated(Vector2Int chunkCoord)
@@ -38,6 +44,12 @@ namespace ARPG.Map
             if (AR.s.Npc != null)
             {
                 AR.s.Npc.OnChunkDeactivated(chunkCoord);
+            }
+
+            // 건물 엔티티 저장 및 비활성화 (BuildingManager의 SaveData 기반)
+            if (AR.s.Building != null)
+            {
+                AR.s.Building.OnChunkDeactivated(chunkCoord);
             }
         }
     }

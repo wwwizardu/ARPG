@@ -11,9 +11,11 @@ namespace ARPG.Scene
         [SerializeField] private CameraController _cameraController;
         [SerializeField] private Transform _monsterRoot;
         [SerializeField] private Transform _npcRoot;
+        [SerializeField] private Transform _buildingRoot;
 
         public Transform MonsterRoot => _monsterRoot;
         public Transform NpcRoot => _npcRoot;
+        public Transform BuildingRoot => _buildingRoot;
 
         protected override IEnumerator OnInitialize()
         {

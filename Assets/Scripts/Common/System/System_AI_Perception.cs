@@ -54,6 +54,10 @@ namespace ARPG.Systems
                 int entityId = perceptionPool.GetEntityId(i);
                 AIPerceptionComponent perception = perceptionPool.GetByIndex(i);
 
+                // NPC는 플레이어를 타겟으로 인식하지 않음 (관계 기반 행동은 추후 구현)
+                if (AR.s.Component.HasComponent<NpcTag>(entityId))
+                    continue;
+
                 // AI 컴포넌트 가져오기
                 if (!AR.s.Component.TryGetComponent<AIComponent>(entityId, out var ai))
                     continue;

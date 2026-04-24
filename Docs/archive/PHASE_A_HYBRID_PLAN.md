@@ -1,8 +1,8 @@
-# Phase A — 하이브리드 건물 시스템 도입 계획
+# Phase A — 하이브리드 건물 시스템 도입 계획 ✅ 완료 (2026-04-24)
 
 > Phase A의 Campfire를 **EntityBase 기반 엔티티**로 구현하면서, 기존 Tile 경로는 **범용 경량 건물용으로 유지**한다. `BuildableItemTable.SpawnType` 컬럼으로 분기하고, `AnimationId` 컬럼으로 정적/애니메이션을 구분한다.
 >
-> 관련 문서: [PHASE_A_DESIGN.md](PHASE_A_DESIGN.md) · [PHASE_A_IMPLEMENTATION.md](PHASE_A_IMPLEMENTATION.md) · [PHASE_A_UNITY_CHECKLIST.md](PHASE_A_UNITY_CHECKLIST.md)
+> 관련 문서: [../PHASE_A_DESIGN.md](../PHASE_A_DESIGN.md) · [PHASE_A_IMPLEMENTATION.md](PHASE_A_IMPLEMENTATION.md) · [PHASE_A_UNITY_CHECKLIST.md](PHASE_A_UNITY_CHECKLIST.md)
 
 ---
 
@@ -64,21 +64,30 @@ PlaceObject(x, y, id)
 - `MapManager_Renderer`가 Entity 타입 타일을 재렌더 시도하지 않음 (objectId=0이므로)
 - BuildingManager와 타일 비트의 정합성 걱정 없음 (타일 비트에 건물 흔적이 없으니까)
 
-### 2.4 프리팹 철학: 경량 단일 프리팹 + 런타임 조건부 조립
+### 2.4 프리팹 통합: `Prefabs/Entity` 공용
 
-**`Prefabs/Building`은 `SpriteRenderer` 1개만 포함**. `SpriteLibrary`, `SpriteResolver`, HP바, Shadow, Collider **전부 없음**.
+**`Prefabs/Entity`를 엔티티(Monster/NPC/Player)와 건물(Campfire 등) 모두 공용 사용**. 별도 `Prefabs/Building` 프리팹 만들지 않음.
+
+핵심 근거: [SpriteAnimationData.SetSprite()](Assets/Scripts/Animation/SpriteAnimationData.cs) 가 `_spriteRenderer.sprite`를 **직접 교체**하고 `SpriteLibraryAsset`은 생성자에서 직접 소비. 런타임 애니메이션은 **`SpriteLibrary`/`SpriteResolver` 컴포넌트를 쓰지 않음**.
+
+→ `Prefabs/Entity`에서 **SpriteLibrary/SpriteResolver 컴포넌트 제거** (레거시 정리). SpriteRenderer만 남김.
 
 `BuildableItemTable.AnimationId`가 런타임 구성을 결정:
 
 | `AnimationId` | `BuildingFactory` 동작 | 결과 |
 |---|---|---|
-| `0` (정적) | `Addressables.LoadAssetAsync<Sprite>(table.ResourceName)` → `_sr.sprite` 할당 | SpriteRenderer만 있는 가벼운 GameObject |
-| `> 0` (애니) | 런타임 `AddComponent<SpriteLibrary>()` + `AddComponent<SpriteResolver>()` + `SpriteLibraryAsset` 로드 + `SpriteAnimationComponent` 부착 | 기존 `System_Animation` 파이프 그대로 동작 |
+| `0` (정적) | `Addressables.LoadAssetAsync<Sprite>(table.ResourceName)` → `_sr.sprite` 할당 | 정적 스프라이트, System_Animation 미관여 |
+| `> 0` (애니) | `SpriteAnimationComponent` 부착 + `SpriteLibraryAsset` 비동기 로드 + `SpriteAnimationData` 생성 → `System_Animation` 등록 | 기존 엔티티 애니 파이프 그대로 동작 |
 
 이점:
-- 프리팹 1개로 정적/애니 둘 다 커버 — 에셋 관리 단순
-- 정적 건물은 Awake 시 Resolver 비용 없음
+- **프리팹 1개로 모든 엔티티/건물 커버** — 에셋 관리 단순
+- `EntityBase.SetSpriteLibrary()` 같은 레거시 메서드 제거 (실제 미사용)
+- `SpriteLibrary`/`SpriteResolver` 런타임 AddComponent 비용 없음
 - 애니 건물은 **`AnimationTable` 재활용** — `CreatureTable.AnimationId`와 동일 파이프
+
+**건물과 엔티티의 차이는 Factory 레벨에서만 존재**:
+- `EntityFactory.CreateMonster/Npc/Player`: HP바/Shadow/AI/Skill/Stat 전부 부착
+- `BuildingFactory.CreateBuilding`: `BuildingTag` + `BuildingComponent`만 부착 (HP바/Shadow 없음)
 
 ### 2.5 `BuildableItemTable.ResourceName`의 이중 해석
 
@@ -86,7 +95,7 @@ PlaceObject(x, y, id)
 
 변경 후:
 - `SpawnType == Tile` → `TileBase` 키로 해석 (기존)
-- `SpawnType == Entity` + `AnimationId == 0` → `Sprite` 키로 해석 (예: `Sprites/Village/Campfire`)
+- `SpawnType == Entity` + `AnimationId == 0` → `Sprite` 키로 해석 (예: `Sprites/Items/Campfire`)
 - `SpawnType == Entity` + `AnimationId > 0` → SpriteLibraryAsset 경로는 `AnimationTable.SpriteLibraryPath`에서 가져옴. `ResourceName`은 placeholder로만 사용 (또는 초기 프레임용 Sprite)
 
 ### 2.6 외부 시스템에서 "이 칸에 뭐 있나" 조회
@@ -120,11 +129,12 @@ public bool IsAnyObjectAt(int worldX, int worldY)
 |---|---|
 | `Assets/Scripts/Common/Component/BuildingTag.cs` | 빈 태그 struct |
 | `Assets/Scripts/Common/Component/BuildingComponent.cs` | TableId, VillageId, WorldTileX/Y, CurrentHp |
-| `Assets/Scripts/Factory/BuildingFactory.cs` | 경량 프리팹 로드 + 정적/애니 분기 + 컴포넌트 부착 |
+| `Assets/Scripts/Factory/BuildingFactory.cs` | `Prefabs/Entity` 로드 + 정적/애니 분기 + 건물 전용 컴포넌트 부착 |
 | `Assets/Scripts/Manager/BuildingManager.cs` | 상태 dict + 청크 매핑 + Save/Load |
-| `Assets/Scripts/Common/Data/BuildingSaveData.cs` | 직렬화 구조체 |
-| (Unity 에셋) `Assets/Prefabs/Game/Building/Building.prefab` | 경량 프리팹 (SpriteRenderer만) |
-| (Unity 에셋) `Assets/Art/Sprites/Village/Campfire.png` + import 설정 | Campfire 정적 placeholder 스프라이트 |
+| `Assets/Scripts/Village/BuildingSaveData.cs` | 직렬화 구조체 |
+| (Unity 에셋) `Assets/Art/Sprites/Items/Campfire.png` + import 설정 | Campfire 정적 placeholder 스프라이트 |
+
+**신규 프리팹 불필요** — 기존 `Prefabs/Entity` 재사용 (단, SpriteLibrary/SpriteResolver 제거)
 
 ### 수정
 | 경로 | 변경 내용 |
@@ -140,11 +150,17 @@ public bool IsAnyObjectAt(int worldX, int worldY)
 | (Google Sheets) `BuildableItem` 시트 | `SpawnType`, `AnimationId` 컬럼 추가, Campfire 행 세팅 |
 
 ### 손대지 않는 것
-- `EntityFactory.cs`
 - `System_VillageFirstBuild.cs`
-- `System_Animation.cs`, `SpriteAnimationComponent.cs`
+- `System_Animation.cs`, `SpriteAnimationComponent.cs`, `SpriteAnimationData.cs`
 - `BuildableTileRegistry.cs` (Tile 경로용으로 그대로 유지)
-- `VillageManager.cs`, `VillageData.cs` (`HasCampfire`는 마일스톤 플래그로 유지)
+- `VillageData.cs` (`HasCampfire`는 마일스톤 플래그로 유지)
+
+### 추가 정리 (프리팹 통합 부수 작업)
+| 경로 | 변경 내용 |
+|---|---|
+| `Assets/Scripts/Base/EntityBase.cs` | `SetSpriteLibrary()` 메서드 제거 (런타임 미사용) |
+| `Assets/Scripts/Factory/EntityFactory.cs` | `LoadAnimationAsync`에서 `SetSpriteLibrary` 호출 제거 |
+| (Unity 에셋) `Assets/Prefabs/Game/Creature/Entity.prefab` | SpriteRenderer 자식의 `SpriteLibrary`, `SpriteResolver` 컴포넌트 제거 |
 
 ---
 
@@ -160,7 +176,7 @@ public bool IsAnyObjectAt(int worldX, int worldY)
 1.3 Google Sheets `BuildableItem` 시트 컬럼 추가:
   - L열: `SpawnType` (`Tile` / `Entity`)
   - M열: `AnimationId` (정수, 0이면 정적)
-  - Campfire 행: `SpawnType=Entity`, `AnimationId=0`, `ResourceName=Sprites/Village/Campfire`
+  - Campfire 행: `SpawnType=Entity`, `AnimationId=0`, `ResourceName=Sprites/Items/Campfire`
   - 기존 나무벽 행: `SpawnType=Tile`, `AnimationId=0` (변경 최소화)
 1.4 `DownloadTables.cs`:
   - 다운로드 범위 `A:K` → `A:M` (`534887250&range=A:M`)
@@ -190,19 +206,16 @@ public struct BuildingComponent {
 
 **DoD**: 컴파일 성공
 
-### Step 3 — 경량 프리팹 (Unity 작업, 10분)
-3.1 `Assets/Prefabs/Game/Building/Building.prefab` 생성
-  - 루트 GameObject: `EntityBase` 컴포넌트, `_entityId=-1`
-  - 자식 `_visual`:
-    - `SpriteRenderer` 1개 (Sorting Layer = 기존 엔티티와 동일, Order in Layer 적절히)
-    - **`SpriteLibrary`, `SpriteResolver`, Collider 없음** — 런타임 조건부 부착
-  - Shadow, HP Canvas 없음
-  - EntityBase의 `_visual`, `_sr` 필드 연결
-3.2 Addressable 키: `Prefabs/Building`
-3.3 Campfire Sprite 임포트 (`Assets/Art/Sprites/Village/Campfire.png`, 단색 placeholder)
-3.4 Sprite Addressable 키: `Sprites/Village/Campfire`
+### Step 3 — 기존 프리팹 정리 + Sprite 임포트 (Unity 작업, 10분)
+3.1 **`Assets/Prefabs/Game/Creature/Entity.prefab`에서 SpriteLibrary, SpriteResolver 컴포넌트 제거**
+  - 자식 SpriteRenderer 오브젝트 인스펙터에서 두 컴포넌트 Remove
+  - 런타임 애니메이션은 `SpriteAnimationData`가 `_sr.sprite`를 직접 교체하므로 영향 없음
+3.2 Campfire Sprite 임포트: `Assets/Art/Sprites/Items/Campfire.png` (단색 placeholder)
+3.3 Sprite Addressable 키: `Sprites/Items/Campfire`
 
-**DoD**: Addressables Groups에 두 항목 등록 후 빌드. 프리팹 인스펙터에서 `SpriteLibrary`가 보이지 않아야 함
+**DoD**:
+- Entity.prefab에서 SpriteLibrary/SpriteResolver 제거 후 기존 몬스터/NPC/플레이어 애니메이션이 정상 재생되는지 Play Mode 확인
+- Campfire Sprite가 Addressable Groups에 등록되고 Build 완료
 
 ### Step 4 — BuildingFactory (45분)
 4.1 `BuildingFactory.cs` 신설:
@@ -390,7 +403,7 @@ if (AR.s.Building.IsTileOccupied(tile.x, tile.y)) return false;
   - §2.1 "CustomTile 에셋 생성" → "Campfire Sprite 임포트 + `Prefabs/Building.prefab` 생성"
   - §3 Addressables 항목:
     - `Tiles/Village/Campfire` (TileBase) **삭제**
-    - `Sprites/Village/Campfire` (Sprite) 추가
+    - `Sprites/Items/Campfire` (Sprite) 추가
     - `Prefabs/Building` (GameObject) 추가
 
 **DoD**: 체크리스트만 보고 Unity 작업자가 혼란 없이 진행 가능
@@ -413,7 +426,7 @@ if (AR.s.Building.IsTileOccupied(tile.x, tile.y)) return false;
 | Size_Height | 1 | |
 | Recipe | 0 | |
 | Function | 0 | |
-| ResourceName | `Sprites/Village/Campfire` | **Entity + AnimationId=0 → Sprite 키로 해석** |
+| ResourceName | `Sprites/Items/Campfire` | **Entity + AnimationId=0 → Sprite 키로 해석** |
 | SpawnType | `Entity` | **신규 L열** |
 | AnimationId | `0` | **신규 M열**. Phase A는 정적. Phase B에서 불꽃 flicker 시 값 부여 |
 
@@ -421,10 +434,12 @@ if (AR.s.Building.IsTileOccupied(tile.x, tile.y)) return false;
 
 | Address | 타입 | 용도 |
 |---|---|---|
-| `Prefabs/Building` | GameObject (prefab) | 모든 Entity 타입 건물의 공용 경량 프리팹 |
-| `Sprites/Village/Campfire` | Sprite | Campfire 정적 placeholder |
+| `Prefabs/Entity` | GameObject (prefab) | 엔티티/건물 공용 (기존 등록 유지) |
+| `Sprites/Items/Campfire` | Sprite | Campfire 정적 placeholder |
 
 기존 `Tiles/Village/Campfire` (TileBase) 항목은 **제거** (또는 미사용으로 방치).
+
+> 건물은 `Prefabs/Entity`를 재사용. 별도 `Prefabs/Building`은 만들지 않음.
 
 ### 5.3 Phase B 애니메이션 전환 시 필요한 것 (참고)
 

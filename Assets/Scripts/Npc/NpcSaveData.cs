@@ -19,6 +19,10 @@ namespace ARPG.Npc
         public int EntityId;
         public bool IsActive;
 
+        /// <summary>스폰 진행 중 플래그 (async CreateNpc 대기 구간). 이중 스폰 차단용. 세이브 대상 아님.</summary>
+        [JsonIgnore]
+        public bool IsSpawning;
+
         // 마을 시스템 데이터
         public int VillageId;
         public GlobalEnum.JobType JobType;

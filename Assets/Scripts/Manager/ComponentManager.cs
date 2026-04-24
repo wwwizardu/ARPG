@@ -65,6 +65,11 @@ namespace ARPG.Component
             { typeof(NpcJobComponent), 200 },
             { typeof(NpcVillageComponent), 200 },
             { typeof(VillageStorageComponent), 32 },   // 마을 1개당 1개, 현재 <10, 여유 32
+            { typeof(ObjectPlacementTaskComponent), 32 }, // 마을 1개당 0~1개 (Phase B 배치 큐)
+
+            // 건물 시스템 컴포넌트 (BuildingManager 관리)
+            { typeof(BuildingTag), 200 },
+            { typeof(BuildingComponent), 200 },
 
             // 발사체 컴포넌트
             { typeof(ProjectileComponent), 100 },

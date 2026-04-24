@@ -370,19 +370,31 @@ Category 예: `Housing / Storage / Production / Crafting / Service / Defense / D
 
 ## 10. 구현 Phase
 
-### Phase A — 자가 생성 최소 루프 (MVP)
-- [ ] `System_VillagePassiveProduction`
-- [ ] `VillageStorageComponent` (기존 `VillageData.Resources`를 ECS로 승격)
-- [ ] 디버그 UI: 마을 클릭 시 자원/인구/Tier 표시
-- [ ] Stage 0 시드: `EnsureVillagePopulated` 성공 시 Bedroll + Campfire 자동 배치
+### Phase A — 자가 생성 최소 루프 (MVP) ✅ 완료 (2026-04-24)
+- [x] `System_VillagePassiveProduction`
+- [x] `VillageStorageComponent` (기존 `VillageData.Resources`를 ECS로 승격)
+- [x] 디버그 유틸: `VillageDebugLog.SnapshotAll()` — Phase A는 화면 UI 대신 로그로 대체 (설계 결정)
+- [x] Stage 0 시드: `EnsureVillagePopulated` 성공 + Wood≥3 + NPC 1명 조건 시 **Campfire 자동 배치** (2h 건설)
+- [x] **하이브리드 건물 시스템**: `BuildableItemTable.SpawnType` 분기로 Tile/Entity 경로 공존 — `BuildingManager`/`BuildingFactory` 신설. 상세는 [archive/PHASE_A_HYBRID_PLAN.md](archive/PHASE_A_HYBRID_PLAN.md)
 
-### Phase B — 오브젝트 배치 (핵심)
-- [ ] `ObjectType` enum 확장 (§12.2)
-- [ ] `ObjectTable` 정의 + 구글 시트
-- [ ] `ObjectPlacementTaskComponent` + `System_NpcCrafting`
-- [ ] 하드코딩 로드맵: Bed → Woodpile → CropPlot → Chest → Bed 2 → Well
-- [ ] 배치 위치 자동 탐색 (중심 나선형)
-- [ ] 기존 `MapManager.PlaceObject`(1×1) 그대로 사용
+> Bedroll 자동 배치는 **Phase B의 하드코딩 로드맵**(Bed → Woodpile → …)으로 이관.
+> Stage 0 완료 조건을 "Campfire 1개"로 단순화 — 범용 배치 큐 완성 후 Bedroll/Bed 등을 로드맵에 포함.
+
+### Phase B — 오브젝트 배치 (핵심) ✅ 완료 (2026-04-24)
+- [x] ~~`ObjectType` enum 확장~~ → 미확장 결정. 식별은 `BuildableItemTable.Id`가 담당 (Phase A 결정 유지)
+- [x] `BuildableItemTable` 확장 재사용 — 신규 컬럼 5개 (`Cost_Wood`, `Cost_Stone`, `StorageCap_Food/Wood/Stone`)
+- [x] `ObjectPlacementTaskComponent` (마을당 1개 슬롯)
+- [x] 하드코딩 로드맵: **Campfire** → Bedroll → Bed → Woodpile → CropPlot → Chest → Bed 2 → Well (`VillageBuildRoadmap`)
+- [x] 배치 위치 자동 탐색 (중심 **링 확장 + 같은 링 내 랜덤 픽** — `VillageTileFinder.FindEmptyTileNearest`. 클러스터링 방지)
+- [x] 기존 `MapManager.PlaceObject`(1×1) + `BuildingManager` 하이브리드 경로 재사용
+- [x] `System_VillageFirstBuild` → 범용 `System_VillageBuildQueue`로 일반화
+- [x] `Prefabs/Entity` 공용 프리팹 유지 (Phase A에서 통합 완료)
+- [x] **데이터 주도 Cap 확장** — `VillageManager.OnObjectPlaced`가 `StorageCap_*` 컬럼을 그대로 가산 (기획 §4.2)
+- [x] Google Sheets `BuildableItem` 시트 + 로컬 `BuildableItemTable.bytes` 동기 갱신 (Id 1, 100, 101, 102, 110, 111, 120, 130 총 8행)
+- [x] `DataManager` 세이브 경로에 `SyncTaskToData()` 훅 추가 (진행 중 태스크 → `VillageData.CurrentBuild*` 동기화)
+- [x] `VillageDebugLog.Snapshot` 포맷 확장 (현재 진행 오브젝트 + Placed 누적 표시)
+- [x] Sprite placeholder 6장 import + Addressable 등록 — `Sprites/Items/{Bedroll,Bed,Woodpile,Chest,CropPlot,Well}` (Campfire 포함 총 7종)
+- [x] `BuildableTileRegistry` 단순화 — `Preserve()` 제거 + 결과 캐시/진행 게이트 분리, 미등록 키 사전 검증으로 InvalidKey 콘솔 노이즈 차단
 
 ### Phase C — Tier 승격 + 벽
 - [ ] `System_VillageTierProgression`
@@ -390,6 +402,7 @@ Category 예: `Housing / Storage / Production / Crafting / Service / Defense / D
 - [ ] `System_VillageWallPlanner` + Palisade 건설
 - [ ] Palisade/StoneWall RuleTile 에셋 제작
 - [ ] `WallSegmentComponent` 세그먼트 HP 관리
+- [ ] **배치 분산 정교화** (Phase B에서 링 내 랜덤 픽 도입 후 후속): 인접 점유 셀 8방위 페널티 → 건물 사이 1칸 간격 유지 + "큰길" 예약(중심에서 방위별 통로 보존, NPC 통행 확보)
 
 ### Phase D — 플레이어 이득 (루프 완성)
 - [ ] 오브젝트 세트 판정 `VillageManager.HasObjectSet`
@@ -398,6 +411,7 @@ Category 예: `Housing / Storage / Production / Crafting / Service / Defense / D
   - Furnace + Anvil 근처 → 강화 UI
   - InnBed + Hearth 근처 → 여관 UI
 - [ ] 기증 UX + 자원 변환 (`ItemTable.ResourceType`)
+- [ ] **배치 구역화**: 직업/세트 기반 그루핑 — 같은 카테고리 오브젝트(Blacksmith 세트, 주거 세트 등)를 한 영역에 모아 배치 → "공방 거리", "주거 구역" 같은 자연 발생 지구 형성
 
 ### Phase E — 배후 시뮬레이션
 - [ ] `System_AbstractVillageSimulation`

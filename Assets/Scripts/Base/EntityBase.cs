@@ -4,7 +4,6 @@ using ARPG.Component;
 using ARPG.Message;
 using ARPG.Utility;
 using UnityEngine;
-using UnityEngine.U2D.Animation;
 
 namespace ARPG.Base
 {
@@ -34,19 +33,9 @@ namespace ARPG.Base
             _shadow = shadow;
         }
 
-        public void SetSpriteLibrary(SpriteLibraryAsset slAsset)
-        {
-            if (_sr == null)
-                return;
-
-            var spriteLibrary = _sr.GetComponent<SpriteLibrary>();
-            if (spriteLibrary == null)
-            {
-                spriteLibrary = _sr.gameObject.AddComponent<SpriteLibrary>();
-            }
-
-            spriteLibrary.spriteLibraryAsset = slAsset;
-        }
+        // SetSpriteLibrary는 제거됨.
+        // SpriteLibrary/SpriteResolver 컴포넌트는 런타임에 참조되지 않으며,
+        // SpriteAnimationData가 SpriteLibraryAsset을 직접 받아 _sr.sprite를 교체한다.
 
 
         /// <summary>

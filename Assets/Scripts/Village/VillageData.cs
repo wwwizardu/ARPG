@@ -25,11 +25,23 @@ namespace ARPG.Village
         public int HungerHoursAccumulated;   // Food 0 유지 누적 시간 (24h 넘으면 경고 1회)
         public float RegisteredAt;           // 마을 등록 게임 시각
 
-        // Phase A: 첫 Campfire 제작 상태
+        // Phase A: 첫 Campfire 제작 상태 (Phase B에서 PlacedObjectTypeIds + CurrentBuild*로 일반화)
+        // 구 세이브 호환 위해 필드 유지. VillageManager.Load에서 마이그레이션 후 새 필드만 사용.
         public bool HasCampfire;
         public float FirstBuildStartedAt = -1f;   // -1 = 미착수
         public int FirstBuildTileX;
         public int FirstBuildTileY;
+
+        // Phase B: 현재 진행 중인 배치 작업 (마을당 1건). 0 = 미착수.
+        public int CurrentBuildTableId;
+        public float CurrentBuildStartedAt = -1f;
+        public int CurrentBuildTileX;
+        public int CurrentBuildTileY;
+        public int CurrentBuildReservedWood;
+        public int CurrentBuildReservedStone;
+
+        // Phase B: 완성된 오브젝트 TableId 누적 (중복 허용 — 같은 종류 여러 개 카운트)
+        public List<int> PlacedObjectTypeIds = new();
 
         [JsonIgnore]
         public List<int> NpcEntityIds = new();
@@ -58,6 +70,8 @@ namespace ARPG.Village
             RegisteredAt = 0f;
             HasCampfire = false;
             FirstBuildStartedAt = -1f;
+            CurrentBuildTableId = 0;
+            CurrentBuildStartedAt = -1f;
         }
     }
 }

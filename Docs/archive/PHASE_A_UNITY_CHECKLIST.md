@@ -1,7 +1,7 @@
 # Phase A — Unity Editor 작업 체크리스트
 
 > 코드 작업은 완료됐음. 이 문서는 **Unity 에디터에서 수동으로 해야 하는 작업**만 나열.
-> 기획: [PHASE_A_DESIGN.md](PHASE_A_DESIGN.md) / 구현: [PHASE_A_IMPLEMENTATION.md](PHASE_A_IMPLEMENTATION.md)
+> 기획: [../PHASE_A_DESIGN.md](../PHASE_A_DESIGN.md) / 구현: [PHASE_A_IMPLEMENTATION.md](PHASE_A_IMPLEMENTATION.md)
 
 ---
 
@@ -16,9 +16,9 @@
 
 ## 1. 데이터 테이블 작업
 
-### 1.1 `BuildableItemTable`에 Campfire 행 추가
+### 1.1 `BuildableItemTable`에 Campfire 행 추가 (하이브리드: Entity 타입)
 
-**위치**: 구글 시트 (또는 CSV 원본) → `BuildableItemTable` 시트
+**위치**: 구글 시트 → `BuildableItem` 시트 (**작업 완료됨** — MCP로 이미 추가 반영)
 
 | 컬럼 | 값 |
 |------|-----|
@@ -32,10 +32,15 @@
 | `Size_Height` | `1` |
 | `Recipe` | `0` |
 | `Function` | `0` |
-| `ResourceName` | `Tiles/Village/Campfire` |
+| `ResourceName` | `Sprites/Items/Campfire` |
+| `SpawnType` | **`Entity`** (신규 L열) |
+| `AnimationId` | **`0`** (신규 M열, Phase A는 정적) |
 
-> `ResourceName`은 Addressable 키와 **완전 일치**해야 함 (§3.2에서 동일 문자열 사용).
-> `Id=100` 상수가 `System_VillageFirstBuild.CAMPFIRE_BUILDABLE_ID`와 매칭됨. 변경 시 코드 상수도 동시 수정.
+> **Entity 타입**: Tilemap 셀이 아닌 `Prefabs/Building` 기반 `GameObject`로 생성됨.
+> `ResourceName`은 `Sprite` Addressable 키로 해석 (SpawnType=Tile과 의미 다름).
+> `Id=100` 상수가 `System_VillageFirstBuild.CAMPFIRE_BUILDABLE_ID`와 매칭됨.
+> 기존 `Id=1` 나무벽은 `SpawnType=Tile`로 Tile 경로 유지.
+> 설계 전체는 [PHASE_A_HYBRID_PLAN.md](PHASE_A_HYBRID_PLAN.md) 참조.
 
 ### 1.2 테이블 재빌드 (`.bytes` 생성)
 
@@ -56,48 +61,64 @@
 
 ---
 
-## 2. 에셋 제작
+## 2. 에셋 제작 (Prefabs/Entity 통합 경로)
 
-### 2.1 Campfire `CustomTile` 에셋
+### 2.1 Campfire 스프라이트
 
-- [ ] 폴더 준비: `Assets/Art/Tiles/Village/` (없으면 생성)
+- [ ] 폴더 준비: `Assets/Art/Sprites/Items/` (없으면 생성)
 - [ ] Placeholder 스프라이트 1장 준비
   - 임시로 단색 + 텍스트 라벨("🔥" 또는 "CF") 가능
   - 크기: 타일 1칸 (프로젝트 그리드 기준)
-- [ ] `CustomTile` 에셋 생성:
-  - 마우스 우클릭 → Create → `CustomTile` (프로젝트에 기존 Create 메뉴가 있어야 함)
-  - 파일명: `Campfire.asset`
-- [ ] 인스펙터 설정:
-  - `_sprite` → 위 Placeholder 스프라이트
-  - `_layer` → `Object` (GlobalEnum.TileLayer)
-  - `_isWalkable` → **`true`** (NPC 통과 가능)
-  - `_customData` → 기본값 0 유지
+- [ ] `Assets/Art/Sprites/Items/Campfire.png`로 저장
+- [ ] 임포트 설정 확인:
+  - `Texture Type` = `Sprite (2D and UI)`
+  - `Sprite Mode` = `Single`
+  - `Pixels Per Unit` = 기존 엔티티/타일과 동일
+  - `Filter Mode` = `Point (no filter)` (픽셀아트)
+  - `Compression` = `None`
 
-### 2.2 파일 경로 확인
+### 2.2 `Prefabs/Entity`에서 레거시 컴포넌트 제거
 
-- [ ] 최종 에셋 경로: `Assets/Art/Tiles/Village/Campfire.asset`
+건물은 별도 프리팹을 만들지 않고 `Prefabs/Entity`를 재사용한다.
+런타임 애니메이션은 `SpriteAnimationData`가 `_sr.sprite`를 직접 교체하므로 `SpriteLibrary`/`SpriteResolver` 컴포넌트는 더 이상 필요 없다.
+
+- [ ] `Assets/Prefabs/Game/Creature/Entity.prefab` 열기
+- [ ] 자식 `SpriteRenderer` GameObject 선택
+- [ ] **`SpriteLibrary` 컴포넌트 Remove**
+- [ ] **`SpriteResolver` 컴포넌트 Remove**
+- [ ] 프리팹 저장
+- [ ] Play Mode에서 기존 몬스터/NPC/플레이어 애니메이션 정상 재생 확인 (비회귀)
+
+### 2.3 레거시 CustomTile 에셋 (불필요)
+
+기존 계획에 있던 `Assets/Art/Tiles/Village/Campfire.asset` (`CustomTile`)은 **하이브리드 경로에서 사용 안 함**.
+이미 만들어뒀다면 Addressable 등록만 빼면 되고, 안 만들었다면 건너뛰어도 됨.
 
 ---
 
 ## 3. Addressables 등록
 
+통합 경로에서는 **신규 항목 1개만** 등록 (Sprite). 프리팹은 기존 `Prefabs/Entity` 재사용.
+
 ### 3.1 그룹 설정
 
 - [ ] `Window` → `Asset Management` → `Addressables` → `Groups` 창 열기
-- [ ] 기존 그룹 중 타일/에셋용 그룹 선택 (없으면 신규 그룹 `Tiles` 또는 `VillageTiles` 생성, Schema: `Packed Assets`)
-- [ ] `Campfire.asset`을 해당 그룹으로 드래그
+- [ ] 기존 그룹 또는 `Items` 그룹에 Campfire 스프라이트 드래그
 
 ### 3.2 Address 설정 (**필수**)
 
-- [ ] 추가된 Campfire 엔트리 선택 → **Address** 필드를 다음으로 변경:
-  ```
-  Tiles/Village/Campfire
-  ```
-- [ ] `BuildableItemTable.Campfire.ResourceName` 값과 **완전 일치** 확인 (오타·대소문자 주의)
+| 에셋 | Address (코드와 정확히 일치) |
+|---|---|
+| `Assets/Art/Sprites/Items/Campfire.png` | `Sprites/Items/Campfire` |
+
+- [ ] Campfire Sprite Address = `Sprites/Items/Campfire` (`BuildableItem` 시트의 `ResourceName`과 완전 일치)
+- [ ] `Prefabs/Entity`는 기존에 이미 등록되어 있음 — 확인만
+
+> 기존 `Tiles/Village/Campfire` (TileBase) 항목은 사용 안 함. 등록돼 있다면 제거하거나 방치.
 
 ### 3.3 Labels (선택)
 
-- [ ] 필요하면 `village-tile` 라벨 부착 (검색·관리 편의)
+- [ ] `village-asset` 라벨 부착 가능 (검색·관리 편의)
 
 ### 3.4 콘텐츠 빌드
 
@@ -122,7 +143,12 @@
 - [ ] `GameScene` 또는 메인 플레이 씬 열기
 - [ ] `AR` 오브젝트(MonoBehaviour)의 Serialized 매니저 참조 확인:
   - `Village Manager`, `Map Manager`, `Time Manager` 등 모두 연결됨
+  - **`Building Manager` 신규 필드 연결** (하이브리드 도입분)
+    - AR 프리팹/오브젝트에 `BuildingManager` 컴포넌트 추가 (GameObject에 New Component) 후 `_buildingManager` 필드에 할당
+- [ ] `Prefabs/Entity`의 SpriteLibrary/SpriteResolver 컴포넌트가 제거되었는지 재확인 (§2.2)
 - [ ] `MapManager`의 ThemeTileSet 연결 확인 (기존 상태 유지)
+- [ ] `GameScene`에 **`_buildingRoot`** Serialized 필드 추가 연결 필요
+  - Hierarchy에 `BuildingRoot` GameObject 만들고 `GameScene._buildingRoot`에 드래그
 
 ---
 

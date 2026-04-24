@@ -16,6 +16,7 @@ namespace ARPG
         [SerializeField] private UIManager _uiManager;
         [SerializeField] private ARPG.Monster.MonsterManager _monsterManager;
         [SerializeField] private ARPG.Npc.NpcManager _npcManager;
+        [SerializeField] private ARPG.Building.BuildingManager _buildingManager;
 
         [SerializeField] private Item.ItemManager _itemManager;
         [SerializeField] private Manager.LLMManager _llmManager;
@@ -40,6 +41,7 @@ namespace ARPG
         public UIManager UI => _uiManager;
         public Monster.MonsterManager Monster => _monsterManager;
         public Npc.NpcManager Npc => _npcManager;
+        public Building.BuildingManager Building => _buildingManager;
         public Item.ItemManager Item => _itemManager;
         public Manager.MessageManager Message => _messageManager;
 
@@ -69,6 +71,7 @@ namespace ARPG
             _itemManager.Initialize();
             _monsterManager.Initialize();
             _npcManager.Initialize();
+            _buildingManager.Initialize();
             _messageManager.Initialize();
             _llmManager.Initialize();
             _timeManager.Initialize();
@@ -87,6 +90,7 @@ namespace ARPG
             _mapManager.Reset();
             _monsterManager.Reset();
             _npcManager.Reset();
+            _buildingManager.Reset();
             _messageManager.Reset();
             _timeManager.Reset();
             _villageManager.Reset();
@@ -116,6 +120,7 @@ namespace ARPG
                 {
                     _monsterManager.SetMorsterRoot(gameScene.MonsterRoot);
                     _npcManager.SetNpcRoot(gameScene.NpcRoot);
+                    _buildingManager.SetBuildingRoot(gameScene.BuildingRoot);
                 }
             }
         }
