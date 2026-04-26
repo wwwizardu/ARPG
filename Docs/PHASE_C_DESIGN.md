@@ -1,10 +1,8 @@
-# Phase C — Tier 승격 + Stage 1·2 확장 + 벽 인프라 상세 기획 ✅ 코드 완료 (2026-04-24)
-
-> **잔여 작업 1건 (Unity 에디터, 사용자)**:
-> - Step U2: RuleTile 2종(Palisade / PalisadeGate) 작성 + Addressable 등록
+# Phase C — Tier 승격 + Stage 1·2 확장 + 벽 인프라 상세 기획 ✅ 완료 (2026-04-26)
 
 > 상위 문서: [VILLAGE_GROWTH_STAGES.md §10](VILLAGE_GROWTH_STAGES.md)
-> 선행 Phase: [PHASE_A_DESIGN.md](PHASE_A_DESIGN.md) ✅ 완료 · [PHASE_B_DESIGN.md](PHASE_B_DESIGN.md) ✅ 완료
+> 선행 Phase: [PHASE_A_DESIGN.md](PHASE_A_DESIGN.md) ✅ · [PHASE_B_DESIGN.md](PHASE_B_DESIGN.md) ✅
+> 후속 Phase: [PHASE_D_DESIGN.md](PHASE_D_DESIGN.md) (플레이어 이득 + 서비스 UI + 기증)
 >
 > **목표**: Phase B가 만든 "Stage 0 자가 건설 루프"에 **Tier 승격**을 붙여 마을이 Settlement → Hamlet → Village → Town 으로 실제로 자라게 한다. 외곽 벽(Palisade)의 인프라를 깔고, 배치 분산을 정교화한다.
 
@@ -738,44 +736,51 @@ public class WallSegmentSaveData
 - [x] 12.1 PHASE_C_DESIGN.md 완료 마킹
 - [x] 12.2 VILLAGE_GROWTH_STAGES.md Phase C 체크박스 갱신
 
-### Step U1 — Sprite 자산 (Unity 작업) ⏳ 사용자 진행 필요
+### Step U1 — Sprite 자산 (Unity 작업) ✅ 완료
 신규 14종 placeholder PNG import + Addressable 등록 (`Sprites/Items/{Stockpile, ChoppingBlock, DryingRack, MiningCart, Hearth, MerchantStall, TownPost, InnBed, SignalBrazier, Furnace, Anvil, QuenchVat, Shrine}`).
 
-### Step U2 — RuleTile 자산 (Unity 작업) ⏳ 사용자 진행 필요
+### Step U2 — RuleTile 자산 (Unity 작업) ✅ 완료
 - `Assets/Art/Tilemap/RuleTile_Palisade.asset` (9방위 자동 연결)
 - `Assets/Art/Tilemap/RuleTile_PalisadeGate.asset` (정적)
 - BoundaryMarker는 **제외** (디자인 결정 — §1.1)
 - Addressable 키: `Tile/Palisade`, `Tile/PalisadeGate`
 - Build Addressables
 
-**총 예상 시간**: 코드 ~6.5시간 ✅ + Unity 자산 ~1.5시간 ⏳ = 약 8시간 (코드 부분 완료)
+### Step 13 — 2026-04-26 추가 작업 ✅ 완료
+- [x] 13.1 **벽 트리거 시점 변경** Town(Stage 3) → Hamlet(Stage 1) — `System_VillageTierProgression.Promote` 1줄 변경
+- [x] 13.2 **벽/로드맵 자원 기반 교대** — `System_VillageBuildQueue.TryStartNextTask` 재구성 (Gate 항상 우선, 잉여 Wood로 Palisade fallback, 로드맵 자원 부족 시 벽 진행)
+- [x] 13.3 **이민 시스템 Settlement 허용** — `Stage < Hamlet` 가드 제거, Bedroll도 잠자리 카운트, Stage별 확률 (Settlement 10% → City 30%)
+- [x] 13.4 **`VillageTable.DefaultNpcList` 시작 인구 보정** — `3001,3001,3001` 로 Pop 3 보장
+
+**총 예상 시간**: 코드 ~6.5시간 + 추가 작업 ~1.5시간 + Unity 자산 ~1.5시간 = 약 9.5시간 ✅
 
 ---
 
 ## 14. DoD (완료 기준)
 
 ### 14.1 Tier 승격 동작
-- [ ] Phase B 완료 상태에서 플레이 → Stage 0 로드맵 소진 → 게임시간 24h+ 경과 + Bed 2개 + Pop 3 + Food 30 만족 → `[TierProgression] v0 Settlement → Hamlet` 로그 + Bounds 6→10 확장
-- [ ] Hamlet 진입 후 HAMLET_SEQUENCE 시작, TownPost 완성 + Pop 8 + Food 80 + 72h → Village 승격
-- [ ] Village 진입 후 VILLAGE_SEQUENCE 시작, Furnace+Anvil+MerchantStall + Pop 15 + 168h → Town 승격
-- [ ] Town 진입 시 `WallPlanRequestTag` 부착 → `[WallPlanner] 벽 계획 시작` 로그
+- [x] Phase B 완료 상태에서 플레이 → Stage 0 로드맵 소진 → 게임시간 24h+ 경과 + Bed 2개 + Pop 3 + Food 30 만족 → `[TierProgression] v0 Settlement → Hamlet` 로그 + Bounds 6→10 확장
+- [x] Hamlet 진입 후 HAMLET_SEQUENCE 시작, TownPost 완성 + Pop 8 + Food 80 + 72h → Village 승격
+- [x] Village 진입 후 VILLAGE_SEQUENCE 시작, Furnace+Anvil+MerchantStall + Pop 15 + 168h → Town 승격
+- [x] **Hamlet** 진입 시 `WallPlanRequestTag` 부착 → `[WallPlanner] 벽 계획 시작` 로그 (2026-04-26 결정으로 Town → Hamlet 앞당김)
 
 ### 14.2 벽 건설
-- [ ] Town 진입 후 외곽 타일에 Palisade가 순차 배치되는 것 시각 확인
-- [ ] 게이트 위치는 Walkable 유지, NPC 통과 가능
-- [ ] 모든 세그먼트 완성 시 `[WallPlanner] 벽 100%` 로그
+- [x] Hamlet 진입 후 외곽 타일에 Palisade가 순차 배치되는 것 시각 확인
+- [x] 게이트 위치는 Walkable 유지, NPC 통과 가능
+- [x] 모든 세그먼트 완성 시 `[WallPlanner] 벽 100%` 로그
+- [x] 벽이 한 번에 우르르 깔리지 않고 일반 건물과 자연스럽게 분산 진행 (자원 기반 교대)
 
 ### 14.3 배치 정교화
-- [ ] Stage 1 빌드 시점에 새 오브젝트가 기존 오브젝트 인접 셀을 회피하는 경향 시각 확인
-- [ ] 마을 중심에서 N/S/E/W 방위 통로 1칸이 비어있음 (큰길 예약)
+- [x] Stage 1 빌드 시점에 새 오브젝트가 기존 오브젝트 인접 셀을 회피하는 경향 시각 확인
+- [x] 마을 중심에서 N/S/E/W 방위 통로 1칸이 비어있음 (큰길 예약)
 
 ### 14.4 세이브/로드
-- [ ] Hamlet 상태 저장 → 종료 → 로드 → Stage/Bounds 유지, 진행 중 태스크 이어짐
-- [ ] Town에 벽 절반 완성 상태 저장 → 로드 → 벽 위치/HP 유지, 미완성 세그먼트 큐 이어짐
+- [x] Hamlet 상태 저장 → 종료 → 로드 → Stage/Bounds 유지, 진행 중 태스크 이어짐
+- [x] Hamlet에 벽 절반 완성 상태 저장 → 로드 → 벽 위치/HP 유지, 미완성 세그먼트 큐 이어짐
 
 ### 14.5 비회귀
-- [ ] Phase B 7개 오브젝트 자동 배치 + Cap 확장 그대로 동작
-- [ ] Stage 0 로그 (`[BuildQueue]`) 변화 없음
+- [x] Phase B 7개 오브젝트 자동 배치 + Cap 확장 그대로 동작
+- [x] Stage 0 로그 (`[BuildQueue]`) 변화 없음
 
 ---
 
