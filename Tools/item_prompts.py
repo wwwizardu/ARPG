@@ -1,0 +1,147 @@
+"""
+Phase C 신규 빌드 가능 오브젝트 13종의 ComfyUI 생성용 프롬프트 정의.
+
+기준 프롬프트(사용자 제공, Bedroll 예시):
+  masterpiece, best quality, game asset, unrolled bedroll, fantasy RPG style,
+  rustic fabric texture, soft padded interior, flat laid-out rectangular shape,
+  worn canvas surface, stitched patches and folded edges, cozy resting vibe,
+  wilderness camp prop, Dragon Quest inspired, vibrant colors, clean render,
+  concept art, detailed shading
+
+각 항목은 위 양식을 따라 핵심 묘사만 오브젝트에 맞게 변형.
+"""
+
+# 공통 prefix / suffix
+PREFIX = "masterpiece, best quality, game asset"
+SUFFIX = "Dragon Quest inspired, vibrant colors, clean render, concept art, detailed shading, top-down 3/4 view, isolated on transparent background"
+NEGATIVE = "low quality, blurry, jpeg artifacts, watermark, text, logo, multiple objects, busy background, photorealistic, human figure"
+
+# 13종 오브젝트 — Phase C에서 추가된 BuildableItemTable 엔트리
+ITEM_PROMPTS = [
+    {
+        "id": 112,
+        "name": "Stockpile",
+        "core": (
+            "stone stockpile, pile of mining stones, rough quarry rocks heaped together, "
+            "gravel and small boulders mixed, weathered grey surface, sturdy storage pile, "
+            "village resource depot, rugged texture, mossy edges"
+        ),
+    },
+    {
+        "id": 140,
+        "name": "ChoppingBlock",
+        "core": (
+            "wooden chopping block, axe stuck in tree stump, woodcutter station, "
+            "fresh wood chips scattered around, exposed tree rings, bark texture, "
+            "rustic lumberjack prop, sturdy round base"
+        ),
+    },
+    {
+        "id": 141,
+        "name": "DryingRack",
+        "core": (
+            "wooden drying rack, hanging strips of meat and fish, hunter's preservation rack, "
+            "lashed wooden poles, sun-dried texture, rope and twine details, "
+            "rustic wilderness prop, weathered timber"
+        ),
+    },
+    {
+        "id": 142,
+        "name": "MiningCart",
+        "core": (
+            "rusty mining cart on rails, ore-filled minecart, iron wheels, "
+            "weathered wooden body with metal bands, pile of raw ore visible inside, "
+            "industrial mining prop, gritty rust patina"
+        ),
+    },
+    {
+        "id": 150,
+        "name": "Hearth",
+        "core": (
+            "stone hearth fireplace, glowing embers and warm orange flames, "
+            "cooking pot hung over fire, cobblestone arched opening, "
+            "soot-stained masonry, cozy kitchen prop, gentle smoke wisps"
+        ),
+    },
+    {
+        "id": 151,
+        "name": "MerchantStall",
+        "core": (
+            "wooden merchant stall, striped awning canopy, displayed goods on counter, "
+            "market vendor table with crates and baskets, hanging coin pouch, "
+            "colorful trade banners, lively bazaar prop"
+        ),
+    },
+    {
+        "id": 152,
+        "name": "TownPost",
+        "core": (
+            "wooden town post, carved village name sign, directional arrow markers, "
+            "weathered standing post stuck in ground, lantern hanging from top, "
+            "small notice paper nailed on, welcoming village landmark"
+        ),
+    },
+    {
+        "id": 153,
+        "name": "InnBed",
+        "core": (
+            "cozy inn bed, wooden bedframe with patchwork quilt, fluffy pillow, "
+            "tavern lodging room prop, soft warm linens, side table with candle, "
+            "homely resting vibe, polished wood headboard"
+        ),
+    },
+    {
+        "id": 154,
+        "name": "SignalBrazier",
+        "core": (
+            "iron signal brazier on tall wooden pole, burning coals in metal cage, "
+            "watchtower fire beacon, glowing embers and rising sparks, "
+            "reinforced iron brackets, night-watch guardian prop"
+        ),
+    },
+    {
+        "id": 160,
+        "name": "Furnace",
+        "core": (
+            "stone forge furnace, glowing molten interior with intense orange light, "
+            "blacksmith's forge, brick chimney with rising smoke, "
+            "soot-stained masonry, sturdy iron grate, heat shimmer aura"
+        ),
+    },
+    {
+        "id": 161,
+        "name": "Anvil",
+        "core": (
+            "iron blacksmith anvil on heavy wooden block, hammer resting on top, "
+            "scorched metal surface with hammer marks, sparks frozen mid-air, "
+            "polished horn and base, master craftsman prop"
+        ),
+    },
+    {
+        "id": 162,
+        "name": "QuenchVat",
+        "core": (
+            "wooden quench vat barrel, water-filled tub with rippling surface, "
+            "blacksmith's cooling station, iron tongs leaning against the rim, "
+            "iron-bound oak staves, faint steam rising"
+        ),
+    },
+    {
+        "id": 170,
+        "name": "Shrine",
+        "core": (
+            "small stone shrine altar, lit candles and offerings of flowers, "
+            "mossy carved stones with faded runes, mystical soft glow, "
+            "sacred forest grove prop, weathered religious icon"
+        ),
+    },
+]
+
+
+def make_positive_prompt(item: dict) -> str:
+    """item['core']를 prefix/suffix와 결합해 완성된 양성 프롬프트 반환."""
+    return f"{PREFIX}, {item['core']}, fantasy RPG style, {SUFFIX}"
+
+
+def make_negative_prompt() -> str:
+    return NEGATIVE

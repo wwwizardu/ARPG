@@ -1,0 +1,654 @@
+{
+  "id": "71c31374-fca6-4d80-8aaf-be1f44f9546a",
+  "revision": 0,
+  "last_node_id": 66,
+  "last_link_id": 112,
+  "nodes": [
+    {
+      "id": 45,
+      "type": "CLIPLoader",
+      "pos": [
+        -51.66666666666667,
+        315
+      ],
+      "size": [
+        307.59114583333337,
+        146.640625
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            80,
+            81
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CLIPLoader",
+        "cnr_id": "comfy-core",
+        "ver": "0.11.0",
+        "enableTabs": false,
+        "tabWidth": 65,
+        "tabXOffset": 10,
+        "hasSecondTab": false,
+        "secondTabText": "Send Back",
+        "secondTabOffset": 80,
+        "secondTabWidth": 65,
+        "models": [
+          {
+            "name": "qwen_3_06b_base.safetensors",
+            "url": "https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/text_encoders/qwen_3_06b_base.safetensors",
+            "directory": "text_encoders"
+          }
+        ]
+      },
+      "widgets_values": [
+        "qwen_3_06b_base.safetensors",
+        "stable_diffusion",
+        "default"
+      ]
+    },
+    {
+      "id": 48,
+      "type": "MarkdownNote",
+      "pos": [
+        -768.0557213420167,
+        107.77777634726202
+      ],
+      "size": [
+        660,
+        775.6510416666667
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "## About Anima\n\n[Anima](https://huggingface.co/circlestone-labs/Anima) (2B-parameter, CircleStone/Comfy Org): Anime/non-photorealistic text-to-image model (no realism). Preview version trained on anime; final version to improve details.\n\nLimitations: poor realism (intentional), weak high-res/text, plain style.\n\n## Model Links (for Local Users)\n\n**text_encoders**\n\n- [qwen_3_06b_base.safetensors](https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/text_encoders/qwen_3_06b_base.safetensors)\n\n**vae**\n\n- [qwen_image_vae.safetensors](https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/vae/qwen_image_vae.safetensors)\n\n**diffusion_models**\n\n- [anima-preview2.safetensors](https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/diffusion_models/anima-preview2.safetensors)\n\n\n## Model Storage Location\n\n```\n📂 ComfyUI/\n├── 📂 models/\n│   ├── 📂 text_encoders/\n│   │   └── qwen_3_06b_base.safetensors\n│   ├── 📂 vae/\n│   │   └── qwen_image_vae.safetensors\n│   └── 📂 diffusion_models/\n│       └── anima-preview2.safetensors\n```\n\n## Report Issue\n\nNote: Please update ComfyUI first ([guide](https://docs.comfy.org/installation/update_comfyui)) and prepare required models. Desktop/Cloud will be updated after the stable release; nightly-supported models may not be included yet, please wait for the next stable release.\n\n- Cannot run / runtime errors: [ComfyUI/issues](https://github.com/Comfy-Org/ComfyUI/issues)\n- UI / frontend issues: [ComfyUI_frontend/issues](https://github.com/Comfy-Org/ComfyUI_frontend/issues)\n- Workflow issues: [workflow_templates/issues](https://github.com/Comfy-Org/workflow_templates/issues)\n"
+      ],
+      "color": "#222",
+      "bgcolor": "#000"
+    },
+    {
+      "id": 44,
+      "type": "UNETLoader",
+      "pos": [
+        -60,
+        156.66666666666669
+      ],
+      "size": [
+        307.59114583333337,
+        117.76041666666667
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            79
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "UNETLoader",
+        "cnr_id": "comfy-core",
+        "ver": "0.11.0",
+        "enableTabs": false,
+        "tabWidth": 65,
+        "tabXOffset": 10,
+        "hasSecondTab": false,
+        "secondTabText": "Send Back",
+        "secondTabOffset": 80,
+        "secondTabWidth": 65,
+        "models": [
+          {
+            "name": "anima-preview2.safetensors",
+            "url": "https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/diffusion_models/anima-preview2.safetensors",
+            "directory": "diffusion_models"
+          }
+        ]
+      },
+      "widgets_values": [
+        "anima-preview.safetensors",
+        "default"
+      ]
+    },
+    {
+      "id": 19,
+      "type": "KSampler",
+      "pos": [
+        863.6110370808352,
+        124.44444071493783
+      ],
+      "size": [
+        290,
+        430
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 79
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 39
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 40
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 98
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "slot_index": 0,
+          "links": [
+            97
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "KSampler",
+        "cnr_id": "comfy-core",
+        "ver": "0.3.40",
+        "enableTabs": false,
+        "tabWidth": 65,
+        "tabXOffset": 10,
+        "hasSecondTab": false,
+        "secondTabText": "Send Back",
+        "secondTabOffset": 80,
+        "secondTabWidth": 65
+      },
+      "widgets_values": [
+        604844965645863,
+        "randomize",
+        30,
+        4,
+        "er_sde",
+        "simple",
+        1
+      ]
+    },
+    {
+      "id": 15,
+      "type": "VAELoader",
+      "pos": [
+        -43.333333333333336,
+        498.33333333333337
+      ],
+      "size": [
+        307.59114583333337,
+        88.88020833333334
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            11
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAELoader",
+        "cnr_id": "comfy-core",
+        "ver": "0.3.40",
+        "enableTabs": false,
+        "tabWidth": 65,
+        "tabXOffset": 10,
+        "hasSecondTab": false,
+        "secondTabText": "Send Back",
+        "secondTabOffset": 80,
+        "secondTabWidth": 65,
+        "models": [
+          {
+            "name": "qwen_image_vae.safetensors",
+            "url": "https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/vae/qwen_image_vae.safetensors",
+            "directory": "vae"
+          }
+        ]
+      },
+      "widgets_values": [
+        "qwen_image_vae.safetensors"
+      ]
+    },
+    {
+      "id": 12,
+      "type": "CLIPTextEncode",
+      "pos": [
+        315,
+        706.6666666666667
+      ],
+      "size": [
+        480,
+        130
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 81
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            40
+          ]
+        }
+      ],
+      "title": "CLIP Text Encode (Negative Prompt)",
+      "properties": {
+        "Node name for S&R": "CLIPTextEncode",
+        "cnr_id": "comfy-core",
+        "ver": "0.3.65",
+        "enableTabs": false,
+        "tabWidth": 65,
+        "tabXOffset": 10,
+        "hasSecondTab": false,
+        "secondTabText": "Send Back",
+        "secondTabOffset": 80,
+        "secondTabWidth": 65
+      },
+      "widgets_values": [
+        "blurry, low quality, watermark, text, human, background clutter"
+      ],
+      "color": "#223",
+      "bgcolor": "#335"
+    },
+    {
+      "id": 28,
+      "type": "EmptyLatentImage",
+      "pos": [
+        -51.66666666666667,
+        706.6666666666667
+      ],
+      "size": [
+        307.59114583333337,
+        140
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            98
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "EmptyLatentImage",
+        "cnr_id": "comfy-core",
+        "ver": "0.3.40",
+        "enableTabs": false,
+        "tabWidth": 65,
+        "tabXOffset": 10,
+        "hasSecondTab": false,
+        "secondTabText": "Send Back",
+        "secondTabOffset": 80,
+        "secondTabWidth": 65
+      },
+      "widgets_values": [
+        1024,
+        1024,
+        1
+      ]
+    },
+    {
+      "id": 46,
+      "type": "SaveImage",
+      "pos": [
+        1241.9386531798855,
+        236.58240052738716
+      ],
+      "size": [
+        580,
+        640
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 100
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.11.1",
+        "enableTabs": false,
+        "tabWidth": 65,
+        "tabXOffset": 10,
+        "hasSecondTab": false,
+        "secondTabText": "Send Back",
+        "secondTabOffset": 80,
+        "secondTabWidth": 65,
+        "Node name for S&R": "SaveImage"
+      },
+      "widgets_values": [
+        "anime"
+      ]
+    },
+    {
+      "id": 11,
+      "type": "CLIPTextEncode",
+      "pos": [
+        306.6666666666667,
+        173.33333333333334
+      ],
+      "size": [
+        480,
+        410
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 80
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            39
+          ]
+        }
+      ],
+      "title": "CLIP Text Encode (Positive Prompt)",
+      "properties": {
+        "Node name for S&R": "CLIPTextEncode",
+        "cnr_id": "comfy-core",
+        "ver": "0.3.65",
+        "enableTabs": false,
+        "tabWidth": 65,
+        "tabXOffset": 10,
+        "hasSecondTab": false,
+        "secondTabText": "Send Back",
+        "secondTabOffset": 80,
+        "secondTabWidth": 65
+      },
+      "widgets_values": [
+        "game icon, fantasy sword, RPG item, isolated on black background, \nhigh quality, 3D render, metallic texture, glowing effect, \ndetailed, game asset, UI element"
+      ],
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 8,
+      "type": "VAEDecode",
+      "pos": [
+        871.5621525131063,
+        618.9930067136689
+      ],
+      "size": [
+        210,
+        80
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 97
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 11
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            112
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAEDecode",
+        "cnr_id": "comfy-core",
+        "ver": "0.3.40",
+        "enableTabs": false,
+        "tabWidth": 65,
+        "tabXOffset": 10,
+        "hasSecondTab": false,
+        "secondTabText": "Send Back",
+        "secondTabOffset": 80,
+        "secondTabWidth": 65
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 62,
+      "type": "ResizeAndPadImage",
+      "pos": [
+        969.9463424338446,
+        1161.7499024462143
+      ],
+      "size": [
+        270,
+        130
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 112
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            100
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ResizeAndPadImage",
+        "cnr_id": "comfy-core",
+        "ver": "0.18.1"
+      },
+      "widgets_values": [
+        128,
+        128,
+        "black",
+        "nearest-exact"
+      ]
+    }
+  ],
+  "links": [
+    [
+      11,
+      15,
+      0,
+      8,
+      1,
+      "VAE"
+    ],
+    [
+      39,
+      11,
+      0,
+      19,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      40,
+      12,
+      0,
+      19,
+      2,
+      "CONDITIONING"
+    ],
+    [
+      79,
+      44,
+      0,
+      19,
+      0,
+      "MODEL"
+    ],
+    [
+      80,
+      45,
+      0,
+      11,
+      0,
+      "CLIP"
+    ],
+    [
+      81,
+      45,
+      0,
+      12,
+      0,
+      "CLIP"
+    ],
+    [
+      97,
+      19,
+      0,
+      8,
+      0,
+      "LATENT"
+    ],
+    [
+      98,
+      28,
+      0,
+      19,
+      3,
+      "LATENT"
+    ],
+    [
+      100,
+      62,
+      0,
+      46,
+      0,
+      "IMAGE"
+    ],
+    [
+      112,
+      8,
+      0,
+      62,
+      0,
+      "IMAGE"
+    ]
+  ],
+  "groups": [
+    {
+      "id": 1,
+      "title": "Step 1 - Load Models",
+      "bounding": [
+        -76.66666666666667,
+        81.66666666666667,
+        350,
+        525
+      ],
+      "color": "#3f789e",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "id": 2,
+      "title": "Step 2 - Image Size(1MP))",
+      "bounding": [
+        -76.66666666666667,
+        631.6666666666667,
+        350,
+        241.66666666666669
+      ],
+      "color": "#3f789e",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "id": 3,
+      "title": "Step3 - Prompt",
+      "bounding": [
+        298.33333333333337,
+        81.66666666666667,
+        525,
+        791.6666666666667
+      ],
+      "color": "#3f789e",
+      "font_size": 24,
+      "flags": {}
+    }
+  ],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 1.3107378503636224,
+      "offset": [
+        255.47215895275326,
+        120.1218304651792
+      ]
+    },
+    "frontendVersion": "1.41.21",
+    "workflowRendererVersion": "Vue-corrected",
+    "VHS_latentpreview": false,
+    "VHS_latentpreviewrate": 0,
+    "VHS_MetadataImage": true,
+    "VHS_KeepIntermediate": true
+  },
+  "version": 0.4
+}

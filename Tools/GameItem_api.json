@@ -1,0 +1,144 @@
+{
+  "45": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen_3_06b_base.safetensors",
+      "type": "stable_diffusion",
+      "device": "default"
+    },
+    "_meta": {
+      "title": "CLIPLoader"
+    }
+  },
+  "44": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "anima-preview.safetensors",
+      "weight_dtype": "default"
+    },
+    "_meta": {
+      "title": "UNETLoader"
+    }
+  },
+  "19": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "44",
+        0
+      ],
+      "seed": 604844965645863,
+      "steps": 30,
+      "cfg": 4,
+      "sampler_name": "er_sde",
+      "scheduler": "simple",
+      "positive": [
+        "11",
+        0
+      ],
+      "negative": [
+        "12",
+        0
+      ],
+      "latent_image": [
+        "28",
+        0
+      ],
+      "denoise": 1
+    },
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "15": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+    },
+    "_meta": {
+      "title": "VAELoader"
+    }
+  },
+  "12": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "blurry, low quality, watermark, text, human, background clutter",
+      "clip": [
+        "45",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "CLIP Text Encode (Negative Prompt)"
+    }
+  },
+  "28": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "width": 1024,
+      "height": 1024,
+      "batch_size": 1
+    },
+    "_meta": {
+      "title": "EmptyLatentImage"
+    }
+  },
+  "46": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "62",
+        0
+      ],
+      "filename_prefix": "anime"
+    },
+    "_meta": {
+      "title": "SaveImage"
+    }
+  },
+  "11": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "game icon, fantasy sword, RPG item, isolated on black background, \nhigh quality, 3D render, metallic texture, glowing effect, \ndetailed, game asset, UI element",
+      "clip": [
+        "45",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "CLIP Text Encode (Positive Prompt)"
+    }
+  },
+  "8": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "19",
+        0
+      ],
+      "vae": [
+        "15",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "VAEDecode"
+    }
+  },
+  "62": {
+    "class_type": "ResizeAndPadImage",
+    "inputs": {
+      "image": [
+        "8",
+        0
+      ],
+      "target_width": 128,
+      "target_height": 128,
+      "padding_color": "black",
+      "interpolation": "nearest-exact"
+    },
+    "_meta": {
+      "title": "ResizeAndPadImage"
+    }
+  }
+}
