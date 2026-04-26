@@ -78,6 +78,7 @@ namespace ARPG
         [Header("Loading UI")]
         [SerializeField] private UnityEngine.UI.Image _fadeInOutBG;
         [SerializeField] private TextMeshProUGUI _loadingText;
+        [SerializeField] private TextMeshProUGUI _notifyText;
 
         [Header("Layer Root")]
         [SerializeField] private Transform _topRoot;
@@ -127,6 +128,8 @@ namespace ARPG
         private Input.ArpgInputAction _inputSystem;
 
         private Coroutine? _saveCoroutine = null;
+
+        private Tween? _notifyTween = null;
 
         public Camera UICamera { get { return _uiCamera!; } }
 
@@ -624,6 +627,27 @@ namespace ARPG
             }
 
             _saveCoroutine = StartCoroutine(ShowSaveText());
+        }
+
+        public void SetNotify(string inText)
+        {
+            if (_notifyTween != null)
+            {
+                _notifyTween.Kill();
+                _notifyTween = null;
+            }
+
+            _notifyText.text = inText;
+            _notifyText.color = Color.white;
+            _notifyText.gameObject.SetActive(true);
+
+            _notifyTween = _notifyText.DOFade(0f, 0.5f)
+                .SetDelay(1f)
+                .OnComplete(() =>
+                {
+                    _notifyText.gameObject.SetActive(false);
+                    _notifyTween = null;
+                });
         }
 
         public async UniTask LoadingTitle(float inSecond)

@@ -30,6 +30,16 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 174fc71b52ca4a141ae303fdcf091d59
+    m_Address: Sprites/Items/TownPost
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2008348491dbf52499c601a47881fe76
+    m_Address: Sprites/Items/MerchantStall
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 206f5d6b047a4094cb009545d978aa05
     m_Address: Sprites/Items/Well
     m_ReadOnly: 0
@@ -37,6 +47,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 21fcae8338717c34586e97a993d4afee
     m_Address: UI/Character
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 26141100bb484924d856b7d4e1569224
+    m_Address: Sprites/Items/SignalBrazier
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -60,6 +75,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 41767315da4883c42aeb061131fe0565
+    m_Address: Sprites/Items/Stockpile
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 42e502c96dce7174dbb0c8a6fc8f8bc1
     m_Address: Animation/Knight
     m_ReadOnly: 0
@@ -80,6 +100,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4befc4a636c75fc4ba1a872701c1237a
+    m_Address: Sprites/Items/MiningCart
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 578e3d57ccf7ae344b6c4fd7d6443a82
     m_Address: Prefabs/Shadow
     m_ReadOnly: 0
@@ -92,6 +117,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 67e8b3db722c2c44b8daf70e09c44e42
     m_Address: UI/Inventory
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7457d7e78385bc14687f943fbb9ba979
+    m_Address: Tile/PalisadeGate
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -115,6 +145,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 970565422ccd6ca4c804159ed59867f8
+    m_Address: Sprites/Items/InnBed
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 98787bc7e144ce1408c5c6220d9fba34
     m_Address: Atlas/Base
     m_ReadOnly: 0
@@ -125,8 +160,18 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a3bf84c16fde1d64cad785459e1ed179
+    m_Address: Sprites/Items/Shrine
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a8d24ae4c7d2d724ea0c3b3675455d5f
     m_Address: UI/UICurrencyTooltip
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ac6768f8e2b34be4285ce2d4c8342f18
+    m_Address: Sprites/Items/Anvil
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -140,8 +185,18 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c1310f69a2074e247a11b0f6060521f1
+    m_Address: Sprites/Items/DryingRack
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c7be8e5aec1ed9343b40ecd697f4f5d0
     m_Address: UI/SlotUI_Equip
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cfe764a98e2bec04485c292df4d162a2
+    m_Address: Tile/Palisade
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -160,6 +215,21 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e4707ce76f807ec4683e7bacead2c863
+    m_Address: Sprites/Items/QuenchVat
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e4a024613cb5dfa4392dd8e756b86b71
+    m_Address: Sprites/Items/Hearth
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e51b4ce57b4aa1b42b16b56ab5fb98af
+    m_Address: Sprites/Items/ChoppingBlock
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e7ca75a3c61dfbe41b5c967ba4b9a2ca
     m_Address: Sprites/Items/Bedroll
     m_ReadOnly: 0
@@ -167,6 +237,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ef0eaf139fc4856438136f2ab4b6c5ff
     m_Address: UI/UICheat
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f1e97912fa1b87b4c972c848ed7eb8d4
+    m_Address: Sprites/Items/Furnace
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

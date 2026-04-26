@@ -135,6 +135,17 @@ ITEM_PROMPTS = [
             "sacred forest grove prop, weathered religious icon"
         ),
     },
+    {
+        "id": 181,
+        "name": "PalisadeGate",
+        "core": (
+            "wooden palisade gate, double wooden doors with iron hinges, "
+            "two tall log posts framing the entrance, sturdy wood beams across the top, "
+            "rustic village gate seen from front 3/4 angle, "
+            "weathered timber and iron studs, slightly open showing path through, "
+            "cozy fortified entrance"
+        ),
+    },
 ]
 
 

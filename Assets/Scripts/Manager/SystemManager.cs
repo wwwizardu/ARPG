@@ -47,21 +47,32 @@ namespace ARPG.Systems
             System_AI_Behavior aiBehaviorSystem = new();
             RegisterSystems(aiBehaviorSystem);
 
-            // Priority 57: Village Passive Production (FixedUpdate, 5.0s) - 정수 기반 자원 생산/소비
+            // ===== Village Domain (Priority 50-69) — see CLAUDE.md =====
+            // 50-54: Resource / 55-59: Population / 60-64: Lifecycle / 65-69: Construction
+
+            // Priority 52: Village Passive Production (Resource) - 정수 기반 자원 생산/소비 (Phase A)
             System_VillagePassiveProduction villagePassiveProductionSystem = new();
             RegisterSystems(villagePassiveProductionSystem);
 
-            // Priority 58: Village Build Queue (FixedUpdate, 5.0s) - Phase B: 범용 오브젝트 배치 큐 (Roadmap 기반)
-            System_VillageBuildQueue villageBuildQueueSystem = new();
-            RegisterSystems(villageBuildQueueSystem);
+            // Priority 56: Village Population (Population) - 정원 재스폰 + 자연 이민 (Phase A→C: 구 Respawn 흡수)
+            System_VillagePopulation villagePopulationSystem = new();
+            RegisterSystems(villagePopulationSystem);
 
-            // Priority 58.5: Relationship System (FixedUpdate, 3.0s) - 관계 패시브 변동
+            // Priority 58.5: Relationship System (3.0s) - 관계 패시브 변동
             System_Relationship relationshipSystem = new();
             RegisterSystems(relationshipSystem);
 
-            // Priority 59: Village Respawn System (FixedUpdate, 5.0s) - 마을 기본 NPC 스폰 및 쿨타임 재스폰
-            System_VillageRespawn villageRespawnSystem = new();
-            RegisterSystems(villageRespawnSystem);
+            // Priority 60: Village Tier Progression (Lifecycle) - Stage 0→1→2→3 승격 (Phase C)
+            System_VillageTierProgression villageTierSystem = new();
+            RegisterSystems(villageTierSystem);
+
+            // Priority 66: Village Build Queue (Construction) - Roadmap + 벽 세그먼트 큐 실행 (Phase B/C)
+            System_VillageBuildQueue villageBuildQueueSystem = new();
+            RegisterSystems(villageBuildQueueSystem);
+
+            // Priority 67: Village Wall Planner (Construction) - Town 진입 시 벽 세그먼트 계획 (Phase C)
+            System_VillageWallPlanner villageWallPlannerSystem = new();
+            RegisterSystems(villageWallPlannerSystem);
 
             // Priority 100: Movement System (FixedUpdate) - 이동 로직
             System_Move moveSystem = new();

@@ -5,7 +5,8 @@ Phase C 빌드 가능 오브젝트 13종 × 3장 = 39장 ComfyUI 일괄 생성 �
   1) ComfyUI 띄움 (기본 http://127.0.0.1:8188)
   2) 평소 쓰는 워크플로우를 Settings → "Save (API Format)"로 JSON 저장 → Tools/GameItem.json 에 두기
   3) (필요 시) 본 스크립트 상단 CONFIG 섹션의 노드 ID/필드명 조정
-  4) `python Tools/comfyui_generate.py` 실행
+  4) `python Tools/comfyui_generate.py` 실행 — 전체 ITEM_PROMPTS 생성
+     또는 `python Tools/comfyui_generate.py --only Name1,Name2` — 특정 이름만 생성
 
 생성 파일 경로:
   Assets/Art/Sprites/Items/Generated/{ItemName}_{1,2,3}.png
@@ -178,6 +179,17 @@ def patch_workflow(workflow: dict, positive: str, negative: str, seed: int) -> d
 # 메인 루프
 # =====================================================================
 
+def parse_only_filter() -> set:
+    """--only Name1,Name2 인자 파싱 → 이름 set 반환. 없으면 빈 set (=전체 생성)."""
+    only = set()
+    for i, arg in enumerate(sys.argv):
+        if arg == "--only" and i + 1 < len(sys.argv):
+            for name in sys.argv[i + 1].split(","):
+                name = name.strip()
+                if name:
+                    only.add(name)
+    return only
+
 def main():
     if not WORKFLOW_PATH.exists():
         print(f"[ERROR] 워크플로우 파일 없음: {WORKFLOW_PATH}")
@@ -190,21 +202,30 @@ def main():
     with open(WORKFLOW_PATH, encoding="utf-8") as f:
         base_workflow = json.load(f)
 
+    only_names = parse_only_filter()
+    items_to_generate = [it for it in ITEM_PROMPTS if (not only_names or it["name"] in only_names)]
+
+    if only_names and not items_to_generate:
+        print(f"[ERROR] --only {only_names} 로 매칭되는 ITEM_PROMPTS 항목 없음")
+        sys.exit(1)
+
     print(f"[INFO] ComfyUI: {COMFYUI_URL}")
     print(f"[INFO] Workflow: {WORKFLOW_PATH.name} ({len(base_workflow)} nodes)")
     print(f"[INFO] Output: {OUTPUT_DIR}")
-    print(f"[INFO] {len(ITEM_PROMPTS)} items × {IMAGES_PER_ITEM} = {len(ITEM_PROMPTS) * IMAGES_PER_ITEM} images")
+    if only_names:
+        print(f"[INFO] Filter (--only): {','.join(only_names)}")
+    print(f"[INFO] {len(items_to_generate)} items × {IMAGES_PER_ITEM} = {len(items_to_generate) * IMAGES_PER_ITEM} images")
     print()
 
     total = 0
     base_seed = int(time.time()) & 0x7FFFFFFF
 
-    for item in ITEM_PROMPTS:
+    for item in items_to_generate:
         positive = make_positive_prompt(item)
         negative = make_negative_prompt()
         for k in range(1, IMAGES_PER_ITEM + 1):
             seed = (base_seed + total * 7919) & 0x7FFFFFFF
-            print(f"[{total+1:>2}/{len(ITEM_PROMPTS)*IMAGES_PER_ITEM}] {item['name']} #{k} (seed={seed})")
+            print(f"[{total+1:>2}/{len(items_to_generate)*IMAGES_PER_ITEM}] {item['name']} #{k} (seed={seed})")
             try:
                 wf = patch_workflow(base_workflow, positive, negative, seed)
                 prompt_id = queue_prompt(wf)

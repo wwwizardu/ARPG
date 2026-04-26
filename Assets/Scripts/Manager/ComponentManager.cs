@@ -65,6 +65,9 @@ namespace ARPG.Component
             { typeof(NpcJobComponent), 200 },
             { typeof(NpcVillageComponent), 200 },
             { typeof(VillageStorageComponent), 32 },   // 마을 1개당 1개, 현재 <10, 여유 32
+            { typeof(VillageComponent), 32 },          // 마을 1개당 1개 (Phase C: Stage/Bounds/Threat)
+            { typeof(WallPlanRequestTag), 32 },        // Stage 3 도달 시 부착, 처리 후 제거
+            { typeof(WallSegmentComponent), 500 },     // 마을 외곽 벽 세그먼트 (마을당 ~60칸 × 5마을 여유)
             { typeof(ObjectPlacementTaskComponent), 32 }, // 마을 1개당 0~1개 (Phase B 배치 큐)
 
             // 건물 시스템 컴포넌트 (BuildingManager 관리)

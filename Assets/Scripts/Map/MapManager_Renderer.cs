@@ -90,16 +90,19 @@ namespace ARPG.Map
 
                     // 오브젝트 타일 설정
                     // 1) BuildableTileRegistry (BuildableItemTable.Id → Addressable 로드) 우선 조회
-                    // 2) 미스 시 레거시 ThemeTileSet.ObjectSet fallback (Stone/Npc/WoodWall 등)
+                    // 2) 미스 시 레거시 ThemeTileSet.ObjectSet fallback — Phase A 이전 자산만 해당.
+                    //    Docs/THEME_TILESET_REFACTOR.md 단계 2~3 완료 시 fallback 분기 제거 예정.
                     if (objectId > 0)
                     {
                         TileBase tile = BuildableTileRegistry.Get((int)objectId);
+#pragma warning disable 0618    // ObjectSet은 [Obsolete] 처리됨 — 의도적 fallback 사용
                         if (tile == null
                             && _themeTileSet.ObjectSet != null
                             && objectId < (ulong)_themeTileSet.ObjectSet.Length)
                         {
                             tile = _themeTileSet.ObjectSet[objectId];
                         }
+#pragma warning restore 0618
                         _tempObjectTileArray[index] = tile;
                     }
                     else

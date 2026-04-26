@@ -38,7 +38,7 @@
 | 자원 | Wood 10, Food 5 |
 | Tier | `VillageStage.Settlement` |
 | 경계 | 마을 중심 기준 반경 6타일 원형 |
-| 외벽 | 없음 (BoundaryMarker 표지석 2~4개로 경계 표시만) |
+| 외벽 | 없음 (시각화 X — 플레이어는 NPC 행동/지형으로 마을 영역 추측) |
 
 ### 1.2 Founder NPC
 - 직업: `Gatherer` (만능형 채집 직업)
@@ -174,14 +174,16 @@ NPC가 `Working` 상태 + 자기 직업의 작업 오브젝트가 마을 내 존
 
 ## 4. 외곽 방어 — 벽의 진화
 
-### 4.1 3단계 벽 업그레이드
+### 4.1 2단계 벽 업그레이드
 
 ```
-Stage 1: 표지석  →  Stage 3: 나무 울타리   →  Stage 4: 돌담 + 망루
-(경계 표시만)       (Palisade)                (StoneWall + WatchTower)
-내구: N/A           내구: 100/세그먼트         내구: 500/세그먼트
-비용: 0             비용: Wood 8/타일         비용: Stone 20/타일
+Stage 0~2: 시각 경계 없음   →  Stage 3: 나무 울타리   →  Stage 4: 돌담 + 망루
+(NPC 행동/지형으로 추측)        (Palisade)              (StoneWall + WatchTower)
+내구: —                       내구: 100/세그먼트       내구: 500/세그먼트
+비용: 0                       비용: Wood 8/타일       비용: Stone 20/타일
 ```
+
+> Stage 0~2 단계의 마을 경계는 **명시적으로 시각화하지 않음** — 플레이어가 NPC 일과/이동 패턴, 건물 분포로 마을 영역을 자연스럽게 추측. emergent perception 의도.
 
 ### 4.2 벽 배치 알고리즘 (`System_VillageWallPlanner`)
 
@@ -396,13 +398,30 @@ Category 예: `Housing / Storage / Production / Crafting / Service / Defense / D
 - [x] Sprite placeholder 6장 import + Addressable 등록 — `Sprites/Items/{Bedroll,Bed,Woodpile,Chest,CropPlot,Well}` (Campfire 포함 총 7종)
 - [x] `BuildableTileRegistry` 단순화 — `Preserve()` 제거 + 결과 캐시/진행 게이트 분리, 미등록 키 사전 검증으로 InvalidKey 콘솔 노이즈 차단
 
-### Phase C — Tier 승격 + 벽
-- [ ] `System_VillageTierProgression`
-- [ ] 경계(`VillageComponent.Bounds`) 타일 계산
-- [ ] `System_VillageWallPlanner` + Palisade 건설
-- [ ] Palisade/StoneWall RuleTile 에셋 제작
-- [ ] `WallSegmentComponent` 세그먼트 HP 관리
-- [ ] **배치 분산 정교화** (Phase B에서 링 내 랜덤 픽 도입 후 후속): 인접 점유 셀 8방위 페널티 → 건물 사이 1칸 간격 유지 + "큰길" 예약(중심에서 방위별 통로 보존, NPC 통행 확보)
+### Phase C — Tier 승격 + 벽 ✅ 코드 완료 (2026-04-24)
+- [x] `System_VillageTierProgression` (Priority 60, 게임시간 4h 인터벌)
+- [x] 경계(`VillageComponent.Bounds`) 타일 계산 — `VillageManager.GetBoundsRadius` (Settlement=6, Hamlet=10, Village=14, Town=18, City=24)
+- [x] `System_VillageWallPlanner` (Priority 67) + Palisade 건설 — `WallPlanRequestTag` 트리거 + `WallSegmentRegistry` 큐 관리
+- [ ] **Step U2 (Unity 자산)**: Palisade/PalisadeGate RuleTile 에셋 제작 + Addressable 등록 (BoundaryMarker는 디자인 결정으로 제외)
+- [x] `WallSegmentComponent` (HP/Type/Orient) — Phase F의 파괴/복구 시점부터 본격 사용 예정
+- [x] **배치 분산 정교화** — `VillageTileFinder`에 8방위 점유 페널티 + Stage 기반 "큰길" 예약 (Hamlet 4, Village 6, Town 8) 추가
+- [x] **Population 통합** — 구 `System_VillageRespawn` → `System_VillagePopulation` 리네임 + 자연 이민 흡수 (Hamlet+ 한정, 게임시간 24h마다 확률 스폰)
+- [x] **Priority 대역 정책** — 50-69 Village domain 4-sub band (Resource/Population/Lifecycle/Construction). CLAUDE.md + PHASE_C_DESIGN.md §8 참조
+- [x] `BuildableItemTable.Cost_Metal` 컬럼 추가 + 신규 17행 (Stage 1: 8종, Stage 2: 8종, Wall: 3종)
+- [x] `VillageDebugLog.Snapshot` 확장 — Bounds, Wall 진행률, TierCheck 조건별 ✓/✗ 표시
+- [ ] **Step U1 (Unity 자산)**: 신규 14종 Sprite placeholder import + Addressable 등록 (`Sprites/Items/{Stockpile,ChoppingBlock,...}`)
+
+#### Phase C 추가 작업 (2026-04-26 검토 후 도출)
+- [ ] **벽 트리거 시점 변경** — Town(Stage 3) → **Hamlet(Stage 1)** 진입 시 활성화. [System_VillageTierProgression.Promote](../Assets/Scripts/Common/System/System_VillageTierProgression.cs)의 1줄 변경. 벽은 Hamlet Bounds(20×20) 기준 외곽으로 1회 계획, 이후 Stage 승격으로 Bounds 확장돼도 벽은 그대로 유지 (성벽 안=마을 코어, 바깥=농지/외곽 영역).
+- [ ] **벽/로드맵 자원 기반 교대** — `System_VillageBuildQueue.TryStartNextTask` dispatcher 재구성:
+  - 다음 로드맵 타겟의 자원(`Cost_Wood`/`Cost_Stone`)을 **예약**
+  - 예약 후 남는 Wood가 다음 벽 세그먼트 비용(`BuildableItemTable.Cost_Wood`, Palisade=8/Gate=40) 이상이면 벽 우선
+  - 로드맵이 다른 자원 부족(Stone)으로 블록되면 벽 fallback
+  - 별도 튜닝 상수 X (테이블 값 직접 비교)
+  - 효과: 벽이 한 번에 우르르 깔리지 않고 일반 건물과 자연스럽게 분산 진행
+- [ ] **이민 시스템 Settlement 허용** ✅ (적용됨) — `System_VillagePopulation`의 `Stage < Hamlet` 가드 제거 + Bedroll도 잠자리로 카운트 + Stage별 확률 (Settlement 10%, Hamlet 15%, ..., City 30%)
+- [ ] **(선택, 후속 정리)** `WallSegmentSaveData`에 `TableId` 필드 추가 — Phase C+의 StoneWall 도입 시 BuildQueue 분기 코드 0으로. 현재는 `PALISADE_TABLE_ID`/`PALISADE_GATE_TABLE_ID` 상수 분기 유지로 충분
+- [ ] **`VillageTable.DefaultNpcList` 시작 인구 보정** ✅ (적용됨) — `3001,3001,3001` 로 시작 Pop 3 보장 → Stage 0→1 게이트 즉시 충족 가능
 
 ### Phase D — 플레이어 이득 (루프 완성)
 - [ ] 오브젝트 세트 판정 `VillageManager.HasObjectSet`
@@ -483,10 +502,9 @@ WatchTower_Anchor = 70, WatchTower_Footprint = 71
 
 // 제작 중 시각
 CraftingSite = 80, CraftingFrame = 81, CraftingShell = 82
-
-// 경계 표시
-BoundaryMarker = 90
 ```
+
+> **참고**: BoundaryMarker(90) 등 마을 경계 시각화는 도입하지 않음 (디자인 결정 — Stage 0~2는 NPC 행동/지형으로 추측).
 
 ### 12.3 오브젝트 → 엔티티 연결
 
@@ -545,14 +563,13 @@ Progress에 따라 타일 스프라이트만 교체 (`PlaceObject`로 덮어쓰�
 
 ### 12.8 경계(Bounds) 시각화
 
-- Stage 0: `BoundaryMarker` 타일 4~8개를 경계선 샘플로 배치
-- Stage 3+: 실제 벽이 생기면 벽이 곧 경계
-- 에디터 기즈모: `VillageComponent.Bounds`를 원/다각형으로 렌더 (디버그 옵션)
+- **인게임에는 시각화 X** — 디자인 결정 (Stage 0~2는 NPC 행동/지형으로 추측, Stage 3+는 벽이 곧 경계)
+- 에디터 기즈모: `VillageComponent.Bounds`를 사각형으로 렌더 (디버그 옵션) — 개발자 용
 
 ### 12.9 걷기/통과 가능 오브젝트
 
 `CustomTile.IsWalkable`을 ObjectType별로 설정:
-- Walkable: CropPlot, BoundaryMarker, CraftingSite(제작 중 NPC 통과용)
+- Walkable: CropPlot, CraftingSite(제작 중 NPC 통과용)
 - Blocked: Bed, Furnace, Anvil, Wall, 등 대부분
 
 → 기존 `MapManager.IsWalkable()`이 `CustomTile.IsWalkable` 이미 확인하므로 **코드 변경 불필요**. CustomTile 에셋 설정만 잘 하면 됨.

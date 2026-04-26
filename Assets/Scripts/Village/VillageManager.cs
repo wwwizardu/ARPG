@@ -85,6 +85,8 @@ namespace ARPG.Village
             data.Resources[type] = newAmount;
 
             SyncStorageComponent(data);
+
+            AR.s.UI.SetNotify(BuildResourceStatusNotify(data));
         }
 
         public bool ConsumeResource(int villageId, GlobalEnum.ItemType type, int amount)
@@ -99,7 +101,20 @@ namespace ARPG.Village
             data.Resources[type] = current - amount;
 
             SyncStorageComponent(data);
+
+            AR.s.UI.SetNotify(BuildResourceStatusNotify(data));
             return true;
+        }
+
+        private static string BuildResourceStatusNotify(VillageData data)
+        {
+            int food = GetInt(data, GlobalEnum.ItemType.Food);
+            int wood = GetInt(data, GlobalEnum.ItemType.Wood);
+            int stone = GetInt(data, GlobalEnum.ItemType.Stone);
+            int foodCap = GetCap(data, GlobalEnum.ItemType.Food);
+            int woodCap = GetCap(data, GlobalEnum.ItemType.Wood);
+            int stoneCap = GetCap(data, GlobalEnum.ItemType.Stone);
+            return $"마을 {data.VillageId} [{data.Stage}]: Food {food}/{foodCap}  Wood {wood}/{woodCap}  Stone {stone}/{stoneCap}";
         }
 
         public int GetResourceAmount(int villageId, GlobalEnum.ItemType type)
@@ -221,6 +236,11 @@ namespace ARPG.Village
                     data.CurrentBuildReservedStone = 0;
                 }
 
+                // Phase C 마이그레이션
+                if (data.WallSegments == null)
+                    data.WallSegments = new List<WallSegmentSaveData>();
+                // Bounds가 0인 구 세이브 → CreateStorageEntity가 Stage 기준으로 자동 산출
+
                 _villages[data.VillageId] = data;
                 CreateStorageEntity(data);
                 RestoreTaskFromData(data);
@@ -248,6 +268,55 @@ namespace ARPG.Village
                 SurplusFlags = 0,
             };
             AR.s.Component.AddComponent(entityId, storage);
+
+            // Phase C: VillageComponent 함께 부착 (Stage / Bounds / ThreatLevel)
+            // Bounds가 세이브에 없으면 Stage 기준 기본값 산출
+            RectInt bounds;
+            if (data.BoundsW > 0 && data.BoundsH > 0)
+            {
+                bounds = new RectInt(data.BoundsX, data.BoundsY, data.BoundsW, data.BoundsH);
+            }
+            else
+            {
+                int radius = GetBoundsRadius(data.Stage);
+                bounds = new RectInt(
+                    Mathf.FloorToInt(data.PositionX) - radius,
+                    Mathf.FloorToInt(data.PositionY) - radius,
+                    radius * 2, radius * 2);
+                data.BoundsX = bounds.x;
+                data.BoundsY = bounds.y;
+                data.BoundsW = bounds.width;
+                data.BoundsH = bounds.height;
+            }
+            AR.s.Component.AddComponent(entityId, new VillageComponent
+            {
+                VillageId = data.VillageId,
+                Stage = data.Stage,
+                Bounds = bounds,
+                ThreatLevel = data.ThreatLevel,
+                WallSegmentCount = data.WallSegmentCount,
+                CompletedWallSegments = data.CompletedWallSegments,
+            });
+
+            // Phase C: 벽 빌더 활성 상태 복원
+            if (data.WallPlanRequested)
+                AR.s.Component.AddComponent(entityId, new WallPlanRequestTag());
+        }
+
+        /// <summary>
+        /// Phase C: Stage별 마을 경계 반경. 승격 시 Bounds 확장에 사용.
+        /// </summary>
+        public static int GetBoundsRadius(VillageStage stage)
+        {
+            return stage switch
+            {
+                VillageStage.Settlement => 6,
+                VillageStage.Hamlet     => 10,
+                VillageStage.Village    => 14,
+                VillageStage.Town       => 18,
+                VillageStage.City       => 24,
+                _ => 6,
+            };
         }
 
         private void SyncStorageComponent(VillageData data)
@@ -323,7 +392,8 @@ namespace ARPG.Village
         // ========== Phase B: 진행 중 태스크 세이브 동기화 ==========
 
         /// <summary>
-        /// 세이브 직전 호출. 활성 ObjectPlacementTaskComponent → VillageData.CurrentBuild* 필드.
+        /// 세이브 직전 호출. ECS 컴포넌트 → VillageData 평면 필드 미러링.
+        /// 동기화 대상: ObjectPlacementTaskComponent, VillageComponent, WallPlanRequestTag.
         /// </summary>
         public void SyncTaskToData()
         {
@@ -336,6 +406,7 @@ namespace ARPG.Village
                     continue;
                 }
 
+                // 진행 중 빌드 태스크
                 if (AR.s.Component.TryGetComponent<ObjectPlacementTaskComponent>(v.EntityId, out var task))
                 {
                     v.CurrentBuildTableId = task.TargetTableId;
@@ -350,6 +421,22 @@ namespace ARPG.Village
                     v.CurrentBuildTableId = 0;
                     v.CurrentBuildStartedAt = -1f;
                 }
+
+                // Phase C: VillageComponent 미러
+                if (AR.s.Component.TryGetComponent<VillageComponent>(v.EntityId, out var vc))
+                {
+                    v.Stage = vc.Stage;
+                    v.BoundsX = vc.Bounds.x;
+                    v.BoundsY = vc.Bounds.y;
+                    v.BoundsW = vc.Bounds.width;
+                    v.BoundsH = vc.Bounds.height;
+                    v.ThreatLevel = vc.ThreatLevel;
+                    v.WallSegmentCount = vc.WallSegmentCount;
+                    v.CompletedWallSegments = vc.CompletedWallSegments;
+                }
+
+                // Phase C: 벽 빌더 활성 플래그
+                v.WallPlanRequested = AR.s.Component.HasComponent<WallPlanRequestTag>(v.EntityId);
             }
         }
 

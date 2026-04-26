@@ -92,8 +92,15 @@ public interface ILateUpdateSystem : ISystem      // Camera, final sync
 | Priority | Purpose | Phase |
 |----------|---------|-------|
 | 0-50 | Input, AI perception | Update/FixedUpdate |
+| 50-69 | **Village domain** (Resource/Population/Lifecycle/Construction) | FixedUpdate |
 | 100-500 | Gameplay (movement, skills, buffs) | FixedUpdate/Update |
 | 500-1000 | Animation, rendering | Update |
+
+**Village domain sub-bands** (Phase C에서 도입, see [PHASE_C_DESIGN.md §8](Docs/PHASE_C_DESIGN.md)):
+- 50-54: Resource (PassiveProduction)
+- 55-59: Population (재스폰, 이민, 출생, 분가)
+- 60-64: Lifecycle (Tier 승격, 평판, 위협도)
+- 65-69: Construction (BuildQueue, Wall)
 
 ### Component Iteration Pattern
 

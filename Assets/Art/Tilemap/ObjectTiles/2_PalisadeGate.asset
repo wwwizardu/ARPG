@@ -1,0 +1,18 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 248a3fba91942d54093c07e7b850ea99, type: 3}
+  m_Name: 2_PalisadeGate
+  m_EditorClassIdentifier: 
+  _sprite: {fileID: -1716454136744197350, guid: 960eeb5cd85d1ee47883b3df8f4777e5, type: 3}
+  _layer: 1
+  _customData: 1
+  _isWalkable: 0

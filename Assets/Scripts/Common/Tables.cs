@@ -211,6 +211,8 @@ namespace ARPG.Tables
         // Phase B: 마을 자가 건설 비용 (NPC가 짓기 위해 필요한 자원)
         [JsonProperty("Cost_Wood")] public int Cost_Wood = 0;
         [JsonProperty("Cost_Stone")] public int Cost_Stone = 0;
+        // Phase C: Metal 비용 (MiningCart, Anvil 등)
+        [JsonProperty("Cost_Metal")] public int Cost_Metal = 0;
 
         // Phase B: 완성 시 마을의 해당 자원 Cap에 가산되는 양 (Woodpile, Chest 등)
         [JsonProperty("StorageCap_Food")] public int StorageCap_Food = 0;

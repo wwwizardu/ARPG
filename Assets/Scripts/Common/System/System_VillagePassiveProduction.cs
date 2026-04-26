@@ -27,7 +27,8 @@ namespace ARPG.Systems
         // 기아 경고 임계 (게임시간)
         private const int HUNGER_WARN_THRESHOLD = 24;
 
-        public int Priority => 57;
+        // 도메인 대역 (CLAUDE.md): 50-54 Resource (Phase C에서 57→52 재할당)
+        public int Priority => 52;
         public float UpdateInterval => 5.0f;
 
         private int _lastProcessedHour;
@@ -55,6 +56,10 @@ namespace ARPG.Systems
 
                 int pop = v.Population;
 
+                int foodBefore = storage.FoodAmount;
+                int woodBefore = storage.WoodAmount;
+                int stoneBefore = storage.StoneAmount;
+
                 // 정수 곱셈으로 deltaHours 만큼 누적
                 int foodDelta = (FOOD_PRODUCE_PER_HOUR - FOOD_CONSUME_PER_HOUR) * pop * deltaHours;
                 int woodDelta = WOOD_PRODUCE_PER_HOUR * pop * deltaHours;
@@ -70,6 +75,14 @@ namespace ARPG.Systems
                     int stoneDelta = pop * cycles;
                     storage.StoneAmount = ApplyCap(storage.StoneAmount + stoneDelta, storage.StoneCap, ref storage.SurplusFlags, VillageSurplusFlags.Stone);
                     storage.StoneTimer -= cycles * STONE_PRODUCE_EVERY_N_HOURS;
+                }
+
+                bool changed = storage.FoodAmount != foodBefore
+                    || storage.WoodAmount != woodBefore
+                    || storage.StoneAmount != stoneBefore;
+                if (changed)
+                {
+                    AR.s.UI.SetNotify($"마을 {v.VillageId} [{v.Stage}]: Food {storage.FoodAmount}/{storage.FoodCap}  Wood {storage.WoodAmount}/{storage.WoodCap}  Stone {storage.StoneAmount}/{storage.StoneCap}");
                 }
 
                 // 기아 경고 (Food 0 유지 24h 경계 크로싱 1회)

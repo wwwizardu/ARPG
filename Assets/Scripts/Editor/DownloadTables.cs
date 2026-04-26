@@ -41,7 +41,7 @@ namespace ARPG.Editor
 
             await DownloadTable<ItemTable>("2064107837&range=A:N", 1, SaveType.String);
 
-            await DownloadTable<BuildableItemTable>("534887250&range=A:R", 1, SaveType.String);
+            await DownloadTable<BuildableItemTable>("534887250&range=A:S", 1, SaveType.String);
 
             await DownloadTable<WeaponBaseStatTable>("853198133&range=A:H", 1, SaveType.String);
             
@@ -362,10 +362,10 @@ namespace ARPG.Editor
 
         private static void ParseBuildableItemTable(BuildableItemTable table, string[] values)
         {
-            // 전체 범위: A:R = 18개 컬럼 (Phase B에서 N~R 5개 컬럼 추가)
-            if (values.Length < 18)
+            // 전체 범위: A:S = 19개 컬럼 (Phase C에서 S=Cost_Metal 추가)
+            if (values.Length < 19)
             {
-                Debug.LogError($"[ParseBuildableItemTable] Invalid data length. Expected at least 18, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseBuildableItemTable] Invalid data length. Expected at least 19, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
@@ -388,6 +388,9 @@ namespace ARPG.Editor
             table.StorageCap_Food = int.Parse(values[15]);
             table.StorageCap_Wood = int.Parse(values[16]);
             table.StorageCap_Stone = int.Parse(values[17]);
+
+            // Phase C 신규 컬럼
+            table.Cost_Metal = int.Parse(values[18]);
         }
 
         private static void ParseWeaponBaseStatTable(WeaponBaseStatTable table, string[] values)

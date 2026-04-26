@@ -43,6 +43,25 @@ namespace ARPG.Village
         // Phase B: 완성된 오브젝트 TableId 누적 (중복 허용 — 같은 종류 여러 개 카운트)
         public List<int> PlacedObjectTypeIds = new();
 
+        // Phase C: 마을 경계 (Tier 승격 시 확장). VillageComponent.Bounds 미러 — 세이브 정본.
+        public int BoundsX;
+        public int BoundsY;
+        public int BoundsW;
+        public int BoundsH;
+
+        // Phase C: 위협도 (Phase F에서 본격 사용. C는 0 고정)
+        public float ThreatLevel;
+
+        // Phase C: 벽 세그먼트 통계
+        public int WallSegmentCount;
+        public int CompletedWallSegments;
+
+        // Phase C: 벽 빌더 활성 플래그 (WallPlanRequestTag 미러)
+        public bool WallPlanRequested;
+
+        // Phase C: 세그먼트 영구 데이터 (활성 청크 진입 시 ECS 컴포넌트로 복원)
+        public List<WallSegmentSaveData> WallSegments = new();
+
         [JsonIgnore]
         public List<int> NpcEntityIds = new();
 

@@ -18,7 +18,8 @@ namespace ARPG.Systems
     {
         private const int DEFAULT_MAX_RADIUS = 3;
 
-        public int Priority => 58;
+        // 도메인 대역 (CLAUDE.md): 65-69 Construction (Phase C에서 58→66 재할당)
+        public int Priority => 66;
         public float UpdateInterval => 5.0f;
 
         public void OnCreate() { }
@@ -51,9 +52,26 @@ namespace ARPG.Systems
 
         private void TryStartNextTask(VillageData v, float now)
         {
-            RoadmapEntry? next = VillageBuildRoadmap.GetNextTarget(v);
-            if (next.HasValue == false)
+            // Phase C: 다음 미완성 벽 세그먼트 조회
+            WallSegmentSaveData? wallSeg = WallSegmentRegistry.GetNextUnbuiltSegment(v);
+            bool wallIsGate = wallSeg != null && wallSeg.Orient == (int)WallOrientation.Gate;
+
+            // Gate는 항상 우선 (방어 핵심 → 로드맵 차단 허용)
+            if (wallSeg != null && wallIsGate)
+            {
+                TryStartWallTask(v, wallSeg, now);
                 return;
+            }
+
+            RoadmapEntry? next = VillageBuildRoadmap.GetNextTarget(v);
+
+            // 로드맵 소진 → 남은 Palisade 진행 (잉여 체크 없이)
+            if (next.HasValue == false)
+            {
+                if (wallSeg != null)
+                    TryStartWallTask(v, wallSeg, now);
+                return;
+            }
 
             RoadmapEntry target = next.Value;
             Tables.BuildableItemTable? table = AR.s.Data.GetBuildableItem(target.TableId);
@@ -61,16 +79,29 @@ namespace ARPG.Systems
 
             int wood = AR.s.Village.GetResourceAmount(v.VillageId, GlobalEnum.ItemType.Wood);
             int stone = AR.s.Village.GetResourceAmount(v.VillageId, GlobalEnum.ItemType.Stone);
+
+            // Palisade 잉여 우선: 로드맵 Wood + Palisade Wood 모두 커버 시 벽 먼저
+            if (wallSeg != null)
+            {
+                Tables.BuildableItemTable? palTable = AR.s.Data.GetBuildableItem(PALISADE_TABLE_ID);
+                if (palTable != null && wood >= table.Cost_Wood + palTable.Cost_Wood)
+                {
+                    TryStartWallTask(v, wallSeg, now);
+                    return;
+                }
+            }
+
             if (wood < table.Cost_Wood) return;
             if (stone < table.Cost_Stone) return;
 
-            // 빈 타일 탐색
+            // 빈 타일 탐색 — Stage 기반 큰길 예약 반경 적용 (Phase C)
             Tables.VillageTable? villageTable = AR.s.Data.GetVillageTable(v.TableId);
             int maxRadius = villageTable != null ? Mathf.CeilToInt(villageTable.SpawnRadius) : DEFAULT_MAX_RADIUS;
             Vector2Int center = new Vector2Int(
                 Mathf.FloorToInt(v.PositionX),
                 Mathf.FloorToInt(v.PositionY)
             );
+            VillageTileFinder.SetRoadReserveRadius(GetRoadReserveRadius(v.Stage));
             Vector2Int? tile = VillageTileFinder.FindEmptyTileNearest(center, maxRadius);
             if (tile.HasValue == false) return;
 
@@ -132,7 +163,14 @@ namespace ARPG.Systems
                 return;
             }
 
-            // 성공 — 누적 리스트 + 효과 콜백
+            // 성공 처리 — 벽이면 세그먼트 마킹, 그 외엔 누적 리스트 + 효과 콜백
+            if (IsWallTask(task.TargetTableId))
+            {
+                OnWallSegmentCompleted(v, task);
+                Debug.Log($"[BuildQueue] v{v.VillageId} 벽 '{table.Name}' 완성 at ({task.TileX},{task.TileY})");
+                return;
+            }
+
             v.PlacedObjectTypeIds.Add(task.TargetTableId);
             AR.s.Village.OnObjectPlaced(v.VillageId, task.TargetTableId);
 
@@ -142,9 +180,9 @@ namespace ARPG.Systems
 
             Debug.Log($"[BuildQueue] v{v.VillageId} '{table.Name}' 완성 at ({task.TileX},{task.TileY})");
 
-            // 로드맵 소진 감지 (1회 로그)
-            if (VillageBuildRoadmap.GetNextTarget(v) == null)
-                Debug.Log($"[BuildQueue] v{v.VillageId} Stage0 로드맵 완료 — Phase C 승격 대기");
+            // 로드맵 소진 감지 (1회 로그) — 벽이 없을 때만 의미 있음
+            if (VillageBuildRoadmap.GetNextTarget(v) == null && WallSegmentRegistry.CountUnbuilt(v) == 0)
+                Debug.Log($"[BuildQueue] v{v.VillageId} 로드맵 + 벽 완료 — Phase C+ 승격 대기");
         }
 
         private static void RefundReserved(VillageData v, ObjectPlacementTaskComponent task)
@@ -153,6 +191,113 @@ namespace ARPG.Systems
                 AR.s.Village.ProduceResource(v.VillageId, GlobalEnum.ItemType.Wood, task.ReservedWoodCost);
             if (task.ReservedStoneCost > 0)
                 AR.s.Village.ProduceResource(v.VillageId, GlobalEnum.ItemType.Stone, task.ReservedStoneCost);
+        }
+
+        // ========== Phase C: 벽 세그먼트 처리 ==========
+
+        // PHASE_C_DESIGN.md §15 결정 #2: 벽 1칸 건설 시간 0.5h (실시간 ~15초)
+        private const float PALISADE_BUILD_HOURS = 0.5f;
+        private const int PALISADE_TABLE_ID = 180;
+        private const int PALISADE_GATE_TABLE_ID = 181;
+
+        /// <summary>
+        /// 미완성 벽 세그먼트를 ObjectPlacementTaskComponent로 큐잉.
+        /// 자원/타일 체크 — Cost_Wood만 사용 (Palisade=8, Gate=40).
+        /// </summary>
+        private void TryStartWallTask(VillageData v, WallSegmentSaveData seg, float now)
+        {
+            int tableId = (seg.Orient == (int)WallOrientation.Gate) ? PALISADE_GATE_TABLE_ID : PALISADE_TABLE_ID;
+            Tables.BuildableItemTable? table = AR.s.Data.GetBuildableItem(tableId);
+            if (table == null) return;
+
+            int wood = AR.s.Village.GetResourceAmount(v.VillageId, GlobalEnum.ItemType.Wood);
+            if (wood < table.Cost_Wood) return;
+
+            // 타일이 비어있는지 확인 (다른 오브젝트가 점유했으면 스킵)
+            if (AR.s.Map.GetObjectIdAt(seg.TileX, seg.TileY) != 0)
+            {
+                // 이미 무언가 있음 — 벽 못 세움. SegmentId가 있으니 재시도 안 함, IsBuilt=true로 마킹
+                Debug.LogWarning($"[WallPlanner] v{v.VillageId} seg{seg.SegmentId} 위치 ({seg.TileX},{seg.TileY}) 점유됨, 스킵");
+                WallSegmentRegistry.MarkSegmentBuilt(v, seg.SegmentId);
+                return;
+            }
+
+            // 자원 차감
+            if (table.Cost_Wood > 0
+                && AR.s.Village.ConsumeResource(v.VillageId, GlobalEnum.ItemType.Wood, table.Cost_Wood) == false)
+                return;
+
+            ObjectPlacementTaskComponent task = new ObjectPlacementTaskComponent
+            {
+                VillageId = v.VillageId,
+                TargetTableId = tableId,
+                TileX = seg.TileX,
+                TileY = seg.TileY,
+                StartedAt = now,
+                BuildDurationHours = PALISADE_BUILD_HOURS,
+                ReservedWoodCost = table.Cost_Wood,
+                ReservedStoneCost = 0,
+            };
+            AR.s.Component.AddComponent(v.EntityId, task);
+
+            Debug.Log($"[BuildQueue] v{v.VillageId} 벽 착수 seg{seg.SegmentId} '{table.Name}' tile=({seg.TileX},{seg.TileY})");
+        }
+
+        /// <summary>현재 task가 벽 세그먼트인지 판정 — TableId로 분기.</summary>
+        private static bool IsWallTask(int tableId)
+        {
+            return tableId == PALISADE_TABLE_ID || tableId == PALISADE_GATE_TABLE_ID;
+        }
+
+        /// <summary>벽 완성 시 처리 — PlacedObjectTypeIds에 추가하지 않고 WallSegments 마킹.</summary>
+        private static void OnWallSegmentCompleted(VillageData v, ObjectPlacementTaskComponent task)
+        {
+            // 좌표로 세그먼트 찾기 (SegmentId를 task에 안 박았으므로 좌표 매칭)
+            if (v.WallSegments == null) return;
+            for (int i = 0; i < v.WallSegments.Count; i++)
+            {
+                var seg = v.WallSegments[i];
+                if (seg.IsBuilt == false && seg.TileX == task.TileX && seg.TileY == task.TileY)
+                {
+                    WallSegmentRegistry.MarkSegmentBuilt(v, seg.SegmentId);
+                    UpdateVillageWallStats(v);
+                    return;
+                }
+            }
+        }
+
+        private static void UpdateVillageWallStats(VillageData v)
+        {
+            if (AR.s.Component.TryGetComponent<VillageComponent>(v.EntityId, out var vc))
+            {
+                vc.CompletedWallSegments = v.CompletedWallSegments;
+                AR.s.Component.SetComponent(v.EntityId, vc);
+            }
+
+            // 10% 단위 진행률 로그
+            int total = v.WallSegmentCount;
+            int built = v.CompletedWallSegments;
+            if (total <= 0) return;
+            int pct = built * 100 / total;
+            int prevPct = (built - 1) * 100 / total;
+            if (pct / 10 != prevPct / 10)
+                Debug.Log($"[WallPlanner] v{v.VillageId} 벽 {built}/{total} ({pct}%)");
+        }
+
+        /// <summary>
+        /// Phase C: Stage별 "큰길" 예약 반경. Settlement은 좁은 마을이라 비활성, Hamlet+부터 통로 보존.
+        /// </summary>
+        private static int GetRoadReserveRadius(VillageStage stage)
+        {
+            return stage switch
+            {
+                VillageStage.Settlement => 0,
+                VillageStage.Hamlet     => 4,
+                VillageStage.Village    => 6,
+                VillageStage.Town       => 8,
+                VillageStage.City       => 10,
+                _ => 0,
+            };
         }
 
         public void OnReset() { }
