@@ -62,6 +62,14 @@ namespace ARPG.Village
         // Phase C: 세그먼트 영구 데이터 (활성 청크 진입 시 ECS 컴포넌트로 복원)
         public List<WallSegmentSaveData> WallSegments = new();
 
+        // Phase D: 배치 오브젝트 영구 데이터 (좌표/HP/쿨다운). 활성 청크에서 PlacedObjectComponent로 복원.
+        // PlacedObjectTypeIds(ID-only 카운트)와 양립 — 카운트는 그대로, 위치/상태는 이 리스트.
+        public List<PlacedObjectSaveData> PlacedObjects = new();
+
+        // Phase D: 상점 매물 풀 (게임시간 24h마다 재롤). MerchantStall 보유 마을만 의미 있음.
+        public List<MerchantStockEntry> MerchantStock = new();
+        public float LastMerchantRollGameTime;
+
         [JsonIgnore]
         public List<int> NpcEntityIds = new();
 

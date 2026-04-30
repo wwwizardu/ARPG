@@ -66,6 +66,14 @@ namespace ARPG.Systems
             System_VillageTierProgression villageTierSystem = new();
             RegisterSystems(villageTierSystem);
 
+            // Priority 61: Village Needs Evaluation (Lifecycle, FixedUpdate) - 점수 기반 빌드 후보 (Phase D, 게임시간 2h)
+            System_VillageNeedsEvaluation villageNeedsSystem = new();
+            RegisterSystems(villageNeedsSystem);
+
+            // Priority 61: Village Service Proximity (Lifecycle, Update) - 플레이어 근처 서비스 집계 (Phase D, 0.3s)
+            System_VillageServiceProximity villageServiceProximitySystem = new();
+            RegisterSystems(villageServiceProximitySystem);
+
             // Priority 66: Village Build Queue (Construction) - Roadmap + 벽 세그먼트 큐 실행 (Phase B/C)
             System_VillageBuildQueue villageBuildQueueSystem = new();
             RegisterSystems(villageBuildQueueSystem);
@@ -73,6 +81,10 @@ namespace ARPG.Systems
             // Priority 67: Village Wall Planner (Construction) - Town 진입 시 벽 세그먼트 계획 (Phase C)
             System_VillageWallPlanner villageWallPlannerSystem = new();
             RegisterSystems(villageWallPlannerSystem);
+
+            // Priority 68: Village Job Assignment (Construction) - NPC 직업 ↔ 작업 오브젝트 매칭 (Phase D, 게임시간 1h)
+            System_VillageJobAssignment villageJobAssignmentSystem = new();
+            RegisterSystems(villageJobAssignmentSystem);
 
             // Priority 100: Movement System (FixedUpdate) - 이동 로직
             System_Move moveSystem = new();

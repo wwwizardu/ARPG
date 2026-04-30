@@ -60,12 +60,29 @@ namespace ARPG.Systems
                 int woodBefore = storage.WoodAmount;
                 int stoneBefore = storage.StoneAmount;
 
-                // 정수 곱셈으로 deltaHours 만큼 누적
+                // 정수 곱셈으로 deltaHours 만큼 누적 (베이스 생산)
                 int foodDelta = (FOOD_PRODUCE_PER_HOUR - FOOD_CONSUME_PER_HOUR) * pop * deltaHours;
                 int woodDelta = WOOD_PRODUCE_PER_HOUR * pop * deltaHours;
 
+                // Phase D: NpcAssignment + JobBonusTable 기반 직업 보너스 가산
+                int ironBonusDelta = 0;
+                int goldBonusDelta = 0;
+                int stoneBonusDelta = 0;
+                AggregateJobBonus(v, deltaHours, ref foodDelta, ref woodDelta, ref stoneBonusDelta, ref ironBonusDelta, ref goldBonusDelta);
+
                 storage.FoodAmount = ApplyCap(storage.FoodAmount + foodDelta, storage.FoodCap, ref storage.SurplusFlags, VillageSurplusFlags.Food);
                 storage.WoodAmount = ApplyCap(storage.WoodAmount + woodDelta, storage.WoodCap, ref storage.SurplusFlags, VillageSurplusFlags.Wood);
+
+                // 직업 보너스의 Stone/Iron/Gold 가산은 storage에 직접 — Cap 무시 (지금은 Phase D MVP 단순화)
+                // Stone은 베이스 5h 카운터와 별도. 일단 직접 누적.
+                if (stoneBonusDelta > 0)
+                    storage.StoneAmount = ApplyCap(storage.StoneAmount + stoneBonusDelta, storage.StoneCap, ref storage.SurplusFlags, VillageSurplusFlags.Stone);
+
+                // Iron/Gold는 VillageData.Resources에 기록 (Storage는 Food/Wood/Stone만 캐시)
+                if (ironBonusDelta > 0)
+                    AccumulateResource(v, GlobalEnum.ItemType.Iron, ironBonusDelta);
+                if (goldBonusDelta > 0)
+                    AccumulateResource(v, GlobalEnum.ItemType.Gold, goldBonusDelta);
 
                 // Stone: 5h 누적 카운터 방식
                 storage.StoneTimer += deltaHours;
@@ -126,6 +143,58 @@ namespace ARPG.Systems
             v.Resources[GlobalEnum.ItemType.Stone] = s.StoneAmount;
             v.HungerHoursAccumulated = s.HungerHoursAccumulated;
             v.StoneTimer = s.StoneTimer;
+        }
+
+        // ========== Phase D: 직업 보너스 가산 ==========
+
+        /// <summary>
+        /// 마을의 NpcAssignmentComponent를 순회하며 JobBonusTable 기반 자원 가산.
+        /// JobBonusTable에 정의된 Resource1/Resource2 모두 처리.
+        /// 정수 누적이라 1h 미만 가산은 절사 (0.5/h 직업이 1h만 작동하면 0).
+        /// </summary>
+        private static void AggregateJobBonus(VillageData v, int deltaHours,
+            ref int foodDelta, ref int woodDelta, ref int stoneDelta, ref int ironDelta, ref int goldDelta)
+        {
+            for (int i = 0; i < v.NpcEntityIds.Count; i++)
+            {
+                int npcId = v.NpcEntityIds[i];
+                if (AR.s.Component.TryGetComponent<NpcAssignmentComponent>(npcId, out var assignment) == false) continue;
+                if (assignment.AssignedObjectEntityId < 0) continue;
+
+                Tables.JobBonusTable? bonus = AR.s.Data.GetJobBonusByJobType(assignment.JobType);
+                if (bonus == null) continue;
+
+                ApplyResourceBonus(bonus.Resource1Type, bonus.Resource1PerHour, deltaHours,
+                    ref foodDelta, ref woodDelta, ref stoneDelta, ref ironDelta, ref goldDelta);
+                ApplyResourceBonus(bonus.Resource2Type, bonus.Resource2PerHour, deltaHours,
+                    ref foodDelta, ref woodDelta, ref stoneDelta, ref ironDelta, ref goldDelta);
+            }
+        }
+
+        private static void ApplyResourceBonus(int resourceType, float perHour, int deltaHours,
+            ref int foodDelta, ref int woodDelta, ref int stoneDelta, ref int ironDelta, ref int goldDelta)
+        {
+            if (resourceType == 0 || perHour <= 0f) return;
+            int gain = Mathf.FloorToInt(perHour * deltaHours);
+            if (gain <= 0) return;
+
+            switch ((GlobalEnum.ItemType)resourceType)
+            {
+                case GlobalEnum.ItemType.Food:  foodDelta  += gain; break;
+                case GlobalEnum.ItemType.Wood:  woodDelta  += gain; break;
+                case GlobalEnum.ItemType.Stone: stoneDelta += gain; break;
+                case GlobalEnum.ItemType.Iron:  ironDelta  += gain; break;
+                case GlobalEnum.ItemType.Gold:  goldDelta  += gain; break;
+            }
+        }
+
+        /// <summary>
+        /// VillageData.Resources에 직접 가산 (Storage 캐시는 Food/Wood/Stone 한정이라 Iron/Gold는 직접).
+        /// </summary>
+        private static void AccumulateResource(VillageData v, GlobalEnum.ItemType type, int amount)
+        {
+            int current = v.Resources.TryGetValue(type, out int c) ? c : 0;
+            v.Resources[type] = current + amount;
         }
 
         public void OnReset()

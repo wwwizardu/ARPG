@@ -30,6 +30,12 @@ namespace ARPG
         public const string Inventory = "UI/Inventory";
 
         public const string TooltipEquipment = "UI/UIEquipmentTooltip";
+
+        // Phase D: 마을 서비스 UI (prefab 키 — Step U1 사용자 작업)
+        public const string ShopMerchant = "UI/ShopMerchant";
+        public const string Forge = "UI/Forge";
+        public const string Inn = "UI/Inn";
+        public const string Shrine = "UI/Shrine";
     }
 
     public class UIManager : MonoBehaviour, IPointerDownHandler, IPointerUpHandler

@@ -190,6 +190,12 @@ namespace ARPG.Tables
         [JsonProperty("EquipmentFixedStatId")] public int EquipmentBastStatId;
         [JsonProperty("EquipmentStatId")] public int EquipmentStatId;
         [JsonProperty("SpriteName")] public string SpriteName = string.Empty;
+
+        // Phase D: 상점 거래 컬럼
+        [JsonProperty("BasePrice")] public int BasePrice;                       // 매물 기본가 (Gold). 0이면 비매품
+        [JsonProperty("SellRatioBp")] public int SellRatioBp;                   // 매각 비율 ×100 (50=0.5, 40=0.4). 0이면 매각 불가
+        [JsonProperty("ReturnResourceType")] public int ReturnResourceType;     // 매각 시 마을 환원 자원 (ItemType enum, 0=환원 없음)
+        [JsonProperty("ReturnRatioBp")] public int ReturnRatioBp;               // 환원 비율 ×100 (50/100). 0=환원 없음
     }
 
      [Serializable]
@@ -203,7 +209,6 @@ namespace ARPG.Tables
         [JsonProperty("Size_Width")] public int Size_Width = 1;
         [JsonProperty("Size_Height")] public int Size_Height = 1;
         [JsonProperty("Recipe")] public int Recipe = 0;
-        [JsonProperty("Function")] public int Function = 0;
         [JsonProperty("ResourceName")] public string ResourceName = string.Empty;
         [JsonProperty("SpawnType")] public GE.BuildableSpawnType SpawnType = GE.BuildableSpawnType.Tile;
         [JsonProperty("AnimationId")] public int AnimationId = 0;
@@ -218,6 +223,28 @@ namespace ARPG.Tables
         [JsonProperty("StorageCap_Food")] public int StorageCap_Food = 0;
         [JsonProperty("StorageCap_Wood")] public int StorageCap_Wood = 0;
         [JsonProperty("StorageCap_Stone")] public int StorageCap_Stone = 0;
+
+        // Phase D: 데이터 정본화 (no hardcoded TableId 정책 — PHASE_D_DESIGN.md §2.2)
+        // 구 Function 컬럼은 제거됨 (placeholder. 의미 없음).
+        [JsonProperty("ProvidedService")] public int ProvidedService = 0;       // ProvidedService Flags enum 비트 OR
+        [JsonProperty("Category")] public int Category = 0;                     // BuildableCategory enum
+        [JsonProperty("SetMembership")] public int SetMembership = 0;           // SetMemberTag Flags enum 비트 OR
+        [JsonProperty("AssociatedJobType")] public int AssociatedJobType = 0;   // JobType enum (NPC 직무 매칭. 0=None)
+        [JsonProperty("BaseWeight")] public int BaseWeight = 10;                // 필요도 스코어 베이스
+        [JsonProperty("MaxPerVillage")] public int MaxPerVillage = 0;           // 마을당 최대 개수 (0=무제한, 1=Shrine/TownPost/Well 등 단일 시설)
+    }
+
+    /// <summary>
+    /// Phase D: 직업별 시간당 자원 가산값. System_VillagePassiveProduction이 NpcAssignment를 보고 가산.
+    /// </summary>
+    [Serializable]
+    public class JobBonusTable : TableBase
+    {
+        [JsonProperty("JobType")] public int JobType;                       // GE.JobType enum
+        [JsonProperty("Resource1Type")] public int Resource1Type;           // GE.ItemType enum (1차 가산 자원)
+        [JsonProperty("Resource1PerHour")] public float Resource1PerHour;   // 시간당 가산량
+        [JsonProperty("Resource2Type")] public int Resource2Type;           // (선택) 2차 가산 자원
+        [JsonProperty("Resource2PerHour")] public float Resource2PerHour;
     }
 
     // EquipmentBaseStatTable 제거됨 → ModTable + ItemImplicitTable로 대체

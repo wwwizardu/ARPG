@@ -44,6 +44,7 @@ namespace ARPG.Village
                 }
             }
             _villages.Clear();
+            PlacedObjectRegistry.ClearAll();
         }
 
         public void RegisterVillage(int villageId, Vector2 position, int tableId = 0)
@@ -241,12 +242,93 @@ namespace ARPG.Village
                     data.WallSegments = new List<WallSegmentSaveData>();
                 // Bounds가 0인 구 세이브 → CreateStorageEntity가 Stage 기준으로 자동 산출
 
+                // Phase D 마이그레이션
+                if (data.PlacedObjects == null)
+                    data.PlacedObjects = new List<PlacedObjectSaveData>();
+                if (data.MerchantStock == null)
+                    data.MerchantStock = new List<MerchantStockEntry>();
+                MigratePlacedObjectsFromTypeIds(data);
+
                 _villages[data.VillageId] = data;
                 CreateStorageEntity(data);
                 RestoreTaskFromData(data);
+                RestorePlacedObjectsFromData(data);
             }
 
             Debug.Log($"[VillageManager] Loaded {_villages.Count} villages");
+        }
+
+        /// <summary>
+        /// Phase D 마이그레이션: PlacedObjectTypeIds(ID-only 카운트)만 있는 구 세이브에서
+        /// PlacedObjects(좌표/HP) 자동 재생성. 좌표는 마을 중심 주변 무작위 (정확한 복원 불가).
+        /// PlacedObjects가 이미 비어있지 않으면 스킵 (정본 우선).
+        /// </summary>
+        private void MigratePlacedObjectsFromTypeIds(VillageData data)
+        {
+            if (data.PlacedObjects.Count > 0) return;            // 이미 정본 있음
+            if (data.PlacedObjectTypeIds == null) return;
+            if (data.PlacedObjectTypeIds.Count == 0) return;
+
+            int regenerated = 0;
+            for (int i = 0; i < data.PlacedObjectTypeIds.Count; i++)
+            {
+                int tableId = data.PlacedObjectTypeIds[i];
+                Tables.BuildableItemTable? t = AR.s.Data.GetBuildableItem(tableId);
+                if (t == null) continue;
+
+                // Bounds 산출 — 아직 CreateStorageEntity 호출 전이므로 Stage 기준 직접 산출
+                int radius = data.BoundsW > 0 ? data.BoundsW / 2 : GetBoundsRadius(data.Stage);
+                int cx = Mathf.FloorToInt(data.PositionX);
+                int cy = Mathf.FloorToInt(data.PositionY);
+                int dx = Random.Range(-radius + 1, radius);
+                int dy = Random.Range(-radius + 1, radius);
+
+                data.PlacedObjects.Add(new PlacedObjectSaveData
+                {
+                    TableId = tableId,
+                    TileX = cx + dx,
+                    TileY = cy + dy,
+                    Hp = t.HP,
+                    MaxHp = t.HP,
+                    LastUseGameTime = 0f,
+                });
+                regenerated++;
+            }
+
+            if (regenerated > 0)
+                Debug.Log($"[Phase D Migration] v{data.VillageId} {regenerated}개 오브젝트 좌표 재배치");
+        }
+
+        /// <summary>
+        /// 로드 후 호출. VillageData.PlacedObjects → ECS 엔티티 + PlacedObjectComponent 재구성 + Registry 등록.
+        /// </summary>
+        private void RestorePlacedObjectsFromData(VillageData data)
+        {
+            if (data.PlacedObjects == null) return;
+
+            for (int i = 0; i < data.PlacedObjects.Count; i++)
+            {
+                PlacedObjectSaveData saved = data.PlacedObjects[i];
+                Tables.BuildableItemTable? t = AR.s.Data.GetBuildableItem(saved.TableId);
+                if (t == null) continue;
+
+                int entityId = EntityIdHelper.CreateEntity();
+                AR.s.Component.AddComponent(entityId, new PlacedObjectComponent
+                {
+                    VillageId = data.VillageId,
+                    TableId = saved.TableId,
+                    TileX = saved.TileX,
+                    TileY = saved.TileY,
+                    HP = saved.Hp > 0 ? saved.Hp : t.HP,
+                    MaxHP = saved.MaxHp > 0 ? saved.MaxHp : t.HP,
+                    Service = (ProvidedService)t.ProvidedService,
+                    SetMember = (SetMemberTag)t.SetMembership,
+                    UsingNpcEntityId = -1,
+                    LastUseGameTime = saved.LastUseGameTime,
+                });
+                PlacedObjectRegistry.Register(data.VillageId, entityId, saved.TableId,
+                    new Vector2Int(saved.TileX, saved.TileY));
+            }
         }
 
         private void CreateStorageEntity(VillageData data)
@@ -348,9 +430,9 @@ namespace ARPG.Village
         // ========== Phase B: 오브젝트 배치 콜백 ==========
 
         /// <summary>
-        /// 오브젝트 배치 완료 시 호출. 데이터 주도 Cap 확장 + 향후 효과 훅.
+        /// 오브젝트 배치 완료 시 호출. 데이터 주도 Cap 확장 + Phase D PlacedObject 정본 추가 + ECS 엔티티 발급.
         /// </summary>
-        public void OnObjectPlaced(int villageId, int tableId)
+        public void OnObjectPlaced(int villageId, int tableId, int tileX, int tileY)
         {
             if (_villages.TryGetValue(villageId, out VillageData? v) == false)
                 return;
@@ -367,7 +449,33 @@ namespace ARPG.Village
             if (t.StorageCap_Stone > 0)
                 AddCap(v, GlobalEnum.ItemType.Stone, t.StorageCap_Stone);
 
-            // Function 3 (CropPlot 생산 보너스), 4 (Well 생산 ×1.05) 는 Phase D에서 본격 처리
+            // Phase D: PlacedObject 정본 추가 + ECS 엔티티 발급 + Registry 등록
+            PlacedObjectSaveData saved = new PlacedObjectSaveData
+            {
+                TableId = tableId,
+                TileX = tileX,
+                TileY = tileY,
+                Hp = t.HP,
+                MaxHp = t.HP,
+                LastUseGameTime = 0f,
+            };
+            v.PlacedObjects.Add(saved);
+
+            int entityId = EntityIdHelper.CreateEntity();
+            AR.s.Component.AddComponent(entityId, new PlacedObjectComponent
+            {
+                VillageId = villageId,
+                TableId = tableId,
+                TileX = tileX,
+                TileY = tileY,
+                HP = t.HP,
+                MaxHP = t.HP,
+                Service = (ProvidedService)t.ProvidedService,
+                SetMember = (SetMemberTag)t.SetMembership,
+                UsingNpcEntityId = -1,
+                LastUseGameTime = 0f,
+            });
+            PlacedObjectRegistry.Register(villageId, entityId, tableId, new Vector2Int(tileX, tileY));
         }
 
         private void AddCap(VillageData v, GlobalEnum.ItemType type, int delta)
@@ -464,6 +572,180 @@ namespace ARPG.Village
             AR.s.Component.AddComponent(v.EntityId, task);
 
             Debug.Log($"[BuildQueue] v{v.VillageId} 로드 후 태스크 복원: TableId={task.TargetTableId}, tile=({task.TileX},{task.TileY}), 시작={task.StartedAt:F1}h");
+        }
+
+        // ========== Phase D: 세트 판정 API ==========
+
+        /// <summary>
+        /// Phase D: 마을 전체 또는 anchor 주변 영역에서 세트 요구 비트가 모두 만족되는지 검사.
+        /// ObjectSetCatalog의 정의(요구 비트 + Range)에 따라 자동 분기.
+        /// Range == 0 → 마을 전체. Range > 0 → anchor 기준 N×N (체비셰프).
+        /// </summary>
+        public bool HasObjectSet(int villageId, ObjectSetType setType, Vector2Int anchor = default)
+        {
+            if (ObjectSetCatalog.All.TryGetValue(setType, out var def) == false) return false;
+
+            List<int> entities;
+            if (def.Range == 0)
+            {
+                entities = PlacedObjectRegistry.GetAllEntitiesInVillage(villageId);
+            }
+            else
+            {
+                int half = def.Range / 2;
+                RectInt rect = new RectInt(anchor.x - half, anchor.y - half, def.Range, def.Range);
+                entities = PlacedObjectRegistry.GetAllEntitiesInBounds(villageId, rect);
+            }
+
+            SetMemberTag covered = SetMemberTag.None;
+            for (int i = 0; i < entities.Count; i++)
+            {
+                if (AR.s.Component.TryGetComponent<PlacedObjectComponent>(entities[i], out var po))
+                    covered |= po.SetMember;
+            }
+            return (covered & def.RequiredMask) == def.RequiredMask;
+        }
+
+        /// <summary>
+        /// Phase D: 마을 내 PlacedObject 중 특정 ProvidedService 비트를 가진 엔티티 개수.
+        /// Tier 승격 조건(주거 N개, MerchantStall 1개 등)에 사용. TableId 분기 0.
+        /// </summary>
+        public int CountByService(int villageId, ProvidedService service)
+        {
+            var entities = PlacedObjectRegistry.GetAllEntitiesInVillage(villageId);
+            int count = 0;
+            for (int i = 0; i < entities.Count; i++)
+            {
+                if (AR.s.Component.TryGetComponent<PlacedObjectComponent>(entities[i], out var po))
+                {
+                    if ((po.Service & service) != 0) count++;
+                }
+            }
+            return count;
+        }
+
+        // ========== Phase D: 상점 거래 API ==========
+
+        /// <summary>
+        /// Phase D: 상점 매각 처리. 인벤토리 슬롯 → Gold + 마을 자원 부분 환원.
+        /// 반환: 실제 지급된 Gold (실패 시 -1).
+        /// </summary>
+        public int SellItemToMerchant(int villageId, int slotIndex, int amount)
+        {
+            if (_villages.TryGetValue(villageId, out VillageData? v) == false) return -1;
+            if (AR.s.Player == null) return -1;
+
+            ARPG.Data.ItemData? slotItem = AR.s.Player.Inventory.GetItemBySlotIndex(slotIndex);
+            if (slotItem == null) return -1;
+
+            Tables.ItemTable? item = AR.s.Data.GetItem(slotItem.Id);
+            if (item == null || item.BasePrice <= 0 || item.SellRatioBp <= 0) return -1;
+
+            // 1. 인벤토리 차감 (실패 시 atomic abort)
+            if (AR.s.Player.Inventory.RemoveItem(slotIndex, amount, out _) == false) return -1;
+
+            // 2. Gold 지급 (PlayerData.Gold 정수)
+            int gold = item.BasePrice * amount * item.SellRatioBp / 100;
+            if (AR.s.Data?.Player != null) AR.s.Data.Player.Gold += gold;
+
+            // 3. 마을 Storage 부분 환원 (자원만)
+            if (item.ReturnResourceType != 0 && item.ReturnRatioBp > 0)
+            {
+                int returnAmount = amount * item.ReturnRatioBp / 100;
+                if (returnAmount > 0)
+                    ProduceResource(villageId, (GlobalEnum.ItemType)item.ReturnResourceType, returnAmount);
+            }
+
+            Debug.Log($"[Sell] v{villageId} 판매 {item.Name} ×{amount} → +{gold}G");
+            AR.s.UI.SetNotify($"판매: {item.Name} ×{amount} → +{gold}G");
+            return gold;
+        }
+
+        /// <summary>
+        /// Phase D: 상점 매물 구매. Gold 차감 + 인벤토리 추가 + 매물 잔량 감소.
+        /// 반환: 실제 차감된 Gold (실패 시 -1).
+        /// </summary>
+        public int BuyItemFromMerchant(int villageId, int stockEntryIndex, int amount)
+        {
+            if (_villages.TryGetValue(villageId, out VillageData? v) == false) return -1;
+            if (AR.s.Player == null) return -1;
+            if (AR.s.Data?.Player == null) return -1;
+            if (stockEntryIndex < 0 || stockEntryIndex >= v.MerchantStock.Count) return -1;
+
+            MerchantStockEntry entry = v.MerchantStock[stockEntryIndex];
+            if (entry.RemainingCount < amount) return -1;
+
+            Tables.ItemTable? item = AR.s.Data.GetItem(entry.ItemTableId);
+            if (item == null || item.BasePrice <= 0) return -1;
+
+            int gold = item.BasePrice * amount;
+            if (AR.s.Data.Player.Gold < gold) return -1;
+
+            // 인벤토리에 추가 시도 (꽉 차 있으면 실패 — Gold 미차감)
+            ARPG.Data.ItemData purchase = new ARPG.Data.ItemData { Id = entry.ItemTableId, Quantity = amount };
+            if (AR.s.Player.Inventory.AddItem(purchase) < 0) return -1;
+
+            // 차감
+            AR.s.Data.Player.Gold -= gold;
+            entry.RemainingCount -= amount;
+            v.MerchantStock[stockEntryIndex] = entry;
+
+            Debug.Log($"[Shop] v{villageId} 구매 {item.Name} ×{amount} = {gold}G");
+            AR.s.UI.SetNotify($"구매: {item.Name} ×{amount} = -{gold}G");
+            return gold;
+        }
+
+        // ========== Phase D: 매물 풀 재롤 ==========
+
+        private const float MERCHANT_ROLL_INTERVAL_HOURS = 24f;
+        private const int MERCHANT_STOCK_SLOTS = 5;
+
+        /// <summary>
+        /// Phase D: 24h 게임시간 경과 시 매물 풀 재롤.
+        /// 풀 조건: ItemTable.Tier ≤ village.Stage AND BasePrice > 0.
+        /// 호출자(UIShopMerchant)는 진입 시 EnsureMerchantStockFresh를 호출.
+        /// </summary>
+        public void EnsureMerchantStockFresh(int villageId)
+        {
+            if (_villages.TryGetValue(villageId, out VillageData? v) == false) return;
+
+            float now = AR.s.Time.CurrentGameTime;
+            if (v.MerchantStock.Count > 0 && now - v.LastMerchantRollGameTime < MERCHANT_ROLL_INTERVAL_HOURS)
+                return;
+
+            RollMerchantStock(v);
+            v.LastMerchantRollGameTime = now;
+        }
+
+        private static void RollMerchantStock(VillageData v)
+        {
+            v.MerchantStock.Clear();
+
+            List<Tables.ItemTable> pool = new List<Tables.ItemTable>();
+            int stageInt = (int)v.Stage;
+            foreach (Tables.ItemTable it in AR.s.Data.GetAllItems())
+            {
+                if (it.BasePrice <= 0) continue;
+                if (it.Tier > stageInt + 1) continue;  // Stage 0(Settlement) → Tier 1까지, Stage 3(Town) → Tier 4까지 (관대한 설정)
+                pool.Add(it);
+            }
+
+            if (pool.Count == 0) return;
+
+            int slots = Mathf.Min(MERCHANT_STOCK_SLOTS, pool.Count);
+            for (int i = 0; i < slots; i++)
+            {
+                int idx = Random.Range(0, pool.Count);
+                Tables.ItemTable picked = pool[idx];
+                pool.RemoveAt(idx);
+                v.MerchantStock.Add(new MerchantStockEntry
+                {
+                    ItemTableId = picked.Id,
+                    RemainingCount = picked.Stackable ? Random.Range(3, 11) : 1,
+                });
+            }
+
+            Debug.Log($"[Shop] v{v.VillageId} 매물 재롤: {v.MerchantStock.Count}건");
         }
     }
 }

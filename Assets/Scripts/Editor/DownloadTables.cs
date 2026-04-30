@@ -39,9 +39,12 @@ namespace ARPG.Editor
 
             await DownloadTable<StatTable>("318209064&range=A:AF", 1, SaveType.String);
 
-            await DownloadTable<ItemTable>("2064107837&range=A:N", 1, SaveType.String);
+            await DownloadTable<ItemTable>("2064107837&range=A:R", 1, SaveType.String);
 
-            await DownloadTable<BuildableItemTable>("534887250&range=A:S", 1, SaveType.String);
+            await DownloadTable<BuildableItemTable>("534887250&range=A:Y", 1, SaveType.String);
+
+            // Phase D: JobBonusTable (직업별 시간당 가산 자원)
+            await DownloadTable<JobBonusTable>("470575350&range=A:F", 1, SaveType.String);
 
             await DownloadTable<WeaponBaseStatTable>("853198133&range=A:H", 1, SaveType.String);
             
@@ -205,6 +208,10 @@ namespace ARPG.Editor
                 {
                     ParseVillageTable(villageTable, values);
                 }
+                else if (table is JobBonusTable jobBonusTable)
+                {
+                    ParseJobBonusTable(jobBonusTable, values);
+                }
                 else
                 {
                     Debug.LogError($"[DownloadTables] CreateTable - Unknown table type: {typeof(T)}");
@@ -339,6 +346,7 @@ namespace ARPG.Editor
 
         private static void ParseItemTable(ItemTable table, string[] values)
         {
+            // 전체 범위: A:R = 18개 컬럼 (Phase D에서 4개 추가)
             if (values.Length < 14)
             {
                 Debug.LogError($"[ParseItemTable] Invalid data length. Expected at least 14, got {values.Length}. Id: {table.Id}");
@@ -358,11 +366,18 @@ namespace ARPG.Editor
             table.EquipmentStatId = int.Parse(values[11]);
             table.SpriteName = values[12];
             table.DropLevel = int.Parse(values[13]);
+
+            // Phase D 신규 컬럼 (시트 갱신 전에는 길이 < 18일 수 있어 안전 가드)
+            table.BasePrice = ParseIntSafe(values, 14);
+            table.SellRatioBp = ParseIntSafe(values, 15);
+            table.ReturnResourceType = ParseIntSafe(values, 16);
+            table.ReturnRatioBp = ParseIntSafe(values, 17);
         }
 
         private static void ParseBuildableItemTable(BuildableItemTable table, string[] values)
         {
-            // 전체 범위: A:S = 19개 컬럼 (Phase C에서 S=Cost_Metal 추가)
+            // 전체 범위: A:X = 24개 컬럼 (Phase D에서 W=BaseWeight까지 5개 추가)
+            // 컬럼 9 (구 Function)는 유지하되 코드에서 읽지 않음 (시트 정리는 별도 작업)
             if (values.Length < 19)
             {
                 Debug.LogError($"[ParseBuildableItemTable] Invalid data length. Expected at least 19, got {values.Length}. Id: {table.Id}");
@@ -377,7 +392,7 @@ namespace ARPG.Editor
             table.Size_Width = int.Parse(values[6]);
             table.Size_Height = int.Parse(values[7]);
             table.Recipe = int.Parse(values[8]);
-            table.Function = int.Parse(values[9]);
+            // values[9] = 구 Function 컬럼 (Phase D에서 폐기, 데이터 무시)
             table.ResourceName = values[10];
             table.SpawnType = (GlobalEnum.BuildableSpawnType)Enum.Parse(typeof(GlobalEnum.BuildableSpawnType), values[11]);
             table.AnimationId = int.Parse(values[12]);
@@ -391,6 +406,46 @@ namespace ARPG.Editor
 
             // Phase C 신규 컬럼
             table.Cost_Metal = int.Parse(values[18]);
+
+            // Phase D 신규 컬럼 (시트 갱신 전에는 길이 < 25일 수 있어 안전 가드)
+            table.ProvidedService = ParseIntSafe(values, 19);
+            table.Category = ParseIntSafe(values, 20);
+            table.SetMembership = ParseIntSafe(values, 21);
+            table.AssociatedJobType = ParseIntSafe(values, 22);
+            table.BaseWeight = ParseIntSafe(values, 23, defaultValue: 10);
+            table.MaxPerVillage = ParseIntSafe(values, 24);
+        }
+
+        private static int ParseIntSafe(string[] values, int index, int defaultValue = 0)
+        {
+            if (index >= values.Length) return defaultValue;
+            string s = values[index]?.Trim();
+            if (string.IsNullOrEmpty(s)) return defaultValue;
+            return int.TryParse(s, out int v) ? v : defaultValue;
+        }
+
+        private static float ParseFloatSafe(string[] values, int index, float defaultValue = 0f)
+        {
+            if (index >= values.Length) return defaultValue;
+            string s = values[index]?.Trim();
+            if (string.IsNullOrEmpty(s)) return defaultValue;
+            return float.TryParse(s, out float v) ? v : defaultValue;
+        }
+
+        private static void ParseJobBonusTable(JobBonusTable table, string[] values)
+        {
+            // 전체 범위: A:F = 6개 컬럼 (Id, JobType, Resource1Type, Resource1PerHour, Resource2Type, Resource2PerHour)
+            if (values.Length < 6)
+            {
+                Debug.LogError($"[ParseJobBonusTable] Invalid data length. Expected at least 6, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            table.JobType = ParseIntSafe(values, 1);
+            table.Resource1Type = ParseIntSafe(values, 2);
+            table.Resource1PerHour = ParseFloatSafe(values, 3);
+            table.Resource2Type = ParseIntSafe(values, 4);
+            table.Resource2PerHour = ParseFloatSafe(values, 5);
         }
 
         private static void ParseWeaponBaseStatTable(WeaponBaseStatTable table, string[] values)

@@ -233,14 +233,17 @@ public class GlobalEnum
     public enum JobType
     {
         None,           // 무직
-        Farmer,         // 농부 (식량 생산)
-        Blacksmith,     // 대장장이 (도구/무기 제작)
-        Merchant,       // 상인 (교역)
-        Hunter,         // 사냥꾼 (식량/가죽 획득)
+        Farmer,         // 농부 (식량 생산 - CropPlot)
+        Blacksmith,     // 대장장이 (도구/무기 제작 - Furnace+Anvil)
+        Merchant,       // 상인 (교역 - MerchantStall)
+        Hunter,         // 사냥꾼 (식량/가죽 획득 - DryingRack)
         Builder,        // 건축가 (건설)
         Scholar,        // 학자 (연구)
         Guard,          // 경비병 (방어)
-        Chief           // 촌장 (마을 관리)
+        Chief,          // 촌장 (마을 관리)
+        Woodcutter,     // Phase D: 벌목꾼 (Wood 생산 - ChoppingBlock)
+        Miner,          // Phase D: 광부 (Stone/Iron 생산 - MiningCart)
+        Gatherer,       // Phase D: 채집꾼 (만능 - 작업 오브젝트 없을 때 fallback)
     }
 
     public enum DamageType

@@ -25,6 +25,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 109379a8d1252184fb128a7533daee84
+    m_Address: UI/Shrine
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 129e10fa9fdbc334680c1f57b4a04ef1
     m_Address: Sprites/Items/CropPlot
     m_ReadOnly: 0
@@ -97,6 +102,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 487fed0a5647d4e4397521a391fc4cef
     m_Address: UI/CharacterUI
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 49d74ff3525b2044289761c822e28f8f
+    m_Address: UI/Forge
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -190,6 +200,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c425fa69427f1f84095d3f022d22d5bc
+    m_Address: UI/Inn
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c7be8e5aec1ed9343b40ecd697f4f5d0
     m_Address: UI/SlotUI_Equip
     m_ReadOnly: 0
@@ -212,6 +227,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: def967a83b43db54785a8aff08a0b520
     m_Address: Humanoid/Idle
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e202b60158c083949b2b058601316857
+    m_Address: UI/ShopMerchant
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

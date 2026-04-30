@@ -17,5 +17,8 @@ namespace ARPG.Component
         public float ThreatLevel;         // 0.0~1.0, Phase F에서 본격 사용 (Phase C는 0 고정)
         public int WallSegmentCount;      // Stage 3+ 통계
         public int CompletedWallSegments;
+
+        // Phase D: System_VillageNeedsEvaluation의 게임시간 2h 게이트용
+        public float LastNeedsEvalGameHour;
     }
 }

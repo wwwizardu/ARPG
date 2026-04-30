@@ -7,6 +7,8 @@ namespace ARPG.Village
     /// <summary>
     /// 마을 상태 스냅샷 로그 유틸 (테스트용 수동 호출).
     /// Phase B에서는 진행 중인 ObjectPlacementTaskComponent + PlacedObjectTypeIds 함께 노출.
+    /// Phase D: TableId 하드코딩 제거 — TierCheck는 ProvidedService 비트 + HasObjectSet 사용.
+    ///          Snapshot에 활성 서비스 / Jobs 할당률 추가.
     /// </summary>
     public static class VillageDebugLog
     {
@@ -52,25 +54,27 @@ namespace ARPG.Village
             string threat = v.ThreatLevel > 0f ? $" Threat={v.ThreatLevel:F2}" : "";
             string tier = FormatTierCheck(v, s, AR.s.Time.CurrentGameTime);
 
-            Debug.Log($"[VillageSnapshot] v{v.VillageId} Stage={v.Stage} Pop={v.Population}/{targetPop} {food} {wood} {stone} Hunger={s.HungerHoursAccumulated}h StoneTimer={s.StoneTimer}/5 {bounds}{wall}{threat} Build={build} Placed=[{placed}] {tier}");
+            // Phase D: 활성 서비스 + Jobs 할당률
+            string services = FormatServices(v);
+            string jobs = FormatJobs(v);
+
+            Debug.Log($"[VillageSnapshot] v{v.VillageId} Stage={v.Stage} Pop={v.Population}/{targetPop} {food} {wood} {stone} Hunger={s.HungerHoursAccumulated}h StoneTimer={s.StoneTimer}/5 {bounds}{wall}{threat} {services} {jobs} Build={build} Placed=[{placed}] {tier}");
         }
 
-        private const int BED_ID = 102;
-        private const int TOWNPOST_ID = 152;
-        private const int FURNACE_ID = 160;
-        private const int ANVIL_ID = 161;
-        private const int MERCHANTSTALL_ID = 151;
-
+        // Phase D: TableId 하드코딩 제거 — 모든 카운트는 CountByService 사용
         private static string FormatTierCheck(VillageData v, VillageStorageComponent s, float now)
         {
-            int bedCount = CountInPlaced(v, BED_ID);
+            int housingCount = AR.s.Village.CountByService(v.VillageId, ProvidedService.Housing);
+            int civicCount = AR.s.Village.CountByService(v.VillageId, ProvidedService.Civic);
+            int shopCount = AR.s.Village.CountByService(v.VillageId, ProvidedService.Shop);
+            bool forgeStandard = AR.s.Village.HasObjectSet(v.VillageId, ObjectSetType.ForgeStandard);
             float ageHours = now - v.RegisteredAt;
 
             return v.Stage switch
             {
-                VillageStage.Settlement => $"TierCheck(→Hamlet): Pop{Mark(v.Population >= 3, $"{v.Population}/3")} Bed{Mark(bedCount >= 2, $"{bedCount}/2")} Food{Mark(s.FoodAmount >= 30, $"{s.FoodAmount}/30")} Age{Mark(ageHours >= 24f, $"{ageHours:F0}/24h")}",
-                VillageStage.Hamlet => $"TierCheck(→Village): Pop{Mark(v.Population >= 8, $"{v.Population}/8")} Bed{Mark(bedCount >= 4, $"{bedCount}/4")} Food{Mark(s.FoodAmount >= 80, $"{s.FoodAmount}/80")} Age{Mark(ageHours >= 72f, $"{ageHours:F0}/72h")} TownPost{Mark(CountInPlaced(v, TOWNPOST_ID) >= 1, "")}",
-                VillageStage.Village => $"TierCheck(→Town): Pop{Mark(v.Population >= 15, $"{v.Population}/15")} Bed{Mark(bedCount >= 8, $"{bedCount}/8")} Food{Mark(s.FoodAmount >= 200, $"{s.FoodAmount}/200")} Age{Mark(ageHours >= 168f, $"{ageHours:F0}/168h")} Furnace{Mark(CountInPlaced(v, FURNACE_ID) >= 1, "")} Anvil{Mark(CountInPlaced(v, ANVIL_ID) >= 1, "")} Stall{Mark(CountInPlaced(v, MERCHANTSTALL_ID) >= 1, "")}",
+                VillageStage.Settlement => $"TierCheck(→Hamlet): Pop{Mark(v.Population >= 3, $"{v.Population}/3")} Housing{Mark(housingCount >= 2, $"{housingCount}/2")} Food{Mark(s.FoodAmount >= 30, $"{s.FoodAmount}/30")} Age{Mark(ageHours >= 24f, $"{ageHours:F0}/24h")}",
+                VillageStage.Hamlet => $"TierCheck(→Village): Pop{Mark(v.Population >= 8, $"{v.Population}/8")} Housing{Mark(housingCount >= 4, $"{housingCount}/4")} Food{Mark(s.FoodAmount >= 80, $"{s.FoodAmount}/80")} Age{Mark(ageHours >= 72f, $"{ageHours:F0}/72h")} TownPost{Mark(civicCount >= 1, "")}",
+                VillageStage.Village => $"TierCheck(→Town): Pop{Mark(v.Population >= 15, $"{v.Population}/15")} Housing{Mark(housingCount >= 8, $"{housingCount}/8")} Food{Mark(s.FoodAmount >= 200, $"{s.FoodAmount}/200")} Age{Mark(ageHours >= 168f, $"{ageHours:F0}/168h")} Forge{Mark(forgeStandard, "")} Stall{Mark(shopCount >= 1, "")}",
                 _ => "",
             };
         }
@@ -81,13 +85,31 @@ namespace ARPG.Village
             return string.IsNullOrEmpty(detail) ? sym : $"{sym}({detail})";
         }
 
-        private static int CountInPlaced(VillageData v, int tableId)
+        // Phase D: 마을 활성 서비스 비트 OR 출력
+        private static string FormatServices(VillageData v)
         {
-            if (v.PlacedObjectTypeIds == null) return 0;
-            int count = 0;
-            for (int i = 0; i < v.PlacedObjectTypeIds.Count; i++)
-                if (v.PlacedObjectTypeIds[i] == tableId) count++;
-            return count;
+            ProvidedService all = ProvidedService.None;
+            var entities = PlacedObjectRegistry.GetAllEntitiesInVillage(v.VillageId);
+            for (int i = 0; i < entities.Count; i++)
+            {
+                if (AR.s.Component.TryGetComponent<PlacedObjectComponent>(entities[i], out var po))
+                    all |= po.Service;
+            }
+            if (all == ProvidedService.None) return "Services=-";
+            return $"Services={all}";
+        }
+
+        // Phase D: 마을 NPC 중 NpcAssignmentComponent 보유 수 / 전체
+        private static string FormatJobs(VillageData v)
+        {
+            int total = v.NpcEntityIds.Count;
+            int assigned = 0;
+            for (int i = 0; i < total; i++)
+            {
+                if (AR.s.Component.HasComponent<NpcAssignmentComponent>(v.NpcEntityIds[i]))
+                    assigned++;
+            }
+            return $"Jobs={assigned}/{total}";
         }
 
         private static string Fmt(string label, int amount, int cap, bool surplus)

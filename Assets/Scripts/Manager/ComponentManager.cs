@@ -70,6 +70,11 @@ namespace ARPG.Component
             { typeof(WallSegmentComponent), 500 },     // 마을 외곽 벽 세그먼트 (마을당 ~60칸 × 5마을 여유)
             { typeof(ObjectPlacementTaskComponent), 32 }, // 마을 1개당 0~1개 (Phase B 배치 큐)
 
+            // Phase D 마을 시스템 컴포넌트
+            { typeof(PlacedObjectComponent), 1024 },   // 마을당 수십~수백 오브젝트 × 5~10마을
+            { typeof(PlayerNearbyServicesComponent), 8 }, // 플레이어 1명당 1개 (멀티 대비 8)
+            { typeof(NpcAssignmentComponent), 256 },   // 직무 할당된 NPC만 (마을당 ~30 × 5마을)
+
             // 건물 시스템 컴포넌트 (BuildingManager 관리)
             { typeof(BuildingTag), 200 },
             { typeof(BuildingComponent), 200 },

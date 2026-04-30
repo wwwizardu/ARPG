@@ -373,66 +373,16 @@ Category 예: `Housing / Storage / Production / Crafting / Service / Defense / D
 ## 10. 구현 Phase
 
 ### Phase A — 자가 생성 최소 루프 (MVP) ✅ 완료 (2026-04-24)
-- [x] `System_VillagePassiveProduction`
-- [x] `VillageStorageComponent` (기존 `VillageData.Resources`를 ECS로 승격)
-- [x] 디버그 유틸: `VillageDebugLog.SnapshotAll()` — Phase A는 화면 UI 대신 로그로 대체 (설계 결정)
-- [x] Stage 0 시드: `EnsureVillagePopulated` 성공 + Wood≥3 + NPC 1명 조건 시 **Campfire 자동 배치** (2h 건설)
-- [x] **하이브리드 건물 시스템**: `BuildableItemTable.SpawnType` 분기로 Tile/Entity 경로 공존 — `BuildingManager`/`BuildingFactory` 신설. 상세는 [archive/PHASE_A_HYBRID_PLAN.md](archive/PHASE_A_HYBRID_PLAN.md)
-
-> Bedroll 자동 배치는 **Phase B의 하드코딩 로드맵**(Bed → Woodpile → …)으로 이관.
-> Stage 0 완료 조건을 "Campfire 1개"로 단순화 — 범용 배치 큐 완성 후 Bedroll/Bed 등을 로드맵에 포함.
+상세 → [PHASE_A_DESIGN.md](PHASE_A_DESIGN.md)
 
 ### Phase B — 오브젝트 배치 (핵심) ✅ 완료 (2026-04-24)
-- [x] ~~`ObjectType` enum 확장~~ → 미확장 결정. 식별은 `BuildableItemTable.Id`가 담당 (Phase A 결정 유지)
-- [x] `BuildableItemTable` 확장 재사용 — 신규 컬럼 5개 (`Cost_Wood`, `Cost_Stone`, `StorageCap_Food/Wood/Stone`)
-- [x] `ObjectPlacementTaskComponent` (마을당 1개 슬롯)
-- [x] 하드코딩 로드맵: **Campfire** → Bedroll → Bed → Woodpile → CropPlot → Chest → Bed 2 → Well (`VillageBuildRoadmap`)
-- [x] 배치 위치 자동 탐색 (중심 **링 확장 + 같은 링 내 랜덤 픽** — `VillageTileFinder.FindEmptyTileNearest`. 클러스터링 방지)
-- [x] 기존 `MapManager.PlaceObject`(1×1) + `BuildingManager` 하이브리드 경로 재사용
-- [x] `System_VillageFirstBuild` → 범용 `System_VillageBuildQueue`로 일반화
-- [x] `Prefabs/Entity` 공용 프리팹 유지 (Phase A에서 통합 완료)
-- [x] **데이터 주도 Cap 확장** — `VillageManager.OnObjectPlaced`가 `StorageCap_*` 컬럼을 그대로 가산 (기획 §4.2)
-- [x] Google Sheets `BuildableItem` 시트 + 로컬 `BuildableItemTable.bytes` 동기 갱신 (Id 1, 100, 101, 102, 110, 111, 120, 130 총 8행)
-- [x] `DataManager` 세이브 경로에 `SyncTaskToData()` 훅 추가 (진행 중 태스크 → `VillageData.CurrentBuild*` 동기화)
-- [x] `VillageDebugLog.Snapshot` 포맷 확장 (현재 진행 오브젝트 + Placed 누적 표시)
-- [x] Sprite placeholder 6장 import + Addressable 등록 — `Sprites/Items/{Bedroll,Bed,Woodpile,Chest,CropPlot,Well}` (Campfire 포함 총 7종)
-- [x] `BuildableTileRegistry` 단순화 — `Preserve()` 제거 + 결과 캐시/진행 게이트 분리, 미등록 키 사전 검증으로 InvalidKey 콘솔 노이즈 차단
+상세 → [PHASE_B_DESIGN.md](PHASE_B_DESIGN.md)
 
 ### Phase C — Tier 승격 + 벽 ✅ 완료 (2026-04-26)
-- [x] `System_VillageTierProgression` (Priority 60, 게임시간 4h 인터벌)
-- [x] 경계(`VillageComponent.Bounds`) 타일 계산 — `VillageManager.GetBoundsRadius` (Settlement=6, Hamlet=10, Village=14, Town=18, City=24)
-- [x] `System_VillageWallPlanner` (Priority 67) + Palisade 건설 — `WallPlanRequestTag` 트리거 + `WallSegmentRegistry` 큐 관리
-- [x] **벽 트리거 시점 변경** — Town(Stage 3) → **Hamlet(Stage 1)** 진입 시 활성화. 벽은 Hamlet Bounds(20×20) 기준 외곽으로 1회 계획, 이후 Stage 승격으로 Bounds 확장돼도 벽은 그대로 유지 (성벽 안=마을 코어, 바깥=농지/외곽 영역).
-- [x] **벽/로드맵 자원 기반 교대** — `System_VillageBuildQueue.TryStartNextTask` 재구성: 로드맵 자원 예약 + 잉여 Wood가 Palisade Cost 이상이면 벽 우선 / Gate는 항상 우선 / 로드맵 자원 부족 시 벽 fallback
-- [x] **Step U2 (Unity 자산)**: Palisade/PalisadeGate RuleTile 에셋 제작 + Addressable 등록 (BoundaryMarker는 디자인 결정으로 제외)
-- [x] `WallSegmentComponent` (HP/Type/Orient) — Phase F의 파괴/복구 시점부터 본격 사용 예정
-- [x] **배치 분산 정교화** — `VillageTileFinder`에 8방위 점유 페널티 + Stage 기반 "큰길" 예약 (Hamlet 4, Village 6, Town 8) 추가
-- [x] **Population 통합** — 구 `System_VillageRespawn` → `System_VillagePopulation` 리네임 + 자연 이민 흡수 (Settlement+ 허용, 게임시간 8h마다 Stage별 확률 스폰. Settlement 10% / Hamlet 15% / Village 20% / Town 25% / City 30%)
-- [x] **Priority 대역 정책** — 50-69 Village domain 4-sub band (Resource/Population/Lifecycle/Construction). CLAUDE.md + PHASE_C_DESIGN.md §8 참조
-- [x] `BuildableItemTable.Cost_Metal` 컬럼 추가 + 신규 17행 (Stage 1: 8종, Stage 2: 8종, Wall: 3종)
-- [x] `VillageDebugLog.Snapshot` 확장 — Bounds, Wall 진행률, TierCheck 조건별 ✓/✗ 표시
-- [x] **Step U1 (Unity 자산)**: 신규 14종 Sprite placeholder import + Addressable 등록 (`Sprites/Items/{Stockpile,ChoppingBlock,DryingRack,MiningCart,Hearth,MerchantStall,TownPost,InnBed,SignalBrazier,Furnace,Anvil,QuenchVat,Shrine,...}`)
-- [x] **`VillageTable.DefaultNpcList` 시작 인구 보정** — `3001,3001,3001` 로 시작 Pop 3 보장 → Stage 0→1 게이트 즉시 충족 가능
+상세 → [PHASE_C_DESIGN.md](PHASE_C_DESIGN.md)
 
-> **(후속 정리, Phase C+ 이관)** `WallSegmentSaveData`에 `TableId` 필드 추가 — StoneWall 도입 시 BuildQueue 분기 코드 0으로. 현재는 `PALISADE_TABLE_ID`/`PALISADE_GATE_TABLE_ID` 상수 분기 유지로 충분.
-
-### Phase D — 플레이어 이득 (루프 완성) → 상세 기획 [PHASE_D_DESIGN.md](PHASE_D_DESIGN.md)
-- [ ] **`PlacedObjectComponent`** ECS 컴포넌트 — `BuildableItemTable.Id` + `TileX/Y` + `VillageId` + `HP` 보관 (현재 `PlacedObjectTypeIds`는 ID-only 카운트라 위치 정보 없음. 세트 판정 위해 위치 인덱스 필수)
-- [ ] **`PlacedObjectRegistry`** — 마을별 `Dictionary<int tableId, List<int entityId>>` + `Dictionary<Vector2Int, int entityId>` 두 인덱스
-- [ ] **세트 판정** `VillageManager.HasObjectSet(villageId, ObjectSetType, anchor?)` — 오브젝트 세트의 같은 5×5 그룹(또는 마을 전체) 내 공존 검사
-- [ ] **`ProvidedService` 비트마스크** — `BuildableItemTable.Function`을 `ProvidedService` enum 비트로 재해석 (Shop/Forge/Inn/Shrine/Storage/Housing/...)
-- [ ] **`System_VillageServiceProximity`** (Priority 61, Lifecycle) — 플레이어 근처 활성 PlacedObject의 ProvidedService를 `PlayerNearbyServicesComponent`에 집계
-- [ ] **서비스 UI 오픈** — Interaction 키(F) 입력 시 가까운 서비스 UI 열기
-  - MerchantStall 근처 → 상점 UI (구매 + **판매** 두 탭. 인벤토리 자원/장비 → Gold + 자원 50% 마을 환원)
-  - Furnace + Anvil 세트 → 강화 UI (Mod 재롤/추가)
-  - InnBed + Hearth 세트 → 여관 UI (세이브, HP 회복)
-  - Shrine → 단기 버프 1회 (쿨다운)
-- [ ] **필요도 스코어링** `System_VillageNeedsEvaluation` (Priority 61, Lifecycle, 게임시간 2h) — 하드코딩 로드맵 → 점수 기반 동적 선택. ThreatLevel·잉여자재·세트완성 가중치 반영
-- [ ] **배치 구역화**: 직업/세트 기반 그루핑 — `VillageTileFinder`에 카테고리 클러스터 가산점. 같은 카테고리(Blacksmith 세트, 주거 세트 등)를 한 영역에 모아 → "공방 거리", "주거 구역" 자연 발생
-- [ ] **외곽 보호 마진** — 비-Defense 카테고리(상점/화로/여관/주거 등)는 마을 경계로부터 ≥ 2타일 안쪽에만 배치. Defense(벽/게이트)만 외곽 띠 점유. ServiceProximity가 "마을 안에서만 서비스 잡힘"을 자연스럽게 보장
-- [ ] **`System_VillageJobAssignment`** (Priority 68, Construction) — NPC `JobType` × 활성 작업 오브젝트 매칭 → `NpcAssignmentComponent`. PassiveProduction이 직업/오브젝트 보너스 가산
-
-> **Phase D에서 폐기된 항목 (PHASE_D_DESIGN.md §2.5)**: 자원 기증 시스템, 명성(Reputation) 시스템. 플레이어의 자원 활용 경로는 **상점 판매로 단일화**, 명성은 갱신 경로(퀘스트)와 함께 Phase F로 이관.
+### Phase D — 플레이어 이득 (루프 완성) ✅ 코드 완료 (2026-04-28)
+상세 → [PHASE_D_DESIGN.md](PHASE_D_DESIGN.md)
 
 ### Phase E — 배후 시뮬레이션
 - [ ] `System_AbstractVillageSimulation`

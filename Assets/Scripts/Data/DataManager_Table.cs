@@ -33,6 +33,9 @@ namespace ARPG.Data
         private ImmutableDictionary<int, Tables.ModTierTable> _modTierTable = null!;
         private ImmutableDictionary<int, Tables.ItemImplicitTable> _itemImplicitTable = null!;
         private ImmutableDictionary<int, Tables.VillageTable> _villageTable = null!;
+        private ImmutableDictionary<int, Tables.JobBonusTable> _jobBonusTable = null!;
+        // Phase D: JobType → JobBonusTable 빠른 조회 인덱스 (LoadLate에서 구축)
+        private Dictionary<int, Tables.JobBonusTable> _jobBonusByJobType = new();
 
         public async Task LoadTableAsync()
         {
@@ -57,7 +60,8 @@ namespace ARPG.Data
                 LoadTable<Tables.ModTable>("ModTable.bytes", tables => _modTable = tables),
                 LoadTable<Tables.ModTierTable>("ModTierTable.bytes", tables => _modTierTable = tables),
                 LoadTable<Tables.ItemImplicitTable>("ItemImplicitTable.bytes", tables => _itemImplicitTable = tables),
-                LoadTable<Tables.VillageTable>("VillageTable.bytes", tables => _villageTable = tables)
+                LoadTable<Tables.VillageTable>("VillageTable.bytes", tables => _villageTable = tables),
+                LoadTable<Tables.JobBonusTable>("JobBonusTable.bytes", tables => _jobBonusTable = tables)
             );
 
             // 모든 테이블 로드 후 LoadLate 실행
@@ -152,6 +156,15 @@ namespace ARPG.Data
             foreach (var table in _villageTable.Values)
             {
                 table.LoadLate();
+            }
+
+            // Phase D: JobBonusTable LoadLate + JobType 인덱스 구축
+            _jobBonusByJobType.Clear();
+            foreach (var table in _jobBonusTable.Values)
+            {
+                table.LoadLate();
+                if (table.JobType > 0 && _jobBonusByJobType.ContainsKey(table.JobType) == false)
+                    _jobBonusByJobType.Add(table.JobType, table);
             }
 
             Debug.Log("Data Tables Loaded");
@@ -293,6 +306,19 @@ namespace ARPG.Data
         public Tables.VillageTable? GetVillageTable(int id)
         {
             if (_villageTable.TryGetValue(id, out var table))
+            {
+                return table;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Phase D: 직업별 시간당 가산 자원 조회. JobType 정수 또는 enum 모두 허용.
+        /// </summary>
+        public Tables.JobBonusTable? GetJobBonusByJobType(GlobalEnum.JobType jobType)
+        {
+            if (_jobBonusByJobType.TryGetValue((int)jobType, out var table))
             {
                 return table;
             }

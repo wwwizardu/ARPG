@@ -63,7 +63,10 @@ namespace ARPG.Systems
                 return;
             }
 
-            RoadmapEntry? next = VillageBuildRoadmap.GetNextTarget(v);
+            // Phase D: NeedsEvaluation 후보 1순위 채택 — 없으면 로드맵 fallback
+            RoadmapEntry? next = VillageNeedsCache.GetNextTarget(v);
+            if (next.HasValue == false)
+                next = VillageBuildRoadmap.GetNextTarget(v);
 
             // 로드맵 소진 → 남은 Palisade 진행 (잉여 체크 없이)
             if (next.HasValue == false)
@@ -80,21 +83,20 @@ namespace ARPG.Systems
             int wood = AR.s.Village.GetResourceAmount(v.VillageId, GlobalEnum.ItemType.Wood);
             int stone = AR.s.Village.GetResourceAmount(v.VillageId, GlobalEnum.ItemType.Stone);
 
-            // Palisade 잉여 우선: 로드맵 Wood + Palisade Wood 모두 커버 시 벽 먼저
-            if (wallSeg != null)
+            // Phase D 정책 변경 (이전 Phase C "잉여 우선" 룰 폐기):
+            // 일반 건물 자원 충분 → 항상 일반 건물 우선. 자원 부족 시에만 벽 fallback.
+            // 이전 룰("Wood 잉여 시 벽 먼저")은 일반 건물 비용이 낮을 때 벽이 무한 도배되는 부작용 발생.
+            bool canBuildRegular = wood >= table.Cost_Wood && stone >= table.Cost_Stone;
+
+            if (canBuildRegular == false)
             {
-                Tables.BuildableItemTable? palTable = AR.s.Data.GetBuildableItem(PALISADE_TABLE_ID);
-                if (palTable != null && wood >= table.Cost_Wood + palTable.Cost_Wood)
-                {
+                // 자원 부족 → 시간 낭비하지 말고 Palisade로 fallback (있으면)
+                if (wallSeg != null)
                     TryStartWallTask(v, wallSeg, now);
-                    return;
-                }
+                return;
             }
 
-            if (wood < table.Cost_Wood) return;
-            if (stone < table.Cost_Stone) return;
-
-            // 빈 타일 탐색 — Stage 기반 큰길 예약 반경 적용 (Phase C)
+            // 빈 타일 탐색 — Phase D: 카테고리 + 외곽 마진 + 큰길 예약 모두 적용
             Tables.VillageTable? villageTable = AR.s.Data.GetVillageTable(v.TableId);
             int maxRadius = villageTable != null ? Mathf.CeilToInt(villageTable.SpawnRadius) : DEFAULT_MAX_RADIUS;
             Vector2Int center = new Vector2Int(
@@ -102,7 +104,11 @@ namespace ARPG.Systems
                 Mathf.FloorToInt(v.PositionY)
             );
             VillageTileFinder.SetRoadReserveRadius(GetRoadReserveRadius(v.Stage));
-            Vector2Int? tile = VillageTileFinder.FindEmptyTileNearest(center, maxRadius);
+
+            // Phase D: 카테고리 + boundsRadius 전달 — 외곽 마진 + 클러스터 가산점 활성화
+            BuildableCategory category = (BuildableCategory)table.Category;
+            int boundsRadius = VillageManager.GetBoundsRadius(v.Stage);
+            Vector2Int? tile = VillageTileFinder.FindEmptyTileNearest(center, maxRadius, v.VillageId, category, boundsRadius);
             if (tile.HasValue == false) return;
 
             // 자원 차감 (실패 시 abort)
@@ -172,7 +178,7 @@ namespace ARPG.Systems
             }
 
             v.PlacedObjectTypeIds.Add(task.TargetTableId);
-            AR.s.Village.OnObjectPlaced(v.VillageId, task.TargetTableId);
+            AR.s.Village.OnObjectPlaced(v.VillageId, task.TargetTableId, task.TileX, task.TileY);
 
             // Phase A 호환 플래그 (UI/타 시스템이 아직 참조할 수 있어 유지)
             if (task.TargetTableId == VillageBuildRoadmap.CAMPFIRE_TABLE_ID)

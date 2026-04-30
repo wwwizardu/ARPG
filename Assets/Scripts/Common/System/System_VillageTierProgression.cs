@@ -23,12 +23,7 @@ namespace ARPG.Systems
         private const float CHECK_INTERVAL_HOURS = 4f;
         private float _lastCheckGameTime = -1f;
 
-        // 승격 조건 참조 TableId (PHASE_C_DESIGN.md §3.1)
-        private const int BED_ID = 102;
-        private const int TOWNPOST_ID = 152;
-        private const int FURNACE_ID = 160;
-        private const int ANVIL_ID = 161;
-        private const int MERCHANTSTALL_ID = 151;
+        // Phase D: TableId 하드코딩 제거. 승격 조건은 ProvidedService 비트 + HasObjectSet 사용.
 
         public void OnCreate()
         {
@@ -63,39 +58,30 @@ namespace ARPG.Systems
             if (AR.s.Component.TryGetComponent<VillageStorageComponent>(v.EntityId, out var s) == false)
                 return v.Stage;
 
-            int bedCount = CountInPlaced(v, BED_ID);
+            // Phase D: 데이터 정본화 — ProvidedService.Housing 비트로 주거 카운트 (Bedroll/Bed/InnBed 모두 포함)
+            int housingCount = AR.s.Village.CountByService(v.VillageId, ProvidedService.Housing);
             float ageHours = now - v.RegisteredAt;
 
             switch (v.Stage)
             {
                 case VillageStage.Settlement:
-                    if (v.Population >= 3 && bedCount >= 2 && s.FoodAmount >= 30 && ageHours >= 24f)
+                    if (v.Population >= 3 && housingCount >= 2 && s.FoodAmount >= 30 && ageHours >= 24f)
                         return VillageStage.Hamlet;
                     break;
                 case VillageStage.Hamlet:
-                    if (v.Population >= 8 && bedCount >= 4 && s.FoodAmount >= 80 && ageHours >= 72f
-                        && CountInPlaced(v, TOWNPOST_ID) >= 1)
+                    if (v.Population >= 8 && housingCount >= 4 && s.FoodAmount >= 80 && ageHours >= 72f
+                        && AR.s.Village.CountByService(v.VillageId, ProvidedService.Civic) >= 1)  // TownPost
                         return VillageStage.Village;
                     break;
                 case VillageStage.Village:
-                    if (v.Population >= 15 && bedCount >= 8 && s.FoodAmount >= 200 && ageHours >= 168f
-                        && CountInPlaced(v, FURNACE_ID) >= 1
-                        && CountInPlaced(v, ANVIL_ID) >= 1
-                        && CountInPlaced(v, MERCHANTSTALL_ID) >= 1)
+                    if (v.Population >= 15 && housingCount >= 8 && s.FoodAmount >= 200 && ageHours >= 168f
+                        && AR.s.Village.HasObjectSet(v.VillageId, ObjectSetType.ForgeStandard)  // Furnace + Anvil 5×5
+                        && AR.s.Village.CountByService(v.VillageId, ProvidedService.Shop) >= 1)  // MerchantStall
                         return VillageStage.Town;
                     break;
                 // Town → City (Stage 4)는 Phase C+ 이관
             }
             return v.Stage;
-        }
-
-        private static int CountInPlaced(VillageData v, int tableId)
-        {
-            if (v.PlacedObjectTypeIds == null) return 0;
-            int count = 0;
-            for (int i = 0; i < v.PlacedObjectTypeIds.Count; i++)
-                if (v.PlacedObjectTypeIds[i] == tableId) count++;
-            return count;
         }
 
         // ========== 승격 적용 ==========
