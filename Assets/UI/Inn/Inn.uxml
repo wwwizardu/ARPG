@@ -9,19 +9,21 @@
                 <appui:Heading text="여관" size="L" class="inn-title"/>
                 <appui:IconButton name="close-btn" icon="x" class="inn-close-icon"/>
             </ui:VisualElement>
+            <appui:Text name="slot-count-text" text="세트 활성 — 손님 0/2" class="inn-slot-count"/>
 
             <appui:Divider/>
 
-            <ui:VisualElement class="inn-body">
+            <ui:VisualElement name="visitor-list" class="inn-visitor-list"/>
+
+            <appui:Divider/>
+
+            <ui:VisualElement class="inn-aux">
                 <appui:Text name="status-text" text="휴식 가능" class="inn-status"/>
                 <appui:Text name="cost-text" text="휴식 비용: 10G" class="inn-cost"/>
-            </ui:VisualElement>
-
-            <appui:Divider/>
-
-            <ui:VisualElement class="inn-buttons">
-                <appui:Button name="rest-btn" title="휴식하기 (+6h)" variant="Accent" size="M" class="inn-btn"/>
-                <appui:Button name="save-btn" title="세이브" variant="Default" size="M" class="inn-btn"/>
+                <ui:VisualElement class="inn-aux-buttons">
+                    <appui:Button name="rest-btn" title="휴식하기 (+6h)" variant="Default" size="S" class="inn-aux-btn"/>
+                    <appui:Button name="save-btn" title="세이브" variant="Default" size="S" class="inn-aux-btn"/>
+                </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>

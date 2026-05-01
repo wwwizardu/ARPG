@@ -65,7 +65,9 @@ namespace ARPG.Systems
             switch (v.Stage)
             {
                 case VillageStage.Settlement:
-                    if (v.Population >= 3 && housingCount >= 2 && s.FoodAmount >= 30 && ageHours >= 24f)
+                    // INN_HIRING_DESIGN.md §2.9 — Inn 세트 완성이 시스템 전제조건
+                    if (v.Population >= 3 && housingCount >= 2 && s.FoodAmount >= 30 && ageHours >= 24f
+                        && AR.s.Village.HasObjectSet(v.VillageId, ObjectSetType.Inn))
                         return VillageStage.Hamlet;
                     break;
                 case VillageStage.Hamlet:

@@ -18,7 +18,8 @@ namespace ARPG.Component
         public int WallSegmentCount;      // Stage 3+ 통계
         public int CompletedWallSegments;
 
-        // Phase D: System_VillageNeedsEvaluation의 게임시간 2h 게이트용
+        // (deprecated) BUILD_PRIORITY_DESIGN.md에서 평가기 인라인화로 이 게이트 폐기.
+        // 필드는 세이브 호환을 위해 유지 — 다음 메이저 마이그레이션 시 제거.
         public float LastNeedsEvalGameHour;
     }
 }

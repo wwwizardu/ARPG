@@ -213,6 +213,9 @@ namespace ARPG.Tables
         [JsonProperty("SpawnType")] public GE.BuildableSpawnType SpawnType = GE.BuildableSpawnType.Tile;
         [JsonProperty("AnimationId")] public int AnimationId = 0;
 
+        // 자가 건설 소요 시간 (게임 시간, 시간 단위). 0이면 호출자 기본값.
+        [JsonProperty("BuildHours")] public float BuildHours = 0f;
+
         // Phase B: 마을 자가 건설 비용 (NPC가 짓기 위해 필요한 자원)
         [JsonProperty("Cost_Wood")] public int Cost_Wood = 0;
         [JsonProperty("Cost_Stone")] public int Cost_Stone = 0;

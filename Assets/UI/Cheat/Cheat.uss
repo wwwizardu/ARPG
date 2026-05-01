@@ -1,0 +1,88 @@
+/* Cheat UI 스타일 — 개발용 치트창 */
+
+.cheat-root {
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+}
+
+.cheat-overlay {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.55);
+}
+
+.cheat-panel {
+    width: 520px;
+    padding: 24px;
+    border-radius: 12px;
+    background-color: rgba(28, 28, 32, 0.96);
+    border-width: 1px;
+    border-color: rgba(180, 140, 80, 0.4);
+}
+
+.cheat-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.cheat-title {
+    color: rgb(220, 180, 100);
+}
+
+.cheat-close-icon {
+    --appui-iconbutton-size: 32px;
+}
+
+.cheat-row {
+    flex-direction: row;
+    align-items: center;
+    padding-top: 8px;
+    padding-bottom: 8px;
+}
+
+.cheat-label {
+    color: rgb(200, 200, 200);
+    width: 80px;
+    margin-right: 8px;
+}
+
+.cheat-input {
+    flex-grow: 1;
+    margin-right: 8px;
+}
+
+.cheat-input > .unity-text-field__input {
+    background-color: rgba(60, 60, 70, 0.95);
+    border-color: rgba(180, 140, 80, 0.5);
+    border-width: 1px;
+    border-radius: 4px;
+    color: rgb(240, 235, 220);
+    padding: 4px 8px;
+}
+
+.cheat-input > .unity-text-field__input:focus {
+    border-color: rgb(220, 180, 100);
+    background-color: rgba(70, 70, 82, 0.98);
+}
+
+.cheat-action-btn {
+    min-width: 120px;
+}
+
+.cheat-popup {
+    margin-top: 12px;
+    padding: 8px;
+    color: rgb(255, 215, 100);
+    -unity-text-align: middle-center;
+    white-space: normal;
+    display: none;
+}
+
+.cheat-popup--visible {
+    display: flex;
+}

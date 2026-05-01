@@ -8,11 +8,11 @@ using UnityEngine;
 namespace ARPG.Systems
 {
     /// <summary>
-    /// Phase B: 마을의 범용 오브젝트 배치 큐.
+    /// 마을의 범용 오브젝트 배치 큐.
     /// - 마을당 ObjectPlacementTaskComponent 1개를 슬롯으로 사용 (큐 아님).
-    /// - VillageBuildRoadmap이 다음 타깃 결정.
-    /// - 자원/빈 타일 대기 → 자원 차감 + Task 부착 → 시간 누적 → 완료 시 PlaceObject + Task 제거.
-    /// Phase A의 System_VillageFirstBuild를 일반화해 대체.
+    /// - VillageNeedsEvaluator가 점수 정렬한 후보 리스트를 받아, affordable + placeable한 첫 후보 채택.
+    /// - 자원 차감 + Task 부착 → 시간 누적 → 완료 시 PlaceObject + Task 제거.
+    /// 우선순위 정책은 BUILD_PRIORITY_DESIGN.md §2 (4 Layer 점수) 참조.
     /// </summary>
     public class System_VillageBuildQueue : IFixedUpdateSystem
     {
@@ -52,106 +52,103 @@ namespace ARPG.Systems
 
         private void TryStartNextTask(VillageData v, float now)
         {
-            // Phase C: 다음 미완성 벽 세그먼트 조회
+            // 다음 미완성 벽 세그먼트 조회 — Gate면 절대 우선, 일반 Palisade는 fallback
             WallSegmentSaveData? wallSeg = WallSegmentRegistry.GetNextUnbuiltSegment(v);
             bool wallIsGate = wallSeg != null && wallSeg.Orient == (int)WallOrientation.Gate;
-
-            // Gate는 항상 우선 (방어 핵심 → 로드맵 차단 허용)
             if (wallSeg != null && wallIsGate)
             {
                 TryStartWallTask(v, wallSeg, now);
                 return;
             }
 
-            // Phase D: NeedsEvaluation 후보 1순위 채택 — 없으면 로드맵 fallback
-            RoadmapEntry? next = VillageNeedsCache.GetNextTarget(v);
-            if (next.HasValue == false)
-                next = VillageBuildRoadmap.GetNextTarget(v);
-
-            // 로드맵 소진 → 남은 Palisade 진행 (잉여 체크 없이)
-            if (next.HasValue == false)
+            // BUILD_PRIORITY_DESIGN.md §3 — 점수 우선순위 절대 존중.
+            //  • 1위가 자원 부족 → 다른 후보로 우회하지 않고 자원이 모일 때까지 대기
+            //  • 1위가 자리 없음(영구 블로커) → 2위, 3위 순으로 시도
+            //  • 모든 후보 자리 없음 → 벽 fallback
+            var ranked = VillageNeedsEvaluator.GetRankedCandidates(v);
+            for (int i = 0; i < ranked.Count; i++)
             {
-                if (wallSeg != null)
-                    TryStartWallTask(v, wallSeg, now);
-                return;
+                BuildAttemptResult result = TryStartGeneralBuild(v, ranked[i], now);
+                if (result == BuildAttemptResult.Started)
+                    return;
+                if (result == BuildAttemptResult.WaitForResources)
+                    return;  // 1위(이거든 후순위든 도달한 후보)의 자원 모일 때까지 대기 — fallback X
+                // BuildAttemptResult.NoTileOrTableMissing → 다음 후보 시도
             }
 
-            RoadmapEntry target = next.Value;
-            Tables.BuildableItemTable? table = AR.s.Data.GetBuildableItem(target.TableId);
-            if (table == null) return;
+            // 모든 일반 후보 자리 없음 / 테이블 누락 → 벽 천천히 진행
+            if (wallSeg != null)
+                TryStartWallTask(v, wallSeg, now);
+        }
+
+        private enum BuildAttemptResult
+        {
+            Started,                  // 빌드 시작 성공
+            WaitForResources,         // 자원 부족 — 시간이 지나면 해소되므로 대기
+            NoTileOrTableMissing,     // 자리 없음 / 테이블 누락 — 영구 블로커, 다음 후보 시도
+        }
+
+        /// <summary>
+        /// 일반 건물 1개 빌드 시도.
+        /// BuildHours는 BuildableItemTable.BuildHours에서 직접 읽음.
+        /// </summary>
+        private BuildAttemptResult TryStartGeneralBuild(VillageData v, int targetTableId, float now)
+        {
+            Tables.BuildableItemTable? table = AR.s.Data.GetBuildableItem(targetTableId);
+            if (table == null) return BuildAttemptResult.NoTileOrTableMissing;
 
             int wood = AR.s.Village.GetResourceAmount(v.VillageId, GlobalEnum.ItemType.Wood);
             int stone = AR.s.Village.GetResourceAmount(v.VillageId, GlobalEnum.ItemType.Stone);
+            if (wood < table.Cost_Wood || stone < table.Cost_Stone)
+                return BuildAttemptResult.WaitForResources;
 
-            // Phase D 정책 변경 (이전 Phase C "잉여 우선" 룰 폐기):
-            // 일반 건물 자원 충분 → 항상 일반 건물 우선. 자원 부족 시에만 벽 fallback.
-            // 이전 룰("Wood 잉여 시 벽 먼저")은 일반 건물 비용이 낮을 때 벽이 무한 도배되는 부작용 발생.
-            bool canBuildRegular = wood >= table.Cost_Wood && stone >= table.Cost_Stone;
-
-            if (canBuildRegular == false)
-            {
-                // 자원 부족 → 시간 낭비하지 말고 Palisade로 fallback (있으면)
-                if (wallSeg != null)
-                    TryStartWallTask(v, wallSeg, now);
-                return;
-            }
-
-            // 빈 타일 탐색 — Phase E: 광장/큰길 예약 + 카테고리 minSep + 거리 차등 클러스터
+            // 빈 타일 탐색 — 광장/큰길 예약 + 카테고리 minSep + 거리 차등 클러스터
             Vector2Int center = new Vector2Int(
                 Mathf.FloorToInt(v.PositionX),
                 Mathf.FloorToInt(v.PositionY)
             );
             BuildableCategory category = (BuildableCategory)table.Category;
             int boundsRadius = VillageManager.GetBoundsRadius(v.Stage);
-
-            // Phase E: 탐색 반경을 boundsRadius 기반으로 확대 — Stage가 커질수록 분산 가능
-            // (이전엔 villageTable.SpawnRadius=3 고정이라 City에서도 3타일 안에 다 박힘)
             int maxRadius = boundsRadius > 0
                 ? Mathf.Max(DEFAULT_MAX_RADIUS, boundsRadius - VillageTileFinder.OUTSKIRT_MARGIN_TILES)
                 : DEFAULT_MAX_RADIUS;
 
-            // Phase E: 큰길 폭(B3) + 광장(A4) Stage별 옵션
             (int roadRadius, int roadHalfWidth) = GetRoadReserve(v.Stage);
             VillageTileFinder.SetRoadReserve(roadRadius, roadHalfWidth);
             VillageTileFinder.SetPlazaRadius(GetPlazaRadius(v.Stage));
 
-            // B1: 테이블에 MinSeparation > 0이면 카테고리 기본값을 오버라이드
             Vector2Int? tile = VillageTileFinder.FindEmptyTileNearest(
                 center, maxRadius, v.VillageId, category, boundsRadius, table.MinSeparation);
-            if (tile.HasValue == false) return;
+            if (tile.HasValue == false) return BuildAttemptResult.NoTileOrTableMissing;  // 자리 없음 → 다음 후보 시도
 
-            // 자원 차감 (실패 시 abort)
-            if (table.Cost_Wood > 0)
+            // 자원 차감 (Wood/Stone 둘 중 하나라도 실패 시 환불). 동시성 race 시에만 발생.
+            if (table.Cost_Wood > 0
+                && AR.s.Village.ConsumeResource(v.VillageId, GlobalEnum.ItemType.Wood, table.Cost_Wood) == false)
+                return BuildAttemptResult.WaitForResources;
+            if (table.Cost_Stone > 0
+                && AR.s.Village.ConsumeResource(v.VillageId, GlobalEnum.ItemType.Stone, table.Cost_Stone) == false)
             {
-                if (AR.s.Village.ConsumeResource(v.VillageId, GlobalEnum.ItemType.Wood, table.Cost_Wood) == false)
-                    return;
-            }
-            if (table.Cost_Stone > 0)
-            {
-                if (AR.s.Village.ConsumeResource(v.VillageId, GlobalEnum.ItemType.Stone, table.Cost_Stone) == false)
-                {
-                    // Stone 차감 실패 → Wood 환불
-                    if (table.Cost_Wood > 0)
-                        AR.s.Village.ProduceResource(v.VillageId, GlobalEnum.ItemType.Wood, table.Cost_Wood);
-                    return;
-                }
+                if (table.Cost_Wood > 0)
+                    AR.s.Village.ProduceResource(v.VillageId, GlobalEnum.ItemType.Wood, table.Cost_Wood);
+                return BuildAttemptResult.WaitForResources;
             }
 
-            // Task 부착
+            float buildHours = table.BuildHours > 0f ? table.BuildHours : 2f;
             ObjectPlacementTaskComponent task = new ObjectPlacementTaskComponent
             {
                 VillageId = v.VillageId,
-                TargetTableId = target.TableId,
+                TargetTableId = targetTableId,
                 TileX = tile.Value.x,
                 TileY = tile.Value.y,
                 StartedAt = now,
-                BuildDurationHours = target.BuildHours,
+                BuildDurationHours = buildHours,
                 ReservedWoodCost = table.Cost_Wood,
                 ReservedStoneCost = table.Cost_Stone,
             };
             AR.s.Component.AddComponent(v.EntityId, task);
 
-            Debug.Log($"[BuildQueue] v{v.VillageId} 착수 '{table.Name}': Wood -{table.Cost_Wood}, Stone -{table.Cost_Stone}, tile=({tile.Value.x},{tile.Value.y}), 완료 예정={now + target.BuildHours:F1}h");
+            Debug.Log($"[BuildQueue] v{v.VillageId} 착수 '{table.Name}': Wood -{table.Cost_Wood}, Stone -{table.Cost_Stone}, tile=({tile.Value.x},{tile.Value.y}), 완료 예정={now + buildHours:F1}h");
+            return BuildAttemptResult.Started;
         }
 
         private async UniTask TryFinishAsync(VillageData v, ObjectPlacementTaskComponent task)
@@ -190,14 +187,10 @@ namespace ARPG.Systems
             AR.s.Village.OnObjectPlaced(v.VillageId, task.TargetTableId, task.TileX, task.TileY);
 
             // Phase A 호환 플래그 (UI/타 시스템이 아직 참조할 수 있어 유지)
-            if (task.TargetTableId == VillageBuildRoadmap.CAMPFIRE_TABLE_ID)
+            if (task.TargetTableId == VillageNeedsEvaluator.CAMPFIRE_TABLE_ID)
                 v.HasCampfire = true;
 
             Debug.Log($"[BuildQueue] v{v.VillageId} '{table.Name}' 완성 at ({task.TileX},{task.TileY})");
-
-            // 로드맵 소진 감지 (1회 로그) — 벽이 없을 때만 의미 있음
-            if (VillageBuildRoadmap.GetNextTarget(v) == null && WallSegmentRegistry.CountUnbuilt(v) == 0)
-                Debug.Log($"[BuildQueue] v{v.VillageId} 로드맵 + 벽 완료 — Phase C+ 승격 대기");
         }
 
         private static void RefundReserved(VillageData v, ObjectPlacementTaskComponent task)

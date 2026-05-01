@@ -66,9 +66,8 @@ namespace ARPG.Systems
             System_VillageTierProgression villageTierSystem = new();
             RegisterSystems(villageTierSystem);
 
-            // Priority 61: Village Needs Evaluation (Lifecycle, FixedUpdate) - 점수 기반 빌드 후보 (Phase D, 게임시간 2h)
-            System_VillageNeedsEvaluation villageNeedsSystem = new();
-            RegisterSystems(villageNeedsSystem);
+            // (제거) System_VillageNeedsEvaluation — BUILD_PRIORITY_DESIGN.md에 따라
+            // VillageNeedsEvaluator 정적 클래스로 흡수, BuildQueue가 inline 호출.
 
             // Priority 61: Village Service Proximity (Lifecycle, Update) - 플레이어 근처 서비스 집계 (Phase D, 0.3s)
             System_VillageServiceProximity villageServiceProximitySystem = new();

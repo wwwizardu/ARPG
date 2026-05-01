@@ -68,11 +68,12 @@ namespace ARPG.Village
             int civicCount = AR.s.Village.CountByService(v.VillageId, ProvidedService.Civic);
             int shopCount = AR.s.Village.CountByService(v.VillageId, ProvidedService.Shop);
             bool forgeStandard = AR.s.Village.HasObjectSet(v.VillageId, ObjectSetType.ForgeStandard);
+            bool hasInn = AR.s.Village.HasObjectSet(v.VillageId, ObjectSetType.Inn);
             float ageHours = now - v.RegisteredAt;
 
             return v.Stage switch
             {
-                VillageStage.Settlement => $"TierCheck(→Hamlet): Pop{Mark(v.Population >= 3, $"{v.Population}/3")} Housing{Mark(housingCount >= 2, $"{housingCount}/2")} Food{Mark(s.FoodAmount >= 30, $"{s.FoodAmount}/30")} Age{Mark(ageHours >= 24f, $"{ageHours:F0}/24h")}",
+                VillageStage.Settlement => $"TierCheck(→Hamlet): Pop{Mark(v.Population >= 3, $"{v.Population}/3")} Housing{Mark(housingCount >= 2, $"{housingCount}/2")} Food{Mark(s.FoodAmount >= 30, $"{s.FoodAmount}/30")} Age{Mark(ageHours >= 24f, $"{ageHours:F0}/24h")} Inn{Mark(hasInn, "")}",
                 VillageStage.Hamlet => $"TierCheck(→Village): Pop{Mark(v.Population >= 8, $"{v.Population}/8")} Housing{Mark(housingCount >= 4, $"{housingCount}/4")} Food{Mark(s.FoodAmount >= 80, $"{s.FoodAmount}/80")} Age{Mark(ageHours >= 72f, $"{ageHours:F0}/72h")} TownPost{Mark(civicCount >= 1, "")}",
                 VillageStage.Village => $"TierCheck(→Town): Pop{Mark(v.Population >= 15, $"{v.Population}/15")} Housing{Mark(housingCount >= 8, $"{housingCount}/8")} Food{Mark(s.FoodAmount >= 200, $"{s.FoodAmount}/200")} Age{Mark(ageHours >= 168f, $"{ageHours:F0}/168h")} Forge{Mark(forgeStandard, "")} Stall{Mark(shopCount >= 1, "")}",
                 _ => "",
@@ -125,13 +126,13 @@ namespace ARPG.Village
 
             if (AR.s.Component.TryGetComponent<ObjectPlacementTaskComponent>(v.EntityId, out var task) == false)
             {
-                // 태스크 없음 → 다음 후보 표시
-                RoadmapEntry? next = VillageBuildRoadmap.GetNextTarget(v);
-                if (next.HasValue == false)
-                    return "✓로드맵완료";
+                // 태스크 없음 → 점수 1위 후보 표시 (BUILD_PRIORITY_DESIGN.md §2)
+                int nextId = VillageNeedsEvaluator.GetTopCandidate(v);
+                if (nextId < 0)
+                    return "✓후보없음";
 
-                Tables.BuildableItemTable? nextTable = AR.s.Data.GetBuildableItem(next.Value.TableId);
-                string nextName = nextTable != null ? nextTable.Name : $"Id{next.Value.TableId}";
+                Tables.BuildableItemTable? nextTable = AR.s.Data.GetBuildableItem(nextId);
+                string nextName = nextTable != null ? nextTable.Name : $"Id{nextId}";
                 return $"대기({nextName})";
             }
 

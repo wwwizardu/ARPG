@@ -558,6 +558,9 @@ namespace ARPG.Village
             if (v.CurrentBuildTableId <= 0)
                 return;
 
+            // BuildableItemTable.BuildHours에서 직접 조회. 누락 시 기본 2h.
+            Tables.BuildableItemTable? buildTable = AR.s.Data.GetBuildableItem(v.CurrentBuildTableId);
+            float buildHours = (buildTable != null && buildTable.BuildHours > 0f) ? buildTable.BuildHours : 2f;
             ObjectPlacementTaskComponent task = new ObjectPlacementTaskComponent
             {
                 VillageId = v.VillageId,
@@ -565,7 +568,7 @@ namespace ARPG.Village
                 TileX = v.CurrentBuildTileX,
                 TileY = v.CurrentBuildTileY,
                 StartedAt = v.CurrentBuildStartedAt,
-                BuildDurationHours = VillageBuildRoadmap.GetBuildHours(v.CurrentBuildTableId),
+                BuildDurationHours = buildHours,
                 ReservedWoodCost = v.CurrentBuildReservedWood,
                 ReservedStoneCost = v.CurrentBuildReservedStone,
             };
