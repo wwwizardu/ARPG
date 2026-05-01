@@ -200,11 +200,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: c425fa69427f1f84095d3f022d22d5bc
-    m_Address: UI/InnBackup
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c7be8e5aec1ed9343b40ecd697f4f5d0
     m_Address: UI/SlotUI_Equip
     m_ReadOnly: 0

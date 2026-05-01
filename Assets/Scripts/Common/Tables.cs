@@ -232,6 +232,10 @@ namespace ARPG.Tables
         [JsonProperty("AssociatedJobType")] public int AssociatedJobType = 0;   // JobType enum (NPC 직무 매칭. 0=None)
         [JsonProperty("BaseWeight")] public int BaseWeight = 10;                // 필요도 스코어 베이스
         [JsonProperty("MaxPerVillage")] public int MaxPerVillage = 0;           // 마을당 최대 개수 (0=무제한, 1=Shrine/TownPost/Well 등 단일 시설)
+
+        // 마을 배치 시 다른 점유 타일과의 최소 체비쇼프 거리. 0=카테고리 기본값(VillageTileFinder.GetDefaultMinSeparation) 사용.
+        // 같은 카테고리/오브젝트별 차등이 필요할 때만 채움 (예: Furnace 3, Bedroll 1).
+        [JsonProperty("MinSeparation")] public int MinSeparation = 0;
     }
 
     /// <summary>

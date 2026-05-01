@@ -96,19 +96,28 @@ namespace ARPG.Systems
                 return;
             }
 
-            // 빈 타일 탐색 — Phase D: 카테고리 + 외곽 마진 + 큰길 예약 모두 적용
-            Tables.VillageTable? villageTable = AR.s.Data.GetVillageTable(v.TableId);
-            int maxRadius = villageTable != null ? Mathf.CeilToInt(villageTable.SpawnRadius) : DEFAULT_MAX_RADIUS;
+            // 빈 타일 탐색 — Phase E: 광장/큰길 예약 + 카테고리 minSep + 거리 차등 클러스터
             Vector2Int center = new Vector2Int(
                 Mathf.FloorToInt(v.PositionX),
                 Mathf.FloorToInt(v.PositionY)
             );
-            VillageTileFinder.SetRoadReserveRadius(GetRoadReserveRadius(v.Stage));
-
-            // Phase D: 카테고리 + boundsRadius 전달 — 외곽 마진 + 클러스터 가산점 활성화
             BuildableCategory category = (BuildableCategory)table.Category;
             int boundsRadius = VillageManager.GetBoundsRadius(v.Stage);
-            Vector2Int? tile = VillageTileFinder.FindEmptyTileNearest(center, maxRadius, v.VillageId, category, boundsRadius);
+
+            // Phase E: 탐색 반경을 boundsRadius 기반으로 확대 — Stage가 커질수록 분산 가능
+            // (이전엔 villageTable.SpawnRadius=3 고정이라 City에서도 3타일 안에 다 박힘)
+            int maxRadius = boundsRadius > 0
+                ? Mathf.Max(DEFAULT_MAX_RADIUS, boundsRadius - VillageTileFinder.OUTSKIRT_MARGIN_TILES)
+                : DEFAULT_MAX_RADIUS;
+
+            // Phase E: 큰길 폭(B3) + 광장(A4) Stage별 옵션
+            (int roadRadius, int roadHalfWidth) = GetRoadReserve(v.Stage);
+            VillageTileFinder.SetRoadReserve(roadRadius, roadHalfWidth);
+            VillageTileFinder.SetPlazaRadius(GetPlazaRadius(v.Stage));
+
+            // B1: 테이블에 MinSeparation > 0이면 카테고리 기본값을 오버라이드
+            Vector2Int? tile = VillageTileFinder.FindEmptyTileNearest(
+                center, maxRadius, v.VillageId, category, boundsRadius, table.MinSeparation);
             if (tile.HasValue == false) return;
 
             // 자원 차감 (실패 시 abort)
@@ -291,17 +300,36 @@ namespace ARPG.Systems
         }
 
         /// <summary>
-        /// Phase C: Stage별 "큰길" 예약 반경. Settlement은 좁은 마을이라 비활성, Hamlet+부터 통로 보존.
+        /// Phase E: Stage별 큰길 예약 (radius, halfWidth).
+        ///  Settlement: 비활성 (좁은 마을)
+        ///  Hamlet+: 폭 3타일(±1)로 시각적으로 통로처럼 인식되도록 확장 — B3
         /// </summary>
-        private static int GetRoadReserveRadius(VillageStage stage)
+        private static (int radius, int halfWidth) GetRoadReserve(VillageStage stage)
+        {
+            return stage switch
+            {
+                VillageStage.Settlement => (0, 0),
+                VillageStage.Hamlet     => (4, 1),
+                VillageStage.Village    => (6, 1),
+                VillageStage.Town       => (8, 1),
+                VillageStage.City       => (10, 1),
+                _ => (0, 0),
+            };
+        }
+
+        /// <summary>
+        /// Phase E (A4): Stage별 마을 중심 광장. Hamlet부터 3x3, Town부터 5x5로 확장.
+        /// 광장은 큰길 예약과 겹치지만 시각/판정상 무해 (둘 다 "배치 불가" 표시일 뿐).
+        /// </summary>
+        private static int GetPlazaRadius(VillageStage stage)
         {
             return stage switch
             {
                 VillageStage.Settlement => 0,
-                VillageStage.Hamlet     => 4,
-                VillageStage.Village    => 6,
-                VillageStage.Town       => 8,
-                VillageStage.City       => 10,
+                VillageStage.Hamlet     => 1,   // 3x3
+                VillageStage.Village    => 1,   // 3x3
+                VillageStage.Town       => 2,   // 5x5
+                VillageStage.City       => 2,   // 5x5
                 _ => 0,
             };
         }

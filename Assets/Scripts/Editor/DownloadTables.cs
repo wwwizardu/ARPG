@@ -41,7 +41,7 @@ namespace ARPG.Editor
 
             await DownloadTable<ItemTable>("2064107837&range=A:R", 1, SaveType.String);
 
-            await DownloadTable<BuildableItemTable>("534887250&range=A:Y", 1, SaveType.String);
+            await DownloadTable<BuildableItemTable>("534887250&range=A:Z", 1, SaveType.String);
 
             // Phase D: JobBonusTable (직업별 시간당 가산 자원)
             await DownloadTable<JobBonusTable>("470575350&range=A:F", 1, SaveType.String);
@@ -376,7 +376,7 @@ namespace ARPG.Editor
 
         private static void ParseBuildableItemTable(BuildableItemTable table, string[] values)
         {
-            // 전체 범위: A:X = 24개 컬럼 (Phase D에서 W=BaseWeight까지 5개 추가)
+            // 전체 범위: A:Z = 26개 컬럼 (Z=MinSeparation, 신규)
             // 컬럼 9 (구 Function)는 유지하되 코드에서 읽지 않음 (시트 정리는 별도 작업)
             if (values.Length < 19)
             {
@@ -414,6 +414,7 @@ namespace ARPG.Editor
             table.AssociatedJobType = ParseIntSafe(values, 22);
             table.BaseWeight = ParseIntSafe(values, 23, defaultValue: 10);
             table.MaxPerVillage = ParseIntSafe(values, 24);
+            table.MinSeparation = ParseIntSafe(values, 25);
         }
 
         private static int ParseIntSafe(string[] values, int index, int defaultValue = 0)
