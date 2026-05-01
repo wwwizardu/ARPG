@@ -1,0 +1,137 @@
+/* Forge UI 스타일 — 인벤토리 그리드 포함 */
+
+.forge-root {
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+}
+
+.forge-overlay {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+}
+
+.forge-panel {
+    width: 640px;
+    padding: 24px;
+    border-radius: 12px;
+    background-color: rgba(28, 28, 32, 0.96);
+    border-width: 1px;
+    border-color: rgba(180, 140, 80, 0.4);
+}
+
+.forge-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.forge-title {
+    color: rgb(220, 180, 100);
+}
+
+.forge-close-icon {
+    --appui-iconbutton-size: 32px;
+}
+
+.forge-body {
+    flex-direction: column;
+    padding-top: 12px;
+    padding-bottom: 12px;
+}
+
+.forge-tier {
+    margin-bottom: 4px;
+    color: rgb(220, 220, 220);
+}
+
+.forge-discount {
+    color: rgb(255, 200, 80);
+    font-size: 12px;
+}
+
+.forge-section {
+    flex-direction: column;
+    padding-top: 12px;
+    padding-bottom: 12px;
+}
+
+.forge-section-title {
+    color: rgb(200, 200, 200);
+    margin-bottom: 8px;
+    font-size: 12px;
+}
+
+/* 인벤토리 그리드 */
+.forge-inventory-grid {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+.forge-inv-slot {
+    width: 56px;
+    height: 56px;
+    margin: 4px;
+    border-radius: 6px;
+    background-color: rgba(50, 50, 60, 0.6);
+    border-width: 2px;
+    border-color: rgba(100, 100, 120, 0.4);
+    align-items: center;
+    justify-content: center;
+}
+
+.forge-inv-slot:hover {
+    border-color: rgba(255, 215, 100, 0.6);
+}
+
+.forge-inv-slot-equipment {
+    border-color: rgba(180, 140, 80, 0.6);
+    background-color: rgba(60, 50, 40, 0.7);
+}
+
+.forge-inv-slot-disabled {
+    opacity: 0.3;
+}
+
+.forge-inv-slot-selected {
+    border-color: rgb(255, 215, 100);
+    background-color: rgba(100, 80, 40, 0.8);
+}
+
+.forge-inv-icon {
+    width: 44px;
+    height: 44px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.forge-inv-empty-text {
+    color: rgb(120, 120, 120);
+    font-size: 11px;
+}
+
+.forge-selected {
+    color: rgb(255, 215, 100);
+    margin-top: 8px;
+}
+
+/* 액션 버튼 */
+.forge-actions {
+    flex-direction: row;
+    justify-content: space-between;
+    padding-top: 12px;
+}
+
+.forge-action-btn {
+    flex-grow: 1;
+    margin-left: 4px;
+    margin-right: 4px;
+}
+
+.forge-action-btn:disabled {
+    opacity: 0.4;
+}

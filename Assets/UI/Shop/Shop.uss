@@ -1,0 +1,190 @@
+/* Shop UI 스타일 — Inn/Shrine/Forge와 톤 일관 */
+
+.shop-root {
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+}
+
+.shop-overlay {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+}
+
+.shop-panel {
+    width: 720px;
+    max-height: 90%;
+    padding: 24px;
+    border-radius: 12px;
+    background-color: rgba(28, 28, 32, 0.96);
+    border-width: 1px;
+    border-color: rgba(180, 140, 80, 0.4);
+}
+
+.shop-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.shop-title {
+    color: rgb(220, 180, 100);
+}
+
+.shop-close-icon {
+    --appui-iconbutton-size: 32px;
+}
+
+.shop-info {
+    flex-direction: row;
+    justify-content: flex-end;
+    padding-top: 8px;
+    padding-bottom: 8px;
+}
+
+.shop-gold {
+    color: rgb(255, 215, 100);
+}
+
+.shop-tabs {
+    flex-direction: row;
+    padding-top: 8px;
+    padding-bottom: 8px;
+}
+
+.shop-tab-btn {
+    flex-grow: 1;
+    margin-left: 4px;
+    margin-right: 4px;
+}
+
+.shop-tab-panel {
+    flex-direction: column;
+    padding-top: 12px;
+    padding-bottom: 12px;
+}
+
+.shop-section-title {
+    color: rgb(200, 200, 200);
+    margin-bottom: 8px;
+    font-size: 12px;
+}
+
+/* 구매 리스트 */
+.shop-buy-scroll {
+    height: 320px;
+}
+
+.shop-buy-list {
+    flex-direction: column;
+}
+
+.shop-buy-row {
+    flex-direction: row;
+    align-items: center;
+    padding: 8px;
+    margin-bottom: 4px;
+    border-radius: 6px;
+    background-color: rgba(50, 50, 60, 0.6);
+    border-width: 1px;
+    border-color: rgba(100, 100, 120, 0.3);
+}
+
+.shop-buy-row:hover {
+    border-color: rgba(180, 140, 80, 0.6);
+}
+
+.shop-buy-icon {
+    width: 40px;
+    height: 40px;
+    margin-right: 12px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.shop-buy-info {
+    flex-grow: 1;
+    flex-direction: column;
+}
+
+.shop-buy-name {
+    color: rgb(220, 220, 220);
+    margin-bottom: 2px;
+}
+
+.shop-buy-price {
+    color: rgb(255, 215, 100);
+    font-size: 12px;
+}
+
+/* 판매 그리드 */
+.shop-sell-grid {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+    height: 280px;
+    overflow: hidden;
+}
+
+.shop-sell-slot {
+    width: 56px;
+    height: 56px;
+    margin: 4px;
+    border-radius: 6px;
+    background-color: rgba(50, 50, 60, 0.6);
+    border-width: 2px;
+    border-color: rgba(100, 100, 120, 0.4);
+    align-items: center;
+    justify-content: center;
+}
+
+.shop-sell-slot:hover {
+    border-color: rgba(255, 215, 100, 0.6);
+}
+
+.shop-sell-slot-sellable {
+    border-color: rgba(180, 140, 80, 0.6);
+    background-color: rgba(60, 50, 40, 0.7);
+}
+
+.shop-sell-slot-disabled {
+    opacity: 0.3;
+}
+
+.shop-sell-slot-selected {
+    border-color: rgb(255, 215, 100);
+    background-color: rgba(100, 80, 40, 0.8);
+}
+
+.shop-sell-icon {
+    width: 44px;
+    height: 44px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.shop-sell-qty {
+    position: absolute;
+    bottom: 2px;
+    right: 4px;
+    color: rgb(255, 255, 255);
+    font-size: 11px;
+}
+
+.shop-selected {
+    color: rgb(255, 215, 100);
+    margin-top: 8px;
+    margin-bottom: 8px;
+}
+
+.shop-sell-action-btn:disabled {
+    opacity: 0.4;
+}
+
+/* 공용 */
+.shop-empty-text {
+    color: rgb(120, 120, 120);
+    padding: 16px;
+}

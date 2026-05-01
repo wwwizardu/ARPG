@@ -1,0 +1,37 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements"
+         xmlns:appui="Unity.AppUI.UI"
+         editor-extension-mode="False">
+    <Style src="project://database/Assets/UI/Forge/Forge.uss"/>
+    <ui:VisualElement name="root" class="forge-root" picking-mode="Position">
+        <ui:VisualElement name="overlay" class="forge-overlay" picking-mode="Position"/>
+        <ui:VisualElement name="panel" class="forge-panel">
+            <ui:VisualElement class="forge-header">
+                <appui:Heading text="강화" size="L" class="forge-title"/>
+                <appui:IconButton name="close-btn" icon="x" class="forge-close-icon"/>
+            </ui:VisualElement>
+
+            <appui:Divider/>
+
+            <ui:VisualElement class="forge-body">
+                <appui:Text name="tier-text" text="강화 단계" class="forge-tier"/>
+                <appui:Text name="discount-text" text="" class="forge-discount"/>
+            </ui:VisualElement>
+
+            <appui:Divider/>
+
+            <ui:VisualElement class="forge-section">
+                <appui:Text text="인벤토리 (장비만)" class="forge-section-title"/>
+                <ui:VisualElement name="inventory-grid" class="forge-inventory-grid"/>
+                <appui:Text name="selected-text" text="강화할 장비를 선택하세요" class="forge-selected"/>
+            </ui:VisualElement>
+
+            <appui:Divider/>
+
+            <ui:VisualElement class="forge-actions">
+                <appui:Button name="disassemble-btn" title="분해" variant="Default" size="M" class="forge-action-btn"/>
+                <appui:Button name="reroll-btn" title="Mod 재롤 (50G)" variant="Accent" size="M" class="forge-action-btn"/>
+                <appui:Button name="addmod-btn" title="Mod 추가 (80G)" variant="Accent" size="M" class="forge-action-btn"/>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

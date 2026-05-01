@@ -201,7 +201,7 @@ MonoBehaviour:
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c425fa69427f1f84095d3f022d22d5bc
-    m_Address: UI/Inn
+    m_Address: UI/InnBackup
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -247,6 +247,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e51b4ce57b4aa1b42b16b56ab5fb98af
     m_Address: Sprites/Items/ChoppingBlock
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e7a2d1ed74eb058449cad90d6ef5e9f0
+    m_Address: UI/Inn
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

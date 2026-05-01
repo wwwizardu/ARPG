@@ -2,7 +2,11 @@
 using ARPG.Base;
 using ARPG.Component;
 using ARPG.Village;
+using Unity.AppUI.UI;
 using UnityEngine;
+using UnityEngine.UIElements;
+using Button = Unity.AppUI.UI.Button;
+using Text = Unity.AppUI.UI.Text;
 
 namespace ARPG.UI
 {
@@ -16,31 +20,72 @@ namespace ARPG.UI
     ///   - 사냥꾼의 정확: 치명타 +10%
     ///   - 헤르메스의 발: 이속 +20%
     ///
-    /// Step 10 MVP: 인터페이스/스켈레톤만.
+    /// UI Toolkit 기반 (App UI 컴포넌트 사용). prefab의 UIDocument 컴포넌트 필요.
     /// </summary>
     public class UIShrine : UIBaseForm
     {
-        // [SerializeField] private Button _buff1Button = null!;
-        // [SerializeField] private Button _buff2Button = null!;
-        // [SerializeField] private Button _buff3Button = null!;
-
         private const float COOLDOWN_HOURS = 12f;
         private const float BUFF_DURATION_HOURS = 0.5f; // 30분 게임시간
 
         public enum ShrineBuff { ProtectionLight, HuntersAim, HermesFeet }
 
+        private UIDocument? _document;
+        private Button? _buff1Btn;
+        private Button? _buff2Btn;
+        private Button? _buff3Btn;
+        private IconButton? _closeBtn;
+        private Text? _statusText;
+        private Text? _cooldownText;
+
         private int _shrineEntityId = -1;
         private int _villageId = -1;
         private float _lastUseGameTime;
         private bool _isOnCooldown;
+        private VisualElement? _lastRoot;
 
         public override void Initialize(string inName, bool isForm = false)
         {
             base.Initialize(inName, isForm);
+
+            _document = GetComponent<UIDocument>();
+            if (_document == null)
+            {
+                Debug.LogError("[UIShrine] UIDocument 컴포넌트 없음 — prefab 확인 필요");
+                return;
+            }
+
+            EnsureBound();
+        }
+
+        /// <summary>
+        /// UIDocument는 SetActive 토글 시마다 rootVisualElement를 재구성하므로
+        /// root 변경을 감지해 매번 재바인딩.
+        /// </summary>
+        private void EnsureBound()
+        {
+            if (_document == null) return;
+            VisualElement root = _document.rootVisualElement;
+            if (root == null) return;
+            if (root == _lastRoot) return;
+
+            _lastRoot = root;
+
+            _buff1Btn = root.Q<Button>("buff1-btn");
+            _buff2Btn = root.Q<Button>("buff2-btn");
+            _buff3Btn = root.Q<Button>("buff3-btn");
+            _closeBtn = root.Q<IconButton>("close-btn");
+            _statusText = root.Q<Text>("status-text");
+            _cooldownText = root.Q<Text>("cooldown-text");
+
+            if (_buff1Btn != null) _buff1Btn.clicked += () => OnClickBuff(ShrineBuff.ProtectionLight);
+            if (_buff2Btn != null) _buff2Btn.clicked += () => OnClickBuff(ShrineBuff.HuntersAim);
+            if (_buff3Btn != null) _buff3Btn.clicked += () => OnClickBuff(ShrineBuff.HermesFeet);
+            if (_closeBtn != null) _closeBtn.clicked += () => Close();
         }
 
         public void Bind(int shrineEntityId)
         {
+            EnsureBound();
             _shrineEntityId = shrineEntityId;
 
             if (AR.s.Component.TryGetComponent<PlacedObjectComponent>(_shrineEntityId, out var po) == false)
@@ -55,14 +100,32 @@ namespace ARPG.UI
             RefreshAll();
         }
 
+        /// <summary>
+        /// 테스트용: 실제 Shrine 엔티티 없이 UI만 띄울 때.
+        /// </summary>
+        public void BindForTest()
+        {
+            EnsureBound();
+            _shrineEntityId = -1;
+            _villageId = -1;
+            _lastUseGameTime = -100f; // 충분히 과거 → 쿨다운 해제 상태
+            _isOnCooldown = false;
+            RefreshAll();
+            Debug.Log("[UIShrine] BindForTest — 테스트 모드로 UI 열림");
+        }
+
         public override void OnOpen()
         {
             base.OnOpen();
-            CheckCooldown();
-            RefreshAll();
+            EnsureBound();
+            if (_shrineEntityId >= 0)
+            {
+                CheckCooldown();
+                RefreshAll();
+            }
         }
 
-        // ========== 액션 stub ==========
+        // ========== 액션 ==========
 
         public void OnClickBuff(ShrineBuff buff)
         {
@@ -74,13 +137,15 @@ namespace ARPG.UI
                 return;
             }
 
-            // TODO(Step 10b+): Gold 차감 (Stage 기반)
+            // TODO: Gold 차감 (Stage 기반)
             // TODO: BuffTable Id 매핑 후 AR.s.Buff.ApplyBuff(player, buffId, BUFF_DURATION_HOURS)
-            // TODO: 쿨다운 갱신 — PlacedObjectComponent.LastUseGameTime = now + Component.SetComponent
             float now = AR.s.Time.CurrentGameTime;
-            UpdateLastUseGameTime(now);
+            if (_shrineEntityId >= 0)
+                UpdateLastUseGameTime(now);
+            else
+                _lastUseGameTime = now; // 테스트 모드
 
-            Debug.Log($"[Shrine] v{_villageId} 버프 {buff} 적용 + 12h 쿨다운 시작");
+            Debug.Log($"[Shrine] v{_villageId} 버프 {buff} 적용 + {COOLDOWN_HOURS}h 쿨다운 시작");
             CheckCooldown();
             RefreshAll();
         }
@@ -102,11 +167,34 @@ namespace ARPG.UI
             _lastUseGameTime = now;
         }
 
-        // ========== 갱신 hook ==========
+        // ========== 갱신 ==========
 
         private void RefreshAll()
         {
-            // TODO(Step U1+): 쿨다운 중이면 버튼 회색, 가격 표시 등
+            if (_statusText != null)
+            {
+                _statusText.text = _isOnCooldown
+                    ? "쿨다운 중 — 사용 불가"
+                    : "가호 받기 가능";
+            }
+
+            if (_cooldownText != null)
+            {
+                if (_isOnCooldown)
+                {
+                    float remain = COOLDOWN_HOURS - (AR.s.Time.CurrentGameTime - _lastUseGameTime);
+                    _cooldownText.text = $"남은 쿨다운: {remain:F1}h";
+                }
+                else
+                {
+                    _cooldownText.text = "지속시간: 30분 / 쿨다운: 12h";
+                }
+            }
+
+            bool canUse = _isOnCooldown == false;
+            if (_buff1Btn != null) _buff1Btn.SetEnabled(canUse);
+            if (_buff2Btn != null) _buff2Btn.SetEnabled(canUse);
+            if (_buff3Btn != null) _buff3Btn.SetEnabled(canUse);
         }
     }
 }

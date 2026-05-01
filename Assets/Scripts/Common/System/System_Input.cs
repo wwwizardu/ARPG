@@ -4,6 +4,7 @@ using ARPG.Systems;
 using ARPG.Utility;
 using ARPG.Village;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace ARPG.Systems
 {
@@ -59,6 +60,38 @@ namespace ARPG.Systems
                 var characterUI = AR.s.UI.Show<UI.UICharacter>(AddressablePath.Character, UIManager.Layer.Main);
                 if (characterUI == null)
                     return;
+            }
+
+            // [TEST] B키 — Inn UI 열기 (실제 InnBed 없이 테스트용)
+            if (Keyboard.current != null && Keyboard.current.bKey.wasPressedThisFrame)
+            {
+                var innUI = AR.s.UI.Show<UI.UIInn>(AddressablePath.Inn, UIManager.Layer.Main);
+                if (innUI != null)
+                    innUI.BindForTest();
+            }
+
+            // [TEST] N키 — Shrine UI 열기 (실제 Shrine 없이 테스트용)
+            if (Keyboard.current != null && Keyboard.current.nKey.wasPressedThisFrame)
+            {
+                var shrineUI = AR.s.UI.Show<UI.UIShrine>(AddressablePath.Shrine, UIManager.Layer.Main);
+                if (shrineUI != null)
+                    shrineUI.BindForTest();
+            }
+
+            // [TEST] G키 — Forge UI 열기 (실제 Forge 없이 테스트용, Premium 단계로 가정)
+            if (Keyboard.current != null && Keyboard.current.gKey.wasPressedThisFrame)
+            {
+                var forgeUI = AR.s.UI.Show<UI.UIForge>(AddressablePath.Forge, UIManager.Layer.Main);
+                if (forgeUI != null)
+                    forgeUI.BindForTest(UI.UIForge.ForgeTier.Premium);
+            }
+
+            // [TEST] M키 — Shop UI 열기 (실제 MerchantStall 없이 테스트용)
+            if (Keyboard.current != null && Keyboard.current.mKey.wasPressedThisFrame)
+            {
+                var shopUI = AR.s.UI.Show<UI.UIShopMerchant>(AddressablePath.ShopMerchant, UIManager.Layer.Main);
+                if (shopUI != null)
+                    shopUI.BindForTest();
             }
 
             // if (_input.Value.UseItem.WasPressedThisFrame() == true) // 아이템 사용 시 그냥 리턴

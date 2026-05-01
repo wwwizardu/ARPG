@@ -1,0 +1,28 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements"
+         xmlns:appui="Unity.AppUI.UI"
+         editor-extension-mode="False">
+    <Style src="project://database/Assets/UI/Inn/Inn.uss"/>
+    <ui:VisualElement name="root" class="inn-root" picking-mode="Position">
+        <ui:VisualElement name="overlay" class="inn-overlay" picking-mode="Position"/>
+        <ui:VisualElement name="panel" class="inn-panel">
+            <ui:VisualElement class="inn-header">
+                <appui:Heading text="여관" size="L" class="inn-title"/>
+                <appui:IconButton name="close-btn" icon="x" class="inn-close-icon"/>
+            </ui:VisualElement>
+
+            <appui:Divider/>
+
+            <ui:VisualElement class="inn-body">
+                <appui:Text name="status-text" text="휴식 가능" class="inn-status"/>
+                <appui:Text name="cost-text" text="휴식 비용: 10G" class="inn-cost"/>
+            </ui:VisualElement>
+
+            <appui:Divider/>
+
+            <ui:VisualElement class="inn-buttons">
+                <appui:Button name="rest-btn" title="휴식하기 (+6h)" variant="Accent" size="M" class="inn-btn"/>
+                <appui:Button name="save-btn" title="세이브" variant="Default" size="M" class="inn-btn"/>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

@@ -34,7 +34,8 @@ namespace ARPG.Base
         public virtual void OnOpen()
         {
             gameObject.SetActive(true);
-            _rectTransform.SetAsLastSibling();
+            if (_rectTransform != null)
+                _rectTransform.SetAsLastSibling();
 
             //UpdateLocalization(DataManager.Instance.LocalizationIndex);
 
