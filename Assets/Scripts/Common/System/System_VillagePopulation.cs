@@ -21,11 +21,7 @@ namespace ARPG.Systems
         public int Priority => 56;
         public float UpdateInterval => 5.0f;
 
-        // INN_HIRING_DESIGN.md §2.4 — Stage별 체크 주기 (게임시간 시)
-        // 인덱스: 0=Settlement, 1=Hamlet, 2=Village, 3=Town, 4=City
-        private static readonly float[] CHECK_HOURS_BY_STAGE = { 6f, 5f, 4f, 3f, 2f };
-        // INN_HIRING_DESIGN.md §2.4 — Stage별 도착 확률
-        private static readonly float[] ARRIVE_CHANCE_BY_STAGE = { 0.40f, 0.50f, 0.60f, 0.75f, 0.90f };
+        // 이민 체크 주기/도착 확률은 VillageStageTable에서 조회 (INN_HIRING_DESIGN.md §2.4 정본)
 
         // 마을별 마지막 이민 체크 시각 — Stage가 다른 마을이 섞여있어도 각자 주기로 동작
         private readonly System.Collections.Generic.Dictionary<int, float> _lastImmigrationCheckByVillage = new();
@@ -59,8 +55,13 @@ namespace ARPG.Systems
             {
                 if (v.EntityId < 0) continue;
 
-                int stageIdx = Mathf.Clamp((int)v.Stage, 0, CHECK_HOURS_BY_STAGE.Length - 1);
-                float checkInterval = CHECK_HOURS_BY_STAGE[stageIdx];
+                Tables.VillageStageTable? stageTable = AR.s.Data.GetVillageStage(v.Stage);
+                if (stageTable == null)
+                {
+                    Debug.LogError($"[VillagePopulation] VillageStageTable not loaded — stage={v.Stage}");
+                    continue;
+                }
+                float checkInterval = stageTable.ImmigrationCheckHours;
 
                 if (_lastImmigrationCheckByVillage.TryGetValue(v.VillageId, out float last) == false)
                 {
@@ -89,8 +90,7 @@ namespace ARPG.Systems
                 if (s.FoodAmount < v.Population * FOOD_PER_NPC) continue;
 
                 // ⑤ 도착 확률
-                float chance = ARRIVE_CHANCE_BY_STAGE[stageIdx];
-                if (Random.value > chance) continue;
+                if (Random.value > stageTable.ImmigrationArriveChance) continue;
 
                 SpawnVisitor(v);
             }

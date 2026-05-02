@@ -1130,6 +1130,30 @@ namespace ARPG
             }
 #endif
 
+            // V 키 입력 시 마을 UI 토글 (마을 안에 있을 때만 열림)
+            if (UnityEngine.Input.GetKeyDown(KeyCode.V) == true)
+            {
+                if (IsShow("UI/UIVillage") == true)
+                {
+                    Close("UI/UIVillage");
+                    return false;
+                }
+
+                int playerEntityId = AR.s.Data != null ? AR.s.Data.CurrentPlayerEntityId : -1;
+                if (playerEntityId >= 0
+                    && AR.s.Component.TryGetComponent<Component.TransformComponent>(playerEntityId, out var playerTr))
+                {
+                    int tileX = Mathf.FloorToInt(playerTr.Position.x);
+                    int tileY = Mathf.FloorToInt(playerTr.Position.y);
+                    if (AR.s.Village.FindVillageContaining(tileX, tileY) >= 0)
+                    {
+                        Show<ARPG.UI.UIVillage>("UI/UIVillage", Layer.Top);
+                        return false;
+                    }
+                }
+                // 마을 밖이면 무시
+            }
+
             // 아무 UI가 활성화되어 있지 않은 상태에서 Menu(ESC) 입력이 들어오면 메인 메뉴를 연다.
             if(_input.Player.Menu.WasReleasedThisFrame() == true)
             {

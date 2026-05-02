@@ -61,23 +61,40 @@ namespace ARPG.Village
             Debug.Log($"[VillageSnapshot] v{v.VillageId} Stage={v.Stage} Pop={v.Population}/{targetPop} {food} {wood} {stone} Hunger={s.HungerHoursAccumulated}h StoneTimer={s.StoneTimer}/5 {bounds}{wall}{threat} {services} {jobs} Build={build} Placed=[{placed}] {tier}");
         }
 
-        // Phase D: TableId 하드코딩 제거 — 모든 카운트는 CountByService 사용
+        // 모든 임계값은 VillageStageTable에서 조회 — System_VillageTierProgression.CanPromoteTo와 동일 정본
         private static string FormatTierCheck(VillageData v, VillageStorageComponent s, float now)
         {
+            if (v.Stage >= VillageStage.City) return "";
+            VillageStage next = v.Stage + 1;
+            Tables.VillageStageTable? t = AR.s.Data.GetVillageStage(next);
+            if (t == null || t.PromoMinPopulation < 0) return "";
+
             int housingCount = AR.s.Village.CountByService(v.VillageId, ProvidedService.Housing);
-            int civicCount = AR.s.Village.CountByService(v.VillageId, ProvidedService.Civic);
-            int shopCount = AR.s.Village.CountByService(v.VillageId, ProvidedService.Shop);
-            bool forgeStandard = AR.s.Village.HasObjectSet(v.VillageId, ObjectSetType.ForgeStandard);
-            bool hasInn = AR.s.Village.HasObjectSet(v.VillageId, ObjectSetType.Inn);
             float ageHours = now - v.RegisteredAt;
 
-            return v.Stage switch
+            string parts = $"Pop{Mark(v.Population >= t.PromoMinPopulation, $"{v.Population}/{t.PromoMinPopulation}")}"
+                         + $" Housing{Mark(housingCount >= t.PromoMinHousing, $"{housingCount}/{t.PromoMinHousing}")}"
+                         + $" Food{Mark(s.FoodAmount >= t.PromoMinFood, $"{s.FoodAmount}/{t.PromoMinFood}")}"
+                         + $" Age{Mark(ageHours >= t.PromoMinAgeHours, $"{ageHours:F0}/{t.PromoMinAgeHours:F0}h")}";
+
+            if (t.PromoRequiredSet >= 0)
             {
-                VillageStage.Settlement => $"TierCheck(→Hamlet): Pop{Mark(v.Population >= 3, $"{v.Population}/3")} Housing{Mark(housingCount >= 2, $"{housingCount}/2")} Food{Mark(s.FoodAmount >= 30, $"{s.FoodAmount}/30")} Age{Mark(ageHours >= 24f, $"{ageHours:F0}/24h")} Inn{Mark(hasInn, "")}",
-                VillageStage.Hamlet => $"TierCheck(→Village): Pop{Mark(v.Population >= 8, $"{v.Population}/8")} Housing{Mark(housingCount >= 4, $"{housingCount}/4")} Food{Mark(s.FoodAmount >= 80, $"{s.FoodAmount}/80")} Age{Mark(ageHours >= 72f, $"{ageHours:F0}/72h")} TownPost{Mark(civicCount >= 1, "")}",
-                VillageStage.Village => $"TierCheck(→Town): Pop{Mark(v.Population >= 15, $"{v.Population}/15")} Housing{Mark(housingCount >= 8, $"{housingCount}/8")} Food{Mark(s.FoodAmount >= 200, $"{s.FoodAmount}/200")} Age{Mark(ageHours >= 168f, $"{ageHours:F0}/168h")} Forge{Mark(forgeStandard, "")} Stall{Mark(shopCount >= 1, "")}",
-                _ => "",
-            };
+                var setType = (ObjectSetType)t.PromoRequiredSet;
+                bool ok = AR.s.Village.HasObjectSet(v.VillageId, setType);
+                parts += $" {setType}{Mark(ok, "")}";
+            }
+            if (t.PromoRequiredCivic > 0)
+            {
+                int civic = AR.s.Village.CountByService(v.VillageId, ProvidedService.Civic);
+                parts += $" Civic{Mark(civic >= t.PromoRequiredCivic, $"{civic}/{t.PromoRequiredCivic}")}";
+            }
+            if (t.PromoRequiredShop > 0)
+            {
+                int shop = AR.s.Village.CountByService(v.VillageId, ProvidedService.Shop);
+                parts += $" Shop{Mark(shop >= t.PromoRequiredShop, $"{shop}/{t.PromoRequiredShop}")}";
+            }
+
+            return $"TierCheck(→{next}): {parts}";
         }
 
         private static string Mark(bool ok, string detail)
@@ -124,7 +141,9 @@ namespace ARPG.Village
             if (v.EntityId < 0)
                 return "대기";
 
-            if (AR.s.Component.TryGetComponent<ObjectPlacementTaskComponent>(v.EntityId, out var task) == false)
+            // Step A: task가 별도 entity에 부착되므로 풀에서 마을 ID 매칭으로 조회
+            ObjectPlacementTaskComponent? activeTask = FindActiveTaskForVillage(v.VillageId);
+            if (activeTask.HasValue == false)
             {
                 // 태스크 없음 → 점수 1위 후보 표시 (BUILD_PRIORITY_DESIGN.md §2)
                 int nextId = VillageNeedsEvaluator.GetTopCandidate(v);
@@ -136,16 +155,33 @@ namespace ARPG.Village
                 return $"대기({nextName})";
             }
 
-            float elapsed = now - task.StartedAt;
+            ObjectPlacementTaskComponent task = activeTask.Value;
             float total = task.BuildDurationHours;
-            float remain = Mathf.Max(0f, total - elapsed);
+            float remain = Mathf.Max(0f, total - task.AccumulatedHours);
             int pct = total > 0f
-                ? Mathf.Clamp(Mathf.FloorToInt(elapsed / total * 100f), 0, 100)
+                ? Mathf.Clamp(Mathf.FloorToInt(task.AccumulatedHours / total * 100f), 0, 100)
                 : 0;
 
             Tables.BuildableItemTable? curTable = AR.s.Data.GetBuildableItem(task.TargetTableId);
             string curName = curTable != null ? curTable.Name : $"Id{task.TargetTableId}";
-            return $"{curName} {pct}%(남은 {remain:F1}h, tile={task.TileX},{task.TileY})";
+            string npcNote = task.AssignedNpcEntityId >= 0
+                ? $", npc{task.AssignedNpcEntityId}"
+                : ", 미배정";
+            return $"{curName} {pct}%(누적 {task.AccumulatedHours:F1}/{total:F1}h, 남은 {remain:F1}h, tile={task.TileX},{task.TileY}{npcNote})";
+        }
+
+        /// <summary>
+        /// Step A: task entity 풀에서 villageId가 일치하는 첫 task 반환. 마을당 1개 보장.
+        /// </summary>
+        private static ObjectPlacementTaskComponent? FindActiveTaskForVillage(int villageId)
+        {
+            SparseSet<ObjectPlacementTaskComponent> pool = AR.s.Component.GetComponentPool<ObjectPlacementTaskComponent>();
+            for (int i = 0; i < pool.Count; i++)
+            {
+                ObjectPlacementTaskComponent t = pool.GetByIndex(i);
+                if (t.VillageId == villageId) return t;
+            }
+            return null;
         }
 
         private static string FormatPlaced(VillageData v)

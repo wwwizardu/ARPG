@@ -60,6 +60,15 @@ namespace ARPG.Building
         }
 
         /// <summary>
+        /// EntityId에 매핑된 BuildingSaveData 반환. 없으면 null.
+        /// 외부 시스템이 청크 비활성/세이브에 반영될 데이터를 동기화할 때 사용.
+        /// </summary>
+        public BuildingSaveData? GetSaveData(int entityId)
+        {
+            return _buildingSaveDict.TryGetValue(entityId, out BuildingSaveData? saveData) ? saveData : null;
+        }
+
+        /// <summary>
         /// 타일 위치가 이미 다른 Entity 건물로 점유되어 있는지 확인.
         /// VillageTileFinder 등이 빈 칸을 찾을 때 호출.
         /// </summary>
@@ -71,8 +80,9 @@ namespace ARPG.Building
         /// <summary>
         /// 새 건물을 배치한다. SaveData 등록 + 점유 칸 기록 + 청크 매핑 추가 + 활성 청크면 즉시 스폰.
         /// MapManager.PlaceObject에서 SpawnType=Entity 분기로 호출됨.
+        /// isUnderConstruction=true면 건설 중 상태(진행도 0, 건설중 스프라이트)로 시작.
         /// </summary>
-        public int PlaceBuilding(int worldTileX, int worldTileY, int tableId, int villageId = -1)
+        public int PlaceBuilding(int worldTileX, int worldTileY, int tableId, int villageId = -1, bool isUnderConstruction = false)
         {
             Tables.BuildableItemTable? table = AR.s.Data.GetBuildableItem(tableId);
             if (table == null)
@@ -86,7 +96,8 @@ namespace ARPG.Building
             {
                 EntityId = entityId,
                 VillageId = villageId,
-                CurrentHp = table.HP
+                CurrentHp = isUnderConstruction ? 0 : table.HP,
+                IsUnderConstruction = isUnderConstruction,
             };
 
             _buildingSaveDict[entityId] = saveData;
@@ -127,7 +138,9 @@ namespace ARPG.Building
                 if (saveData.IsActive || saveData.IsSpawning)
                     continue;
 
-                if (saveData.CurrentHp <= 0)
+                // 건설중일 땐 CurrentHp=0이 정상(진행도 0%)이므로 IsUnderConstruction 우선 검사.
+                // 완성 빌딩은 HP<=0이면 파괴됐으므로 복원 안 함.
+                if (saveData.CurrentHp <= 0 && saveData.IsUnderConstruction == false)
                     continue;
 
                 SpawnBuilding(entityId, saveData).Forget();
@@ -191,13 +204,16 @@ namespace ARPG.Building
 
             try
             {
+                // 건설중일 땐 CurrentHp가 진행도라 0이어도 정상이므로 그대로 전달.
+                int hpToRestore = saveData.IsUnderConstruction ? saveData.CurrentHp : (saveData.CurrentHp > 0 ? saveData.CurrentHp : -1);
                 var (createdId, entity) = await BuildingFactory.CreateBuilding(
                     saveData.TableId,
                     saveData.WorldTileX,
                     saveData.WorldTileY,
                     saveData.VillageId,
                     entityId,
-                    saveData.CurrentHp > 0 ? saveData.CurrentHp : -1);
+                    hpToRestore,
+                    saveData.IsUnderConstruction);
 
                 if (createdId < 0 || entity == null)
                     return;
@@ -230,6 +246,7 @@ namespace ARPG.Building
             {
                 saveData.CurrentHp = buildingComp.CurrentHp;
                 saveData.VillageId = buildingComp.VillageId;
+                saveData.IsUnderConstruction = buildingComp.IsUnderConstruction;
             }
 
             if (AR.s.Message.TryGetEntity(entityId, out var entity))
@@ -255,6 +272,7 @@ namespace ARPG.Building
                 {
                     saveData.CurrentHp = buildingComp.CurrentHp;
                     saveData.VillageId = buildingComp.VillageId;
+                    saveData.IsUnderConstruction = buildingComp.IsUnderConstruction;
                 }
             }
         }
@@ -280,11 +298,18 @@ namespace ARPG.Building
             {
                 BuildingSaveData saveData = kvp.Value;
 
-                // 파괴된 건물 (HP<=0)은 무시
-                if (saveData.CurrentHp <= 0)
+                // 파괴된 건물 (HP<=0)은 무시. 단 건설중(HP=0이 정상)은 복원해야 함.
+                if (saveData.CurrentHp <= 0 && saveData.IsUnderConstruction == false)
                     continue;
 
-                int entityId = EntityIdHelper.CreateEntity();
+                // 저장된 EntityId 그대로 재사용 — 세션 간 빌딩 동일성 보장.
+                // task.BuildingEntityId 등 다른 시스템 참조가 stale 안 되도록.
+                int entityId = kvp.Key > 0 ? kvp.Key
+                              : (saveData.EntityId > 0 ? saveData.EntityId : EntityIdHelper.CreateEntity());
+
+                if (kvp.Key > 0 || saveData.EntityId > 0)
+                    EntityIdHelper.RegisterExistingEntity(entityId);
+
                 saveData.IsActive = false;
                 saveData.EntityId = entityId;
 

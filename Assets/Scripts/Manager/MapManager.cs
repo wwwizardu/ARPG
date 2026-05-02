@@ -214,6 +214,22 @@ namespace ARPG.Map
             return false;
         }
 
+        /// <summary>
+        /// 타일 좌표 기준 통행 차단 여부. Blocked 비트 + 건물 footprint 동시 검사.
+        /// 충돌 시스템(System_Render) 위치 적분 단계에서 호출.
+        /// </summary>
+        public bool IsTileBlocked(int worldTileX, int worldTileY)
+        {
+            ulong tile = GetTileAt(worldTileX, worldTileY);
+            if ((tile & (ulong)GlobalEnum.TileFlag.Blocked) != 0)
+                return true;
+
+            if (AR.s.Building != null && AR.s.Building.IsTileOccupied(worldTileX, worldTileY) == true)
+                return true;
+
+            return false;
+        }
+
         public bool IsWalkable(Vector3 worldPosition)
         {
             Vector3Int cellPos = _tileMap.WorldToCell(worldPosition);
@@ -250,8 +266,22 @@ namespace ARPG.Map
         /// 월드 좌표에 오브젝트를 배치한다.
         /// SpawnType=Entity인 건물은 타일 비트를 건드리지 않고 BuildingManager에 전적으로 위임한다.
         /// </summary>
-        public bool PlaceObject(int worldX, int worldY, int objectId)
+        public bool PlaceObject(int worldX, int worldY, int objectId, bool isUnderConstruction = false)
         {
+            return PlaceObjectInternal(worldX, worldY, objectId, isUnderConstruction, out _);
+        }
+
+        /// <summary>
+        /// PlaceObject의 out 변형. SpawnType=Entity면 생성된 빌딩 EntityId를 반환 (Tile 경로는 -1).
+        /// </summary>
+        public bool PlaceObject(int worldX, int worldY, int objectId, bool isUnderConstruction, out int buildingEntityId)
+        {
+            return PlaceObjectInternal(worldX, worldY, objectId, isUnderConstruction, out buildingEntityId);
+        }
+
+        private bool PlaceObjectInternal(int worldX, int worldY, int objectId, bool isUnderConstruction, out int buildingEntityId)
+        {
+            buildingEntityId = -1;
             if (objectId <= 0)
                 return false;
 
@@ -266,7 +296,8 @@ namespace ARPG.Map
                     return false;
                 }
                 int villageId = AR.s.Village != null ? AR.s.Village.FindVillageContaining(worldX, worldY) : -1;
-                int entityId = AR.s.Building.PlaceBuilding(worldX, worldY, objectId, villageId);
+                int entityId = AR.s.Building.PlaceBuilding(worldX, worldY, objectId, villageId, isUnderConstruction);
+                buildingEntityId = entityId;
                 return entityId >= 0;
             }
 

@@ -24,19 +24,20 @@ namespace ARPG.AI
             var rangedAttack = new RangedAttackStateHandler();
             var retreat = new RetreatStateHandler();
             var flee = new FleeStateHandler();
+            var build = new BuildStateHandler();
 
-            // AIState enum 순서: Idle=0, Patrol=1, Chase=2, Attack=3, Retreat=4, Flee=5, Return=6
+            // AIState enum 순서: Idle=0, Patrol=1, Chase=2, Attack=3, Retreat=4, Flee=5, Return=6, Build=7
             _profiles[AIBehaviorType.Melee] = new IAIStateHandler[]
-                { idle, null, chase, meleeAttack, retreat, null, null };
+                { idle, null, chase, meleeAttack, retreat, null, null, null };
 
             _profiles[AIBehaviorType.Ranged] = new IAIStateHandler[]
-                { idle, null, chase, rangedAttack, retreat, null, null };
+                { idle, null, chase, rangedAttack, retreat, null, null, null };
 
             _profiles[AIBehaviorType.Patrol] = new IAIStateHandler[]
-                { idle, patrol, chase, meleeAttack, retreat, flee, null };
+                { idle, patrol, chase, meleeAttack, retreat, flee, null, build };
 
             _profiles[AIBehaviorType.PatrolRanged] = new IAIStateHandler[]
-                { idle, patrol, chase, rangedAttack, retreat, flee, null };
+                { idle, patrol, chase, rangedAttack, retreat, flee, null, build };
         }
 
         /// <summary>

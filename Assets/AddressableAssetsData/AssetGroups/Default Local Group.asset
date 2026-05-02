@@ -70,6 +70,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3866fb743eb1646478333e2966c3e710
+    m_Address: Sprites/Tiles/UnderConstruction
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3c98d39872317ac4ca4135d49a452b24
     m_Address: Prefabs/UICanvas
     m_ReadOnly: 0
@@ -152,6 +157,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8915c31f92be31b428d8b7b217666895
     m_Address: Sprites/Items/Bed
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8e2b6f4a9c1d4e3a8b6c2d1e7f5a9bd3
+    m_Address: UI/UIVillage
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

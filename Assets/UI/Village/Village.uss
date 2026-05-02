@@ -1,0 +1,232 @@
+/* Village UI 스타일 — 화면 중앙 모달 (큰 사이즈) */
+
+.village-root {
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+}
+
+.village-overlay {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+}
+
+.village-panel {
+    width: 1100px;
+    max-height: 80%;
+    padding: 24px;
+    border-radius: 12px;
+    background-color: rgba(28, 28, 32, 0.96);
+    border-width: 1px;
+    border-color: rgba(180, 140, 80, 0.4);
+}
+
+/* ========== 헤더 ========== */
+
+.village-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 6px;
+}
+
+.village-title-block {
+    flex-direction: column;
+}
+
+.village-title {
+    color: rgb(220, 180, 100);
+}
+
+.village-subtitle {
+    color: rgb(160, 160, 160);
+    -unity-font-style: italic;
+    margin-top: 2px;
+}
+
+.village-close-icon {
+    --appui-iconbutton-size: 32px;
+}
+
+/* ========== 본문 ========== */
+
+.village-body {
+    flex-direction: row;
+    padding-top: 12px;
+}
+
+.village-col-left {
+    flex-direction: column;
+    flex-basis: 0;
+    flex-grow: 1.2;
+    margin-right: 16px;
+}
+
+.village-col-right {
+    flex-direction: column;
+    flex-basis: 0;
+    flex-grow: 1;
+}
+
+.village-section-title {
+    color: rgb(220, 180, 100);
+    -unity-font-style: bold;
+    margin-top: 8px;
+    margin-bottom: 6px;
+}
+
+/* ========== 상태 그리드 ========== */
+
+.village-stat-grid {
+    flex-direction: column;
+    margin-bottom: 4px;
+}
+
+.village-stat-row {
+    flex-direction: row;
+    justify-content: space-between;
+    padding-top: 3px;
+    padding-bottom: 3px;
+}
+
+.village-stat-label {
+    color: rgb(180, 180, 180);
+}
+
+.village-stat-value {
+    color: rgb(230, 220, 200);
+    -unity-font-style: bold;
+}
+
+/* ========== 리소스 ========== */
+
+.village-resource-list {
+    flex-direction: column;
+    margin-bottom: 4px;
+}
+
+.village-resource-row {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 3px;
+    padding-bottom: 3px;
+}
+
+.village-resource-name {
+    color: rgb(200, 200, 210);
+}
+
+.village-resource-amount {
+    color: rgb(255, 215, 100);
+    -unity-font-style: bold;
+}
+
+/* ========== 다음 건설 카드 ========== */
+
+.village-next-build-card {
+    flex-direction: column;
+    padding: 12px;
+    margin-bottom: 6px;
+    border-radius: 8px;
+    background-color: rgba(50, 45, 30, 0.85);
+    border-width: 1px;
+    border-color: rgba(180, 140, 80, 0.45);
+}
+
+.village-next-build-name {
+    color: rgb(255, 215, 100);
+    -unity-font-style: bold;
+    margin-bottom: 4px;
+}
+
+.village-next-build-detail {
+    color: rgb(180, 180, 200);
+    white-space: normal;
+}
+
+/* ========== 진행 중 빌드 ========== */
+
+.village-active-build-list {
+    flex-direction: column;
+}
+
+.village-active-build-row {
+    flex-direction: column;
+    padding: 8px 12px;
+    margin-bottom: 4px;
+    border-radius: 6px;
+    background-color: rgba(40, 40, 48, 0.85);
+    border-width: 1px;
+    border-color: rgba(120, 100, 70, 0.3);
+}
+
+.village-active-build-name {
+    color: rgb(230, 220, 200);
+}
+
+.village-active-build-progress {
+    color: rgb(180, 200, 220);
+    -unity-font-style: italic;
+}
+
+.village-empty-text {
+    color: rgb(120, 120, 120);
+    -unity-font-style: italic;
+    padding: 8px 12px;
+}
+
+/* ========== NPC 리스트 ========== */
+
+.village-npc-scroll {
+    flex-grow: 1;
+    min-height: 360px;
+    max-height: 540px;
+}
+
+.village-npc-list {
+    flex-direction: column;
+}
+
+.village-npc-card {
+    flex-direction: row;
+    align-items: center;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    border-radius: 8px;
+    background-color: rgba(40, 40, 48, 0.85);
+    border-width: 1px;
+    border-color: rgba(120, 100, 70, 0.35);
+}
+
+.village-npc-portrait {
+    width: 40px;
+    height: 40px;
+    margin-right: 10px;
+    border-radius: 4px;
+    background-color: rgba(60, 60, 70, 0.6);
+    border-width: 1px;
+    border-color: rgba(150, 130, 80, 0.4);
+}
+
+.village-npc-info {
+    flex-direction: column;
+    flex-grow: 1;
+}
+
+.village-npc-name {
+    color: rgb(230, 220, 200);
+    -unity-font-style: bold;
+}
+
+.village-npc-meta {
+    color: rgb(180, 180, 200);
+}
+
+.village-npc-status-visitor {
+    color: rgb(255, 180, 70);
+    -unity-font-style: italic;
+}

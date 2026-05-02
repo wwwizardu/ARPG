@@ -7,9 +7,10 @@ namespace ARPG.Component
     public struct BuildingComponent
     {
         public int TableId;
-        public int VillageId;       // -1 = 마을 소속 아님
+        public int VillageId;             // -1 = 마을 소속 아님
         public int WorldTileX;
         public int WorldTileY;
-        public int CurrentHp;       // 0 이하 = 파괴
+        public int CurrentHp;             // 0 이하 = 파괴
+        public bool IsUnderConstruction;  // true = 건설 중. CurrentHp는 진행도 역할 (0→MaxHp). 데미지로 깎이면 진행 후퇴.
     }
 }

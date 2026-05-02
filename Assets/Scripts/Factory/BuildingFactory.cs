@@ -19,6 +19,12 @@ namespace ARPG.Factory
         // EntityFactory와 동일한 범용 프리팹 사용 (SpriteRenderer 1개 구성).
         // 애니메이션은 런타임에 _sr.sprite를 SpriteAnimationData가 직접 교체하므로 SpriteLibrary/Resolver 컴포넌트는 필요 없음.
         private const string BUILDING_PREFAB_KEY = "Prefabs/Entity";
+        private const string UI_CANVAS_PREFAB_KEY = "Prefabs/UICanvas";
+
+        // 건설 중 공통 placeholder 스프라이트 (모든 빌딩이 건설 중에 공통 사용).
+        // ComfyUI로 생성 후 ImportGeneratedSprites가 "Sprites/Tiles/UnderConstruction" 키로 등록.
+        // 추후 BuildableItemTable.ConstructionSpriteResourceName 컬럼이 추가되면 우선 적용 예정.
+        private const string CONSTRUCTION_SPRITE_KEY = "Sprites/Tiles/UnderConstruction";
 
         /// <summary>
         /// 경량 건물 엔티티 생성.
@@ -28,11 +34,13 @@ namespace ARPG.Factory
         /// <param name="worldTileY">월드 타일 좌표 Y</param>
         /// <param name="villageId">소속 마을 Id. 없으면 -1</param>
         /// <param name="savedEntityId">저장된 EntityId 재사용 시 >=0</param>
-        /// <param name="savedHp">저장된 HP. 없으면 -1 (테이블 HP 사용)</param>
+        /// <param name="savedHp">저장된 HP. 없으면 -1 (테이블 HP 사용). 건설중이면 0~table.HP 진행도.</param>
+        /// <param name="isUnderConstruction">true면 건설중 스프라이트 + HP바(진행도)로 표시</param>
         /// <returns>(entityId, entity) 튜플. 실패 시 (-1, null)</returns>
         public static async UniTask<(int entityId, EntityBase? entity)> CreateBuilding(
             int tableId, int worldTileX, int worldTileY,
-            int villageId, int savedEntityId = -1, int savedHp = -1)
+            int villageId, int savedEntityId = -1, int savedHp = -1,
+            bool isUnderConstruction = false)
         {
             BuildableItemTable? table = AR.s.Data.GetBuildableItem(tableId);
             if (table == null)
@@ -68,13 +76,18 @@ namespace ARPG.Factory
 
             // 태그 + 메타데이터 컴포넌트
             AR.s.Component.AddComponent(entityId, new BuildingTag());
+            // 건설중일 땐 CurrentHp가 진행도 역할 (0 → table.HP). 저장 HP가 없으면 0부터 시작.
+            int initialHp = isUnderConstruction
+                ? (savedHp >= 0 ? savedHp : 0)
+                : (savedHp >= 0 ? savedHp : table.HP);
             AR.s.Component.AddComponent(entityId, new BuildingComponent
             {
                 TableId = tableId,
                 VillageId = villageId,
                 WorldTileX = worldTileX,
                 WorldTileY = worldTileY,
-                CurrentHp = savedHp >= 0 ? savedHp : table.HP
+                CurrentHp = initialHp,
+                IsUnderConstruction = isUnderConstruction,
             });
 
             // System_Render 등록
@@ -85,7 +98,13 @@ namespace ARPG.Factory
             }
 
             // 스프라이트 경로 분기
-            if (table.AnimationId == 0)
+            //  - 건설중: 공통 placeholder 스프라이트 사용 (애니메이션 무시)
+            //  - 완성: 테이블의 ResourceName 또는 AnimationId
+            if (isUnderConstruction)
+            {
+                await LoadStaticSprite(entity, CONSTRUCTION_SPRITE_KEY);
+            }
+            else if (table.AnimationId == 0)
             {
                 await LoadStaticSprite(entity, table.ResourceName);
             }
@@ -94,11 +113,60 @@ namespace ARPG.Factory
                 SetupAnimatedSprite(entityId, entity, table.AnimationId);
             }
 
-            // 자식 프리팹의 IEntityMessageHandler 자동 등록 (미래 확장용)
+            // HP바 부착 (완성 빌딩도 데미지 받으면 표시되도록 항상 부착).
+            // table.HP <= 0 인 빌딩은 HP 개념이 없으므로 스킵.
+            // await 필수 — 다음의 AutoRegisterChildHandlers가 HpBarView를 등록할 때 GameObject가 살아있어야 함.
+            if (table.HP > 0)
+            {
+                await AttachStatAndHpBar(entityId, entity, initialHp, table.HP);
+            }
+
+            // 자식 프리팹의 IEntityMessageHandler 자동 등록 (HpBarView도 여기서 등록됨)
             entity.AutoRegisterChildHandlers();
 
-            Debug.Log($"[BuildingFactory] Building created - EntityId: {entityId}, TableId: {tableId}, Name: {table.Name}, Pos: ({worldTileX},{worldTileY})");
+            // 초기 HP바 갱신 — DamageMessage로 fillAmount 즉시 동기화
+            if (table.HP > 0)
+            {
+                AR.s.Message.SendToEntity(new ARPG.Message.DamageMessage
+                {
+                    TargetEntityId = entityId,
+                    DamageAmount = 0,
+                    AttackerEntityId = -1,
+                    DamageType = GlobalEnum.DamageType.Physics,
+                    CurrentHp = initialHp,
+                    MaxHp = table.HP,
+                });
+            }
+
+            string mode = isUnderConstruction ? "건설중" : "완성";
+            Debug.Log($"[BuildingFactory] Building created [{mode}] - EntityId: {entityId}, TableId: {tableId}, Name: {table.Name}, Pos: ({worldTileX},{worldTileY}), HP: {initialHp}/{table.HP}");
             return (entityId, entity);
+        }
+
+        /// <summary>
+        /// 빌딩에 StatComponent + HP바 프리팹 부착.
+        /// 진행도/HP를 단일 표현으로 통합 — fillAmount = CurrentHp / MaxHp.
+        /// </summary>
+        private static async UniTask AttachStatAndHpBar(int entityId, EntityBase entity, int currentHp, int maxHp)
+        {
+            // StatComponent — MaxHp만 의미있게 사용. 다른 스탯은 0으로 두어도 무방 (전투 시스템이 빌딩을 별도 분기 처리하지 않으면 데미지 계산 시 적용됨).
+            StatComponent stat = new();
+            stat.BaseMaxHp = maxHp;
+            stat.FinalMaxHp = maxHp;
+            stat.SetCurrentHpDirect(currentHp);
+            AR.s.Component.AddComponent(entityId, stat);
+
+            // HP바 프리팹 로드 → _visual 아래 자식으로 추가 (NPC/몬스터와 동일 패턴)
+            try
+            {
+                GameObject hpBarObj = await Addressables.InstantiateAsync(UI_CANVAS_PREFAB_KEY, entity.Visual.transform).ToUniTask();
+                if (hpBarObj != null)
+                    hpBarObj.transform.localPosition = Vector3.zero;
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"[BuildingFactory] Failed to load HP bar prefab: {e.Message}");
+            }
         }
 
         /// <summary>

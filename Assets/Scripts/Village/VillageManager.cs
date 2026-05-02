@@ -386,19 +386,23 @@ namespace ARPG.Village
         }
 
         /// <summary>
-        /// Phase C: Stage별 마을 경계 반경. 승격 시 Bounds 확장에 사용.
+        /// Stage별 마을 경계 반경. VillageStageTable에서 조회.
+        /// 테이블 미로딩 시 명시적 에러 + 0 반환 (의도된 실패).
         /// </summary>
         public static int GetBoundsRadius(VillageStage stage)
         {
-            return stage switch
+            if (AR.s.Data == null)
             {
-                VillageStage.Settlement => 6,
-                VillageStage.Hamlet     => 10,
-                VillageStage.Village    => 14,
-                VillageStage.Town       => 18,
-                VillageStage.City       => 24,
-                _ => 6,
-            };
+                Debug.LogError($"[VillageManager] DataManager not ready — stage={stage}");
+                return 0;
+            }
+            Tables.VillageStageTable? t = AR.s.Data.GetVillageStage(stage);
+            if (t == null)
+            {
+                Debug.LogError($"[VillageManager] VillageStageTable not loaded — stage={stage}");
+                return 0;
+            }
+            return t.BoundsRadius;
         }
 
         private void SyncStorageComponent(VillageData data)
@@ -501,34 +505,52 @@ namespace ARPG.Village
 
         /// <summary>
         /// 세이브 직전 호출. ECS 컴포넌트 → VillageData 평면 필드 미러링.
-        /// 동기화 대상: ObjectPlacementTaskComponent, VillageComponent, WallPlanRequestTag.
+        /// 동기화 대상: ObjectPlacementTaskComponent (task entity 풀 검색), VillageComponent, WallPlanRequestTag.
+        /// Step C: 마을별 task 목록 → VillageData.ActiveBuildTasks. Legacy CurrentBuild* 필드는 비움.
         /// </summary>
         public void SyncTaskToData()
         {
+            // task entity 풀에서 마을별 task 목록 매핑 (Step B/C: N개 동시 task 지원)
+            var taskPool = AR.s.Component.GetComponentPool<ObjectPlacementTaskComponent>();
+            var tasksByVillage = new Dictionary<int, List<BuildTaskSnapshot>>();
+            for (int i = 0; i < taskPool.Count; i++)
+            {
+                ObjectPlacementTaskComponent t = taskPool.GetByIndex(i);
+                if (tasksByVillage.TryGetValue(t.VillageId, out var list) == false)
+                {
+                    list = new List<BuildTaskSnapshot>();
+                    tasksByVillage[t.VillageId] = list;
+                }
+                list.Add(new BuildTaskSnapshot
+                {
+                    TableId = t.TargetTableId,
+                    StartedAt = t.StartedAt,
+                    AccumulatedHours = t.AccumulatedHours,
+                    TileX = t.TileX,
+                    TileY = t.TileY,
+                    ReservedWood = t.ReservedWoodCost,
+                    ReservedStone = t.ReservedStoneCost,
+                    AssignedNpcEntityId = t.AssignedNpcEntityId,
+                    BuildingEntityId = t.BuildingEntityId,
+                });
+            }
+
             foreach (VillageData v in _villages.Values)
             {
+                // Legacy 단일 필드는 신규 세이브에선 항상 비움 (구 세이브 호환만 위해 필드 유지)
+                v.CurrentBuildTableId = 0;
+                v.CurrentBuildStartedAt = -1f;
+
                 if (v.EntityId < 0)
                 {
-                    v.CurrentBuildTableId = 0;
-                    v.CurrentBuildStartedAt = -1f;
+                    v.ActiveBuildTasks.Clear();
                     continue;
                 }
 
-                // 진행 중 빌드 태스크
-                if (AR.s.Component.TryGetComponent<ObjectPlacementTaskComponent>(v.EntityId, out var task))
-                {
-                    v.CurrentBuildTableId = task.TargetTableId;
-                    v.CurrentBuildStartedAt = task.StartedAt;
-                    v.CurrentBuildTileX = task.TileX;
-                    v.CurrentBuildTileY = task.TileY;
-                    v.CurrentBuildReservedWood = task.ReservedWoodCost;
-                    v.CurrentBuildReservedStone = task.ReservedStoneCost;
-                }
+                if (tasksByVillage.TryGetValue(v.VillageId, out var list))
+                    v.ActiveBuildTasks = list;
                 else
-                {
-                    v.CurrentBuildTableId = 0;
-                    v.CurrentBuildStartedAt = -1f;
-                }
+                    v.ActiveBuildTasks.Clear();
 
                 // Phase C: VillageComponent 미러
                 if (AR.s.Component.TryGetComponent<VillageComponent>(v.EntityId, out var vc))
@@ -549,32 +571,74 @@ namespace ARPG.Village
         }
 
         /// <summary>
-        /// 로드 후 호출. VillageData.CurrentBuild* → ObjectPlacementTaskComponent 재구성.
+        /// 로드 후 호출. VillageData.ActiveBuildTasks → 각 task entity로 재구성.
+        /// 구 세이브 호환: ActiveBuildTasks 비어있고 CurrentBuildTableId>0이면 단일 task로 마이그레이션.
         /// </summary>
         public void RestoreTaskFromData(VillageData v)
         {
-            if (v.EntityId < 0)
-                return;
-            if (v.CurrentBuildTableId <= 0)
-                return;
+            if (v.EntityId < 0) return;
 
-            // BuildableItemTable.BuildHours에서 직접 조회. 누락 시 기본 2h.
-            Tables.BuildableItemTable? buildTable = AR.s.Data.GetBuildableItem(v.CurrentBuildTableId);
-            float buildHours = (buildTable != null && buildTable.BuildHours > 0f) ? buildTable.BuildHours : 2f;
-            ObjectPlacementTaskComponent task = new ObjectPlacementTaskComponent
+            // Legacy 마이그레이션: 구 세이브의 단일 CurrentBuild* 필드 → ActiveBuildTasks
+            if (v.ActiveBuildTasks.Count == 0 && v.CurrentBuildTableId > 0)
             {
-                VillageId = v.VillageId,
-                TargetTableId = v.CurrentBuildTableId,
-                TileX = v.CurrentBuildTileX,
-                TileY = v.CurrentBuildTileY,
-                StartedAt = v.CurrentBuildStartedAt,
-                BuildDurationHours = buildHours,
-                ReservedWoodCost = v.CurrentBuildReservedWood,
-                ReservedStoneCost = v.CurrentBuildReservedStone,
-            };
-            AR.s.Component.AddComponent(v.EntityId, task);
+                v.ActiveBuildTasks.Add(new BuildTaskSnapshot
+                {
+                    TableId = v.CurrentBuildTableId,
+                    StartedAt = v.CurrentBuildStartedAt,
+                    TileX = v.CurrentBuildTileX,
+                    TileY = v.CurrentBuildTileY,
+                    ReservedWood = v.CurrentBuildReservedWood,
+                    ReservedStone = v.CurrentBuildReservedStone,
+                });
+                v.CurrentBuildTableId = 0;
+                v.CurrentBuildStartedAt = -1f;
+                Debug.Log($"[BuildQueue] v{v.VillageId} 구 세이브 단일 태스크 → ActiveBuildTasks로 마이그레이션");
+            }
 
-            Debug.Log($"[BuildQueue] v{v.VillageId} 로드 후 태스크 복원: TableId={task.TargetTableId}, tile=({task.TileX},{task.TileY}), 시작={task.StartedAt:F1}h");
+            for (int i = 0; i < v.ActiveBuildTasks.Count; i++)
+            {
+                BuildTaskSnapshot snap = v.ActiveBuildTasks[i];
+                Tables.BuildableItemTable? buildTable = AR.s.Data.GetBuildableItem(snap.TableId);
+                float buildHours = (buildTable != null && buildTable.BuildHours > 0f) ? buildTable.BuildHours : 2f;
+
+                // EntityIdHelper.RegisterExistingEntity 덕분에 NpcManager.Load / BuildingManager.Load가
+                // 저장 EntityId를 그대로 재사용 → 저장된 AssignedNpcEntityId / BuildingEntityId가 그대로 유효.
+                // → 같은 NPC가 같은 빌딩을 이어서 짓는 상태로 정확히 복원됨.
+                int taskEntityId = ARPG.Utility.EntityIdHelper.CreateEntity();
+                ObjectPlacementTaskComponent task = new ObjectPlacementTaskComponent
+                {
+                    VillageId = v.VillageId,
+                    TargetTableId = snap.TableId,
+                    TileX = snap.TileX,
+                    TileY = snap.TileY,
+                    StartedAt = snap.StartedAt,
+                    AccumulatedHours = snap.AccumulatedHours,
+                    BuildDurationHours = buildHours,
+                    ReservedWoodCost = snap.ReservedWood,
+                    ReservedStoneCost = snap.ReservedStone,
+                    AssignedNpcEntityId = snap.AssignedNpcEntityId,
+                    BuildingEntityId = snap.BuildingEntityId,
+                };
+                AR.s.Component.AddComponent(taskEntityId, task);
+
+                // 배정됐던 NPC가 있으면 NpcBuildAssignmentComponent를 재부착해서
+                // 다음 AI 틱에 즉시 BuildState로 진입하도록.
+                // (NPC 자체는 NpcManager.SpawnNpc에서 청크 활성 시 만들어짐 — 그때 ReattachBuildAssignmentIfAny가
+                //  컴포넌트 재부착을 처리하므로 여기서는 안 해도 되지만, 활성 NPC가 있을 경우를 대비해 즉시 부착)
+                if (snap.AssignedNpcEntityId >= 0
+                    && AR.s.Component.HasComponent<TransformComponent>(snap.AssignedNpcEntityId))
+                {
+                    Vector2 sitePos = new Vector2(snap.TileX + 0.5f, snap.TileY + 0.5f);
+                    AR.s.Component.AddComponent(snap.AssignedNpcEntityId, new NpcBuildAssignmentComponent
+                    {
+                        TaskEntityId = taskEntityId,
+                        VillageId = v.VillageId,
+                        BuildSitePosition = sitePos,
+                    });
+                }
+
+                Debug.Log($"[BuildQueue] v{v.VillageId} 로드 후 태스크 복원 #{i+1}/{v.ActiveBuildTasks.Count}: taskEntity={taskEntityId} TableId={task.TargetTableId}, tile=({task.TileX},{task.TileY}), 시작={task.StartedAt:F1}h, 누적={task.AccumulatedHours:F2}h, npc={task.AssignedNpcEntityId}, building={task.BuildingEntityId}");
+            }
         }
 
         // ========== Phase D: 세트 판정 API ==========

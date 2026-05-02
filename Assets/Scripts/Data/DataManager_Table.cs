@@ -33,6 +33,7 @@ namespace ARPG.Data
         private ImmutableDictionary<int, Tables.ModTierTable> _modTierTable = null!;
         private ImmutableDictionary<int, Tables.ItemImplicitTable> _itemImplicitTable = null!;
         private ImmutableDictionary<int, Tables.VillageTable> _villageTable = null!;
+        private ImmutableDictionary<int, Tables.VillageStageTable> _villageStageTable = null!;
         private ImmutableDictionary<int, Tables.JobBonusTable> _jobBonusTable = null!;
         // Phase D: JobType → JobBonusTable 빠른 조회 인덱스 (LoadLate에서 구축)
         private Dictionary<int, Tables.JobBonusTable> _jobBonusByJobType = new();
@@ -61,6 +62,7 @@ namespace ARPG.Data
                 LoadTable<Tables.ModTierTable>("ModTierTable.bytes", tables => _modTierTable = tables),
                 LoadTable<Tables.ItemImplicitTable>("ItemImplicitTable.bytes", tables => _itemImplicitTable = tables),
                 LoadTable<Tables.VillageTable>("VillageTable.bytes", tables => _villageTable = tables),
+                LoadTable<Tables.VillageStageTable>("VillageStageTable.bytes", tables => _villageStageTable = tables),
                 LoadTable<Tables.JobBonusTable>("JobBonusTable.bytes", tables => _jobBonusTable = tables)
             );
 
@@ -306,6 +308,19 @@ namespace ARPG.Data
         public Tables.VillageTable? GetVillageTable(int id)
         {
             if (_villageTable.TryGetValue(id, out var table))
+            {
+                return table;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// 마을 단계 파라미터 조회. 미로딩/누락 시 null — 호출자는 명시적 에러 처리 필요.
+        /// </summary>
+        public Tables.VillageStageTable? GetVillageStage(VillageStage stage)
+        {
+            if (_villageStageTable != null && _villageStageTable.TryGetValue((int)stage, out var table))
             {
                 return table;
             }

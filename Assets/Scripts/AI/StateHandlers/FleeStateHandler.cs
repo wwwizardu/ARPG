@@ -19,7 +19,7 @@ namespace ARPG.AI.StateHandlers
             // 위협 해소 시 Patrol 복귀
             if (cm.HasComponent<AICanSeeTargetTag>(entityId) == false)
             {
-                AIStateHelper.TransitionToState(entityId, AIState.Patrol);
+                AIStateHelper.TransitionToState(entityId, AIStateHelper.GetDefaultState(entityId));
                 return;
             }
 
@@ -28,7 +28,7 @@ namespace ARPG.AI.StateHandlers
             // 타겟이 없으면 Patrol 복귀
             if (ai.TargetEntityId == -1)
             {
-                AIStateHelper.TransitionToState(entityId, AIState.Patrol);
+                AIStateHelper.TransitionToState(entityId, AIStateHelper.GetDefaultState(entityId));
                 return;
             }
 

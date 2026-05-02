@@ -22,8 +22,11 @@ namespace ARPG.Village
         /// <summary>건물이 차지한 타일의 월드 Y 좌표 (타일 단위). 멀티타일은 좌측 하단 기준.</summary>
         public int WorldTileY;
 
-        /// <summary>현재 HP. 0 이하 = 파괴 상태 (Load 시 제외됨).</summary>
+        /// <summary>현재 HP. 0 이하 = 파괴 상태 (Load 시 제외됨). 건설중일 땐 진행도 역할(0→MaxHp).</summary>
         public int CurrentHp;
+
+        /// <summary>건설 중 여부. true → 진행도 스프라이트로 표시되고 CurrentHp는 진행도. 완료 시 false.</summary>
+        public bool IsUnderConstruction;
 
         /// <summary>ECS EntityId. BuildingManager가 발급·관리하며 청크 언로드/로드 시 재사용.</summary>
         public int EntityId;

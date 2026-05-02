@@ -226,7 +226,7 @@ namespace ARPG.Village
 
                         Tables.BuildableItemTable? t = AR.s.Data.GetBuildableItem(po.TableId);
                         if (t == null) continue;
-                        BuildableCategory neighborCat = (BuildableCategory)t.Category;
+                        BuildableCategory neighborCat = t.Category;
                         if (neighborCat == category)
                             score += SameCategoryBonus(d);
                         else if (neighborCat != BuildableCategory.None)

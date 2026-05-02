@@ -1,4 +1,5 @@
 using ARPG.Component;
+using ARPG.Utility;
 using UnityEngine;
 
 namespace ARPG.Systems
@@ -51,11 +52,19 @@ namespace ARPG.Systems
                 float t = jump.Elapsed / jump.Duration;
                 jump.Height = 4f * jump.MaxHeight * t * (1f - t);
 
-                // 수평 위치 보간
+                // 수평 위치 보간 — 현재 위치에서 lerp까지 직선 경로 검사.
+                // 경로 중 벽이 있으면 그 직전까지만 이동 (벽 가로지른 후 반대편으로 텔레포트 방지).
                 if (cm.TryGetComponent<TransformComponent>(entityId, out var transform) == true)
                 {
                     Vector2 horizontalPos = Vector2.Lerp(jump.StartPosition, jump.EndPosition, t);
-                    transform.Position = horizontalPos;
+
+                    Vector2 reachable;
+                    if (cm.TryGetComponent<ColliderComponent>(entityId, out var collider) == true)
+                        reachable = CollisionUtil.ClipTrajectory(transform.Position, horizontalPos, collider.Radius);
+                    else
+                        reachable = horizontalPos;
+
+                    transform.Position = reachable;
                     cm.SetComponent(entityId, transform);
                 }
 
@@ -71,10 +80,39 @@ namespace ARPG.Systems
             ComponentManager cm = AR.s.Component;
 
             // 최종 위치 확정
+            // - 현재 위치에서 EndPosition까지 직선 경로 검사 (ClipTrajectory)
+            //   → 벽 가로지르지 않고 도달 가능한 곳까지만 (벽 너머 텔레포트 방지)
+            // - 도달한 위치의 발 밑 타일이 Blocked → spiral 탐색으로 탈출
+            // - 발 밑이 비어있으면 그대로 유지 (반경 overlap은 다음 이동 슬라이딩이 처리)
             if (cm.TryGetComponent<TransformComponent>(entityId, out var transform) == true)
             {
-                transform.Position = jump.EndPosition;
-                cm.SetComponent(entityId, transform);
+                if (cm.TryGetComponent<ColliderComponent>(entityId, out var collider) == true)
+                {
+                    Vector2 reachable = CollisionUtil.ClipTrajectory(transform.Position, jump.EndPosition, collider.Radius);
+
+                    int tx = Mathf.FloorToInt(reachable.x);
+                    int ty = Mathf.FloorToInt(reachable.y);
+                    if (AR.s.Map.IsTileBlocked(tx, ty) == true)
+                    {
+                        if (CollisionUtil.TryFindNearestFree(reachable, collider.Radius, out Vector2 fallback) == true)
+                        {
+                            Debug.LogWarning($"[System_Jump] Landing on blocked tile ({tx},{ty}), fallback to {fallback}");
+                            reachable = fallback;
+                        }
+                        else
+                        {
+                            Debug.LogError($"[System_Jump] Landing on blocked tile ({tx},{ty}), no free tile within search radius");
+                        }
+                    }
+
+                    transform.Position = reachable;
+                    cm.SetComponent(entityId, transform);
+                }
+                else
+                {
+                    transform.Position = jump.EndPosition;
+                    cm.SetComponent(entityId, transform);
+                }
             }
 
             // 이동 상태 복귀

@@ -345,15 +345,8 @@ namespace ARPG.UI
             VillageData? village = AR.s.Village.GetVillage(_villageId);
             if (village == null) return 0;
 
-            int baseCost = village.Stage switch
-            {
-                VillageStage.Settlement => 0,
-                VillageStage.Hamlet     => 50,
-                VillageStage.Village    => 150,
-                VillageStage.Town       => 400,
-                VillageStage.City       => 1000,
-                _ => 0,
-            };
+            Tables.VillageStageTable? stageTable = AR.s.Data.GetVillageStage(village.Stage);
+            int baseCost = stageTable != null ? stageTable.HireBaseCost : 0;
 
             GlobalEnum.JobType desiredJob = saveData.JobType;
             if (desiredJob == GlobalEnum.JobType.None)

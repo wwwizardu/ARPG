@@ -1,0 +1,79 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements"
+         xmlns:appui="Unity.AppUI.UI"
+         editor-extension-mode="False">
+    <Style src="project://database/Assets/UI/Village/Village.uss"/>
+    <ui:VisualElement name="root" class="village-root" picking-mode="Position">
+        <ui:VisualElement name="overlay" class="village-overlay" picking-mode="Position"/>
+        <ui:VisualElement name="panel" class="village-panel">
+
+            <!-- 헤더 -->
+            <ui:VisualElement class="village-header">
+                <ui:VisualElement class="village-title-block">
+                    <appui:Heading name="title-text" text="마을" size="L" class="village-title"/>
+                    <appui:Text name="subtitle-text" text="" class="village-subtitle"/>
+                </ui:VisualElement>
+                <appui:IconButton name="close-btn" icon="x" class="village-close-icon"/>
+            </ui:VisualElement>
+
+            <appui:Divider/>
+
+            <!-- 본문: 좌(상태/리소스/다음 건설) | 우(NPC 리스트) -->
+            <ui:VisualElement class="village-body">
+
+                <!-- 좌측 컬럼 -->
+                <ui:VisualElement class="village-col-left">
+
+                    <!-- 마을 상태 -->
+                    <appui:Text text="마을 상태" class="village-section-title"/>
+                    <ui:VisualElement class="village-stat-grid">
+                        <ui:VisualElement class="village-stat-row">
+                            <appui:Text text="단계" class="village-stat-label"/>
+                            <appui:Text name="stage-text" text="-" class="village-stat-value"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="village-stat-row">
+                            <appui:Text text="인구" class="village-stat-label"/>
+                            <appui:Text name="population-text" text="0명" class="village-stat-value"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="village-stat-row">
+                            <appui:Text text="위협도" class="village-stat-label"/>
+                            <appui:Text name="threat-text" text="0" class="village-stat-value"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="village-stat-row">
+                            <appui:Text text="배치 오브젝트" class="village-stat-label"/>
+                            <appui:Text name="placed-text" text="0개" class="village-stat-value"/>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+
+                    <appui:Divider/>
+
+                    <!-- 리소스 -->
+                    <appui:Text text="리소스" class="village-section-title"/>
+                    <ui:VisualElement name="resource-list" class="village-resource-list"/>
+
+                    <appui:Divider/>
+
+                    <!-- 다음 건설 -->
+                    <appui:Text text="다음에 배치될 오브젝트" class="village-section-title"/>
+                    <ui:VisualElement name="next-build-card" class="village-next-build-card">
+                        <appui:Text name="next-build-name" text="-" class="village-next-build-name"/>
+                        <appui:Text name="next-build-detail" text="" class="village-next-build-detail"/>
+                    </ui:VisualElement>
+
+                    <!-- 진행 중 빌드 -->
+                    <appui:Text text="진행 중 건설" class="village-section-title"/>
+                    <ui:VisualElement name="active-build-list" class="village-active-build-list"/>
+
+                </ui:VisualElement>
+
+                <!-- 우측 컬럼: NPC -->
+                <ui:VisualElement class="village-col-right">
+                    <appui:Text text="NPC 목록" class="village-section-title"/>
+                    <ui:ScrollView class="village-npc-scroll">
+                        <ui:VisualElement name="npc-list" class="village-npc-list"/>
+                    </ui:ScrollView>
+                </ui:VisualElement>
+
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

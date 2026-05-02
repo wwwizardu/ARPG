@@ -309,6 +309,12 @@ namespace ARPG.Factory
                 SprintMultiplier = 2f
             });
 
+            // ColliderComponent (정적 충돌용 — 1 unit = 1 tile, 캐릭터는 0.30 반경)
+            AR.s.Component.AddComponent(entityId, new ColliderComponent
+            {
+                Radius = 0.30f
+            });
+
             // HP바 프리팹 로드 → _visual 아래에 자식으로 추가
             try
             {
@@ -409,6 +415,12 @@ namespace ARPG.Factory
                 CurrentState = initialState,
                 SpawnPosition = spawnPos
             });
+
+            // PathfindingComponent — AI 엔티티는 길찾기 사용
+            AR.s.Component.AddComponent(entityId, new PathfindingComponent
+            {
+                Status = PathfindingStatus.None
+            });
         }
 
         /// <summary>
@@ -444,6 +456,12 @@ namespace ARPG.Factory
             {
                 CurrentState = AIState.Patrol,
                 SpawnPosition = new Vector2(position.x, position.y)
+            });
+
+            // PathfindingComponent — AI 엔티티는 길찾기 사용
+            AR.s.Component.AddComponent(entityId, new PathfindingComponent
+            {
+                Status = PathfindingStatus.None
             });
         }
 

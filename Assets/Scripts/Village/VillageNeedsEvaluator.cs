@@ -43,10 +43,12 @@ namespace ARPG.Village
         /// <summary>
         /// 점수 내림차순 정렬된 후보 TableId 리스트 반환. MaxPerVillage 도달 / SpawnType=Tile / 점수 ≤ 0인 후보는 제외.
         /// 호출자가 BuildableItemTable에서 BuildHours/Cost/Category 등 모두 조회.
+        /// Step B: 진행 중 task의 TableId도 existing에 합산해 동시 동일 항목 중복 빌드 방지.
         /// </summary>
         public static List<int> GetRankedCandidates(VillageData v)
         {
             SetMemberTag covered = AggregateSetMembers(v);
+            Dictionary<int, int> inProgress = CountInProgressTasksByTableId(v.VillageId);
 
             List<(int id, float score)> scored = new();
 
@@ -57,7 +59,9 @@ namespace ARPG.Village
                 if (t == null) continue;
                 if (t.SpawnType == GlobalEnum.BuildableSpawnType.Tile) continue;
 
-                int existing = CountByTableId(v, id);
+                int placedCount = CountByTableId(v, id);
+                int inProgressCount = inProgress.TryGetValue(id, out int n) ? n : 0;
+                int existing = placedCount + inProgressCount;
                 if (t.MaxPerVillage > 0 && existing >= t.MaxPerVillage) continue;
 
                 float score = ScoreCandidate(t, v, covered, existing);
@@ -74,6 +78,23 @@ namespace ARPG.Village
                 ranked.Add(scored[i].id);
             }
             return ranked;
+        }
+
+        /// <summary>
+        /// 마을의 진행 중 task를 TableId별 카운트로 반환. 동시 동일 항목 중복 방지에 사용.
+        /// </summary>
+        private static Dictionary<int, int> CountInProgressTasksByTableId(int villageId)
+        {
+            var result = new Dictionary<int, int>();
+            var pool = AR.s.Component.GetComponentPool<ObjectPlacementTaskComponent>();
+            for (int i = 0; i < pool.Count; i++)
+            {
+                ObjectPlacementTaskComponent t = pool.GetByIndex(i);
+                if (t.VillageId != villageId) continue;
+                result.TryGetValue(t.TargetTableId, out int n);
+                result[t.TargetTableId] = n + 1;
+            }
+            return result;
         }
 
         /// <summary>

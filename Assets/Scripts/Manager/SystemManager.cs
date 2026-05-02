@@ -85,6 +85,11 @@ namespace ARPG.Systems
             System_VillageJobAssignment villageJobAssignmentSystem = new();
             RegisterSystems(villageJobAssignmentSystem);
 
+            // Priority 80: Pathfinding System (FixedUpdate) - PathfindingComponent A* + Waypoint 추적
+            // AI Behavior(50) 이후, Move(100) 이전 — Velocity.Direction을 waypoint 방향으로 덮어씀
+            System_Pathfinding pathfindingSystem = new();
+            RegisterSystems(pathfindingSystem);
+
             // Priority 100: Movement System (FixedUpdate) - 이동 로직
             System_Move moveSystem = new();
             RegisterSystems(moveSystem);

@@ -70,6 +70,8 @@ namespace ARPG.Editor
 
             await DownloadTable<VillageTable>("441028134&range=A:F", 1, SaveType.String);
 
+            await DownloadTable<VillageStageTable>("467145019&range=A:Q", 1, SaveType.String);
+
             //await DownloadTable<BuffEffectTable>("2104311648&range=A:K", 1, SaveType.String);
 
             foreach (var tableType in _tableDic.Keys)
@@ -208,6 +210,10 @@ namespace ARPG.Editor
                 {
                     ParseVillageTable(villageTable, values);
                 }
+                else if (table is VillageStageTable villageStageTable)
+                {
+                    ParseVillageStageTable(villageStageTable, values);
+                }
                 else if (table is JobBonusTable jobBonusTable)
                 {
                     ParseJobBonusTable(jobBonusTable, values);
@@ -256,6 +262,36 @@ namespace ARPG.Editor
             table.DefaultNpcList = values[3];
             table.RespawnCooldown = float.Parse(values[4]);
             table.SpawnRadius = float.Parse(values[5]);
+        }
+
+        private static void ParseVillageStageTable(VillageStageTable table, string[] values)
+        {
+            // 전체 범위: A:Q = 17개 컬럼 (Id, Name, Description, BoundsRadius, ImmigrationCheckHours, ImmigrationArriveChance,
+            //                            HireBaseCost, PromoMinPopulation, PromoMinHousing, PromoMinFood, PromoMinAgeHours,
+            //                            PromoRequiredSet, PromoRequiredCivic, PromoRequiredShop,
+            //                            RoadReserveRadius, RoadReserveHalfWidth, PlazaRadius)
+            if (values.Length < 17)
+            {
+                Debug.LogError($"[ParseVillageStageTable] Invalid data length. Expected at least 17, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            table.Name = values[1];
+            // values[2]는 웹에서만 사용한다.
+            table.BoundsRadius = ParseIntSafe(values, 3);
+            table.ImmigrationCheckHours = ParseFloatSafe(values, 4);
+            table.ImmigrationArriveChance = ParseFloatSafe(values, 5);
+            table.HireBaseCost = ParseIntSafe(values, 6);
+            table.PromoMinPopulation = ParseIntSafe(values, 7);
+            table.PromoMinHousing = ParseIntSafe(values, 8);
+            table.PromoMinFood = ParseIntSafe(values, 9);
+            table.PromoMinAgeHours = ParseFloatSafe(values, 10);
+            table.PromoRequiredSet = ParseIntSafe(values, 11);
+            table.PromoRequiredCivic = ParseIntSafe(values, 12);
+            table.PromoRequiredShop = ParseIntSafe(values, 13);
+            table.RoadReserveRadius = ParseIntSafe(values, 14);
+            table.RoadReserveHalfWidth = ParseIntSafe(values, 15);
+            table.PlazaRadius = ParseIntSafe(values, 16);
         }
 
         private static void ParseNpcTable(NpcTable table, string[] values)
@@ -409,7 +445,7 @@ namespace ARPG.Editor
 
             // Phase D 신규 컬럼 (시트 갱신 전에는 길이 < 25일 수 있어 안전 가드)
             table.ProvidedService = ParseIntSafe(values, 19);
-            table.Category = ParseIntSafe(values, 20);
+            table.Category = ParseEnumSafe(values, 20, BuildableCategory.None);
             table.SetMembership = ParseIntSafe(values, 21);
             table.AssociatedJobType = ParseIntSafe(values, 22);
             table.BaseWeight = ParseIntSafe(values, 23, defaultValue: 10);
@@ -431,6 +467,20 @@ namespace ARPG.Editor
             string s = values[index]?.Trim();
             if (string.IsNullOrEmpty(s)) return defaultValue;
             return float.TryParse(s, out float v) ? v : defaultValue;
+        }
+
+        /// <summary>
+        /// enum 컬럼 파서. 문자열("Housing") 또는 정수("1") 모두 허용.
+        /// 빈 칸/누락/파싱 실패 시 defaultValue 반환.
+        /// </summary>
+        private static T ParseEnumSafe<T>(string[] values, int index, T defaultValue) where T : struct, Enum
+        {
+            if (index >= values.Length) return defaultValue;
+            string s = values[index]?.Trim();
+            if (string.IsNullOrEmpty(s)) return defaultValue;
+            if (Enum.TryParse<T>(s, ignoreCase: true, out T v) && Enum.IsDefined(typeof(T), v)) return v;
+            Debug.LogWarning($"[ParseEnumSafe] '{s}' not a valid {typeof(T).Name} — defaulting to {defaultValue}");
+            return defaultValue;
         }
 
         private static void ParseJobBonusTable(JobBonusTable table, string[] values)

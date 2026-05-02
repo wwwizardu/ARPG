@@ -210,12 +210,16 @@ if (wallSeg != null) TryStartWallTask(v, wallSeg, now);
 
 | 파일 | 변경 |
 |------|------|
-| [`System_VillageNeedsEvaluation.cs`](../Assets/Scripts/Common/System/System_VillageNeedsEvaluation.cs) | 4 Layer 점수 함수 분리, `GetRankedCandidates` 신규 |
-| [`System_VillageBuildQueue.cs`](../Assets/Scripts/Common/System/System_VillageBuildQueue.cs) | Roadmap fallback 분기 제거, 1위 자원 부족 시 2위 시도 루프 |
-| `VillageBuildRoadmap.cs` | **완전 삭제**. RoadmapEntry struct도 폐기 — `BuildableItemTable.BuildHours` 컬럼으로 흡수 |
+| [`VillageNeedsEvaluator.cs`](../Assets/Scripts/Village/VillageNeedsEvaluator.cs) | 정적 헬퍼. 4 Layer 점수 + `GetRankedCandidates` (List&lt;int&gt; TableId 반환) + 진행 중 task 집계 |
+| [`TierGapDetector.cs`](../Assets/Scripts/Village/TierGapDetector.cs) | Tier 승격 미충족 조건 감지 헬퍼 |
+| [`BuildTaskSnapshot.cs`](../Assets/Scripts/Village/BuildTaskSnapshot.cs) | 진행 중 task 영구 저장 스냅샷 (Step C, N개 동시 task 세이브) |
+| [`System_VillageBuildQueue.cs`](../Assets/Scripts/Common/System/System_VillageBuildQueue.cs) | Phase1 task 풀 순회 완료 처리 + Phase2 Pop 한도 while 루프 신규 시작. TryStartNextTask/TryStartWallTask는 bool 반환. task entity 별도 발급 |
+| [`VillageData.cs`](../Assets/Scripts/Village/VillageData.cs) | `ActiveBuildTasks` List 추가, legacy CurrentBuild* 필드는 호환만 |
+| [`VillageManager.cs`](../Assets/Scripts/Village/VillageManager.cs) | `SyncTaskToData`/`RestoreTaskFromData`가 ActiveBuildTasks 리스트 기반 + 구 단일 필드 자동 마이그레이션 |
+| `VillageBuildRoadmap.cs` | **완전 삭제** — `BuildableItemTable.BuildHours` 컬럼으로 흡수 |
 | `VillageNeedsCache.cs` | **완전 삭제** — `VillageNeedsEvaluator`가 매 빌드마다 inline 평가 |
-| [`VillageDebugLog.cs`](../Assets/Scripts/Village/VillageDebugLog.cs) | `GetNextTarget` 호출 → `NeedsCache.GetTopCandidate` |
-| [`Assets/_BinaryData/TableData/BuildableItemTable.bytes`](../Assets/_BinaryData/TableData/BuildableItemTable.bytes) | Hearth `Cost_Stone`: 20 → 5 |
+| [`VillageDebugLog.cs`](../Assets/Scripts/Village/VillageDebugLog.cs) | task 풀 순회로 마을별 task 조회 |
+| [`Assets/_BinaryData/TableData/BuildableItemTable.bytes`](../Assets/_BinaryData/TableData/BuildableItemTable.bytes) | Hearth `Cost_Stone`: 20 → 5, 모든 항목에 `BuildHours` 컬럼 |
 
 ---
 
@@ -247,6 +251,11 @@ if (wallSeg != null) TryStartWallTask(v, wallSeg, now);
 - [ ] 위협도 5로 강제 시뮬레이션 → 벽이 일반 후보보다 우선
 - [ ] Hamlet 승격 후 Hearth가 HAMLET_SEQUENCE 의존 없이 자연 진행
 - [ ] VillageDebugLog의 [VillageSnapshot]에 새 점수 시스템 1위 출력
+- [ ] **Pop=N일 때 동시에 최대 N개 task 진행** (Step B)
+- [ ] **진행 중 task의 TableId가 점수 평가의 existing에 합산되어 동시 동일 항목 중복 빌드 방지**
+- [ ] **세이브 → 다중 task가 ActiveBuildTasks 리스트에 모두 보존**
+- [ ] **로드 시 각 스냅샷마다 task entity 발급되어 동일 시점 복원**
+- [ ] **구 세이브(단일 CurrentBuildTableId) 로드 시 자동으로 ActiveBuildTasks로 마이그레이션**
 
 ---
 

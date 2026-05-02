@@ -1,5 +1,6 @@
 using ARPG.Base;
 using ARPG.Component;
+using ARPG.Utility;
 using UnityEngine;
 using System.Collections.Generic;
 
@@ -106,7 +107,18 @@ namespace ARPG.Systems
                 {
                     if (0 < velocity.Speed)
                     {
-                        transformComponent.Position += velocity.Velocity * inDeltaTime;
+                        Vector2 intendedDelta = velocity.Velocity * inDeltaTime;
+
+                        // ColliderComponent가 있으면 축 분리 슬라이딩, 없으면 통과
+                        if (_componentManager.TryGetComponent<ColliderComponent>(entityId, out var collider))
+                        {
+                            transformComponent.Position = CollisionUtil.ResolveAxisSeparated(
+                                transformComponent.Position, intendedDelta, collider.Radius);
+                        }
+                        else
+                        {
+                            transformComponent.Position += intendedDelta;
+                        }
 
                         // 업데이트된 Position 저장
                         _componentManager.AddComponent(entityId, transformComponent);

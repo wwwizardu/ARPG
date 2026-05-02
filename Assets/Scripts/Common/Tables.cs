@@ -230,7 +230,7 @@ namespace ARPG.Tables
         // Phase D: 데이터 정본화 (no hardcoded TableId 정책 — PHASE_D_DESIGN.md §2.2)
         // 구 Function 컬럼은 제거됨 (placeholder. 의미 없음).
         [JsonProperty("ProvidedService")] public int ProvidedService = 0;       // ProvidedService Flags enum 비트 OR
-        [JsonProperty("Category")] public int Category = 0;                     // BuildableCategory enum
+        [JsonProperty("Category")] public BuildableCategory Category = BuildableCategory.None;
         [JsonProperty("SetMembership")] public int SetMembership = 0;           // SetMemberTag Flags enum 비트 OR
         [JsonProperty("AssociatedJobType")] public int AssociatedJobType = 0;   // JobType enum (NPC 직무 매칭. 0=None)
         [JsonProperty("BaseWeight")] public int BaseWeight = 10;                // 필요도 스코어 베이스
@@ -379,6 +379,37 @@ namespace ARPG.Tables
                     DefaultNpcIds.Add(id);
             }
         }
+    }
+
+    /// <summary>
+    /// 마을 단계별 파라미터 테이블. Id = (int)VillageStage (Settlement=0 ~ City=4) 5행.
+    /// 단계로 키잉되는 모든 수치(경계 반경, 이민 주기/확률, 고용 기본가, 승격 임계값)의 정본.
+    /// 승격 임계값은 "이 단계로 *진입*하기 위한 조건"으로 표현. Settlement(시작)/City(미구현)는 PromoMinPopulation = -1.
+    /// </summary>
+    [Serializable]
+    public class VillageStageTable : TableBase
+    {
+        [JsonProperty("Name")] public string Name = string.Empty;                       // 표시용 이름
+
+        // 단계 파라미터
+        [JsonProperty("BoundsRadius")] public int BoundsRadius;                         // 마을 경계 반경 (타일)
+        [JsonProperty("ImmigrationCheckHours")] public float ImmigrationCheckHours;     // 방문자 도착 체크 주기
+        [JsonProperty("ImmigrationArriveChance")] public float ImmigrationArriveChance; // 도착 확률 (0~1)
+        [JsonProperty("HireBaseCost")] public int HireBaseCost;                         // NPC 고용 기본가 (Gold)
+
+        // 승격 게이트 (이 단계로 진입하기 위한 조건)
+        [JsonProperty("PromoMinPopulation")] public int PromoMinPopulation;             // -1 = 진입 불가 (시작점/미구현)
+        [JsonProperty("PromoMinHousing")] public int PromoMinHousing;
+        [JsonProperty("PromoMinFood")] public int PromoMinFood;
+        [JsonProperty("PromoMinAgeHours")] public float PromoMinAgeHours;
+        [JsonProperty("PromoRequiredSet")] public int PromoRequiredSet = -1;            // (int)ObjectSetType, -1 = 없음
+        [JsonProperty("PromoRequiredCivic")] public int PromoRequiredCivic;             // 0 = 없음, ≥1 = CountByService(Civic) >= N
+        [JsonProperty("PromoRequiredShop")] public int PromoRequiredShop;               // 0 = 없음, ≥1 = CountByService(Shop) >= N
+
+        // 도시 계획 파라미터 (System_VillageBuildQueue)
+        [JsonProperty("RoadReserveRadius")] public int RoadReserveRadius;               // 큰길 예약 반경 (0=비활성)
+        [JsonProperty("RoadReserveHalfWidth")] public int RoadReserveHalfWidth;         // 큰길 폭의 절반 (1=±1로 폭 3타일)
+        [JsonProperty("PlazaRadius")] public int PlazaRadius;                           // 마을 중심 광장 반경 (0=없음, 1=3×3, 2=5×5)
     }
 
     [Serializable]

@@ -10,7 +10,8 @@ namespace ARPG.Component
         Attack,         // 공격
         Retreat,        // 후퇴
         Flee,           // 도주 (NPC 위협 대응)
-        Return          // 귀환
+        Return,         // 귀환
+        Build           // 마을 건물 배치 작업 (NpcBuildAssignmentComponent 부착 시)
     }
 
     public struct AIStateComponent

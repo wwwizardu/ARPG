@@ -55,35 +55,53 @@ namespace ARPG.Systems
 
         private static VillageStage EvaluateNextStage(VillageData v, float now)
         {
-            if (AR.s.Component.TryGetComponent<VillageStorageComponent>(v.EntityId, out var s) == false)
-                return v.Stage;
+            if (v.Stage >= VillageStage.City) return v.Stage;
 
-            // Phase D: 데이터 정본화 — ProvidedService.Housing 비트로 주거 카운트 (Bedroll/Bed/InnBed 모두 포함)
+            VillageStage next = v.Stage + 1;
+            if (CanPromoteTo(v, next, now))
+                return next;
+            return v.Stage;
+        }
+
+        /// <summary>
+        /// VillageStageTable의 진입 게이트(Pop/Housing/Food/Age/RequiredSet/RequiredCivic/RequiredShop)를
+        /// 모두 통과하면 true. PromoMinPopulation &lt; 0이면 진입 불가 (City 등 미구현 단계).
+        /// 빌드 점수 게이트(TierGapDetector)와 동일 헬퍼를 공유해 이중 진실 소스 제거.
+        /// </summary>
+        public static bool CanPromoteTo(VillageData v, VillageStage next, float now)
+        {
+            Tables.VillageStageTable? t = AR.s.Data.GetVillageStage(next);
+            if (t == null)
+            {
+                Debug.LogError($"[VillageTierProgression] VillageStageTable not loaded — stage={next}");
+                return false;
+            }
+            if (t.PromoMinPopulation < 0) return false;  // 진입 불가 표식
+
+            if (AR.s.Component.TryGetComponent<VillageStorageComponent>(v.EntityId, out var s) == false)
+                return false;
+
             int housingCount = AR.s.Village.CountByService(v.VillageId, ProvidedService.Housing);
             float ageHours = now - v.RegisteredAt;
 
-            switch (v.Stage)
-            {
-                case VillageStage.Settlement:
-                    // INN_HIRING_DESIGN.md §2.9 — Inn 세트 완성이 시스템 전제조건
-                    if (v.Population >= 3 && housingCount >= 2 && s.FoodAmount >= 30 && ageHours >= 24f
-                        && AR.s.Village.HasObjectSet(v.VillageId, ObjectSetType.Inn))
-                        return VillageStage.Hamlet;
-                    break;
-                case VillageStage.Hamlet:
-                    if (v.Population >= 8 && housingCount >= 4 && s.FoodAmount >= 80 && ageHours >= 72f
-                        && AR.s.Village.CountByService(v.VillageId, ProvidedService.Civic) >= 1)  // TownPost
-                        return VillageStage.Village;
-                    break;
-                case VillageStage.Village:
-                    if (v.Population >= 15 && housingCount >= 8 && s.FoodAmount >= 200 && ageHours >= 168f
-                        && AR.s.Village.HasObjectSet(v.VillageId, ObjectSetType.ForgeStandard)  // Furnace + Anvil 5×5
-                        && AR.s.Village.CountByService(v.VillageId, ProvidedService.Shop) >= 1)  // MerchantStall
-                        return VillageStage.Town;
-                    break;
-                // Town → City (Stage 4)는 Phase C+ 이관
-            }
-            return v.Stage;
+            if (v.Population < t.PromoMinPopulation) return false;
+            if (housingCount < t.PromoMinHousing) return false;
+            if (s.FoodAmount < t.PromoMinFood) return false;
+            if (ageHours < t.PromoMinAgeHours) return false;
+
+            if (t.PromoRequiredSet >= 0
+                && AR.s.Village.HasObjectSet(v.VillageId, (ObjectSetType)t.PromoRequiredSet) == false)
+                return false;
+
+            if (t.PromoRequiredCivic > 0
+                && AR.s.Village.CountByService(v.VillageId, ProvidedService.Civic) < t.PromoRequiredCivic)
+                return false;
+
+            if (t.PromoRequiredShop > 0
+                && AR.s.Village.CountByService(v.VillageId, ProvidedService.Shop) < t.PromoRequiredShop)
+                return false;
+
+            return true;
         }
 
         // ========== 승격 적용 ==========

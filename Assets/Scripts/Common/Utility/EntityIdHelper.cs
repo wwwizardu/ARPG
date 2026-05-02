@@ -88,7 +88,9 @@ namespace ARPG.Utility
 
         /// <summary>
         /// 새로운 엔티티 ID를 생성하고 등록
-        /// 재활용 가능한 ID가 있으면 우선 사용
+        /// - 재활용 큐가 있으면 우선 사용
+        /// - 없으면 _nextEntityId부터 위로 올라가며 미등록 ID를 찾아 발급.
+        ///   RegisterExistingEntity로 사전 예약된 ID는 자동으로 건너뜀 → ID 풀 낭비 없음.
         /// </summary>
         /// <returns>생성된 엔티티 ID</returns>
         public static int CreateEntity()
@@ -102,7 +104,10 @@ namespace ARPG.Utility
             }
             else
             {
-                // 새로운 ID 할당
+                // 예약된 ID 건너뛰며 첫 미등록 ID 탐색.
+                // _nextEntityId는 단조 증가 hint이므로 한 번 지나간 영역은 다시 검사 안 함 → 누적 비용은 O(N).
+                while (_registeredEntityIds.Contains(_nextEntityId))
+                    _nextEntityId++;
                 entityId = _nextEntityId++;
             }
 
@@ -110,6 +115,34 @@ namespace ARPG.Utility
             Debug.Log($"[EntityIdHelper] Entity created - ID: {entityId}");
 
             return entityId;
+        }
+
+        /// <summary>
+        /// 저장된 EntityId를 그대로 재등록한다 (게임 로드 전용).
+        /// 세션 간 NPC/빌딩 동일성을 보장하기 위해 사용.
+        ///
+        /// 호출 전제: 다른 어떤 매니저도 아직 CreateEntity()를 호출하지 않은 상태에서 호출.
+        /// CreateEntity()가 미등록 ID 탐색 시 이 함수로 예약된 ID를 자동으로 건너뛰므로,
+        /// _nextEntityId를 별도로 끌어올리지 않아도 충돌 없음 → ID 풀 낭비 0.
+        ///
+        /// 충돌(이미 등록된 ID 재예약 시도)은 호출 순서가 잘못됐다는 강한 신호이므로 LogError로 즉시 노출.
+        /// </summary>
+        public static void RegisterExistingEntity(int entityId)
+        {
+            if (entityId <= 0)
+            {
+                Debug.LogWarning($"[EntityIdHelper] RegisterExistingEntity - 무효한 ID: {entityId}");
+                return;
+            }
+            if (_registeredEntityIds.Contains(entityId))
+            {
+                Debug.LogError($"[EntityIdHelper] RegisterExistingEntity - ID {entityId}가 이미 등록되어 있음. " +
+                                "사전 예약 단계가 다른 엔티티 생성보다 늦게 호출됐거나, 같은 ID가 두 번 예약됨. " +
+                                "호출 순서를 점검하세요.");
+                return;
+            }
+
+            _registeredEntityIds.Add(entityId);
         }
 
         /// <summary>

@@ -32,13 +32,19 @@ namespace ARPG.Village
         public int FirstBuildTileX;
         public int FirstBuildTileY;
 
-        // Phase B: 현재 진행 중인 배치 작업 (마을당 1건). 0 = 미착수.
+        // (Legacy) 단일 빌드 task — Step C 이전 세이브 호환용. 신규 코드는 ActiveBuildTasks 사용.
+        // 신규 세이브에서는 0/-1로 비워둠. 구 세이브 로드 시 자동 마이그레이션됨.
         public int CurrentBuildTableId;
         public float CurrentBuildStartedAt = -1f;
         public int CurrentBuildTileX;
         public int CurrentBuildTileY;
         public int CurrentBuildReservedWood;
         public int CurrentBuildReservedStone;
+
+        // BUILD_PRIORITY_DESIGN.md Step B/C — N개 동시 진행 task 스냅샷.
+        // 마을 NPC 수만큼 동시 빌드 가능. 세이브 시 task entity 풀 → 이 리스트로 미러링,
+        // 로드 시 각 스냅샷마다 task entity를 발급한다.
+        public List<BuildTaskSnapshot> ActiveBuildTasks = new();
 
         // Phase B: 완성된 오브젝트 TableId 누적 (중복 허용 — 같은 종류 여러 개 카운트)
         public List<int> PlacedObjectTypeIds = new();

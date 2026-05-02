@@ -95,6 +95,7 @@ namespace ARPG.Npc
 
                 NpcSaveData saveData = new NpcSaveData(obj.ObjectId, worldPos)
                 {
+                    EntityId = entityId,  // 일관성 — 다른 생성 경로(SpawnNewNpc)도 채워줌
                     Description = PickDescription(GetPreferredJobType(obj.ObjectId)),
                 };
 
@@ -342,6 +343,12 @@ namespace ARPG.Npc
 
                 saveData.EntityId = createdId;
                 saveData.IsActive = true;
+
+                // 진행 중 build task에 이 NPC가 배정돼 있었다면 NpcBuildAssignmentComponent 재부착 + Build 상태 전이.
+                // 청크 비활성으로 일시 디스폰됐다가 돌아온 경우, 그리고 게임 로드 후 첫 스폰 모두 동일 경로.
+                // EntityId가 세션 간 보존되므로(EntityIdHelper.RegisterExistingEntity) task.AssignedNpcEntityId가
+                // 그대로 이 NPC의 createdId와 일치 → 매칭 성공 → 같은 NPC가 같은 빌딩을 이어서 짓는 상태로 복원.
+                ARPG.Systems.System_VillageBuildQueue.ReattachBuildAssignmentIfAny(createdId);
             }
             finally
             {
@@ -490,7 +497,15 @@ namespace ARPG.Npc
             {
                 NpcSaveData saveData = kvp.Value;
 
-                int entityId = EntityIdHelper.CreateEntity();
+                // 저장된 EntityId 그대로 재사용 — 세션 간 NPC 동일성 보장.
+                // task.AssignedNpcEntityId 등 다른 시스템이 참조하는 ID가 stale 안 되도록.
+                // dict key가 정본(저장 시점의 EntityId), saveData.EntityId는 백업 (둘 다 동일하나 안전망).
+                int entityId = kvp.Key > 0 ? kvp.Key
+                              : (saveData.EntityId > 0 ? saveData.EntityId : EntityIdHelper.CreateEntity());
+
+                if (kvp.Key > 0 || saveData.EntityId > 0)
+                    EntityIdHelper.RegisterExistingEntity(entityId);
+
                 saveData.IsActive = false;
                 saveData.EntityId = entityId;
 
@@ -746,15 +761,10 @@ namespace ARPG.Npc
         /// </summary>
         private int CalculateHireCost(NpcSaveData saveData, VillageData village)
         {
-            int baseCost = village.Stage switch
-            {
-                VillageStage.Settlement => 0,
-                VillageStage.Hamlet     => 50,
-                VillageStage.Village    => 150,
-                VillageStage.Town       => 400,
-                VillageStage.City       => 1000,
-                _ => 0,
-            };
+            Tables.VillageStageTable? stageTable = AR.s.Data.GetVillageStage(village.Stage);
+            int baseCost = stageTable != null ? stageTable.HireBaseCost : 0;
+            if (stageTable == null)
+                Debug.LogError($"[NpcManager] VillageStageTable not loaded — stage={village.Stage}");
 
             GlobalEnum.JobType desiredJob = saveData.JobType != GlobalEnum.JobType.None
                 ? saveData.JobType

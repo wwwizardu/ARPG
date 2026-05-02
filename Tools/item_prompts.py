@@ -146,6 +146,21 @@ ITEM_PROMPTS = [
             "cozy fortified entrance"
         ),
     },
+    {
+        # 모든 빌딩이 건설 중일 때 공통으로 사용하는 placeholder 스프라이트.
+        # 시각적으로 "공사 중" 임을 즉시 인지할 수 있어야 함 (목재 골조 + 비계 + 작업 도구).
+        "id": 999,
+        "name": "UnderConstruction",
+        "core": (
+            "wooden construction scaffolding, half-built timber framework, "
+            "exposed wooden beams forming a partial structure, "
+            "stacked planks and wooden boards leaning against the frame, "
+            "construction tools nearby — hammer, saw, sawhorse, "
+            "rope tied around posts, sawdust on the ground, "
+            "work-in-progress village building site, rustic wooden skeleton, "
+            "no walls yet, framework only, daylight"
+        ),
+    },
 ]
 
 

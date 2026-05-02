@@ -24,6 +24,7 @@ namespace ARPG.Component
             { typeof(VelocityComponent), 500 },
             { typeof(StateComponent), 300 },
             { typeof(StatComponent), 300 },
+            { typeof(ColliderComponent), 500 },
 
             // 점프 컴포넌트 (점프 중인 엔티티만)
             { typeof(JumpComponent), 50 },
@@ -37,6 +38,7 @@ namespace ARPG.Component
             { typeof(AIBehaviorTypeComponent), 500 },
             { typeof(AIStateComponent), 500 },
             { typeof(AICanSeeTargetTag), 500 },
+            { typeof(PathfindingComponent), 500 },
 
             // 적게 사용되는 컴포넌트 (스킬 엔티티용)
             { typeof(SkillComponent), 50 },
@@ -74,6 +76,7 @@ namespace ARPG.Component
             { typeof(PlacedObjectComponent), 1024 },   // 마을당 수십~수백 오브젝트 × 5~10마을
             { typeof(PlayerNearbyServicesComponent), 8 }, // 플레이어 1명당 1개 (멀티 대비 8)
             { typeof(NpcAssignmentComponent), 256 },   // 직무 할당된 NPC만 (마을당 ~30 × 5마을)
+            { typeof(NpcBuildAssignmentComponent), 32 }, // 진행 중 build task에 1:1 배정된 NPC (마을당 ~Pop개 × 5마을)
 
             // 건물 시스템 컴포넌트 (BuildingManager 관리)
             { typeof(BuildingTag), 200 },
