@@ -188,3 +188,18 @@
     color: rgb(120, 120, 120);
     padding: 16px;
 }
+
+/* 드래그앤드롭 — 고스트(마우스 따라다니는 반투명 아이콘) */
+.skillbook-drag-ghost {
+    position: absolute;
+    width: 64px;
+    height: 64px;
+    opacity: 0.75;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+/* 드래그 중 마우스 아래의 장착 슬롯 강조 */
+.skillbook-slot-droptarget {
+    border-color: rgb(255, 215, 100);
+    background-color: rgba(120, 90, 40, 0.7);
+}

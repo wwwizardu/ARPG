@@ -91,6 +91,58 @@ namespace ARPG.Manager
             return true;
         }
 
+        // ========== 슬롯 간 스왑 ==========
+
+        /// <summary>
+        /// 장착 슬롯 간 책 위치 교환. 한쪽이 비어 있어도 동작(이동).
+        /// 성공 시 ECS 스킬 엔티티 양쪽 재구성 + 세이브.
+        /// </summary>
+        public bool SwapSkillSlots(int slotA, int slotB)
+        {
+            if (IsValidSlot(slotA) == false || IsValidSlot(slotB) == false)
+            {
+                Debug.LogWarning($"[PlayerSkillManager] SwapSkillSlots - Invalid slot ({slotA}, {slotB})");
+                return false;
+            }
+            if (slotA == slotB) return false;
+
+            PlayerData? data = AR.s?.Data?.Player;
+            if (data == null) return false;
+
+            ItemData? bookA = data._skillBookSlots[slotA];
+            ItemData? bookB = data._skillBookSlots[slotB];
+            if (bookA == null && bookB == null) return false;
+
+            data._skillBookSlots[slotA] = bookB;
+            data._skillBookSlots[slotB] = bookA;
+
+            int playerEntityId = AR.s!.Data!.CurrentPlayerEntityId;
+            if (playerEntityId >= 0)
+            {
+                EntityFactory.RemoveSkill(playerEntityId, slotA);
+                EntityFactory.RemoveSkill(playerEntityId, slotB);
+
+                int newSkillIdA = bookB?.SkillBook?.SkillId ?? 0;
+                int newSkillIdB = bookA?.SkillBook?.SkillId ?? 0;
+                if (newSkillIdA > 0) EntityFactory.CreateSkill(playerEntityId, slotA, newSkillIdA);
+                if (newSkillIdB > 0) EntityFactory.CreateSkill(playerEntityId, slotB, newSkillIdB);
+            }
+
+            AR.s.Message?.Broadcast(new SkillBookChangedMessage
+            {
+                SlotIndex = slotA,
+                NewSkillId = bookB?.SkillBook?.SkillId ?? 0,
+            });
+            AR.s.Message?.Broadcast(new SkillBookChangedMessage
+            {
+                SlotIndex = slotB,
+                NewSkillId = bookA?.SkillBook?.SkillId ?? 0,
+            });
+
+            AR.s.Data.Save();
+            return true;
+        }
+
         // ========== 해제 ==========
 
         /// <summary>
