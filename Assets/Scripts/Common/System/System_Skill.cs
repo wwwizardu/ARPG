@@ -1,8 +1,9 @@
 #nullable enable
 using ARPG.Component;
 using ARPG.Skill.Combat;
-using Mono.Cecil.Cil;
+using ARPG.Utility;
 using UnityEngine;
+using GE = GlobalEnum;
 
 namespace ARPG.Systems
 {
@@ -10,9 +11,12 @@ namespace ARPG.Systems
     /// 스킬 시스템 - 스킬의 실행, 상태 전환, 타이밍 처리를 담당
     /// FixedUpdate로 실행하여 일정한 타임스텝 보장
     /// </summary>
-    public partial struct System_Skill : IFixedUpdateSystem
+    public class System_Skill : IFixedUpdateSystem
     {
         public int Priority => 200; // Move 시스템(100) 이후 실행
+
+        // 매 히트마다 List 할당 방지용 캐시. ProcessSkillHit 내부에서만 사용 (재진입 없음)
+        private readonly System.Collections.Generic.List<int> _hitEntitiesCache = new(16);
 
         public void OnCreate()
         {
@@ -97,7 +101,7 @@ namespace ARPG.Systems
                 return;
             }
 
-            // 스킬 사용 가능 여부 확인
+            // 스킬 사용 가능 여부 확인 (Stunned 등 - SkillCommand는 유지하여 상태 회복 후 자동 시전)
             if(CheckEnableSkill(charState) == false)
                 return;
 
@@ -112,6 +116,24 @@ namespace ARPG.Systems
             if(AR.s.Component.TryGetComponent<SkillTargetComponent>(skillEntityId, out var target) == false)
             {
                 Debug.LogError($"[System_Skill] SkillTargetComponent not found for SkillEntityId: {skillEntityId}");
+                AR.s.Component.RemoveComponent<SkillCommandComponent>(inSkill.OwnerEntityId);
+                return;
+            }
+
+            // [SkillEffect] OnSkillCommand 트리거 - 모든 전제조건 통과 후 1회만 발화
+            // 위치: CheckEnableSkill / 컴포넌트 검증 이후, 실제 시전 처리 이전
+            //   - Stunned 상태에서 효과(예: DelegateToTotem) 누수 방지
+            //   - SkillCommand가 매 프레임 들어와도 효과 중복 발동 방지(상태 차단 시 여기 도달 X)
+            SkillEffectContext cmdCtx = new()
+            {
+                SkillEntityId = skillEntityId,
+                SkillId = inSkill.SkillId,
+                OwnerEntityId = inSkill.OwnerEntityId,
+                TargetPosition = inCommand.TargetPosition,
+            };
+            SkillEffectExecutor.Trigger(GE.SkillTrigger.OnSkillCommand, ref cmdCtx, inSkill.Table?.SkillEffectIds);
+            if (cmdCtx.CancelOriginalCast)
+            {
                 AR.s.Component.RemoveComponent<SkillCommandComponent>(inSkill.OwnerEntityId);
                 return;
             }
@@ -312,9 +334,13 @@ namespace ARPG.Systems
             AR.s.Component.SetComponent(skillEntityId, skill);
 
             // Process 상태 시간이 끝나면 End 상태로 전환
-            if (state.ElapsedTime >= timing.ProcessDuration)
+            // 단, 플레이어 채널링은 입력 유지가 종료를 결정하므로 ProcessDuration 자동 종료를 스킵
+            // (AI 채널링은 InputComponent가 없으므로 ProcessDuration으로 종료됨 → 채널 지속시간 데이터로 활용)
+            // ProcessChannelingSkill에서 이미 End로 전이된 경우는 state.State가 더 이상 Process가 아니므로 중복 전이 방지
+            bool hasInput = AR.s.Component.HasComponent<InputComponent>(skill.OwnerEntityId);
+            bool isPlayerChanneling = (skill.ExecutionType == SkillExecutionType.Channeling) && hasInput;
+            if (state.State == SkillState.Process && isPlayerChanneling == false && state.ElapsedTime >= timing.ProcessDuration)
             {
-                // End 상태로 전환
                 OnChangeState(skillEntityId, ref state, ref skill, SkillState.End);
             }
         }
@@ -469,6 +495,15 @@ namespace ARPG.Systems
         /// </summary>
         private void OnEnterProcessState(int skillEntityId, ref SkillComponent inSkill)
         {
+            // [SkillEffect] OnSkillStart 트리거
+            SkillEffectContext startCtx = new()
+            {
+                SkillEntityId = skillEntityId,
+                SkillId = inSkill.SkillId,
+                OwnerEntityId = inSkill.OwnerEntityId,
+            };
+            SkillEffectExecutor.Trigger(GE.SkillTrigger.OnSkillStart, ref startCtx, inSkill.Table?.SkillEffectIds);
+
             // SkillTarget 컴포넌트에서 타겟 정보 가져오기
             if (!AR.s.Component.TryGetComponent<SkillTargetComponent>(skillEntityId, out var target))
                 return;
@@ -505,6 +540,15 @@ namespace ARPG.Systems
         /// </summary>
         private void OnEnterEndState(int skillEntityId, ref SkillComponent inSkill)
         {
+            // [SkillEffect] OnSkillEnd 트리거
+            SkillEffectContext endCtx = new()
+            {
+                SkillEntityId = skillEntityId,
+                SkillId = inSkill.SkillId,
+                OwnerEntityId = inSkill.OwnerEntityId,
+            };
+            SkillEffectExecutor.Trigger(GE.SkillTrigger.OnSkillEnd, ref endCtx, inSkill.Table?.SkillEffectIds);
+
             // TODO: 종료 이펙트, 사운드 등
             // Debug.Log($"[System_Skill] Skill End - SkillEntityId: {skillEntityId}");
         }
@@ -629,22 +673,30 @@ namespace ARPG.Systems
         }
 
         /// <summary>
-        /// Channeling 타입 스킬 처리 - 입력을 누르고 있는 동안 지속적으로 효과 발동
+        /// Channeling 타입 스킬 처리
+        /// - 플레이어(InputComponent 보유): 슬롯 키를 유지하는 동안 tick. 입력을 떼면 End 상태로 전이하여 후딜레이/쿨타임 정상 처리
+        /// - AI(InputComponent 없음): 항상 held 취급. 종료는 ProcessProcessState의 ProcessDuration 자동 종료 경로에서 처리
         /// </summary>
         private void ProcessChannelingSkill(int skillEntityId, ref SkillStateComponent state, ref SkillComponent skill)
         {
-            // 입력이 끊기면 스킬 중단함
-            if(AR.s.Component.TryGetComponent<SkillCommandComponent>(skill.OwnerEntityId, out var command) == false)
+            bool isHeld;
+            if (AR.s.Component.TryGetComponent<InputComponent>(skill.OwnerEntityId, out var input))
             {
-                StopSkillInternal(skillEntityId, ref skill, ref state);
-                return;
+                int slotBit = 1 << skill.SlotIndex;
+                isHeld = (input.SkillSlotHeldMask & slotBit) != 0;
+            }
+            else
+            {
+                // AI 채널링: ProcessDuration이 종료를 결정
+                isHeld = true;
             }
 
-            // if (!IsInputHeld(skill.OwnerEntityId))
-            // {
-            //     OnChangeState(skillEntityId, ref state, SkillState.End);
-            //     return;
-            // }
+            if (isHeld == false)
+            {
+                // 입력을 뗀 경우 End 상태 경유 (후딜레이 + 쿨타임 적용)
+                OnChangeState(skillEntityId, ref state, ref skill, SkillState.End);
+                return;
+            }
 
             // 채널링 간격마다 효과 적용
             if (state.ElapsedTime - skill.LastChannelingTime >= skill.ChannelingInterval)
@@ -753,12 +805,12 @@ namespace ARPG.Systems
         }
 
         /// <summary>
-        /// 특정 위치에서 가장 가까운 엔티티를 찾습니다
+        /// 특정 위치에서 가장 가까운 적 엔티티를 찾습니다 (진영 필터 적용).
         /// </summary>
         /// <param name="position">기준 위치</param>
-        /// <param name="excludeEntityId">제외할 엔티티 ID (보통 자기 자신)</param>
-        /// <returns>가장 가까운 엔티티 ID (없으면 0)</returns>
-        private readonly int FindClosestEntity(Vector2 position, int excludeEntityId)
+        /// <param name="casterEntityId">시전자 엔티티 ID (자기 자신 + 같은 진영 제외)</param>
+        /// <returns>가장 가까운 적 엔티티 ID (없으면 0)</returns>
+        private int FindClosestEntity(Vector2 position, int casterEntityId)
         {
             int closestEntityId = 0;
             float closestSqrDistance = float.MaxValue;
@@ -770,8 +822,12 @@ namespace ARPG.Systems
             {
                 int entityId = transformPool.GetEntityId(i);
 
-                // 제외할 엔티티는 건너뜀
-                if (entityId == excludeEntityId)
+                // 자기 자신 제외
+                if (entityId == casterEntityId)
+                    continue;
+
+                // 진영 필터 (caster가 진영 없으면 기존 동작 유지)
+                if (FactionHelper.IsHostileTo(casterEntityId, entityId) == false)
                     continue;
 
                 TransformComponent entityTransform = transformPool.GetByIndex(i);
@@ -789,15 +845,17 @@ namespace ARPG.Systems
             return closestEntityId;
         }
 
+
         /// <summary>
-        /// 스킬 범위 내에 있는 엔티티들을 가져옵니다
+        /// 스킬 범위 내에 있는 엔티티들을 가져옵니다.
+        /// 반환 List는 _hitEntitiesCache를 재사용하므로, 다음 호출 전에 소비해야 함.
         /// </summary>
-        private readonly System.Collections.Generic.List<int> GetEntitiesInSkillRange(SkillComponent skill, SkillTargetComponent target)
+        private System.Collections.Generic.List<int> GetEntitiesInSkillRange(SkillComponent skill, SkillTargetComponent target)
         {
-            System.Collections.Generic.List<int> hitEntities = new();
+            _hitEntitiesCache.Clear();
 
             if (skill.Table == null)
-                return hitEntities;
+                return _hitEntitiesCache;
 
             // 스킬 타겟 타입에 따라 분기
             switch (skill.Table.SkillTargetType)
@@ -806,17 +864,17 @@ namespace ARPG.Systems
                     // 단일 타겟 - TargetId만 체크
                     if (target.TargetId != 0)
                     {
-                        hitEntities.Add((int)target.TargetId);
+                        _hitEntitiesCache.Add((int)target.TargetId);
                     }
                     break;
 
                 case GlobalEnum.SkillTargetType.Direction:
                     // 범위 원형 - TargetPosition 중심으로 범위 내 엔티티 체크
-                    CheckCircleRangeEntities(skill, target, hitEntities);
+                    CheckCircleRangeEntities(skill, target, _hitEntitiesCache);
                     break;
             }
 
-            return hitEntities;
+            return _hitEntitiesCache;
         }
 
         /// <summary>
@@ -848,6 +906,10 @@ namespace ARPG.Systems
 
                 // 자기 자신은 제외
                 if (entityId == skill.OwnerEntityId)
+                    continue;
+
+                // 진영 필터 (적대 관계만 타격)
+                if (FactionHelper.IsHostileTo(skill.OwnerEntityId, entityId) == false)
                     continue;
 
                 TransformComponent entityTransform = transformPool.GetByIndex(i);
@@ -910,6 +972,25 @@ namespace ARPG.Systems
             {
                 Debug.LogWarning($"[System_Skill] Target StatComponent lost after damage - TargetEntityId: {targetEntityId}");
                 return;
+            }
+
+            // [SkillEffect] OnHit / OnCrit / OnKill 트리거
+            SkillEffectContext hitCtx = new()
+            {
+                SkillEntityId = skillEntityId,
+                SkillId = skill.SkillId,
+                OwnerEntityId = skill.OwnerEntityId,
+                TargetEntityId = targetEntityId,
+                DamageResult = damageResult,
+            };
+            SkillEffectExecutor.Trigger(GE.SkillTrigger.OnHit, ref hitCtx, skill.Table.SkillEffectIds);
+            if (damageResult.IsCritical)
+            {
+                SkillEffectExecutor.Trigger(GE.SkillTrigger.OnCrit, ref hitCtx, skill.Table.SkillEffectIds);
+            }
+            if (targetStat.CurrentHp <= 0f)
+            {
+                SkillEffectExecutor.Trigger(GE.SkillTrigger.OnKill, ref hitCtx, skill.Table.SkillEffectIds);
             }
 
             Debug.Log($"[System_Skill] ApplySkillEffectToEntity - SkillEntityId: {skillEntityId}, SkillId: {skill.SkillId}, TargetEntityId: {targetEntityId}, Damage: {Mathf.RoundToInt(damageResult.FinalDamage)}, Critical: {damageResult.IsCritical}, Evaded: {damageResult.IsEvaded}, Blocked: {damageResult.IsBlocked}, RemainingHP: {targetStat.CurrentHp}/{targetStat.FinalMaxHp}");

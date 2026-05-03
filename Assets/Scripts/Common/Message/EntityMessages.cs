@@ -159,4 +159,18 @@ namespace ARPG.Message
         /// </summary>
         public int EntityId;
     }
+
+    /// <summary>
+    /// 스킬북 슬롯 변경 Broadcast 메시지 (SKILLBOOK_DESIGN.md §4.1)
+    /// PlayerSkillManager.Equip/UnequipSkillBook 성공 시 발행.
+    /// UI가 구독해 슬롯·인벤토리 표시를 갱신.
+    /// </summary>
+    public struct SkillBookChangedMessage
+    {
+        /// <summary>변경된 스킬 슬롯 인덱스 (0 ~ PLAYER_SKILL_SLOT_COUNT-1)</summary>
+        public int SlotIndex;
+
+        /// <summary>새로 장착된 SkillId. 해제(unequip) 시 0.</summary>
+        public int NewSkillId;
+    }
 }

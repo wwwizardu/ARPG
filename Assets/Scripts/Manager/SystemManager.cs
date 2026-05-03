@@ -85,6 +85,11 @@ namespace ARPG.Systems
             System_VillageJobAssignment villageJobAssignmentSystem = new();
             RegisterSystems(villageJobAssignmentSystem);
 
+            // Priority 70: Lifetime System (FixedUpdate) - LifetimeComponent 만료 시 DestroyTag 부착 (토템·지뢰·장판)
+            // 토템의 자율 시전은 AI Behavior(50)의 Stationary 프로필에서 처리 (StationaryAttackStateHandler)
+            System_Lifetime lifetimeSystem = new();
+            RegisterSystems(lifetimeSystem);
+
             // Priority 80: Pathfinding System (FixedUpdate) - PathfindingComponent A* + Waypoint 추적
             // AI Behavior(50) 이후, Move(100) 이전 — Velocity.Direction을 waypoint 방향으로 덮어씀
             System_Pathfinding pathfindingSystem = new();

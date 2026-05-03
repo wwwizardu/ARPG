@@ -23,13 +23,15 @@ namespace ARPG
         [SerializeField] private Manager.TimeManager _timeManager;
         [SerializeField] private Village.VillageManager _villageManager;
         [SerializeField] private UI.FloatingTextManager _floatingTextManager;
+        [SerializeField] private Manager.TooltipManager _tooltipManager;
 
         private bool _initialized = false;
 
         private Base.SceneBase? _currentScene;
 
         private PlayerManager _playerManager = new PlayerManager();
-        
+        private PlayerSkillManager _playerSkillManager = new PlayerSkillManager();
+
         public bool IsInitialized => _initialized;
 
         public Base.SceneBase? CurrentScene => _currentScene;
@@ -50,6 +52,8 @@ namespace ARPG
         public Village.VillageManager Village => _villageManager;
         public UI.FloatingTextManager FloatingText => _floatingTextManager;
         public PlayerManager Player => _playerManager;
+        public PlayerSkillManager PlayerSkill => _playerSkillManager;
+        public TooltipManager Tooltip => _tooltipManager;
 
         public Base.EntityBase? MyPlayer => _playerManager.MyPlayers;
 
@@ -65,13 +69,9 @@ namespace ARPG
             // 가장 먼저: EntityId 시스템을 깨끗한 상태로 리셋. 다른 어떤 매니저도 CreateEntity 호출하기 전.
             ARPG.Utility.EntityIdHelper.Initialize();
 
-            // 세이브 데이터 로드 (NpcSaveDatas, BuildingSaveDatas 포함)
+            // 세이브 데이터 로드 — DataManager가 WorldData deserialize 직후 saved 영구 EntityId(NPC/Building)를
+            // EntityIdHelper에 사전 예약하므로, 이후 단계의 CreateEntity()는 saved ID와 충돌하지 않음.
             await _dataManager.Initialize();
-
-            // 영구 EntityId 사전 예약 — 다른 매니저들이 CreateEntity 호출하기 전에 saved IDs를 등록.
-            // 등록된 ID는 CreateEntity 탐색 시 자동 건너뜀 → 신규 엔티티가 saved ID와 충돌 안 함.
-            // ★ 새로운 영구 EntityId 매니저가 추가되면 PreReserveSavedEntityIds에 등록 추가 필수.
-            PreReserveSavedEntityIds();
 
             _componentManager.Initialize();
             _systemManager.Initialize();
@@ -86,32 +86,11 @@ namespace ARPG
             _timeManager.Initialize();
             _villageManager.Initialize();
             _floatingTextManager.Initialize();
+            _tooltipManager.Initialize();
 
             _initialized = true;
 
             Debug.Log("AR Initialized");
-        }
-
-        /// <summary>
-        /// 세이브 데이터의 모든 영구 EntityId를 EntityIdHelper에 사전 등록한다.
-        /// 다른 매니저들이 CreateEntity()로 신규 엔티티를 발급받기 전에 호출되어야 함 — 그래야
-        /// CreateEntity가 saved ID와 충돌 없이 미등록 ID를 자동 탐색.
-        ///
-        /// 새로운 영구 EntityId를 가진 매니저가 추가될 때마다 여기에도 등록해야 한다.
-        /// 누락 시 ID 충돌이 silent하게 발생할 수 있음 (RegisterExistingEntity가 LogError로 알려줌).
-        /// </summary>
-        private void PreReserveSavedEntityIds()
-        {
-            if (_dataManager.NpcSaveDatas != null)
-            {
-                foreach (var kvp in _dataManager.NpcSaveDatas)
-                    ARPG.Utility.EntityIdHelper.RegisterExistingEntity(kvp.Key);
-            }
-            if (_dataManager.BuildingSaveDatas != null)
-            {
-                foreach (var kvp in _dataManager.BuildingSaveDatas)
-                    ARPG.Utility.EntityIdHelper.RegisterExistingEntity(kvp.Key);
-            }
         }
 
         public void Reset()
@@ -126,6 +105,7 @@ namespace ARPG
             _timeManager.Reset();
             _villageManager.Reset();
             _floatingTextManager.Reset();
+            _tooltipManager.Reset();
         }
         
         public void OnSceneLoadStart(Base.SceneBase inScene)

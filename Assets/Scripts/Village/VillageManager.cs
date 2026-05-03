@@ -748,8 +748,26 @@ namespace ARPG.Village
             int gold = item.BasePrice * amount;
             if (AR.s.Data.Player.Gold < gold) return -1;
 
+            // 구매 ItemData 생성 — 스킬북은 SkillBookData를 채워야 인벤/UI에서 정상 인식 (SKILLBOOK_DESIGN.md §4.3)
+            ARPG.Data.ItemData? purchase;
+            if (item.ItemType == GlobalEnum.ItemType.SkillBook)
+            {
+                if (entry.SkillId <= 0)
+                {
+                    Debug.LogError($"[Shop] SkillBook 매물에 SkillId가 비어있음. v{villageId} stockIdx={stockEntryIndex}");
+                    return -1;
+                }
+                purchase = AR.s.Item.CreateSkillBook(entry.ItemTableId, entry.SkillId);
+                if (purchase == null) return -1;
+                // amount는 항상 1로 강제 (Stackable=false)
+                amount = 1;
+            }
+            else
+            {
+                purchase = new ARPG.Data.ItemData { Id = entry.ItemTableId, Quantity = amount };
+            }
+
             // 인벤토리에 추가 시도 (꽉 차 있으면 실패 — Gold 미차감)
-            ARPG.Data.ItemData purchase = new ARPG.Data.ItemData { Id = entry.ItemTableId, Quantity = amount };
             if (AR.s.Player.Inventory.AddItem(purchase) < 0) return -1;
 
             // 차감
@@ -805,14 +823,52 @@ namespace ARPG.Village
                 int idx = Random.Range(0, pool.Count);
                 Tables.ItemTable picked = pool[idx];
                 pool.RemoveAt(idx);
+
+                // 스킬북 매물: 같은 Tier 스킬 풀에서 SkillId도 함께 픽 (SKILLBOOK_DESIGN.md §10)
+                int skillId = 0;
+                if (picked.ItemType == GlobalEnum.ItemType.SkillBook)
+                {
+                    skillId = PickRandomSkillIdByTier(picked.Tier);
+                    if (skillId <= 0)
+                    {
+                        // 매칭되는 스킬이 없으면 슬롯 스킵하고 다른 매물로 채우기 시도
+                        Debug.LogWarning($"[Shop] SkillBook ItemId({picked.Id}) Tier({picked.Tier})에 매칭되는 스킬 없음 — 매물 슬롯 스킵");
+                        i--; // 슬롯 카운트 복구
+                        if (pool.Count == 0) break;
+                        continue;
+                    }
+                }
+
                 v.MerchantStock.Add(new MerchantStockEntry
                 {
                     ItemTableId = picked.Id,
                     RemainingCount = picked.Stackable ? Random.Range(3, 11) : 1,
+                    SkillId = skillId,
                 });
             }
 
             Debug.Log($"[Shop] v{v.VillageId} 매물 재롤: {v.MerchantStock.Count}건");
+        }
+
+        /// <summary>
+        /// SkillTable에서 Tier 매칭 균등 랜덤. 없으면 0.
+        /// (ItemManager.PickRandomSkillByTier과 동일 로직 — VillageManager 내부 전용)
+        /// </summary>
+        private static int PickRandomSkillIdByTier(int tier)
+        {
+            if (AR.s.Data == null) return 0;
+
+            List<Tables.SkillTable> all = AR.s.Data.GetAllSkills();
+            int matchedCount = 0;
+            int picked = 0;
+            for (int i = 0; i < all.Count; i++)
+            {
+                if (all[i].Tier != tier) continue;
+                matchedCount++;
+                // Reservoir sampling (k=1)
+                if (Random.Range(0, matchedCount) == 0) picked = all[i].Id;
+            }
+            return picked;
         }
     }
 }

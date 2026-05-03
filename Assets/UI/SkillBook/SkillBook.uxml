@@ -1,0 +1,59 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements"
+         xmlns:appui="Unity.AppUI.UI"
+         editor-extension-mode="False">
+    <Style src="project://database/Assets/UI/SkillBook/SkillBook.uss"/>
+    <ui:VisualElement name="root" class="skillbook-root" picking-mode="Position">
+        <ui:VisualElement name="overlay" class="skillbook-overlay" picking-mode="Position"/>
+        <ui:VisualElement name="panel" class="skillbook-panel">
+
+            <ui:VisualElement class="skillbook-header">
+                <appui:Heading text="스킬" size="L" class="skillbook-title"/>
+                <appui:IconButton name="close-btn" icon="x" class="skillbook-close-icon"/>
+            </ui:VisualElement>
+
+            <appui:Divider/>
+
+            <ui:VisualElement class="skillbook-body">
+
+                <!-- 좌측: 인벤토리(스킬북 필터) -->
+                <ui:VisualElement class="skillbook-inventory-panel">
+                    <appui:Text text="보유 스킬북" class="skillbook-section-title"/>
+                    <ui:ScrollView class="skillbook-inventory-scroll">
+                        <ui:VisualElement name="inventory-grid" class="skillbook-inventory-grid"/>
+                    </ui:ScrollView>
+                </ui:VisualElement>
+
+                <!-- 우측: 장착 슬롯 5x2 -->
+                <ui:VisualElement class="skillbook-slot-panel">
+                    <appui:Text text="장착 슬롯" class="skillbook-section-title"/>
+                    <ui:VisualElement class="skillbook-slot-grid">
+                        <ui:VisualElement class="skillbook-slot-row">
+                            <ui:VisualElement name="slot-0" class="skillbook-slot"/>
+                            <ui:VisualElement name="slot-1" class="skillbook-slot"/>
+                            <ui:VisualElement name="slot-2" class="skillbook-slot"/>
+                            <ui:VisualElement name="slot-3" class="skillbook-slot"/>
+                            <ui:VisualElement name="slot-4" class="skillbook-slot"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="skillbook-slot-row">
+                            <ui:VisualElement name="slot-5" class="skillbook-slot"/>
+                            <ui:VisualElement name="slot-6" class="skillbook-slot"/>
+                            <ui:VisualElement name="slot-7" class="skillbook-slot"/>
+                            <ui:VisualElement name="slot-8" class="skillbook-slot"/>
+                            <ui:VisualElement name="slot-9" class="skillbook-slot"/>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+
+                    <appui:Text name="hint-text" text="인벤토리의 스킬북을 클릭하면 빈 슬롯에 장착됩니다. 장착된 슬롯을 클릭하면 해제됩니다." class="skillbook-hint"/>
+                </ui:VisualElement>
+
+            </ui:VisualElement>
+
+            <appui:Divider/>
+
+            <ui:VisualElement class="skillbook-footer">
+                <appui:Text name="status-text" text="" class="skillbook-status"/>
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

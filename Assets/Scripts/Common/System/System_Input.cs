@@ -94,6 +94,12 @@ namespace ARPG.Systems
                     shopUI.BindForTest();
             }
 
+            // K키 — SkillBook UI 열기 (SKILLBOOK_DESIGN.md §5.4)
+            if (Keyboard.current != null && Keyboard.current.kKey.wasPressedThisFrame)
+            {
+                AR.s.UI.Show<UI.UISkillBook>(AddressablePath.SkillBook, UIManager.Layer.Main);
+            }
+
             // if (_input.Value.UseItem.WasPressedThisFrame() == true) // 아이템 사용 시 그냥 리턴
             // {
             //     CharacterComponent.Toolbelt.UseHoldingItem();
@@ -107,6 +113,27 @@ namespace ARPG.Systems
             inputComponent.MousePosition = _input.Value.MouseMove.ReadValue<Vector2>();
             inputComponent.IsInteracting = _input.Value.Interact.WasPressedThisFrame();
             inputComponent.IsSprinting = _input.Value.Sprint.IsPressed();
+
+            // 슬롯별 입력 유지 비트마스크 (채널링/차징 스킬용)
+            // bit 0: Attack(좌클릭) → 슬롯 0
+            // bit 1: Jump(Space) → 슬롯 1
+            // bit 2~9: Digit1~Digit8 → 슬롯 2~9
+            int heldMask = 0;
+            if (_input.Value.Attack.IsPressed()) heldMask |= 1 << 0;
+            if (_input.Value.Jump.IsPressed()) heldMask |= 1 << 1;
+            if (Keyboard.current != null)
+            {
+                Key[] heldDigitKeys = {
+                    Key.Digit1, Key.Digit2, Key.Digit3, Key.Digit4,
+                    Key.Digit5, Key.Digit6, Key.Digit7, Key.Digit8,
+                };
+                for (int i = 0; i < heldDigitKeys.Length; i++)
+                {
+                    if (Keyboard.current[heldDigitKeys[i]].isPressed)
+                        heldMask |= 1 << (i + 2);
+                }
+            }
+            inputComponent.SkillSlotHeldMask = heldMask;
 
             // 업데이트된 입력 컴포넌트 저장
             _componentManager.SetComponent(_playerEntityId, inputComponent);
@@ -141,6 +168,23 @@ namespace ARPG.Systems
             if (_input.Value.Jump.WasPressedThisFrame() == true)
             {
                 UseSkill(ref inputComponent, 1);
+            }
+
+            // 숫자키 1~8 → 슬롯 2~9 발동 (SKILLBOOK_DESIGN.md §2.3)
+            // 추후 키바인딩 UI 도입 시 ArpgInput 액션으로 이전 가능. 일단 raw 키로 처리.
+            if (Keyboard.current != null)
+            {
+                Key[] digitKeys = {
+                    Key.Digit1, Key.Digit2, Key.Digit3, Key.Digit4,
+                    Key.Digit5, Key.Digit6, Key.Digit7, Key.Digit8,
+                };
+                for (int i = 0; i < digitKeys.Length; i++)
+                {
+                    if (Keyboard.current[digitKeys[i]].wasPressedThisFrame)
+                    {
+                        UseSkill(ref inputComponent, i + 2); // 슬롯 2~9
+                    }
+                }
             }
         }
 

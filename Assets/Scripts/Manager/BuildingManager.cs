@@ -304,11 +304,9 @@ namespace ARPG.Building
 
                 // 저장된 EntityId 그대로 재사용 — 세션 간 빌딩 동일성 보장.
                 // task.BuildingEntityId 등 다른 시스템 참조가 stale 안 되도록.
+                // 등록은 AR.PreReserveSavedEntityIds()가 Initialize 단계에서 일괄 처리 — 여기서 다시 등록하면 이중 등록 LogError.
                 int entityId = kvp.Key > 0 ? kvp.Key
                               : (saveData.EntityId > 0 ? saveData.EntityId : EntityIdHelper.CreateEntity());
-
-                if (kvp.Key > 0 || saveData.EntityId > 0)
-                    EntityIdHelper.RegisterExistingEntity(entityId);
 
                 saveData.IsActive = false;
                 saveData.EntityId = entityId;

@@ -1,0 +1,79 @@
+/* 글로벌 툴팁 스타일 (AR.s.Tooltip) */
+
+.tooltip-root {
+    width: 100%;
+    height: 100%;
+}
+
+.tooltip-frame {
+    position: absolute;
+    display: none;
+    min-width: 220px;
+    max-width: 320px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background-color: rgba(20, 20, 24, 0.96);
+    border-width: 1px;
+    border-color: rgba(180, 140, 80, 0.5);
+}
+
+.tooltip-content {
+    display: none;
+    flex-direction: column;
+}
+
+.tooltip-name {
+    font-size: 17px;
+    -unity-font-style: bold;
+    color: rgb(220, 220, 220);
+    white-space: normal;
+}
+
+.tooltip-tier {
+    font-size: 13px;
+    color: rgb(180, 140, 80);
+    margin-top: 1px;
+}
+
+.tooltip-divider {
+    height: 1px;
+    margin-top: 6px;
+    margin-bottom: 6px;
+    background-color: rgba(120, 120, 120, 0.4);
+}
+
+.tooltip-skillname {
+    font-size: 16px;
+    -unity-font-style: bold;
+    color: rgb(255, 215, 100);
+    margin-bottom: 4px;
+}
+
+.tooltip-desc {
+    font-size: 14px;
+    color: rgb(200, 200, 200);
+    white-space: normal;
+    margin-bottom: 6px;
+}
+
+.tooltip-stats {
+    flex-direction: column;
+}
+
+.tooltip-statline {
+    font-size: 13px;
+    color: rgb(170, 200, 230);
+    margin-top: 1px;
+    display: none;
+}
+
+/* 등급별 이름 색상 (1=Common, 2=Rare, 3=Epic) */
+.tooltip-tier-1 {
+    color: rgb(220, 220, 220);
+}
+.tooltip-tier-2 {
+    color: rgb(100, 180, 255);
+}
+.tooltip-tier-3 {
+    color: rgb(200, 130, 255);
+}

@@ -1,4 +1,5 @@
 using ARPG.Component;
+using ARPG.Utility;
 using UnityEngine;
 
 namespace ARPG.Systems
@@ -39,14 +40,7 @@ namespace ARPG.Systems
             if (perceptionPool == null || perceptionPool.Count == 0)
                 return;
 
-            // 플레이어 엔티티 ID 가져오기
-            int playerEntityId = AR.s.Player.MyPlayers.EntityId;
-            if (playerEntityId == -1)
-                return;
-
-            // 플레이어 Transform 가져오기
-            if (!AR.s.Component.TryGetComponent<TransformComponent>(playerEntityId, out var playerTransform))
-                return;
+            ComponentManager cm = AR.s.Component;
 
             // 모든 AI 엔티티 순회
             for (int i = 0; i < perceptionPool.Count; i++)
@@ -54,89 +48,67 @@ namespace ARPG.Systems
                 int entityId = perceptionPool.GetEntityId(i);
                 AIPerceptionComponent perception = perceptionPool.GetByIndex(i);
 
-                // NPC는 플레이어를 타겟으로 인식하지 않음 (관계 기반 행동은 추후 구현)
-                if (AR.s.Component.HasComponent<NpcTag>(entityId))
+                // NPC는 타겟을 인식하지 않음 (관계 기반 행동은 추후 구현)
+                if (cm.HasComponent<NpcTag>(entityId))
                     continue;
 
-                // AI 컴포넌트 가져오기
-                if (!AR.s.Component.TryGetComponent<AIComponent>(entityId, out var ai))
+                // AI 컴포넌트
+                if (cm.TryGetComponent<AIComponent>(entityId, out var ai) == false)
                     continue;
 
-                // AI 엔티티 Transform 가져오기
-                if (!AR.s.Component.TryGetComponent<TransformComponent>(entityId, out var transform))
+                // AI 엔티티 Transform
+                if (cm.TryGetComponent<TransformComponent>(entityId, out var transform) == false)
                     continue;
 
-                // 플레이어와의 거리 계산 (SqrMagnitude 사용 - 성능 최적화)
-                Vector2 toPlayer = playerTransform.Position - transform.Position;
-                float sqrDistance = toPlayer.sqrMagnitude;
-                float detectionRangeSqr = perception.DetectionRange * perception.DetectionRange;
+                // AI 자신의 진영 (없으면 중립으로 간주 → 타겟 못 잡음)
+                if (cm.TryGetComponent<FactionComponent>(entityId, out var selfFaction) == false)
+                    continue;
+                if (selfFaction.FactionId == Faction.Neutral)
+                    continue;
 
-                bool canSeeTarget = false;
-
-                // 거리 체크
-                if (sqrDistance <= detectionRangeSqr)
-                {
-                    // 시야각 체크
-                    if (perception.FieldOfView >= 360f)
-                    {
-                        // 전방향 감지
-                        canSeeTarget = true;
-                    }
-                    else
-                    {
-                        // 정면 방향 계산 (2D에서는 rotation을 사용하여 정면 벡터 계산)
-                        // Quaternion * Vector2.right로 정면 방향 구함
-                        Vector2 forward = transform.Rotation * Vector2.right;
-                        float distanceToPlayer = Mathf.Sqrt(sqrDistance);
-
-                        if (distanceToPlayer > 0.001f)
-                        {
-                            Vector2 directionToPlayer = toPlayer / distanceToPlayer;
-                            float angle = Vector2.Angle(forward, directionToPlayer);
-
-                            if (angle <= perception.FieldOfView * 0.5f)
-                            {
-                                canSeeTarget = true;
-                            }
-                        }
-                    }
-                }
+                // 진영 기반으로 가장 가까운 적 탐색 (FactionHelper 위임)
+                int targetEntityId = FactionHelper.FindNearestEnemy(
+                    entityId,
+                    transform.Position,
+                    transform.Rotation,
+                    selfFaction.FactionId,
+                    perception.DetectionRange * perception.DetectionRange,
+                    perception.FieldOfView,
+                    requireStatComponent: false,
+                    out Vector2 targetPosition,
+                    out float targetSqrDistance);
 
                 // 타겟 감지 성공
-                if (canSeeTarget)
+                if (targetEntityId != -1)
                 {
-                    // AICanSeeTargetTag 추가
-                    AR.s.Component.AddComponent(entityId, new AICanSeeTargetTag());
+                    cm.AddComponent(entityId, new AICanSeeTargetTag());
 
-                    // AIComponent 업데이트
-                    ai.TargetEntityId = playerEntityId;
-                    ai.LastKnownTargetPos = playerTransform.Position;
-                    AR.s.Component.SetComponent(entityId, ai);
+                    ai.TargetEntityId = targetEntityId;
+                    ai.LastKnownTargetPos = targetPosition;
+                    cm.SetComponent(entityId, ai);
 
-                    // 마지막 감지 시간 업데이트
                     perception.LastDetectionTime = Time.time;
-                    AR.s.Component.SetComponent(entityId, perception);
+                    cm.SetComponent(entityId, perception);
                 }
                 // 타겟 감지 실패
                 else
                 {
-                    // 타겟을 잃은 범위 체크
+                    // 마지막 알려진 타겟이 LoseTargetRange를 벗어났거나 5초 경과 시 타겟 잃음
                     float loseTargetRangeSqr = perception.LoseTargetRange * perception.LoseTargetRange;
 
-                    if (sqrDistance > loseTargetRangeSqr || Time.time - perception.LastDetectionTime > 5f)
+                    if (targetSqrDistance > loseTargetRangeSqr || Time.time - perception.LastDetectionTime > 5f)
                     {
-                        // AICanSeeTargetTag 제거
-                        AR.s.Component.RemoveComponent<AICanSeeTargetTag>(entityId);
+                        cm.RemoveComponent<AICanSeeTargetTag>(entityId);
 
-                        // 일정 시간(5초) 후 타겟 완전히 잃음
                         if (Time.time - perception.LastDetectionTime > 5f)
                         {
                             ai.TargetEntityId = -1;
-                            AR.s.Component.SetComponent(entityId, ai);
+                            cm.SetComponent(entityId, ai);
                         }
                     }
                 }
             }
         }
+
     }
 }

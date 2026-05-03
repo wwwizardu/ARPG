@@ -10,5 +10,6 @@ namespace ARPG.Component
         public bool IsAttacking;         // 공격 입력
         public bool IsInteracting;       // 상호작용 입력
         public bool IsSprinting;         // 달리기 입력
+        public int SkillSlotHeldMask;    // 슬롯별 입력 유지 비트마스크 (bit i = 슬롯 i 키 눌림). 채널링/차징 스킬에서 SlotIndex로 조회
     }
 }

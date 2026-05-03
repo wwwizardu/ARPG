@@ -1,0 +1,1 @@
+[{"Name":"LifeSteal_15%","EffectType":1,"Trigger":2,"Param1":15.0,"Param2":0.0,"Param3":0.0,"Probability":100,"Id":1001},{"Name":"OnHit_Bleed","EffectType":2,"Trigger":2,"Param1":1.0,"Param2":0.0,"Param3":0.0,"Probability":100,"Id":1002},{"Name":"Delegate_Totem_8s","EffectType":3,"Trigger":0,"Param1":8.0,"Param2":0.0,"Param3":0.0,"Probability":100,"Id":1010}]

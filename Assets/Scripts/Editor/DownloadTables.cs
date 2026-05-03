@@ -54,7 +54,10 @@ namespace ARPG.Editor
 
             await DownloadTable<DropEquipmentTable>("1267382287&range=A:V", 1, SaveType.String);
 
-            await DownloadTable<SkillTable>("92727160&range=A:AE", 1, SaveType.String);
+            await DownloadTable<SkillTable>("92727160&range=A:AK", 1, SaveType.String);
+
+            // Phase 1: SkillEffect 합성 시스템용 신규 테이블
+            await DownloadTable<SkillEffectTable>("1681865950&range=A:H", 1, SaveType.String);
 
             await DownloadTable<BuffTable>("127577579&range=A:J", 1, SaveType.String);
 
@@ -173,6 +176,10 @@ namespace ARPG.Editor
                 else if (table is SkillTable skillTable)
                 {
                     ParseSkillTable(skillTable, values);
+                }
+                else if (table is SkillEffectTable skillEffectTable)
+                {
+                    ParseSkillEffectTable(skillEffectTable, values);
                 }
                 else if (table is AiTable aiTable)
                 {
@@ -532,6 +539,9 @@ namespace ARPG.Editor
             table.EquipmentId = int.Parse(values[6]);
             table.CurrencyPoolMode = int.Parse(values[7]);
             table.EquipmentPoolMode = int.Parse(values[8]);
+
+            // 스킬북 드랍 가중치 (SKILLBOOK_DESIGN.md §10) — 신규 컬럼, 빈 셀 허용 (= 0)
+            table.SkillBookRate = values.Length > 9 && int.TryParse(values[9], out var sbr) ? sbr : 0;
         }
 
         private static void ParseDropCurrencyTable(DropCurrencyTable table, string[] values)
@@ -592,42 +602,89 @@ namespace ARPG.Editor
 
         private static void ParseSkillTable(SkillTable table, string[] values)
         {
-            if (values.Length < 31)
+            if (values.Length < 32)
             {
-                Debug.LogError($"[ParseSkillTable] Invalid data length. Expected at least 31, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseSkillTable] Invalid data length. Expected at least 32, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
             table.Name = values[1];
             table.Desctiption = values[2];
-            table.Tags = ParseSkillTags(values[3]);
-            table.SkillType = (GlobalEnum.SkillType)Enum.Parse(typeof(GlobalEnum.SkillType), values[4]);
-            table.SubType = (GlobalEnum.SkillSubType)Enum.Parse(typeof(GlobalEnum.SkillSubType), values[5]);
-            table.SkillRangeMin = float.Parse(values[6]);
-            table.SkillRangeMax = float.Parse(values[7]);
-            table.Cooltime = float.Parse(values[8]);
-            table.Mana = int.Parse(values[9]);
-            table.StartTime = float.Parse(values[10]);
-            table.ProcessTime = float.Parse(values[11]);
-            table.EndTime = float.Parse(values[12]);
-            table.DamageTime = float.Parse(values[13]);
-            table.HitCount = int.Parse(values[14]);
-            table.HitInterval = float.Parse(values[15]);
-            table.DamageType = (GlobalEnum.DamageType)Enum.Parse(typeof(GlobalEnum.DamageType), values[16]);
-            table.DamageMin = int.Parse(values[17]);
-            table.DamageMax = int.Parse(values[18]);
-            table.SkillTargetType = (GlobalEnum.SkillTargetType)Enum.Parse(typeof(GlobalEnum.SkillTargetType), values[19]);
-            table.SkillTargetRange1 = float.Parse(values[20]);
-            table.SkillTargetRange2 = float.Parse(values[21]);
-            table.AnimationName = values[22];
-            table.StartEffectName = values[23];
-            table.ActivateName = values[24];
-            table.HitEffect = values[25];
-            table.ProjectileId = int.Parse(values[26]);
-            table.ArcHeight = float.Parse(values[27]);
-            table.BaseCriRate = int.Parse(values[28]);
-            table.BaseDamageMul = int.Parse(values[29]);
-            table.BaseAttackSpeedMul = int.Parse(values[30]);
+            // 스킬북 시스템 (SKILLBOOK_DESIGN.md §3.3) — Desctiption 다음 컬럼. ItemTable.Tier 체계 공유
+            table.Tier = values.Length > 3 && int.TryParse(values[3], out var tier) ? tier : 0;
+            table.Tags = ParseSkillTags(values[4]);
+            table.SkillType = (GlobalEnum.SkillType)Enum.Parse(typeof(GlobalEnum.SkillType), values[5]);
+            table.SubType = (GlobalEnum.SkillSubType)Enum.Parse(typeof(GlobalEnum.SkillSubType), values[6]);
+            table.SkillRangeMin = float.Parse(values[7]);
+            table.SkillRangeMax = float.Parse(values[8]);
+            table.Cooltime = float.Parse(values[9]);
+            table.Mana = int.Parse(values[10]);
+            table.StartTime = float.Parse(values[11]);
+            table.ProcessTime = float.Parse(values[12]);
+            table.EndTime = float.Parse(values[13]);
+            table.DamageTime = float.Parse(values[14]);
+            table.HitCount = int.Parse(values[15]);
+            table.HitInterval = float.Parse(values[16]);
+            table.DamageType = (GlobalEnum.DamageType)Enum.Parse(typeof(GlobalEnum.DamageType), values[17]);
+            table.DamageMin = int.Parse(values[18]);
+            table.DamageMax = int.Parse(values[19]);
+            table.SkillTargetType = (GlobalEnum.SkillTargetType)Enum.Parse(typeof(GlobalEnum.SkillTargetType), values[20]);
+            table.SkillTargetRange1 = float.Parse(values[21]);
+            table.SkillTargetRange2 = float.Parse(values[22]);
+            table.AnimationName = values[23];
+            table.StartEffectName = values[24];
+            table.ActivateName = values[25];
+            table.HitEffect = values[26];
+            table.ProjectileId = int.Parse(values[27]);
+            table.ArcHeight = float.Parse(values[28]);
+            table.BaseCriRate = int.Parse(values[29]);
+            table.BaseDamageMul = int.Parse(values[30]);
+            table.BaseAttackSpeedMul = int.Parse(values[31]);
+
+            // Phase 1·2: SkillEffect 합성 + ExecutionType 컬럼화 (빈 셀 허용)
+            table.SkillEffectIds     = ParseIntCsv(values.Length > 32 ? values[32] : "");
+            table.ExecutionType      = values.Length > 33 && int.TryParse(values[33], out var et) ? et : 1;
+            table.ChannelingInterval = values.Length > 34 && float.TryParse(values[34], out var ci) ? ci : 0f;
+            table.MaxChargeTime      = values.Length > 35 && float.TryParse(values[35], out var mct) ? mct : 0f;
+            table.MinChargeRatio     = values.Length > 36 && float.TryParse(values[36], out var mcr) ? mcr : 0f;
+        }
+
+        /// <summary>
+        /// Phase 1: SkillEffectTable 파서. 8개 컬럼 (Id, Name, EffectType, Trigger, Param1~3, Probability)
+        /// </summary>
+        private static void ParseSkillEffectTable(SkillEffectTable table, string[] values)
+        {
+            if (values.Length < 4)
+            {
+                Debug.LogError($"[ParseSkillEffectTable] Invalid data length. Expected at least 4, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            table.Name = values[1];
+            table.EffectType = (GlobalEnum.SkillEffectType)Enum.Parse(typeof(GlobalEnum.SkillEffectType), values[2]);
+            table.Trigger = (GlobalEnum.SkillTrigger)Enum.Parse(typeof(GlobalEnum.SkillTrigger), values[3]);
+            table.Param1 = values.Length > 4 && float.TryParse(values[4], out var p1) ? p1 : 0f;
+            table.Param2 = values.Length > 5 && float.TryParse(values[5], out var p2) ? p2 : 0f;
+            table.Param3 = values.Length > 6 && float.TryParse(values[6], out var p3) ? p3 : 0f;
+            table.Probability = values.Length > 7 && int.TryParse(values[7], out var prob) ? prob : 100;
+        }
+
+        /// <summary>
+        /// CSV 형식 정수 리스트 파싱. 빈 문자열이면 null 반환.
+        /// 예: "1001,1002" → [1001, 1002], "" → null
+        /// </summary>
+        private static List<int> ParseIntCsv(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+                return null;
+            var list = new List<int>();
+            var tokens = raw.Split(',');
+            for (int i = 0; i < tokens.Length; i++)
+            {
+                if (int.TryParse(tokens[i].Trim(), out var v))
+                    list.Add(v);
+            }
+            return list.Count > 0 ? list : null;
         }
 
         private static GlobalEnum.SkillTag ParseSkillTags(string tagsRaw)

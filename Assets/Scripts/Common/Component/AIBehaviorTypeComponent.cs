@@ -8,7 +8,8 @@ namespace ARPG.Component
         PatrolRanged,   // 순찰형 (NPC 원거리)
         Defensive,      // 방어형
         Aggressive,     // 공격적
-        Support         // 지원형
+        Support,        // 지원형
+        Stationary      // 정지형 (토템·터렛·지뢰 — 이동 없이 사거리 내 적 자동 시전)
     }
 
     public struct AIBehaviorTypeComponent

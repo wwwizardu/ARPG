@@ -40,6 +40,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1883f93cec5a4964cb4a098af4de9201
+    m_Address: UI/TooltipUIT
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2008348491dbf52499c601a47881fe76
     m_Address: Sprites/Items/MerchantStall
     m_ReadOnly: 0
@@ -162,6 +167,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8e2b6f4a9c1d4e3a8b6c2d1e7f5a9bd3
     m_Address: UI/UIVillage
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8fe71ad63d2ad69469b43d5aeb1d0605
+    m_Address: UI/SkillBook
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

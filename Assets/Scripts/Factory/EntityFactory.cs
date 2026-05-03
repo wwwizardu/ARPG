@@ -2,6 +2,7 @@
 using System.Threading;
 using ARPG.Base;
 using ARPG.Component;
+using ARPG.Data;
 using ARPG.Tables;
 using ARPG.Utility;
 using Cysharp.Threading.Tasks;
@@ -60,6 +61,9 @@ namespace ARPG.Factory
 
             // MonsterTag (System_EntityDestroy에서 MonsterManager 연동에 사용)
             AR.s.Component.AddComponent(entityId, new MonsterTag());
+
+            // 진영 (적대) - 스킬·발사체·AI 타겟 필터에 사용
+            AR.s.Component.AddComponent(entityId, new FactionComponent { FactionId = Faction.Hostile });
 
             if (table.AiTableId > 0)
             {
@@ -253,12 +257,21 @@ namespace ARPG.Factory
                 IsInitialized = false
             });
 
+            // 진영 (플레이어) - 스킬·발사체·AI 타겟 필터에 사용. 토템·지뢰는 이 값을 그대로 복사
+            AR.s.Component.AddComponent(entityId, new FactionComponent { FactionId = Faction.Player });
+
             // 저장된 장비의 스탯 modifier 복원
             EquipHelper.ApplyAllEquipmentModifiers(entityId, AR.s.Data.Player._inventoryEquip);
 
-            // 플레이어 스킬
-            CreateSkill(entityId, 0, 1); // 슬롯 0: Strike
-            CreateSkill(entityId, 1, 5); // 슬롯 1: QuickHop (Space 키로 발동)
+            // 플레이어 스킬 — _skillBookSlots에 장착된 책의 SkillId로 슬롯별 스킬 엔티티 생성 (SKILLBOOK_DESIGN.md §2.6)
+            ItemData?[] skillBookSlots = AR.s.Data.Player._skillBookSlots;
+            for (int i = 0; i < skillBookSlots.Length; i++)
+            {
+                ItemData? book = skillBookSlots[i];
+                if (book == null || book.SkillBook == null) continue;
+                if (book.SkillBook.SkillId <= 0) continue;
+                CreateSkill(entityId, i, book.SkillBook.SkillId);
+            }
 
             RegisterToSystems(entityId, obj, table.AnimationId);
 
@@ -482,6 +495,97 @@ namespace ARPG.Factory
         }
 
         /// <summary>
+        /// 토템 엔티티 생성. caster의 StatComponent를 스냅샷 복사하고 caster 진영을 그대로 따름.
+        /// 슬롯 0에 지정 스킬을 생성하며, System_Totem이 자율로 사거리 내 적에게 발사한다.
+        /// LifetimeComponent로 만료되면 System_Lifetime이 DestroyTag를 부착.
+        /// </summary>
+        /// <param name="casterEntityId">시전자(플레이어 등) - 스탯 스냅샷 출처</param>
+        /// <param name="skillId">토템이 시전할 SkillTable ID</param>
+        /// <param name="position">토템 스폰 위치</param>
+        /// <param name="duration">토템 생존 시간(초)</param>
+        /// <returns>생성된 토템 엔티티 ID, 실패 시 -1</returns>
+        public static int CreateTotem(int casterEntityId, int skillId, Vector2 position, float duration)
+        {
+            ComponentManager cm = AR.s.Component;
+
+            // caster 검증
+            if (cm.TryGetComponent<StatComponent>(casterEntityId, out var casterStat) == false)
+            {
+                Debug.LogError($"[EntityFactory] CreateTotem - caster has no StatComponent: {casterEntityId}");
+                return -1;
+            }
+            if (cm.TryGetComponent<FactionComponent>(casterEntityId, out var casterFaction) == false)
+            {
+                Debug.LogError($"[EntityFactory] CreateTotem - caster has no FactionComponent: {casterEntityId}");
+                return -1;
+            }
+
+            int totemId = EntityIdHelper.CreateEntity();
+
+            // 위치/이동/충돌
+            cm.AddComponent(totemId, new TransformComponent
+            {
+                Position = position,
+                Rotation = 0f,
+                Scale = Vector2.one
+            });
+            cm.AddComponent(totemId, new VelocityComponent
+            {
+                Direction = Vector2.zero,
+                Speed = 0f,
+                SprintMultiplier = 1f
+            });
+            cm.AddComponent(totemId, new ColliderComponent
+            {
+                Radius = 0.30f
+            });
+
+            // 상태/스탯 (caster 스냅샷)
+            cm.AddComponent(totemId, casterStat);
+            cm.AddComponent(totemId, new StateComponent
+            {
+                Condition = Creature.CharacterConditions.Normal,
+                ConditionPrev = Creature.CharacterConditions.Normal,
+                MoveState = Creature.MovementStates.Idle,
+                MovementStatePrev = Creature.MovementStates.Idle
+            });
+
+            // 진영/링크/수명/식별
+            cm.AddComponent(totemId, new FactionComponent { FactionId = casterFaction.FactionId });
+            cm.AddComponent(totemId, new CasterLinkComponent { CasterEntityId = casterEntityId });
+            cm.AddComponent(totemId, new LifetimeComponent { Remaining = duration });
+            cm.AddComponent(totemId, new TotemTag());
+
+            // 슬롯 0에 스킬 생성 (AI 컴포넌트보다 먼저 - AttackRange 계산이 SkillTable.SkillRangeMax를 참조)
+            CreateSkill(totemId, 0, skillId);
+
+            // AI 컴포넌트: Stationary 프로필 - StationaryAttackStateHandler가 사거리 내 적 자율 시전
+            // AIComponent / AIPerceptionComponent / PathfindingComponent는 추가 안 함:
+            //  - StationaryAttackStateHandler가 FactionHelper로 직접 타겟 탐색 (AI Perception 우회)
+            //  - 정지 상태이므로 Pathfinding 불필요
+            float skillRange = 0f;
+            Tables.SkillTable? skillTable = AR.s.Data.GetSkill(skillId);
+            if (skillTable != null)
+                skillRange = skillTable.SkillRangeMax;
+
+            cm.AddComponent(totemId, new AIBehaviorTypeComponent
+            {
+                BehaviorType = AIBehaviorType.Stationary,
+                AggroRange = skillRange,
+                AttackRange = skillRange,
+                KeepDistance = 0f
+            });
+            cm.AddComponent(totemId, new AIStateComponent
+            {
+                CurrentState = AIState.Idle,
+                SpawnPosition = position
+            });
+
+            Debug.Log($"[EntityFactory] CreateTotem - TotemId: {totemId}, Caster: {casterEntityId}, SkillId: {skillId}, Position: {position}, Duration: {duration}");
+            return totemId;
+        }
+
+        /// <summary>
         /// 지정 슬롯에 스킬 생성
         /// </summary>
         public static void CreateSkill(int ownerEntityId, int slotIndex, int skillId)
@@ -505,9 +609,12 @@ namespace ARPG.Factory
                 Table = skillTable,
                 IsInitialized = true,
                 IsEnabled = true,
-                ExecutionType = SkillExecutionType.MultiHit,
+                ExecutionType = (SkillExecutionType)skillTable.ExecutionType,
                 HitCount = skillTable.HitCount > 0 ? skillTable.HitCount : 1,
                 HitInterval = skillTable.HitInterval,
+                ChannelingInterval = skillTable.ChannelingInterval,
+                MaxChargeTime = skillTable.MaxChargeTime,
+                MinChargeRatio = skillTable.MinChargeRatio,
             });
 
             AR.s.Component.AddComponent(skillEntityId, new SkillStateComponent
@@ -527,6 +634,29 @@ namespace ARPG.Factory
             });
 
             AR.s.Component.AddComponent(skillEntityId, new SkillTargetComponent());
+        }
+
+        /// <summary>
+        /// 지정 슬롯의 스킬 엔티티 제거 (SKILLBOOK_DESIGN.md §2.6).
+        /// 결정적 ID로 스킬 엔티티를 찾아 ECS 컴포넌트 일괄 제거 + 슬롯 해제.
+        /// 슬롯이 비어 있으면 (등록되지 않은 ID) 조용히 무시.
+        /// </summary>
+        public static void RemoveSkill(int ownerEntityId, int slotIndex)
+        {
+            int skillEntityId = EntityIdHelper.GetDeterministicId(ownerEntityId, EntityIdCategory.Skill, slotIndex);
+            if (skillEntityId == -1)
+            {
+                Debug.LogWarning($"[EntityFactory] RemoveSkill - Invalid skill entity ID. Owner: {ownerEntityId}, Slot: {slotIndex}");
+                return;
+            }
+
+            // 등록되지 않은 슬롯(스킬 미장착)은 정상 케이스 — 경고 없이 무시
+            if (EntityIdHelper.IsEntityRegistered(skillEntityId) == false)
+            {
+                return;
+            }
+
+            EntityIdHelper.DestroySkillEntity(skillEntityId);
         }
 
         /// <summary>

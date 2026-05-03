@@ -24,6 +24,7 @@ namespace ARPG.Data
         private ImmutableDictionary<int, Tables.DropCurrencyTable> _dropCurrencyTable = null!;
         private ImmutableDictionary<int, Tables.DropEquipmentTable> _dropWeaponBaseStatTable = null!;
         private ImmutableDictionary<int, Tables.SkillTable> _skillTable = null!;
+        private ImmutableDictionary<int, Tables.SkillEffectTable> _skillEffectTable = null!;
         private ImmutableDictionary<int, Tables.AiTable> _aiTable = null!;
         private ImmutableDictionary<int, Tables.BuffTable> _buffTable = null!;
         private ImmutableDictionary<int, Tables.BuffEffectTable> _buffEffectTable = null!;
@@ -53,6 +54,7 @@ namespace ARPG.Data
                 LoadTable<Tables.DropCurrencyTable>("DropCurrencyTable.bytes", tables => _dropCurrencyTable = tables),
                 LoadTable<Tables.DropEquipmentTable>("DropEquipmentTable.bytes", tables => _dropWeaponBaseStatTable = tables),
                 LoadTable<Tables.SkillTable>("SkillTable.bytes", tables => _skillTable = tables),
+                LoadTable<Tables.SkillEffectTable>("SkillEffectTable.bytes", tables => _skillEffectTable = tables),
                 LoadTable<Tables.AiTable>("AiTable.bytes", tables => _aiTable = tables),
                 LoadTable<Tables.BuffTable>("BuffTable.bytes", tables => _buffTable = tables),
                 LoadTable<Tables.BuffEffectTable>("BuffEffectTable.bytes", tables => _buffEffectTable = tables),
@@ -295,6 +297,14 @@ namespace ARPG.Data
             return null;
         }
 
+        /// <summary>
+        /// 전체 스킬 테이블 목록 반환 (스킬북 풀 빌드 등에 사용)
+        /// </summary>
+        public List<Tables.SkillTable> GetAllSkills()
+        {
+            return new List<Tables.SkillTable>(_skillTable.Values);
+        }
+
         public Tables.AiTable? GetAiTable(int id)
         {
             if (_aiTable.TryGetValue(id, out var table))
@@ -334,6 +344,16 @@ namespace ARPG.Data
         public Tables.JobBonusTable? GetJobBonusByJobType(GlobalEnum.JobType jobType)
         {
             if (_jobBonusByJobType.TryGetValue((int)jobType, out var table))
+            {
+                return table;
+            }
+
+            return null;
+        }
+
+        public Tables.SkillEffectTable? GetSkillEffect(int id)
+        {
+            if (_skillEffectTable.TryGetValue(id, out var table))
             {
                 return table;
             }

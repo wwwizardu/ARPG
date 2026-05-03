@@ -194,8 +194,8 @@ namespace ARPG.Tables
         // Phase D: 상점 거래 컬럼
         [JsonProperty("BasePrice")] public int BasePrice;                       // 매물 기본가 (Gold). 0이면 비매품
         [JsonProperty("SellRatioBp")] public int SellRatioBp;                   // 매각 비율 ×100 (50=0.5, 40=0.4). 0이면 매각 불가
-        [JsonProperty("ReturnResourceType")] public int ReturnResourceType;     // 매각 시 마을 환원 자원 (ItemType enum, 0=환원 없음)
-        [JsonProperty("ReturnRatioBp")] public int ReturnRatioBp;               // 환원 비율 ×100 (50/100). 0=환원 없음
+        [JsonProperty("ReturnResourceType")] public int ReturnResourceType;     // 마을 상인에 매각 시 마을 Storage로 환원될 자원 종류 (ItemType enum 값). 0=환원 없음. ex) 나무공예품 매각 → Wood 일부 회수
+        [JsonProperty("ReturnRatioBp")] public int ReturnRatioBp;               // 환원량 비율 ×100 (basis points). returnAmount = amount × ReturnRatioBp / 100. ex) 50이면 매각 수량의 50%가 ReturnResourceType 자원으로 마을 창고에 적립. 0=환원 없음
     }
 
      [Serializable]
@@ -285,6 +285,9 @@ namespace ARPG.Tables
         [JsonProperty("EquipmentRate")] public int EquipmentRate;           // Drop 장비 확률
         [JsonProperty("EquipmentId")] public int EquipmentId;               // Drop 장비 테이블 Id
         [JsonProperty("EquipmentPoolMode")] public int EquipmentPoolMode;   // 0=Explicit, 1=Pool
+
+        // 스킬북 드랍 (SKILLBOOK_DESIGN.md §10) — Pool 모드 전용. SkillTable.Tier == DropTable.Tier 매칭 풀에서 랜덤 픽
+        [JsonProperty("SkillBookRate")] public int SkillBookRate;           // Drop 스킬북 가중치. 0=드랍 없음
     }
 
     [Serializable]
@@ -309,6 +312,8 @@ namespace ARPG.Tables
     {
         [JsonProperty("Name")] public string Name = string.Empty;               // 이름
         [JsonProperty("Desctiption")] public string Desctiption = string.Empty; // 설명
+        // 스킬북 시스템 (SKILLBOOK_DESIGN.md §3.3) — ItemTable.Tier와 같은 등급 체계 공유
+        [JsonProperty("Tier")] public int Tier;                                   // 이 스킬이 들어갈 스킬북 등급(=ItemTable.Tier). 1=Common, 2=Rare, 3=Epic. 0이면 책 드랍/상점 풀에서 제외
         [JsonProperty("Tags")] public GE.SkillTag Tags;                           // 스킬 태그 (비트 플래그)
         [JsonProperty("SkillType")] public GE.SkillType SkillType;              // 스킬 타입
         [JsonProperty("SubType")] public GE.SkillSubType SubType;               // 스킬 서브 타입
@@ -338,7 +343,29 @@ namespace ARPG.Tables
         [JsonProperty("BaseDamageMul")] public int BaseDamageMul = 100;                  // 스킬 베이스 데미지 배율 (100=1.0x). 플랫 데미지(베이스+Added) 합산 후 스킬 배율/치명타보다 먼저 적용
         [JsonProperty("BaseAttackSpeedMul")] public int BaseAttackSpeedMul = 100;        // 스킬 베이스 공속 배율 (100=1.0x). 무기 공속에 곱한 뒤 FinalAttackSpeed% 적용
 
+        // Phase 1: SkillEffect 합성 시스템 - 이 스킬에 부착된 효과 ID 목록 (SkillEffectTable 참조)
+        [JsonProperty("SkillEffectIds")] public List<int>? SkillEffectIds = null;
+        // Phase 2: ExecutionType 컬럼화 - 0=Single, 1=MultiHit, 2=Channeling, 3=Toggle, 4=Charge (Component.SkillExecutionType과 매칭)
+        [JsonProperty("ExecutionType")] public int ExecutionType = 1;                    // 기본 MultiHit (HitCount=1이면 사실상 Single)
+        [JsonProperty("ChannelingInterval")] public float ChannelingInterval;            // Channeling: 효과 적용 간격(초)
+        [JsonProperty("MaxChargeTime")] public float MaxChargeTime;                      // Charge: 최대 차징 시간(초)
+        [JsonProperty("MinChargeRatio")] public float MinChargeRatio;                    // Charge: 최소 차징 비율(0~1)
+    }
 
+    /// <summary>
+    /// Phase 1: 스킬에 합성 가능한 효과 정의. SkillTable.SkillEffectIds가 이 테이블을 참조.
+    /// 한 효과 = (Trigger 시점, EffectType, 파라미터 3개, 발동 확률).
+    /// </summary>
+    [Serializable]
+    public class SkillEffectTable : TableBase
+    {
+        [JsonProperty("Name")] public string Name = string.Empty;
+        [JsonProperty("EffectType")] public GE.SkillEffectType EffectType;   // 효과 종류 (LifeStealOnHit 등)
+        [JsonProperty("Trigger")] public GE.SkillTrigger Trigger;             // 발동 시점 (OnHit 등)
+        [JsonProperty("Param1")] public float Param1;                        // 효과별 파라미터 1
+        [JsonProperty("Param2")] public float Param2;                        // 효과별 파라미터 2
+        [JsonProperty("Param3")] public float Param3;                        // 효과별 파라미터 3
+        [JsonProperty("Probability")] public int Probability = 100;          // 발동 확률(%) 100=항상
     }
 
     [Serializable]

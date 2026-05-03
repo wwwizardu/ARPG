@@ -6,17 +6,17 @@ using UnityEngine;
 namespace ARPG.Systems
 {
     /// <summary>
-    /// HP 체크 시스템
-    /// HpDirtyTag가 있는 엔티티의 CurrentHp를 검사하여 0 이하일 경우 사망 처리
+    /// HP 체크 + UI 동기화 시스템
+    /// HpDirtyTag가 있는 엔티티의 CurrentHp를 검사하여 사망 처리하고, HP바 UI를 갱신한다.
     ///
     /// 실행 흐름:
     /// 1. HpDirtyTag가 있는 엔티티 순회
-    /// 2. CurrentHp가 0 이하인 엔티티 탐지
-    /// 3. 상태 변경 (Dead) + 스킬 중지
-    /// 4. DropComponent가 있으면 아이템 드랍 처리
-    /// 5. DestroyTag 추가 (엔티티 제거 예약)
-    /// 6. DeathMessage 전송 (비주얼 이펙트용)
-    /// 7. HpDirtyTag 제거
+    /// 2. CurrentHp가 0 이하면 사망 처리 (상태/스킬/드랍/DestroyTag/DeathMessage)
+    /// 3. UI 동기화용 DamageMessage(DamageAmount=0) 발송 → HpBarView fillAmount 갱신
+    /// 4. HpDirtyTag 제거
+    ///
+    /// → SetCurrentHp() 호출만으로 UI 갱신이 보장됨. 호출자는 floating text가 필요할 때만
+    ///   별도 DamageMessage(상세 정보 포함)를 보내면 된다.
     /// </summary>
     public class System_HpCheck : IFixedUpdateSystem
     {
@@ -87,6 +87,22 @@ namespace ARPG.Systems
                         KillerEntityId = 0
                     });
                 }
+
+                // HP 동기화 메시지 — HpBarView 등 UI 갱신용
+                // DamageAmount=0 → fillAmount만 갱신, 텍스트/이펙트 미표시 (HpBarView.cs:44-46)
+                // 호출자가 별도 DamageMessage(상세 정보 포함)를 보낸 경우와 중복돼도 같은 값으로 set되므로 무해
+                AR.s.Message.SendToEntity(new DamageMessage
+                {
+                    TargetEntityId = entityId,
+                    DamageAmount = 0,
+                    AttackerEntityId = -1,
+                    DamageType = GlobalEnum.DamageType.Physics,
+                    IsCritical = false,
+                    IsEvaded = false,
+                    IsBlocked = false,
+                    CurrentHp = stat.CurrentHp,
+                    MaxHp = stat.FinalMaxHp,
+                });
 
                 // 태그 제거
                 cm.RemoveComponent<HpDirtyTag>(entityId);

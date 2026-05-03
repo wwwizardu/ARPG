@@ -1,5 +1,6 @@
 #nullable enable
 using System.Collections.Generic;
+using ARPG.Data;
 using ARPG.Tables;
 using UnityEngine;
 
@@ -37,31 +38,37 @@ namespace ARPG.Utility
                 nothingRate = nothingRate * 100 / (100 + dropRateBonus);
             }
 
-            // 드랍 아이템 결정
-            int totalRate = nothingRate + dropTable.CurrencyRate + dropTable.EquipmentRate;
+            // 드랍 카테고리 결정 (SkillBook 가중치 포함, SKILLBOOK_DESIGN.md §10)
+            int totalRate = nothingRate + dropTable.CurrencyRate + dropTable.EquipmentRate + dropTable.SkillBookRate;
+            if (totalRate <= 0)
+            {
+                Debug.Log($"[DropHelper] DropId({dropId}) totalRate=0 → 드랍 스킵. (의도적 무드랍 행이거나 데이터 누락)");
+                return;
+            }
             int randomValue = Random.Range(0, totalRate);
 
             // 아무것도 안 떨어짐
             if (randomValue < nothingRate)
                 return;
 
-            int dropItemId = 0;
-
-            // 화폐 vs 장비 결정
+            // 화폐
             if (randomValue < nothingRate + dropTable.CurrencyRate)
             {
-                dropItemId = SelectCurrencyItem(dropTable, monsterLevel, dropRarityBonus);
-            }
-            else
-            {
-                dropItemId = SelectEquipmentItem(dropTable, monsterLevel, dropRarityBonus);
-            }
-
-            if (dropItemId <= 0)
+                int dropItemId = SelectCurrencyItem(dropTable, monsterLevel, dropRarityBonus);
+                if (dropItemId > 0) CreateDropItemAsync(dropItemId, position);
                 return;
+            }
 
-            // 비동기로 아이템 GameObject 생성
-            CreateDropItemAsync(dropItemId, position);
+            // 장비
+            if (randomValue < nothingRate + dropTable.CurrencyRate + dropTable.EquipmentRate)
+            {
+                int dropItemId = SelectEquipmentItem(dropTable, monsterLevel, dropRarityBonus);
+                if (dropItemId > 0) CreateDropItemAsync(dropItemId, position);
+                return;
+            }
+
+            // 스킬북 — DropTable.Tier에 매칭되는 책 + 같은 Tier 스킬 풀에서 랜덤 픽
+            CreateSkillBookDropAsync(dropTable.Tier, position);
         }
 
         private static int SelectCurrencyItem(DropTable dropTable, int monsterLevel, int dropRarityBonus)
@@ -140,6 +147,25 @@ namespace ARPG.Utility
             if (await AR.s.Item.CreateItem(itemId, 1, position) == false)
             {
                 Debug.LogError($"[DropHelper] Failed to create item with Id({itemId})");
+            }
+        }
+
+        /// <summary>
+        /// 스킬북 드랍 (SKILLBOOK_DESIGN.md §10) — DropTable.Tier에 매칭되는 등급 책 + 같은 Tier 스킬 풀에서 랜덤 SkillId.
+        /// 풀이 비어 있으면 (책 ItemTable 행 없음 또는 SkillTable.Tier 미입력) 조용히 드랍 스킵.
+        /// </summary>
+        private static async void CreateSkillBookDropAsync(int tier, Vector3 position)
+        {
+            ItemData? book = AR.s.Item.CreateRandomSkillBookOfTier(tier);
+            if (book == null)
+            {
+                Debug.LogWarning($"[DropHelper] SkillBook drop skipped — Tier({tier})에 매칭되는 책 또는 스킬 풀이 비어있음");
+                return;
+            }
+
+            if (await AR.s.Item.CreateItemFromData(book, position) == false)
+            {
+                Debug.LogError($"[DropHelper] Failed to spawn SkillBook drop. Tier({tier}), ItemId({book.Id}), SkillId({book.SkillBook?.SkillId})");
             }
         }
     }

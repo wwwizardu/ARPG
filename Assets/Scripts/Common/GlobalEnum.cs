@@ -141,6 +141,7 @@ public class GlobalEnum
         Gold = 10,      // 골드 (화폐)
         Herb = 11,      // 약초/마법 재료
         Object = 12,    // 건축 자재
+        SkillBook = 100,  // 스킬북 (새 스킬 획득)
 
     }
 
@@ -172,6 +173,8 @@ public class GlobalEnum
 
         // 건축 자재
         WoodWall,           // 나무 벽 (건축 자재)
+
+        SkillBook = 100,          // 스킬북 (새 스킬 획득)
     }
 
     public enum TeamType
@@ -222,6 +225,37 @@ public class GlobalEnum
         SingleEntity,
         Direction,
         Position,   // 지점 지정 (마우스 위치로 도약하는 Leap Slam 등)
+    }
+
+    /// <summary>
+    /// 스킬 효과(SkillEffect)의 발동 시점.
+    /// SkillEffectExecutor가 이 트리거에 매칭되는 효과만 실행한다.
+    /// </summary>
+    public enum SkillTrigger : byte
+    {
+        OnSkillCommand,     // 시전 명령 처리 직전 (캔슬·시전 위임 가능)
+        OnSkillStart,       // Process 단계 진입 직후 (시전 확정)
+        OnHit,              // 적중한 적마다 1회
+        OnCrit,             // 치명타 적중 (OnHit과 함께 발화)
+        OnKill,             // 적중으로 적이 사망
+        OnProjectileSpawn,  // 발사체 생성 직후
+        OnProjectileHit,    // 발사체 적중 시
+        OnSkillEnd,         // End 단계 종료
+    }
+
+    /// <summary>
+    /// 스킬에 합성 가능한 효과 타입. SkillEffectTable이 이 enum + (Param1/2/3)으로 효과를 정의.
+    /// 새 효과 추가 시 enum 1줄 + SkillEffectExecutor에 case 1개만 추가하면 데이터로 합성 가능.
+    /// </summary>
+    public enum SkillEffectType : byte
+    {
+        None = 0,
+        LifeStealOnHit,         // OnHit. Param1=흡혈 비율(%)
+        ApplyBuffOnHit,         // OnHit. Param1=BuffId, Param2=스택, Param3=지속시간 오버라이드(0=기본)
+        DelegateToTotem,        // OnSkillCommand. Param1=토템 생존시간(초), Param2=캐스팅 거리 오프셋(0=시전자 위치). 시전 캔슬 후 토템이 자율 발사
+        // 향후 확장 슬롯 (구현은 후속 페이즈)
+        // ManaRestoreOnKill, SpawnProjectileOnHit, SpawnAreaEffectOnKill,
+        // KnockbackOnHit, DelegateToMine, DelegateToTrap, ...
     }
 
     public enum AiType
@@ -341,4 +375,9 @@ public class GlobalEnum
     }
 
     static public ushort PLAYER_INVENTORY_SLOTCOUNT_MAX = 60;
+
+    // 스킬북 시스템 (SKILLBOOK_DESIGN.md §3.1)
+    public const int PLAYER_SKILL_SLOT_COUNT = 10;          // 플레이어 스킬 슬롯 수 (0~9). 슬롯 0=좌클릭, 1=Space, 2~9=숫자키 1~8
+    public const int DEFAULT_SKILLBOOK_ITEM_ID_COMMON = 5000; // 신규 플레이어에게 시드되는 Common 등급 책 ItemId
+    public const int DEFAULT_STARTER_SKILL_ID = 1;          // 신규 플레이어 슬롯 0에 시드되는 기본 스킬 (Strike)
 }

@@ -16,6 +16,9 @@ namespace ARPG.Data
 
         public EquipmentData? Equipment;
 
+        // 스킬북 시스템 (SKILLBOOK_DESIGN.md §3.2) — Table.ItemType==SkillBook 일 때만 셋
+        public SkillBookData? SkillBook;
+
         public int Quantity;
 
         [NonSerialized] public ItemTable? Table;
@@ -38,6 +41,31 @@ namespace ARPG.Data
             if (Equipment != null)
             {
                 Equipment.OnLoadCompleted(Table);
+            }
+
+            if (SkillBook != null)
+            {
+                SkillBook.OnLoadCompleted();
+            }
+        }
+    }
+
+    /// <summary>
+    /// 스킬북 인스턴스 데이터. 같은 ItemId(등급 책)라도 SkillId가 다르면 다른 책으로 취급.
+    /// EquipmentData가 ItemData의 인스턴스 변동분이듯, SkillBookData도 같은 패턴.
+    /// </summary>
+    [Serializable]
+    public class SkillBookData
+    {
+        public int SkillId;
+
+        [NonSerialized] public SkillTable? Table;
+
+        public void OnLoadCompleted()
+        {
+            if (Table == null)
+            {
+                Table = AR.s.Data.GetSkill(SkillId);
             }
         }
     }

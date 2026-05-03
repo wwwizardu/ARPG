@@ -1,6 +1,7 @@
 using ARPG.Component;
 using ARPG.Skill.Combat;
 using UnityEngine;
+using GE = GlobalEnum;
 
 namespace ARPG.Systems
 {
@@ -75,8 +76,8 @@ namespace ARPG.Systems
             if (cm.TryGetComponent<SkillComponent>(proj.SkillEntityId, out var skill) == false)
                 return false;
 
-            // owner가 몬스터인지 플레이어인지 확인
-            bool ownerIsMonster = cm.HasComponent<MonsterTag>(proj.OwnerEntityId);
+            // 발사자의 진영 (없으면 마이그레이션 안전망 — 모든 적 가능)
+            bool ownerHasFaction = cm.TryGetComponent<FactionComponent>(proj.OwnerEntityId, out var ownerFaction);
 
             SparseSet<TransformComponent> transformPool = cm.GetComponentPool<TransformComponent>();
 
@@ -96,10 +97,16 @@ namespace ARPG.Systems
                 if (cm.HasComponent<ProjectileTag>(targetId))
                     continue;
 
-                // 같은 편 제외: 몬스터가 쏜 건 몬스터에게 안 맞음, 플레이어가 쏜 건 플레이어에게 안 맞음
-                bool targetIsMonster = cm.HasComponent<MonsterTag>(targetId);
-                if (ownerIsMonster == targetIsMonster)
-                    continue;
+                // 진영 필터: 같은 진영, 중립, 진영 없는 엔티티는 제외
+                if (ownerHasFaction)
+                {
+                    if (cm.TryGetComponent<FactionComponent>(targetId, out var targetFaction) == false)
+                        continue;
+                    if (targetFaction.FactionId == Faction.Neutral)
+                        continue;
+                    if (targetFaction.FactionId == ownerFaction.FactionId)
+                        continue;
+                }
 
                 // StatComponent가 없는 엔티티(아이템, NPC 등)는 제외
                 if (cm.HasComponent<StatComponent>(targetId) == false)
@@ -122,6 +129,23 @@ namespace ARPG.Systems
                     {
                         DamageResult result = DamageCalculator.Calculate(proj.OwnerEntityId, targetId, skill.Table);
                         DamageCalculator.ApplyDamageResult(proj.OwnerEntityId, targetId, result);
+
+                        // [SkillEffect] OnProjectileHit 트리거 (+ OnHit/OnCrit/OnKill 동시 발화)
+                        SkillEffectContext hitCtx = new()
+                        {
+                            SkillEntityId = proj.SkillEntityId,
+                            SkillId = skill.SkillId,
+                            OwnerEntityId = proj.OwnerEntityId,
+                            TargetEntityId = targetId,
+                            ProjectileEntityId = projectileEntityId,
+                            DamageResult = result,
+                        };
+                        SkillEffectExecutor.Trigger(GE.SkillTrigger.OnProjectileHit, ref hitCtx, skill.Table.SkillEffectIds);
+                        SkillEffectExecutor.Trigger(GE.SkillTrigger.OnHit, ref hitCtx, skill.Table.SkillEffectIds);
+                        if (result.IsCritical)
+                            SkillEffectExecutor.Trigger(GE.SkillTrigger.OnCrit, ref hitCtx, skill.Table.SkillEffectIds);
+                        if (cm.TryGetComponent<StatComponent>(targetId, out var targetStat) && targetStat.CurrentHp <= 0f)
+                            SkillEffectExecutor.Trigger(GE.SkillTrigger.OnKill, ref hitCtx, skill.Table.SkillEffectIds);
                     }
 
                     hitAny = true;

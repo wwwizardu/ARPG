@@ -36,6 +36,9 @@ namespace ARPG
         public const string Forge = "UI/Forge";
         public const string Inn = "UI/Inn";
         public const string Shrine = "UI/Shrine";
+
+        // 스킬북 UI (SKILLBOOK_DESIGN.md §5)
+        public const string SkillBook = "UI/SkillBook";
     }
 
     public class UIManager : MonoBehaviour, IPointerDownHandler, IPointerUpHandler

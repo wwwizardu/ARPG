@@ -475,6 +475,9 @@ namespace ARPG.Skill.Combat
                 Debug.Log($"[DamageCalculator] 데미지 적용 - Target: {targetId}, Total: {damage} (Phys:{result.PhysDamage:F0} Fire:{result.FireDamage:F0} Ice:{result.IceDamage:F0} Light:{result.LightningDamage:F0} Poison:{result.PoisonDamage:F0}), Crit: {result.IsCritical}, Block: {result.IsBlocked}, HP: {newHp}/{targetStat.FinalMaxHp}");
             }
 
+            // 토템·소환물의 흡혈/반사는 실제 공격 주체(attackerId)에게 적용한다.
+            // 원 시전자 추적이 필요한 보상/경험치 계열은 CasterLinkComponent를 별도 조회해서 처리한다.
+
             // ========== 생명력 흡수 ==========
             if (result.LifeStealAmount > 0f)
             {

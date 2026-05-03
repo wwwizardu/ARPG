@@ -25,6 +25,7 @@ namespace ARPG.AI
             var retreat = new RetreatStateHandler();
             var flee = new FleeStateHandler();
             var build = new BuildStateHandler();
+            var stationaryAttack = new StationaryAttackStateHandler();
 
             // AIState enum 순서: Idle=0, Patrol=1, Chase=2, Attack=3, Retreat=4, Flee=5, Return=6, Build=7
             _profiles[AIBehaviorType.Melee] = new IAIStateHandler[]
@@ -38,6 +39,10 @@ namespace ARPG.AI
 
             _profiles[AIBehaviorType.PatrolRanged] = new IAIStateHandler[]
                 { idle, patrol, chase, rangedAttack, retreat, flee, null, build };
+
+            // Stationary: Idle/Chase/Attack 모두 Stationary 핸들러 (이동/추적 없음, 자율 시전)
+            _profiles[AIBehaviorType.Stationary] = new IAIStateHandler[]
+                { stationaryAttack, null, stationaryAttack, stationaryAttack, null, null, null, null };
         }
 
         /// <summary>

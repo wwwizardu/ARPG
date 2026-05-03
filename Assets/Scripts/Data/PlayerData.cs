@@ -11,8 +11,8 @@ namespace ARPG.Data
     [Serializable]
     public class PlayerData
     {
-        
-        public ushort Version = 1;
+        // V1 → V2: _skillBookSlots 배열 추가 (SKILLBOOK_DESIGN.md §3.4)
+        public ushort Version = 2;
 
         public int PlayerId; // 고유 플레이어 ID
         public int PlayerTableId;
@@ -31,6 +31,9 @@ namespace ARPG.Data
 
         // 인벤토리 아이템
         public List<ItemData?> _inventory = new List<ItemData?>();
+
+        // 스킬북 슬롯 (SKILLBOOK_DESIGN.md §3.4) — 슬롯 0=좌클릭, 1=Space, 2~9=숫자키 1~8
+        public ItemData?[] _skillBookSlots = new ItemData?[GlobalEnum.PLAYER_SKILL_SLOT_COUNT];
 
         public void Initialize(int inPlayerId = 0)
         {
@@ -65,6 +68,13 @@ namespace ARPG.Data
             {
                 _inventory.Add(null);
             }
+
+            // 스킬북 슬롯 초기화 + 슬롯 0에 기본 책 시드
+            for (int i = 0; i < _skillBookSlots.Length; i++)
+            {
+                _skillBookSlots[i] = null;
+            }
+            SeedDefaultStarterSkillBook();
         }
 
         public void LoadCompleted()
@@ -79,6 +89,33 @@ namespace ARPG.Data
             for (int i = 0; i < _inventory.Count; i++)
             {
                 _inventory[i]?.OnLoadCompleted();
+            }
+
+            // 스킬북 슬롯 테이블 세팅
+            for (int i = 0; i < _skillBookSlots.Length; i++)
+            {
+                _skillBookSlots[i]?.OnLoadCompleted();
+            }
+        }
+
+        /// <summary>
+        /// 신규 플레이어/V1→V2 마이그레이션 시 슬롯 0에 기본 스킬북(Common 등급 + Strike) 시드.
+        /// 시드 실패해도 게임 진행은 막지 않음 (테이블 미로드/책 ItemId 부재 등).
+        /// </summary>
+        public void SeedDefaultStarterSkillBook()
+        {
+            if (AR.s?.Item == null)
+            {
+                UnityEngine.Debug.LogWarning("[PlayerData] SeedDefaultStarterSkillBook - ItemManager not ready, skipping seed");
+                return;
+            }
+
+            ItemData? defaultBook = AR.s.Item.CreateSkillBook(
+                GlobalEnum.DEFAULT_SKILLBOOK_ITEM_ID_COMMON,
+                GlobalEnum.DEFAULT_STARTER_SKILL_ID);
+            if (defaultBook != null)
+            {
+                _skillBookSlots[0] = defaultBook;
             }
         }
 

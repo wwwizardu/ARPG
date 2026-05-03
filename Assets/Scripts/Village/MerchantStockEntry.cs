@@ -13,5 +13,10 @@ namespace ARPG.Village
     {
         public int ItemTableId;
         public int RemainingCount;
+
+        // 스킬북 매물 (SKILLBOOK_DESIGN.md §10) — ItemTableId가 SkillBook 등급 책일 때만 사용.
+        // RollMerchantStock에서 같은 Tier의 SkillTable에서 픽해 저장 → 같은 stock entry는 항상 같은 스킬.
+        // 0이면 일반 아이템(스킬북 아님).
+        public int SkillId;
     }
 }

@@ -1,0 +1,33 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements"
+         editor-extension-mode="False">
+    <Style src="project://database/Assets/UI/Tooltip/Tooltip.uss"/>
+    <!-- 글로벌 툴팁 패널 (AR.s.Tooltip).
+         타입별 자식 컨테이너를 display 토글로 활성/비활성.
+         새 데이터 타입 추가 시 content-* 컨테이너만 추가하면 됨. -->
+    <ui:VisualElement name="root" class="tooltip-root" picking-mode="Ignore">
+        <ui:VisualElement name="tooltip" class="tooltip-frame" picking-mode="Ignore">
+
+            <!-- SkillBook -->
+            <ui:VisualElement name="content-skillbook" class="tooltip-content" picking-mode="Ignore">
+                <ui:Label name="sb-name" class="tooltip-name"/>
+                <ui:Label name="sb-tier" class="tooltip-tier"/>
+                <ui:VisualElement class="tooltip-divider"/>
+                <ui:Label name="sb-skillname" class="tooltip-skillname"/>
+                <ui:Label name="sb-desc" class="tooltip-desc"/>
+                <ui:VisualElement class="tooltip-stats">
+                    <ui:Label name="sb-stat-damage" class="tooltip-statline"/>
+                    <ui:Label name="sb-stat-cooltime" class="tooltip-statline"/>
+                    <ui:Label name="sb-stat-mana" class="tooltip-statline"/>
+                    <ui:Label name="sb-stat-range" class="tooltip-statline"/>
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <!-- Equipment (추후 Phase 2에서 채움) -->
+            <ui:VisualElement name="content-equipment" class="tooltip-content" picking-mode="Ignore"/>
+
+            <!-- 일반 아이템 (추후) -->
+            <ui:VisualElement name="content-item" class="tooltip-content" picking-mode="Ignore"/>
+
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

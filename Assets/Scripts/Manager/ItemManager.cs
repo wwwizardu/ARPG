@@ -87,6 +87,53 @@ namespace ARPG.Item
             return true;
         }
 
+        /// <summary>
+        /// 이미 만들어진 ItemData를 월드에 드랍 (스킬북 등 인스턴스 변동분이 있는 아이템용).
+        /// CreateItem(itemId)가 일반 ItemData만 만드는 것과 달리, 외부에서 SkillBookData 등을 미리 채워 전달.
+        /// ItemInstanceId가 0이면 새로 발급.
+        /// </summary>
+        public async Task<bool> CreateItemFromData(ItemData itemData, Vector3 position)
+        {
+            if (itemData == null || itemData.Table == null)
+            {
+                Debug.LogError("[ItemManager] CreateItemFromData - itemData or Table is null");
+                return false;
+            }
+
+            var handle = Addressables.InstantiateAsync("Item/Item", position, Quaternion.identity);
+            var itemObject = await handle.Task;
+            if (itemObject == null)
+            {
+                Debug.LogError("[ItemManager] CreateItemFromData - InstantiateAsync returned null");
+                return false;
+            }
+
+            var item = itemObject.GetComponent<ItemObject>();
+            if (item == null)
+            {
+                Addressables.ReleaseInstance(itemObject);
+                Debug.LogError("[ItemManager] CreateItemFromData - ItemObject component missing");
+                return false;
+            }
+
+            if (itemData.ItemInstanceId == 0)
+            {
+                itemData.ItemInstanceId = _instanceIdCounter++;
+            }
+
+            item.Initialize(itemData);
+
+            if (_itemInstances.ContainsKey(itemData.ItemInstanceId))
+            {
+                Debug.LogError($"[ItemManager] CreateItemFromData - InstanceId already exists: {itemData.ItemInstanceId}");
+                Addressables.ReleaseInstance(itemObject);
+                return false;
+            }
+
+            _itemInstances[itemData.ItemInstanceId] = item;
+            return true;
+        }
+
         public bool PickupItem(Item.ItemObject inItem)
         {
             if (inItem == null)
@@ -137,6 +184,132 @@ namespace ARPG.Item
             return CreateEquipmentData(inTable);
         }
 #endif
+
+        // ========== 스킬북 시스템 (SKILLBOOK_DESIGN.md §3.6) ==========
+
+        /// <summary>
+        /// 등급 책 ItemId + SkillId 조합으로 스킬북 ItemData 생성.
+        /// </summary>
+        public ItemData? CreateSkillBook(int itemId, int skillId)
+        {
+            ItemTable? itemTable = AR.s.Data?.GetItem(itemId);
+            if (itemTable == null)
+            {
+                Debug.LogError($"[ItemManager] CreateSkillBook - ItemTable not found, itemId({itemId})");
+                return null;
+            }
+            if (itemTable.ItemType != GlobalEnum.ItemType.SkillBook)
+            {
+                Debug.LogError($"[ItemManager] CreateSkillBook - ItemId({itemId}) is not SkillBook (ItemType={itemTable.ItemType})");
+                return null;
+            }
+
+            SkillTable? skillTable = AR.s.Data?.GetSkill(skillId);
+            if (skillTable == null)
+            {
+                Debug.LogError($"[ItemManager] CreateSkillBook - SkillTable not found, skillId({skillId})");
+                return null;
+            }
+
+            return new ItemData
+            {
+                Id = itemId,
+                ItemInstanceId = _instanceIdCounter++,
+                Quantity = 1,
+                Table = itemTable,
+                SkillBook = new SkillBookData
+                {
+                    SkillId = skillId,
+                    Table = skillTable,
+                }
+            };
+        }
+
+        /// <summary>
+        /// 지정 SkillId로 스킬북 생성. 책 ItemId는 SkillTable.Tier에 매칭되는 등급 책으로 자동 선택.
+        /// 치트/시나리오 보상 등 "이 스킬을 주고 싶다"는 케이스에 사용. 매칭 책이 없거나 SkillTable 부재 시 null.
+        /// </summary>
+        public ItemData? CreateSkillBookForSkill(int skillId)
+        {
+            SkillTable? skillTable = AR.s.Data?.GetSkill(skillId);
+            if (skillTable == null)
+            {
+                Debug.LogError($"[ItemManager] CreateSkillBookForSkill - SkillTable not found, skillId({skillId})");
+                return null;
+            }
+
+            int itemId = GetSkillBookItemIdByTier(skillTable.Tier);
+            if (itemId == 0)
+            {
+                Debug.LogWarning($"[ItemManager] CreateSkillBookForSkill - No SkillBook ItemTable for Tier({skillTable.Tier}). SkillId={skillId}, SkillName={skillTable.Name}");
+                return null;
+            }
+
+            return CreateSkillBook(itemId, skillId);
+        }
+
+        /// <summary>
+        /// 등급(Tier)에 해당하는 책 ItemId를 찾고, 같은 Tier의 스킬 풀에서 랜덤 SkillId를 뽑아 스킬북 생성.
+        /// 드랍/상점 stock 생성 시 사용. 풀이 비어 있으면 null 반환.
+        /// </summary>
+        public ItemData? CreateRandomSkillBookOfTier(int tier)
+        {
+            int itemId = GetSkillBookItemIdByTier(tier);
+            if (itemId == 0)
+            {
+                Debug.LogWarning($"[ItemManager] CreateRandomSkillBookOfTier - No SkillBook ItemTable for tier({tier})");
+                return null;
+            }
+
+            int skillId = PickRandomSkillByTier(tier);
+            if (skillId == 0)
+            {
+                Debug.LogWarning($"[ItemManager] CreateRandomSkillBookOfTier - No skills with Tier({tier})");
+                return null;
+            }
+
+            return CreateSkillBook(itemId, skillId);
+        }
+
+        /// <summary>
+        /// ItemTable에서 ItemType==SkillBook && Tier==tier 인 첫 행의 ItemId 반환. 없으면 0.
+        /// </summary>
+        private int GetSkillBookItemIdByTier(int tier)
+        {
+            if (AR.s.Data == null)
+                return 0;
+
+            List<ItemTable> all = AR.s.Data.GetAllItems();
+            for (int i = 0; i < all.Count; i++)
+            {
+                ItemTable t = all[i];
+                if (t.ItemType == GlobalEnum.ItemType.SkillBook && t.Tier == tier)
+                    return t.Id;
+            }
+            return 0;
+        }
+
+        /// <summary>
+        /// SkillTable.Tier == tier 인 스킬들 중 균등 랜덤 픽. 없으면 0.
+        /// </summary>
+        private int PickRandomSkillByTier(int tier)
+        {
+            if (AR.s.Data == null)
+                return 0;
+
+            List<SkillTable> all = AR.s.Data.GetAllSkills();
+            List<int> matched = new List<int>();
+            for (int i = 0; i < all.Count; i++)
+            {
+                if (all[i].Tier == tier)
+                    matched.Add(all[i].Id);
+            }
+
+            if (matched.Count == 0)
+                return 0;
+
+            return matched[Random.Range(0, matched.Count)];
+        }
 
         private EquipmentData? CreateEquipmentData(ItemTable inTable)
         {

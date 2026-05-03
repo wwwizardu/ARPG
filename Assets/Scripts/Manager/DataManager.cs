@@ -14,7 +14,7 @@ namespace ARPG.Data
     public partial class DataManager : MonoBehaviour
     {
         private const ushort CURRENT_WORLD_DATA_VERSION = 2;
-        private const ushort CURRENT_PLAYER_DATA_VERSION = 1;
+        private const ushort CURRENT_PLAYER_DATA_VERSION = 2;
         private WorldData _worldData = new();
         private List<PlayerData> _playerDataList = new();
         private int _currentPlayerEntityId = 0; // 현재 활성화된 플레이어 ID
@@ -98,6 +98,10 @@ namespace ARPG.Data
                         _worldData.Version = CURRENT_WORLD_DATA_VERSION;
                     }
 
+                    // saved EntityId 사전 예약 — Village.Load / PlayerData CreateEntity 호출보다 반드시 먼저.
+                    // 누락 시 신규 ID가 saved ID와 충돌하여 RegisterExistingEntity LogError.
+                    PreReserveSavedEntityIds();
+
                     _worldData.LoadCompleted();
                     AR.s.Village.Load(_worldData.VillageDatas);
                     AR.s.Map.LoadTileModifications(_worldData.TileModifications);
@@ -121,6 +125,9 @@ namespace ARPG.Data
                                 MigrateWorldData(_worldData.Version, CURRENT_WORLD_DATA_VERSION);
                                 _worldData.Version = CURRENT_WORLD_DATA_VERSION;
                             }
+
+                            // saved EntityId 사전 예약 — Village.Load / PlayerData CreateEntity 호출보다 반드시 먼저.
+                            PreReserveSavedEntityIds();
 
                             _worldData.LoadCompleted();
                             AR.s.Village.Load(_worldData.VillageDatas);
@@ -247,6 +254,27 @@ namespace ARPG.Data
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// WorldData가 로드된 직후, saved 영구 EntityId(NPC/Building)를 EntityIdHelper에 일괄 등록한다.
+        /// 이 단계 이후의 CreateEntity()는 등록된 ID를 자동으로 건너뛰므로 신규/saved ID 간 충돌이 방지됨.
+        ///
+        /// 호출 시점은 반드시 WorldData deserialize 직후 — Village.Load() / PlayerData CreateEntity()보다 먼저여야 함.
+        /// 새로운 영구 EntityId 매니저가 추가되면 여기에 등록 추가 필수.
+        /// </summary>
+        private void PreReserveSavedEntityIds()
+        {
+            if (_worldData.NpcSaveDatas != null)
+            {
+                foreach (var kvp in _worldData.NpcSaveDatas)
+                    EntityIdHelper.RegisterExistingEntity(kvp.Key);
+            }
+            if (_worldData.BuildingSaveDatas != null)
+            {
+                foreach (var kvp in _worldData.BuildingSaveDatas)
+                    EntityIdHelper.RegisterExistingEntity(kvp.Key);
+            }
         }
 
         public async void Save()
@@ -527,18 +555,16 @@ namespace ARPG.Data
         {
             Debug.Log($"[DataManager] Migrating PlayerData (ID: {playerData.PlayerId}) from version {fromVersion} to {toVersion}");
 
-            // 예시: 버전 1 -> 2 마이그레이션
-            // if (fromVersion == 1 && toVersion >= 2)
-            // {
-            //     // 새로운 필드 초기화 또는 데이터 변환
-            //     // playerData.NewField = defaultValue;
-            // }
-
-            // 예시: 버전 2 -> 3 마이그레이션
-            // if (fromVersion <= 2 && toVersion >= 3)
-            // {
-            //     // 추가 마이그레이션 로직
-            // }
+            // V1 → V2: 스킬북 시스템 도입 (SKILLBOOK_DESIGN.md §3.4)
+            // 기존 세이브에는 _skillBookSlots 배열이 없으므로 초기화 + 슬롯 0에 기본 책 시드.
+            if (fromVersion <= 1 && toVersion >= 2)
+            {
+                if (playerData._skillBookSlots == null || playerData._skillBookSlots.Length != GlobalEnum.PLAYER_SKILL_SLOT_COUNT)
+                {
+                    playerData._skillBookSlots = new ItemData?[GlobalEnum.PLAYER_SKILL_SLOT_COUNT];
+                }
+                playerData.SeedDefaultStarterSkillBook();
+            }
         }
     }
 }

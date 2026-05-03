@@ -1,7 +1,9 @@
 #nullable enable
 using ARPG.Component;
+using ARPG.Skill.Combat;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
+using GE = GlobalEnum;
 
 namespace ARPG.Utility
 {
@@ -71,6 +73,19 @@ namespace ARPG.Utility
             });
 
             AR.s.Component.AddComponent(entityId, new ProjectileTag());
+
+            // [SkillEffect] OnProjectileSpawn 트리거
+            if (AR.s.Component.TryGetComponent<SkillComponent>(skillEntityId, out var skill) && skill.Table != null)
+            {
+                SkillEffectContext spawnCtx = new()
+                {
+                    SkillEntityId = skillEntityId,
+                    SkillId = skill.SkillId,
+                    OwnerEntityId = ownerEntityId,
+                    ProjectileEntityId = entityId,
+                };
+                SkillEffectExecutor.Trigger(GE.SkillTrigger.OnProjectileSpawn, ref spawnCtx, skill.Table.SkillEffectIds);
+            }
 
             // System_Render에 등록 (ECS Position → GameObject transform 동기화)
             var renderSystem = AR.s.System.GetSystem<Systems.System_Render>();

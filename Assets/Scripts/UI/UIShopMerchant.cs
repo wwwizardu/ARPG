@@ -223,10 +223,17 @@ namespace ARPG.UI
                 }
                 row.Add(icon);
 
-                // 이름 + 재고
+                // 이름 + 재고 — 스킬북은 책 이름 옆에 스킬명 부기 (SKILLBOOK_DESIGN.md §11)
+                string displayName = table.Name;
+                if (table.ItemType == GlobalEnum.ItemType.SkillBook && entry.SkillId > 0)
+                {
+                    var skillTable = AR.s.Data.GetSkill(entry.SkillId);
+                    if (skillTable != null) displayName = $"{table.Name} — {skillTable.Name}";
+                }
+
                 VisualElement info = new();
                 info.AddToClassList("shop-buy-info");
-                Text nameText = new() { text = $"{table.Name} (재고 {entry.RemainingCount})" };
+                Text nameText = new() { text = $"{displayName} (재고 {entry.RemainingCount})" };
                 nameText.AddToClassList("shop-buy-name");
                 Text priceText = new() { text = $"{price:N0} G" };
                 priceText.AddToClassList("shop-buy-price");

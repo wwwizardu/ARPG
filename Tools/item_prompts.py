@@ -146,6 +146,41 @@ ITEM_PROMPTS = [
             "cozy fortified entrance"
         ),
     },
+    # ===== 스킬북 3종 (SKILLBOOK_DESIGN.md §2.2) — 등급별 ItemTable 행 =====
+    {
+        "id": 5000,
+        "name": "SkillBookCommon",
+        "core": (
+            "old worn spellbook, weathered brown leather cover with simple iron clasp, "
+            "frayed edges and dog-eared yellowed pages peeking out, "
+            "plain embossed circular emblem on the front, faded ink stains, "
+            "humble apprentice tome, single book lying flat closed, "
+            "rustic novice grimoire prop, muted brown and tan tones"
+        ),
+    },
+    {
+        "id": 5001,
+        "name": "SkillBookRare",
+        "core": (
+            "fine arcane spellbook, deep blue leather cover with silver filigree trim, "
+            "ornate metal corner caps and silver lock buckle, embossed runic sigil glowing softly, "
+            "ribbon bookmark hanging from gilded edge pages, polished and well-kept, "
+            "scholar's enchanted tome, single book lying flat closed, "
+            "magical adept grimoire prop, sapphire blue and silver tones"
+        ),
+    },
+    {
+        "id": 5002,
+        "name": "SkillBookEpic",
+        "core": (
+            "legendary mystical tome, rich purple and black leather cover with intricate gold filigree, "
+            "large central gemstone inlay glowing with violet arcane light, "
+            "ornate gold corner guards and clasp, faintly glowing magic runes etched along the spine, "
+            "wisps of purple magical aura floating around the book, gilded page edges, "
+            "ancient archmage's grimoire, single book lying flat closed, "
+            "epic legendary spellbook prop, deep purple and gold tones"
+        ),
+    },
     {
         # 모든 빌딩이 건설 중일 때 공통으로 사용하는 placeholder 스프라이트.
         # 시각적으로 "공사 중" 임을 즉시 인지할 수 있어야 함 (목재 골조 + 비계 + 작업 도구).
