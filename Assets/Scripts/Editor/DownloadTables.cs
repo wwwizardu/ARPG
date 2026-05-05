@@ -8,6 +8,7 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.Networking;
 
+using ARPG.Component;
 using ARPG.Tables;
 using Newtonsoft.Json;
 using System.Collections;
@@ -54,10 +55,13 @@ namespace ARPG.Editor
 
             await DownloadTable<DropEquipmentTable>("1267382287&range=A:V", 1, SaveType.String);
 
-            await DownloadTable<SkillTable>("92727160&range=A:AK", 1, SaveType.String);
+            await DownloadTable<SkillTable>("92727160&range=A:AM", 1, SaveType.String);
 
             // Phase 1: SkillEffect 합성 시스템용 신규 테이블
             await DownloadTable<SkillEffectTable>("1681865950&range=A:H", 1, SaveType.String);
+
+            // 장판(지속 영역 효과) 테이블
+            await DownloadTable<AreaEffectTable>("1891935594&range=A:M", 1, SaveType.String);
 
             await DownloadTable<BuffTable>("127577579&range=A:J", 1, SaveType.String);
 
@@ -200,6 +204,10 @@ namespace ARPG.Editor
                 else if (table is ProjectileTable projectileTable)
                 {
                     ParseProjectileTable(projectileTable, values);
+                }
+                else if (table is AreaEffectTable areaEffectTable)
+                {
+                    ParseAreaEffectTable(areaEffectTable, values);
                 }
                 else if (table is ModTable modTable)
                 {
@@ -602,9 +610,9 @@ namespace ARPG.Editor
 
         private static void ParseSkillTable(SkillTable table, string[] values)
         {
-            if (values.Length < 32)
+            if (values.Length < 33)
             {
-                Debug.LogError($"[ParseSkillTable] Invalid data length. Expected at least 32, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseSkillTable] Invalid data length. Expected at least 33, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
@@ -636,17 +644,22 @@ namespace ARPG.Editor
             table.ActivateName = values[25];
             table.HitEffect = values[26];
             table.ProjectileId = int.Parse(values[27]);
-            table.ArcHeight = float.Parse(values[28]);
-            table.BaseCriRate = int.Parse(values[29]);
-            table.BaseDamageMul = int.Parse(values[30]);
-            table.BaseAttackSpeedMul = int.Parse(values[31]);
+            table.AreaEffectId = ParseIntSafe(values, 28);   // 장판 테이블 ID (0=없음)
+            table.ArcHeight = float.Parse(values[29]);
+            table.BaseCriRate = int.Parse(values[30]);
+            table.BaseDamageMul = int.Parse(values[31]);
+            table.BaseAttackSpeedMul = int.Parse(values[32]);
 
             // Phase 1·2: SkillEffect 합성 + ExecutionType 컬럼화 (빈 셀 허용)
-            table.SkillEffectIds     = ParseIntCsv(values.Length > 32 ? values[32] : "");
-            table.ExecutionType      = values.Length > 33 && int.TryParse(values[33], out var et) ? et : 1;
-            table.ChannelingInterval = values.Length > 34 && float.TryParse(values[34], out var ci) ? ci : 0f;
-            table.MaxChargeTime      = values.Length > 35 && float.TryParse(values[35], out var mct) ? mct : 0f;
-            table.MinChargeRatio     = values.Length > 36 && float.TryParse(values[36], out var mcr) ? mcr : 0f;
+            table.SkillEffectIds     = ParseIntCsv(values.Length > 33 ? values[33] : "");
+            table.ExecutionType      = values.Length > 34 && string.IsNullOrWhiteSpace(values[34]) == false
+                                       ? (SkillExecutionType)Enum.Parse(typeof(SkillExecutionType), values[34])
+                                       : SkillExecutionType.MultiHit;
+            table.ChannelingInterval = values.Length > 35 && float.TryParse(values[35], out var ci) ? ci : 0f;
+            table.MaxChargeTime      = values.Length > 36 && float.TryParse(values[36], out var mct) ? mct : 0f;
+            table.MinChargeRatio     = values.Length > 37 && float.TryParse(values[37], out var mcr) ? mcr : 0f;
+            // Phase 3: BaseProjectileCount (빈 셀이면 1로 기본값. 발사 0개 방지)
+            table.BaseProjectileCount = values.Length > 38 && int.TryParse(values[38], out var bpc) ? Mathf.Max(1, bpc) : 1;
         }
 
         /// <summary>
@@ -715,7 +728,7 @@ namespace ARPG.Editor
 
             table.Name = values[1];
             table.AiType = (GlobalEnum.AiType)Enum.Parse(typeof(GlobalEnum.AiType), values[2]);
-            table.BehaviorType = (ARPG.Component.AIBehaviorType)Enum.Parse(typeof(ARPG.Component.AIBehaviorType), values[3]);
+            table.BehaviorType = (AIBehaviorType)Enum.Parse(typeof(AIBehaviorType), values[3]);
             table.DetectionRange = float.Parse(values[4]);
             table.SkillId1 = int.Parse(values[5]);
             table.SkillWeight1 = int.Parse(values[6]);
@@ -777,6 +790,31 @@ namespace ARPG.Editor
             table.HitRadius = float.Parse(values[4]);
             table.IsPiercing = values[5].Trim().ToUpper() == "TRUE";
             table.PrefabKey = values[6];
+        }
+
+        private static void ParseAreaEffectTable(AreaEffectTable table, string[] values)
+        {
+            // 전체 범위: A:M = 13개 컬럼
+            // (Id, Name, Description, DamageType, Damage, Radius, Duration, TickInterval,
+            //  OnTickBuffId, OnEnterBuffId, TargetFaction, TickEffectName, PrefabKey)
+            if (values.Length < 12)
+            {
+                Debug.LogError($"[ParseAreaEffectTable] Invalid data length. Expected at least 12, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            table.Name = values[1];
+            table.Description = values[2];
+            table.DamageType = (GlobalEnum.DamageType)Enum.Parse(typeof(GlobalEnum.DamageType), values[3]);
+            table.Damage = ParseIntSafe(values, 4);
+            table.Radius = ParseFloatSafe(values, 5);
+            table.Duration = ParseFloatSafe(values, 6);
+            table.TickInterval = ParseFloatSafe(values, 7);
+            table.OnTickBuffId = ParseIntSafe(values, 8);
+            table.OnEnterBuffId = ParseIntSafe(values, 9);
+            table.TargetFaction = ParseEnumSafe(values, 10, Faction.Neutral);
+            table.TickEffectName = values[11];
+            table.PrefabKey = values.Length > 12 ? values[12] : string.Empty;
         }
 
         private static void ParseModTable(ModTable table, string[] values)

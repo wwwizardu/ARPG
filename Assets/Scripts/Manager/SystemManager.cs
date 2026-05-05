@@ -119,6 +119,14 @@ namespace ARPG.Systems
             System_Jump jumpSystem = new();
             RegisterSystems(jumpSystem);
 
+            // Priority 240: Area Effect System (FixedUpdate) - 장판 틱 처리 (반경 내 적 데미지/버프)
+            System_AreaEffect areaEffectSystem = new();
+            RegisterSystems(areaEffectSystem);
+
+            // Priority 245: Regen System (FixedUpdate) - HP/MP 재생 누적기 처리 (RegenComponent 부착 엔티티)
+            System_Regen regenSystem = new();
+            RegisterSystems(regenSystem);
+
             // Priority 250: HP Check System (FixedUpdate) - HP 0 체크 및 DeathMessage 전송
             System_HpCheck hpCheckSystem = new();
             RegisterSystems(hpCheckSystem);

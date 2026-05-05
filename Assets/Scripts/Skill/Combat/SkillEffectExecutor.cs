@@ -74,6 +74,10 @@ namespace ARPG.Skill.Combat
                     ExecuteDelegateToTotem(effect, ref ctx);
                     break;
 
+                case GE.SkillEffectType.SpawnProjectile:
+                    ExecuteSpawnProjectile(effect, ref ctx);
+                    break;
+
                 default:
                     Debug.LogWarning($"[SkillEffectExecutor] Unhandled EffectType: {effect.EffectType}");
                     break;
@@ -128,6 +132,60 @@ namespace ARPG.Skill.Combat
 
             ctx.CancelOriginalCast = true;
             Debug.Log($"[SkillEffect] DelegateToTotem - Caster({ctx.OwnerEntityId}) → Totem({totemId}) casting SkillId({ctx.SkillId}) for {duration}s");
+        }
+
+        /// <summary>
+        /// 스킬 본인의 발사체와 무관한 추가 발사체를 부채꼴로 스폰.
+        /// 용도: "스킬 효과로 다른 종류의 발사체를 추가 발사" — 예: 화염 폭발 시 작은 폭탄 N개, 시체 폭발의 파편 등.
+        /// 일반 Multi Shot(스킬 자체 발사체 개수 조절)은 SkillTable.BaseProjectileCount + Stat.ProjectileCountAdd로 처리하므로 이 EffectType은 사용하지 않음.
+        ///
+        /// Param1: 별도 ProjectileId (스킬의 ProjectileId가 아님 — 효과 전용)
+        /// Param2: 기본 발사 개수 (Stat.ProjectileCountAdd가 추가 합산됨)
+        /// Param3: 현재 미사용 (분산 각도는 코드 상수)
+        /// </summary>
+        private static void ExecuteSpawnProjectile(SkillEffectTable effect, ref SkillEffectContext ctx)
+        {
+            const float SPREAD_ANGLE_PER_SHOT = 15f;  // 발사체 간 각도(도). 추후 Stat 또는 Param3로 교체 예정
+
+            int projectileId = (int)effect.Param1;
+            if (projectileId <= 0)
+            {
+                Debug.LogWarning($"[SkillEffect] SpawnProjectile - invalid ProjectileId: {projectileId}");
+                return;
+            }
+
+            int baseCount = Mathf.Max(1, (int)effect.Param2);
+            int extraCount = 0;
+            if (AR.s.Component.TryGetComponent<StatComponent>(ctx.OwnerEntityId, out var ownerStat))
+                extraCount = ownerStat.FinalProjectileCountAdd;
+            int finalCount = Mathf.Max(1, baseCount + extraCount);
+
+            if (AR.s.Component.TryGetComponent<TransformComponent>(ctx.OwnerEntityId, out var ownerTr) == false)
+            {
+                Debug.LogWarning($"[SkillEffect] SpawnProjectile - Owner({ctx.OwnerEntityId}) has no TransformComponent");
+                return;
+            }
+
+            Vector2 baseDir = ctx.TargetPosition - ownerTr.Position;
+            if (baseDir.sqrMagnitude < 0.0001f)
+                baseDir = Vector2.right;
+            else
+                baseDir.Normalize();
+            float baseAngle = Mathf.Atan2(baseDir.y, baseDir.x) * Mathf.Rad2Deg;
+
+            // 부채꼴 분산 — 발사체 간 SPREAD_ANGLE_PER_SHOT 도씩 벌림
+            float totalSpread = (finalCount - 1) * SPREAD_ANGLE_PER_SHOT;
+            float startOffset = -totalSpread * 0.5f;
+
+            for (int i = 0; i < finalCount; i++)
+            {
+                float angle = baseAngle + startOffset + SPREAD_ANGLE_PER_SHOT * i;
+                float rad = angle * Mathf.Deg2Rad;
+                Vector2 dir = new Vector2(Mathf.Cos(rad), Mathf.Sin(rad));
+                ProjectileHelper.SpawnProjectile(ctx.OwnerEntityId, ctx.SkillEntityId, projectileId, ownerTr.Position, dir);
+            }
+
+            Debug.Log($"[SkillEffect] SpawnProjectile - Owner({ctx.OwnerEntityId}) fired {finalCount} projectiles (base={baseCount}+stat={extraCount}) of Id={projectileId}");
         }
 
         /// <summary>

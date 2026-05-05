@@ -121,19 +121,7 @@ namespace ARPG
                 return;
             }
 
-            if (_currentScene.CurrentSceneType == Base.SceneBase.SceneType.Login)
-            {
-
-            }
-            else if (_currentScene.CurrentSceneType == Base.SceneBase.SceneType.Game)
-            {
-                if (_currentScene is Scene.GameScene gameScene)
-                {
-                    _monsterManager.SetMorsterRoot(gameScene.MonsterRoot);
-                    _npcManager.SetNpcRoot(gameScene.NpcRoot);
-                    _buildingManager.SetBuildingRoot(gameScene.BuildingRoot);
-                }
-            }
+            // Scene 별 root transform 등록은 각 Scene이 OnInitialize 단계에서 직접 매니저에 알려준다 — Map.CreateMap 이후 spawn이 fire 되기 전에 반드시 세팅되어야 하기 때문.
         }
 
         private void Update()

@@ -59,6 +59,7 @@ namespace ARPG.Systems
                 {
                     // modifier가 없으면 Base = Final 그대로 저장
                     AR.s.Component.SetComponent(entityId, stat);
+                    SyncRegenComponent(entityId, stat);
                     AR.s.Component.RemoveComponent<StatDirtyTag>(entityId);
                     if (entityId == AR.s.Data.CurrentPlayerEntityId)
                     {
@@ -103,6 +104,9 @@ namespace ARPG.Systems
                 // 7단계: 업데이트된 스탯 저장
                 AR.s.Component.SetComponent(entityId, stat);
 
+                // 7-2단계: RegenComponent 동기화 (FinalHpGeneration / FinalMpGeneration 기반)
+                SyncRegenComponent(entityId, stat);
+
                 // 8단계: Dirty 태그 제거
                 AR.s.Component.RemoveComponent<StatDirtyTag>(entityId);
 
@@ -111,6 +115,25 @@ namespace ARPG.Systems
                 {
                     AR.s.Message.Broadcast(new StatRecalculatedMessage { EntityId = entityId });
                 }
+            }
+        }
+
+        /// <summary>
+        /// FinalHpGeneration / FinalMpGeneration 값에 따라 RegenComponent 부착/제거.
+        /// 양수면 부착(없을 때만), 둘 다 0 이하면 제거(있을 때만).
+        /// </summary>
+        private void SyncRegenComponent(int entityId, StatComponent stat)
+        {
+            bool needsRegen = stat.FinalHpGeneration > 0 || stat.FinalMpGeneration > 0;
+            bool hasRegen = AR.s.Component.HasComponent<RegenComponent>(entityId);
+
+            if (needsRegen && hasRegen == false)
+            {
+                AR.s.Component.AddComponent(entityId, new RegenComponent());
+            }
+            else if (needsRegen == false && hasRegen)
+            {
+                AR.s.Component.RemoveComponent<RegenComponent>(entityId);
             }
         }
 
@@ -211,6 +234,9 @@ namespace ARPG.Systems
                     break;
                 case GE.Stat.PoisonAttackMax:
                     stat.FinalPoisonAttackMax = ApplyValue(stat.FinalPoisonAttackMax, modifier);
+                    break;
+                case GE.Stat.ProjectileCountAdd:
+                    stat.FinalProjectileCountAdd = ApplyValue(stat.FinalProjectileCountAdd, modifier);
                     break;
             }
         }

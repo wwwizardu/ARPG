@@ -95,6 +95,7 @@ public class GlobalEnum
         PoisonAttackMax,    // 독 최대 공격력
         Evasion,            // 회피
         BlockChance,        // 블록 확률
+        ProjectileCountAdd, // 발사체 추가 개수 (Add 합산만 의미 있음. SkillEffect.SpawnProjectile에서 base+이 stat으로 최종 발사 수 결정)
     }
 
     public enum EquipSlotType
@@ -253,6 +254,7 @@ public class GlobalEnum
         LifeStealOnHit,         // OnHit. Param1=흡혈 비율(%)
         ApplyBuffOnHit,         // OnHit. Param1=BuffId, Param2=스택, Param3=지속시간 오버라이드(0=기본)
         DelegateToTotem,        // OnSkillCommand. Param1=토템 생존시간(초), Param2=캐스팅 거리 오프셋(0=시전자 위치). 시전 캔슬 후 토템이 자율 발사
+        SpawnProjectile,        // 스킬 본인의 발사체와 무관한 추가 발사체 스폰 용도(예: "폭발 시 작은 폭탄 5개"). Param1=별도 ProjectileId, Param2=Count(base), Param3=미사용. 스킬 자체의 발사체 개수 조절은 SkillTable.BaseProjectileCount + Stat.ProjectileCountAdd로 처리하므로 일반 Multi Shot에는 사용하지 않음.
         // 향후 확장 슬롯 (구현은 후속 페이즈)
         // ManaRestoreOnKill, SpawnProjectileOnHit, SpawnAreaEffectOnKill,
         // KnockbackOnHit, DelegateToMine, DelegateToTrap, ...

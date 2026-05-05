@@ -30,6 +30,7 @@ namespace ARPG.Data
         private ImmutableDictionary<int, Tables.BuffEffectTable> _buffEffectTable = null!;
         private ImmutableDictionary<int, Tables.AnimationTable> _animationTable = null!;
         private ImmutableDictionary<int, Tables.ProjectileTable> _projectileTable = null!;
+        private ImmutableDictionary<int, Tables.AreaEffectTable> _areaEffectTable = null!;
         private ImmutableDictionary<int, Tables.ModTable> _modTable = null!;
         private ImmutableDictionary<int, Tables.ModTierTable> _modTierTable = null!;
         private ImmutableDictionary<int, Tables.ItemImplicitTable> _itemImplicitTable = null!;
@@ -60,6 +61,7 @@ namespace ARPG.Data
                 LoadTable<Tables.BuffEffectTable>("BuffEffectTable.bytes", tables => _buffEffectTable = tables),
                 LoadTable<Tables.AnimationTable>("AnimationTable.bytes", tables => _animationTable = tables),
                 LoadTable<Tables.ProjectileTable>("ProjectileTable.bytes", tables => _projectileTable = tables),
+                LoadTable<Tables.AreaEffectTable>("AreaEffectTable.bytes", tables => _areaEffectTable = tables),
                 LoadTable<Tables.ModTable>("ModTable.bytes", tables => _modTable = tables),
                 LoadTable<Tables.ModTierTable>("ModTierTable.bytes", tables => _modTierTable = tables),
                 LoadTable<Tables.ItemImplicitTable>("ItemImplicitTable.bytes", tables => _itemImplicitTable = tables),
@@ -394,6 +396,16 @@ namespace ARPG.Data
         public Tables.ProjectileTable? GetProjectile(int id)
         {
             if (_projectileTable.TryGetValue(id, out var table))
+            {
+                return table;
+            }
+
+            return null;
+        }
+
+        public Tables.AreaEffectTable? GetAreaEffect(int id)
+        {
+            if (_areaEffectTable.TryGetValue(id, out var table))
             {
                 return table;
             }

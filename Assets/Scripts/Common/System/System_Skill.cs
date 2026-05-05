@@ -1,5 +1,6 @@
 #nullable enable
 using ARPG.Component;
+using ARPG.Factory;
 using ARPG.Skill.Combat;
 using ARPG.Utility;
 using UnityEngine;
@@ -508,6 +509,26 @@ namespace ARPG.Systems
             if (!AR.s.Component.TryGetComponent<SkillTargetComponent>(skillEntityId, out var target))
                 return;
 
+            // [AreaEffect] SkillTable.AreaEffectId > 0이면 장판 스폰
+            // Position 타겟은 마우스/지정 위치, 그 외는 caster 위치 기준.
+            if (inSkill.Table != null && inSkill.Table.AreaEffectId > 0)
+            {
+                Vector2 spawnPos;
+                if (inSkill.Table.SkillTargetType == GE.SkillTargetType.Position)
+                {
+                    spawnPos = target.TargetPosition;
+                }
+                else if (AR.s.Component.TryGetComponent<TransformComponent>(inSkill.OwnerEntityId, out var ownerTr))
+                {
+                    spawnPos = ownerTr.Position;
+                }
+                else
+                {
+                    spawnPos = Vector2.zero;
+                }
+                EntityFactory.CreateAreaEffect(inSkill.OwnerEntityId, inSkill.Table.AreaEffectId, spawnPos, inSkill.SkillId);
+            }
+
             // Process 기간 동안 애니메이션 재생 요청
             // DamageTime(비율) * ProcessDuration 지점에서 타격 프레임이 나오도록 에셋을 구성
             if (AR.s.Component.TryGetComponent<AnimatorComponent>(inSkill.OwnerEntityId, out var animatorComp))
@@ -774,19 +795,42 @@ namespace ARPG.Systems
                 return;
             }
 
-            // 발사체 스킬인 경우 발사체 생성
+            // 발사체 스킬인 경우 발사체 생성 (BaseProjectileCount + Stat.ProjectileCountAdd만큼 부채꼴 발사)
             if (skill.Table.ProjectileId > 0)
             {
                 if (AR.s.Component.TryGetComponent<TransformComponent>(skill.OwnerEntityId, out var ownerTransform))
                 {
-                    Vector2 direction = (target.TargetPosition - ownerTransform.Position).normalized;
-                    Utility.ProjectileHelper.SpawnProjectile(
-                        skill.OwnerEntityId,
-                        skillEntityId,
-                        skill.Table.ProjectileId,
-                        ownerTransform.Position,
-                        direction
-                    );
+                    const float SPREAD_ANGLE_PER_SHOT = 15f;  // 발사체 간 각도(도). 추후 Stat 합산 도입 시 교체
+
+                    Vector2 baseDir = target.TargetPosition - ownerTransform.Position;
+                    if (baseDir.sqrMagnitude < 0.0001f)
+                        baseDir = Vector2.right;
+                    else
+                        baseDir.Normalize();
+                    float baseAngle = Mathf.Atan2(baseDir.y, baseDir.x) * Mathf.Rad2Deg;
+
+                    int baseCount = Mathf.Max(1, skill.Table.BaseProjectileCount);
+                    int extraCount = 0;
+                    if (AR.s.Component.TryGetComponent<StatComponent>(skill.OwnerEntityId, out var ownerStat))
+                        extraCount = ownerStat.FinalProjectileCountAdd;
+                    int finalCount = Mathf.Max(1, baseCount + extraCount);
+
+                    float totalSpread = (finalCount - 1) * SPREAD_ANGLE_PER_SHOT;
+                    float startOffset = -totalSpread * 0.5f;
+
+                    for (int i = 0; i < finalCount; i++)
+                    {
+                        float angle = baseAngle + startOffset + SPREAD_ANGLE_PER_SHOT * i;
+                        float rad = angle * Mathf.Deg2Rad;
+                        Vector2 dir = new Vector2(Mathf.Cos(rad), Mathf.Sin(rad));
+                        Utility.ProjectileHelper.SpawnProjectile(
+                            skill.OwnerEntityId,
+                            skillEntityId,
+                            skill.Table.ProjectileId,
+                            ownerTransform.Position,
+                            dir
+                        );
+                    }
                 }
 
                 return;

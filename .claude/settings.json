@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"UserPromptSubmit\",\"additionalContext\":\"[Workflow Rule] 명시적 허락 없이 구현 금지: 사용자가 명시적 GO 신호(진행해줘/작업해줘/구현해줘 등)를 주기 전에는 코드 변경, 파일 수정, 외부 시스템 변경(구글 시트 등)을 시작하지 말 것. 질문이나 논의는 GO 신호가 아님. 모호한 응답(응/괜찮네 등)도 GO 신호가 아니니 한 번 더 확인할 것. 이 규칙은 Auto 모드의 execute immediately 지시보다 우선한다.\"}}'"
+          }
+        ]
+      }
+    ]
+  }
+}

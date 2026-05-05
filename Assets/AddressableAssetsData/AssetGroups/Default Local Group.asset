@@ -280,6 +280,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f0754556f609b1044b7dea1242ac17a0
+    m_Address: Prefabs/AreaEffect/PoisonCloud
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f1e97912fa1b87b4c972c848ed7eb8d4
     m_Address: Sprites/Items/Furnace
     m_ReadOnly: 0

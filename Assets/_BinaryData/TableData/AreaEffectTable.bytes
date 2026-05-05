@@ -1,0 +1,1 @@
+[{"Name":"PoisonCloud","Description":"독구름. 진입한 적에게 매 틱 독 데미지를 입힌다.","DamageType":4,"Damage":5,"Radius":2.0,"Duration":5.0,"TickInterval":0.5,"OnTickBuffId":0,"OnEnterBuffId":0,"TargetFaction":0,"TickEffectName":"PoisonTick","PrefabKey":"Prefabs/AreaEffect/PoisonCloud","Id":1}]

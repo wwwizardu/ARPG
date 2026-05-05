@@ -3,6 +3,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using Newtonsoft.Json;
+using ARPG.Component;
 using GE = GlobalEnum;
 
 
@@ -339,14 +340,16 @@ namespace ARPG.Tables
         [JsonProperty("ActivateName")] public string ActivateName = string.Empty;       // 활성 이펙트
         [JsonProperty("HitEffect")] public string HitEffect = string.Empty;             // 히트 이펙트
         [JsonProperty("ProjectileId")] public int ProjectileId;                          // 발사체 테이블 ID (0이면 즉발)
+        [JsonProperty("AreaEffectId")] public int AreaEffectId;                          // 장판 테이블 ID (0이면 장판 없음)
+        [JsonProperty("BaseProjectileCount")] public int BaseProjectileCount = 1;        // 기본 발사 개수. 최종 = BaseProjectileCount + Stat.ProjectileCountAdd
         [JsonProperty("ArcHeight")] public float ArcHeight;                              // 포물선 최대 높이 (점프, Arc 투사체 등에 사용. 0이면 지면 유지)
         [JsonProperty("BaseDamageMul")] public int BaseDamageMul = 100;                  // 스킬 베이스 데미지 배율 (100=1.0x). 플랫 데미지(베이스+Added) 합산 후 스킬 배율/치명타보다 먼저 적용
         [JsonProperty("BaseAttackSpeedMul")] public int BaseAttackSpeedMul = 100;        // 스킬 베이스 공속 배율 (100=1.0x). 무기 공속에 곱한 뒤 FinalAttackSpeed% 적용
 
         // Phase 1: SkillEffect 합성 시스템 - 이 스킬에 부착된 효과 ID 목록 (SkillEffectTable 참조)
         [JsonProperty("SkillEffectIds")] public List<int>? SkillEffectIds = null;
-        // Phase 2: ExecutionType 컬럼화 - 0=Single, 1=MultiHit, 2=Channeling, 3=Toggle, 4=Charge (Component.SkillExecutionType과 매칭)
-        [JsonProperty("ExecutionType")] public int ExecutionType = 1;                    // 기본 MultiHit (HitCount=1이면 사실상 Single)
+        // Phase 2: ExecutionType 컬럼화 - Component.SkillExecutionType과 매칭. 시트는 문자열(Single/MultiHit/Channeling/Toggle/Charge)
+        [JsonProperty("ExecutionType")] public SkillExecutionType ExecutionType = SkillExecutionType.MultiHit;  // 기본 MultiHit (HitCount=1이면 사실상 Single)
         [JsonProperty("ChannelingInterval")] public float ChannelingInterval;            // Channeling: 효과 적용 간격(초)
         [JsonProperty("MaxChargeTime")] public float MaxChargeTime;                      // Charge: 최대 차징 시간(초)
         [JsonProperty("MinChargeRatio")] public float MinChargeRatio;                    // Charge: 최소 차징 비율(0~1)
@@ -377,6 +380,27 @@ namespace ARPG.Tables
         [JsonProperty("HitRadius")] public float HitRadius;                 // 충돌 반경
         [JsonProperty("IsPiercing")] public bool IsPiercing;                // 관통 여부
         [JsonProperty("PrefabKey")] public string PrefabKey = string.Empty; // Addressable 프리팹 키
+    }
+
+    /// <summary>
+    /// 장판(지속 영역 효과) 정의 테이블. SkillTable.AreaEffectId가 이 테이블을 참조.
+    /// 위치 지정 즉발(SkillTargetType=Position) 또는 SkillEffect.SpawnAreaEffect 트리거에서 스폰.
+    /// </summary>
+    [Serializable]
+    public class AreaEffectTable : TableBase
+    {
+        [JsonProperty("Name")] public string Name = string.Empty;                    // 이름
+        [JsonProperty("Description")] public string Description = string.Empty;      // 설명
+        [JsonProperty("DamageType")] public GE.DamageType DamageType;                // 데미지 속성 (Physics/Fire/Ice/Lightning/Poison)
+        [JsonProperty("Damage")] public int Damage;                                  // 틱당 데미지 (0이면 데미지 없음, 버프만 부여)
+        [JsonProperty("Radius")] public float Radius;                                // 효과 반경
+        [JsonProperty("Duration")] public float Duration;                            // 지속 시간 (초)
+        [JsonProperty("TickInterval")] public float TickInterval;                    // 틱 간격 (초)
+        [JsonProperty("OnTickBuffId")] public int OnTickBuffId;                      // 매 틱 진입자에게 부여할 BuffTable Id (0이면 없음)
+        [JsonProperty("OnEnterBuffId")] public int OnEnterBuffId;                    // 진입 시 1회 부여할 BuffTable Id (0이면 없음)
+        [JsonProperty("TargetFaction")] public Faction TargetFaction;                // 타격 대상 진영 (Neutral=caster의 적, 그 외=명시 진영)
+        [JsonProperty("TickEffectName")] public string TickEffectName = string.Empty; // 매 틱 재생할 이펙트 키
+        [JsonProperty("PrefabKey")] public string PrefabKey = string.Empty;          // Addressable 프리팹 키 (장판 본체 시각)
     }
 
     [Serializable]
@@ -444,7 +468,7 @@ namespace ARPG.Tables
     {
         [JsonProperty("Name")] public string Name = string.Empty;   // 이름
         [JsonProperty("AiType")] public GE.AiType AiType;           // Ai 타입
-        [JsonProperty("BehaviorType")] public ARPG.Component.AIBehaviorType BehaviorType; // 행동 타입 (Melee/Ranged 등)
+        [JsonProperty("BehaviorType")] public AIBehaviorType BehaviorType; // 행동 타입 (Melee/Ranged 등)
         [JsonProperty("DetectionRange")] public float DetectionRange; // 감지 범위
         [JsonProperty("SkillId1")] public int SkillId1;             // 스킬 1
         [JsonProperty("SkillWeight1")] public int SkillWeight1;     // 스킬 1 선택 가중치 (0이면 선택 안함)

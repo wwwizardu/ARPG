@@ -21,6 +21,11 @@ namespace ARPG.Scene
         {
             yield return base.OnInitialize();
 
+            // 매니저에 root transform 등록 — Map.CreateMap 이후 첫 spawn이 fire 되기 전에 반드시 세팅되어야 함
+            AR.s.Monster.SetMorsterRoot(_monsterRoot);
+            AR.s.Npc.SetNpcRoot(_npcRoot);
+            AR.s.Building.SetBuildingRoot(_buildingRoot);
+
             // EntityFactory를 통해 플레이어 생성 (Addressable 비동기)
             yield return CreatePlayerAsync().ToCoroutine();
 

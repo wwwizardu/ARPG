@@ -26,6 +26,9 @@ namespace ARPG.Component
             { typeof(StatComponent), 300 },
             { typeof(ColliderComponent), 500 },
 
+            // HP/MP 재생 누적기 (FinalHpGeneration > 0 또는 FinalMpGeneration > 0인 엔티티만)
+            { typeof(RegenComponent), 50 },
+
             // 점프 컴포넌트 (점프 중인 엔티티만)
             { typeof(JumpComponent), 50 },
 
@@ -85,6 +88,10 @@ namespace ARPG.Component
             // 발사체 컴포넌트
             { typeof(ProjectileComponent), 100 },
             { typeof(ProjectileTag), 100 },
+
+            // 장판(지속 영역 효과) 컴포넌트
+            { typeof(AreaEffectComponent), 50 },
+            { typeof(AreaEffectTag), 50 },
 
             // 장비 Mod 풀 컴포넌트
             { typeof(ModPoolComponent), 10 },

@@ -107,6 +107,19 @@ namespace ARPG.Systems
                                     Object.Destroy(go);
                                 }
                             }
+                            // 장판도 AddressablePool에 반환
+                            else if (cm.TryGetComponent<AreaEffectComponent>(entityId, out var area))
+                            {
+                                var areaTable = AR.s.Data.GetAreaEffect(area.AreaEffectTableId);
+                                if (areaTable != null && string.IsNullOrEmpty(areaTable.PrefabKey) == false)
+                                {
+                                    AddressablePool.Return(areaTable.PrefabKey, go);
+                                }
+                                else
+                                {
+                                    Object.Destroy(go);
+                                }
+                            }
                             else
                             {
                                 Object.Destroy(go);

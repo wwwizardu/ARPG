@@ -52,6 +52,9 @@ namespace ARPG.Component
         public int BaseLifeSteal;            // 기본 생명력 흡수 (%)
         public int BaseThorns;               // 기본 반사 데미지 (고정값)
 
+        // 발사체 옵션 (장비 mod / 버프가 +N 합산. 캐릭터 base는 항상 0)
+        public int BaseProjectileCountAdd;   // 기본 발사체 추가 개수
+
         // === 최종 스탯 (Final Stats) ===
         // Base + 장비 + 버프 등 모든 보정이 적용된 최종값 (읽기 전용으로 사용)
         public int FinalStr;
@@ -93,6 +96,9 @@ namespace ARPG.Component
         public int FinalCooldownReduction;   // 최종 쿨타임 감소 (%)
         public int FinalLifeSteal;           // 최종 생명력 흡수 (%)
         public int FinalThorns;              // 최종 반사 데미지 (고정값)
+
+        // 발사체 옵션 (Base + 장비/버프 modifier 합산값)
+        public int FinalProjectileCountAdd;  // 최종 발사체 추가 개수
 
         // === 현재 상태 값 ===
         // 전투 중 변동되는 값들
@@ -213,6 +219,8 @@ namespace ARPG.Component
             FinalCooldownReduction = BaseCooldownReduction;
             FinalLifeSteal = BaseLifeSteal;
             FinalThorns = BaseThorns;
+
+            FinalProjectileCountAdd = BaseProjectileCountAdd;
         }
     }
 }

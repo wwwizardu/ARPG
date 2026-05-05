@@ -305,6 +305,9 @@ namespace ARPG.Factory
             statComponent.InitializeFromTable(table.Stat);
             AR.s.Component.AddComponent(entityId, statComponent);
 
+            // 첫 stat 재계산 트리거 — RegenComponent 등 파생 마커 동기화 보장
+            AR.s.Component.AddComponent(entityId, new StatDirtyTag());
+
             // StateComponent
             AR.s.Component.AddComponent(entityId, new StateComponent
             {
@@ -586,6 +589,103 @@ namespace ARPG.Factory
         }
 
         /// <summary>
+        /// 장판(AreaEffect) 엔티티 생성. caster의 진영을 그대로 따르며 AreaEffectTable을 참조해
+        /// System_AreaEffect가 매 틱 범위 내 적에게 데미지/버프를 적용한다.
+        /// 만료(LifetimeComponent)는 System_Lifetime이 DestroyTag를 부착해 정리.
+        /// PrefabKey가 지정되면 AddressablePool에서 GameObject를 로드하고 System_Render에 등록.
+        /// 호출자는 await할 필요 없음 (fire-and-forget) — 컴포넌트는 즉시 부착되고 GameObject만 비동기 로드됨.
+        /// </summary>
+        public static async void CreateAreaEffect(int casterEntityId, int areaEffectTableId, Vector2 position, int skillId = 0)
+        {
+            ComponentManager cm = AR.s.Component;
+
+            AreaEffectTable? table = AR.s.Data.GetAreaEffect(areaEffectTableId);
+            if (table == null)
+            {
+                Debug.LogError($"[EntityFactory] CreateAreaEffect - AreaEffectTable not found: {areaEffectTableId}");
+                return;
+            }
+
+            Faction faction = table.TargetFaction;
+            if (faction == Faction.Neutral)
+            {
+                if (cm.TryGetComponent<FactionComponent>(casterEntityId, out var casterFaction))
+                    faction = casterFaction.FactionId;
+            }
+
+            int entityId = EntityIdHelper.CreateEntity();
+
+            cm.AddComponent(entityId, new TransformComponent
+            {
+                Position = position,
+                Rotation = 0f,
+                Scale = Vector2.one
+            });
+            // FactionComponent는 의도적으로 부착하지 않음 — AI 적 탐색이 장판을 공격 대상으로 인식하지 않게.
+            // 적/아군 판정은 AreaEffectComponent.CasterFaction 스냅샷으로 수행 (System_AreaEffect 참조).
+            cm.AddComponent(entityId, new CasterLinkComponent { CasterEntityId = casterEntityId });
+            cm.AddComponent(entityId, new LifetimeComponent { Remaining = table.Duration });
+            cm.AddComponent(entityId, new AreaEffectComponent
+            {
+                OwnerEntityId = casterEntityId,
+                AreaEffectTableId = areaEffectTableId,
+                SkillId = skillId,
+                CasterFaction = faction,
+                Radius = table.Radius,
+                TickInterval = table.TickInterval,
+                NextTickIn = 0f,   // 첫 프레임에 첫 틱 발동
+            });
+            cm.AddComponent(entityId, new AreaEffectTag());
+
+            Debug.Log($"[EntityFactory] CreateAreaEffect - EntityId: {entityId}, Caster: {casterEntityId}, TableId: {areaEffectTableId}, Position: {position}, Radius: {table.Radius}, Duration: {table.Duration}");
+
+            // GameObject 시각 로드 (PrefabKey가 비어있으면 시각 없이 로직만 — 디버그/투명 장판)
+            if (string.IsNullOrEmpty(table.PrefabKey))
+                return;
+
+            // 엔티티가 이미 만료되어 사라진 경우(짧은 Duration + 늦은 로드) 로드 결과를 버림
+            Vector3 spawnPos = new Vector3(position.x, position.y, 0f);
+            GameObject? obj = await AddressablePool.Get(table.PrefabKey, spawnPos, Quaternion.identity);
+            if (obj == null)
+            {
+                Debug.LogWarning($"[EntityFactory] CreateAreaEffect - AddressablePool.Get returned null for key: {table.PrefabKey}");
+                return;
+            }
+
+            if (cm.HasComponent<DestroyTag>(entityId) || cm.HasComponent<AreaEffectComponent>(entityId) == false)
+            {
+                AddressablePool.Return(table.PrefabKey, obj);
+                return;
+            }
+
+            var renderSystem = AR.s.System.GetSystem<Systems.System_Render>();
+            if (renderSystem != null)
+            {
+                var entityBase = obj.GetComponent<Base.EntityBase>();
+                if (entityBase != null)
+                {
+                    // 장판 반경에 맞춰 Visual 스케일 (프리팹은 반경 1.0 기준 제작)
+                    // 루트 transform은 System_Render가 매 프레임 덮어쓰므로 자식 Visual을 조정.
+                    if (entityBase.Visual != null)
+                    {
+                        float visualScale = table.Radius > 0f ? table.Radius : 1f;
+                        entityBase.Visual.transform.localScale = new Vector3(visualScale, visualScale, 1f);
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[EntityFactory] CreateAreaEffect - EntityBase.Visual is null on prefab '{table.PrefabKey}'. Visual scale not applied.");
+                    }
+
+                    renderSystem.RegisterEntity(entityId, entityBase);
+                }
+                else
+                {
+                    Debug.LogError($"[EntityFactory] EntityBase component not found on AreaEffect prefab '{table.PrefabKey}'. Add EntityBase to the prefab root.");
+                }
+            }
+        }
+
+        /// <summary>
         /// 지정 슬롯에 스킬 생성
         /// </summary>
         public static void CreateSkill(int ownerEntityId, int slotIndex, int skillId)
@@ -609,7 +709,7 @@ namespace ARPG.Factory
                 Table = skillTable,
                 IsInitialized = true,
                 IsEnabled = true,
-                ExecutionType = (SkillExecutionType)skillTable.ExecutionType,
+                ExecutionType = skillTable.ExecutionType,
                 HitCount = skillTable.HitCount > 0 ? skillTable.HitCount : 1,
                 HitInterval = skillTable.HitInterval,
                 ChannelingInterval = skillTable.ChannelingInterval,

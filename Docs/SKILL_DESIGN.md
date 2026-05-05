@@ -64,7 +64,7 @@
 
 ### 1.6 ExecutionType (런타임)
 
-`SkillComponent.ExecutionType`은 코드에는 5종 분기(Single/MultiHit/Channeling/Charge/Toggle)가 있으나, **현재 `EntityFactory.CreateSkill`이 모든 스킬을 `MultiHit`으로 고정 생성**한다. Single은 `HitCount=1, HitInterval=0`으로 사실상 동작하지만, Channeling/Charge/Toggle을 쓰려면 §6.1의 ExecutionType 컬럼화가 선행되어야 한다.
+`SkillComponent.ExecutionType`은 코드에 5종 분기(`Single`/`MultiHit`/`Channeling`/`Toggle`/`Charge`)가 있으며, `SkillTable.ExecutionType` 컬럼에 enum 문자열로 지정(시트도 문자열 표기, 빈 셀은 `MultiHit`로 기본값). `EntityFactory.CreateSkill`이 테이블 값을 그대로 매핑. 채널링은 입력 유지 메커니즘(§6.1)까지 모두 동작. Charge/Toggle은 분기는 잡혀있으나 처리 로직 미완.
 
 ---
 
@@ -158,11 +158,14 @@
 - `ProcessTime`: 0.4, `DamageTime`: 0.3
 - `Cooltime`: 0
 
-### R2. Multi Shot — 부채꼴 3발 *(요구: §6.4)*
-- `ProjectileId`: 101 (Spread를 ProjectileTable 또는 신규 컬럼으로 확장)
-- 3발 동시 발사, 각도 30° 분산
+### R2. Multi Shot — 부채꼴 3발 ✅ *(2026-05-04 완료, rev 2)*
+- Skill 시트 Id=101, **ProjectileId=1(임시, Test 발사체 재사용)**, **BaseProjectileCount=3**, SkillEffectIds=null
+- 일반 발사체 경로(`System_Skill.ProcessSkillHit`의 `if(ProjectileId>0)` 분기)가 `BaseProjectileCount + Stat.ProjectileCountAdd`만큼 부채꼴로 발사하도록 확장됨.
+- **SkillEffect 사용 안 함**: "스킬 자체의 발사체 개수"는 SkillTable 컬럼이 책임. SkillEffect.SpawnProjectile은 "스킬과 다른 종류의 발사체 스폰"(예: 폭발의 파편) 용도로만 사용.
+- 분산 각도는 현재 `System_Skill`의 `SPREAD_ANGLE_PER_SHOT=15°` 상수로 고정. 추후 Stat 합산이나 SkillTable 컬럼으로 교체 예정.
+- **장비 mod/버프 효과 자동 적용**: `Stat.ProjectileCountAdd`가 캐스터에 부여되면 R1·R2·S1 등 모든 발사체 스킬이 자동으로 +N발 발사. 발사체 개수 조절은 SkillTable에 분기 없이 동작.
+- 정식 화살 프리팹/Projectile 행이 마련되면 ProjectileId를 1→101로 갱신.
 - `Cooltime`: 4
-- 의존: `ProjectileHelper.SpawnProjectile`을 N발 분산으로 호출하는 래퍼 필요.
 
 ### R3. Piercing Bolt — 관통 볼트
 - `ProjectileId`: 102 (`ProjectileTable.IsPiercing=true`)
@@ -266,21 +269,20 @@
 
 위 §3 ~ §8에서 참조한 작업을 한곳에 모음. 우선순위 순.
 
-### §6.1 ExecutionType 컬럼화 + 입력 유지 메커니즘 *(우선순위: 높음, Charge/Toggle/Channeling 활성화)*
-**현재 상태**: `ProcessChannelingSkill` / `ProcessChargeSkill` / `ProcessToggleSkill` 함수는 작성되어 있으나 실제로는 동작 불가.
+### §6.1 ExecutionType 컬럼화 + 입력 유지 메커니즘 ✅ *(완료, 2026-05-04 확인)*
+**현재 상태**: 채널링은 동작 가능. Charge/Toggle은 ExecutionType 분기까지는 마련됐으나 실제 처리 로직은 미완.
 
-블로커:
-1. `EntityFactory.CreateSkill`이 `ExecutionType = SkillExecutionType.MultiHit`으로 하드코딩 → 채널링/차징/토글로 만들 경로가 없음.
-2. `ProcessSkillCommands` 종료 직후 `SkillCommandComponent`를 즉시 제거 → 1프레임 트리거.
-3. `ProcessChannelingSkill`이 (2)에서 제거된 `SkillCommandComponent`를 "입력 유지" 신호로 잘못 사용 → 다음 프레임에 무조건 종료.
-4. `ChannelingInterval` / `MaxChargeTime` 등이 EntityFactory에서 세팅되지 않음 (테이블 컬럼 부재).
+채택 내역:
+- `SkillTable`에 컬럼 추가: `ExecutionType`(0=Single,1=MultiHit,2=Channeling,3=Toggle,4=Charge), `ChannelingInterval`, `MaxChargeTime`, `MinChargeRatio`.
+- `EntityFactory.CreateSkill`이 테이블 `ExecutionType`을 그대로 매핑 (이전 MultiHit 하드코딩 해소). [EntityFactory.cs:612-615]
+- 입력 유지는 **`InputComponent.SkillSlotHeldMask`(int 비트마스크)** 로 채택 — 별도 `SkillInputHeldTag` 컴포넌트는 만들지 않음. 슬롯 매핑: bit 0=Attack(좌클릭), bit 1=Jump(Space), bit 2~9=Digit1~8.
+- `System_Input`이 매 프레임 `IsPressed()`로 마스크 갱신. [System_Input.cs:117-136]
+- `ProcessChannelingSkill`이 `SlotIndex`로 비트 조회. 입력 떼면 `End` 상태로 전이(후딜레이/쿨타임 정상 처리). AI는 `InputComponent` 없으므로 항상 held 취급, `ProcessDuration`이 종료를 결정. [System_Skill.cs:680-709]
+- `ProcessProcessState`가 플레이어 채널링일 때만 `ProcessDuration` 자동 종료를 스킵. [System_Skill.cs:340-342]
 
-해결:
-- `SkillTable`에 `ExecutionType` 컬럼 추가 (또는 `Tags`/`SkillType`에서 파생). `ChannelingInterval`, `MaxChargeTime`, `MinChargeRatio`도 함께 추가.
-- 입력 유지 판정용 별도 컴포넌트 신설 권장: `SkillInputHeldTag` (캐릭터 엔티티에 부착, 입력 유지 시 매 프레임 갱신, 떼면 제거). 또는 `InputComponent`에 `IsSkillButtonHeld` 추가.
-- `ProcessChannelingSkill`/`ProcessChargeSkill`이 위 신호를 보도록 수정.
+남은 작업: Charge(`ProcessChargeSkill` 입력 끊김 분기), Toggle(`ProcessToggleSkill` 효과 적용/제거).
 
-영향: C1·C2·C3·B2 활성화.
+영향: C1·C3 활성화. C2(Charge)·B2(Toggle)는 분기는 잡혀있으나 처리 로직 미완.
 
 ### §6.2 마나 소모 + 버프 적용 훅 *(우선순위: 높음, 버프/스펠 전반)*
 - `ProcessSkillCommands`에서 시전 직전 `Mana` 소모 검사 (StatComponent.CurrentMana).
@@ -293,10 +295,11 @@
 - 점프 스킬은 착지 시점에 한 번 더 ProcessSkillHit 트리거가 필요(현재 ProcessTime 종료 = 착지 = ProcessHit과 어긋나는지 검토).
 - 영향: M2·M3·S5·C1.
 
-### §6.4 발사체 다중/포물선 확장 *(우선순위: 중)*
-- `ProjectileHelper.SpawnProjectile`을 N발/분산 발사 래퍼 추가. `ProjectileTable`에 `Count`, `SpreadAngle` 컬럼.
-- 발사체에 `ArcHeight` 적용 (현재 점프에만 사용). 별도 `ArcProjectile` 분기 또는 ProjectileSystem 보강.
-- 영향: R2·R4.
+### §6.4 발사체 다중/포물선 확장 ✅ *(다중 발사 완료, 포물선만 남음)*
+- ~~다중 발사~~: `SkillTable.BaseProjectileCount` 컬럼 + `Stat.ProjectileCountAdd` 합산으로 처리 (R2 완료). System_Skill의 ProjectileId 분기가 N발 부채꼴 발사로 확장. **임의의 발사체 스킬에 자동 적용** — 장비 mod/버프가 +N 부여하면 R1·R2·S1 등 모든 스킬이 자동으로 다중 발사. ProjectileTable에는 컬럼 추가 없음, SkillEffect 행도 필요 없음.
+- ※ §6.8 `SkillEffectType.SpawnProjectile`은 별도 용도로 유지: "스킬과 다른 종류의 발사체를 스폰"(예: 폭발의 파편, 시체 폭발)에만 사용. 일반 Multi Shot에 사용 금지.
+- 포물선(R4): 발사체에 `ArcHeight` 적용 미해결. 별도 `ArcProjectile` 분기 또는 ProjectileSystem 보강 필요.
+- 영향: R4 (포물선만 미해결).
 
 ### §6.5 연쇄 / 다중 타겟 메커니즘 *(우선순위: 낮음)*
 - 신규 컴포넌트 `ChainComponent` 또는 `ProjectileTable.ChainCount`.
@@ -314,8 +317,24 @@
 - 영향: A5·S1·S2·S6.
 - **주**: §6.8 SkillEffect 시스템이 도입되면 `EffectType.ApplyBuffOnHit`로 자연스럽게 흡수됨. 단독 컬럼 추가는 §6.8을 건너뛸 때만 의미 있음.
 
-### §6.8 SkillEffect 합성형 효과 시스템 *(우선순위: 매우 높음, 커스텀 옵션 전체의 토대)*
+### §6.8 SkillEffect 합성형 효과 시스템 ✅ *(골격 완료, 2026-05-04 확인. 신규 EffectType 확장만 남음)*
 **목적**: "명중 시 HP 흡수", "투사체 분리", "치명타 시 추가 발사체" 등의 옵션을 코드 분기 없이 데이터로 합성한다. PoE 보조 젬과 본질적으로 같은 모델.
+
+**구현 위치**:
+- `GlobalEnum.SkillTrigger` (8종 전체 정의), `GlobalEnum.SkillEffectType` (None/LifeStealOnHit/ApplyBuffOnHit/DelegateToTotem/SpawnProjectile 5종 구현)
+- `SkillEffectExecutor.Trigger(trigger, ctx, effectIds)` 단일 진입점, EffectType별 switch
+- `SkillEffectContext` (OwnerId/TargetId/SkillId/TargetPos/DamageResult/IsCrit/CancelOriginalCast)
+- `SkillTable.SkillEffectIds: List<int>` 컬럼 + 구글 시트 SkillEffect 시트
+- 등록된 효과: 1001 LifeSteal_15%, 1002 OnHit_Bleed, 1010 Delegate_Totem_8s, 2003 MultiShot_3 (R2)
+
+**옵션 합산 컨벤션**: 옵션은 두 종류로 나뉨.
+- **(1) 스킬 고유 속성**: `SkillTable` 컬럼으로 표현 (예: `ProjectileId`, `BaseProjectileCount`). 발사체 개수처럼 "스킬마다 다를 수 있지만 하나의 스킬 내에선 base 값"인 항목.
+- **(2) 외부 modifier**: `Stat.<Aspect>Add` enum으로 누적, `StatModifier`로 장비/버프 부여. 사용처 측에서 `base + Stat.Final*Add`로 합산. 예: `Stat.ProjectileCountAdd`.
+- 새 modifier 추가 시: Stat enum 1줄 + StatComponent 2줄(Base/Final) + System_StatCalculation case 1개 + 합산 코드 1곳.
+
+**SkillEffect.SpawnProjectile은 별도 용도**: "스킬과 다른 종류의 발사체 스폰"(폭발 파편, 시체 폭발 등). 일반 Multi Shot에는 사용 안 함.
+
+**남은 작업**: SpawnProjectileOnHit(분리) / SpawnAreaEffectOnKill / ManaRestoreOnKill / KnockbackOnHit / DelegateToMine·Trap 등 `SkillEffectType` enum 추가 + Executor case 추가. 합산형 옵션은 `Stat.ProjectilePierceAdd` / `ProjectileChainAdd` / `ProjectileSpreadAdd` / `ProjectileForkCountAdd` 추가.
 
 **문제 의식**: 현재는 새 옵션 1개 = `SkillTable` 컬럼 1개 + `System_Skill` 분기 1개. 옵션 N × 스킬 M 조합 폭발. `ApplySkillEffectToEntity`의 TODO 주석들이 이 한계를 드러냄.
 
@@ -422,9 +441,9 @@ ProjectileId 대역도 동일 규칙 권장: 화살 100번대, 마법 200번대.
 
 기획 문서 채택 후 권장 구현 순서. **§6.8(SkillEffect)을 가장 먼저 도입하면 이후 옵션·보조가 데이터 추가만으로 동작**하므로 우선순위가 가장 높음.
 
-1. **시스템 변경 0**: A2 Cleave, A3 Whirlwind, A4 Heavy Slam, R1 Power Shot, R3 Piercing Bolt, S2 Ice Nova (테이블 행만 추가).
+1. **시스템 변경 0**: A2 Cleave, A3 Whirlwind(채널링 변형 포함, ExecutionType=2), A4 Heavy Slam, R1 Power Shot, R3 Piercing Bolt, S2 Ice Nova (테이블 행만 추가). ✅ §6.1 완료로 채널링도 시스템 변경 0 그룹에 포함.
 2. **§6.8 SkillEffect 골격 도입** (트리거 enum + Executor 빈 디스패치 + System_Skill 8개 호출 지점). 동작 변화 0, 토대만 마련.
-3. **§6.1 + §6.2 + §6.8 첫 EffectType (LifeStealOnHit, ApplyBuffOnHit)**: A5 Lacerate, B1 War Cry, B4 Curse of Weakness, S1 Fireball, S6 Frost Bolt.
+3. **§6.2 + §6.8 첫 EffectType (LifeStealOnHit, ApplyBuffOnHit)**: A5 Lacerate, B1 War Cry, B4 Curse of Weakness, S1 Fireball, S6 Frost Bolt. (§6.1은 완료)
 4. **§6.3**: M2 Leap Slam, M3 Dash Strike, S5 Lightning Strike, C1 Beam Cast.
 5. **§6.4 + EffectType.SpawnProjectile 계열**: R2 Multi Shot, R4 Arc Shot, "투사체 분리" 옵션.
 6. **§6.9 토템·지뢰·함정 위임** (§6.8 + Faction + Lifetime 의존): T1 Spell Totem, T2 Remote Mine, T3 Trap.
@@ -437,3 +456,7 @@ ProjectileId 대역도 동일 규칙 권장: 화살 100번대, 마법 200번대.
 
 - 2026-05-02: 초안 작성. 25종 스킬 카탈로그 + 7개 시스템 보강 항목 정의.
 - 2026-05-02 (rev 2): §6.8 SkillEffect 합성형 효과 시스템 추가, §6.9 토템·지뢰·함정 시전 주체 위임 추가. §6.7을 §6.8에 흡수 가능 항목으로 표시. §11 로드맵 재정렬 (SkillEffect 우선).
+- 2026-05-04: §6.1 완료 표시. 입력 유지 메커니즘은 `SkillInputHeldTag`(제안) 대신 `InputComponent.SkillSlotHeldMask` 비트마스크로 채택. Charge/Toggle 처리 로직은 미완으로 남음. §11 로드맵에서 §6.1 의존 항목 정리. A3 Whirlwind 채널링 변형 추가 (Skill 시트 Id=11, ExecutionType=2).
+- 2026-05-04 (rev 2): §6.8 SkillEffect 골격 완료 표시 (Executor/Context/Trigger·EffectType enum/SkillEffect 시트). LifeStealOnHit/ApplyBuffOnHit/DelegateToTotem 3종 구현됨. A5 Lacerate 추가 (Skill 시트 Id=13, SkillEffectIds=[1002 OnHit_Bleed]).
+- 2026-05-04 (rev 3): R2 Multi Shot 구현 — `SkillEffectType.SpawnProjectile` + `Stat.ProjectileCountAdd` 추가. SkillEffect 2003 / Skill Id=101. 발사체 옵션 합산 컨벤션(Param=base, Stat=modifier) 도입. §6.4를 §6.8에 흡수. 분산 각도는 코드 상수(15°/발) 고정 — 추후 Stat 추가 시 교체 예정.
+- 2026-05-04 (rev 4): R2 설계 재검토 — SpawnProjectile EffectType 기반 접근은 "스킬당 별도 SkillEffect 행 필요"라는 조합 폭발 문제로 폐기. 대신 **`SkillTable.BaseProjectileCount` 컬럼**을 추가하고 System_Skill의 ProjectileId 분기를 N발 부채꼴 발사로 확장. R2는 `ProjectileId=1, BaseProjectileCount=3`만으로 정의. `Stat.ProjectileCountAdd`는 모든 발사체 스킬에 자동 적용. SpawnProjectile EffectType은 "스킬과 다른 종류의 발사체 스폰" 용도로 살려둠.
