@@ -802,7 +802,14 @@ namespace ARPG.Systems
                 {
                     const float SPREAD_ANGLE_PER_SHOT = 15f;  // 발사체 간 각도(도). 추후 Stat 합산 도입 시 교체
 
-                    Vector2 baseDir = target.TargetPosition - ownerTransform.Position;
+                    // 발사 시작점 = owner의 몸통 중심 (HitOffset 적용). 타겟도 몸통 기준이라 방향이 직관적
+                    Vector2 spawnOrigin = ownerTransform.Position;
+                    if (AR.s.Component.TryGetComponent<ColliderComponent>(skill.OwnerEntityId, out var ownerCollider))
+                    {
+                        spawnOrigin += ownerCollider.HitOffset;
+                    }
+
+                    Vector2 baseDir = target.TargetPosition - spawnOrigin;
                     if (baseDir.sqrMagnitude < 0.0001f)
                         baseDir = Vector2.right;
                     else
@@ -827,7 +834,7 @@ namespace ARPG.Systems
                             skill.OwnerEntityId,
                             skillEntityId,
                             skill.Table.ProjectileId,
-                            ownerTransform.Position,
+                            spawnOrigin,
                             dir
                         );
                     }
@@ -850,8 +857,9 @@ namespace ARPG.Systems
 
         /// <summary>
         /// 특정 위치에서 가장 가까운 적 엔티티를 찾습니다 (진영 필터 적용).
+        /// 타겟의 ColliderComponent.HitOffset을 적용한 몸통 중심 기준으로 비교 — 마우스 hover와 시각이 일치
         /// </summary>
-        /// <param name="position">기준 위치</param>
+        /// <param name="position">기준 위치(마우스 월드 좌표 등)</param>
         /// <param name="casterEntityId">시전자 엔티티 ID (자기 자신 + 같은 진영 제외)</param>
         /// <returns>가장 가까운 적 엔티티 ID (없으면 0)</returns>
         private int FindClosestEntity(Vector2 position, int casterEntityId)
@@ -859,8 +867,10 @@ namespace ARPG.Systems
             int closestEntityId = 0;
             float closestSqrDistance = float.MaxValue;
 
+            ComponentManager cm = AR.s.Component;
+
             // 모든 TransformComponent를 가진 엔티티 순회
-            SparseSet<TransformComponent> transformPool = AR.s.Component.GetComponentPool<TransformComponent>();
+            SparseSet<TransformComponent> transformPool = cm.GetComponentPool<TransformComponent>();
 
             for (int i = 0; i < transformPool.Count; i++)
             {
@@ -874,10 +884,15 @@ namespace ARPG.Systems
                 if (FactionHelper.IsHostileTo(casterEntityId, entityId) == false)
                     continue;
 
+                // 몸통 중심 기준 거리 비교 (HitOffset 없으면 발 좌표 그대로)
                 TransformComponent entityTransform = transformPool.GetByIndex(i);
+                Vector2 entityCenter = entityTransform.Position;
+                if (cm.TryGetComponent<ColliderComponent>(entityId, out var entityCollider))
+                {
+                    entityCenter += entityCollider.HitOffset;
+                }
 
-                // 거리 계산 (제곱 거리 비교로 성능 최적화)
-                float sqrDistance = (entityTransform.Position - position).sqrMagnitude;
+                float sqrDistance = HitboxMath.SqrDistance(entityCenter, position);
 
                 if (sqrDistance < closestSqrDistance)
                 {
@@ -923,26 +938,31 @@ namespace ARPG.Systems
 
         /// <summary>
         /// 원형 범위 내 엔티티 체크
-        /// Range1: 거리, Range2: 각도 (360도면 전방향, 그 외는 부채꼴)
+        /// Range1: 거리, Range2: 각도 (360도면 전방향, 그 외는 부채꼴 한쪽 각도)
+        /// 시전자 발 좌표를 기준점으로 사용하고, 타겟은 ColliderComponent.HitOffset/HitRadius로 보정
         /// </summary>
         private void CheckCircleRangeEntities(SkillComponent skill, SkillTargetComponent target, System.Collections.Generic.List<int> outHitEntities)
         {
             if (skill.Table == null)
                 return;
 
-            if(AR.s.Component.TryGetComponent<TransformComponent>(skill.OwnerEntityId, out var ownerTransform) == false)
+            ComponentManager cm = AR.s.Component;
+
+            if(cm.TryGetComponent<TransformComponent>(skill.OwnerEntityId, out var ownerTransform) == false)
             {
                 Debug.LogError($"[System_Skill] Owner TransformComponent not found - OwnerEntityId: {skill.OwnerEntityId}");
                 return;
-            }              
+            }
 
-            Vector2 ownerPosition = ownerTransform.Position;  
+            // 시전자 시점 기준은 발 좌표 그대로 (스킬 사거리 기획 의미상 발 기준)
+            Vector2 originPosition = ownerTransform.Position;
 
-            float range = skill.Table.SkillTargetRange1; // 거리
-            float angle = skill.Table.SkillTargetRange2; // 각도 (360도면 전방향, 그 외는 부채꼴)
+            float range = skill.Table.SkillTargetRange1;       // 거리
+            float halfAngleDeg = skill.Table.SkillTargetRange2; // 한쪽 각도 (360이면 전방향)
+            Vector2 forward = target.TargetDirection;
 
             // 모든 TransformComponent를 가진 엔티티 순회
-            SparseSet<TransformComponent> transformPool = AR.s.Component.GetComponentPool<TransformComponent>();
+            SparseSet<TransformComponent> transformPool = cm.GetComponentPool<TransformComponent>();
 
             for (int i = 0; i < transformPool.Count; i++)
             {
@@ -956,33 +976,26 @@ namespace ARPG.Systems
                 if (FactionHelper.IsHostileTo(skill.OwnerEntityId, entityId) == false)
                     continue;
 
+                // 타겟 충돌 중심 = 발 좌표 + HitOffset, 타겟 반경 = HitRadius
                 TransformComponent entityTransform = transformPool.GetByIndex(i);
-
-                // 1. 거리 체크 (성능을 위해 제곱 거리 비교)
-                float sqrDistance = (entityTransform.Position - ownerPosition).sqrMagnitude;
-                float sqrRange = range * range;
-
-                if (sqrDistance > sqrRange)
-                    continue;
-
-                // 2. 각도 체크 (360도가 아닐 경우에만)
-                if (angle < 360f)
+                Vector2 entityCenter;
+                float entityRadius;
+                if (cm.TryGetComponent<ColliderComponent>(entityId, out var entityCollider))
                 {
-                    // 타겟 방향을 기준으로 각도 체크
-                    Vector2 directionToEntity = (entityTransform.Position - ownerPosition).normalized;
-                    Vector2 targetDirection = target.TargetDirection.normalized;
-
-                    // 두 벡터 사이의 각도 계산
-                    float dotProduct = Vector2.Dot(targetDirection, directionToEntity);
-                    float angleToEntity = Mathf.Acos(dotProduct) * Mathf.Rad2Deg;
-
-                    // angle은 한쪽 각도를 의미하므로, 양쪽 각도 체크
-                    if (angleToEntity > angle)
-                        continue;
+                    entityCenter = entityTransform.Position + entityCollider.HitOffset;
+                    entityRadius = entityCollider.HitRadius;
+                }
+                else
+                {
+                    entityCenter = entityTransform.Position;
+                    entityRadius = 0f;
                 }
 
-                // 거리와 각도 조건을 모두 만족하면 리스트에 추가
-                outHitEntities.Add(entityId);
+                // CircleVsSector: 부채꼴 거리 검사에 타겟 반경을 더해 가장자리 명중까지 커버
+                if (HitboxMath.CircleVsSector(entityCenter, entityRadius, originPosition, forward, range, halfAngleDeg))
+                {
+                    outHitEntities.Add(entityId);
+                }
             }
         }
 

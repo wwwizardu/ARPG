@@ -27,6 +27,11 @@ namespace ARPG.Tables
 
         [JsonProperty("Stat")] public int StatId;
 
+        // 충돌/피격 메타데이터 (모두 0이면 EntityFactory에서 fallback 적용)
+        [JsonProperty("MoveRadius")] public float MoveRadius;
+        [JsonProperty("HitRadius")] public float HitRadius;
+        [JsonProperty("HitOffsetY")] public float HitOffsetY;
+
         [JsonProperty("PrefabName")] public string PrefabName = string.Empty;
 
         [JsonProperty("AnimationId")] public int AnimationId;

@@ -30,13 +30,13 @@ namespace ARPG.Editor
         {
             _tableDic = new();
 
-            await DownloadTable<CreatureTable>("0&range=A:F", 1, SaveType.String);
+            await DownloadTable<CreatureTable>("0&range=A:I", 1, SaveType.String);
 
             await DownloadTable<AiTable>("947794841&range=A:K", 1, SaveType.String);
 
-            await DownloadTable<MonsterTable>("483012127&range=A:L", 1, SaveType.String);
+            await DownloadTable<MonsterTable>("483012127&range=A:O", 1, SaveType.String);
 
-            await DownloadTable<NpcTable>("1460299278&range=A:L", 1, SaveType.String);
+            await DownloadTable<NpcTable>("1460299278&range=A:O", 1, SaveType.String);
 
             await DownloadTable<StatTable>("318209064&range=A:AF", 1, SaveType.String);
 
@@ -251,17 +251,20 @@ namespace ARPG.Editor
 
         private static void ParseCreatureTable(CreatureTable table, string[] values)
         {
-            if (values.Length < 5)
+            if (values.Length < 9)
             {
-                Debug.LogError($"[ParseCreatureTable] Invalid data length. Expected at least 5, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseCreatureTable] Invalid data length. Expected at least 9, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
             table.Name = values[1];
             // values[2]는 웹에서만 사용한다.
             table.StatId = int.Parse(values[3]);
-            table.PrefabName = values[4];
-            table.AnimationId = int.Parse(values[5]);
+            table.MoveRadius = ParseFloatSafe(values, 4);
+            table.HitRadius = ParseFloatSafe(values, 5);
+            table.HitOffsetY = ParseFloatSafe(values, 6);
+            table.PrefabName = values[7];
+            table.AnimationId = int.Parse(values[8]);
         }
 
         private static void ParseVillageTable(VillageTable table, string[] values)
@@ -311,23 +314,26 @@ namespace ARPG.Editor
 
         private static void ParseNpcTable(NpcTable table, string[] values)
         {
-            if (values.Length < 12)
+            if (values.Length < 15)
             {
-                Debug.LogError($"[ParseNpcTable] Invalid data length. Expected at least 12, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseNpcTable] Invalid data length. Expected at least 15, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
             table.Name = values[1];
             // values[2]는 웹에서만 사용한다.
             table.StatId = int.Parse(values[3]);
-            table.PrefabName = values[4];
-            table.AnimationId = int.Parse(values[5]);
-            table.JobType = (GlobalEnum.JobType)Enum.Parse(typeof(GlobalEnum.JobType), values[6]);
-            table.WeaponId = int.Parse(values[7]);
-            table.AiTableId = int.Parse(values[8]);
-            table.DropId = int.Parse(values[9]);
-            table.DropRateBonus = int.Parse(values[10]);
-            table.DropRarityBonus = int.Parse(values[11]);
+            table.MoveRadius = ParseFloatSafe(values, 4);
+            table.HitRadius = ParseFloatSafe(values, 5);
+            table.HitOffsetY = ParseFloatSafe(values, 6);
+            table.PrefabName = values[7];
+            table.AnimationId = int.Parse(values[8]);
+            table.JobType = (GlobalEnum.JobType)Enum.Parse(typeof(GlobalEnum.JobType), values[9]);
+            table.WeaponId = int.Parse(values[10]);
+            table.AiTableId = int.Parse(values[11]);
+            table.DropId = int.Parse(values[12]);
+            table.DropRateBonus = int.Parse(values[13]);
+            table.DropRarityBonus = int.Parse(values[14]);
         }
 
         private static void ParseStatTable(StatTable table, string[] values)
@@ -376,23 +382,26 @@ namespace ARPG.Editor
 
         private static void ParseMonsterTable(MonsterTable table, string[] values)
         {
-            if (values.Length < 12)
+            if (values.Length < 15)
             {
-                Debug.LogError($"[ParseMonsterTable] Invalid data length. Expected at least 12, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseMonsterTable] Invalid data length. Expected at least 15, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
             table.Name = values[1];
             // values[2]는 웹에서만 사용한다.
             table.StatId = int.Parse(values[3]);
-            table.PrefabName = values[4];
-            table.AnimationId = int.Parse(values[5]);
-            table.WeaponId = int.Parse(values[6]);
-            table.AiTableId = int.Parse(values[7]);
-            table.DropId = int.Parse(values[8]);
-            table.DropRateBonus = int.Parse(values[9]);
-            table.DropRarityBonus = int.Parse(values[10]);
-            table.Level = int.Parse(values[11]);
+            table.MoveRadius = ParseFloatSafe(values, 4);
+            table.HitRadius = ParseFloatSafe(values, 5);
+            table.HitOffsetY = ParseFloatSafe(values, 6);
+            table.PrefabName = values[7];
+            table.AnimationId = int.Parse(values[8]);
+            table.WeaponId = int.Parse(values[9]);
+            table.AiTableId = int.Parse(values[10]);
+            table.DropId = int.Parse(values[11]);
+            table.DropRateBonus = int.Parse(values[12]);
+            table.DropRarityBonus = int.Parse(values[13]);
+            table.Level = int.Parse(values[14]);
         }
 
         private static void ParseItemTable(ItemTable table, string[] values)

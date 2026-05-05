@@ -1,5 +1,6 @@
 using ARPG.Component;
 using ARPG.Skill.Combat;
+using ARPG.Utility;
 using UnityEngine;
 using GE = GlobalEnum;
 
@@ -70,7 +71,6 @@ namespace ARPG.Systems
         private bool CheckCollision(ComponentManager cm, int projectileEntityId, ref ProjectileComponent proj, Vector2 position)
         {
             bool hitAny = false;
-            float hitRadiusSqr = proj.HitRadius * proj.HitRadius;
 
             // SkillComponent에서 SkillTable 가져오기 (데미지 계산용)
             if (cm.TryGetComponent<SkillComponent>(proj.SkillEntityId, out var skill) == false)
@@ -119,10 +119,22 @@ namespace ARPG.Systems
                         continue;
                 }
 
+                // 타겟 충돌 중심 = 발 좌표 + HitOffset, 타겟 반경 = HitRadius
                 TransformComponent targetTransform = transformPool.GetByIndex(i);
-                float sqrDistance = (targetTransform.Position - position).sqrMagnitude;
+                Vector2 targetCenter;
+                float targetRadius;
+                if (cm.TryGetComponent<ColliderComponent>(targetId, out var targetCollider))
+                {
+                    targetCenter = targetTransform.Position + targetCollider.HitOffset;
+                    targetRadius = targetCollider.HitRadius;
+                }
+                else
+                {
+                    targetCenter = targetTransform.Position;
+                    targetRadius = 0f;
+                }
 
-                if (sqrDistance <= hitRadiusSqr)
+                if (HitboxMath.CircleVsCircle(position, proj.HitRadius, targetCenter, targetRadius))
                 {
                     // 데미지 적용
                     if (skill.Table != null)

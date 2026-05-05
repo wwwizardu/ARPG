@@ -60,7 +60,7 @@ namespace ARPG.Systems
 
                     Vector2 reachable;
                     if (cm.TryGetComponent<ColliderComponent>(entityId, out var collider) == true)
-                        reachable = CollisionUtil.ClipTrajectory(transform.Position, horizontalPos, collider.Radius);
+                        reachable = CollisionUtil.ClipTrajectory(transform.Position, horizontalPos, collider.MoveRadius);
                     else
                         reachable = horizontalPos;
 
@@ -88,13 +88,13 @@ namespace ARPG.Systems
             {
                 if (cm.TryGetComponent<ColliderComponent>(entityId, out var collider) == true)
                 {
-                    Vector2 reachable = CollisionUtil.ClipTrajectory(transform.Position, jump.EndPosition, collider.Radius);
+                    Vector2 reachable = CollisionUtil.ClipTrajectory(transform.Position, jump.EndPosition, collider.MoveRadius);
 
                     int tx = Mathf.FloorToInt(reachable.x);
                     int ty = Mathf.FloorToInt(reachable.y);
                     if (AR.s.Map.IsTileBlocked(tx, ty) == true)
                     {
-                        if (CollisionUtil.TryFindNearestFree(reachable, collider.Radius, out Vector2 fallback) == true)
+                        if (CollisionUtil.TryFindNearestFree(reachable, collider.MoveRadius, out Vector2 fallback) == true)
                         {
                             Debug.LogWarning($"[System_Jump] Landing on blocked tile ({tx},{ty}), fallback to {fallback}");
                             reachable = fallback;

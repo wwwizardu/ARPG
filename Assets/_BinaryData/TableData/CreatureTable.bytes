@@ -1,1 +1,1 @@
-[{"Name":"Knight","Stat":1,"PrefabName":"","AnimationId":1,"Id":1}]
+[{"Name":"Knight","Stat":1,"MoveRadius":0.3,"HitRadius":0.5,"HitOffsetY":0.5,"PrefabName":"","AnimationId":1,"Id":1}]

@@ -75,6 +75,10 @@ namespace ARPG.UI
             {
                 AR.s.UI.ShowTooltip_Equipment(_itemData, _rectTransform);
             }
+            else if (_itemData.Table.ItemType == GlobalEnum.ItemType.SkillBook)
+            {
+                AR.s.Tooltip.Show(_itemData, UnityEngine.Input.mousePosition);
+            }
         }
 
         // 마우스가 UI 요소 밖으로 나갈 때 (툴팁 비활성화)
@@ -82,6 +86,7 @@ namespace ARPG.UI
         {
             //OnExit(eventData);
             AR.s.UI.HideTooltip();
+            AR.s.Tooltip.Hide();
         }
 
         // 마우스 클릭 시

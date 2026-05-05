@@ -20,6 +20,10 @@ namespace ARPG.Factory
     {
         private const string ENTITY_PREFAB_KEY = "Prefabs/Entity";
 
+        // 충돌 반경 fallback — CreatureTable.MoveRadius/HitRadius/HitOffsetY가 0일 때 사용
+        // 1 unit = 1 tile, 캐릭터 휴머노이드 기본값
+        private const float DEFAULT_MOVE_RADIUS = 0.30f;
+
         /// <summary>
         /// MonsterTable 기반 몬스터 엔티티 생성
         /// MonsterTable → Stat + State + Velocity + AI + Skill + Drop + MonsterTag
@@ -325,10 +329,17 @@ namespace ARPG.Factory
                 SprintMultiplier = 2f
             });
 
-            // ColliderComponent (정적 충돌용 — 1 unit = 1 tile, 캐릭터는 0.30 반경)
+            // ColliderComponent — 시트 미입력 시 fallback:
+            //   MoveRadius == 0  → DEFAULT_MOVE_RADIUS
+            //   HitRadius  == 0  → MoveRadius (피격/이동 동일 = 분리 안 한 것과 동일 동작)
+            //   HitOffsetY == 0  → 발 좌표 (기존 동작)
+            float moveRadius = table.MoveRadius > 0f ? table.MoveRadius : DEFAULT_MOVE_RADIUS;
+            float hitRadius = table.HitRadius > 0f ? table.HitRadius : moveRadius;
             AR.s.Component.AddComponent(entityId, new ColliderComponent
             {
-                Radius = 0.30f
+                MoveRadius = moveRadius,
+                HitRadius = hitRadius,
+                HitOffset = new Vector2(0f, table.HitOffsetY)
             });
 
             // HP바 프리팹 로드 → _visual 아래에 자식으로 추가
@@ -538,9 +549,12 @@ namespace ARPG.Factory
                 Speed = 0f,
                 SprintMultiplier = 1f
             });
+            // 토템은 정적이라 피격 반경/오프셋만 의미가 있으나, 통일성을 위해 캐릭터 기본값 사용
             cm.AddComponent(totemId, new ColliderComponent
             {
-                Radius = 0.30f
+                MoveRadius = DEFAULT_MOVE_RADIUS,
+                HitRadius = DEFAULT_MOVE_RADIUS,
+                HitOffset = Vector2.zero
             });
 
             // 상태/스탯 (caster 스냅샷)

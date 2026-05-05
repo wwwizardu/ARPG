@@ -39,12 +39,23 @@ namespace ARPG.UI
                 return;
             }
 
+            RefreshAll();
+        }
+
+        // 인벤토리 데이터(_inventory.Items)와 SlotUI 캐시를 강제 동기화.
+        // 빈 슬롯은 Reset() 처리하므로 외부에서 데이터만 변경된 경우(예: PlayerSkillManager.EquipSkillBook)에도 UI가 따라간다.
+        public void RefreshAll()
+        {
+            if (_slotUIs == null || _inventory == null || _inventory.Items == null) return;
+
             for (int i = 0; i < _slotUIs.Length && i < _inventory.Items.Count; i++)
             {
-                if (_slotUIs[i] != null && _inventory.Items[i] != null)
-                {
-                    _slotUIs[i]!.SetItem(_inventory.Items[i]!);
-                }
+                SlotUI? slot = _slotUIs[i];
+                if (slot == null) continue;
+
+                Data.ItemData? item = _inventory.Items[i];
+                if (item != null) slot.SetItem(item);
+                else slot.Reset();
             }
         }
 

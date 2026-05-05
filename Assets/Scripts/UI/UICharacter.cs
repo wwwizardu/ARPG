@@ -26,6 +26,14 @@ namespace ARPG.UI
             LoadUI();
         }
 
+        public override void OnOpen()
+        {
+            base.OnOpen();
+            // 첫 오픈은 LoadUI 비동기 완료 후 OnLoadCompleted가 그리므로 스킵.
+            // 두 번째 이후 오픈에서 인벤토리 데이터(스킬북 장착/해제 등 외부 변경 반영)를 SlotUI에 동기화.
+            if (_loadCompleted == true && _inventoryUI != null) _inventoryUI.RefreshAll();
+        }
+
         public override bool UpdateInput(Input.ArpgInput inInput)
         {
             if (_loadCompleted == false)

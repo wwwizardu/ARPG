@@ -113,7 +113,7 @@ namespace ARPG.Systems
                         if (_componentManager.TryGetComponent<ColliderComponent>(entityId, out var collider))
                         {
                             transformComponent.Position = CollisionUtil.ResolveAxisSeparated(
-                                transformComponent.Position, intendedDelta, collider.Radius);
+                                transformComponent.Position, intendedDelta, collider.MoveRadius);
                         }
                         else
                         {
