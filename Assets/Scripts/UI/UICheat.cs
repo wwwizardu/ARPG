@@ -124,40 +124,22 @@ namespace ARPG.UI
                 return;
             }
 
-            // 스킬북: ItemManager 헬퍼를 거쳐 SkillBookData를 채워 생성
+            // SkillBook + explicitSkillId 케이스만 직접 처리(특정 스킬을 책에 박아 넣는 치트 의미).
+            // 그 외는 ItemManager 공통 팩토리에 위임 — SkillBook/SkillPage 인스턴스 데이터가 자동으로 채워짐.
             Data.ItemData? itemData;
-            if (table.ItemType == GlobalEnum.ItemType.SkillBook)
+            if (table.ItemType == GlobalEnum.ItemType.SkillBook && explicitSkillId > 0)
             {
-                if (explicitSkillId > 0)
-                {
-                    itemData = AR.s.Item.CreateSkillBook(itemId, explicitSkillId);
-                }
-                else
-                {
-                    // SkillId 미지정 → 책의 Tier에 해당하는 스킬 풀에서 랜덤 픽
-                    int skillId = PickAnySkillIdOfTier(table.Tier);
-                    if (skillId <= 0)
-                    {
-                        ShowPopup($"Tier({table.Tier})에 해당하는 스킬이 없습니다. 시트에서 SkillTable.Tier 채우거나 'itemId,skillId' 명시");
-                        return;
-                    }
-                    itemData = AR.s.Item.CreateSkillBook(itemId, skillId);
-                }
-
-                if (itemData == null)
-                {
-                    ShowPopup("SkillBook 생성 실패 — 로그 확인");
-                    return;
-                }
+                itemData = AR.s.Item.CreateSkillBook(itemId, explicitSkillId);
             }
             else
             {
-                itemData = new Data.ItemData
-                {
-                    Id = itemId,
-                    Quantity = 1,
-                    Table = table
-                };
+                itemData = AR.s.Item.CreateInventoryItemData(itemId);
+            }
+
+            if (itemData == null)
+            {
+                ShowPopup($"아이템 생성 실패 — Id: {itemId}, 로그 확인");
+                return;
             }
 
             int slotIndex = AR.s.Player.Inventory.AddItem(itemData);
@@ -170,27 +152,6 @@ namespace ARPG.UI
             {
                 ShowPopup($"AddItem failed. Id: {itemId}, Name: {table.Name}");
             }
-        }
-
-        /// <summary>
-        /// SkillTable 풀에서 Tier 매칭되는 스킬을 균등 랜덤 픽. 없으면 0.
-        /// (ItemManager의 private PickRandomSkillByTier과 동일 로직 — 치트 전용 별도 헬퍼)
-        /// </summary>
-        private static int PickAnySkillIdOfTier(int tier)
-        {
-            if (AR.s.Data == null) return 0;
-
-            var all = AR.s.Data.GetAllSkills();
-            int matchedCount = 0;
-            int picked = 0;
-            for (int i = 0; i < all.Count; i++)
-            {
-                if (all[i].Tier != tier) continue;
-                matchedCount++;
-                // Reservoir sampling (k=1)
-                if (Random.Range(0, matchedCount) == 0) picked = all[i].Id;
-            }
-            return picked;
         }
 
         public void OnAddGold()

@@ -1,4 +1,5 @@
 #nullable enable
+using System.Collections.Generic;
 using System.Threading;
 using ARPG.Base;
 using ARPG.Component;
@@ -721,6 +722,7 @@ namespace ARPG.Factory
                 OwnerEntityId = ownerEntityId,
                 SlotIndex = slotIndex,
                 Table = skillTable,
+                EffectiveSkillEffectIds = BuildEffectiveSkillEffectIds(ownerEntityId, slotIndex, skillTable),
                 IsInitialized = true,
                 IsEnabled = true,
                 ExecutionType = skillTable.ExecutionType,
@@ -748,6 +750,58 @@ namespace ARPG.Factory
             });
 
             AR.s.Component.AddComponent(skillEntityId, new SkillTargetComponent());
+        }
+
+        private static List<int>? BuildEffectiveSkillEffectIds(int ownerEntityId, int slotIndex, SkillTable skillTable)
+        {
+            List<int>? result = null;
+            HashSet<int>? seen = null;
+
+            void AddEffectId(int effectId)
+            {
+                if (effectId <= 0)
+                    return;
+
+                seen ??= new HashSet<int>();
+                if (seen.Add(effectId) == false)
+                    return;
+
+                result ??= new List<int>();
+                result.Add(effectId);
+            }
+
+            if (skillTable.SkillEffectIds != null)
+            {
+                for (int i = 0; i < skillTable.SkillEffectIds.Count; i++)
+                {
+                    AddEffectId(skillTable.SkillEffectIds[i]);
+                }
+            }
+
+            ItemData? book = GetPlayerSkillBookForSlot(ownerEntityId, slotIndex);
+            if (book?.SkillBook?.SocketedPages != null)
+            {
+                List<ItemData> socketedPages = book.SkillBook.SocketedPages;
+                for (int i = 0; i < socketedPages.Count; i++)
+                {
+                    SkillPageData? page = socketedPages[i].SkillPage;
+                    if (page != null) AddEffectId(page.SkillEffectId);
+                }
+            }
+
+            return result;
+        }
+
+        private static ItemData? GetPlayerSkillBookForSlot(int ownerEntityId, int slotIndex)
+        {
+            if (AR.s?.Data == null || ownerEntityId != AR.s.Data.CurrentPlayerEntityId)
+                return null;
+
+            ItemData?[]? skillBookSlots = AR.s.Data.Player?._skillBookSlots;
+            if (skillBookSlots == null || slotIndex < 0 || slotIndex >= skillBookSlots.Length)
+                return null;
+
+            return skillBookSlots[slotIndex];
         }
 
         /// <summary>

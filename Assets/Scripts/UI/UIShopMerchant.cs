@@ -223,12 +223,17 @@ namespace ARPG.UI
                 }
                 row.Add(icon);
 
-                // 이름 + 재고 — 스킬북은 책 이름 옆에 스킬명 부기 (SKILLBOOK_DESIGN.md §11)
+                // 이름 + 재고 — 스킬북은 책 이름 옆에 스킬명, 스킬 페이지는 페이지 이름 옆에 효과명 부기
                 string displayName = table.Name;
                 if (table.ItemType == GlobalEnum.ItemType.SkillBook && entry.SkillId > 0)
                 {
                     var skillTable = AR.s.Data.GetSkill(entry.SkillId);
                     if (skillTable != null) displayName = $"{table.Name} — {skillTable.Name}";
+                }
+                else if (table.ItemType == GlobalEnum.ItemType.SkillPage && entry.SkillEffectId > 0)
+                {
+                    var effectTable = AR.s.Data.GetSkillEffect(entry.SkillEffectId);
+                    if (effectTable != null) displayName = $"{table.Name} — {effectTable.Name}";
                 }
 
                 VisualElement info = new();
@@ -249,8 +254,80 @@ namespace ARPG.UI
                 buyBtn.clicked += () => OnClickBuyStock(stockIdx);
                 row.Add(buyBtn);
 
+                // 호버 툴팁 — 매물의 임시 ItemData를 빌드해 글로벌 툴팁에 넘긴다.
+                ItemData? hoverItem = BuildStockHoverItem(table, entry);
+                if (hoverItem != null)
+                {
+                    row.userData = hoverItem;
+                    VisualElement rowRef = row;
+                    row.RegisterCallback<MouseEnterEvent>(_ => AR.s.Tooltip.Show(rowRef.userData as ItemData, GetSlotScreenRect(rowRef)));
+                    row.RegisterCallback<MouseLeaveEvent>(_ => AR.s.Tooltip.Hide());
+                }
+
                 list.Add(row);
             }
+        }
+
+        /// <summary>
+        /// 매물 row 호버 시 글로벌 툴팁에 넘길 임시 ItemData 빌드.
+        /// SkillBook/SkillPage는 인스턴스 데이터를 채워야 툴팁 분기가 정상 작동.
+        /// </summary>
+        private static ItemData? BuildStockHoverItem(Tables.ItemTable table, MerchantStockEntry entry)
+        {
+            if (table.ItemType == GlobalEnum.ItemType.SkillBook && entry.SkillId > 0)
+            {
+                Tables.SkillTable? skill = AR.s.Data?.GetSkill(entry.SkillId);
+                if (skill == null) return null;
+                return new ItemData
+                {
+                    Id = table.Id,
+                    Quantity = 1,
+                    Table = table,
+                    SkillBook = new SkillBookData { SkillId = entry.SkillId, Table = skill },
+                };
+            }
+
+            if (table.ItemType == GlobalEnum.ItemType.SkillPage && entry.SkillEffectId > 0)
+            {
+                Tables.SkillEffectTable? effect = AR.s.Data?.GetSkillEffect(entry.SkillEffectId);
+                if (effect == null) return null;
+                return new ItemData
+                {
+                    Id = table.Id,
+                    Quantity = 1,
+                    Table = table,
+                    SkillPage = new SkillPageData { SkillEffectId = entry.SkillEffectId, Table = effect },
+                };
+            }
+
+            return new ItemData { Id = table.Id, Quantity = 1, Table = table };
+        }
+
+        /// <summary>
+        /// UI Toolkit VisualElement → Screen Space Rect (Y up). 글로벌 툴팁 anchor용.
+        /// UISkillBook의 동명 헬퍼와 동일 정책 — 향후 공통 유틸로 추출 가능.
+        /// </summary>
+        private static Rect GetSlotScreenRect(VisualElement slot)
+        {
+            if (slot == null) return Rect.zero;
+            IPanel? panel = slot.panel;
+            if (panel == null) return Rect.zero;
+
+            VisualElement visualTree = panel.visualTree;
+            float panelW = visualTree.resolvedStyle.width;
+            float panelH = visualTree.resolvedStyle.height;
+            if (panelW <= 0f || panelH <= 0f) return Rect.zero;
+
+            float scaleX = Screen.width / panelW;
+            float scaleY = Screen.height / panelH;
+
+            Rect bound = slot.worldBound;
+            float xMin = bound.xMin * scaleX;
+            float xMax = bound.xMax * scaleX;
+            float yMaxScreen = Screen.height - bound.yMin * scaleY;
+            float yMinScreen = Screen.height - bound.yMax * scaleY;
+
+            return new Rect(xMin, yMinScreen, xMax - xMin, yMaxScreen - yMinScreen);
         }
 
         // ========== 판매 그리드 ==========

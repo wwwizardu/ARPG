@@ -75,10 +75,37 @@ namespace ARPG.UI
             {
                 AR.s.UI.ShowTooltip_Equipment(_itemData, _rectTransform);
             }
-            else if (_itemData.Table.ItemType == GlobalEnum.ItemType.SkillBook)
+            else if (_itemData.Table.ItemType == GlobalEnum.ItemType.SkillBook
+                  || _itemData.Table.ItemType == GlobalEnum.ItemType.SkillPage)
             {
-                AR.s.Tooltip.Show(_itemData, UnityEngine.Input.mousePosition);
+                AR.s.Tooltip.Show(_itemData, GetSlotScreenRect(_rectTransform));
             }
+        }
+
+        /// <summary>
+        /// uGUI RectTransform → Screen Space Rect (Y up, 좌하단 원점). 글로벌 툴팁 anchor용.
+        /// Screen Space - Overlay 캔버스에서는 world == screen이라 변환 불필요,
+        /// Screen Space - Camera는 UI 카메라로 WorldToScreenPoint 변환.
+        /// </summary>
+        protected static Rect GetSlotScreenRect(RectTransform rt)
+        {
+            if (rt == null) return Rect.zero;
+
+            Vector3[] corners = new Vector3[4];
+            rt.GetWorldCorners(corners);
+
+            Camera? uiCam = AR.s?.UI?.UICamera;
+            Canvas? canvas = rt.GetComponentInParent<Canvas>();
+            bool useCamera = canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay && uiCam != null;
+
+            Vector3 bl = useCamera ? (Vector3)uiCam!.WorldToScreenPoint(corners[0]) : corners[0];
+            Vector3 tr = useCamera ? (Vector3)uiCam!.WorldToScreenPoint(corners[2]) : corners[2];
+
+            float xMin = Mathf.Min(bl.x, tr.x);
+            float xMax = Mathf.Max(bl.x, tr.x);
+            float yMin = Mathf.Min(bl.y, tr.y);
+            float yMax = Mathf.Max(bl.y, tr.y);
+            return new Rect(xMin, yMin, xMax - xMin, yMax - yMin);
         }
 
         // 마우스가 UI 요소 밖으로 나갈 때 (툴팁 비활성화)

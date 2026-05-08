@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using ARPG.Tables;
+using Newtonsoft.Json;
 using UnityEngine;
 using GE = GlobalEnum;
 
@@ -18,6 +19,9 @@ namespace ARPG.Data
 
         // 스킬북 시스템 (SKILLBOOK_DESIGN.md §3.2) — Table.ItemType==SkillBook 일 때만 셋
         public SkillBookData? SkillBook;
+
+        // 스킬 페이지 시스템 (SKILL_RUNE_DESIGN.md) — Table.ItemType==SkillPage 일 때만 셋
+        public SkillPageData? SkillPage;
 
         public int Quantity;
 
@@ -47,6 +51,11 @@ namespace ARPG.Data
             {
                 SkillBook.OnLoadCompleted();
             }
+
+            if (SkillPage != null)
+            {
+                SkillPage.OnLoadCompleted();
+            }
         }
     }
 
@@ -59,6 +68,13 @@ namespace ARPG.Data
     {
         public int SkillId;
 
+        [JsonProperty("SocketedPageItems")]
+        public List<ItemData> SocketedPages = new();
+
+        public int PageCapacityBonus;
+
+        public int PageSlotsBonus;
+
         [NonSerialized] public SkillTable? Table;
 
         public void OnLoadCompleted()
@@ -66,6 +82,33 @@ namespace ARPG.Data
             if (Table == null)
             {
                 Table = AR.s.Data.GetSkill(SkillId);
+            }
+
+            SocketedPages ??= new List<ItemData>();
+
+            for (int i = 0; i < SocketedPages.Count; i++)
+            {
+                SocketedPages[i].OnLoadCompleted();
+            }
+        }
+    }
+
+    /// <summary>
+    /// 스킬 페이지 인스턴스 데이터. 실제 효과는 SkillEffectTable 행을 참조한다.
+    /// v1에서는 페이지 아이템 자체의 roll 없이 SkillEffectId만 저장한다.
+    /// </summary>
+    [Serializable]
+    public class SkillPageData
+    {
+        public int SkillEffectId;
+
+        [NonSerialized] public SkillEffectTable? Table;
+
+        public void OnLoadCompleted()
+        {
+            if (Table == null)
+            {
+                Table = AR.s.Data.GetSkillEffect(SkillEffectId);
             }
         }
     }

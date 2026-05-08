@@ -53,22 +53,13 @@ namespace ARPG.Item
                 return false;
             }
 
-            // 아이템 데이터 생성
-            ItemTable? itemTable = AR.s.Data?.GetItem(inItemId);
-            if (itemTable == null)
+            // 아이템 데이터 생성 — ItemType별 인스턴스 데이터(SkillBook/SkillPage)도 자동으로 채워짐
+            ItemData? itemData = CreateInventoryItemData(inItemId, inQuantity);
+            if (itemData == null)
             {
-                Debug.LogError($"[ItemData] Initialize - ItemTable not found for Id: {inItemId}");
+                Addressables.ReleaseInstance(itemObject);
                 return false;
             }
-
-            ItemData itemData = new ItemData()
-            {
-                Table = itemTable,
-                Id = inItemId,
-                ItemInstanceId = _instanceIdCounter++,
-                Equipment = CreateEquipmentData(itemTable),
-                Quantity = inQuantity,
-            };
 
             item.Initialize(itemData);
 
@@ -211,6 +202,12 @@ namespace ARPG.Item
                 return null;
             }
 
+            // 인스턴스 roll (SKILL_RUNE_DESIGN.md §3.1)
+            // - PageCapacityBonus: +1~+5 균등 랜덤 — 같은 등급 책 사이에서도 용량 차별화
+            // - PageSlotsBonus  : 50% 확률 +1 — 같은 등급 책 사이에서도 가끔 슬롯 1개 추가
+            // v1 정책: 모든 등급에 동일 적용. 향후 등급별 차등이 필요하면 RollSkillBookBonuses에 itemTable.Tier 인자 추가.
+            (int capBonus, int slotsBonus) = RollSkillBookBonuses();
+
             return new ItemData
             {
                 Id = itemId,
@@ -221,8 +218,17 @@ namespace ARPG.Item
                 {
                     SkillId = skillId,
                     Table = skillTable,
+                    PageCapacityBonus = capBonus,
+                    PageSlotsBonus = slotsBonus,
                 }
             };
+        }
+
+        private static (int CapacityBonus, int SlotsBonus) RollSkillBookBonuses()
+        {
+            int capBonus = Random.Range(1, 6);              // 1~5 inclusive
+            int slotsBonus = Random.Range(0, 2);            // 0 또는 1 (50% 확률 +1)
+            return (capBonus, slotsBonus);
         }
 
         /// <summary>
@@ -272,6 +278,108 @@ namespace ARPG.Item
         }
 
         /// <summary>
+        /// 스킬 페이지 ItemId + SkillEffectId 조합으로 스킬 페이지 ItemData 생성.
+        /// </summary>
+        public ItemData? CreateSkillPage(int itemId, int skillEffectId)
+        {
+            ItemTable? itemTable = AR.s.Data?.GetItem(itemId);
+            if (itemTable == null)
+            {
+                Debug.LogError($"[ItemManager] CreateSkillPage - ItemTable not found, itemId({itemId})");
+                return null;
+            }
+            if (itemTable.ItemType != GlobalEnum.ItemType.SkillPage)
+            {
+                Debug.LogError($"[ItemManager] CreateSkillPage - ItemId({itemId}) is not SkillPage (ItemType={itemTable.ItemType})");
+                return null;
+            }
+
+            SkillEffectTable? effectTable = AR.s.Data?.GetSkillEffect(skillEffectId);
+            if (effectTable == null)
+            {
+                Debug.LogError($"[ItemManager] CreateSkillPage - SkillEffectTable not found, skillEffectId({skillEffectId})");
+                return null;
+            }
+            if (effectTable.PageCost <= 0)
+            {
+                Debug.LogWarning($"[ItemManager] CreateSkillPage - SkillEffect({skillEffectId}) has PageCost <= 0 and cannot be used as a SkillPage");
+                return null;
+            }
+
+            return new ItemData
+            {
+                Id = itemId,
+                ItemInstanceId = _instanceIdCounter++,
+                Quantity = 1,
+                Table = itemTable,
+                SkillPage = new SkillPageData
+                {
+                    SkillEffectId = skillEffectId,
+                    Table = effectTable,
+                }
+            };
+        }
+
+        /// <summary>
+        /// 등급(Tier)에 해당하는 페이지 ItemId를 찾고, PageCost 범위에 맞는 SkillEffect 중 랜덤으로 페이지 생성.
+        /// </summary>
+        public ItemData? CreateRandomSkillPageOfTier(int tier)
+        {
+            int itemId = GetSkillPageItemIdByTier(tier);
+            if (itemId == 0)
+            {
+                Debug.LogWarning($"[ItemManager] CreateRandomSkillPageOfTier - No SkillPage ItemTable for tier({tier})");
+                return null;
+            }
+
+            int skillEffectId = PickRandomSkillPageEffectByTier(tier);
+            if (skillEffectId == 0)
+            {
+                Debug.LogWarning($"[ItemManager] CreateRandomSkillPageOfTier - No SkillEffect with PageCost range for Tier({tier})");
+                return null;
+            }
+
+            return CreateSkillPage(itemId, skillEffectId);
+        }
+
+        // ========== 공통 팩토리 ==========
+
+        /// <summary>
+        /// ItemId 하나로 인벤토리에 들어갈 ItemData를 ItemType에 맞게 생성한다.
+        /// SkillBook/SkillPage는 인스턴스 데이터(SkillBookData/SkillPageData)가 빈 채로 만들어지지 않도록
+        /// 등급 기반 랜덤 헬퍼로 위임한다. CreateItem(월드 드랍)·UICheat·DropHelper 모두 이 함수를 거쳐야
+        /// 인스턴스 데이터 누락이 일어나지 않는다.
+        /// </summary>
+        public ItemData? CreateInventoryItemData(int itemId, int quantity = 1)
+        {
+            ItemTable? itemTable = AR.s.Data?.GetItem(itemId);
+            if (itemTable == null)
+            {
+                Debug.LogError($"[ItemManager] CreateInventoryItemData - ItemTable not found, itemId({itemId})");
+                return null;
+            }
+
+            switch (itemTable.ItemType)
+            {
+                case GlobalEnum.ItemType.SkillBook:
+                    return CreateRandomSkillBookOfTier(itemTable.Tier);
+
+                case GlobalEnum.ItemType.SkillPage:
+                    return CreateRandomSkillPageOfTier(itemTable.Tier);
+
+                default:
+                    return new ItemData
+                    {
+                        Id = itemId,
+                        ItemInstanceId = _instanceIdCounter++,
+                        Quantity = quantity,
+                        Table = itemTable,
+                        Equipment = CreateEquipmentData(itemTable),
+                    };
+            }
+        }
+
+        /// <summary>
         /// ItemTable에서 ItemType==SkillBook && Tier==tier 인 첫 행의 ItemId 반환. 없으면 0.
         /// </summary>
         private int GetSkillBookItemIdByTier(int tier)
@@ -287,6 +395,53 @@ namespace ARPG.Item
                     return t.Id;
             }
             return 0;
+        }
+
+        /// <summary>
+        /// ItemTable에서 ItemType==SkillPage && Tier==tier 인 첫 행의 ItemId 반환. 없으면 0.
+        /// </summary>
+        private int GetSkillPageItemIdByTier(int tier)
+        {
+            if (AR.s.Data == null)
+                return 0;
+
+            List<ItemTable> all = AR.s.Data.GetAllItems();
+            for (int i = 0; i < all.Count; i++)
+            {
+                ItemTable t = all[i];
+                if (t.ItemType == GlobalEnum.ItemType.SkillPage && t.Tier == tier)
+                    return t.Id;
+            }
+            return 0;
+        }
+
+        private static int GetSkillPageTierByCost(int pageCost)
+        {
+            if (pageCost <= 10) return 1;
+            if (pageCost <= 25) return 2;
+            return 3;
+        }
+
+        private int PickRandomSkillPageEffectByTier(int tier)
+        {
+            if (AR.s.Data == null)
+                return 0;
+
+            List<SkillEffectTable> all = AR.s.Data.GetAllSkillEffects();
+            List<int> matched = new List<int>();
+            for (int i = 0; i < all.Count; i++)
+            {
+                SkillEffectTable effect = all[i];
+                if (effect.PageCost <= 0)
+                    continue;
+                if (GetSkillPageTierByCost(effect.PageCost) == tier)
+                    matched.Add(effect.Id);
+            }
+
+            if (matched.Count == 0)
+                return 0;
+
+            return matched[Random.Range(0, matched.Count)];
         }
 
         /// <summary>

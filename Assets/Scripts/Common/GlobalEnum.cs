@@ -143,6 +143,7 @@ public class GlobalEnum
         Herb = 11,      // 약초/마법 재료
         Object = 12,    // 건축 자재
         SkillBook = 100,  // 스킬북 (새 스킬 획득)
+        SkillPage = 101,  // 스킬 페이지 (스킬북에 장착하는 SkillEffect 조각)
 
     }
 
@@ -176,6 +177,7 @@ public class GlobalEnum
         WoodWall,           // 나무 벽 (건축 자재)
 
         SkillBook = 100,          // 스킬북 (새 스킬 획득)
+        SkillPage = 101,          // 스킬 페이지
     }
 
     public enum TeamType
@@ -258,6 +260,21 @@ public class GlobalEnum
         // 향후 확장 슬롯 (구현은 후속 페이즈)
         // ManaRestoreOnKill, SpawnProjectileOnHit, SpawnAreaEffectOnKill,
         // KnockbackOnHit, DelegateToMine, DelegateToTrap, ...
+    }
+
+    /// <summary>
+    /// 스킬 페이지 발동 조건. P-1에서는 데이터만 보관하고, 실제 조건 체크는 후속 페이즈에서 활성화한다.
+    /// </summary>
+    public enum PageCondition : byte
+    {
+        None = 0,
+        TargetHpBelow,
+        TargetStunned,
+        TargetIgnited,
+        OwnerHpBelow,
+        WallNearby,
+        KnockbackTarget,
+        IsBoss,
     }
 
     public enum AiType

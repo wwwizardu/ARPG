@@ -25,6 +25,7 @@ namespace ARPG.Data
         private ImmutableDictionary<int, Tables.DropEquipmentTable> _dropWeaponBaseStatTable = null!;
         private ImmutableDictionary<int, Tables.SkillTable> _skillTable = null!;
         private ImmutableDictionary<int, Tables.SkillEffectTable> _skillEffectTable = null!;
+        private ImmutableDictionary<int, Tables.SkillBookTable> _skillBookTable = null!;
         private ImmutableDictionary<int, Tables.AiTable> _aiTable = null!;
         private ImmutableDictionary<int, Tables.BuffTable> _buffTable = null!;
         private ImmutableDictionary<int, Tables.BuffEffectTable> _buffEffectTable = null!;
@@ -56,6 +57,7 @@ namespace ARPG.Data
                 LoadTable<Tables.DropEquipmentTable>("DropEquipmentTable.bytes", tables => _dropWeaponBaseStatTable = tables),
                 LoadTable<Tables.SkillTable>("SkillTable.bytes", tables => _skillTable = tables),
                 LoadTable<Tables.SkillEffectTable>("SkillEffectTable.bytes", tables => _skillEffectTable = tables),
+                LoadTable<Tables.SkillBookTable>("SkillBookTable.bytes", tables => _skillBookTable = tables),
                 LoadTable<Tables.AiTable>("AiTable.bytes", tables => _aiTable = tables),
                 LoadTable<Tables.BuffTable>("BuffTable.bytes", tables => _buffTable = tables),
                 LoadTable<Tables.BuffEffectTable>("BuffEffectTable.bytes", tables => _buffEffectTable = tables),
@@ -361,6 +363,33 @@ namespace ARPG.Data
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// 전체 SkillEffect 목록 반환. 스킬 페이지 풀 생성 등에 사용.
+        /// </summary>
+        public List<Tables.SkillEffectTable> GetAllSkillEffects()
+        {
+            return new List<Tables.SkillEffectTable>(_skillEffectTable.Values);
+        }
+
+        /// <summary>
+        /// 스킬북 등급별 룰(페이지 용량/슬롯) 조회. 테이블 누락 시 설계 초안 기본값으로 fallback.
+        /// </summary>
+        public Tables.SkillBookTable? GetSkillBook(int tier)
+        {
+            if (_skillBookTable != null && _skillBookTable.TryGetValue(tier, out var table))
+            {
+                return table;
+            }
+
+            return tier switch
+            {
+                1 => new Tables.SkillBookTable { Id = 1, PageCapacity = 8, PageSlots = 1 },
+                2 => new Tables.SkillBookTable { Id = 2, PageCapacity = 24, PageSlots = 3 },
+                3 => new Tables.SkillBookTable { Id = 3, PageCapacity = 60, PageSlots = 5 },
+                _ => null,
+            };
         }
 
         public Tables.BuffTable? GetBuff(int id)

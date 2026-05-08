@@ -20,6 +20,25 @@
                     <ui:Label name="sb-stat-mana" class="tooltip-statline"/>
                     <ui:Label name="sb-stat-range" class="tooltip-statline"/>
                 </ui:VisualElement>
+                <ui:VisualElement name="sb-page-section" class="tooltip-stats">
+                    <ui:Label name="sb-page-capacity" class="tooltip-statline"/>
+                    <ui:Label name="sb-page-list" class="tooltip-statline"/>
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <!-- SkillPage (SKILL_RUNE_DESIGN §7.3) -->
+            <ui:VisualElement name="content-skillpage" class="tooltip-content" picking-mode="Ignore">
+                <ui:Label name="sp-name" class="tooltip-name"/>
+                <ui:Label name="sp-tier" class="tooltip-tier"/>
+                <ui:VisualElement class="tooltip-divider"/>
+                <ui:Label name="sp-effect-name" class="tooltip-skillname"/>
+                <ui:Label name="sp-desc" class="tooltip-desc"/>
+                <ui:VisualElement class="tooltip-stats">
+                    <ui:Label name="sp-trigger" class="tooltip-statline"/>
+                    <ui:Label name="sp-cost" class="tooltip-statline"/>
+                    <ui:Label name="sp-efficiency" class="tooltip-statline"/>
+                    <ui:Label name="sp-condition" class="tooltip-statline"/>
+                </ui:VisualElement>
             </ui:VisualElement>
 
             <!-- Equipment (추후 Phase 2에서 채움) -->

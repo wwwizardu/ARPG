@@ -49,7 +49,7 @@ namespace ARPG.Editor
 
             await DownloadTable<WeaponBaseStatTable>("853198133&range=A:H", 1, SaveType.String);
             
-            await DownloadTable<DropTable>("1241586373&range=A:J", 1, SaveType.String);
+            await DownloadTable<DropTable>("1241586373&range=A:K", 1, SaveType.String);
 
             await DownloadTable<DropCurrencyTable>("2071520432&range=A:V", 1, SaveType.String);
 
@@ -57,8 +57,15 @@ namespace ARPG.Editor
 
             await DownloadTable<SkillTable>("92727160&range=A:AM", 1, SaveType.String);
 
-            // Phase 1: SkillEffect 합성 시스템용 신규 테이블
-            await DownloadTable<SkillEffectTable>("1681865950&range=A:H", 1, SaveType.String);
+            // Phase 1: SkillEffect 합성 시스템용 테이블 (+ 스킬 페이지 비용 메타데이터)
+            await DownloadTable<SkillEffectTable>("1681865950&range=A:K", 1, SaveType.String);
+
+            // SKILL_RUNE_DESIGN P-1: 스킬북 등급별 룰(페이지 용량/슬롯)
+            // 컬럼 순서: Id(=Tier), PageCapacity, PageSlots
+            // 시트 신규 탭을 만든 뒤 아래 줄을 활성화하고 GID를 채울 것.
+            // 그 전까지는 손으로 만든 Assets/_BinaryData/TableData/SkillBookTable.bytes 가 사용되며,
+            // 그것마저 누락된 경우 DataManager가 코드 기본값(8/24/60, 1/3/5)으로 fallback한다.
+             await DownloadTable<SkillBookTable>("1726438368&range=A:C", 1, SaveType.String);
 
             // 장판(지속 영역 효과) 테이블
             await DownloadTable<AreaEffectTable>("1891935594&range=A:M", 1, SaveType.String);
@@ -184,6 +191,10 @@ namespace ARPG.Editor
                 else if (table is SkillEffectTable skillEffectTable)
                 {
                     ParseSkillEffectTable(skillEffectTable, values);
+                }
+                else if (table is SkillBookTable skillBookTable)
+                {
+                    ParseSkillBookTable(skillBookTable, values);
                 }
                 else if (table is AiTable aiTable)
                 {
@@ -559,6 +570,8 @@ namespace ARPG.Editor
 
             // 스킬북 드랍 가중치 (SKILLBOOK_DESIGN.md §10) — 신규 컬럼, 빈 셀 허용 (= 0)
             table.SkillBookRate = values.Length > 9 && int.TryParse(values[9], out var sbr) ? sbr : 0;
+            // 스킬 페이지 드랍 가중치 (SKILL_RUNE_DESIGN.md §8.1) — 신규 컬럼, 빈 셀 허용 (= 0)
+            table.SkillPageRate = ParseIntSafe(values, 10);
         }
 
         private static void ParseDropCurrencyTable(DropCurrencyTable table, string[] values)
@@ -672,7 +685,7 @@ namespace ARPG.Editor
         }
 
         /// <summary>
-        /// Phase 1: SkillEffectTable 파서. 8개 컬럼 (Id, Name, EffectType, Trigger, Param1~3, Probability)
+        /// Phase 1: SkillEffectTable 파서. 기본 8개 컬럼 + 스킬 페이지 메타데이터(PageCost, Condition, ConditionParam)
         /// </summary>
         private static void ParseSkillEffectTable(SkillEffectTable table, string[] values)
         {
@@ -689,6 +702,24 @@ namespace ARPG.Editor
             table.Param2 = values.Length > 5 && float.TryParse(values[5], out var p2) ? p2 : 0f;
             table.Param3 = values.Length > 6 && float.TryParse(values[6], out var p3) ? p3 : 0f;
             table.Probability = values.Length > 7 && int.TryParse(values[7], out var prob) ? prob : 100;
+            table.PageCost = ParseIntSafe(values, 8);
+            table.Condition = ParseEnumSafe(values, 9, GlobalEnum.PageCondition.None);
+            table.ConditionParam = ParseFloatSafe(values, 10);
+        }
+
+        /// <summary>
+        /// SKILL_RUNE_DESIGN P-1: SkillBookTable 파서. 컬럼: Id(=Tier), PageCapacity, PageSlots
+        /// </summary>
+        private static void ParseSkillBookTable(SkillBookTable table, string[] values)
+        {
+            if (values.Length < 3)
+            {
+                Debug.LogError($"[ParseSkillBookTable] Invalid data length. Expected at least 3, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            table.PageCapacity = ParseIntSafe(values, 1);
+            table.PageSlots = ParseIntSafe(values, 2);
         }
 
         /// <summary>

@@ -38,8 +38,8 @@ namespace ARPG.Utility
                 nothingRate = nothingRate * 100 / (100 + dropRateBonus);
             }
 
-            // 드랍 카테고리 결정 (SkillBook 가중치 포함, SKILLBOOK_DESIGN.md §10)
-            int totalRate = nothingRate + dropTable.CurrencyRate + dropTable.EquipmentRate + dropTable.SkillBookRate;
+            // 드랍 카테고리 결정 (SkillBook + SkillPage 가중치 포함, SKILLBOOK_DESIGN.md §10 / SKILL_RUNE_DESIGN.md §8.1)
+            int totalRate = nothingRate + dropTable.CurrencyRate + dropTable.EquipmentRate + dropTable.SkillBookRate + dropTable.SkillPageRate;
             if (totalRate <= 0)
             {
                 Debug.Log($"[DropHelper] DropId({dropId}) totalRate=0 → 드랍 스킵. (의도적 무드랍 행이거나 데이터 누락)");
@@ -68,7 +68,14 @@ namespace ARPG.Utility
             }
 
             // 스킬북 — DropTable.Tier에 매칭되는 책 + 같은 Tier 스킬 풀에서 랜덤 픽
-            CreateSkillBookDropAsync(dropTable.Tier, position);
+            if (randomValue < nothingRate + dropTable.CurrencyRate + dropTable.EquipmentRate + dropTable.SkillBookRate)
+            {
+                CreateSkillBookDropAsync(dropTable.Tier, position);
+                return;
+            }
+
+            // 스킬 페이지 — DropTable.Tier에 매칭되는 등급 페이지 ItemId + PageCost 범위 매칭 SkillEffect 풀에서 랜덤 픽
+            CreateSkillPageDropAsync(dropTable.Tier, position);
         }
 
         private static int SelectCurrencyItem(DropTable dropTable, int monsterLevel, int dropRarityBonus)
@@ -166,6 +173,25 @@ namespace ARPG.Utility
             if (await AR.s.Item.CreateItemFromData(book, position) == false)
             {
                 Debug.LogError($"[DropHelper] Failed to spawn SkillBook drop. Tier({tier}), ItemId({book.Id}), SkillId({book.SkillBook?.SkillId})");
+            }
+        }
+
+        /// <summary>
+        /// 스킬 페이지 드랍 (SKILL_RUNE_DESIGN.md §8.1) — DropTable.Tier에 매칭되는 등급 페이지 + PageCost 범위로 SkillEffect 랜덤 픽.
+        /// 풀이 비어 있으면 (페이지 ItemTable 행 없음 또는 PageCost 매칭 SkillEffect 없음) 조용히 드랍 스킵.
+        /// </summary>
+        private static async void CreateSkillPageDropAsync(int tier, Vector3 position)
+        {
+            ItemData? page = AR.s.Item.CreateRandomSkillPageOfTier(tier);
+            if (page == null)
+            {
+                Debug.LogWarning($"[DropHelper] SkillPage drop skipped — Tier({tier})에 매칭되는 페이지 또는 SkillEffect 풀이 비어있음");
+                return;
+            }
+
+            if (await AR.s.Item.CreateItemFromData(page, position) == false)
+            {
+                Debug.LogError($"[DropHelper] Failed to spawn SkillPage drop. Tier({tier}), ItemId({page.Id}), SkillEffectId({page.SkillPage?.SkillEffectId})");
             }
         }
     }

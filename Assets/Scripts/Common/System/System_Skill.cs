@@ -132,7 +132,7 @@ namespace ARPG.Systems
                 OwnerEntityId = inSkill.OwnerEntityId,
                 TargetPosition = inCommand.TargetPosition,
             };
-            SkillEffectExecutor.Trigger(GE.SkillTrigger.OnSkillCommand, ref cmdCtx, inSkill.Table?.SkillEffectIds);
+            SkillEffectExecutor.Trigger(GE.SkillTrigger.OnSkillCommand, ref cmdCtx, inSkill.EffectiveSkillEffectIds);
             if (cmdCtx.CancelOriginalCast)
             {
                 AR.s.Component.RemoveComponent<SkillCommandComponent>(inSkill.OwnerEntityId);
@@ -503,7 +503,7 @@ namespace ARPG.Systems
                 SkillId = inSkill.SkillId,
                 OwnerEntityId = inSkill.OwnerEntityId,
             };
-            SkillEffectExecutor.Trigger(GE.SkillTrigger.OnSkillStart, ref startCtx, inSkill.Table?.SkillEffectIds);
+            SkillEffectExecutor.Trigger(GE.SkillTrigger.OnSkillStart, ref startCtx, inSkill.EffectiveSkillEffectIds);
 
             // SkillTarget 컴포넌트에서 타겟 정보 가져오기
             if (!AR.s.Component.TryGetComponent<SkillTargetComponent>(skillEntityId, out var target))
@@ -568,7 +568,7 @@ namespace ARPG.Systems
                 SkillId = inSkill.SkillId,
                 OwnerEntityId = inSkill.OwnerEntityId,
             };
-            SkillEffectExecutor.Trigger(GE.SkillTrigger.OnSkillEnd, ref endCtx, inSkill.Table?.SkillEffectIds);
+            SkillEffectExecutor.Trigger(GE.SkillTrigger.OnSkillEnd, ref endCtx, inSkill.EffectiveSkillEffectIds);
 
             // TODO: 종료 이펙트, 사운드 등
             // Debug.Log($"[System_Skill] Skill End - SkillEntityId: {skillEntityId}");
@@ -1040,14 +1040,14 @@ namespace ARPG.Systems
                 TargetEntityId = targetEntityId,
                 DamageResult = damageResult,
             };
-            SkillEffectExecutor.Trigger(GE.SkillTrigger.OnHit, ref hitCtx, skill.Table.SkillEffectIds);
+            SkillEffectExecutor.Trigger(GE.SkillTrigger.OnHit, ref hitCtx, skill.EffectiveSkillEffectIds);
             if (damageResult.IsCritical)
             {
-                SkillEffectExecutor.Trigger(GE.SkillTrigger.OnCrit, ref hitCtx, skill.Table.SkillEffectIds);
+                SkillEffectExecutor.Trigger(GE.SkillTrigger.OnCrit, ref hitCtx, skill.EffectiveSkillEffectIds);
             }
             if (targetStat.CurrentHp <= 0f)
             {
-                SkillEffectExecutor.Trigger(GE.SkillTrigger.OnKill, ref hitCtx, skill.Table.SkillEffectIds);
+                SkillEffectExecutor.Trigger(GE.SkillTrigger.OnKill, ref hitCtx, skill.EffectiveSkillEffectIds);
             }
 
             Debug.Log($"[System_Skill] ApplySkillEffectToEntity - SkillEntityId: {skillEntityId}, SkillId: {skill.SkillId}, TargetEntityId: {targetEntityId}, Damage: {Mathf.RoundToInt(damageResult.FinalDamage)}, Critical: {damageResult.IsCritical}, Evaded: {damageResult.IsEvaded}, Blocked: {damageResult.IsBlocked}, RemainingHP: {targetStat.CurrentHp}/{targetStat.FinalMaxHp}");

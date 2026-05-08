@@ -152,12 +152,12 @@ namespace ARPG.Systems
                             ProjectileEntityId = projectileEntityId,
                             DamageResult = result,
                         };
-                        SkillEffectExecutor.Trigger(GE.SkillTrigger.OnProjectileHit, ref hitCtx, skill.Table.SkillEffectIds);
-                        SkillEffectExecutor.Trigger(GE.SkillTrigger.OnHit, ref hitCtx, skill.Table.SkillEffectIds);
+                        SkillEffectExecutor.Trigger(GE.SkillTrigger.OnProjectileHit, ref hitCtx, skill.EffectiveSkillEffectIds);
+                        SkillEffectExecutor.Trigger(GE.SkillTrigger.OnHit, ref hitCtx, skill.EffectiveSkillEffectIds);
                         if (result.IsCritical)
-                            SkillEffectExecutor.Trigger(GE.SkillTrigger.OnCrit, ref hitCtx, skill.Table.SkillEffectIds);
+                            SkillEffectExecutor.Trigger(GE.SkillTrigger.OnCrit, ref hitCtx, skill.EffectiveSkillEffectIds);
                         if (cm.TryGetComponent<StatComponent>(targetId, out var targetStat) && targetStat.CurrentHp <= 0f)
-                            SkillEffectExecutor.Trigger(GE.SkillTrigger.OnKill, ref hitCtx, skill.Table.SkillEffectIds);
+                            SkillEffectExecutor.Trigger(GE.SkillTrigger.OnKill, ref hitCtx, skill.EffectiveSkillEffectIds);
                     }
 
                     hitAny = true;

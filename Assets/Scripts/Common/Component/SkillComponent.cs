@@ -1,4 +1,5 @@
 #nullable enable
+using System.Collections.Generic;
 using ARPG.Tables;
 
 namespace ARPG.Component
@@ -41,6 +42,9 @@ namespace ARPG.Component
 
         /// <summary>스킬 테이블 데이터</summary>
         public SkillTable? Table;
+
+        /// <summary>스킬 본체 효과 + 장착된 스킬 페이지 효과를 합친 실행용 Effect ID 목록</summary>
+        public List<int>? EffectiveSkillEffectIds;
 
         /// <summary>스킬이 초기화되었는지 여부</summary>
         public bool IsInitialized;

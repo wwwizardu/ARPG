@@ -2,6 +2,7 @@
 using ARPG.Base;
 using ARPG.Data;
 using ARPG.Message;
+using ARPG.Tables;
 using Unity.AppUI.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -30,6 +31,15 @@ namespace ARPG.UI
         private VisualElement? _inventoryGrid;
         private VisualElement?[] _slotElements = new VisualElement?[GlobalEnum.PLAYER_SKILL_SLOT_COUNT];
         private VisualElement? _lastRoot;
+
+        // 페이지 편집 모달 (SKILL_RUNE_DESIGN §7.2)
+        private VisualElement? _pageModalBackdrop;
+        private VisualElement? _pageSlotsRow;
+        private VisualElement? _pageCapacityFill;
+        private Text? _pageCapacityText;
+        private VisualElement? _pageInvGrid;
+        private Text? _pageModalStatus;
+        private int _pageModalSkillBookSlot = -1;
 
         // 드래그앤드롭 상태
         private enum DragSource { None, Inventory, Equipped }
@@ -95,12 +105,19 @@ namespace ARPG.UI
                     OnClickSkillSlot(slotIndex);
                 });
 
+                // 우클릭 → 페이지 편집 모달
+                slot.RegisterCallback<PointerDownEvent>(evt =>
+                {
+                    if (evt.button != 1) return; // 우클릭만
+                    OpenPageEditor(slotIndex);
+                    evt.StopPropagation();
+                });
+
                 // 호버 콜백은 1회 등록(슬롯 element는 재생성되지 않음).
                 // 책 정보는 RefreshSkillSlots에서 slot.userData에 셋팅.
                 VisualElement slotRef = slot;
-                slotRef.RegisterCallback<MouseEnterEvent>(_ => AR.s.Tooltip.Show(slotRef.userData as ItemData, GetMouseScreenPos()));
+                slotRef.RegisterCallback<MouseEnterEvent>(_ => AR.s.Tooltip.Show(slotRef.userData as ItemData, GetSlotScreenRect(slotRef)));
                 slotRef.RegisterCallback<MouseLeaveEvent>(_ => AR.s.Tooltip.Hide());
-                slotRef.RegisterCallback<MouseMoveEvent>(_ => AR.s.Tooltip.UpdatePosition(GetMouseScreenPos()));
 
                 // 드래그앤드롭 (장착 슬롯이 소스)
                 slotRef.RegisterCallback<PointerDownEvent>(evt => OnDragPointerDown(evt, DragSource.Equipped, slotIndex, slotRef));
@@ -277,9 +294,8 @@ namespace ARPG.UI
 
                 bookSlot.userData = item;
                 VisualElement bookSlotRef = bookSlot;
-                bookSlot.RegisterCallback<MouseEnterEvent>(_ => AR.s.Tooltip.Show(bookSlotRef.userData as ItemData, GetMouseScreenPos()));
+                bookSlot.RegisterCallback<MouseEnterEvent>(_ => AR.s.Tooltip.Show(bookSlotRef.userData as ItemData, GetSlotScreenRect(bookSlotRef)));
                 bookSlot.RegisterCallback<MouseLeaveEvent>(_ => AR.s.Tooltip.Hide());
-                bookSlot.RegisterCallback<MouseMoveEvent>(_ => AR.s.Tooltip.UpdatePosition(GetMouseScreenPos()));
                 bookSlot.RegisterCallback<ClickEvent>(_ =>
                 {
                     if (_suppressClick) { _suppressClick = false; return; }
@@ -521,9 +537,31 @@ namespace ARPG.UI
 
         // ========== 헬퍼 ==========
 
-        private static Vector2 GetMouseScreenPos()
+        /// <summary>
+        /// UI Toolkit VisualElement → Screen Space Rect (Y up, 좌하단 원점). 글로벌 툴팁 anchor용.
+        /// worldBound는 panel-local(Y down)이라 panel root 사이즈 비율로 screen 좌표로 매핑하고 Y를 반전.
+        /// </summary>
+        private static Rect GetSlotScreenRect(VisualElement slot)
         {
-            return (Vector2)UnityEngine.Input.mousePosition;
+            if (slot == null) return Rect.zero;
+            IPanel? panel = slot.panel;
+            if (panel == null) return Rect.zero;
+
+            VisualElement visualTree = panel.visualTree;
+            float panelW = visualTree.resolvedStyle.width;
+            float panelH = visualTree.resolvedStyle.height;
+            if (panelW <= 0f || panelH <= 0f) return Rect.zero;
+
+            float scaleX = Screen.width / panelW;
+            float scaleY = Screen.height / panelH;
+
+            Rect bound = slot.worldBound;
+            float xMin = bound.xMin * scaleX;
+            float xMax = bound.xMax * scaleX;
+            float yMaxScreen = Screen.height - bound.yMin * scaleY; // panel 상단(yMin) → screen 상단(yMax)
+            float yMinScreen = Screen.height - bound.yMax * scaleY; // panel 하단(yMax) → screen 하단(yMin)
+
+            return new Rect(xMin, yMinScreen, xMax - xMin, yMaxScreen - yMinScreen);
         }
 
         private void SetStatus(string msg)
@@ -541,6 +579,318 @@ namespace ARPG.UI
             Text emptyText = new() { text = msg };
             emptyText.AddToClassList("skillbook-empty-text");
             parent.Add(emptyText);
+        }
+
+        // ========== 페이지 편집 모달 (SKILL_RUNE_DESIGN §7.2) ==========
+
+        private void OpenPageEditor(int skillBookSlotIndex)
+        {
+            if (_lastRoot == null) return;
+            if (AR.s.PlayerSkill == null) return;
+
+            ItemData? book = AR.s.PlayerSkill.GetEquippedBook(skillBookSlotIndex);
+            if (book == null || book.SkillBook == null || book.Table == null)
+            {
+                SetStatus("빈 슬롯입니다 — 책을 먼저 장착하세요.");
+                return;
+            }
+
+            EndDrag();
+            AR.s.Tooltip.Hide();
+            ClosePageEditor();
+
+            _pageModalSkillBookSlot = skillBookSlotIndex;
+
+            // ----- backdrop (외부 클릭 시 닫힘) -----
+            VisualElement backdrop = new();
+            backdrop.AddToClassList("skillpage-modal-backdrop");
+            backdrop.RegisterCallback<ClickEvent>(evt =>
+            {
+                if (evt.target == backdrop) ClosePageEditor();
+            });
+            _lastRoot.Add(backdrop);
+            _pageModalBackdrop = backdrop;
+
+            // ----- panel -----
+            VisualElement panel = new();
+            panel.AddToClassList("skillpage-modal-panel");
+            backdrop.Add(panel);
+
+            // header
+            VisualElement header = new();
+            header.AddToClassList("skillpage-modal-header");
+            string skillName = book.SkillBook.Table?.Name ?? "?";
+            string itemName = book.Table.Name ?? "";
+            Text title = new() { text = $"{itemName} — {skillName}" };
+            title.AddToClassList("skillpage-modal-title");
+            header.Add(title);
+
+            IconButton closeBtn = new() { icon = "x" };
+            closeBtn.AddToClassList("skillbook-close-icon");
+            closeBtn.clicked += ClosePageEditor;
+            header.Add(closeBtn);
+            panel.Add(header);
+
+            // body
+            VisualElement body = new();
+            body.AddToClassList("skillpage-modal-body");
+            panel.Add(body);
+
+            VisualElement left = new();
+            left.AddToClassList("skillpage-modal-left");
+            body.Add(left);
+
+            VisualElement right = new();
+            right.AddToClassList("skillpage-modal-right");
+            body.Add(right);
+
+            // 좌측: 페이지 슬롯들 + 페이지 용량 게이지
+            Text leftTitle = new() { text = "장착된 페이지" };
+            leftTitle.AddToClassList("skillbook-section-title");
+            left.Add(leftTitle);
+
+            VisualElement slotsRow = new();
+            slotsRow.AddToClassList("skillpage-slot-row");
+            left.Add(slotsRow);
+            _pageSlotsRow = slotsRow;
+
+            VisualElement barBg = new();
+            barBg.AddToClassList("skillpage-capacity-bar-bg");
+            VisualElement fill = new();
+            fill.AddToClassList("skillpage-capacity-bar-fill");
+            barBg.Add(fill);
+            left.Add(barBg);
+            _pageCapacityFill = fill;
+
+            Text capText = new() { text = "" };
+            capText.AddToClassList("skillpage-capacity-text");
+            left.Add(capText);
+            _pageCapacityText = capText;
+
+            Text status = new() { text = "" };
+            status.AddToClassList("skillbook-status");
+            status.style.marginTop = 8;
+            left.Add(status);
+            _pageModalStatus = status;
+
+            // 우측: 인벤토리의 페이지 목록
+            Text rightTitle = new() { text = "보유 페이지 (클릭=장착)" };
+            rightTitle.AddToClassList("skillbook-section-title");
+            right.Add(rightTitle);
+
+            ScrollView invScroll = new();
+            invScroll.AddToClassList("skillpage-inv-scroll");
+            right.Add(invScroll);
+
+            VisualElement invGrid = new();
+            invGrid.AddToClassList("skillpage-inv-grid");
+            invScroll.Add(invGrid);
+            _pageInvGrid = invGrid;
+
+            RebuildPageEditor();
+        }
+
+        private void ClosePageEditor()
+        {
+            if (_pageModalBackdrop != null)
+            {
+                _pageModalBackdrop.RemoveFromHierarchy();
+                _pageModalBackdrop = null;
+            }
+            _pageSlotsRow = null;
+            _pageCapacityFill = null;
+            _pageCapacityText = null;
+            _pageInvGrid = null;
+            _pageModalStatus = null;
+            _pageModalSkillBookSlot = -1;
+            AR.s.Tooltip.Hide();
+        }
+
+        private void RebuildPageEditor()
+        {
+            if (_pageModalSkillBookSlot < 0) return;
+            if (AR.s.PlayerSkill == null) return;
+
+            ItemData? book = AR.s.PlayerSkill.GetEquippedBook(_pageModalSkillBookSlot);
+            if (book == null || book.SkillBook == null || book.Table == null)
+            {
+                ClosePageEditor();
+                return;
+            }
+
+            int slotCount = AR.s.PlayerSkill.GetPageSlots(book);
+            int capacity = AR.s.PlayerSkill.GetPageCapacity(book);
+            int used = AR.s.PlayerSkill.GetUsedPageCost(book);
+
+            BuildPageSlotsRow(book, slotCount);
+            UpdateCapacityBar(used, capacity);
+            BuildPageInventoryGrid();
+        }
+
+        private void BuildPageSlotsRow(ItemData book, int slotCount)
+        {
+            if (_pageSlotsRow == null) return;
+            _pageSlotsRow.Clear();
+
+            var pages = book.SkillBook?.SocketedPages;
+            int filled = pages?.Count ?? 0;
+
+            for (int i = 0; i < slotCount; i++)
+            {
+                int slotIdx = i;
+                VisualElement slot = new();
+                slot.AddToClassList("skillpage-slot");
+
+                if (i < filled)
+                {
+                    ItemData pageItem = pages![i];
+                    SkillEffectTable? effect = pageItem.SkillPage?.Table;
+                    if (effect != null && pageItem.Table != null)
+                    {
+                        slot.AddToClassList("skillpage-slot-filled");
+
+                        Text costLabel = new() { text = effect.PageCost.ToString() };
+                        costLabel.AddToClassList("skillpage-slot-cost");
+                        slot.Add(costLabel);
+
+                        VisualElement icon = new();
+                        icon.AddToClassList("skillpage-slot-icon");
+                        if (string.IsNullOrEmpty(pageItem.Table.SpriteName) == false)
+                        {
+                            Sprite? sprite = AR.s.Data.GetSprite(pageItem.Table.SpriteName);
+                            if (sprite != null) icon.style.backgroundImage = new StyleBackground(sprite);
+                        }
+                        slot.Add(icon);
+
+                        slot.userData = pageItem;
+                        VisualElement slotRef = slot;
+                        slot.RegisterCallback<MouseEnterEvent>(_ =>
+                        {
+                            if (slotRef.userData is ItemData item)
+                                AR.s.Tooltip.Show(item, GetSlotScreenRect(slotRef));
+                        });
+                        slot.RegisterCallback<MouseLeaveEvent>(_ => AR.s.Tooltip.Hide());
+
+                        slot.RegisterCallback<ClickEvent>(_ => UnsocketAt(slotIdx));
+                    }
+                }
+
+                _pageSlotsRow.Add(slot);
+            }
+        }
+
+        private void UpdateCapacityBar(int used, int capacity)
+        {
+            if (_pageCapacityFill == null || _pageCapacityText == null) return;
+
+            float ratio = capacity > 0 ? Mathf.Clamp01((float)used / capacity) : 0f;
+            _pageCapacityFill.style.width = new Length(ratio * 100f, LengthUnit.Percent);
+
+            _pageCapacityFill.RemoveFromClassList("skillpage-capacity-bar-fill-over");
+            if (used > capacity)
+            {
+                _pageCapacityFill.AddToClassList("skillpage-capacity-bar-fill-over");
+            }
+
+            _pageCapacityText.text = $"페이지 용량: {used} / {capacity}";
+        }
+
+        private void BuildPageInventoryGrid()
+        {
+            if (_pageInvGrid == null) return;
+            _pageInvGrid.Clear();
+
+            var inventory = AR.s.Player?.Inventory;
+            if (inventory == null || inventory.Items == null)
+            {
+                AddEmptyText(_pageInvGrid, "인벤토리 비어있음");
+                return;
+            }
+
+            int count = 0;
+            for (int i = 0; i < inventory.Items.Count; i++)
+            {
+                ItemData? item = inventory.Items[i];
+                if (item == null || item.Table == null) continue;
+                if (item.Table.ItemType != GlobalEnum.ItemType.SkillPage) continue;
+                if (item.SkillPage == null || item.SkillPage.SkillEffectId <= 0) continue;
+
+                int invSlot = i;
+                int effectId = item.SkillPage.SkillEffectId;
+                SkillEffectTable? effect = AR.s.Data?.GetSkillEffect(effectId);
+
+                VisualElement slot = new();
+                slot.AddToClassList("skillpage-inv-item");
+
+                int tier = item.Table.Tier;
+                if (1 <= tier && tier <= 3)
+                {
+                    slot.AddToClassList($"skillpage-tier-{tier}");
+                }
+
+                VisualElement icon = new();
+                icon.AddToClassList("skillpage-inv-item-icon");
+                if (string.IsNullOrEmpty(item.Table.SpriteName) == false)
+                {
+                    Sprite? sprite = AR.s.Data.GetSprite(item.Table.SpriteName);
+                    if (sprite != null) icon.style.backgroundImage = new StyleBackground(sprite);
+                }
+                slot.Add(icon);
+
+                if (effect != null)
+                {
+                    Text costLabel = new() { text = effect.PageCost.ToString() };
+                    costLabel.AddToClassList("skillpage-inv-item-cost");
+                    slot.Add(costLabel);
+                }
+
+                slot.userData = item;
+                VisualElement slotRef = slot;
+                slot.RegisterCallback<MouseEnterEvent>(_ => AR.s.Tooltip.Show(slotRef.userData as ItemData, GetSlotScreenRect(slotRef)));
+                slot.RegisterCallback<MouseLeaveEvent>(_ => AR.s.Tooltip.Hide());
+
+                slot.RegisterCallback<ClickEvent>(_ => SocketFromInventory(invSlot));
+                _pageInvGrid.Add(slot);
+                count++;
+            }
+
+            if (count == 0)
+            {
+                AddEmptyText(_pageInvGrid, "보유한 스킬 페이지가 없습니다");
+            }
+        }
+
+        private void SocketFromInventory(int inventorySlotIndex)
+        {
+            if (_pageModalSkillBookSlot < 0 || AR.s.PlayerSkill == null) return;
+
+            bool ok = AR.s.PlayerSkill.SocketSkillPage(_pageModalSkillBookSlot, inventorySlotIndex);
+            if (ok == false)
+            {
+                SetPageModalStatus("장착 실패 — 슬롯/용량/중복을 확인하세요.");
+                return;
+            }
+            SetPageModalStatus("장착 완료");
+            RebuildPageEditor();
+        }
+
+        private void UnsocketAt(int pageIndex)
+        {
+            if (_pageModalSkillBookSlot < 0 || AR.s.PlayerSkill == null) return;
+
+            bool ok = AR.s.PlayerSkill.UnsocketSkillPage(_pageModalSkillBookSlot, pageIndex);
+            if (ok == false)
+            {
+                SetPageModalStatus("해제 실패 — 인벤토리가 가득 찼는지 확인하세요.");
+                return;
+            }
+            SetPageModalStatus("페이지 해제");
+            RebuildPageEditor();
+        }
+
+        private void SetPageModalStatus(string msg)
+        {
+            if (_pageModalStatus != null) _pageModalStatus.text = msg;
         }
     }
 }

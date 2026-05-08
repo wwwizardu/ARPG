@@ -294,6 +294,9 @@ namespace ARPG.Tables
 
         // 스킬북 드랍 (SKILLBOOK_DESIGN.md §10) — Pool 모드 전용. SkillTable.Tier == DropTable.Tier 매칭 풀에서 랜덤 픽
         [JsonProperty("SkillBookRate")] public int SkillBookRate;           // Drop 스킬북 가중치. 0=드랍 없음
+
+        // 스킬 페이지 드랍 (SKILL_RUNE_DESIGN.md §8.1) — Pool 모드 전용. PageCost 범위로 Tier 매칭 후 랜덤 픽
+        [JsonProperty("SkillPageRate")] public int SkillPageRate;           // Drop 스킬 페이지 가중치. 0=드랍 없음
     }
 
     [Serializable]
@@ -374,6 +377,20 @@ namespace ARPG.Tables
         [JsonProperty("Param2")] public float Param2;                        // 효과별 파라미터 2
         [JsonProperty("Param3")] public float Param3;                        // 효과별 파라미터 3
         [JsonProperty("Probability")] public int Probability = 100;          // 발동 확률(%) 100=항상
+        [JsonProperty("PageCost")] public int PageCost;                      // 스킬 페이지 장착 비용. 0이면 페이지 장착 불가/미사용
+        [JsonProperty("Condition")] public GE.PageCondition Condition;        // 후속 페이즈용 발동 조건
+        [JsonProperty("ConditionParam")] public float ConditionParam;         // 조건 파라미터
+    }
+
+    /// <summary>
+    /// 스킬북 등급별 룰. 현재는 페이지 시스템(용량/슬롯) 룰을 보관하지만 향후 다른 등급별 책 룰도 여기에 통합 가능.
+    /// Id는 ItemTable.Tier와 매칭한다. (1=Common, 2=Rare, 3=Epic)
+    /// </summary>
+    [Serializable]
+    public class SkillBookTable : TableBase
+    {
+        [JsonProperty("PageCapacity")] public int PageCapacity;
+        [JsonProperty("PageSlots")] public int PageSlots;
     }
 
     [Serializable]

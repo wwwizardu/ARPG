@@ -748,7 +748,7 @@ namespace ARPG.Village
             int gold = item.BasePrice * amount;
             if (AR.s.Data.Player.Gold < gold) return -1;
 
-            // 구매 ItemData 생성 — 스킬북은 SkillBookData를 채워야 인벤/UI에서 정상 인식 (SKILLBOOK_DESIGN.md §4.3)
+            // 구매 ItemData 생성 — 스킬북/스킬 페이지는 인스턴스 데이터를 채워야 인벤/UI에서 정상 인식
             ARPG.Data.ItemData? purchase;
             if (item.ItemType == GlobalEnum.ItemType.SkillBook)
             {
@@ -760,6 +760,17 @@ namespace ARPG.Village
                 purchase = AR.s.Item.CreateSkillBook(entry.ItemTableId, entry.SkillId);
                 if (purchase == null) return -1;
                 // amount는 항상 1로 강제 (Stackable=false)
+                amount = 1;
+            }
+            else if (item.ItemType == GlobalEnum.ItemType.SkillPage)
+            {
+                if (entry.SkillEffectId <= 0)
+                {
+                    Debug.LogError($"[Shop] SkillPage 매물에 SkillEffectId가 비어있음. v{villageId} stockIdx={stockEntryIndex}");
+                    return -1;
+                }
+                purchase = AR.s.Item.CreateSkillPage(entry.ItemTableId, entry.SkillEffectId);
+                if (purchase == null) return -1;
                 amount = 1;
             }
             else
@@ -839,11 +850,26 @@ namespace ARPG.Village
                     }
                 }
 
+                // 스킬 페이지 매물: 같은 Tier(=PageCost 범위) SkillEffect 풀에서 픽 (SKILL_RUNE_DESIGN.md §8.2)
+                int skillEffectId = 0;
+                if (picked.ItemType == GlobalEnum.ItemType.SkillPage)
+                {
+                    skillEffectId = PickRandomSkillEffectIdByTier(picked.Tier);
+                    if (skillEffectId <= 0)
+                    {
+                        Debug.LogWarning($"[Shop] SkillPage ItemId({picked.Id}) Tier({picked.Tier})에 매칭되는 SkillEffect 없음 — 매물 슬롯 스킵");
+                        i--;
+                        if (pool.Count == 0) break;
+                        continue;
+                    }
+                }
+
                 v.MerchantStock.Add(new MerchantStockEntry
                 {
                     ItemTableId = picked.Id,
                     RemainingCount = picked.Stackable ? Random.Range(3, 11) : 1,
                     SkillId = skillId,
+                    SkillEffectId = skillEffectId,
                 });
             }
 
@@ -869,6 +895,35 @@ namespace ARPG.Village
                 if (Random.Range(0, matchedCount) == 0) picked = all[i].Id;
             }
             return picked;
+        }
+
+        /// <summary>
+        /// PageCost 범위로 Tier 매칭한 SkillEffect 풀에서 랜덤 픽 (SKILL_RUNE_DESIGN.md §8.2).
+        /// 매핑은 ItemManager.GetSkillPageTierByCost와 동일 정책 (≤10=1, ≤25=2, else=3).
+        /// </summary>
+        private static int PickRandomSkillEffectIdByTier(int tier)
+        {
+            if (AR.s.Data == null) return 0;
+
+            List<Tables.SkillEffectTable> all = AR.s.Data.GetAllSkillEffects();
+            int matchedCount = 0;
+            int picked = 0;
+            for (int i = 0; i < all.Count; i++)
+            {
+                Tables.SkillEffectTable effect = all[i];
+                if (effect.PageCost <= 0) continue;
+                if (PageCostToTier(effect.PageCost) != tier) continue;
+                matchedCount++;
+                if (Random.Range(0, matchedCount) == 0) picked = effect.Id;
+            }
+            return picked;
+        }
+
+        private static int PageCostToTier(int pageCost)
+        {
+            if (pageCost <= 10) return 1;
+            if (pageCost <= 25) return 2;
+            return 3;
         }
     }
 }

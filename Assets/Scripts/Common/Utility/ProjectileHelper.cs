@@ -84,7 +84,7 @@ namespace ARPG.Utility
                     OwnerEntityId = ownerEntityId,
                     ProjectileEntityId = entityId,
                 };
-                SkillEffectExecutor.Trigger(GE.SkillTrigger.OnProjectileSpawn, ref spawnCtx, skill.Table.SkillEffectIds);
+                SkillEffectExecutor.Trigger(GE.SkillTrigger.OnProjectileSpawn, ref spawnCtx, skill.EffectiveSkillEffectIds);
             }
 
             // System_Render에 등록 (ECS Position → GameObject transform 동기화)

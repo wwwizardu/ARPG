@@ -203,3 +203,170 @@
     border-color: rgb(255, 215, 100);
     background-color: rgba(120, 90, 40, 0.7);
 }
+
+/* 페이지 편집 모달 (SKILL_RUNE_DESIGN §7.2) */
+.skillpage-modal-backdrop {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    align-items: center;
+    justify-content: center;
+}
+
+.skillpage-modal-panel {
+    width: 720px;
+    max-height: 80%;
+    padding: 20px;
+    border-radius: 12px;
+    background-color: rgba(28, 28, 32, 0.98);
+    border-width: 1px;
+    border-color: rgba(180, 140, 80, 0.5);
+}
+
+.skillpage-modal-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.skillpage-modal-title {
+    color: rgb(220, 180, 100);
+    font-size: 16px;
+    -unity-font-style: bold;
+}
+
+.skillpage-modal-body {
+    flex-direction: row;
+}
+
+.skillpage-modal-left {
+    width: 330px;
+    flex-direction: column;
+    margin-right: 18px;
+}
+
+.skillpage-modal-right {
+    flex-grow: 1;
+    flex-direction: column;
+}
+
+.skillpage-slot-row {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+
+.skillpage-slot {
+    width: 64px;
+    height: 64px;
+    margin: 4px;
+    border-radius: 6px;
+    background-color: rgba(40, 40, 50, 0.7);
+    border-width: 2px;
+    border-color: rgba(100, 100, 120, 0.5);
+    align-items: center;
+    justify-content: center;
+}
+
+.skillpage-slot:hover {
+    border-color: rgba(255, 215, 100, 0.7);
+}
+
+.skillpage-slot-filled {
+    border-color: rgba(180, 140, 80, 0.8);
+    background-color: rgba(60, 50, 40, 0.8);
+}
+
+.skillpage-slot-icon {
+    width: 44px;
+    height: 44px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.skillpage-slot-cost {
+    position: absolute;
+    bottom: 2px;
+    right: 4px;
+    color: rgb(255, 215, 100);
+    font-size: 10px;
+    -unity-font-style: bold;
+}
+
+.skillpage-capacity-bar-bg {
+    height: 14px;
+    margin-top: 6px;
+    margin-bottom: 8px;
+    background-color: rgba(20, 20, 25, 0.9);
+    border-width: 1px;
+    border-color: rgba(80, 80, 100, 0.7);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.skillpage-capacity-bar-fill {
+    height: 100%;
+    background-color: rgb(120, 180, 90);
+}
+
+.skillpage-capacity-bar-fill-over {
+    background-color: rgb(200, 90, 60);
+}
+
+.skillpage-capacity-text {
+    color: rgb(220, 220, 220);
+    font-size: 11px;
+}
+
+.skillpage-inv-scroll {
+    height: 280px;
+}
+
+.skillpage-inv-grid {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.skillpage-inv-item {
+    width: 56px;
+    height: 56px;
+    margin: 4px;
+    border-radius: 6px;
+    background-color: rgba(40, 40, 50, 0.7);
+    border-width: 2px;
+    border-color: rgba(100, 100, 120, 0.5);
+    align-items: center;
+    justify-content: center;
+}
+
+.skillpage-inv-item:hover {
+    border-color: rgba(255, 215, 100, 0.7);
+}
+
+.skillpage-inv-item-icon {
+    width: 40px;
+    height: 40px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.skillpage-inv-item-cost {
+    position: absolute;
+    bottom: 2px;
+    right: 4px;
+    color: rgb(255, 215, 100);
+    font-size: 10px;
+    -unity-font-style: bold;
+}
+
+.skillpage-tier-1 {
+    border-color: rgba(180, 180, 180, 0.6);
+}
+
+.skillpage-tier-2 {
+    border-color: rgba(110, 160, 220, 0.7);
+}
+
+.skillpage-tier-3 {
+    border-color: rgba(200, 130, 220, 0.8);
+}
