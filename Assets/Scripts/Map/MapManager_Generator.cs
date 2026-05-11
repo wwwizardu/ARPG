@@ -74,6 +74,10 @@ namespace ARPG.Map
         {
             chunk.monsterSpawnPositions.Clear();
 
+            // Zone = max(|cx|, |cy|) + 1, [1, 99] 클램프. 시드 청크 (0,0)이 Zone 1.
+            int dist = Mathf.Max(Mathf.Abs(chunk.chunkX), Mathf.Abs(chunk.chunkY));
+            chunk.zone = Mathf.Clamp(dist + 1, 1, 99);
+
             // 몬스터 스폰 후보 위치 임시 저장
             _candidateSpawnPositions.Clear();
 

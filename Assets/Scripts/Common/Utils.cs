@@ -28,6 +28,23 @@ public static class Utils
         }
     }
 
+    public static GlobalEnum.EquipmentTypeMask EquipTypeToMaskBit(GlobalEnum.EquipmentType inEquipType)
+    {
+        switch (inEquipType)
+        {
+            case GlobalEnum.EquipmentType.Weapon:   return GlobalEnum.EquipmentTypeMask.Weapon;
+            case GlobalEnum.EquipmentType.Helmet:   return GlobalEnum.EquipmentTypeMask.Helmet;
+            case GlobalEnum.EquipmentType.Armor:    return GlobalEnum.EquipmentTypeMask.Armor;
+            case GlobalEnum.EquipmentType.Gloves:   return GlobalEnum.EquipmentTypeMask.Gloves;
+            case GlobalEnum.EquipmentType.Boots:    return GlobalEnum.EquipmentTypeMask.Boots;
+            case GlobalEnum.EquipmentType.Necklace: return GlobalEnum.EquipmentTypeMask.Necklace;
+            case GlobalEnum.EquipmentType.Ring:     return GlobalEnum.EquipmentTypeMask.Ring;
+            case GlobalEnum.EquipmentType.Belt:     return GlobalEnum.EquipmentTypeMask.Belt;
+            case GlobalEnum.EquipmentType.Earring:  return GlobalEnum.EquipmentTypeMask.Earring;
+            default:                                return GlobalEnum.EquipmentTypeMask.None;
+        }
+    }
+
     public static bool IsApparel(this GlobalEnum.ItemCategory inCategory)
     {
         switch (inCategory)

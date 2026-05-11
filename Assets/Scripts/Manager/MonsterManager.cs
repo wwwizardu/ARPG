@@ -40,6 +40,10 @@ namespace ARPG.Monster
         // SpawnInitialMonstersInChunk 호출마다 재사용 — GC 회피
         private readonly List<Vector2> _placedAnchorsCache = new();
 
+        // 현재 처리 중인 청크의 Zone 파라미터 (ResolveSpawnParams가 세팅, SpawnGroup/SampleGroupOffset이 읽음)
+        private float _currentGroupRadius;
+        private float _currentInterGroupMinDistance;
+
         public enum GroupDistribution
         {
             Uniform,             // 반경 내 균등
@@ -238,24 +242,35 @@ namespace ARPG.Monster
             if (spawnPositions.Count == 0)
                 return;
 
+            // Zone별 스폰 파라미터 룩업 (Cap 방식). 시트 미정의/누락 시 인스펙터 값 fallback.
+            int zone = AR.s.Map.GetZone(chunkCoord);
+            ResolveSpawnParams(zone,
+                out Vector2Int mainCountRange, out Vector2Int mainSizeRange,
+                out Vector2Int subCountRange, out Vector2Int subSizeRange,
+                out float groupRadius, out float interGroupMinDistance);
+
+            // 다른 메서드(SpawnGroup, SampleGroupOffset)와 공유하기 위해 현재 청크의 값으로 임시 세팅
+            _currentGroupRadius = groupRadius;
+            _currentInterGroupMinDistance = interGroupMinDistance;
+
             _placedAnchorsCache.Clear();
 
-            int mainCount = Random.Range(_mainGroupCount.x, _mainGroupCount.y + 1);
+            int mainCount = Random.Range(mainCountRange.x, mainCountRange.y + 1);
             for (int i = 0; i < mainCount; i++)
             {
-                int size = Random.Range(_mainGroupSize.x, _mainGroupSize.y + 1);
+                int size = Random.Range(mainSizeRange.x, mainSizeRange.y + 1);
                 SpawnGroup(chunkCoord, spawnPositions, _mainMonsterTableId, size);
             }
 
-            int subCount = Random.Range(_subGroupCount.x, _subGroupCount.y + 1);
+            int subCount = Random.Range(subCountRange.x, subCountRange.y + 1);
             for (int i = 0; i < subCount; i++)
             {
-                int size = Random.Range(_subGroupSize.x, _subGroupSize.y + 1);
+                int size = Random.Range(subSizeRange.x, subSizeRange.y + 1);
                 SpawnGroup(chunkCoord, spawnPositions, _subMonsterTableId, size);
             }
 
-            // 그룹이 하나도 안 떨어진 경우(거부 샘플링 실패 누적)에도 청크는 스폰 처리됨으로 간주
-            // — 다음 0.5초마다 재시도 방지. 필요 시 _chunkMonsters[coord].hasSpawned를 다른 곳에서 명시 세팅.
+            // 그룹이 하나도 안 떨어진 경우(거부 샘플링 실패 누적, Zone 1 안전지대 등)에도 청크는 스폰 처리됨으로 간주
+            // — 다음 0.5초마다 재시도 방지.
             if (_chunkMonsters.ContainsKey(chunkCoord) == false)
             {
                 _chunkMonsters[chunkCoord] = new ChunkMonsterData(chunkCoord);
@@ -263,13 +278,43 @@ namespace ARPG.Monster
             }
         }
 
+        /// <summary>
+        /// Zone → 스폰 파라미터. ZoneTable 행 없으면 인스펙터 글로벌 값으로 fallback.
+        /// </summary>
+        private void ResolveSpawnParams(int zone,
+            out Vector2Int mainCountRange, out Vector2Int mainSizeRange,
+            out Vector2Int subCountRange, out Vector2Int subSizeRange,
+            out float groupRadius, out float interGroupMinDistance)
+        {
+            var row = AR.s.Data != null ? AR.s.Data.GetZone(zone) : null;
+            if (row != null)
+            {
+                mainCountRange = new Vector2Int(row.MainGroupCountMin, row.MainGroupCountMax);
+                mainSizeRange  = new Vector2Int(row.MainGroupSizeMin,  row.MainGroupSizeMax);
+                subCountRange  = new Vector2Int(row.SubGroupCountMin,  row.SubGroupCountMax);
+                subSizeRange   = new Vector2Int(row.SubGroupSizeMin,   row.SubGroupSizeMax);
+                groupRadius           = row.GroupRadius           > 0f ? row.GroupRadius           : _groupRadius;
+                interGroupMinDistance = row.InterGroupMinDistance > 0f ? row.InterGroupMinDistance : _interGroupMinDistance;
+                Debug.Log($"<color=yellow>[ZoneSpawn] zone={zone} capRowId={row.Id} main={mainCountRange.x}~{mainCountRange.y}×{mainSizeRange.x}~{mainSizeRange.y} sub={subCountRange.x}~{subCountRange.y}×{subSizeRange.x}~{subSizeRange.y}</color>");
+                return;
+            }
+
+            mainCountRange = _mainGroupCount;
+            mainSizeRange  = _mainGroupSize;
+            subCountRange  = _subGroupCount;
+            subSizeRange   = _subGroupSize;
+            groupRadius           = _groupRadius;
+            interGroupMinDistance = _interGroupMinDistance;
+            Debug.Log($"<color=yellow>[ZoneSpawn] zone={zone} FALLBACK(inspector) dataNull={AR.s.Data == null} main={mainCountRange.x}~{mainCountRange.y}×{mainSizeRange.x}~{mainSizeRange.y} sub={subCountRange.x}~{subCountRange.y}×{subSizeRange.x}~{subSizeRange.y}</color>");
+        }
+
         private void SpawnGroup(Vector2Int chunkCoord, List<Vector2Int> spawnPositions, int monsterTableId, int size)
         {
             if (size <= 0 || spawnPositions.Count == 0)
                 return;
 
-            // anchor: 거부 샘플링으로 무리 간 최소 거리 확보
-            float interGroupSqr = _interGroupMinDistance * _interGroupMinDistance;
+            // anchor: 거부 샘플링으로 무리 간 최소 거리 확보 (Zone별 값 사용)
+            float interGroupSqr = _currentInterGroupMinDistance * _currentInterGroupMinDistance;
             Vector2Int anchorLocal = default;
             bool anchorFound = false;
             for (int attempt = 0; attempt < _anchorRejectionAttempts; attempt++)
@@ -318,6 +363,7 @@ namespace ARPG.Monster
         private Vector2 SampleGroupOffset()
         {
             float angle = Random.Range(0f, Mathf.PI * 2f);
+            float radius = _currentGroupRadius;
 
             float r;
             if (_groupDistribution == GroupDistribution.GaussianFromCenter)
@@ -326,12 +372,12 @@ namespace ARPG.Monster
                 float u1 = 1f - Random.value;
                 float u2 = 1f - Random.value;
                 float z = Mathf.Sqrt(-2f * Mathf.Log(u1)) * Mathf.Cos(2f * Mathf.PI * u2);
-                r = Mathf.Min(Mathf.Abs(z) * (_groupRadius * 0.5f), _groupRadius);
+                r = Mathf.Min(Mathf.Abs(z) * (radius * 0.5f), radius);
             }
             else
             {
                 // Uniform disk: sqrt(u) * R
-                r = _groupRadius * Mathf.Sqrt(Random.value);
+                r = radius * Mathf.Sqrt(Random.value);
             }
 
             return new Vector2(Mathf.Cos(angle) * r, Mathf.Sin(angle) * r);

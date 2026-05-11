@@ -18,10 +18,11 @@ namespace ARPG.Map
         public float terrainHeight = 10f;
         
         [Header("Map Bounds")]
-        public int minChunkX = -50;
-        public int maxChunkX = 50;
-        public int minChunkY = -50;
-        public int maxChunkY = 50;     
+        // Zone 상한 99 + 시드 청크 (0,0) → Chebyshev 거리 98까지 도달 가능해야 함
+        public int minChunkX = -98;
+        public int maxChunkX = 98;
+        public int minChunkY = -98;
+        public int maxChunkY = 98;
 
         [Header("Monster Spawn")]
         [SerializeField] private float _monsterSpawnRate = 0.1f;
@@ -212,6 +213,19 @@ namespace ARPG.Map
             }
             spawnPositions = null;
             return false;
+        }
+
+        /// <summary>
+        /// 청크의 Zone 번호 조회. 시드 청크 (0,0) = Zone 1, Chebyshev 거리 + 1, [1,99] 클램프.
+        /// 활성 청크면 캐시 값, 아니면 좌표로 즉시 계산.
+        /// </summary>
+        public int GetZone(Vector2Int chunkCoord)
+        {
+            if (_activeChunks.TryGetValue(chunkCoord, out var chunk))
+                return chunk.zone;
+
+            int dist = Mathf.Max(Mathf.Abs(chunkCoord.x), Mathf.Abs(chunkCoord.y));
+            return Mathf.Clamp(dist + 1, 1, 99);
         }
 
         /// <summary>

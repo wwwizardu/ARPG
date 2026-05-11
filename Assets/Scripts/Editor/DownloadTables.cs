@@ -76,7 +76,7 @@ namespace ARPG.Editor
 
             await DownloadTable<ProjectileTable>("1810235418&range=A:G", 1, SaveType.String);
 
-            await DownloadTable<ModTable>("1571193978&range=A:I", 1, SaveType.String);
+            await DownloadTable<ModTable>("1571193978&range=A:J", 1, SaveType.String);
 
             await DownloadTable<ModTierTable>("1782637736&range=A:J", 1, SaveType.String);
             
@@ -85,6 +85,9 @@ namespace ARPG.Editor
             await DownloadTable<VillageTable>("441028134&range=A:F", 1, SaveType.String);
 
             await DownloadTable<VillageStageTable>("467145019&range=A:Q", 1, SaveType.String);
+
+            // 청크 Zone(시드 청크 (0,0) 기준 Chebyshev 거리+1)별 몬스터 스폰 파라미터
+            await DownloadTable<ZoneTable>("848445893&range=A:M", 1, SaveType.String);
 
             //await DownloadTable<BuffEffectTable>("2104311648&range=A:K", 1, SaveType.String);
 
@@ -243,6 +246,10 @@ namespace ARPG.Editor
                 else if (table is JobBonusTable jobBonusTable)
                 {
                     ParseJobBonusTable(jobBonusTable, values);
+                }
+                else if (table is ZoneTable zoneTable)
+                {
+                    ParseZoneTable(zoneTable, values);
                 }
                 else
                 {
@@ -532,6 +539,30 @@ namespace ARPG.Editor
             table.Resource1PerHour = ParseFloatSafe(values, 3);
             table.Resource2Type = ParseIntSafe(values, 4);
             table.Resource2PerHour = ParseFloatSafe(values, 5);
+        }
+
+        private static void ParseZoneTable(ZoneTable table, string[] values)
+        {
+            // 전체 범위: A:M = 13개 컬럼
+            // (Id=Zone, Name, Description(웹용), MainGroupCountMin/Max, MainGroupSizeMin/Max,
+            //  SubGroupCountMin/Max, SubGroupSizeMin/Max, GroupRadius, InterGroupMinDistance)
+            if (values.Length < 13)
+            {
+                Debug.LogError($"[ParseZoneTable] Invalid data length. Expected at least 13, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            // values[1]=Name(웹용), values[2]=Description(웹용) — 코드는 읽지 않음
+            table.MainGroupCountMin     = ParseIntSafe(values, 3);
+            table.MainGroupCountMax     = ParseIntSafe(values, 4);
+            table.MainGroupSizeMin      = ParseIntSafe(values, 5);
+            table.MainGroupSizeMax      = ParseIntSafe(values, 6);
+            table.SubGroupCountMin      = ParseIntSafe(values, 7);
+            table.SubGroupCountMax      = ParseIntSafe(values, 8);
+            table.SubGroupSizeMin       = ParseIntSafe(values, 9);
+            table.SubGroupSizeMax       = ParseIntSafe(values, 10);
+            table.GroupRadius           = ParseFloatSafe(values, 11);
+            table.InterGroupMinDistance = ParseFloatSafe(values, 12);
         }
 
         private static void ParseWeaponBaseStatTable(WeaponBaseStatTable table, string[] values)
@@ -860,10 +891,10 @@ namespace ARPG.Editor
 
         private static void ParseModTable(ModTable table, string[] values)
         {
-            // 컬럼: Id, Name, EffectType, ApplyType, Slot, Group, Element, Tags, TargetStat
-            if (values.Length < 9)
+            // 컬럼: Id, Name, EffectType, ApplyType, Slot, Group, Element, Tags, TargetStat, AllowedEquipTypes
+            if (values.Length < 10)
             {
-                Debug.LogError($"[ParseModTable] Invalid data length. Expected at least 9, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseModTable] Invalid data length. Expected at least 10, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
@@ -876,9 +907,69 @@ namespace ARPG.Editor
                 ? (GlobalEnum.DamageType)Enum.Parse(typeof(GlobalEnum.DamageType), values[6])
                 : GlobalEnum.DamageType.Physics;
             table.Tags = ParseSkillTags(values[7]);
-            table.TargetStat = string.IsNullOrEmpty(values[8]) == false
-                ? (GlobalEnum.Stat)Enum.Parse(typeof(GlobalEnum.Stat), values[8])
-                : default;
+            table.TargetStat = ParseStatStrict(values, 8, table.Id, table.EffectType);
+            table.AllowedEquipTypes = ParseEquipMaskStrict(values, 9, table.Id, table.Slot);
+        }
+
+        /// <summary>
+        /// GlobalEnum.Stat 파싱: 빈 문자열은 default, 숫자 문자열은 거부(시트는 enum 이름으로 입력).
+        /// FlatStat/IncreasedStat은 TargetStat 필수 — 빈 칸이면 LogError.
+        /// 그 외 EffectType은 TargetStat 미사용이므로 빈 칸 허용.
+        /// </summary>
+        private static GlobalEnum.Stat ParseStatStrict(string[] values, int index, int tableId, GlobalEnum.ModEffectType effectType)
+        {
+            bool requiresTargetStat = (effectType == GlobalEnum.ModEffectType.FlatStat
+                                    || effectType == GlobalEnum.ModEffectType.IncreasedStat);
+
+            if (values.Length <= index || string.IsNullOrEmpty(values[index]))
+            {
+                if (requiresTargetStat)
+                    Debug.LogError($"[ParseModTable] TargetStat required for {effectType} (Mod Id={tableId})");
+                return default;
+            }
+
+            string raw = values[index].Trim();
+            if (int.TryParse(raw, out _))
+            {
+                Debug.LogError($"[ParseModTable] TargetStat must be enum name, not integer. Got: '{raw}' (Mod Id={tableId})");
+                return default;
+            }
+
+            if (Enum.TryParse(typeof(GlobalEnum.Stat), raw, true, out object parsed))
+                return (GlobalEnum.Stat)parsed;
+
+            Debug.LogError($"[ParseModTable] Unknown TargetStat name: '{raw}' (Mod Id={tableId})");
+            return default;
+        }
+
+        /// <summary>
+        /// GlobalEnum.EquipmentTypeMask 파싱. 파이프 구분('Weapon|AllArmor') 지원.
+        /// Implicit slot은 빈 칸 허용 (ItemImplicitTable이 ItemId 단위로 매칭하므로 풀 필터링과 무관).
+        /// Prefix/Postfix는 빈 칸 시 LogError. 숫자 문자열도 거부.
+        /// </summary>
+        private static GlobalEnum.EquipmentTypeMask ParseEquipMaskStrict(string[] values, int index, int tableId, GlobalEnum.ModSlot slot)
+        {
+            bool isImplicit = (slot == GlobalEnum.ModSlot.Implicit);
+
+            if (values.Length <= index || string.IsNullOrEmpty(values[index]))
+            {
+                if (isImplicit == false)
+                    Debug.LogError($"[ParseModTable] AllowedEquipTypes must be set for non-Implicit mod (Mod Id={tableId})");
+                return GlobalEnum.EquipmentTypeMask.None;
+            }
+
+            string raw = values[index].Trim();
+            if (int.TryParse(raw, out _))
+            {
+                Debug.LogError($"[ParseModTable] AllowedEquipTypes must be enum name, not integer. Got: '{raw}' (Mod Id={tableId})");
+                return GlobalEnum.EquipmentTypeMask.None;
+            }
+
+            if (Enum.TryParse(typeof(GlobalEnum.EquipmentTypeMask), raw, true, out object parsed))
+                return (GlobalEnum.EquipmentTypeMask)parsed;
+
+            Debug.LogError($"[ParseModTable] Unknown AllowedEquipTypes value: '{raw}' (Mod Id={tableId})");
+            return GlobalEnum.EquipmentTypeMask.None;
         }
 
         private static void ParseModTierTable(ModTierTable table, string[] values)
@@ -984,7 +1075,7 @@ namespace ARPG.Editor
         {
             string fileName = $"{inName}.bytes";
 
-            string result = JsonConvert.SerializeObject(inData);
+            string result = JsonConvert.SerializeObject(inData, ARPG.Data.JsonSettings.Default);
             
             string enData = string.Empty, filePath = string.Empty;
             if (inSaveType == SaveType.String)

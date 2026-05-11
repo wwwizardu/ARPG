@@ -30,6 +30,8 @@ namespace ARPG.Map
     {
         public int chunkX;
         public int chunkY;
+        // 시드 청크 (0,0) 기준 Chebyshev 거리 + 1, [1,99] 클램프. GenerateChunkData에서 채움
+        public int zone;
         public ulong[,] tiles;
         public bool isActive;
         public List<Vector2Int> monsterSpawnPositions;
@@ -40,14 +42,14 @@ namespace ARPG.Map
             monsterSpawnPositions = new List<Vector2Int>();
             isActive = false;
         }
-        
+
         public void SetChunkPosition(int x, int y)
         {
             chunkX = x;
             chunkY = y;
             isActive = true;
         }
-        
+
         public void Deactivate()
         {
             isActive = false;

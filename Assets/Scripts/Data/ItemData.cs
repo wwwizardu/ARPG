@@ -211,7 +211,31 @@ namespace ARPG.Data
                 Mods[i].OnLoadCompleted();
             }
 
+            PurgeIncompatibleMods();
+
             InvalidateWeaponStats();
+        }
+
+        /// <summary>
+        /// 자기 EquipType에 허용되지 않은 Prefix/Postfix mod 제거.
+        /// Implicit slot은 기획상 슬롯 제약 우회가 가능하므로 정리 대상에서 제외.
+        /// </summary>
+        private void PurgeIncompatibleMods()
+        {
+            GE.EquipmentTypeMask selfBit = Utils.EquipTypeToMaskBit(EquipType);
+            for (int i = Mods.Count - 1; i >= 0; i--)
+            {
+                ModInstance mod = Mods[i];
+                if (mod.Table == null)
+                    continue;
+                if (mod.Slot == GE.ModSlot.Implicit)
+                    continue;
+                if ((mod.Table.AllowedEquipTypes & selfBit) == 0)
+                {
+                    Debug.LogWarning($"[EquipmentData] Purged incompatible mod from {EquipType}: {mod.Table.Name} (Allowed={mod.Table.AllowedEquipTypes})");
+                    Mods.RemoveAt(i);
+                }
+            }
         }
 
         /// <summary>

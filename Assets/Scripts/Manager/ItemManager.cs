@@ -489,10 +489,10 @@ namespace ARPG.Item
             equipmentData.InitImplicitMods(inTable.Id);
 
             // 2. Prefix Mod 랜덤 생성
-            RollRandomMods(equipmentData, GlobalEnum.ModSlot.Prefix, Random.Range(1, 3));
+            RollRandomMods(equipmentData, GlobalEnum.ModSlot.Prefix, Random.Range(1, 3), equipmentData.EquipType);
 
             // 3. Postfix Mod 랜덤 생성
-            RollRandomMods(equipmentData, GlobalEnum.ModSlot.Postfix, Random.Range(1, 3));
+            RollRandomMods(equipmentData, GlobalEnum.ModSlot.Postfix, Random.Range(1, 3), equipmentData.EquipType);
 
             // 4. 생성된 Mod들의 테이블 참조 연결
             for (int i = 0; i < equipmentData.Mods.Count; i++)
@@ -506,9 +506,9 @@ namespace ARPG.Item
         /// <summary>
         /// 지정 슬롯에 랜덤 Mod를 롤링하여 추가
         /// </summary>
-        private void RollRandomMods(EquipmentData equipment, GlobalEnum.ModSlot slot, int count)
+        private void RollRandomMods(EquipmentData equipment, GlobalEnum.ModSlot slot, int count, GlobalEnum.EquipmentType equipType)
         {
-            List<ModTable> modPool = AR.s.Data.GetModPool(slot);
+            List<ModTable> modPool = AR.s.Data.GetModPool(slot, equipType);
             if (modPool.Count == 0)
                 return;
 

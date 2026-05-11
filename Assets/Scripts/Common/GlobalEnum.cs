@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 public class GlobalEnum
@@ -85,6 +86,7 @@ public class GlobalEnum
         Luck,               // 행운
         BloodingRate,       // 출혈 확률
         IgniteRate,         // 점화 확률
+        PoisonRate,         // 중독 확률
         FireAttackMin,      // 화염 최소 공격력
         FireAttackMax,      // 화염 최대 공격력
         IceAttackMin,       // 냉기 최소 공격력
@@ -126,6 +128,29 @@ public class GlobalEnum
         Ring,           // 반지
         Belt,           // 허리띠
         Earring,        // 귀걸이
+    }
+
+    /// <summary>
+    /// Mod가 붙을 수 있는 장비 타입 비트마스크. ModTable.AllowedEquipTypes에서 사용.
+    /// 한 mod가 여러 카테고리에 동시 허용될 수 있어 [Flags] 비트마스크로 표현.
+    /// </summary>
+    [Flags]
+    public enum EquipmentTypeMask
+    {
+        None       = 0,
+        Weapon     = 1 << 0,
+        Helmet     = 1 << 1,
+        Armor      = 1 << 2,
+        Gloves     = 1 << 3,
+        Boots      = 1 << 4,
+        Necklace   = 1 << 5,
+        Ring       = 1 << 6,
+        Belt       = 1 << 7,
+        Earring    = 1 << 8,
+
+        AllArmor   = Helmet | Armor | Gloves | Boots | Belt,
+        AllJewelry = Necklace | Ring | Earring,
+        All        = AllArmor | AllJewelry | Weapon,
     }
 
     public enum ItemType

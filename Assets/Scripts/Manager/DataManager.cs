@@ -89,7 +89,7 @@ namespace ARPG.Data
                 try
                 {
                     string worldDataJson = File.ReadAllText(worldDataPath);
-                    _worldData = JsonConvert.DeserializeObject<WorldData>(worldDataJson) ?? new WorldData();
+                    _worldData = JsonConvert.DeserializeObject<WorldData>(worldDataJson, JsonSettings.Default) ?? new WorldData();
 
                     // 버전 체크 및 마이그레이션
                     if (_worldData.Version < CURRENT_WORLD_DATA_VERSION)
@@ -117,7 +117,7 @@ namespace ARPG.Data
                         try
                         {
                             string backupJson = File.ReadAllText(worldDataBackupPath);
-                            _worldData = JsonConvert.DeserializeObject<WorldData>(backupJson) ?? new WorldData();
+                            _worldData = JsonConvert.DeserializeObject<WorldData>(backupJson, JsonSettings.Default) ?? new WorldData();
 
                             // 백업 파일도 버전 체크
                             if (_worldData.Version < CURRENT_WORLD_DATA_VERSION)
@@ -150,7 +150,7 @@ namespace ARPG.Data
                 try
                 {
                     string playerDataJson = File.ReadAllText(playerDataPath);
-                    var loadedList = JsonConvert.DeserializeObject<List<PlayerData>>(playerDataJson);
+                    var loadedList = JsonConvert.DeserializeObject<List<PlayerData>>(playerDataJson, JsonSettings.Default);
 
                     if (loadedList != null && loadedList.Count > 0)
                     {
@@ -200,7 +200,7 @@ namespace ARPG.Data
                         try
                         {
                             string backupJson = File.ReadAllText(playerDataBackupPath);
-                            var loadedList = JsonConvert.DeserializeObject<List<PlayerData>>(backupJson);
+                            var loadedList = JsonConvert.DeserializeObject<List<PlayerData>>(backupJson, JsonSettings.Default);
 
                             if (loadedList != null && loadedList.Count > 0)
                             {
@@ -338,11 +338,7 @@ namespace ARPG.Data
                     _worldData.TileModifications = AR.s.Map.SaveTileModifications();
 
                     // WorldData 저장
-                    string worldDataJson = JsonConvert.SerializeObject(_worldData, Formatting.Indented, new JsonSerializerSettings
-                    {
-                        NullValueHandling = NullValueHandling.Include,
-                        DefaultValueHandling = DefaultValueHandling.Include
-                    });
+                    string worldDataJson = JsonConvert.SerializeObject(_worldData, Formatting.Indented, JsonSettings.Default);
                     await File.WriteAllTextAsync(worldDataPath, worldDataJson);
 
                     // PlayerData 저장 (여러 플레이어 지원)
@@ -354,11 +350,7 @@ namespace ARPG.Data
                     }
 
                     // 전체 플레이어 리스트 저장
-                    string playerDataJson = JsonConvert.SerializeObject(_playerDataList, Formatting.Indented, new JsonSerializerSettings
-                    {
-                        NullValueHandling = NullValueHandling.Include,
-                        DefaultValueHandling = DefaultValueHandling.Include
-                    });
+                    string playerDataJson = JsonConvert.SerializeObject(_playerDataList, Formatting.Indented, JsonSettings.Default);
                     await File.WriteAllTextAsync(playerDataPath, playerDataJson);
 
                     // 저장 성공 시 백업 파일 삭제

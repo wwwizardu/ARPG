@@ -136,9 +136,14 @@ namespace ARPG.Utility
             if (mod.Table == null)
                 return;
 
+            Debug.Log($"[EquipHelper] ApplyPassiveMod - isWeapon={isWeapon}, Mod={mod.Table.Name}, EffectType={mod.Table.EffectType}, TargetStat={mod.Table.TargetStat}, Slot={mod.Slot}, V1={mod.Value1}, V2={mod.Value2}");
+
             // 무기 아이템의 무기 전용 Mod는 스킵 (WeaponHelper 경로로 적용됨)
             if (isWeapon && WeaponHelper.IsWeaponExclusiveMod(mod.Table.EffectType, mod.Table.TargetStat))
+            {
+                Debug.Log($"[EquipHelper]   → skipped (weapon-exclusive, handled by WeaponStats cache)");
                 return;
+            }
 
             switch (mod.Table.EffectType)
             {

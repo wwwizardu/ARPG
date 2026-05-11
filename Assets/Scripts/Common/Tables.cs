@@ -570,6 +570,7 @@ namespace ARPG.Tables
         [JsonProperty("Element")] public GE.DamageType Element;             // 속성 (데미지 계열)
         [JsonProperty("Tags")] public GE.SkillTag Tags;                     // 적용 조건 (Attack, Spell 등)
         [JsonProperty("TargetStat")] public GE.Stat TargetStat;             // FlatStat/IncreasedStat 대상
+        [JsonProperty("AllowedEquipTypes")] public GE.EquipmentTypeMask AllowedEquipTypes;  // 이 mod가 붙을 수 있는 장비 타입. Implicit은 빈 칸 허용
     }
 
     /// <summary>
@@ -659,6 +660,26 @@ namespace ARPG.Tables
                 default: return 0.1f;
             }
         }
+    }
+
+    /// <summary>
+    /// 청크 Zone(시드 청크 (0,0) 기준 Chebyshev 거리 + 1)별 몬스터 스폰 파라미터.
+    /// 시트엔 일부 Zone만 입력. 조회 시 N 이하 최대 정의 Zone 행 사용 (Cap/계단식).
+    /// Id 컬럼이 곧 Zone 번호. Zone 1 행은 반드시 존재해야 함.
+    /// </summary>
+    [Serializable]
+    public class ZoneTable : TableBase
+    {
+        [JsonProperty("MainGroupCountMin")] public int MainGroupCountMin;
+        [JsonProperty("MainGroupCountMax")] public int MainGroupCountMax;
+        [JsonProperty("MainGroupSizeMin")]  public int MainGroupSizeMin;
+        [JsonProperty("MainGroupSizeMax")]  public int MainGroupSizeMax;
+        [JsonProperty("SubGroupCountMin")]  public int SubGroupCountMin;
+        [JsonProperty("SubGroupCountMax")]  public int SubGroupCountMax;
+        [JsonProperty("SubGroupSizeMin")]   public int SubGroupSizeMin;
+        [JsonProperty("SubGroupSizeMax")]   public int SubGroupSizeMax;
+        [JsonProperty("GroupRadius")]           public float GroupRadius;
+        [JsonProperty("InterGroupMinDistance")] public float InterGroupMinDistance;
     }
 
 }

@@ -40,6 +40,9 @@ namespace ARPG.Data
         private ImmutableDictionary<int, Tables.JobBonusTable> _jobBonusTable = null!;
         // Phase D: JobType → JobBonusTable 빠른 조회 인덱스 (LoadLate에서 구축)
         private Dictionary<int, Tables.JobBonusTable> _jobBonusByJobType = new();
+        private ImmutableDictionary<int, Tables.ZoneTable> _zoneTable = null!;
+        // ZoneTable의 Zone 번호(=Id) 오름차순 정렬 캐시 — Cap 조회 시 사용
+        private List<int> _zoneTableSortedIds = new();
 
         public async Task LoadTableAsync()
         {
@@ -69,7 +72,8 @@ namespace ARPG.Data
                 LoadTable<Tables.ItemImplicitTable>("ItemImplicitTable.bytes", tables => _itemImplicitTable = tables),
                 LoadTable<Tables.VillageTable>("VillageTable.bytes", tables => _villageTable = tables),
                 LoadTable<Tables.VillageStageTable>("VillageStageTable.bytes", tables => _villageStageTable = tables),
-                LoadTable<Tables.JobBonusTable>("JobBonusTable.bytes", tables => _jobBonusTable = tables)
+                LoadTable<Tables.JobBonusTable>("JobBonusTable.bytes", tables => _jobBonusTable = tables),
+                LoadTable<Tables.ZoneTable>("ZoneTable.bytes", tables => _zoneTable = tables)
             );
 
             // 모든 테이블 로드 후 LoadLate 실행
@@ -174,6 +178,16 @@ namespace ARPG.Data
                 if (table.JobType > 0 && _jobBonusByJobType.ContainsKey(table.JobType) == false)
                     _jobBonusByJobType.Add(table.JobType, table);
             }
+
+            // ZoneTable: Cap 조회용 정렬 인덱스 구축 (Zone 번호=Id 오름차순)
+            _zoneTableSortedIds.Clear();
+            foreach (var key in _zoneTable.Keys)
+                _zoneTableSortedIds.Add(key);
+            _zoneTableSortedIds.Sort();
+            foreach (var table in _zoneTable.Values)
+                table.LoadLate();
+
+            Debug.Log($"<color=yellow>[ZoneTable] Loaded rows={_zoneTable.Count} ids=[{string.Join(",", _zoneTableSortedIds)}]</color>");
 
             Debug.Log("Data Tables Loaded");
         }
@@ -355,6 +369,41 @@ namespace ARPG.Data
             return null;
         }
 
+        /// <summary>
+        /// Zone 번호 → ZoneTable 행. Cap 방식: zone 이하 최대 정의 Id의 행을 반환.
+        /// 시트에 일부 Zone(예: 1,2,5,10,30)만 입력하면 사이 Zone은 이전 행을 그대로 사용.
+        /// Zone 1 행이 비어 있으면 null 반환 — 호출자는 인스펙터 fallback을 사용해야 함.
+        /// </summary>
+        public Tables.ZoneTable? GetZone(int zone)
+        {
+            if (_zoneTableSortedIds.Count == 0)
+                return null;
+
+            // zone 이하 가장 큰 정의 Id 탐색 (이진 탐색, 오름차순 정렬 기준)
+            int lo = 0;
+            int hi = _zoneTableSortedIds.Count - 1;
+            int best = -1;
+            while (lo <= hi)
+            {
+                int mid = (lo + hi) >> 1;
+                int id = _zoneTableSortedIds[mid];
+                if (id <= zone)
+                {
+                    best = id;
+                    lo = mid + 1;
+                }
+                else
+                {
+                    hi = mid - 1;
+                }
+            }
+
+            if (best < 0)
+                return null;
+
+            return _zoneTable.TryGetValue(best, out var table) ? table : null;
+        }
+
         public Tables.SkillEffectTable? GetSkillEffect(int id)
         {
             if (_skillEffectTable.TryGetValue(id, out var table))
@@ -497,13 +546,17 @@ namespace ARPG.Data
         /// <summary>
         /// 특정 슬롯/조건에 맞는 Mod 풀 반환 (랜덤 롤링용)
         /// </summary>
-        public List<Tables.ModTable> GetModPool(GlobalEnum.ModSlot slot)
+        public List<Tables.ModTable> GetModPool(GlobalEnum.ModSlot slot, GlobalEnum.EquipmentType equipType)
         {
+            GlobalEnum.EquipmentTypeMask bit = Utils.EquipTypeToMaskBit(equipType);
             List<Tables.ModTable> result = new();
             foreach (var table in _modTable.Values)
             {
-                if (table.Slot == slot)
-                    result.Add(table);
+                if (table.Slot != slot)
+                    continue;
+                if ((table.AllowedEquipTypes & bit) == 0)
+                    continue;
+                result.Add(table);
             }
             return result;
         }
@@ -519,7 +572,7 @@ namespace ARPG.Data
                 if (System.IO.File.Exists(path))
                 {
                     string json = await System.IO.File.ReadAllTextAsync(path);
-                    var tableList = Newtonsoft.Json.JsonConvert.DeserializeObject<List<T>>(json);
+                    var tableList = Newtonsoft.Json.JsonConvert.DeserializeObject<List<T>>(json, JsonSettings.Default);
                     if (tableList != null)
                     {
                         for (int i = 0; i < tableList.Count; i++)
