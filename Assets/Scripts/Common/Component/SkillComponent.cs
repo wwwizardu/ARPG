@@ -1,5 +1,4 @@
 #nullable enable
-using System.Collections.Generic;
 using ARPG.Tables;
 
 namespace ARPG.Component
@@ -43,8 +42,11 @@ namespace ARPG.Component
         /// <summary>스킬 테이블 데이터</summary>
         public SkillTable? Table;
 
-        /// <summary>스킬 본체 효과 + 장착된 스킬 페이지 효과를 합친 실행용 Effect ID 목록</summary>
-        public List<int>? EffectiveSkillEffectIds;
+        /// <summary>
+        /// 스킬 본체 효과 + 장착된 스킬 페이지 효과 중 EffectAction만 남긴 런타임 트리거 순회용 인라인 배열(최대 8개).
+        /// StatBonus는 EntityFactory.CreateSkill 시 SkillStatBonusHelper.Rebuild가 SkillStatBonusOn*Component로 흡수한 뒤 이 리스트에서 제거됨.
+        /// </summary>
+        public SkillEffectIds EffectiveSkillEffectIds;
 
         /// <summary>스킬이 초기화되었는지 여부</summary>
         public bool IsInitialized;

@@ -820,6 +820,8 @@ namespace ARPG.Systems
                     int extraCount = 0;
                     if (AR.s.Component.TryGetComponent<StatComponent>(skill.OwnerEntityId, out var ownerStat))
                         extraCount = ownerStat.FinalProjectileCountAdd;
+                    if (AR.s.Component.TryGetComponent<SkillStatBonusOnSkillStartComponent>(skillEntityId, out var skillBonus))
+                        extraCount += skillBonus.ProjectileCountAddBonus;
                     int finalCount = Mathf.Max(1, baseCount + extraCount);
 
                     float totalSpread = (finalCount - 1) * SPREAD_ANGLE_PER_SHOT;
@@ -1019,10 +1021,10 @@ namespace ARPG.Systems
             }
 
             // ========== DamageCalculator를 사용한 데미지 계산 ==========
-            DamageResult damageResult = DamageCalculator.Calculate(skill.OwnerEntityId, targetEntityId, skill.Table);
+            DamageResult damageResult = DamageCalculator.Calculate(skillEntityId, skill.OwnerEntityId, targetEntityId, skill.Table);
 
             // ========== 데미지 적용 (HP 감소, 흡혈, 반사, 메시지 전송, 상태이상) ==========
-            DamageCalculator.ApplyDamageResult(skill.OwnerEntityId, targetEntityId, damageResult);
+            DamageCalculator.ApplyDamageResult(skillEntityId, skill.OwnerEntityId, targetEntityId, damageResult);
 
             // 타겟 StatComponent 다시 가져오기 (ApplyDamageResult에서 HP가 변경됨)
             if (AR.s.Component.TryGetComponent<StatComponent>(targetEntityId, out targetStat) == false)

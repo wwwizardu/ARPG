@@ -139,8 +139,8 @@ namespace ARPG.Systems
                     // 데미지 적용
                     if (skill.Table != null)
                     {
-                        DamageResult result = DamageCalculator.Calculate(proj.OwnerEntityId, targetId, skill.Table);
-                        DamageCalculator.ApplyDamageResult(proj.OwnerEntityId, targetId, result);
+                        DamageResult result = DamageCalculator.Calculate(proj.SkillEntityId, proj.OwnerEntityId, targetId, skill.Table);
+                        DamageCalculator.ApplyDamageResult(proj.SkillEntityId, proj.OwnerEntityId, targetId, result);
 
                         // [SkillEffect] OnProjectileHit 트리거 (+ OnHit/OnCrit/OnKill 동시 발화)
                         SkillEffectContext hitCtx = new()

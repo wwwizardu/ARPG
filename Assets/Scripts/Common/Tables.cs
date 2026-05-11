@@ -372,7 +372,8 @@ namespace ARPG.Tables
     {
         [JsonProperty("Name")] public string Name = string.Empty;
         [JsonProperty("Description")] public string Description = string.Empty;
-        [JsonProperty("EffectType")] public GE.SkillEffectType EffectType;   // 효과 종류 (LifeStealOnHit 등)
+        [JsonProperty("EffectType")] public GE.Stat EffectType;              // 효과/Stat 종류. 처리 경로는 Kind가 결정
+        [JsonProperty("Kind")] public GE.SkillEffectKind Kind = GE.SkillEffectKind.StatBonus;  // 처리 경로: StatBonus=Helper가 컴포넌트로 흡수, EffectAction=Executor가 트리거 시점에 실행
         [JsonProperty("Trigger")] public GE.SkillTrigger Trigger;             // 발동 시점 (OnHit 등)
         [JsonProperty("Param1")] public float Param1;                        // 효과별 파라미터 1
         [JsonProperty("Param2")] public float Param2;                        // 효과별 파라미터 2

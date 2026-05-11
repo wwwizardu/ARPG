@@ -716,13 +716,21 @@ namespace ARPG.Factory
 
             AR.s.Component.GetComponentPool<SkillCommandComponent>();
 
+            List<int>? allEffectIds = BuildEffectiveSkillEffectIds(ownerEntityId, slotIndex, skillTable);
+
+            // StatBonus 행을 트리거별 SkillStatBonus*Component로 흡수
+            SkillStatBonusHelper.Rebuild(skillEntityId, allEffectIds);
+
+            // 흡수된 StatBonus 행은 런타임 트리거 리스트에서 제거 → EffectAction만 인라인 배열로 보관
+            SkillEffectIds actionEffectIds = SkillStatBonusHelper.FilterToActionEffects(allEffectIds);
+
             AR.s.Component.AddComponent(skillEntityId, new SkillComponent
             {
                 SkillId = skillId,
                 OwnerEntityId = ownerEntityId,
                 SlotIndex = slotIndex,
                 Table = skillTable,
-                EffectiveSkillEffectIds = BuildEffectiveSkillEffectIds(ownerEntityId, slotIndex, skillTable),
+                EffectiveSkillEffectIds = actionEffectIds,
                 IsInitialized = true,
                 IsEnabled = true,
                 ExecutionType = skillTable.ExecutionType,

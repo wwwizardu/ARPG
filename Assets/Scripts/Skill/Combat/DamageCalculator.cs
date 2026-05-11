@@ -262,7 +262,7 @@ namespace ARPG.Skill.Combat
         /// 데미지 계산 메인 메서드
         /// 속성별 독립 계산 → 저항 적용 → 합산
         /// </summary>
-        public static DamageResult Calculate(int attackerId, int targetId, SkillTable skillData)
+        public static DamageResult Calculate(int skillEntityId, int attackerId, int targetId, SkillTable skillData)
         {
             DamageResult result = new DamageResult
             {
@@ -352,7 +352,17 @@ namespace ARPG.Skill.Combat
                 }
             }
 
-            // ========== 2-2단계: 스킬 베이스 데미지 배율 (플랫 합산 후, 스킬 배율/치명타 전) ==========
+            // ========== 2-2단계: 스킬의 데미지 보너스 합산 ==========
+            if (AR.s.Component.TryGetComponent<SkillStatBonusOnHitComponent>(skillEntityId, out var onHitBonus))
+            {
+                physDamage += Random.Range(onHitBonus.PhysDamageAddBonusMin, onHitBonus.PhysDamageAddBonusMax + 1);
+                fireDamage += Random.Range(onHitBonus.FireDamageAddBonusMin, onHitBonus.FireDamageAddBonusMax + 1);
+                iceDamage += Random.Range(onHitBonus.IceDamageAddBonusMin, onHitBonus.IceDamageAddBonusMax + 1);
+                lightningDamage += Random.Range(onHitBonus.LightningDamageAddBonusMin, onHitBonus.LightningDamageAddBonusMax + 1);
+                poisonDamage += Random.Range(onHitBonus.PoisonDamageAddBonusMin, onHitBonus.PoisonDamageAddBonusMax + 1);
+            }
+
+            // ========== 2-3단계: 스킬 베이스 데미지 배율 (플랫 합산 후, 스킬 배율/치명타 전) ==========
             if (skillData.BaseDamageMul != 100)
             {
                 float baseDmgMul = skillData.BaseDamageMul / 100f;
@@ -374,10 +384,12 @@ namespace ARPG.Skill.Combat
             // ========== 4단계: 치명타 판정 ==========
             // Attack 스킬: 무기 치명타 + 캐릭터 치명타
             // Spell 스킬:  스킬 테이블 BaseCriRate + 캐릭터 치명타
-            float baseCritRate = isAttackSkill
-                ? WeaponHelper.GetWeaponCriRate(attackerId)
-                : skillData.BaseCriRate;
+            float baseCritRate = isAttackSkill ? WeaponHelper.GetWeaponCriRate(attackerId) : skillData.BaseCriRate;
             float totalCritRate = baseCritRate + attackerStat.FinalCriRate;
+            if (AR.s.Component.TryGetComponent<SkillStatBonusOnHitComponent>(skillEntityId, out var onHitBonusCrit))
+            {
+                totalCritRate += onHitBonusCrit.CriRateBonus;
+            }               
 
             bool isCrit = Random.Range(0f, 100f) < totalCritRate;
             if (isCrit)
@@ -438,7 +450,7 @@ namespace ARPG.Skill.Combat
         /// <summary>
         /// 데미지 결과를 엔티티에 적용
         /// </summary>
-        public static void ApplyDamageResult(int attackerId, int targetId, DamageResult result)
+        public static void ApplyDamageResult(int skillEntityId, int attackerId, int targetId, DamageResult result)
         {
             // ========== 회피 처리 ==========
             if (result.IsEvaded)
@@ -519,7 +531,7 @@ namespace ARPG.Skill.Combat
             // ========== 상태이상 독립 판정 (속성별) ==========
             if (result.IsEvaded == false)
             {
-                ApplyStatusEffects(attackerId, targetId, result);
+                ApplyStatusEffects(skillEntityId, attackerId, targetId, result);
             }
         }
 
@@ -527,7 +539,7 @@ namespace ARPG.Skill.Combat
         /// 속성별 독립 상태이상 판정
         /// 데미지가 존재하는 각 속성에 대해 개별적으로 상태이상 발동
         /// </summary>
-        private static void ApplyStatusEffects(int attackerId, int targetId, DamageResult result)
+        private static void ApplyStatusEffects(int skillEntityId, int attackerId, int targetId, DamageResult result)
         {
             if (AR.s.Component.TryGetComponent<StatComponent>(attackerId, out var attackerStat) == false)
                 return;
@@ -535,7 +547,7 @@ namespace ARPG.Skill.Combat
             // 화염 데미지 > 0 → 점화 판정
             if (result.FireDamage > 0f)
             {
-                ApplyIgnite(attackerId, targetId, attackerStat, result.FireDamage);
+                ApplyIgnite(skillEntityId, attackerId, targetId, attackerStat, result.FireDamage);
             }
 
             // 냉기 데미지 > 0 → 냉기 자동 적용
@@ -553,16 +565,18 @@ namespace ARPG.Skill.Combat
             // 물리 데미지 > 0 → 출혈 판정
             if (result.PhysDamage > 0f)
             {
-                ApplyBleeding(targetId, attackerStat, result.PhysDamage);
+                ApplyBleeding(skillEntityId, targetId, attackerStat, result.PhysDamage);
             }
         }
 
         /// <summary>
         /// 출혈 발동 (물리 DoT)
         /// </summary>
-        private static void ApplyBleeding(int targetId, StatComponent attackerStat, float physDamage)
+        private static void ApplyBleeding(int skillEntityId, int targetId, StatComponent attackerStat, float physDamage)
         {
             int bloodingRate = attackerStat.FinalBloodingRate + 50;
+            if (AR.s.Component.TryGetComponent<SkillStatBonusOnHitComponent>(skillEntityId, out var onHit))
+                bloodingRate += onHit.BloodingRateBonus;
             if (Random.Range(0, 100) < bloodingRate)
             {
                 int bloodingDamage = Mathf.FloorToInt(physDamage * 0.3f);
@@ -585,9 +599,11 @@ namespace ARPG.Skill.Combat
         /// <summary>
         /// 점화 발동 (화염 DoT, 스택 가능)
         /// </summary>
-        private static void ApplyIgnite(int attackerId, int targetId, StatComponent attackerStat, float fireDamage)
+        private static void ApplyIgnite(int skillEntityId, int attackerId, int targetId, StatComponent attackerStat, float fireDamage)
         {
             int igniteRate = attackerStat.FinalIgniteRate;
+            if (AR.s.Component.TryGetComponent<SkillStatBonusOnHitComponent>(skillEntityId, out var onHit))
+                igniteRate += onHit.IgniteRateBonus;
             if (Random.Range(0, 100) < igniteRate)
             {
                 int totalIgniteDamage = Mathf.FloorToInt(fireDamage * 0.5f);

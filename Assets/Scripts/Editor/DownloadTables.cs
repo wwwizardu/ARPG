@@ -57,8 +57,8 @@ namespace ARPG.Editor
 
             await DownloadTable<SkillTable>("92727160&range=A:AM", 1, SaveType.String);
 
-            // Phase 1: SkillEffect 합성 시스템용 테이블 (+ 스킬 페이지 비용 메타데이터)
-            await DownloadTable<SkillEffectTable>("1681865950&range=A:L", 1, SaveType.String);
+            // Phase 1: SkillEffect 합성 시스템용 테이블 (+ 스킬 페이지 비용 메타데이터 + Kind 분류 컬럼)
+            await DownloadTable<SkillEffectTable>("1681865950&range=A:M", 1, SaveType.String);
 
             // SKILL_RUNE_DESIGN P-1: 스킬북 등급별 룰(페이지 용량/슬롯)
             // 컬럼 순서: Id(=Tier), PageCapacity, PageSlots
@@ -720,23 +720,42 @@ namespace ARPG.Editor
         /// </summary>
         private static void ParseSkillEffectTable(SkillEffectTable table, string[] values)
         {
-            if (values.Length < 5)
+            if (values.Length < 6)
             {
-                Debug.LogError($"[ParseSkillEffectTable] Invalid data length. Expected at least 5, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseSkillEffectTable] Invalid data length. Expected at least 6, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
             table.Name = values[1];
             table.Description = values[2];
-            table.EffectType = (GlobalEnum.SkillEffectType)Enum.Parse(typeof(GlobalEnum.SkillEffectType), values[3]);
-            table.Trigger = (GlobalEnum.SkillTrigger)Enum.Parse(typeof(GlobalEnum.SkillTrigger), values[4]);
-            table.Param1 = values.Length > 5 && float.TryParse(values[5], out var p1) ? p1 : 0f;
-            table.Param2 = values.Length > 6 && float.TryParse(values[6], out var p2) ? p2 : 0f;
-            table.Param3 = values.Length > 7 && float.TryParse(values[7], out var p3) ? p3 : 0f;
-            table.Probability = values.Length > 8 && int.TryParse(values[8], out var prob) ? prob : 100;
-            table.PageCost = ParseIntSafe(values, 9);
-            table.Condition = ParseEnumSafe(values, 10, GlobalEnum.PageCondition.None);
-            table.ConditionParam = ParseFloatSafe(values, 11);
+            table.EffectType = (GlobalEnum.Stat)Enum.Parse(typeof(GlobalEnum.Stat), values[3]);
+            // Kind 컬럼(E, EffectType 바로 뒤). 빈 셀이면 EffectType으로 추론(구 IsEffectAction 화이트리스트와 동일) → 시트 마이그레이션 종료 후 이 fallback 제거 가능.
+            table.Kind = ParseEnumSafe(values, 4, InferSkillEffectKindFromEffectType(table.EffectType));
+            table.Trigger = (GlobalEnum.SkillTrigger)Enum.Parse(typeof(GlobalEnum.SkillTrigger), values[5]);
+            table.Param1 = values.Length > 6 && float.TryParse(values[6], out var p1) ? p1 : 0f;
+            table.Param2 = values.Length > 7 && float.TryParse(values[7], out var p2) ? p2 : 0f;
+            table.Param3 = values.Length > 8 && float.TryParse(values[8], out var p3) ? p3 : 0f;
+            table.Probability = values.Length > 9 && int.TryParse(values[9], out var prob) ? prob : 100;
+            table.PageCost = ParseIntSafe(values, 10);
+            table.Condition = ParseEnumSafe(values, 11, GlobalEnum.PageCondition.None);
+            table.ConditionParam = ParseFloatSafe(values, 12);
+        }
+
+        /// <summary>
+        /// SkillEffect 시트의 Kind 컬럼이 비어있을 때 구 동작을 보존하기 위한 fallback.
+        /// 시트에 Kind 컬럼을 모든 행에 채워 넣은 뒤에는 이 메서드 제거 가능.
+        /// </summary>
+        private static GlobalEnum.SkillEffectKind InferSkillEffectKindFromEffectType(GlobalEnum.Stat effectType)
+        {
+            switch (effectType)
+            {
+                case GlobalEnum.Stat.LifeSteal:
+                case GlobalEnum.Stat.ApplyBuff:
+                case GlobalEnum.Stat.DelegateToTotem:
+                    return GlobalEnum.SkillEffectKind.EffectAction;
+                default:
+                    return GlobalEnum.SkillEffectKind.StatBonus;
+            }
         }
 
         /// <summary>

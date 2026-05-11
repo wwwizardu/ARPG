@@ -97,7 +97,13 @@ public class GlobalEnum
         PoisonAttackMax,    // 독 최대 공격력
         Evasion,            // 회피
         BlockChance,        // 블록 확률
-        ProjectileCountAdd, // 발사체 추가 개수 (Add 합산만 의미 있음. SkillEffect.SpawnProjectile에서 base+이 stat으로 최종 발사 수 결정)
+        ProjectileCountAdd, // 발사체 추가 개수 (Add 합산만 의미 있음. SkillTable.BaseProjectileCount + 이 stat이 최종 발사 수)
+
+        // ===== SkillEffect 효과 종류 (구 SkillEffectType에서 통합) =====
+        // 일반 stat과 같은 enum에 합쳐 SkillEffectTable.EffectType이 stat 가산도/효과 실행도 표현하도록 일원화
+        LifeSteal,           // OnHit. Param1=흡혈 비율(%)
+        ApplyBuff,           // OnHit. Param1=BuffId, Param2=스택, Param3=지속시간 오버라이드(0=기본)
+        DelegateToTotem,     // OnSkillCommand. Param1=토템 생존시간(초)
     }
 
     public enum EquipSlotType
@@ -272,19 +278,13 @@ public class GlobalEnum
     }
 
     /// <summary>
-    /// 스킬에 합성 가능한 효과 타입. SkillEffectTable이 이 enum + (Param1/2/3)으로 효과를 정의.
-    /// 새 효과 추가 시 enum 1줄 + SkillEffectExecutor에 case 1개만 추가하면 데이터로 합성 가능.
+    /// SkillEffect 처리 경로. 시트의 Kind 컬럼이 결정한다(코드 화이트리스트 대체).
+    /// StatBonus는 SkillStatBonusHelper가 트리거별 컴포넌트로 사전 합산, EffectAction은 트리거 시점에 SkillEffectExecutor가 직접 실행.
     /// </summary>
-    public enum SkillEffectType : byte
+    public enum SkillEffectKind : byte
     {
-        None = 0,
-        LifeStealOnHit,         // OnHit. Param1=흡혈 비율(%)
-        ApplyBuffOnHit,         // OnHit. Param1=BuffId, Param2=스택, Param3=지속시간 오버라이드(0=기본)
-        DelegateToTotem,        // OnSkillCommand. Param1=토템 생존시간(초), Param2=캐스팅 거리 오프셋(0=시전자 위치). 시전 캔슬 후 토템이 자율 발사
-        SpawnProjectile,        // 스킬 본인의 발사체와 무관한 추가 발사체 스폰 용도(예: "폭발 시 작은 폭탄 5개"). Param1=별도 ProjectileId, Param2=Count(base), Param3=미사용. 스킬 자체의 발사체 개수 조절은 SkillTable.BaseProjectileCount + Stat.ProjectileCountAdd로 처리하므로 일반 Multi Shot에는 사용하지 않음.
-        // 향후 확장 슬롯 (구현은 후속 페이즈)
-        // ManaRestoreOnKill, SpawnProjectileOnHit, SpawnAreaEffectOnKill,
-        // KnockbackOnHit, DelegateToMine, DelegateToTrap, ...
+        StatBonus,      // 수치 가산 — SkillStatBonusOn*Component로 흡수, DamageCalculator가 소비
+        EffectAction,   // 액션 — SkillEffectExecutor가 트리거 시점에 실행
     }
 
     /// <summary>

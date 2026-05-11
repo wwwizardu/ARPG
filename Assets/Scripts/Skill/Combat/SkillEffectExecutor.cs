@@ -1,5 +1,4 @@
 #nullable enable
-using System.Collections.Generic;
 using ARPG.Component;
 using ARPG.Factory;
 using ARPG.Tables;
@@ -22,16 +21,18 @@ namespace ARPG.Skill.Combat
     {
         /// <summary>
         /// 지정 트리거에 매칭되는 효과를 모두 실행.
-        /// effectIds가 null/empty면 즉시 반환 (무비용).
+        /// effectIds.Count == 0이면 즉시 반환 (무비용).
         /// </summary>
-        public static void Trigger(GE.SkillTrigger trigger, ref SkillEffectContext ctx, List<int>? effectIds)
+        public static void Trigger(GE.SkillTrigger trigger, ref SkillEffectContext ctx, in SkillEffectIds effectIds)
         {
-            if (effectIds == null || effectIds.Count == 0)
+            if (effectIds.Count == 0)
                 return;
 
+            // 호출 시점에 전달되는 effectIds는 EntityFactory.CreateSkill에서 이미 EffectAction만 남도록 필터링된 인라인 배열(SkillComponent.EffectiveSkillEffectIds).
+            // StatBonus는 SkillStatBonusHelper가 컴포넌트로 사전 합산해 DamageCalculator가 소비하므로 여기 도달하지 않는다.
             for (int i = 0; i < effectIds.Count; i++)
             {
-                int effectId = effectIds[i];
+                int effectId = effectIds.Get(i);
                 SkillEffectTable? effect = AR.s.Data.GetSkillEffect(effectId);
                 if (effect == null)
                 {
@@ -59,55 +60,22 @@ namespace ARPG.Skill.Combat
         {
             switch (effect.EffectType)
             {
-                case GE.SkillEffectType.None:
-                    break;
-
-                case GE.SkillEffectType.LifeStealOnHit:
-                    ExecuteLifeStealOnHit(effect, ref ctx);
-                    break;
-
-                case GE.SkillEffectType.ApplyBuffOnHit:
+                case GE.Stat.ApplyBuff:
                     ExecuteApplyBuffOnHit(effect, ref ctx);
                     break;
 
-                case GE.SkillEffectType.DelegateToTotem:
+                case GE.Stat.DelegateToTotem:
                     ExecuteDelegateToTotem(effect, ref ctx);
                     break;
 
-                case GE.SkillEffectType.SpawnProjectile:
-                    ExecuteSpawnProjectile(effect, ref ctx);
-                    break;
-
                 default:
-                    Debug.LogWarning($"[SkillEffectExecutor] Unhandled EffectType: {effect.EffectType}");
+                    // 시트에서 Kind=EffectAction으로 분류됐는데 여기 case가 없음 = 미구현 액션.
+                    Debug.LogWarning($"[SkillEffectExecutor] EffectAction case 누락: EffectType={effect.EffectType}, EffectId={effect.Id}");
                     break;
             }
         }
 
         // === EffectType 구현 ===
-
-        /// <summary>
-        /// 명중 시 데미지의 일정 비율을 시전자 HP로 회복.
-        /// Param1: 흡혈 비율(%) — 예: 15 → FinalDamage의 15%
-        /// </summary>
-        private static void ExecuteLifeStealOnHit(SkillEffectTable effect, ref SkillEffectContext ctx)
-        {
-            if (effect.Param1 <= 0f || ctx.DamageResult.FinalDamage <= 0f)
-                return;
-
-            if (AR.s.Component.TryGetComponent<StatComponent>(ctx.OwnerEntityId, out var ownerStat) == false)
-                return;
-
-            int healAmount = Mathf.RoundToInt(ctx.DamageResult.FinalDamage * effect.Param1 / 100f);
-            if (healAmount <= 0)
-                return;
-
-            int newHp = Mathf.Min(ownerStat.CurrentHp + healAmount, ownerStat.FinalMaxHp);
-            ownerStat.SetCurrentHp(ctx.OwnerEntityId, newHp);
-            AR.s.Component.SetComponent(ctx.OwnerEntityId, ownerStat);
-
-            Debug.Log($"<color=yellow>[SkillEffect] LifeStealOnHit - Owner({ctx.OwnerEntityId}) +{healAmount} HP ({effect.Param1}% of {ctx.DamageResult.FinalDamage:F0}) → {newHp}/{ownerStat.FinalMaxHp}</color>");
-        }
 
         /// <summary>
         /// 시전 명령을 가로채 토템 엔티티가 대신 자율 시전하도록 위임.
@@ -132,60 +100,6 @@ namespace ARPG.Skill.Combat
 
             ctx.CancelOriginalCast = true;
             Debug.Log($"[SkillEffect] DelegateToTotem - Caster({ctx.OwnerEntityId}) → Totem({totemId}) casting SkillId({ctx.SkillId}) for {duration}s");
-        }
-
-        /// <summary>
-        /// 스킬 본인의 발사체와 무관한 추가 발사체를 부채꼴로 스폰.
-        /// 용도: "스킬 효과로 다른 종류의 발사체를 추가 발사" — 예: 화염 폭발 시 작은 폭탄 N개, 시체 폭발의 파편 등.
-        /// 일반 Multi Shot(스킬 자체 발사체 개수 조절)은 SkillTable.BaseProjectileCount + Stat.ProjectileCountAdd로 처리하므로 이 EffectType은 사용하지 않음.
-        ///
-        /// Param1: 별도 ProjectileId (스킬의 ProjectileId가 아님 — 효과 전용)
-        /// Param2: 기본 발사 개수 (Stat.ProjectileCountAdd가 추가 합산됨)
-        /// Param3: 현재 미사용 (분산 각도는 코드 상수)
-        /// </summary>
-        private static void ExecuteSpawnProjectile(SkillEffectTable effect, ref SkillEffectContext ctx)
-        {
-            const float SPREAD_ANGLE_PER_SHOT = 15f;  // 발사체 간 각도(도). 추후 Stat 또는 Param3로 교체 예정
-
-            int projectileId = (int)effect.Param1;
-            if (projectileId <= 0)
-            {
-                Debug.LogWarning($"[SkillEffect] SpawnProjectile - invalid ProjectileId: {projectileId}");
-                return;
-            }
-
-            int baseCount = Mathf.Max(1, (int)effect.Param2);
-            int extraCount = 0;
-            if (AR.s.Component.TryGetComponent<StatComponent>(ctx.OwnerEntityId, out var ownerStat))
-                extraCount = ownerStat.FinalProjectileCountAdd;
-            int finalCount = Mathf.Max(1, baseCount + extraCount);
-
-            if (AR.s.Component.TryGetComponent<TransformComponent>(ctx.OwnerEntityId, out var ownerTr) == false)
-            {
-                Debug.LogWarning($"[SkillEffect] SpawnProjectile - Owner({ctx.OwnerEntityId}) has no TransformComponent");
-                return;
-            }
-
-            Vector2 baseDir = ctx.TargetPosition - ownerTr.Position;
-            if (baseDir.sqrMagnitude < 0.0001f)
-                baseDir = Vector2.right;
-            else
-                baseDir.Normalize();
-            float baseAngle = Mathf.Atan2(baseDir.y, baseDir.x) * Mathf.Rad2Deg;
-
-            // 부채꼴 분산 — 발사체 간 SPREAD_ANGLE_PER_SHOT 도씩 벌림
-            float totalSpread = (finalCount - 1) * SPREAD_ANGLE_PER_SHOT;
-            float startOffset = -totalSpread * 0.5f;
-
-            for (int i = 0; i < finalCount; i++)
-            {
-                float angle = baseAngle + startOffset + SPREAD_ANGLE_PER_SHOT * i;
-                float rad = angle * Mathf.Deg2Rad;
-                Vector2 dir = new Vector2(Mathf.Cos(rad), Mathf.Sin(rad));
-                ProjectileHelper.SpawnProjectile(ctx.OwnerEntityId, ctx.SkillEntityId, projectileId, ownerTr.Position, dir);
-            }
-
-            Debug.Log($"[SkillEffect] SpawnProjectile - Owner({ctx.OwnerEntityId}) fired {finalCount} projectiles (base={baseCount}+stat={extraCount}) of Id={projectileId}");
         }
 
         /// <summary>

@@ -436,9 +436,9 @@ namespace ARPG.Manager
         {
             return effect.EffectType switch
             {
-                GlobalEnum.SkillEffectType.LifeStealOnHit => $"적중 시 입힌 피해의 {effect.Param1}%만큼 생명력 회복",
-                GlobalEnum.SkillEffectType.ApplyBuffOnHit => DescribeApplyBuffOnHit(effect),
-                GlobalEnum.SkillEffectType.DelegateToTotem => $"토템 소환({effect.Param1}초)",
+                GlobalEnum.Stat.LifeSteal => $"적중 시 입힌 피해의 {effect.Param1}%만큼 생명력 회복",
+                GlobalEnum.Stat.ApplyBuff => DescribeApplyBuffOnHit(effect),
+                GlobalEnum.Stat.DelegateToTotem => $"토템 소환({effect.Param1}초)",
                 _ => string.Empty,
             };
         }
