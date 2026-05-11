@@ -181,6 +181,67 @@ ITEM_PROMPTS = [
             "epic legendary spellbook prop, deep purple and gold tones"
         ),
     },
+    # ===== 스킬 페이지 3종 (SKILL_RUNE_DESIGN.md §7.1) — 등급별 ItemTable 행 =====
+    # 스킬북에 장착하는 한 장짜리 페이지 아이템 (책이 아님 — 단일 양피지/스크롤)
+    {
+        "id": 5100,
+        "name": "SkillPageCommon",
+        "core": (
+            "single old parchment page, weathered yellowed paper with rough torn edges, "
+            "simple black ink runes and basic magical sigils written across the surface, "
+            "small ink blots and faded handwriting, "
+            "humble apprentice spell page, one flat sheet lying open, "
+            "rustic novice scroll page prop, muted brown and tan tones, "
+            "no book, just a loose page"
+        ),
+    },
+    # 책 페이지 느낌으로 시도하는 변종 (양피지/스크롤이 아니라 한 장의 책 페이지)
+    {
+        "id": 5100,
+        "name": "SkillPageCommonBook",
+        "core": (
+            "ONE SINGLE THIN SHEET OF PAPER, paper-thin single layer, "
+            "razor-thin edges showing only one layer of paper, no visible thickness on any edge, "
+            "looks as thin as a real piece of paper, single ply, "
+            "rectangular shape with all four edges clean and straight, "
+            "smooth flat surface, light cream colored slightly aged, "
+            "very subtle faint shadow underneath - barely a hint, just enough to suggest one thin sheet not a stack, "
+            "viewed from directly above looking straight down, top-down flat view, "
+            "printed text laid out in two neat columns of elegant black calligraphy, "
+            "decorative red drop-cap initial letter at the top of the first column, "
+            "small simple magical sigil illustration centered between the columns, "
+            "tiny page number at the bottom corner, thin ink border framing the text area, "
+            "humble apprentice's spell page, "
+            "(((NOT a stack of pages))), (((NOT layered papers))), (((NOT thick))), "
+            "absolutely no book visible, no binding, no other pages underneath, no scroll, no parchment, "
+            "not rolled, not curled, completely flat, single layer paper only"
+        ),
+    },
+    {
+        "id": 5101,
+        "name": "SkillPageRare",
+        "core": (
+            "single arcane parchment page, fine cream colored paper with neatly trimmed edges, "
+            "intricate silver ink runes and glowing blue magical sigils, "
+            "ornate decorative border drawn around the text, faint blue magical shimmer along the runes, "
+            "scholar's enchanted spell page, one flat sheet lying open, "
+            "magical adept scroll page prop, sapphire blue and silver tones, "
+            "no book, just a loose page"
+        ),
+    },
+    {
+        "id": 5102,
+        "name": "SkillPageEpic",
+        "core": (
+            "single legendary mystical page, rich aged parchment with gilded edges, "
+            "elaborate gold ink runes and powerful glowing violet magical sigils, "
+            "intricate ornamental border with gold filigree, wisps of purple magical aura floating around the page, "
+            "central glowing arcane symbol radiating violet light, "
+            "ancient archmage's spell page, one flat sheet lying open, "
+            "epic legendary scroll page prop, deep purple and gold tones, "
+            "no book, just a loose page"
+        ),
+    },
     {
         # 모든 빌딩이 건설 중일 때 공통으로 사용하는 placeholder 스프라이트.
         # 시각적으로 "공사 중" 임을 즉시 인지할 수 있어야 함 (목재 골조 + 비계 + 작업 도구).
