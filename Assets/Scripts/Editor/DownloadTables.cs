@@ -58,7 +58,7 @@ namespace ARPG.Editor
             await DownloadTable<SkillTable>("92727160&range=A:AM", 1, SaveType.String);
 
             // Phase 1: SkillEffect 합성 시스템용 테이블 (+ 스킬 페이지 비용 메타데이터)
-            await DownloadTable<SkillEffectTable>("1681865950&range=A:K", 1, SaveType.String);
+            await DownloadTable<SkillEffectTable>("1681865950&range=A:L", 1, SaveType.String);
 
             // SKILL_RUNE_DESIGN P-1: 스킬북 등급별 룰(페이지 용량/슬롯)
             // 컬럼 순서: Id(=Tier), PageCapacity, PageSlots
@@ -685,26 +685,27 @@ namespace ARPG.Editor
         }
 
         /// <summary>
-        /// Phase 1: SkillEffectTable 파서. 기본 8개 컬럼 + 스킬 페이지 메타데이터(PageCost, Condition, ConditionParam)
+        /// Phase 1: SkillEffectTable 파서. 기본 9개 컬럼 + 스킬 페이지 메타데이터(PageCost, Condition, ConditionParam)
         /// </summary>
         private static void ParseSkillEffectTable(SkillEffectTable table, string[] values)
         {
-            if (values.Length < 4)
+            if (values.Length < 5)
             {
-                Debug.LogError($"[ParseSkillEffectTable] Invalid data length. Expected at least 4, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseSkillEffectTable] Invalid data length. Expected at least 5, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
             table.Name = values[1];
-            table.EffectType = (GlobalEnum.SkillEffectType)Enum.Parse(typeof(GlobalEnum.SkillEffectType), values[2]);
-            table.Trigger = (GlobalEnum.SkillTrigger)Enum.Parse(typeof(GlobalEnum.SkillTrigger), values[3]);
-            table.Param1 = values.Length > 4 && float.TryParse(values[4], out var p1) ? p1 : 0f;
-            table.Param2 = values.Length > 5 && float.TryParse(values[5], out var p2) ? p2 : 0f;
-            table.Param3 = values.Length > 6 && float.TryParse(values[6], out var p3) ? p3 : 0f;
-            table.Probability = values.Length > 7 && int.TryParse(values[7], out var prob) ? prob : 100;
-            table.PageCost = ParseIntSafe(values, 8);
-            table.Condition = ParseEnumSafe(values, 9, GlobalEnum.PageCondition.None);
-            table.ConditionParam = ParseFloatSafe(values, 10);
+            table.Description = values[2];
+            table.EffectType = (GlobalEnum.SkillEffectType)Enum.Parse(typeof(GlobalEnum.SkillEffectType), values[3]);
+            table.Trigger = (GlobalEnum.SkillTrigger)Enum.Parse(typeof(GlobalEnum.SkillTrigger), values[4]);
+            table.Param1 = values.Length > 5 && float.TryParse(values[5], out var p1) ? p1 : 0f;
+            table.Param2 = values.Length > 6 && float.TryParse(values[6], out var p2) ? p2 : 0f;
+            table.Param3 = values.Length > 7 && float.TryParse(values[7], out var p3) ? p3 : 0f;
+            table.Probability = values.Length > 8 && int.TryParse(values[8], out var prob) ? prob : 100;
+            table.PageCost = ParseIntSafe(values, 9);
+            table.Condition = ParseEnumSafe(values, 10, GlobalEnum.PageCondition.None);
+            table.ConditionParam = ParseFloatSafe(values, 11);
         }
 
         /// <summary>

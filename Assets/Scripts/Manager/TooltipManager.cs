@@ -437,10 +437,23 @@ namespace ARPG.Manager
             return effect.EffectType switch
             {
                 GlobalEnum.SkillEffectType.LifeStealOnHit => $"적중 시 입힌 피해의 {effect.Param1}%만큼 생명력 회복",
-                GlobalEnum.SkillEffectType.ApplyBuffOnHit => $"적중 시 버프({(int)effect.Param1}) {effect.Param2}초 부여",
+                GlobalEnum.SkillEffectType.ApplyBuffOnHit => DescribeApplyBuffOnHit(effect),
                 GlobalEnum.SkillEffectType.DelegateToTotem => $"토템 소환({effect.Param1}초)",
                 _ => string.Empty,
             };
+        }
+
+        private static string DescribeApplyBuffOnHit(SkillEffectTable effect)
+        {
+            int buffId = (int)effect.Param1;
+            BuffTable? buffTable = AR.s.Data.GetBuff(buffId);
+            string buffLabel = buffTable != null ? buffTable.Name : $"#{buffId}";
+
+            float duration = effect.Param3;
+            if (duration <= 0f && buffTable != null)
+                duration = buffTable.Duration;
+
+            return $"적중 시 [{buffLabel}] {duration}초 부여";
         }
 
         // ========== 헬퍼 ==========

@@ -371,6 +371,7 @@ namespace ARPG.Tables
     public class SkillEffectTable : TableBase
     {
         [JsonProperty("Name")] public string Name = string.Empty;
+        [JsonProperty("Description")] public string Description = string.Empty;
         [JsonProperty("EffectType")] public GE.SkillEffectType EffectType;   // 효과 종류 (LifeStealOnHit 등)
         [JsonProperty("Trigger")] public GE.SkillTrigger Trigger;             // 발동 시점 (OnHit 등)
         [JsonProperty("Param1")] public float Param1;                        // 효과별 파라미터 1

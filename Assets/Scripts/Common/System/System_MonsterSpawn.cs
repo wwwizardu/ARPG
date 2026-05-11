@@ -38,9 +38,9 @@ namespace ARPG.Systems
             // 1) 최초 스폰: 활성 청크 중 아직 스폰 안 된 청크 처리 (0.5초마다)
             CheckInitialSpawns();
 
-            // 2) 리스폰: 5초마다 죽은 몬스터 보충
+            // 2) 리스폰: 60초마다 죽은 몬스터 보충
             _respawnTimer += 0.5f;
-            if (_respawnTimer >= 5f)
+            if (_respawnTimer >= 60f)
             {
                 _respawnTimer = 0f;
                 CheckRespawns();

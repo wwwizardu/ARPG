@@ -91,11 +91,12 @@ candidate가 ProvidedService.Production 비트 보유
 | 현재 Stage | 미충족 시 +400 받는 후보 |
 |-----------|--------------------------|
 | Settlement | Inn 세트 미완 → InnBed, Hearth |
+| Settlement | Shop 부재 → MerchantStall |
 | Settlement | housing < 2 → Bedroll/Bed/InnBed (L2와 별도, 정원 미달이 아니어도 게이트 차단) |
 | Hamlet | Civic 부재 → TownPost |
 | Hamlet | housing < 4 → Bed |
 | Village | Forge 세트 미완 → Furnace, Anvil |
-| Village | Shop 부재 → MerchantStall |
+| Village | Shop 부재 → MerchantStall (정상 흐름엔 Settlement에서 충족됨, 파괴 복구용 잔존 게이트) |
 | Village | housing < 8 → Bed |
 
 > 중복 가산 가능: Pop=1 Settlement에서 Bedroll은 L2 (housing 결핍) +1000 + L3 게이트 +400 = +1400. 이게 마지막 Pop=1까지 housing=2를 강제로 채우는 동력.

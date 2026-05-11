@@ -44,9 +44,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a980fd3dc0ca143748bf6a6076ae74e3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _monsterPrefabs:
-  - {fileID: 1813093374385199624, guid: b3ab565fb587a73438158f9df3e12e67, type: 3}
-  _monsterSpawnRate: 0.1
+  _mainMonsterTableId: 1003
+  _subMonsterTableId: 1003
+  _mainGroupCount: {x: 1, y: 2}
+  _mainGroupSize: {x: 5, y: 8}
+  _subGroupCount: {x: 2, y: 3}
+  _subGroupSize: {x: 1, y: 3}
+  _groupRadius: 2.5
+  _groupDistribution: 1
+  _interGroupMinDistance: 5
+  _anchorRejectionAttempts: 8
   _chunkMonsterLifetime: 300
   _activationDistance: 25
   _deactivationDistance: 30

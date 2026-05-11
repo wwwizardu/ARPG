@@ -119,7 +119,8 @@ NPC가 `Working` 상태 + 자기 직업의 작업 오브젝트가 마을 내 존
 | 3 | **CropPlot**(텃밭) | Farmer 활성화 / Food +0.8/h | 1×1 | Wood 5 |
 | 4 | **Chest**(궤짝) | 범용 Cap +30 | 1×1 | Wood 6 |
 | 5 | **Bed** 2번째 | 주거 +1 (승격 조건) | 1×1 | Wood 10 |
-| 6 | **Well**(우물) | 생활 기반, 마을 전체 생산 ×1.05 | 1×1 | Stone 15 |
+| 6 | **MerchantStall**(노점 판매대) | 기초 상점 UI 오픈 (Hamlet 승격 게이트) | 1×1 | Wood 15 |
+| 7 | **Well**(우물) | 생활 기반, 마을 전체 생산 ×1.05 | 1×1 | Stone 15 |
 
 → Hamlet 승격 시 경계 반경 6 → 10타일 확장.
 
@@ -133,9 +134,8 @@ NPC가 `Working` 상태 + 자기 직업의 작업 오브젝트가 마을 내 존
 | 3 | MiningCart(광차) | Miner 가동 | 1×1 | Wood 20, Metal 5 |
 | 4 | Hearth(화덕) | 요리·Food 품질 보존 | 1×1 | Stone 20 |
 | 5 | DryingRack(건조대) | Hunter 가동 | 1×1 | Wood 20 |
-| 6 | MerchantStall(노점 판매대) | 기초 상점 UI 오픈 | 1×1 | Wood 25 |
-| 7 | TownPost(마을 표지판) | 필요도 가중치 +10, Tier 판정 코어 | 1×1 | Wood 30, Stone 15 |
-| 8 | Bed × 추가 | 인구 8까지 수용 | 1×1 | Wood 10/개 |
+| 6 | TownPost(마을 표지판) | 필요도 가중치 +10, Tier 판정 코어 | 1×1 | Wood 30, Stone 15 |
+| 7 | Bed × 추가 | 인구 8까지 수용 | 1×1 | Wood 10/개 |
 
 → 이 Stage 종료 시 **외곽 벽 건설이 해금**된다 (§4).
 
