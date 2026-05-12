@@ -59,7 +59,7 @@ namespace ARPG.Systems
                 {
                     // modifier가 없으면 Base = Final 그대로 저장
                     AR.s.Component.SetComponent(entityId, stat);
-                    SyncRegenComponent(entityId, stat);
+                    SyncDerivedStatComponents(entityId, stat);
                     AR.s.Component.RemoveComponent<StatDirtyTag>(entityId);
                     if (entityId == AR.s.Data.CurrentPlayerEntityId)
                     {
@@ -104,8 +104,8 @@ namespace ARPG.Systems
                 // 7단계: 업데이트된 스탯 저장
                 AR.s.Component.SetComponent(entityId, stat);
 
-                // 7-2단계: RegenComponent 동기화 (FinalHpGeneration / FinalMpGeneration 기반)
-                SyncRegenComponent(entityId, stat);
+                // 7-2단계: 파생 컴포넌트/캐시 갱신
+                SyncDerivedStatComponents(entityId, stat);
 
                 // 8단계: Dirty 태그 제거
                 AR.s.Component.RemoveComponent<StatDirtyTag>(entityId);
@@ -116,6 +116,48 @@ namespace ARPG.Systems
                     AR.s.Message.Broadcast(new StatRecalculatedMessage { EntityId = entityId });
                 }
             }
+        }
+
+        /// <summary>
+        /// StatComponent 재계산 이후 의존 컴포넌트/캐시를 최신 Final 값에 맞춰 동기화.
+        /// StatRecalculatedMessage 수신자가 같은 프레임에 최신 스킬 예상값을 읽을 수 있도록
+        /// 소유 스킬 공격 프로파일은 dirty 태그 대기 없이 즉시 갱신한다.
+        /// </summary>
+        private void SyncDerivedStatComponents(int entityId, StatComponent stat)
+        {
+            SyncRegenComponent(entityId, stat);
+            BuildDefenseCache(entityId, stat);
+            System_SkillAttackProfileCalculation.BuildOwnedProfiles(entityId);
+        }
+
+        /// <summary>
+        /// DamageDefenseCacheComponent를 StatComponent의 Final 값들로부터 빌드/갱신.
+        /// DamageCalculator가 lazy build 용도로도 호출할 수 있도록 public static.
+        /// </summary>
+        public static void BuildDefenseCache(int entityId, StatComponent stat)
+        {
+            DamageDefenseCacheComponent cache;
+            cache.PhysReductionMul      = 1f - DamageCalculator_GetResistanceReduction(stat.FinalDefense);
+            cache.FireReductionMul      = 1f - DamageCalculator_GetResistanceReduction(stat.FinalFireResist);
+            cache.IceReductionMul       = 1f - DamageCalculator_GetResistanceReduction(stat.FinalIceResist);
+            cache.LightningReductionMul = 1f - DamageCalculator_GetResistanceReduction(stat.FinalLightningResist);
+            cache.PoisonReductionMul    = 1f - DamageCalculator_GetResistanceReduction(stat.FinalPoisonResist);
+            cache.EvasionRate           = stat.FinalEvasion;
+            cache.BlockChance           = stat.FinalBlockChance;
+            cache.BlockReductionMul     = stat.FinalBlockReduction > 0
+                ? stat.FinalBlockReduction / 100f
+                : 0.5f;
+            AR.s.Component.SetComponent(entityId, cache);
+        }
+
+        /// <summary>
+        /// resistance / (resistance + 100) — DamageCalculator.GetResistanceReduction과 동일 공식.
+        /// 순환 의존 피하려고 여기 재구현. 수식 변경 시 두 곳 모두 수정 필요.
+        /// </summary>
+        private static float DamageCalculator_GetResistanceReduction(int resistance)
+        {
+            if (resistance <= 0) return 0f;
+            return resistance / (resistance + 100f);
         }
 
         /// <summary>

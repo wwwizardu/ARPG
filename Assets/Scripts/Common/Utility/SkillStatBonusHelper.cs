@@ -72,6 +72,9 @@ namespace ARPG.Utility
             SetOrRemove(skillEntityId, hasHit,   onHit);
             SetOrRemove(skillEntityId, hasCrit,  onCrit);
             SetOrRemove(skillEntityId, hasKill,  onKill);
+
+            // OnHit StatBonus가 변경되었으므로 공격 프로파일 캐시 재계산 요청
+            AR.s.Component.AddComponent(skillEntityId, new SkillAttackProfileDirtyTag());
         }
 
         private static void SetOrRemove<T>(int entityId, bool has, T value) where T : struct

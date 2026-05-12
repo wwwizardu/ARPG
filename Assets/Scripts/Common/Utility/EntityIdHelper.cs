@@ -463,6 +463,43 @@ namespace ARPG.Utility
             return false;
         }
 
+        /// <summary>
+        /// 캐릭터가 소유한 모든 스킬 엔티티 ID를 순회.
+        /// 소유자 스탯 변경처럼 스킬 슬롯 역방향 조회가 필요한 시스템에서 사용.
+        /// </summary>
+        public static void ForEachOwnedSkill(int characterEntityId, System.Action<int> action)
+        {
+            if (action == null)
+                return;
+
+            if (_characterSkillSlots.TryGetValue(characterEntityId, out HashSet<int> slots) == false)
+                return;
+
+            foreach (int slotIndex in slots)
+            {
+                int skillEntityId = GetDeterministicId(characterEntityId, EntityIdCategory.Skill, slotIndex);
+                if (skillEntityId == -1)
+                    continue;
+                if (_registeredEntityIds.Contains(skillEntityId) == false)
+                    continue;
+
+                action(skillEntityId);
+            }
+        }
+
+        /// <summary>
+        /// 캐릭터가 소유한 모든 스킬 엔티티에 태그 T를 부착 (이미 있으면 그대로).
+        /// 소유자 스탯/장비/스킬북 변경 시 그 캐릭터의 스킬 캐시들을 일괄 무효화하는 용도.
+        /// 별도 역방향 인덱스 없이 _characterSkillSlots(소유자→슬롯)와 결정적 ID로 즉시 계산.
+        /// </summary>
+        public static void MarkOwnedSkillsDirty<T>(int characterEntityId) where T : struct
+        {
+            ForEachOwnedSkill(characterEntityId, skillEntityId =>
+            {
+                AR.s.Component.AddComponent(skillEntityId, default(T));
+            });
+        }
+
         #endregion
 
         #region Buff Entity Management

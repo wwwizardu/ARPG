@@ -3,7 +3,6 @@ using System;
 using ARPG.Base;
 using ARPG.Message;
 using ARPG.Skill.Combat;
-using ARPG.Tables;
 using ARPG.Utility;
 using TMPro;
 using UnityEngine;
@@ -155,25 +154,27 @@ namespace ARPG.UI
             _textStat[5].text = $"체력 재생 {_statComponent.FinalHpGeneration}";
             _textStat[6].text = $"마나 재생 {_statComponent.FinalMpGeneration}";
 
-            // 기본 스킬(슬롯 0) 기준 예상 데미지/치명타 계산
+            // 기본 스킬(슬롯 0) 기준 예상 데미지/치명타 계산 — DamageCalculator가 profile lazy build 처리
             int basicSkillEntityId = EntityIdHelper.GetDeterministicId(playerId, EntityIdCategory.Skill, 0);
-            SkillTable? basicSkill = null;
-            if (AR.s.Component.TryGetComponent<Component.SkillComponent>(basicSkillEntityId, out var skillComp))
-            {
-                basicSkill = skillComp.Table;
-            }
+            bool hasBasicSkill = AR.s.Component.HasComponent<Component.SkillComponent>(basicSkillEntityId);
 
             EstimatedDamage est;
             int estimatedCritRate;
-            if (basicSkill != null)
+            float estAttackSpeed;
+            if (hasBasicSkill)
             {
-                est = DamageCalculator.CalculateForSkill(_statComponent, playerId, basicSkill);
-                estimatedCritRate = DamageCalculator.EstimateCritRate(_statComponent, playerId, basicSkill);
+                est = DamageCalculator.CalculateForSkill(basicSkillEntityId);
+                estimatedCritRate = DamageCalculator.EstimateCritRate(basicSkillEntityId);
+                estAttackSpeed = DamageCalculator.EstimateAttackSpeed(basicSkillEntityId);
             }
             else
             {
+                // 스킬 없을 때 폴백: 캐릭터 스탯만으로 추정 (무기 AS, 스킬 배율 없음)
                 est = DamageCalculator.Calculate(_statComponent);
                 estimatedCritRate = _statComponent.FinalCriRate;
+                float weaponAS = WeaponHelper.GetWeaponAttackSpeed(playerId);
+                if (weaponAS <= 0f) weaponAS = 1f;
+                estAttackSpeed = weaponAS * (1f + _statComponent.FinalAttackSpeed / 100f);
             }
 
             _textStat[7].text = $"예상 물리 데미지 {est.PhysMin} - {est.PhysMax}";
@@ -185,9 +186,6 @@ namespace ARPG.UI
             _textStat[12].text = $"치명타 확률 {estimatedCritRate}%";
             _textStat[13].text = $"치명타 피해 {_statComponent.FinalCriDamage}%";
             _textStat[14].text = $"이동 속도 {_statComponent.FinalMoveSpeed}";
-
-            // 공격 속도: 무기 AS × 스킬 BaseAttackSpeedMul × (1 + 캐릭터 공속%/100)
-            float estAttackSpeed = DamageCalculator.EstimateAttackSpeed(_statComponent, playerId, basicSkill);
             _textStat[15].text = $"공격 속도 {estAttackSpeed:F2}";
             _textStat[16].text = $"시전 속도 {_statComponent.FinalCastSpeed}";
             _textStat[17].text = $"방어력 {_statComponent.FinalDefense}";

@@ -83,152 +83,68 @@ namespace ARPG.Skill.Combat
         }
 
         /// <summary>
-        /// UI용 특정 스킬 기준 예상 데미지
-        /// Attack 스킬: 무기 Local 데미지 + 캐릭터 Added + 스킬 Added
-        /// Spell 스킬:  스킬 베이스 데미지 + 캐릭터 Added
-        /// 치명타 기대값 반영, 저항 미적용
+        /// DamageDefenseCacheComponent를 조회. 없으면 즉시 빌드(lazy).
+        /// 정상 흐름에서는 System_StatCalculation이 항상 갱신해두기 때문에 lazy build는 폴백/디버그용.
         /// </summary>
-        public static EstimatedDamage CalculateForSkill(StatComponent attackerStat, int attackerId, Tables.SkillTable skillData)
+        private static DamageDefenseCacheComponent GetOrBuildDefenseCache(int targetId, StatComponent targetStat)
         {
-            bool isAttackSkill = (skillData.Tags & GlobalEnum.SkillTag.Attack) != 0;
+            if (AR.s.Component.TryGetComponent<DamageDefenseCacheComponent>(targetId, out var cache))
+                return cache;
 
-            // 베이스 데미지 모으기
-            int physMin = 0, physMax = 0;
-            int fireMin = 0, fireMax = 0;
-            int iceMin = 0, iceMax = 0;
-            int lightMin = 0, lightMax = 0;
-            int poisMin = 0, poisMax = 0;
+            Debug.LogWarning($"[DamageCalculator] DamageDefenseCache lazy rebuild - invalidation may have been missed (TargetId: {targetId})");
+            System_StatCalculation.BuildDefenseCache(targetId, targetStat);
+            AR.s.Component.TryGetComponent(targetId, out cache);
+            return cache;
+        }
 
-            int baseCritRate = 0;
+        /// <summary>
+        /// UI용 특정 스킬 기준 예상 데미지 범위 (저항 미적용, 치명타 기대값 반영).
+        /// SkillAttackProfileComponent 캐시를 사용 — 무기/Stat/SkillTable/OnHitBonus 모두 자동 반영.
+        /// 캐시가 없으면 lazy build.
+        /// </summary>
+        public static EstimatedDamage CalculateForSkill(int skillEntityId)
+        {
+            SkillAttackProfileComponent profile = GetOrBuildProfile(skillEntityId);
 
-            if (isAttackSkill)
-            {
-                // 무기 Local 스탯
-                var weapon = Utility.WeaponHelper.GetEquippedWeapon(attackerId);
-                ARPG.Data.WeaponStatCache ws = weapon != null && weapon.Equipment != null
-                    ? weapon.Equipment.WeaponStats
-                    : default;
-
-                physMin = ws.Physics.Min;  physMax = ws.Physics.Max;
-                fireMin = ws.Fire.Min;     fireMax = ws.Fire.Max;
-                iceMin = ws.Ice.Min;       iceMax = ws.Ice.Max;
-                lightMin = ws.Lightning.Min; lightMax = ws.Lightning.Max;
-                poisMin = ws.Poison.Min;   poisMax = ws.Poison.Max;
-                baseCritRate = ws.CriRate;
-
-                // 스킬 자체 Added 데미지 (해당 속성에)
-                if (skillData.DamageMax > 0)
-                {
-                    AddSkillDamageToElement(skillData, ref physMin, ref physMax,
-                        ref fireMin, ref fireMax, ref iceMin, ref iceMax,
-                        ref lightMin, ref lightMax, ref poisMin, ref poisMax);
-                }
-            }
-            else
-            {
-                // Spell: 스킬 베이스 데미지
-                AddSkillDamageToElement(skillData, ref physMin, ref physMax,
-                    ref fireMin, ref fireMax, ref iceMin, ref iceMax,
-                    ref lightMin, ref lightMax, ref poisMin, ref poisMax);
-                baseCritRate = skillData.BaseCriRate;
-            }
-
-            // Character Added (비무기 스탯)
-            physMin += attackerStat.FinalAttackMin;
-            physMax += attackerStat.FinalAttackMax;
-            fireMin += attackerStat.FinalFireAttackMin;
-            fireMax += attackerStat.FinalFireAttackMax;
-            iceMin += attackerStat.FinalIceAttackMin;
-            iceMax += attackerStat.FinalIceAttackMax;
-            lightMin += attackerStat.FinalLightningAttackMin;
-            lightMax += attackerStat.FinalLightningAttackMax;
-            poisMin += attackerStat.FinalPoisonAttackMin;
-            poisMax += attackerStat.FinalPoisonAttackMax;
-
-            // 배율 + 치명타 기대값 (스킬 베이스 배율은 플랫 합산 후 적용)
-            float baseDmgMul = skillData.BaseDamageMul / 100f;
-            float mul = GetSkillDamageMultiplier(attackerStat);
-            int totalCritRate = Mathf.Clamp(baseCritRate + attackerStat.FinalCriRate, 0, 100);
-            float critExpected = 1f + (totalCritRate / 100f) * (GetCritMultiplier(attackerStat) - 1f);
-            float m = baseDmgMul * mul * critExpected;
+            // 기대값 배율: BaseDamageMul × SkillDamageMul × (1 + critRate% × (critMul-1))
+            int   clampedCritRate = Mathf.Clamp(profile.TotalCritRate, 0, 100);
+            float critExpected = 1f + (clampedCritRate / 100f) * (profile.CritMultiplier - 1f);
+            float m = profile.BaseDamageMul * profile.SkillDamageMul * critExpected;
 
             EstimatedDamage result;
-            result.PhysMin = Mathf.RoundToInt(physMin * m);
-            result.PhysMax = Mathf.RoundToInt(physMax * m);
-            result.FireMin = Mathf.RoundToInt(fireMin * m);
-            result.FireMax = Mathf.RoundToInt(fireMax * m);
-            result.IceMin = Mathf.RoundToInt(iceMin * m);
-            result.IceMax = Mathf.RoundToInt(iceMax * m);
-            result.LightningMin = Mathf.RoundToInt(lightMin * m);
-            result.LightningMax = Mathf.RoundToInt(lightMax * m);
-            result.PoisonMin = Mathf.RoundToInt(poisMin * m);
-            result.PoisonMax = Mathf.RoundToInt(poisMax * m);
+            result.PhysMin = Mathf.RoundToInt(profile.PhysAddedMin * m);
+            result.PhysMax = Mathf.RoundToInt(profile.PhysAddedMax * m);
+            result.FireMin = Mathf.RoundToInt(profile.FireAddedMin * m);
+            result.FireMax = Mathf.RoundToInt(profile.FireAddedMax * m);
+            result.IceMin = Mathf.RoundToInt(profile.IceAddedMin * m);
+            result.IceMax = Mathf.RoundToInt(profile.IceAddedMax * m);
+            result.LightningMin = Mathf.RoundToInt(profile.LightAddedMin * m);
+            result.LightningMax = Mathf.RoundToInt(profile.LightAddedMax * m);
+            result.PoisonMin = Mathf.RoundToInt(profile.PoisonAddedMin * m);
+            result.PoisonMax = Mathf.RoundToInt(profile.PoisonAddedMax * m);
             result.TotalMin = result.PhysMin + result.FireMin + result.IceMin + result.LightningMin + result.PoisonMin;
             result.TotalMax = result.PhysMax + result.FireMax + result.IceMax + result.LightningMax + result.PoisonMax;
             return result;
         }
 
         /// <summary>
-        /// 스킬의 DamageType 속성에 스킬 DamageMin/Max를 추가
+        /// UI용 예상 치명타 확률 (%, 0~100 클램프).
+        /// profile.TotalCritRate에 (무기/스킬 BaseCriRate + Stat.FinalCriRate + OnHitBonus.CriRateBonus) 가 합산되어 있음.
         /// </summary>
-        private static void AddSkillDamageToElement(Tables.SkillTable skillData,
-            ref int physMin, ref int physMax,
-            ref int fireMin, ref int fireMax,
-            ref int iceMin, ref int iceMax,
-            ref int lightMin, ref int lightMax,
-            ref int poisMin, ref int poisMax)
+        public static int EstimateCritRate(int skillEntityId)
         {
-            switch (skillData.DamageType)
-            {
-                case GlobalEnum.DamageType.Physics:
-                    physMin += skillData.DamageMin; physMax += skillData.DamageMax;
-                    break;
-                case GlobalEnum.DamageType.Fire:
-                    fireMin += skillData.DamageMin; fireMax += skillData.DamageMax;
-                    break;
-                case GlobalEnum.DamageType.Ice:
-                    iceMin += skillData.DamageMin; iceMax += skillData.DamageMax;
-                    break;
-                case GlobalEnum.DamageType.Lightning:
-                    lightMin += skillData.DamageMin; lightMax += skillData.DamageMax;
-                    break;
-                case GlobalEnum.DamageType.Poison:
-                    poisMin += skillData.DamageMin; poisMax += skillData.DamageMax;
-                    break;
-            }
+            SkillAttackProfileComponent profile = GetOrBuildProfile(skillEntityId);
+            return Mathf.Clamp(profile.TotalCritRate, 0, 100);
         }
 
         /// <summary>
-        /// UI용 예상 치명타 확률 (스킬 기준)
-        /// Attack: 무기 치명타 + 캐릭터 치명타
-        /// Spell:  스킬 BaseCriRate + 캐릭터 치명타
+        /// UI용 예상 공격 속도 (초당 공격 횟수).
+        /// profile.AttackSpeedPerSecond는 무기 AS × Skill.BaseAttackSpeedMul × (1 + Stat.FinalAttackSpeed%).
         /// </summary>
-        public static int EstimateCritRate(StatComponent attackerStat, int attackerId, Tables.SkillTable skillData)
+        public static float EstimateAttackSpeed(int skillEntityId)
         {
-            bool isAttackSkill = (skillData.Tags & GlobalEnum.SkillTag.Attack) != 0;
-            int baseCrit;
-            if (isAttackSkill)
-            {
-                baseCrit = Utility.WeaponHelper.GetWeaponCriRate(attackerId);
-            }
-            else
-            {
-                baseCrit = skillData.BaseCriRate;
-            }
-            return Mathf.Clamp(baseCrit + attackerStat.FinalCriRate, 0, 100);
-        }
-
-        /// <summary>
-        /// UI용 예상 공격 속도 (초당 공격 횟수, Attack 기준)
-        /// Spell은 시전 속도 별도 표시하므로 여기선 Attack만
-        /// skillData 전달 시 BaseAttackSpeedMul 반영 (스킬 고유 공속 배율)
-        /// </summary>
-        public static float EstimateAttackSpeed(StatComponent attackerStat, int attackerId, Tables.SkillTable skillData = null)
-        {
-            float weaponAS = Utility.WeaponHelper.GetWeaponAttackSpeed(attackerId);
-            if (weaponAS <= 0f) weaponAS = 1f;
-            float skillMul = skillData != null ? skillData.BaseAttackSpeedMul / 100f : 1f;
-            return weaponAS * skillMul * (1f + attackerStat.FinalAttackSpeed / 100f);
+            SkillAttackProfileComponent profile = GetOrBuildProfile(skillEntityId);
+            return profile.AttackSpeedPerSecond;
         }
 
         /// <summary>
@@ -260,7 +176,9 @@ namespace ARPG.Skill.Combat
 
         /// <summary>
         /// 데미지 계산 메인 메서드
-        /// 속성별 독립 계산 → 저항 적용 → 합산
+        /// SkillAttackProfileComponent(공격자측 캐시) + DamageDefenseCacheComponent(타겟측 캐시) 기반.
+        /// Weapon/Stat/SkillTable/SkillStatBonusOnHit 합산은 캐시 빌드 시 1회만 수행되고
+        /// 매 히트는 Random.Range × 5 + 곱셈 몇 번으로 끝난다.
         /// </summary>
         public static DamageResult Calculate(int skillEntityId, int attackerId, int targetId, SkillTable skillData)
         {
@@ -279,155 +197,66 @@ namespace ARPG.Skill.Combat
                 }
             }
 
-            // 공격자/타겟 스탯 가져오기
-            if (AR.s.Component.TryGetComponent<StatComponent>(attackerId, out var attackerStat) == false)
-            {
-                Debug.LogWarning($"[DamageCalculator] Attacker StatComponent not found - AttackerId: {attackerId}");
-                return result;
-            }
-
+            // 타겟 스탯 (Thorns + DefenseCache lazy build 폴백용)
             if (AR.s.Component.TryGetComponent<StatComponent>(targetId, out var targetStat) == false)
             {
                 Debug.LogWarning($"[DamageCalculator] Target StatComponent not found - TargetId: {targetId}");
                 return result;
             }
 
-            // ========== 1단계: 베이스 데미지 (PoE 스타일) ==========
-            // Attack 스킬: 무기의 Local 파이프라인 완료 데미지
-            // Spell 스킬:  스킬 테이블의 DamageMin/Max (DamageType 속성으로만)
-            bool isAttackSkill = (skillData.Tags & GlobalEnum.SkillTag.Attack) != 0;
-            float physDamage = 0f, fireDamage = 0f, iceDamage = 0f, lightningDamage = 0f, poisonDamage = 0f;
+            // 공격 프로파일 (Weapon + Stat.FinalX + SkillTable + OnHitBonus 모두 합산된 캐시)
+            SkillAttackProfileComponent profile = GetOrBuildProfile(skillEntityId);
 
-            if (isAttackSkill)
-            {
-                // 무기에서 속성별 베이스 데미지 가져오기
-                WeaponHelper.GetWeaponDamage(attackerId, GlobalEnum.DamageType.Physics, out int wPhysMin, out int wPhysMax);
-                physDamage = Random.Range(wPhysMin, wPhysMax + 1);
+            // ========== 1~2-2단계: 속성별 Added 데미지 (캐시에서 한 번에) ==========
+            float physDamage      = Random.Range(profile.PhysAddedMin,   profile.PhysAddedMax + 1);
+            float fireDamage      = Random.Range(profile.FireAddedMin,   profile.FireAddedMax + 1);
+            float iceDamage       = Random.Range(profile.IceAddedMin,    profile.IceAddedMax + 1);
+            float lightningDamage = Random.Range(profile.LightAddedMin,  profile.LightAddedMax + 1);
+            float poisonDamage    = Random.Range(profile.PoisonAddedMin, profile.PoisonAddedMax + 1);
 
-                WeaponHelper.GetWeaponDamage(attackerId, GlobalEnum.DamageType.Fire, out int wFireMin, out int wFireMax);
-                fireDamage = Random.Range(wFireMin, wFireMax + 1);
-
-                WeaponHelper.GetWeaponDamage(attackerId, GlobalEnum.DamageType.Ice, out int wIceMin, out int wIceMax);
-                iceDamage = Random.Range(wIceMin, wIceMax + 1);
-
-                WeaponHelper.GetWeaponDamage(attackerId, GlobalEnum.DamageType.Lightning, out int wLightMin, out int wLightMax);
-                lightningDamage = Random.Range(wLightMin, wLightMax + 1);
-
-                WeaponHelper.GetWeaponDamage(attackerId, GlobalEnum.DamageType.Poison, out int wPoisMin, out int wPoisMax);
-                poisonDamage = Random.Range(wPoisMin, wPoisMax + 1);
-            }
-            else
-            {
-                // Spell: 스킬 테이블의 베이스 데미지 (DamageType 속성에만)
-                float skillBase = Random.Range(skillData.DamageMin, skillData.DamageMax + 1);
-                switch (skillData.DamageType)
-                {
-                    case GlobalEnum.DamageType.Physics:   physDamage = skillBase; break;
-                    case GlobalEnum.DamageType.Fire:      fireDamage = skillBase; break;
-                    case GlobalEnum.DamageType.Ice:       iceDamage = skillBase; break;
-                    case GlobalEnum.DamageType.Lightning: lightningDamage = skillBase; break;
-                    case GlobalEnum.DamageType.Poison:    poisonDamage = skillBase; break;
-                }
-            }
-
-            // ========== 2단계: Character Added 데미지 ==========
-            // 캐릭터 비무기 스탯 (FinalX는 무기 Mod가 제외된 값: 장신구/버프/내재)
-            physDamage += Random.Range(attackerStat.FinalAttackMin, attackerStat.FinalAttackMax + 1);
-            fireDamage += Random.Range(attackerStat.FinalFireAttackMin, attackerStat.FinalFireAttackMax + 1);
-            iceDamage += Random.Range(attackerStat.FinalIceAttackMin, attackerStat.FinalIceAttackMax + 1);
-            lightningDamage += Random.Range(attackerStat.FinalLightningAttackMin, attackerStat.FinalLightningAttackMax + 1);
-            poisonDamage += Random.Range(attackerStat.FinalPoisonAttackMin, attackerStat.FinalPoisonAttackMax + 1);
-
-            // ========== 2-1단계: Attack 스킬은 스킬 테이블의 추가 데미지도 합산 ==========
-            if (isAttackSkill && skillData.DamageMax > 0)
-            {
-                float skillAdded = Random.Range(skillData.DamageMin, skillData.DamageMax + 1);
-                switch (skillData.DamageType)
-                {
-                    case GlobalEnum.DamageType.Physics:   physDamage += skillAdded; break;
-                    case GlobalEnum.DamageType.Fire:      fireDamage += skillAdded; break;
-                    case GlobalEnum.DamageType.Ice:       iceDamage += skillAdded; break;
-                    case GlobalEnum.DamageType.Lightning: lightningDamage += skillAdded; break;
-                    case GlobalEnum.DamageType.Poison:    poisonDamage += skillAdded; break;
-                }
-            }
-
-            // ========== 2-2단계: 스킬의 데미지 보너스 합산 ==========
-            if (AR.s.Component.TryGetComponent<SkillStatBonusOnHitComponent>(skillEntityId, out var onHitBonus))
-            {
-                physDamage += Random.Range(onHitBonus.PhysDamageAddBonusMin, onHitBonus.PhysDamageAddBonusMax + 1);
-                fireDamage += Random.Range(onHitBonus.FireDamageAddBonusMin, onHitBonus.FireDamageAddBonusMax + 1);
-                iceDamage += Random.Range(onHitBonus.IceDamageAddBonusMin, onHitBonus.IceDamageAddBonusMax + 1);
-                lightningDamage += Random.Range(onHitBonus.LightningDamageAddBonusMin, onHitBonus.LightningDamageAddBonusMax + 1);
-                poisonDamage += Random.Range(onHitBonus.PoisonDamageAddBonusMin, onHitBonus.PoisonDamageAddBonusMax + 1);
-            }
-
-            // ========== 2-3단계: 스킬 베이스 데미지 배율 (플랫 합산 후, 스킬 배율/치명타 전) ==========
-            if (skillData.BaseDamageMul != 100)
-            {
-                float baseDmgMul = skillData.BaseDamageMul / 100f;
-                physDamage *= baseDmgMul;
-                fireDamage *= baseDmgMul;
-                iceDamage *= baseDmgMul;
-                lightningDamage *= baseDmgMul;
-                poisonDamage *= baseDmgMul;
-            }
-
-            // ========== 3단계: 스킬 배율 (모든 속성에 동일 적용) ==========
-            float skillDamageMultiplier = GetSkillDamageMultiplier(attackerStat);
-            physDamage *= skillDamageMultiplier;
-            fireDamage *= skillDamageMultiplier;
-            iceDamage *= skillDamageMultiplier;
-            lightningDamage *= skillDamageMultiplier;
-            poisonDamage *= skillDamageMultiplier;
+            // ========== 2-3 + 3단계: BaseDamageMul × SkillDamageMul ==========
+            float damageMul = profile.BaseDamageMul * profile.SkillDamageMul;
+            physDamage      *= damageMul;
+            fireDamage      *= damageMul;
+            iceDamage       *= damageMul;
+            lightningDamage *= damageMul;
+            poisonDamage    *= damageMul;
 
             // ========== 4단계: 치명타 판정 ==========
-            // Attack 스킬: 무기 치명타 + 캐릭터 치명타
-            // Spell 스킬:  스킬 테이블 BaseCriRate + 캐릭터 치명타
-            float baseCritRate = isAttackSkill ? WeaponHelper.GetWeaponCriRate(attackerId) : skillData.BaseCriRate;
-            float totalCritRate = baseCritRate + attackerStat.FinalCriRate;
-            if (AR.s.Component.TryGetComponent<SkillStatBonusOnHitComponent>(skillEntityId, out var onHitBonusCrit))
+            if (Random.Range(0f, 100f) < profile.TotalCritRate)
             {
-                totalCritRate += onHitBonusCrit.CriRateBonus;
-            }               
-
-            bool isCrit = Random.Range(0f, 100f) < totalCritRate;
-            if (isCrit)
-            {
-                float critMul = GetCritMultiplier(attackerStat);
-                physDamage *= critMul;
-                fireDamage *= critMul;
-                iceDamage *= critMul;
+                float critMul = profile.CritMultiplier;
+                physDamage      *= critMul;
+                fireDamage      *= critMul;
+                iceDamage       *= critMul;
                 lightningDamage *= critMul;
-                poisonDamage *= critMul;
+                poisonDamage    *= critMul;
                 result.IsCritical = true;
             }
 
-            // ========== 5단계: 속성별 저항 감소 ==========
-            physDamage *= (1f - GetResistanceReduction(targetStat.FinalDefense));
-            fireDamage *= (1f - GetResistanceReduction(targetStat.FinalFireResist));
-            iceDamage *= (1f - GetResistanceReduction(targetStat.FinalIceResist));
-            lightningDamage *= (1f - GetResistanceReduction(targetStat.FinalLightningResist));
-            poisonDamage *= (1f - GetResistanceReduction(targetStat.FinalPoisonResist));
+            // ========== 5단계: 속성별 저항 감소 (DamageDefenseCache 사용) ==========
+            DamageDefenseCacheComponent defenseCache = GetOrBuildDefenseCache(targetId, targetStat);
+            physDamage      *= defenseCache.PhysReductionMul;
+            fireDamage      *= defenseCache.FireReductionMul;
+            iceDamage       *= defenseCache.IceReductionMul;
+            lightningDamage *= defenseCache.LightningReductionMul;
+            poisonDamage    *= defenseCache.PoisonReductionMul;
 
             // ========== 6단계: 합산 ==========
             float totalDamage = physDamage + fireDamage + iceDamage + lightningDamage + poisonDamage;
 
             // ========== 7단계: 회피/막기 판정 (합산 후 적용) ==========
-            if (Random.Range(0f, 100f) < targetStat.FinalEvasion)
+            if (Random.Range(0f, 100f) < defenseCache.EvasionRate)
             {
                 result.IsEvaded = true;
                 result.FinalDamage = 0;
                 return result;
             }
 
-            if (Random.Range(0f, 100f) < targetStat.FinalBlockChance)
+            if (Random.Range(0f, 100f) < defenseCache.BlockChance)
             {
                 result.IsBlocked = true;
-                float blockReduction = targetStat.FinalBlockReduction > 0
-                    ? targetStat.FinalBlockReduction / 100f
-                    : 0.5f;
-                totalDamage *= (1f - blockReduction);
+                totalDamage *= (1f - defenseCache.BlockReductionMul);
             }
 
             // ========== 8단계: 최소 데미지 보장 ==========
@@ -441,10 +270,26 @@ namespace ARPG.Skill.Combat
             result.PoisonDamage = poisonDamage;
 
             // ========== 특수 효과 계산 ==========
-            result.LifeStealAmount = totalDamage * (attackerStat.FinalLifeSteal / 100f);
+            result.LifeStealAmount = totalDamage * profile.LifeStealRatio;
             result.ThornsDamage = targetStat.FinalThorns;
 
             return result;
+        }
+
+        /// <summary>
+        /// SkillAttackProfileComponent를 조회. 없으면 즉시 빌드(lazy).
+        /// 정상 흐름에서는 CreateSkill/StatRecalc/SkillBookChange 시 dirty 마크되어 시스템이 갱신해두기 때문에
+        /// lazy build는 폴백/디버그용. 발생하면 invalidation 누락 가능성을 LogWarning으로 보고.
+        /// </summary>
+        private static SkillAttackProfileComponent GetOrBuildProfile(int skillEntityId)
+        {
+            if (AR.s.Component.TryGetComponent<SkillAttackProfileComponent>(skillEntityId, out var profile))
+                return profile;
+
+            Debug.LogWarning($"[DamageCalculator] SkillAttackProfile lazy rebuild - invalidation may have been missed (SkillEntityId: {skillEntityId})");
+            System_SkillAttackProfileCalculation.BuildProfile(skillEntityId);
+            AR.s.Component.TryGetComponent(skillEntityId, out profile);
+            return profile;
         }
 
         /// <summary>

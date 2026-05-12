@@ -758,6 +758,9 @@ namespace ARPG.Factory
             });
 
             AR.s.Component.AddComponent(skillEntityId, new SkillTargetComponent());
+
+            // 데미지 계산용 공격 프로파일 캐시 최초 빌드 요청 (다음 Update에서 System_SkillAttackProfileCalculation이 처리)
+            AR.s.Component.AddComponent(skillEntityId, new SkillAttackProfileDirtyTag());
         }
 
         private static List<int>? BuildEffectiveSkillEffectIds(int ownerEntityId, int slotIndex, SkillTable skillTable)

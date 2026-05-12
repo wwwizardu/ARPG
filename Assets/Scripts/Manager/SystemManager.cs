@@ -43,6 +43,9 @@ namespace ARPG.Systems
             System_StatCalculation statCalculationSystem = new();
             RegisterSystems(statCalculationSystem);
 
+            // Priority 55: Skill Attack Profile Calculation (Update) - 스킬 엔티티 데미지 계산용 캐시 재계산
+            RegisterSystems(new System_SkillAttackProfileCalculation());
+
             // Priority 50: AI Behavior System (FixedUpdate) - AI 상태 머신 및 행동 로직
             System_AI_Behavior aiBehaviorSystem = new();
             RegisterSystems(aiBehaviorSystem);

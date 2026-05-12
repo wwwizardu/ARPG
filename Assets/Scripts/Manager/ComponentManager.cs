@@ -24,6 +24,7 @@ namespace ARPG.Component
             { typeof(VelocityComponent), 500 },
             { typeof(StateComponent), 300 },
             { typeof(StatComponent), 300 },
+            { typeof(DamageDefenseCacheComponent), 300 }, // StatComponent와 1:1 — 재계산 시 항상 갱신
             { typeof(ColliderComponent), 500 },
 
             // HP/MP 재생 누적기 (FinalHpGeneration > 0 또는 FinalMpGeneration > 0인 엔티티만)
@@ -48,6 +49,8 @@ namespace ARPG.Component
             { typeof(SkillStateComponent), 50 },
             { typeof(SkillTimingComponent), 50 },
             { typeof(SkillTargetComponent), 50 },
+            { typeof(SkillAttackProfileComponent), 50 }, // 스킬 엔티티와 1:1 — 데미지 계산용 캐시
+            { typeof(SkillAttackProfileDirtyTag), 50 },  // 재계산 요청 태그 (처리 후 즉시 제거)
 
             // 매우 적게 사용되는 컴포넌트 (커맨드용, 일시적)
             { typeof(SkillCommandComponent), 20 },
