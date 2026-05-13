@@ -10,6 +10,7 @@ using UnityEngine.Networking;
 
 using ARPG.Component;
 using ARPG.Tables;
+using ARPG.Utility;
 using Newtonsoft.Json;
 using System.Collections;
 
@@ -34,13 +35,13 @@ namespace ARPG.Editor
 
             await DownloadTable<AiTable>("947794841&range=A:K", 1, SaveType.String);
 
-            await DownloadTable<MonsterTable>("483012127&range=A:O", 1, SaveType.String);
+            await DownloadTable<MonsterTable>("483012127&range=A:P", 1, SaveType.String);
 
             await DownloadTable<NpcTable>("1460299278&range=A:O", 1, SaveType.String);
 
             await DownloadTable<MonsterArchetypeTable>("1141585255&range=A:E", 1, SaveType.String);
 
-            await DownloadTable<StatTable>("318209064&range=A:AF", 1, SaveType.String);
+            await DownloadTable<StatTable>("318209064&range=A:AJ", 1, SaveType.String);
 
             await DownloadTable<ItemTable>("2064107837&range=A:R", 1, SaveType.String);
 
@@ -363,6 +364,13 @@ namespace ARPG.Editor
                 return;
             }
 
+            bool hasMaxResistColumns = values.Length >= 36;
+            if (values.Length > 32 && hasMaxResistColumns == false)
+            {
+                Debug.LogError($"[ParseStatTable] Invalid data length. Expected 32 legacy columns or at least 36 columns with MaxResist, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
             // values[0] 은 Id 이다.
             // values[1], values[2] 는 웹에서만 사용한다.
 
@@ -385,18 +393,35 @@ namespace ARPG.Editor
             table.IceResist = int.Parse(values[19]);
             table.LightningResist = int.Parse(values[20]);
             table.PoisonResist = int.Parse(values[21]);
-            table.Luck = int.Parse(values[22]);
-            table.BloodingRate = int.Parse(values[23]);
-            table.IgniteRate = int.Parse(values[24]);
+
+            int nextIndex = 22;
+            if (hasMaxResistColumns)
+            {
+                table.MaxFireResist = ParseIntSafe(values, nextIndex++, BalanceConstants.BaseMaxResistance);
+                table.MaxIceResist = ParseIntSafe(values, nextIndex++, BalanceConstants.BaseMaxResistance);
+                table.MaxLightningResist = ParseIntSafe(values, nextIndex++, BalanceConstants.BaseMaxResistance);
+                table.MaxPoisonResist = ParseIntSafe(values, nextIndex++, BalanceConstants.BaseMaxResistance);
+            }
+            else
+            {
+                table.MaxFireResist = BalanceConstants.BaseMaxResistance;
+                table.MaxIceResist = BalanceConstants.BaseMaxResistance;
+                table.MaxLightningResist = BalanceConstants.BaseMaxResistance;
+                table.MaxPoisonResist = BalanceConstants.BaseMaxResistance;
+            }
+
+            table.Luck = int.Parse(values[nextIndex++]);
+            table.BloodingRate = int.Parse(values[nextIndex++]);
+            table.IgniteRate = int.Parse(values[nextIndex++]);
 
             // 전투 시스템 확장 스탯 (2026-04-01 추가)
-            table.Evasion = int.Parse(values[25]);
-            table.BlockChance = int.Parse(values[26]);
-            table.BlockReduction = int.Parse(values[27]);
-            table.SkillDamage = int.Parse(values[28]);
-            table.CooldownReduction = int.Parse(values[29]);
-            table.LifeSteal = int.Parse(values[30]);
-            table.Thorns = int.Parse(values[31]);
+            table.Evasion = int.Parse(values[nextIndex++]);
+            table.BlockChance = int.Parse(values[nextIndex++]);
+            table.BlockReduction = int.Parse(values[nextIndex++]);
+            table.SkillDamage = int.Parse(values[nextIndex++]);
+            table.CooldownReduction = int.Parse(values[nextIndex++]);
+            table.LifeSteal = int.Parse(values[nextIndex++]);
+            table.Thorns = int.Parse(values[nextIndex]);
         }
 
         private static void ParseMonsterTable(MonsterTable table, string[] values)

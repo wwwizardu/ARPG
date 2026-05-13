@@ -297,10 +297,10 @@ namespace ARPG.Factory
         }
 
         /// <summary>
-        /// 몬스터에 Archetype × Level 스케일링 적용. HP와 모든 속성 공격력에 곱연산.
+        /// 몬스터에 Archetype × Level 스케일링 적용. HP와 전체 스킬 데미지 배율에 곱연산.
         /// MonsterTable.Archetype + effectiveLevel + BalanceConstants 곡선 사용.
         /// finalHp  = BaseHp  × HpPerLevel^(Level-1)  × Archetype.HpMul
-        /// finalDmg = BaseDmg × DmgPerLevel^(Level-1) × Archetype.DmgMul
+        /// finalDmg = (StatDamage + SkillTableDamage) × DmgPerLevel^(Level-1) × Archetype.DmgMul
         /// </summary>
         private static void ApplyMonsterArchetypeScaling(int entityId, MonsterTable table, int effectiveLevel)
         {
@@ -320,17 +320,12 @@ namespace ARPG.Factory
             float hpMul  = Mathf.Pow(BalanceConstants.HpPerLevel,  effectiveLevel - 1) * archetype.HpMul;
             float dmgMul = Mathf.Pow(BalanceConstants.DmgPerLevel, effectiveLevel - 1) * archetype.DmgMul;
 
-            stat.BaseMaxHp                = Mathf.Max(1, Mathf.RoundToInt(stat.BaseMaxHp * hpMul));
-            stat.BaseAttackMin            = Mathf.RoundToInt(stat.BaseAttackMin * dmgMul);
-            stat.BaseAttackMax            = Mathf.RoundToInt(stat.BaseAttackMax * dmgMul);
-            stat.BaseFireAttackMin        = Mathf.RoundToInt(stat.BaseFireAttackMin * dmgMul);
-            stat.BaseFireAttackMax        = Mathf.RoundToInt(stat.BaseFireAttackMax * dmgMul);
-            stat.BaseIceAttackMin         = Mathf.RoundToInt(stat.BaseIceAttackMin * dmgMul);
-            stat.BaseIceAttackMax         = Mathf.RoundToInt(stat.BaseIceAttackMax * dmgMul);
-            stat.BaseLightningAttackMin   = Mathf.RoundToInt(stat.BaseLightningAttackMin * dmgMul);
-            stat.BaseLightningAttackMax   = Mathf.RoundToInt(stat.BaseLightningAttackMax * dmgMul);
-            stat.BasePoisonAttackMin      = Mathf.RoundToInt(stat.BasePoisonAttackMin * dmgMul);
-            stat.BasePoisonAttackMax      = Mathf.RoundToInt(stat.BasePoisonAttackMax * dmgMul);
+            stat.BaseMaxHp = Mathf.Max(1, Mathf.RoundToInt(stat.BaseMaxHp * hpMul));
+
+            // SkillDamage는 System_SkillAttackProfileCalculation에서 전체 스킬 데미지에 곱해진다.
+            // 0은 기존 코드에서 100% fallback 의미로 쓰이므로 스케일링 전 기준값도 100으로 취급.
+            int baseSkillDamage = stat.BaseSkillDamage > 0 ? stat.BaseSkillDamage : 100;
+            stat.BaseSkillDamage = Mathf.Max(1, Mathf.RoundToInt(baseSkillDamage * dmgMul));
 
             stat.CopyBaseToFinal();
             stat.SetCurrentHpDirect(stat.FinalMaxHp);

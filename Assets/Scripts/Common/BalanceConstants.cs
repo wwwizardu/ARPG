@@ -15,5 +15,11 @@ namespace ARPG.Utility
 
         /// <summary>무기 DPS DropLevel당 배율 (HP 곡선보다 가파름 → 장비 교체 압박)</summary>
         public const float WeaponDpsPerLevel = 1.13f;
+
+        /// <summary>기본 최대 원소 저항 (%)</summary>
+        public const int BaseMaxResistance = 75;
+
+        /// <summary>최대 원소 저항 절대 상한 (%)</summary>
+        public const int MaxResistanceHardCap = 90;
     }
 }

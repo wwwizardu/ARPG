@@ -79,8 +79,10 @@ namespace ARPG.Skill.Combat
         /// </summary>
         public static float GetResistanceReduction(int resistance, int maxResist)
         {
-            if (resistance <= 0) return 0f;
-            int effective = Mathf.Min(resistance, maxResist);
+            if (resistance <= 0 || maxResist <= 0) return 0f;
+
+            int cappedMaxResist = Mathf.Clamp(maxResist, 0, BalanceConstants.MaxResistanceHardCap);
+            int effective = Mathf.Clamp(resistance, 0, cappedMaxResist);
             return effective / 100f;
         }
 

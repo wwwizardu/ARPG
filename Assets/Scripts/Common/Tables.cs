@@ -4,6 +4,7 @@ using System.Collections;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using ARPG.Component;
+using ARPG.Utility;
 using GE = GlobalEnum;
 
 
@@ -81,10 +82,10 @@ namespace ARPG.Tables
         [JsonProperty("IceResist")] public int IceResist;
         [JsonProperty("LightningResist")] public int LightningResist;
         [JsonProperty("PoisonResist")] public int PoisonResist;
-        [JsonProperty("MaxFireResist")] public int MaxFireResist = 75;
-        [JsonProperty("MaxIceResist")] public int MaxIceResist = 75;
-        [JsonProperty("MaxLightningResist")] public int MaxLightningResist = 75;
-        [JsonProperty("MaxPoisonResist")] public int MaxPoisonResist = 75;
+        [JsonProperty("MaxFireResist")] public int MaxFireResist = BalanceConstants.BaseMaxResistance;
+        [JsonProperty("MaxIceResist")] public int MaxIceResist = BalanceConstants.BaseMaxResistance;
+        [JsonProperty("MaxLightningResist")] public int MaxLightningResist = BalanceConstants.BaseMaxResistance;
+        [JsonProperty("MaxPoisonResist")] public int MaxPoisonResist = BalanceConstants.BaseMaxResistance;
         [JsonProperty("Luck")] public int Luck;
         [JsonProperty("BloodingRate")] public int BloodingRate;
         [JsonProperty("IgniteRate")] public int IgniteRate;

@@ -131,7 +131,7 @@ MonsterDmgAtLevel(N)   = BaseDmg   × 1.10^(N-1) × ArchetypeDmgMul
 
 **공식 (PoE 원본 단순 %)**:
 ```
-저항 감소율 = min(Resist, MaxResist) / 100
+저항 감소율 = min(Resist, MaxResist, 90) / 100
 최종 원소 데미지 = IncomingDamage × (1 - 저항 감소율)
 ```
 
