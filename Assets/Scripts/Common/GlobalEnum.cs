@@ -83,6 +83,10 @@ public class GlobalEnum
         IceResist,          // 냉기 저항
         LightningResist,    // 번개 저항
         PoisonResist,       // 독 저항
+        MaxFireResist,      // 화염 저항 최대 캡 (%, 기본 75)
+        MaxIceResist,       // 냉기 저항 최대 캡 (%, 기본 75)
+        MaxLightningResist, // 번개 저항 최대 캡 (%, 기본 75)
+        MaxPoisonResist,    // 독 저항 최대 캡 (%, 기본 75)
         Luck,               // 행운
         BloodingRate,       // 출혈 확률
         IgniteRate,         // 점화 확률
@@ -104,6 +108,19 @@ public class GlobalEnum
         LifeSteal,           // OnHit. Param1=흡혈 비율(%)
         ApplyBuff,           // OnHit. Param1=BuffId, Param2=스택, Param3=지속시간 오버라이드(0=기본)
         DelegateToTotem,     // OnSkillCommand. Param1=토템 생존시간(초)
+    }
+
+    /// <summary>
+    /// 몬스터 등급 (Archetype). MonsterArchetypeTable에서 HpMul/DmgMul 정의.
+    /// PoE2 톤: Normal(white) < Magic(blue) < Rare(yellow/엘리트) < Boss(액트보스) < EndgameBoss(Pinnacle)
+    /// </summary>
+    public enum MonsterArchetype
+    {
+        Normal,         // 일반 잡몹 (white) - HpMul 1
+        Magic,          // 마법몹 (blue) - HpMul 2
+        Rare,           // 희귀/엘리트 (yellow) - HpMul 5
+        Boss,           // 액트 보스 - HpMul 20
+        EndgameBoss,    // 엔드게임 보스 (Pinnacle) - HpMul 60
     }
 
     public enum EquipSlotType

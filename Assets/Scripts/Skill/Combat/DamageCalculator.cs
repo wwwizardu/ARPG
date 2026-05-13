@@ -73,13 +73,26 @@ namespace ARPG.Skill.Combat
         }
 
         /// <summary>
-        /// 저항 감소율 (공통) - resistance / (resistance + 100)
-        /// resistance 100 = 50% 감소, 200 = 66.6% 감소
+        /// 원소 저항 감소율 (PoE 원본 — 단순 % + Max Resist 캡).
+        /// 예) FireResist 65, MaxFireResist 75 → 65% 감소
+        /// 예) FireResist 100, MaxFireResist 75 → 75% 감소 (캡)
         /// </summary>
-        public static float GetResistanceReduction(int resistance)
+        public static float GetResistanceReduction(int resistance, int maxResist)
         {
             if (resistance <= 0) return 0f;
-            return resistance / (resistance + 100f);
+            int effective = Mathf.Min(resistance, maxResist);
+            return effective / 100f;
+        }
+
+        /// <summary>
+        /// 물리 아머 감소율 (PoE 원본) — Armor / (Armor + 10 × IncomingDamage).
+        /// 작은 다타 공격엔 잘 막아주고, 큰 한 방엔 거의 무력 — 회피/저항 등 다른 방어층으로 대응 강제.
+        /// 들어오는 데미지에 의존하므로 미리 캐시 불가 — 매 히트 시 계산.
+        /// </summary>
+        public static float GetArmorReduction(int armor, float incomingDamage)
+        {
+            if (armor <= 0 || incomingDamage <= 0f) return 0f;
+            return armor / (armor + 10f * incomingDamage);
         }
 
         /// <summary>
@@ -236,7 +249,8 @@ namespace ARPG.Skill.Combat
 
             // ========== 5단계: 속성별 저항 감소 (DamageDefenseCache 사용) ==========
             DamageDefenseCacheComponent defenseCache = GetOrBuildDefenseCache(targetId, targetStat);
-            physDamage      *= defenseCache.PhysReductionMul;
+            // 아머는 PoE 원본 공식이 들어오는 데미지에 의존 → 매 히트 시 계산
+            physDamage      *= 1f - GetArmorReduction(defenseCache.Armor, physDamage);
             fireDamage      *= defenseCache.FireReductionMul;
             iceDamage       *= defenseCache.IceReductionMul;
             lightningDamage *= defenseCache.LightningReductionMul;

@@ -13,6 +13,9 @@ namespace ARPG.Data
 
         private ImmutableDictionary<int, Tables.CreatureTable> _creatureTable = null!;
         private ImmutableDictionary<int, Tables.MonsterTable> _monsterTable = null!;
+        private ImmutableDictionary<int, Tables.MonsterArchetypeTable> _monsterArchetypeTable = null!;
+        // Archetype enum → Table 빠른 조회 캐시 (LoadLate에서 구축)
+        private Dictionary<GlobalEnum.MonsterArchetype, Tables.MonsterArchetypeTable> _monsterArchetypeByEnum = new();
         private ImmutableDictionary<int, Tables.NpcTable> _npcTable = null!;
         private ImmutableDictionary<int, Tables.StatTable> _statTable = null!;
         private ImmutableDictionary<int, Tables.ItemTable> _itemTable = null!;
@@ -50,6 +53,7 @@ namespace ARPG.Data
             await Task.WhenAll(
                 LoadTable<Tables.CreatureTable>("CreatureTable.bytes", tables => _creatureTable = tables),
                 LoadTable<Tables.MonsterTable>("MonsterTable.bytes", tables => _monsterTable = tables),
+                LoadTable<Tables.MonsterArchetypeTable>("MonsterArchetypeTable.bytes", tables => _monsterArchetypeTable = tables),
                 LoadTable<Tables.NpcTable>("NpcTable.bytes", tables => _npcTable = tables),
                 LoadTable<Tables.StatTable>("StatTable.bytes", tables => _statTable = tables),
                 LoadTable<Tables.ItemTable>("ItemTable.bytes", tables => _itemTable = tables),
@@ -179,6 +183,15 @@ namespace ARPG.Data
                     _jobBonusByJobType.Add(table.JobType, table);
             }
 
+            // MonsterArchetypeTable: Archetype enum 인덱스 구축
+            _monsterArchetypeByEnum.Clear();
+            foreach (var table in _monsterArchetypeTable.Values)
+            {
+                table.LoadLate();
+                if (_monsterArchetypeByEnum.ContainsKey(table.Archetype) == false)
+                    _monsterArchetypeByEnum.Add(table.Archetype, table);
+            }
+
             // ZoneTable: Cap 조회용 정렬 인덱스 구축 (Zone 번호=Id 오름차순)
             _zoneTableSortedIds.Clear();
             foreach (var key in _zoneTable.Keys)
@@ -209,6 +222,18 @@ namespace ARPG.Data
                 return table;
             }
 
+            return null;
+        }
+
+        /// <summary>
+        /// MonsterArchetype enum으로 해당 등급 테이블 조회.
+        /// </summary>
+        public Tables.MonsterArchetypeTable? GetMonsterArchetype(GlobalEnum.MonsterArchetype archetype)
+        {
+            if (_monsterArchetypeByEnum.TryGetValue(archetype, out var table))
+            {
+                return table;
+            }
             return null;
         }
 

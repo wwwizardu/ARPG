@@ -105,8 +105,7 @@ namespace ARPG.Systems
             int totalDamage = buff.TickDamage * buff.StackCount;
 
             // 속성 저항 적용 (DamageType에 따라 저항 계산)
-            int resistance = GetResistanceForDamageType(buff.DamageType, targetStat);
-            float reduction = DamageCalculator.GetResistanceReduction(resistance);
+            float reduction = GetReductionForDamageType(buff.DamageType, targetStat, totalDamage);
             int finalDamage = Mathf.Max(1, Mathf.RoundToInt(totalDamage * (1f - reduction)));
 
             // 데미지 적용 (양수면 데미지, 음수면 힐)
@@ -151,16 +150,27 @@ namespace ARPG.Systems
         /// <summary>
         /// DamageType에 대응하는 타겟의 저항값 반환
         /// </summary>
-        private int GetResistanceForDamageType(GlobalEnum.DamageType damageType, StatComponent targetStat)
+        /// <summary>
+        /// DoT 데미지에 적용할 감소율 산출.
+        /// 물리: PoE 원본 아머 공식 (Armor / (Armor + 10×Damage)) — 들어오는 데미지에 의존
+        /// 원소: PoE 원본 단순 % + Max Resist 캡
+        /// </summary>
+        private float GetReductionForDamageType(GlobalEnum.DamageType damageType, StatComponent targetStat, int incomingDamage)
         {
             switch (damageType)
             {
-                case GlobalEnum.DamageType.Physics:   return targetStat.FinalDefense;
-                case GlobalEnum.DamageType.Fire:       return targetStat.FinalFireResist;
-                case GlobalEnum.DamageType.Ice:        return targetStat.FinalIceResist;
-                case GlobalEnum.DamageType.Lightning:  return targetStat.FinalLightningResist;
-                case GlobalEnum.DamageType.Poison:     return targetStat.FinalPoisonResist;
-                default:                               return 0;
+                case GlobalEnum.DamageType.Physics:
+                    return DamageCalculator.GetArmorReduction(targetStat.FinalDefense, incomingDamage);
+                case GlobalEnum.DamageType.Fire:
+                    return DamageCalculator.GetResistanceReduction(targetStat.FinalFireResist, targetStat.FinalMaxFireResist);
+                case GlobalEnum.DamageType.Ice:
+                    return DamageCalculator.GetResistanceReduction(targetStat.FinalIceResist, targetStat.FinalMaxIceResist);
+                case GlobalEnum.DamageType.Lightning:
+                    return DamageCalculator.GetResistanceReduction(targetStat.FinalLightningResist, targetStat.FinalMaxLightningResist);
+                case GlobalEnum.DamageType.Poison:
+                    return DamageCalculator.GetResistanceReduction(targetStat.FinalPoisonResist, targetStat.FinalMaxPoisonResist);
+                default:
+                    return 0f;
             }
         }
     }

@@ -112,8 +112,12 @@ namespace ARPG.Monster
 
             Vector3 spawnPos = new Vector3(position.x, position.y, -0.05f);
 
+            // 청크 거리 → Zone → 몬스터 레벨 (BALANCE_DESIGN: zone과 monster level 1:1 매핑).
+            // 향후 ZoneTable에 MonsterLevel 컬럼을 둬서 디자이너가 곡선 튜닝 가능.
+            int monsterLevel = AR.s.Map.GetZone(chunkCoord);
+
             // EntityFactory를 통해 몬스터 생성 (Addressable)
-            var (entityId, entity) = await EntityFactory.CreateMonster(monsterTableId, spawnPos, gameScene.MonsterRoot);
+            var (entityId, entity) = await EntityFactory.CreateMonster(monsterTableId, spawnPos, gameScene.MonsterRoot, monsterLevel);
 
             if (entityId < 0 || entity == null)
                 return -1;

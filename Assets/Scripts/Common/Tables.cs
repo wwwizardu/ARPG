@@ -81,6 +81,10 @@ namespace ARPG.Tables
         [JsonProperty("IceResist")] public int IceResist;
         [JsonProperty("LightningResist")] public int LightningResist;
         [JsonProperty("PoisonResist")] public int PoisonResist;
+        [JsonProperty("MaxFireResist")] public int MaxFireResist = 75;
+        [JsonProperty("MaxIceResist")] public int MaxIceResist = 75;
+        [JsonProperty("MaxLightningResist")] public int MaxLightningResist = 75;
+        [JsonProperty("MaxPoisonResist")] public int MaxPoisonResist = 75;
         [JsonProperty("Luck")] public int Luck;
         [JsonProperty("BloodingRate")] public int BloodingRate;
         [JsonProperty("IgniteRate")] public int IgniteRate;
@@ -104,6 +108,7 @@ namespace ARPG.Tables
         [JsonProperty("DropRateBonus")] public int DropRateBonus;
         [JsonProperty("DropRarityBonus")] public int DropRarityBonus;
         [JsonProperty("Level")] public int Level;
+        [JsonProperty("Archetype")] public GE.MonsterArchetype Archetype = GE.MonsterArchetype.Normal;
 
         [JsonIgnore] public WeaponBaseStatTable? Weapon;
         [JsonIgnore] public AiTable? AiTable;
@@ -133,6 +138,20 @@ namespace ARPG.Tables
                 AiTable = null;
             }
         }
+    }
+
+    /// <summary>
+    /// 몬스터 등급별 배율 정의. EntityFactory.CreateMonster가
+    /// finalHp = BaseHp × HpPerLevel^(Level-1) × HpMul 공식에 사용.
+    /// 곡선 상수(HpPerLevel 등)는 BalanceConstants.cs 참조.
+    /// </summary>
+    [Serializable]
+    public class MonsterArchetypeTable : TableBase
+    {
+        [JsonProperty("Archetype")] public GE.MonsterArchetype Archetype;
+        [JsonProperty("HpMul")] public float HpMul = 1f;
+        [JsonProperty("DmgMul")] public float DmgMul = 1f;
+        [JsonProperty("Note")] public string Note = string.Empty;
     }
 
     [Serializable]

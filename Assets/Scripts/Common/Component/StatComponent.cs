@@ -38,6 +38,10 @@ namespace ARPG.Component
         public int BaseIceResist;       // 기본 냉기 저항
         public int BaseLightningResist; // 기본 번개 저항
         public int BasePoisonResist;    // 기본 독 저항
+        public int BaseMaxFireResist;       // 기본 화염 저항 캡 (%)
+        public int BaseMaxIceResist;        // 기본 냉기 저항 캡 (%)
+        public int BaseMaxLightningResist;  // 기본 번개 저항 캡 (%)
+        public int BaseMaxPoisonResist;     // 기본 독 저항 캡 (%)
         public int BaseLuck;            // 기본 행운
         public int BaseBloodingRate;    // 기본 출혈 확률
         public int BaseIgniteRate;      // 기본 점화 확률
@@ -84,6 +88,10 @@ namespace ARPG.Component
         public int FinalIceResist;
         public int FinalLightningResist;
         public int FinalPoisonResist;
+        public int FinalMaxFireResist;
+        public int FinalMaxIceResist;
+        public int FinalMaxLightningResist;
+        public int FinalMaxPoisonResist;
         public int FinalLuck;
         public int FinalBloodingRate;
         public int FinalIgniteRate;
@@ -154,6 +162,10 @@ namespace ARPG.Component
             BaseIceResist = statTable.IceResist;
             BaseLightningResist = statTable.LightningResist;
             BasePoisonResist = statTable.PoisonResist;
+            BaseMaxFireResist = statTable.MaxFireResist;
+            BaseMaxIceResist = statTable.MaxIceResist;
+            BaseMaxLightningResist = statTable.MaxLightningResist;
+            BaseMaxPoisonResist = statTable.MaxPoisonResist;
             BaseLuck = statTable.Luck;
             BaseBloodingRate = statTable.BloodingRate;
             BaseIgniteRate = statTable.IgniteRate;
@@ -199,6 +211,10 @@ namespace ARPG.Component
             FinalIceResist = BaseIceResist;
             FinalLightningResist = BaseLightningResist;
             FinalPoisonResist = BasePoisonResist;
+            FinalMaxFireResist = BaseMaxFireResist;
+            FinalMaxIceResist = BaseMaxIceResist;
+            FinalMaxLightningResist = BaseMaxLightningResist;
+            FinalMaxPoisonResist = BaseMaxPoisonResist;
             FinalLuck = BaseLuck;
             FinalBloodingRate = BaseBloodingRate;
             FinalIgniteRate = BaseIgniteRate;

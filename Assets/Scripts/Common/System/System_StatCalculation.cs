@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using ARPG.Component;
 using ARPG.Message;
+using ARPG.Skill.Combat;
 using ARPG.Utility;
 using UnityEngine;
 using GE = GlobalEnum;
@@ -137,27 +138,19 @@ namespace ARPG.Systems
         public static void BuildDefenseCache(int entityId, StatComponent stat)
         {
             DamageDefenseCacheComponent cache;
-            cache.PhysReductionMul      = 1f - DamageCalculator_GetResistanceReduction(stat.FinalDefense);
-            cache.FireReductionMul      = 1f - DamageCalculator_GetResistanceReduction(stat.FinalFireResist);
-            cache.IceReductionMul       = 1f - DamageCalculator_GetResistanceReduction(stat.FinalIceResist);
-            cache.LightningReductionMul = 1f - DamageCalculator_GetResistanceReduction(stat.FinalLightningResist);
-            cache.PoisonReductionMul    = 1f - DamageCalculator_GetResistanceReduction(stat.FinalPoisonResist);
+            // 아머는 raw 값만 보관 — PoE 원본 공식 Armor / (Armor + 10×Damage)는 매 히트 시 계산
+            cache.Armor                 = stat.FinalDefense;
+            // 원소 저항 — PoE 원본 단순 % + Max Resist 캡
+            cache.FireReductionMul      = 1f - DamageCalculator.GetResistanceReduction(stat.FinalFireResist,      stat.FinalMaxFireResist);
+            cache.IceReductionMul       = 1f - DamageCalculator.GetResistanceReduction(stat.FinalIceResist,       stat.FinalMaxIceResist);
+            cache.LightningReductionMul = 1f - DamageCalculator.GetResistanceReduction(stat.FinalLightningResist, stat.FinalMaxLightningResist);
+            cache.PoisonReductionMul    = 1f - DamageCalculator.GetResistanceReduction(stat.FinalPoisonResist,    stat.FinalMaxPoisonResist);
             cache.EvasionRate           = stat.FinalEvasion;
             cache.BlockChance           = stat.FinalBlockChance;
             cache.BlockReductionMul     = stat.FinalBlockReduction > 0
                 ? stat.FinalBlockReduction / 100f
                 : 0.5f;
             AR.s.Component.SetComponent(entityId, cache);
-        }
-
-        /// <summary>
-        /// resistance / (resistance + 100) — DamageCalculator.GetResistanceReduction과 동일 공식.
-        /// 순환 의존 피하려고 여기 재구현. 수식 변경 시 두 곳 모두 수정 필요.
-        /// </summary>
-        private static float DamageCalculator_GetResistanceReduction(int resistance)
-        {
-            if (resistance <= 0) return 0f;
-            return resistance / (resistance + 100f);
         }
 
         /// <summary>
@@ -243,6 +236,18 @@ namespace ARPG.Systems
                     break;
                 case GE.Stat.PoisonResist:
                     stat.FinalPoisonResist = ApplyValue(stat.FinalPoisonResist, modifier);
+                    break;
+                case GE.Stat.MaxFireResist:
+                    stat.FinalMaxFireResist = ApplyValue(stat.FinalMaxFireResist, modifier);
+                    break;
+                case GE.Stat.MaxIceResist:
+                    stat.FinalMaxIceResist = ApplyValue(stat.FinalMaxIceResist, modifier);
+                    break;
+                case GE.Stat.MaxLightningResist:
+                    stat.FinalMaxLightningResist = ApplyValue(stat.FinalMaxLightningResist, modifier);
+                    break;
+                case GE.Stat.MaxPoisonResist:
+                    stat.FinalMaxPoisonResist = ApplyValue(stat.FinalMaxPoisonResist, modifier);
                     break;
                 case GE.Stat.Luck:
                     stat.FinalLuck = ApplyValue(stat.FinalLuck, modifier);

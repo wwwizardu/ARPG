@@ -64,6 +64,10 @@ namespace ARPG.Factory
             // 4. ECS 컴포넌트 추가
             await AddCreatureComponents(entityId, table, entity);
 
+            // 4-1. Archetype × Level 스탯 스케일링 (HP / 모든 속성 공격력)
+            int effectiveLevel = level > 0 ? level : table.Level;
+            ApplyMonsterArchetypeScaling(entityId, table, effectiveLevel);
+
             // MonsterTag (System_EntityDestroy에서 MonsterManager 연동에 사용)
             AR.s.Component.AddComponent(entityId, new MonsterTag());
 
@@ -290,6 +294,47 @@ namespace ARPG.Factory
 
             Debug.Log($"[EntityFactory] Player created - EntityId: {entityId}, TableId: {creatureTableId}, Name: {table.Name}");
             return (entityId, entity);
+        }
+
+        /// <summary>
+        /// 몬스터에 Archetype × Level 스케일링 적용. HP와 모든 속성 공격력에 곱연산.
+        /// MonsterTable.Archetype + effectiveLevel + BalanceConstants 곡선 사용.
+        /// finalHp  = BaseHp  × HpPerLevel^(Level-1)  × Archetype.HpMul
+        /// finalDmg = BaseDmg × DmgPerLevel^(Level-1) × Archetype.DmgMul
+        /// </summary>
+        private static void ApplyMonsterArchetypeScaling(int entityId, MonsterTable table, int effectiveLevel)
+        {
+            if (effectiveLevel <= 0)
+                return;
+
+            MonsterArchetypeTable? archetype = AR.s.Data.GetMonsterArchetype(table.Archetype);
+            if (archetype == null)
+            {
+                Debug.LogWarning($"[EntityFactory] MonsterArchetypeTable not found for {table.Archetype} (MonsterId: {table.Id})");
+                return;
+            }
+
+            if (AR.s.Component.TryGetComponent<StatComponent>(entityId, out var stat) == false)
+                return;
+
+            float hpMul  = Mathf.Pow(BalanceConstants.HpPerLevel,  effectiveLevel - 1) * archetype.HpMul;
+            float dmgMul = Mathf.Pow(BalanceConstants.DmgPerLevel, effectiveLevel - 1) * archetype.DmgMul;
+
+            stat.BaseMaxHp                = Mathf.Max(1, Mathf.RoundToInt(stat.BaseMaxHp * hpMul));
+            stat.BaseAttackMin            = Mathf.RoundToInt(stat.BaseAttackMin * dmgMul);
+            stat.BaseAttackMax            = Mathf.RoundToInt(stat.BaseAttackMax * dmgMul);
+            stat.BaseFireAttackMin        = Mathf.RoundToInt(stat.BaseFireAttackMin * dmgMul);
+            stat.BaseFireAttackMax        = Mathf.RoundToInt(stat.BaseFireAttackMax * dmgMul);
+            stat.BaseIceAttackMin         = Mathf.RoundToInt(stat.BaseIceAttackMin * dmgMul);
+            stat.BaseIceAttackMax         = Mathf.RoundToInt(stat.BaseIceAttackMax * dmgMul);
+            stat.BaseLightningAttackMin   = Mathf.RoundToInt(stat.BaseLightningAttackMin * dmgMul);
+            stat.BaseLightningAttackMax   = Mathf.RoundToInt(stat.BaseLightningAttackMax * dmgMul);
+            stat.BasePoisonAttackMin      = Mathf.RoundToInt(stat.BasePoisonAttackMin * dmgMul);
+            stat.BasePoisonAttackMax      = Mathf.RoundToInt(stat.BasePoisonAttackMax * dmgMul);
+
+            stat.CopyBaseToFinal();
+            stat.SetCurrentHpDirect(stat.FinalMaxHp);
+            AR.s.Component.SetComponent(entityId, stat);
         }
 
         #region 공통 컴포넌트 추가 메서드

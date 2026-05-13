@@ -38,6 +38,8 @@ namespace ARPG.Editor
 
             await DownloadTable<NpcTable>("1460299278&range=A:O", 1, SaveType.String);
 
+            await DownloadTable<MonsterArchetypeTable>("1141585255&range=A:E", 1, SaveType.String);
+
             await DownloadTable<StatTable>("318209064&range=A:AF", 1, SaveType.String);
 
             await DownloadTable<ItemTable>("2064107837&range=A:R", 1, SaveType.String);
@@ -60,12 +62,7 @@ namespace ARPG.Editor
             // Phase 1: SkillEffect 합성 시스템용 테이블 (+ 스킬 페이지 비용 메타데이터 + Kind 분류 컬럼)
             await DownloadTable<SkillEffectTable>("1681865950&range=A:M", 1, SaveType.String);
 
-            // SKILL_RUNE_DESIGN P-1: 스킬북 등급별 룰(페이지 용량/슬롯)
-            // 컬럼 순서: Id(=Tier), PageCapacity, PageSlots
-            // 시트 신규 탭을 만든 뒤 아래 줄을 활성화하고 GID를 채울 것.
-            // 그 전까지는 손으로 만든 Assets/_BinaryData/TableData/SkillBookTable.bytes 가 사용되며,
-            // 그것마저 누락된 경우 DataManager가 코드 기본값(8/24/60, 1/3/5)으로 fallback한다.
-             await DownloadTable<SkillBookTable>("1726438368&range=A:C", 1, SaveType.String);
+            await DownloadTable<SkillBookTable>("1726438368&range=A:C", 1, SaveType.String);
 
             // 장판(지속 영역 효과) 테이블
             await DownloadTable<AreaEffectTable>("1891935594&range=A:M", 1, SaveType.String);
@@ -150,6 +147,10 @@ namespace ARPG.Editor
                 if (table is MonsterTable monsterTable)
                 {
                     ParseMonsterTable(monsterTable, values);
+                }
+                else if (table is MonsterArchetypeTable monsterArchetypeTable)
+                {
+                    ParseMonsterArchetypeTable(monsterArchetypeTable, values);
                 }
                 else if (table is NpcTable npcTable)
                 {
@@ -420,6 +421,29 @@ namespace ARPG.Editor
             table.DropRateBonus = int.Parse(values[12]);
             table.DropRarityBonus = int.Parse(values[13]);
             table.Level = int.Parse(values[14]);
+            // Archetype은 시트에 컬럼 있으면 읽음. 없으면 C# 기본값 Normal 유지.
+            table.Archetype = ParseEnumSafe(values, 15, GlobalEnum.MonsterArchetype.Normal);
+        }
+
+        /// <summary>
+        /// MonsterArchetypeTable 파싱.
+        /// 컬럼: A=Id, B=Archetype, C=HpMul, D=DmgMul, E=Note
+        /// </summary>
+        private static void ParseMonsterArchetypeTable(MonsterArchetypeTable table, string[] values)
+        {
+            if (values.Length < 4)
+            {
+                Debug.LogError($"[ParseMonsterArchetypeTable] Invalid data length. Expected at least 4, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            table.Archetype = ParseEnumSafe(values, 1, GlobalEnum.MonsterArchetype.Normal);
+            table.HpMul = ParseFloatSafe(values, 2);
+            table.DmgMul = ParseFloatSafe(values, 3);
+            if (values.Length > 4)
+            {
+                table.Note = values[4];
+            }
         }
 
         private static void ParseItemTable(ItemTable table, string[] values)
