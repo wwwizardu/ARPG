@@ -86,6 +86,9 @@ namespace ARPG.Systems
                 return;
 
             SparseSet<TransformComponent> transformPool = _componentManager.GetComponentPool<TransformComponent>();
+            SparseSet<VelocityComponent> velocityPool = _componentManager.GetComponentPool<VelocityComponent>();
+            SparseSet<ColliderComponent> colliderPool = _componentManager.GetComponentPool<ColliderComponent>();
+            SparseSet<JumpComponent> jumpPool = _componentManager.GetComponentPool<JumpComponent>();
 
             // TransformComponent를 가진 모든 엔티티 순회
             for (int i = 0; i < transformPool.Count; i++)
@@ -103,21 +106,23 @@ namespace ARPG.Systems
                 GameObject gameObject = entityBase.gameObject;
 
                 // Velocity를 이용해 Position 업데이트
-                if (_componentManager.TryGetComponent<VelocityComponent>(entityId, out var velocity))
+                if (velocityPool.TryGet(entityId, out var velocity))
                 {
                     if (0 < velocity.Speed)
                     {
                         Vector2 intendedDelta = velocity.Velocity * inDeltaTime;
 
                         // ColliderComponent가 있으면 축 분리 슬라이딩, 없으면 통과
-                        if (_componentManager.TryGetComponent<ColliderComponent>(entityId, out var collider))
+                        if (colliderPool.TryGet(entityId, out var collider))
                         {
                             transformComponent.Position = CollisionUtil.ResolveAxisSeparated(
                                 transformComponent.Position, intendedDelta, collider.MoveRadius);
+                            transformPool.SetByIndex(i, transformComponent);
                         }
                         else
                         {
                             transformComponent.Position += intendedDelta;
+                            transformPool.SetByIndex(i, transformComponent);
                         }
 
                         // 업데이트된 Position 저장
@@ -141,7 +146,7 @@ namespace ARPG.Systems
                 );
 
                 // 점프 중이면 스프라이트만 위로 띄움 (그림자는 지면에 그대로)
-                ApplyJumpHeight(entityId, entityBase);
+                ApplyJumpHeight(entityId, entityBase, jumpPool);
             }
         }
 
@@ -149,14 +154,14 @@ namespace ARPG.Systems
         /// 점프 높이를 스프라이트에 적용. 그림자는 지면에 고정되므로 건드리지 않음.
         /// 그림자 스케일은 높이에 따라 축소 (깊이감)
         /// </summary>
-        private void ApplyJumpHeight(int entityId, EntityBase entityBase)
+        private void ApplyJumpHeight(int entityId, EntityBase entityBase, SparseSet<JumpComponent> jumpPool)
         {
             if (entityBase.SpriteRenderer == null)
                 return;
 
             Transform spriteTransform = entityBase.SpriteRenderer.transform;
 
-            if (_componentManager.TryGetComponent<JumpComponent>(entityId, out var jump))
+            if (jumpPool.TryGet(entityId, out var jump))
             {
                 // 스프라이트만 위로 오프셋
                 Vector3 localPos = spriteTransform.localPosition;

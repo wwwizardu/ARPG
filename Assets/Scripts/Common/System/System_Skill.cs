@@ -32,7 +32,12 @@ namespace ARPG.Systems
         public void OnFixedUpdate(float inFixedDeltaTime)
         {
             // SkillComponent를 가진 모든 스킬 엔티티 순회
-            SparseSet<SkillComponent> skillPool = AR.s.Component.GetComponentPool<SkillComponent>();
+            ComponentManager cm = AR.s.Component;
+            SparseSet<SkillComponent> skillPool = cm.GetComponentPool<SkillComponent>();
+            SparseSet<SkillStateComponent> skillStatePool = cm.GetComponentPool<SkillStateComponent>();
+            SparseSet<SkillTimingComponent> skillTimingPool = cm.GetComponentPool<SkillTimingComponent>();
+            SparseSet<SkillCommandComponent> skillCommandPool = cm.GetComponentPool<SkillCommandComponent>();
+            SparseSet<StateComponent> statePool = cm.GetComponentPool<StateComponent>();
 
             for (int i = 0; i < skillPool.Count; i++)
             {
@@ -44,16 +49,16 @@ namespace ARPG.Systems
                     continue;
 
                 // 상태 컴포넌트가 없으면 건너뜀
-                if (AR.s.Component.TryGetComponent<SkillStateComponent>(skillEntityId, out var skillState) == false)
+                if (skillStatePool.TryGet(skillEntityId, out var skillState) == false)
                     continue;
 
                 if (skillState.IsRunning == true) // 스킬이 실행 중이면 스킬 업데이트
                 {
                     // 타이밍 컴포넌트가 없으면 건너뜀
-                    if (AR.s.Component.TryGetComponent<SkillTimingComponent>(skillEntityId, out var timing) == false)
+                    if (skillTimingPool.TryGet(skillEntityId, out var timing) == false)
                         continue;
 
-                    if (ShouldCancelSkill(skill) == true)
+                    if (ShouldCancelSkill(skill, statePool) == true)
                     {
                         // 실행 중인 스킬이 있으면 취소
                         StopSkillInternal(skillEntityId, ref skill, ref skillState);
@@ -69,7 +74,7 @@ namespace ARPG.Systems
                     if (skillState.CooldownRemaining > 0f)
                     {
                         skillState.CooldownRemaining -= inFixedDeltaTime;
-                        AR.s.Component.SetComponent(skillEntityId, skillState);
+                        cm.SetComponent(skillEntityId, skillState);
                     }
                 }
 
@@ -77,7 +82,7 @@ namespace ARPG.Systems
                 if (skillState.IsRunning == false)
                 {
                     // 캐릭터 엔티티에서 커맨드 확인
-                    if (AR.s.Component.TryGetComponent<SkillCommandComponent>(skill.OwnerEntityId, out var command) == false)
+                    if (skillCommandPool.TryGet(skill.OwnerEntityId, out var command) == false)
                         continue;
 
                     // 커맨드 스킬 엔티티가 아니라면 다음꺼
@@ -238,10 +243,10 @@ namespace ARPG.Systems
         /// <summary>
         /// 특정 캐릭터 상태에서 스킬이 취소되어야 하는지 확인
         /// </summary>
-        private bool ShouldCancelSkill(SkillComponent inSkill)
+        private bool ShouldCancelSkill(SkillComponent inSkill, SparseSet<StateComponent> statePool)
         {
             // 2. 캐릭터 상태 확인 - 스킬 취소가 필요한 상태인지 체크
-            if (AR.s.Component.TryGetComponent<StateComponent>(inSkill.OwnerEntityId, out var charState) == false)
+            if (statePool.TryGet(inSkill.OwnerEntityId, out var charState) == false)
             {
                 Debug.LogError($"[System_Skill] StateComponent not found for OwnerEntityId: {inSkill.OwnerEntityId}");
                 return false; // 상태 컴포넌트가 없으면 취소하지 않음

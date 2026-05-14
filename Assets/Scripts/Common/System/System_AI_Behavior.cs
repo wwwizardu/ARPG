@@ -18,13 +18,14 @@ namespace ARPG.Systems
         {
             ComponentManager componentManager = AR.s.Component;
             SparseSet<AIBehaviorTypeComponent> behaviorPool = componentManager.GetComponentPool<AIBehaviorTypeComponent>();
+            SparseSet<AIStateComponent> statePool = componentManager.GetComponentPool<AIStateComponent>();
 
             for (int i = 0; i < behaviorPool.Count; i++)
             {
                 int entityId = behaviorPool.GetEntityId(i);
 
                 // AI 상태 컴포넌트 확인
-                if (componentManager.TryGetComponent<AIStateComponent>(entityId, out var stateComponent) == false)
+                if (statePool.TryGet(entityId, out var stateComponent) == false)
                     continue;
 
                 // 행동 타입 가져오기
