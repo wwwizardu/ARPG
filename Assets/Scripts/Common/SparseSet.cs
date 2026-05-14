@@ -1,10 +1,11 @@
+using System;
 using System.Collections.Generic;
 
 namespace ARPG
 {
     /// <summary>
-    /// 컴포넌트 풀의 공통 인터페이스
-    /// 타입에 관계없이 Entity 제거 기능을 제공
+    /// Common component pool interface.
+    /// Allows removing/checking an entity without knowing the component type.
     /// </summary>
     public interface IComponentPool
     {
@@ -14,9 +15,17 @@ namespace ARPG
 
     public class SparseSet<T> : IComponentPool
     {
-        private readonly Dictionary<int, int> _sparse;  // Entity ID -> Dense 배열의 인덱스
-        private int[] _dense;   // 연속된 Entity ID들
-        private T[] _data;      // 연속된 실제 데이터
+        private const int DefaultSparseCapacity = 1024;
+        private const int MaxDirectEntityId = 65536;
+
+        // Direct sparse path: entityId -> denseIndex + 1. Zero means missing.
+        private int[] _sparse;
+
+        // Large/deterministic IDs stay here so they do not force huge sparse arrays.
+        private readonly Dictionary<int, int> _fallbackSparse;
+
+        private int[] _dense;
+        private T[] _data;
         private int _count;
 
         public int Count => _count;
@@ -24,129 +33,195 @@ namespace ARPG
 
         public SparseSet(int capacity = 100)
         {
-            _sparse = new Dictionary<int, int>();
-            _dense = new int[capacity];
-            _data = new T[capacity];
+            int denseCapacity = Math.Max(1, capacity);
+            int sparseCapacity = Math.Min(MaxDirectEntityId, Math.Max(DefaultSparseCapacity, denseCapacity));
+
+            _sparse = new int[sparseCapacity];
+            _fallbackSparse = new Dictionary<int, int>();
+            _dense = new int[denseCapacity];
+            _data = new T[denseCapacity];
             _count = 0;
         }
 
-        // Dense 배열 동적 확장
+        private static bool CanUseDirectSparse(int entityId)
+        {
+            return entityId >= 0 && entityId < MaxDirectEntityId;
+        }
+
+        private void EnsureDenseCapacity()
+        {
+            if (_count < _dense.Length)
+                return;
+
+            int newCapacity = _dense.Length > 0 ? _dense.Length * 2 : 1;
+            Resize(newCapacity);
+        }
+
+        private void EnsureSparseCapacity(int entityId)
+        {
+            if (entityId < _sparse.Length)
+                return;
+
+            int newCapacity = _sparse.Length > 0 ? _sparse.Length : DefaultSparseCapacity;
+            while (newCapacity <= entityId && newCapacity < MaxDirectEntityId)
+            {
+                newCapacity *= 2;
+            }
+
+            if (newCapacity > MaxDirectEntityId)
+            {
+                newCapacity = MaxDirectEntityId;
+            }
+
+            if (newCapacity > _sparse.Length)
+            {
+                Array.Resize(ref _sparse, newCapacity);
+            }
+        }
+
+        private bool TryGetDenseIndex(int entityId, out int denseIndex)
+        {
+            if (CanUseDirectSparse(entityId))
+            {
+                if (entityId >= _sparse.Length)
+                {
+                    denseIndex = -1;
+                    return false;
+                }
+
+                int storedIndex = _sparse[entityId];
+                if (storedIndex == 0)
+                {
+                    denseIndex = -1;
+                    return false;
+                }
+
+                denseIndex = storedIndex - 1;
+                return denseIndex >= 0 && denseIndex < _count && _dense[denseIndex] == entityId;
+            }
+
+            if (_fallbackSparse.TryGetValue(entityId, out denseIndex) == false)
+            {
+                denseIndex = -1;
+                return false;
+            }
+
+            return denseIndex >= 0 && denseIndex < _count && _dense[denseIndex] == entityId;
+        }
+
+        private void SetSparseIndex(int entityId, int denseIndex)
+        {
+            if (CanUseDirectSparse(entityId))
+            {
+                EnsureSparseCapacity(entityId);
+                _sparse[entityId] = denseIndex + 1;
+                return;
+            }
+
+            _fallbackSparse[entityId] = denseIndex;
+        }
+
+        private void RemoveSparseIndex(int entityId)
+        {
+            if (CanUseDirectSparse(entityId))
+            {
+                if (entityId < _sparse.Length)
+                {
+                    _sparse[entityId] = 0;
+                }
+                return;
+            }
+
+            _fallbackSparse.Remove(entityId);
+        }
+
         private void Resize(int newCapacity)
         {
             int[] newDense = new int[newCapacity];
             T[] newData = new T[newCapacity];
 
-            // 기존 데이터 복사
-            System.Array.Copy(_dense, newDense, _count);
-            System.Array.Copy(_data, newData, _count);
+            Array.Copy(_dense, newDense, _count);
+            Array.Copy(_data, newData, _count);
 
             _dense = newDense;
             _data = newData;
         }
 
-        // 추가/업데이트: O(1) - 존재하면 업데이트, 없으면 추가
         public void Add(int entityId, T value)
         {
-            // Dictionary를 사용하므로 entityId 범위 제한 없음
-            if (_sparse.TryGetValue(entityId, out int denseIndex))
-            {
-                // 이미 존재하는 경우 -> 값만 업데이트
-                _data[denseIndex] = value;
-                return;
-            }
-
-            // 존재하지 않으면 추가
-            // Dense 배열 확장 필요 시
-            if (_count >= _dense.Length)
-            {
-                Resize(_dense.Length * 2);
-            }
-
-            _dense[_count] = entityId;
-            _data[_count] = value;
-            _sparse[entityId] = _count;
-            _count++;
+            AddOrSet(entityId, value);
         }
 
-        // 업데이트: O(1) - 존재하면 업데이트, 없으면 추가
         public void Set(int entityId, T value)
         {
-            // Dictionary를 사용하므로 entityId 범위 제한 없음
-            if (_sparse.TryGetValue(entityId, out int denseIndex))
+            AddOrSet(entityId, value);
+        }
+
+        private void AddOrSet(int entityId, T value)
+        {
+            if (TryGetDenseIndex(entityId, out int denseIndex))
             {
-                // 이미 존재하는 경우 -> 값만 업데이트
                 _data[denseIndex] = value;
                 return;
             }
 
-            // 존재하지 않으면 추가
-            if (_count >= _dense.Length)
-            {
-                Resize(_dense.Length * 2);
-            }
+            EnsureDenseCapacity();
 
-            _dense[_count] = entityId;
-            _data[_count] = value;
-            _sparse[entityId] = _count;
+            int newIndex = _count;
+            _dense[newIndex] = entityId;
+            _data[newIndex] = value;
+            SetSparseIndex(entityId, newIndex);
             _count++;
         }
-    
-        // 조회: O(1)
+
         public T Get(int entityId)
         {
-            // Dictionary에서 인덱스 조회
-            if (_sparse.TryGetValue(entityId, out int denseIndex) == false)
-                return default(T);
-
-            // 유효성 검증: sparse가 가리키는 인덱스가 실제로 유효한지 확인
-            if (denseIndex >= _count)
-                return default(T);
+            if (TryGetDenseIndex(entityId, out int denseIndex) == false)
+                return default;
 
             return _data[denseIndex];
         }
 
-        // 존재 확인: O(1)
         public bool Contains(int entityId)
         {
-            // Dictionary에서 인덱스 조회
-            if (_sparse.TryGetValue(entityId, out int denseIndex) == false)
-                return false;
-
-            // 유효성 검증: sparse가 가리키는 인덱스가 실제로 유효한지 확인
-            return denseIndex < _count && _dense[denseIndex] == entityId;
+            return TryGetDenseIndex(entityId, out _);
         }
-    
-        // 제거: O(1)
+
+        public bool TryGet(int entityId, out T value)
+        {
+            if (TryGetDenseIndex(entityId, out int denseIndex) == false)
+            {
+                value = default;
+                return false;
+            }
+
+            value = _data[denseIndex];
+            return true;
+        }
+
         public void Remove(int entityId)
         {
-            // Dictionary에서 인덱스 조회
-            if (_sparse.TryGetValue(entityId, out int denseIndex) == false)
+            if (TryGetDenseIndex(entityId, out int denseIndex) == false)
                 return;
 
-            // 존재하지 않는 엔티티
-            if (denseIndex >= _count)
-                return;
-
-            // Swap-and-pop: 마지막 요소와 교체 후 제거
             int lastIndex = _count - 1;
 
-            // 제거하려는 엔티티가 마지막 요소가 아닌 경우에만 swap 수행
             if (denseIndex != lastIndex)
             {
                 int lastEntityId = _dense[lastIndex];
 
                 _dense[denseIndex] = lastEntityId;
                 _data[denseIndex] = _data[lastIndex];
-                _sparse[lastEntityId] = denseIndex;
+                SetSparseIndex(lastEntityId, denseIndex);
             }
 
-            // Dictionary에서 제거
-            _sparse.Remove(entityId);
+            RemoveSparseIndex(entityId);
+            _dense[lastIndex] = 0;
+            _data[lastIndex] = default;
             _count--;
         }
-    
-        // 순회: 메모리 연속적이라 캐시 효율 좋음!
-        public void ForEach(System.Action<T> action)
+
+        public void ForEach(Action<T> action)
         {
             for (int i = 0; i < _count; i++)
             {
@@ -154,8 +229,7 @@ namespace ARPG
             }
         }
 
-        // EntityId와 Component를 함께 순회
-        public void ForEach(System.Action<int, T> action)
+        public void ForEach(Action<int, T> action)
         {
             for (int i = 0; i < _count; i++)
             {
@@ -164,7 +238,6 @@ namespace ARPG
             }
         }
 
-        // EntityId 가져오기 (인덱스 기반)
         public int GetEntityId(int index)
         {
             if (index < 0 || index >= _count)
@@ -173,7 +246,6 @@ namespace ARPG
             return _dense[index];
         }
 
-        // 인덱스로 데이터 가져오기
         public T GetByIndex(int index)
         {
             if (index < 0 || index >= _count)
@@ -182,7 +254,6 @@ namespace ARPG
             return _data[index];
         }
 
-        // 인덱스로 데이터 설정
         public void SetByIndex(int index, T value)
         {
             if (index < 0 || index >= _count)

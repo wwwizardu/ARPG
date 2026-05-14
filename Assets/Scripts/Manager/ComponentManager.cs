@@ -15,6 +15,27 @@ namespace ARPG.Component
         private Dictionary<int, HashSet<Type>> _entityComponents = new Dictionary<int, HashSet<Type>>();
 
         /// <summary>
+        /// Reset() 호출 시 모든 PoolCache&lt;T&gt;.Pool을 무효화하기 위한 콜백 목록.
+        /// PoolCache&lt;T&gt;의 static ctor에서 한 번 등록됨.
+        /// </summary>
+        private static readonly List<Action> _cacheInvalidators = new();
+
+        /// <summary>
+        /// 제네릭 타입별로 SparseSet&lt;T&gt;를 정적 캐싱.
+        /// Dictionary&lt;Type, IComponentPool&gt; 조회를 타입당 1회로 줄여 GetPool 비용을 거의 0에 가깝게 만듦.
+        /// ComponentManager가 단일 인스턴스라는 가정에 의존 (GlobalManager.Instance.ComponentManager).
+        /// </summary>
+        private static class PoolCache<T> where T : struct
+        {
+            public static SparseSet<T> Pool;
+
+            static PoolCache()
+            {
+                _cacheInvalidators.Add(() => Pool = null);
+            }
+        }
+
+        /// <summary>
         /// 컴포넌트 타입별 SparseSet 초기 용량 설정
         /// </summary>
         private readonly Dictionary<Type, int> _poolSizes = new Dictionary<Type, int>
@@ -115,6 +136,13 @@ namespace ARPG.Component
             // 모든 컴포넌트 풀 정리
             _componentPools.Clear();
             _entityComponents.Clear();
+
+            // 모든 PoolCache<T>.Pool 무효화 (static 필드라 인스턴스 Clear로 안 사라짐)
+            for (int i = 0; i < _cacheInvalidators.Count; i++)
+            {
+                _cacheInvalidators[i].Invoke();
+            }
+
             Debug.Log("ComponentManager Reset - All component pools cleared");
         }
 
@@ -141,16 +169,19 @@ namespace ARPG.Component
         // 컴포넌트 조회 시도 (Unity 패턴, 가장 효율적)
         public bool TryGetComponent<T>(int entityId, out T component) where T : struct
         {
-            SparseSet<T> pool = GetPool<T>();
-
-            if (pool != null && pool.Contains(entityId))
+            SparseSet<T> pool = PoolCache<T>.Pool;
+            if (pool == null)
             {
-                component = pool.Get(entityId);
-                return true;
+                pool = GetPool<T>();
+                if (pool == null)
+                {
+                    component = default;
+                    return false;
+                }
             }
 
-            component = default;
-            return false;
+            // SparseSet.TryGet: Contains + Get을 통합하여 sparse Dictionary 조회를 1회로 줄임
+            return pool.TryGet(entityId, out component);
         }
 
         // 컴포넌트 제거
@@ -211,35 +242,59 @@ namespace ARPG.Component
         // 컴포넌트 존재 확인
         public bool HasComponent<T>(int entityId) where T : struct
         {
-            SparseSet<T> pool = GetPool<T>();
-            return pool != null && pool.Contains(entityId);
+            SparseSet<T> pool = PoolCache<T>.Pool;
+            if (pool == null)
+            {
+                pool = GetPool<T>();
+                if (pool == null)
+                {
+                    return false;
+                }
+            }
+            return pool.Contains(entityId);
         }
 
         // System이 특정 타입의 모든 컴포넌트에 접근할 때 사용
         public SparseSet<T> GetComponentPool<T>() where T : struct
         {
-            return GetOrCreatePool<T>();
+            SparseSet<T> pool = PoolCache<T>.Pool;
+            if (pool == null)
+            {
+                pool = GetOrCreatePool<T>();
+            }
+            return pool;
         }
 
         private SparseSet<T> GetOrCreatePool<T>() where T : struct
         {
             Type type = typeof(T);
-            if (_componentPools.ContainsKey(type) == false)
+            if (_componentPools.TryGetValue(type, out IComponentPool existing))
             {
-                // 타입별로 설정된 용량 사용, 없으면 기본값
-                int capacity = _poolSizes.TryGetValue(type, out int size) ? size : DEFAULT_POOL_SIZE;
-                _componentPools[type] = new SparseSet<T>(capacity);
-
-                Debug.Log($"[ComponentManager] Created component pool for {type.Name} with capacity {capacity}");
+                SparseSet<T> cached = existing as SparseSet<T>;
+                PoolCache<T>.Pool = cached;
+                return cached;
             }
 
-            return _componentPools[type] as SparseSet<T>;
+            // 타입별로 설정된 용량 사용, 없으면 기본값
+            int capacity = _poolSizes.TryGetValue(type, out int size) ? size : DEFAULT_POOL_SIZE;
+            SparseSet<T> newPool = new SparseSet<T>(capacity);
+            _componentPools[type] = newPool;
+            PoolCache<T>.Pool = newPool;
+
+            Debug.Log($"[ComponentManager] Created component pool for {type.Name} with capacity {capacity}");
+            return newPool;
         }
 
         private SparseSet<T> GetPool<T>() where T : struct
         {
-            Type type = typeof(T);
-            return _componentPools.ContainsKey(type) ? _componentPools[type] as SparseSet<T> : null;
+            // ContainsKey + 인덱서 → TryGetValue 단일 호출로 Dictionary FindEntry 절반 감소
+            if (_componentPools.TryGetValue(typeof(T), out IComponentPool pool))
+            {
+                SparseSet<T> typed = pool as SparseSet<T>;
+                PoolCache<T>.Pool = typed; // 첫 접근 시 캐싱
+                return typed;
+            }
+            return null;
         }
 
         /// <summary>
