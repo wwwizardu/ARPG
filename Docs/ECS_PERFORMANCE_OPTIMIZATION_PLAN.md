@@ -628,9 +628,166 @@ Handlers such as `ChaseStateHandler`, `MeleeAttackStateHandler`, `RangedAttackSt
 
 ---
 
-## 9. Phase 2: Small EntityId for Skill/Buff/Relationship
+## 9. Phase 1.9: Faction Search Helper Optimization
+
+Status: implemented in `Assets/Scripts/Common/Utility/FactionHelper.cs` and `Assets/Scripts/Manager/ComponentManager.cs`.
+
+The first pass removed repeated manager-path component lookups and `Vector2.Angle`. The second pass replaced full faction-pool scans with an event-driven faction candidate index.
 
 ### 9.1 Goal
+
+Reduce the cost of `FactionHelper.FindNearestEnemy`, which is shared by AI perception and stationary attack behavior.
+
+The function is called from:
+
+- `System_AI_Perception`
+- `StationaryAttackStateHandler`
+
+It already iterates the `FactionComponent` pool, which is the right high-level candidate set. The remaining cost was repeated manager-path component lookup and `Vector2.Angle` inside the candidate loop.
+
+### 9.2 First-Pass Implemented Scope
+
+Cache pools once before iterating candidates:
+
+```csharp
+SparseSet<FactionComponent> factionPool = cm.GetComponentPool<FactionComponent>();
+SparseSet<TransformComponent> transformPool = cm.GetComponentPool<TransformComponent>();
+SparseSet<StatComponent> statPool = cm.GetComponentPool<StatComponent>();
+```
+
+Replace per-candidate manager reads:
+
+```text
+ComponentManager.TryGetComponent<TransformComponent>
+ComponentManager.HasComponent<StatComponent>
+```
+
+with direct pool reads:
+
+```text
+transformPool.TryGet
+statPool.Contains
+```
+
+Replace FOV angle calculation:
+
+```csharp
+Vector2.Angle(forward, dirToCandidate) <= fieldOfView * 0.5f
+```
+
+with a dot/cos comparison:
+
+```csharp
+float halfFovCos = Mathf.Cos(fieldOfView * 0.5f * Mathf.Deg2Rad);
+float dot = Vector2.Dot(forward, toCandidate) / distance;
+dot >= halfFovCos
+```
+
+This preserves the same cone test while avoiding `Vector2.Angle`'s more expensive angle conversion.
+
+### 9.3 Second-Pass Implemented Scope
+
+`FactionHelper` now keeps direct candidate lists:
+
+```text
+Player faction entities
+Hostile faction entities
+```
+
+`ComponentManager` updates those lists from component lifecycle events:
+
+```text
+AddComponent<FactionComponent>    -> add entity to the new faction list
+SetComponent<FactionComponent>    -> move entity if faction changed
+RemoveComponent<FactionComponent> -> remove entity from the previous faction list
+RemoveAllComponents               -> remove entity from faction lists
+Reset                             -> clear all faction lists
+```
+
+`FindNearestEnemy` no longer scans every entity with `FactionComponent` for normal Player/Hostile searches:
+
+```text
+selfFaction == Hostile -> iterate Player list
+selfFaction == Player  -> iterate Hostile list
+selfFaction == Neutral -> iterate Player + Hostile lists, matching previous non-neutral fallback
+```
+
+### 9.4 Preserved Behavior
+
+- Candidate iteration now uses enemy faction lists instead of the full `FactionComponent` pool.
+- Same faction and neutral candidates are excluded by faction-list membership.
+- `nearestEnemySqrDistance` is still updated before range/FOV filtering, matching the previous lose-target behavior.
+- `requireStatComponent` still filters candidates when requested.
+- `targetPosition` still uses the selected target's transform position.
+
+### 9.5 Event-Driven Faction Candidate Index Rationale
+
+`FindNearestEnemy` was still expensive after direct pool reads, because each caller scanned the full `FactionComponent` pool before skipping same-faction candidates.
+
+Example:
+
+```text
+200 hostile monsters, 1 player
+
+Previous search shape:
+  every monster scans all faction entities
+  200 * 201 candidate visits
+
+Implemented search shape:
+  hostile monsters scan only Player faction candidates
+  200 * 1 candidate visits
+```
+
+Do not rebuild this index every frame. Faction membership changes only when a `FactionComponent` is added, updated, removed, or when an entity is destroyed/reset. Therefore the cache is maintained from component lifecycle hooks:
+
+```text
+FactionComponent Add    -> add entity to that faction list
+FactionComponent Set    -> move entity if faction changed
+FactionComponent Remove -> remove entity from faction list
+RemoveAllComponents     -> remove entity from all faction lists
+ComponentManager.Reset  -> clear all faction lists
+```
+
+The hot `FindNearestEnemy` path now chooses the enemy list directly:
+
+```text
+selfFaction == Hostile -> iterate Player list
+selfFaction == Player  -> iterate Hostile list
+selfFaction == Neutral -> iterate non-neutral lists, matching previous fallback behavior
+```
+
+The candidate list is only a broad candidate filter. The function must still validate per-candidate components before use:
+
+```text
+TransformComponent must exist
+StatComponent must exist when requireStatComponent is true
+range/FOV filters still apply
+```
+
+This keeps entity creation/destruction costs slightly higher, but removes repeated full faction scans from AI perception and stationary attack behavior.
+
+### 9.6 Deferred Scope
+
+Do not yet add spatial partitioning or team-specific target lists.
+
+If `FindNearestEnemy` remains hot after this pass, the next larger step is a broadphase structure, for example:
+
+- grid/spatial hash by world cell
+- cached nearest target per AI update slice
+
+### 9.7 Acceptance Criteria
+
+- AI perception still acquires enemies.
+- Stationary attack AI still finds targets.
+- FOV-limited AI still respects field of view.
+- Lose-target logic remains stable.
+- Profiler shows lower `FindNearestEnemy` time and fewer full-faction candidate visits.
+
+---
+
+## 10. Phase 2: Small EntityId for Skill/Buff/Relationship
+
+### 10.1 Goal
 
 Stop encoding deterministic meaning into EntityId numbers.
 
@@ -691,7 +848,7 @@ Every frame, for every character slot:
 
 That would reintroduce hash cost into the hot path.
 
-### 9.2 New Key Maps
+### 10.2 New Key Maps
 
 Skill:
 
@@ -732,7 +889,7 @@ private static readonly Dictionary<RelationshipKey, int> _relationshipEntityByPa
 private static readonly Dictionary<int, RelationshipKey> _relationshipKeyByEntityId;
 ```
 
-### 9.3 New Behavior
+### 10.3 New Behavior
 
 ```text
 CreateSkillEntity(owner, slot)
@@ -745,7 +902,7 @@ CreateSkillEntity(owner, slot)
 
 Same idea for buff and relationship.
 
-### 9.4 Replace Formula-Based APIs
+### 10.4 Replace Formula-Based APIs
 
 Current API patterns to phase out:
 
@@ -763,7 +920,7 @@ Target API patterns:
 - `TryGetRelationshipEntityId(fromEntityId, toEntityId, out int relationshipEntityId)`
 - `TryGetRelationshipPair(relationshipEntityId, out int fromEntityId, out int toEntityId)`
 
-### 9.5 Migration Plan
+### 10.5 Migration Plan
 
 Do this in slices.
 
@@ -773,7 +930,7 @@ Do this in slices.
 4. Remove formula dependency after all call sites are migrated.
 5. Delete fallback compatibility only after save/load is confirmed.
 
-### 9.6 Save/Load Considerations
+### 10.6 Save/Load Considerations
 
 Saved data may currently store deterministic IDs.
 
@@ -788,7 +945,7 @@ Recommended:
 - Persistent world objects can keep saved EntityId.
 - Runtime-derived entities like skill/buff/relationship should prefer rebuilding from owner/slot or target/type keys.
 
-### 9.7 Phase 2 Risks
+### 10.7 Phase 2 Risks
 
 | Risk | Mitigation |
 |------|------------|
@@ -799,9 +956,9 @@ Recommended:
 
 ---
 
-## 10. Phase 3: Hot Component Mapping Table
+## 11. Phase 3: Hot Component Mapping Table
 
-### 10.1 Goal
+### 11.1 Goal
 
 If Phase 1 and Phase 2 are not enough, add a per-entity hot index mapping.
 
@@ -825,7 +982,7 @@ public struct HotComponentMap
 
 Use `-1` for missing component.
 
-### 10.2 Scope
+### 11.2 Scope
 
 Start only with hot components:
 
@@ -839,7 +996,7 @@ Start only with hot components:
 
 Do not add every component.
 
-### 10.3 Integration Points
+### 11.3 Integration Points
 
 When adding a hot component:
 
@@ -871,7 +1028,7 @@ public readonly struct SparseRemoveResult
 }
 ```
 
-### 10.4 Usage Pattern
+### 11.4 Usage Pattern
 
 Hot systems can avoid repeated sparse lookup:
 
@@ -891,7 +1048,7 @@ Candidate systems:
 - `FactionHelper`
 - `System_AI_Perception`
 
-### 10.5 Risks
+### 11.5 Risks
 
 | Risk | Mitigation |
 |------|------------|
@@ -901,9 +1058,9 @@ Candidate systems:
 
 ---
 
-## 11. Phase 4: Entity Generation Safety
+## 12. Phase 4: Entity Generation Safety
 
-### 11.1 Goal
+### 12.1 Goal
 
 Prevent stale entity references from pointing to a new entity after ID reuse.
 
@@ -916,7 +1073,7 @@ ID 42 reused by unrelated NPC
 missile now targets unrelated NPC
 ```
 
-### 11.2 Target Representation
+### 12.2 Target Representation
 
 Option A: packed 64-bit entity reference.
 
@@ -932,7 +1089,7 @@ Option B: keep `int EntityId`, add validation table in `EntityIdHelper`.
 
 Option A is cleaner but requires changing many component fields.
 
-### 11.3 Current Fields Affected
+### 12.3 Current Fields Affected
 
 Examples:
 
@@ -951,7 +1108,7 @@ Examples:
 - `RelationshipComponent.FromEntityId`
 - `RelationshipComponent.ToEntityId`
 
-### 11.4 Recommended Timing
+### 12.4 Recommended Timing
 
 Do not combine generation with Phase 1.
 
@@ -959,7 +1116,7 @@ Generation is primarily correctness work. It touches component data, save/load, 
 
 ---
 
-## 12. Implementation Order
+## 13. Implementation Order
 
 Recommended order:
 
@@ -974,7 +1131,7 @@ Recommended order:
 
 ---
 
-## 13. Acceptance Criteria
+## 14. Acceptance Criteria
 
 Phase 1 is complete when:
 
@@ -1001,7 +1158,7 @@ Phase 3 is complete when:
 
 ---
 
-## 14. Initial Recommendation
+## 15. Initial Recommendation
 
 Start with Phase 1 only.
 

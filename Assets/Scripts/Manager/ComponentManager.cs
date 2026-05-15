@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using ARPG.Utility;
 using UnityEngine;
 
 namespace ARPG.Component
@@ -136,6 +137,7 @@ namespace ARPG.Component
             // 모든 컴포넌트 풀 정리
             _componentPools.Clear();
             _entityComponents.Clear();
+            FactionHelper.ClearFactionIndex();
 
             // 모든 PoolCache<T>.Pool 무효화 (static 필드라 인스턴스 Clear로 안 사라짐)
             for (int i = 0; i < _cacheInvalidators.Count; i++)
@@ -150,20 +152,28 @@ namespace ARPG.Component
         public void AddComponent<T>(int entityId, T component) where T : struct
         {
             SparseSet<T> pool = GetOrCreatePool<T>();
+            bool isFactionChange = CaptureFactionChange(pool, entityId, component, out Faction previousFaction, out Faction nextFaction, out bool hadPreviousFaction);
             pool.Add(entityId, component);
 
             // Entity에 등록된 컴포넌트 타입 추적
             TrackComponentType<T>(entityId);
+
+            if (isFactionChange)
+                FactionHelper.OnFactionComponentSet(entityId, previousFaction, nextFaction, hadPreviousFaction);
         }
 
         // 컴포넌트 설정 (존재하면 업데이트, 없으면 추가)
         public void SetComponent<T>(int entityId, T component) where T : struct
         {
             SparseSet<T> pool = GetOrCreatePool<T>();
+            bool isFactionChange = CaptureFactionChange(pool, entityId, component, out Faction previousFaction, out Faction nextFaction, out bool hadPreviousFaction);
             pool.Set(entityId, component);
 
             // Entity에 등록된 컴포넌트 타입 추적
             TrackComponentType<T>(entityId);
+
+            if (isFactionChange)
+                FactionHelper.OnFactionComponentSet(entityId, previousFaction, nextFaction, hadPreviousFaction);
         }
 
         // 컴포넌트 조회 시도 (Unity 패턴, 가장 효율적)
@@ -188,6 +198,7 @@ namespace ARPG.Component
         public void RemoveComponent<T>(int entityId) where T : struct
         {
             SparseSet<T> pool = GetPool<T>();
+            RemoveFactionIndexEntry(pool, entityId);
             pool?.Remove(entityId);
 
             // Entity 추적 정보에서 컴포넌트 타입 제거
@@ -221,6 +232,11 @@ namespace ARPG.Component
             // ToArray()로 복사본 생성 (순회 중 컬렉션 수정 방지)
             Type[] typesToRemove = new Type[componentTypes.Count];
             componentTypes.CopyTo(typesToRemove);
+
+            if (componentTypes.Contains(typeof(FactionComponent)))
+            {
+                FactionHelper.OnEntityRemoved(entityId);
+            }
 
             int removedCount = 0;
             foreach (Type componentType in typesToRemove)
@@ -295,6 +311,46 @@ namespace ARPG.Component
                 return typed;
             }
             return null;
+        }
+
+        private static bool CaptureFactionChange<T>(
+            SparseSet<T> pool,
+            int entityId,
+            T component,
+            out Faction previousFaction,
+            out Faction nextFaction,
+            out bool hadPreviousFaction) where T : struct
+        {
+            previousFaction = Faction.Neutral;
+            nextFaction = Faction.Neutral;
+            hadPreviousFaction = false;
+
+            if (typeof(T) != typeof(FactionComponent))
+                return false;
+
+            if (pool.TryGet(entityId, out T previousComponent))
+            {
+                previousFaction = ((FactionComponent)(object)previousComponent).FactionId;
+                hadPreviousFaction = true;
+            }
+
+            nextFaction = ((FactionComponent)(object)component).FactionId;
+            return true;
+        }
+
+        private static void RemoveFactionIndexEntry<T>(SparseSet<T> pool, int entityId) where T : struct
+        {
+            if (typeof(T) != typeof(FactionComponent))
+                return;
+
+            if (pool != null && pool.TryGet(entityId, out T previousComponent))
+            {
+                Faction previousFaction = ((FactionComponent)(object)previousComponent).FactionId;
+                FactionHelper.OnFactionComponentRemoved(entityId, previousFaction);
+                return;
+            }
+
+            FactionHelper.OnEntityRemoved(entityId);
         }
 
         /// <summary>
