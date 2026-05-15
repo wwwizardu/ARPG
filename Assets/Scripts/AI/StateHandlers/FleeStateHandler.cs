@@ -33,10 +33,13 @@ namespace ARPG.AI.StateHandlers
             }
 
             // 타겟 위치로부터 도주
-            if (cm.TryGetComponent<TransformComponent>(ai.TargetEntityId, out var threatTransform))
+            if (AIStateHelper.TryGetValidTargetTransform(entityId, ref ai, out var threatTransform) == false)
             {
-                AIStateHelper.MoveAwayFrom(entityId, threatTransform.Position);
+                AIStateHelper.TransitionToState(entityId, AIStateHelper.GetDefaultState(entityId));
+                return;
             }
+
+            AIStateHelper.MoveAwayFrom(entityId, threatTransform.Position);
         }
 
         public void OnExit(int entityId)

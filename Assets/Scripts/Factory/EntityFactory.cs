@@ -746,6 +746,11 @@ namespace ARPG.Factory
         public static void CreateSkill(int ownerEntityId, int slotIndex, int skillId)
         {
             int skillEntityId = EntityIdHelper.CreateSkillEntity(ownerEntityId, slotIndex);
+            if (skillEntityId == -1)
+            {
+                Debug.LogError($"[EntityFactory] Failed to create skill entity. Owner: {ownerEntityId}, Slot: {slotIndex}, SkillId: {skillId}");
+                return;
+            }
 
             var skillTable = AR.s.Data.GetSkill(skillId);
             if (skillTable == null)

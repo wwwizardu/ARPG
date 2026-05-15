@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using ARPG.Component;
 using ARPG.Skill.Combat;
 using ARPG.Utility;
@@ -96,91 +97,143 @@ namespace ARPG.Systems
             SparseSet<ColliderComponent> colliderPool,
             SparseSet<ProjectileTag> projectileTagPool)
         {
-            bool hitAny = false;
-
             if (skillPool.TryGet(proj.SkillEntityId, out var skill) == false)
                 return false;
 
-            bool ownerHasFaction = factionPool.TryGet(proj.OwnerEntityId, out var ownerFaction);
+            if (factionPool.TryGet(proj.OwnerEntityId, out var ownerFaction))
+            {
+                FactionHelper.GetEnemyFactionLists(ownerFaction.FactionId, out var primaryList, out var secondaryList);
+                bool hitAny = false;
+                bool stopEarly = ScanCandidateList(
+                    primaryList, projectileEntityId, ref proj, ref skill, position,
+                    transformPool, statPool, jumpPool, colliderPool, projectileTagPool, ref hitAny);
+                if (stopEarly == false)
+                {
+                    ScanCandidateList(
+                        secondaryList, projectileEntityId, ref proj, ref skill, position,
+                        transformPool, statPool, jumpPool, colliderPool, projectileTagPool, ref hitAny);
+                }
+                return hitAny;
+            }
 
+            // Owner has no faction — fall back to transform-pool scan to preserve migration-safe behavior.
+            bool fallbackHitAny = false;
             for (int i = 0; i < transformPool.Count; i++)
             {
                 int targetId = transformPool.GetEntityId(i);
-
-                if (targetId == projectileEntityId)
-                    continue;
-
-                if (targetId == proj.OwnerEntityId)
-                    continue;
-
-                if (ownerHasFaction)
+                if (TryHitCandidate(
+                        targetId, projectileEntityId, ref proj, ref skill, position,
+                        transformPool, statPool, jumpPool, colliderPool, projectileTagPool))
                 {
-                    if (factionPool.TryGet(targetId, out var targetFaction) == false)
-                        continue;
-                    if (targetFaction.FactionId == Faction.Neutral)
-                        continue;
-                    if (targetFaction.FactionId == ownerFaction.FactionId)
-                        continue;
-                }
-
-                if (statPool.Contains(targetId) == false)
-                    continue;
-
-                if (projectileTagPool.Contains(targetId))
-                    continue;
-
-                if (jumpPool.TryGet(targetId, out var targetJump))
-                {
-                    if (targetJump.Height >= System_Jump.InvincibleHeight)
-                        continue;
-                }
-
-                TransformComponent targetTransform = transformPool.GetByIndex(i);
-                Vector2 targetCenter;
-                float targetRadius;
-                if (colliderPool.TryGet(targetId, out var targetCollider))
-                {
-                    targetCenter = targetTransform.Position + targetCollider.HitOffset;
-                    targetRadius = targetCollider.HitRadius;
-                }
-                else
-                {
-                    targetCenter = targetTransform.Position;
-                    targetRadius = 0f;
-                }
-
-                if (HitboxMath.CircleVsCircle(position, proj.HitRadius, targetCenter, targetRadius))
-                {
-                    if (skill.Table != null)
-                    {
-                        DamageResult result = DamageCalculator.Calculate(proj.SkillEntityId, proj.OwnerEntityId, targetId, skill.Table);
-                        DamageCalculator.ApplyDamageResult(proj.SkillEntityId, proj.OwnerEntityId, targetId, result);
-
-                        SkillEffectContext hitCtx = new()
-                        {
-                            SkillEntityId = proj.SkillEntityId,
-                            SkillId = skill.SkillId,
-                            OwnerEntityId = proj.OwnerEntityId,
-                            TargetEntityId = targetId,
-                            ProjectileEntityId = projectileEntityId,
-                            DamageResult = result,
-                        };
-                        SkillEffectExecutor.Trigger(GE.SkillTrigger.OnProjectileHit, ref hitCtx, skill.EffectiveSkillEffectIds);
-                        SkillEffectExecutor.Trigger(GE.SkillTrigger.OnHit, ref hitCtx, skill.EffectiveSkillEffectIds);
-                        if (result.IsCritical)
-                            SkillEffectExecutor.Trigger(GE.SkillTrigger.OnCrit, ref hitCtx, skill.EffectiveSkillEffectIds);
-                        if (statPool.TryGet(targetId, out var targetStat) && targetStat.CurrentHp <= 0f)
-                            SkillEffectExecutor.Trigger(GE.SkillTrigger.OnKill, ref hitCtx, skill.EffectiveSkillEffectIds);
-                    }
-
-                    hitAny = true;
-
+                    fallbackHitAny = true;
                     if (proj.IsPiercing == false)
                         break;
                 }
             }
+            return fallbackHitAny;
+        }
 
-            return hitAny;
+        // Returns true when the loop should stop early because a non-piercing projectile already hit.
+        private bool ScanCandidateList(
+            List<int> candidates,
+            int projectileEntityId,
+            ref ProjectileComponent proj,
+            ref SkillComponent skill,
+            Vector2 position,
+            SparseSet<TransformComponent> transformPool,
+            SparseSet<StatComponent> statPool,
+            SparseSet<JumpComponent> jumpPool,
+            SparseSet<ColliderComponent> colliderPool,
+            SparseSet<ProjectileTag> projectileTagPool,
+            ref bool hitAny)
+        {
+            if (candidates == null)
+                return false;
+
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                int targetId = candidates[i];
+                if (TryHitCandidate(
+                        targetId, projectileEntityId, ref proj, ref skill, position,
+                        transformPool, statPool, jumpPool, colliderPool, projectileTagPool))
+                {
+                    hitAny = true;
+                    if (proj.IsPiercing == false)
+                        return true;
+                }
+            }
+            return false;
+        }
+
+        private bool TryHitCandidate(
+            int targetId,
+            int projectileEntityId,
+            ref ProjectileComponent proj,
+            ref SkillComponent skill,
+            Vector2 position,
+            SparseSet<TransformComponent> transformPool,
+            SparseSet<StatComponent> statPool,
+            SparseSet<JumpComponent> jumpPool,
+            SparseSet<ColliderComponent> colliderPool,
+            SparseSet<ProjectileTag> projectileTagPool)
+        {
+            if (targetId == projectileEntityId)
+                return false;
+            if (targetId == proj.OwnerEntityId)
+                return false;
+            if (statPool.Contains(targetId) == false)
+                return false;
+            if (projectileTagPool.Contains(targetId))
+                return false;
+
+            if (jumpPool.TryGet(targetId, out var targetJump))
+            {
+                if (targetJump.Height >= System_Jump.InvincibleHeight)
+                    return false;
+            }
+
+            if (transformPool.TryGet(targetId, out var targetTransform) == false)
+                return false;
+
+            Vector2 targetCenter;
+            float targetRadius;
+            if (colliderPool.TryGet(targetId, out var targetCollider))
+            {
+                targetCenter = targetTransform.Position + targetCollider.HitOffset;
+                targetRadius = targetCollider.HitRadius;
+            }
+            else
+            {
+                targetCenter = targetTransform.Position;
+                targetRadius = 0f;
+            }
+
+            if (HitboxMath.CircleVsCircle(position, proj.HitRadius, targetCenter, targetRadius) == false)
+                return false;
+
+            if (skill.Table != null)
+            {
+                DamageResult result = DamageCalculator.Calculate(proj.SkillEntityId, proj.OwnerEntityId, targetId, skill.Table);
+                DamageCalculator.ApplyDamageResult(proj.SkillEntityId, proj.OwnerEntityId, targetId, result);
+
+                SkillEffectContext hitCtx = new()
+                {
+                    SkillEntityId = proj.SkillEntityId,
+                    SkillId = skill.SkillId,
+                    OwnerEntityId = proj.OwnerEntityId,
+                    TargetEntityId = targetId,
+                    ProjectileEntityId = projectileEntityId,
+                    DamageResult = result,
+                };
+                SkillEffectExecutor.Trigger(GE.SkillTrigger.OnProjectileHit, ref hitCtx, skill.EffectiveSkillEffectIds);
+                SkillEffectExecutor.Trigger(GE.SkillTrigger.OnHit, ref hitCtx, skill.EffectiveSkillEffectIds);
+                if (result.IsCritical)
+                    SkillEffectExecutor.Trigger(GE.SkillTrigger.OnCrit, ref hitCtx, skill.EffectiveSkillEffectIds);
+                if (statPool.TryGet(targetId, out var targetStat) && targetStat.CurrentHp <= 0f)
+                    SkillEffectExecutor.Trigger(GE.SkillTrigger.OnKill, ref hitCtx, skill.EffectiveSkillEffectIds);
+            }
+
+            return true;
         }
     }
 }

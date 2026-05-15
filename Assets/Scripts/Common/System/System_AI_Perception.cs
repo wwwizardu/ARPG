@@ -74,7 +74,7 @@ namespace ARPG.Systems
                     selfFaction.FactionId,
                     perception.DetectionRange * perception.DetectionRange,
                     perception.FieldOfView,
-                    requireStatComponent: false,
+                    requireStatComponent: true,
                     out Vector2 targetPosition,
                     out float targetSqrDistance);
 

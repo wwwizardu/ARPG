@@ -46,6 +46,30 @@ namespace ARPG.Utility
         }
 
         /// <summary>
+        /// Returns the enemy candidate lists for a given self-faction.
+        /// Player/Hostile self gets one primary enemy list; Neutral self gets both Player and Hostile lists,
+        /// matching the existing non-Neutral fallback semantics used by AI perception and projectile collision.
+        /// </summary>
+        public static void GetEnemyFactionLists(Faction selfFaction, out List<int> primary, out List<int> secondary)
+        {
+            switch (selfFaction)
+            {
+                case Faction.Player:
+                    primary = _hostileFactionEntities;
+                    secondary = null;
+                    return;
+                case Faction.Hostile:
+                    primary = _playerFactionEntities;
+                    secondary = null;
+                    return;
+                default:
+                    primary = _playerFactionEntities;
+                    secondary = _hostileFactionEntities;
+                    return;
+            }
+        }
+
+        /// <summary>
         /// Returns whether caster and target are hostile to each other.
         /// Missing caster faction is treated as hostile for migration safety.
         /// Missing target faction or Neutral target is never hostile.

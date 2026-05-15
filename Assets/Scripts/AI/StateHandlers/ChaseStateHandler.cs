@@ -28,7 +28,7 @@ namespace ARPG.AI.StateHandlers
             }
 
             // 타겟 위치 가져오기
-            if (cm.TryGetComponent<TransformComponent>(ai.TargetEntityId, out var targetTransform) == false)
+            if (AIStateHelper.TryGetValidTargetTransform(entityId, ref ai, out var targetTransform) == false)
             {
                 AIStateHelper.TransitionToState(entityId, AIStateHelper.GetDefaultState(entityId));
                 return;

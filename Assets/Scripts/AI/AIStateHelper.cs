@@ -1,4 +1,5 @@
 using ARPG.Component;
+using ARPG.Utility;
 using UnityEngine;
 
 namespace ARPG.AI
@@ -60,6 +61,41 @@ namespace ARPG.AI
                 return AIState.Patrol;
             }
             return AIState.Idle;
+        }
+
+        public static bool TryGetValidTargetTransform(
+            int entityId,
+            ref AIComponent ai,
+            out TransformComponent targetTransform,
+            bool requireStatComponent = true)
+        {
+            targetTransform = default;
+
+            if (ai.TargetEntityId == -1)
+                return false;
+
+            ComponentManager cm = AR.s.Component;
+            int targetEntityId = ai.TargetEntityId;
+            if (EntityIdHelper.IsEntityRegistered(targetEntityId) == false ||
+                cm.HasComponent<DestroyTag>(targetEntityId) ||
+                cm.TryGetComponent<TransformComponent>(targetEntityId, out targetTransform) == false ||
+                (requireStatComponent && cm.HasComponent<StatComponent>(targetEntityId) == false) ||
+                FactionHelper.IsHostileTo(entityId, targetEntityId) == false)
+            {
+                ClearTarget(entityId, ref ai);
+                targetTransform = default;
+                return false;
+            }
+
+            return true;
+        }
+
+        public static void ClearTarget(int entityId, ref AIComponent ai)
+        {
+            ai.TargetEntityId = -1;
+            ComponentManager cm = AR.s.Component;
+            cm.SetComponent(entityId, ai);
+            cm.RemoveComponent<AICanSeeTargetTag>(entityId);
         }
 
         /// <summary>

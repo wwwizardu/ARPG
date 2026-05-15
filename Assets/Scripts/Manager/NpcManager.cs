@@ -318,7 +318,7 @@ namespace ARPG.Npc
                 Vector2Int chunkCoord = PositionToChunk(saveData.Position);
                 if (AR.s.Map == null || AR.s.Map.IsChunkActive(chunkCoord) == false)
                 {
-                    EntityIdHelper.DestroyEntity(createdId, false);
+                    EntityIdHelper.DestroyEntity(createdId, allowRecycle: false, keepRegistered: true);
                     if (entity != null)
                         Destroy(entity.gameObject);
                     return;
@@ -395,7 +395,7 @@ namespace ARPG.Npc
             if (AR.s.Message.TryGetEntity(entityId, out var entity))
             {
                 // ID를 재활용하지 않음 (다음 스폰 시 동일 ID 사용)
-                EntityIdHelper.DestroyEntity(entityId, false);
+                EntityIdHelper.DestroyEntity(entityId, allowRecycle: false, keepRegistered: true);
                 Destroy(entity.gameObject);
             }
 

@@ -1,1167 +1,173 @@
-# ECS Performance Optimization Plan
+# ECS 성능 최적화 계획 (요약)
 
-> Target files: `SparseSet<T>`, `ComponentManager`, `EntityIdHelper`, hot ECS systems
->
-> Goal: reduce per-frame component lookup cost without changing gameplay behavior.
-
----
-
-## 1. Current State
-
-### 1.1 Component Storage
-
-Current component pools use `SparseSet<T>`.
-
-```text
-SparseSet<T>
-  _sparse: Dictionary<int, int>   // EntityId -> dense index
-  _dense:  int[]                  // dense index -> EntityId
-  _data:   T[]                    // dense component data
-```
-
-The dense side is good. Systems already iterate component data with `GetComponentPool<T>()`, `GetEntityId(i)`, and `GetByIndex(i)`.
-
-The weak point is `_sparse`. It is a `Dictionary<int, int>`, so every cross-component lookup still pays hash lookup cost.
-
-Examples:
-
-- `System_Projectile` iterates projectiles, then looks up `TransformComponent`, `VelocityComponent`, `SkillComponent`, `FactionComponent`, `StatComponent`, `JumpComponent`, `ColliderComponent`.
-- `System_Render` iterates transforms, then looks up velocity/collider/jump.
-- `System_Skill` iterates skills, then performs many owner/target component lookups.
-- `FactionHelper` iterates factions and looks up transform/stat.
-
-### 1.2 EntityId Shape
-
-General runtime entities use small recycled IDs.
-
-```text
-CreateEntity()
-  1, 2, 3, ...
-  destroyed IDs are queued and reused
-```
-
-But some entities use deterministic large IDs.
-
-```text
-Buff:         targetId + (buffTableId + 1) * 100_000
-Skill:        ownerId  + (slotIndex + 1)   * 1_000_000
-Relationship: fromId   + (toId + 1)        * 10_000_000
-```
-
-Because of this, `sparse[entityId]` cannot blindly allocate up to the largest EntityId. A relationship ID can be huge.
+> 대상: `SparseSet<T>`, `ComponentManager`, `EntityIdHelper`, 핫 ECS 시스템
+> 목표: 게임플레이 동작 변경 없이 프레임당 컴포넌트 조회 비용 감소
 
 ---
 
-## 2. Optimization Strategy
+## 1. 핵심 문제
 
-Use staged changes.
-
-```text
-Phase 1: SparseSet internal optimization
-  low-risk, mostly one file, keeps public API
-
-Phase 1.5: Projectile hot-loop optimization
-  keep ECS shape, reduce collision candidates and manager lookup calls
-
-Phase 2: deterministic ID cleanup
-  medium/high-risk, changes EntityIdHelper contracts
-
-Phase 3: hot component mapping table
-  optional, only if profiling still shows lookup cost
-
-Phase 4: Entity generation safety
-  correctness/safety refactor, not primarily performance
-```
-
-Do not implement all phases at once.
+- `SparseSet<T>._sparse`가 `Dictionary<int, int>` → 컴포넌트 간 조회마다 해시 비용
+- 핫 시스템에서 조회 누적:
+  - `System_Projectile`: Transform/Velocity/Skill/Faction/Stat/Jump/Collider 다중 조회
+  - `System_Render`: Velocity/Collider/Jump 조회
+  - `System_Skill`: owner/target 조회 다수
+  - `FactionHelper`: Transform/Stat 조회
+- Skill/Buff/Relationship은 결정론적 큰 ID(최대 10_000_000+ 단위) 사용 → 직접 배열 인덱싱 불가
+  - Skill: `ownerId + (slotIndex + 1) * 1_000_000`
+  - Buff: `targetId + (buffTableId + 1) * 100_000`
+  - Relationship: `fromId + (toId + 1) * 10_000_000`
 
 ---
 
-## 3. Phase 0: Measurement Baseline
+## 2. 단계별 진행 현황
 
-Before changing behavior, capture a baseline.
-
-### 3.1 Profiler Markers
-
-Add temporary or editor-only profiler markers around:
-
-- `ComponentManager.TryGetComponent<T>`
-- `ComponentManager.HasComponent<T>`
-- `SparseSet<T>.TryGet`
-- `SparseSet<T>.Contains`
-- hot systems:
-  - `System_Projectile.OnFixedUpdate`
-  - `System_Projectile.CheckCollision`
-  - `System_Skill.OnFixedUpdate`
-  - `System_Render.OnUpdate`
-  - `System_AI_Perception.OnFixedUpdate`
-
-### 3.2 Capture Scenarios
-
-Use at least three repeatable scenes/scenarios.
-
-| Scenario | Purpose |
-|----------|---------|
-| Normal field | everyday entity/component count |
-| Projectile-heavy combat | worst current lookup pattern |
-| Village/NPC-heavy scene | many non-combat entity references |
-
-### 3.3 Baseline Metrics
-
-Record:
-
-- total `TryGetComponent` count per frame
-- total `HasComponent` count per frame
-- main thread frame time
-- GC allocations per frame
-- system-specific time for projectile/skill/render/AI
-
-Exit criteria for Phase 0:
-
-- Have one profiler capture before changes.
-- Know whether projectile/skill/render are the top lookup-heavy systems.
+| Phase | 내용 | 위험도 | 상태 |
+|-------|------|--------|------|
+| 0 | 프로파일러 베이스라인 측정 | — | 선행 작업 |
+| 1 | `SparseSet`: 배열(`int[]`) + 폴백 Dictionary | 저 | **구현 완료** |
+| 1.5 | `System_Projectile` 풀 캐싱 + Faction 후보 좁히기 | 저 | **구현 완료** |
+| 1.6 | `System_Skill` 주요 핫 경로 매니저 우회 | 저 | **핫 경로 구현 완료** |
+| 1.7 | `System_Render` 매니저 우회 | 저 | **구현 완료** |
+| 1.8 | `System_AI_Behavior` 매니저 우회 | 저 | **구현 완료** |
+| 1.9 | `FactionHelper` 이벤트 기반 Player/Hostile 인덱스 | 중 | **구현 완료** |
+| 2 | Skill/Buff/Relationship → 작은 ID + 키 맵 | 중/고 | **현재 보류** |
+| 3 | 핫 컴포넌트 매핑 테이블 | — | **현재 보류** |
+| 4 | EntityRef 세대(generation) 안전성 | — | 별도 리팩토링 |
 
 ---
 
-## 4. Phase 1: SparseSet Array + Fallback Dictionary
+## 3. Phase 1: SparseSet 배열 + 폴백
 
-Status: implemented in `Assets/Scripts/Common/SparseSet.cs`.
-
-Current implementation keeps the public `SparseSet<T>` API unchanged. Normal small EntityIds use the direct sparse array path. Large deterministic IDs, negative sentinel-like IDs if ever inserted, and any ID outside the direct cap use fallback Dictionary storage.
-
-### 4.1 Goal
-
-Replace `Dictionary<int, int> _sparse` with:
+**아이디어**: `Dictionary<int, int> _sparse`를 다음으로 교체.
 
 ```text
-small EntityId path:
-  int[] _sparse
-
-large EntityId path:
-  Dictionary<int, int> _fallbackSparse
+작은 EntityId  → int[] _sparse (직접 인덱싱)
+큰 EntityId    → Dictionary<int, int> _fallbackSparse
 ```
 
-This keeps actual component data dense and unchanged.
+**규칙**:
+- `MaxDirectEntityId = 65536` 이하만 직접 배열 사용 (풀당 ~256KB)
+- 그 이상은 폴백 Dictionary
+- `_sparse[id] = denseIndex + 1` (0 = 없음)
+
+**핵심 주의**: `Remove`의 swap-and-pop 후 마지막 엔티티의 sparse 매핑을 반드시 갱신해야 stale 조회 방지.
+
+**공개 API 변경 없음** → 모든 호출 지점 그대로.
+
+---
+
+## 4. Phase 1.5~1.9: 핫 시스템 매니저 우회
+
+공통 패턴: 시스템 시작 시 풀을 한 번 캐시하고 루프 안에서는 `componentManager.TryGetComponent`가 아닌 `pool.TryGet` 직접 호출.
+
+### 1.5 Projectile
+- `CheckCollision`이 `FactionHelper.GetEnemyFactionLists`로 적 faction 후보만 순회
+- owner Player → Hostile 리스트, owner Hostile → Player 리스트, owner Neutral → 둘 다
+- per-candidate faction 필터 제거 (리스트가 이미 필터링)
+- 폴백: owner가 faction 없으면 Transform 풀 순회 (마이그레이션 안전)
+- 공통 `TryHitCandidate`/`ScanCandidateList` 헬퍼로 두 경로 공유
+
+### 1.6 Skill
+- `SkillRuntimePools`로 FixedUpdate 시작 시 필요한 풀을 한 번 묶어서 캐시
+- 메인 루프: `Skill/SkillState/SkillTiming/SkillCommand/State` 직접 풀 읽기
+- `ProcessSkillCommands`: `State/SkillState/SkillTarget/Transform/SkillTiming/Stat` 직접 풀 읽기
+- `UpdateSkillState`와 상태 처리: 메인 루프에서 읽은 `SkillComponent`를 `ref`로 전달하여 재조회 제거
+- `ProcessMultiHitSkill`/`ProcessChannelingSkill`/`ProcessToggleSkill`: `SkillTiming/Input/SkillTarget` 등 직접 풀 읽기
+- `ProcessSkillHit`: `SkillTarget/Transform/Collider/Stat/SkillStatBonus` 직접 풀 읽기
+- `ApplySkillEffectToEntity`: 데미지 전후 `StatComponent` 재조회는 유지하되 `Stat` 풀로 직접 읽기
+- `FindClosestEntity` & `CheckCircleRangeEntities`: 적 faction 후보 리스트만 순회 (전체 transform 풀 스캔 제거)
+  - owner Player → Hostile 리스트, owner Hostile → Player 리스트, owner Neutral → 둘 다
+  - owner faction 없으면 transform 풀 폴백 (IsHostileTo "모두 적대" 의미 보존)
+- 공통 헬퍼 `FindClosestInList`/`CollectSectorHitsFromList`로 두 경로 공유
+- `AddComponent`/`SetComponent`/`RemoveComponent` 같은 쓰기와 생명주기 추적은 `ComponentManager` 경로 유지
+- 잔여 매니저 조회: `StartSkillInternal` 계열과 `IsSkillRunning` 같은 저빈도 helper에만 남김
+
+### 1.7 Render
+- `Transform/Velocity/Collider/Jump` 풀 캐시
+- 변경된 transform은 `transformPool.SetByIndex(i, ...)`로 직접 저장
+
+### 1.8 AI Behavior
+- `AIStateComponent` 풀 캐시 (디스패치 루프 한정)
+- 개별 핸들러(Chase/Melee/Ranged/Patrol/Build)는 미터치
+
+### 1.9 FactionHelper (가장 큰 효과)
+- **이벤트 기반 인덱스**: `ComponentManager`가 `FactionComponent` Add/Set/Remove 시 Player/Hostile 리스트 자동 갱신
+- `FindNearestEnemy`가 전체 faction 풀 대신 **적 리스트만** 순회
+- 예: 몬스터 200 + 플레이어 1 → 200×201 후보 방문이 200×1로 감소
+
+### 검증
+- `dotnet build Assembly-CSharp.csproj --no-restore` 통과
+- 신규 컴파일 오류 없음
+- 기존 Unity API/nullable 관련 경고만 남음
+
+---
+
+## 5. Phase 2: 결정론적 ID 제거 (현재 보류)
+
+**현재 판단**: 지금은 진행하지 않음. Phase 1 계열 최적화 이후 큰 결정론적 ID가 실제 병목으로 확인될 때만 재검토.
+
+**의도**: EntityId 숫자에 의미를 인코딩하지 않음.
 
 ```text
-_sparse[entityId] = denseIndex + 1
-0 means "component not present"
+의미 조회 (드묾)     : 키 맵 사용 (생성/UI/명령 구성 시)
+컴포넌트 조회 (빈번) : 작은 entityId로 직접 sparse 배열
 ```
 
-The `+1` is needed because dense index `0` is valid.
+**키 맵 구조**:
+- `Dictionary<SkillKey(owner, slot), int>` ↔ `Dictionary<int, SkillKey>`
+- Buff/Relationship도 동일 패턴
 
-### 4.2 Why This Fits Current Project
+**마이그레이션**: 호환성 래퍼 유지 → 키 맵 추가 → 호출 지점 교체 → 공식 제거 → 세이브/로드 검증 후 폴백 제거.
 
-General entities are small and recycled, so they benefit from array lookup.
+**리스크**: 세이브 데이터가 결정론적 ID를 저장 중일 수 있음 → 런타임 파생 엔티티(skill/buff/relationship)는 로드 시 재구성 권장.
 
-Deterministic Skill/Buff/Relationship IDs are large, so they stay in fallback Dictionary until Phase 2.
+---
 
-### 4.3 Proposed `SparseSet<T>` Fields
+## 6. Phase 3: 핫 컴포넌트 매핑 테이블 (현재 보류)
+
+**현재 판단**: 지금은 진행하지 않음. Phase 1 계열 최적화와 재프로파일링 이후에도 핫 시스템의 sparse 조회 비용이 의미 있게 남을 때만 검토.
+
+Phase 1+2 후에도 부족하면, 핫 컴포넌트의 dense 인덱스를 엔티티별로 캐시.
 
 ```csharp
-private const int DefaultSparseCapacity = 1024;
-private const int MaxDirectEntityId = 65536;
-
-private int[] _sparse;
-private readonly Dictionary<int, int> _fallbackSparse;
-private int[] _dense;
-private T[] _data;
-private int _count;
-```
-
-Notes:
-
-- `MaxDirectEntityId` should be configurable or at least easy to change.
-- `65536` means each direct sparse array is at most about 256 KB per component pool.
-- Use dynamic growth so small pools do not immediately allocate the full max size.
-
-### 4.4 Direct vs Fallback Rule
-
-```csharp
-private static bool CanUseDirectSparse(int entityId)
-{
-    return entityId >= 0 && entityId < MaxDirectEntityId;
+struct HotComponentMap {
+    int TransformIndex, VelocityIndex, StatIndex,
+        FactionIndex, ColliderIndex, JumpIndex;
 }
 ```
 
-If `entityId` is direct but larger than current `_sparse.Length`, grow `_sparse` up to `MaxDirectEntityId`.
-
-If growing would exceed `MaxDirectEntityId`, use `_fallbackSparse`.
-
-### 4.5 Required Helper Methods
-
-Add private helpers inside `SparseSet<T>`:
-
-```csharp
-private bool TryGetDenseIndex(int entityId, out int denseIndex);
-private void SetSparseIndex(int entityId, int denseIndex);
-private void RemoveSparseIndex(int entityId);
-private void EnsureSparseCapacity(int entityId);
-```
-
-All public methods should use these helpers.
-
-Affected public methods:
-
-- `Add`
-- `Set`
-- `Get`
-- `Contains`
-- `TryGet`
-- `Remove`
-
-### 4.6 Add/Set Flow
-
-```text
-Add/Set(entityId, value)
-  if TryGetDenseIndex(entityId)
-    _data[denseIndex] = value
-    return
-
-  ensure dense capacity
-  denseIndex = _count
-  _dense[denseIndex] = entityId
-  _data[denseIndex] = value
-  SetSparseIndex(entityId, denseIndex)
-  _count++
-```
-
-### 4.7 Remove Flow
-
-`Remove` must update sparse mapping after swap-and-pop.
-
-```text
-Remove(entityId)
-  if not found: return
-
-  denseIndex = found index
-  lastIndex = _count - 1
-
-  if denseIndex != lastIndex
-    lastEntityId = _dense[lastIndex]
-    _dense[denseIndex] = lastEntityId
-    _data[denseIndex] = _data[lastIndex]
-    SetSparseIndex(lastEntityId, denseIndex)
-
-  RemoveSparseIndex(entityId)
-  _count--
-```
-
-This is critical. If `lastEntityId` is not remapped, later lookups can read stale data.
-
-### 4.8 Compatibility
-
-No public API changes in Phase 1.
-
-Expected unchanged call sites:
-
-- `ComponentManager.AddComponent`
-- `ComponentManager.SetComponent`
-- `ComponentManager.TryGetComponent`
-- `ComponentManager.HasComponent`
-- all systems using `GetComponentPool<T>()`
-
-### 4.9 Phase 1 Validation
-
-Manual/component-level checks:
-
-- Add component to small ID, retrieve it.
-- Set component to small ID, retrieve updated value.
-- Remove component from small ID, confirm missing.
-- Add several IDs, remove middle element, confirm swapped entity still retrieves correctly.
-- Add component to large deterministic ID, retrieve it through fallback.
-- Remove component from large deterministic ID.
-- Mix small and large IDs in the same pool.
-
-Runtime checks:
-
-- Spawn player.
-- Spawn monsters.
-- Cast skills.
-- Fire projectiles.
-- Apply buffs.
-- Create/destroy village/build tasks if available.
-
-Profiler checks:
-
-- `TryGetComponent` count may remain similar.
-- Time per lookup should drop for small EntityIds.
-- No new GC allocations in hot loops.
-
-### 4.10 Phase 1 Risks
-
-| Risk | Mitigation |
-|------|------------|
-| stale dense index after remove | centralize swap update in `Remove` |
-| direct sparse array memory grows too much | cap with `MaxDirectEntityId` |
-| deterministic ID accidentally creates huge array | route IDs above cap to fallback |
-| negative IDs | treat as missing, never index array |
-| behavior difference in `Get` default return | preserve current behavior |
-
-## 5. Phase 1.5: Projectile Hot-Loop Optimization
-
-### 5.1 Goal
-
-After Phase 1, component lookup is cheaper, but projectile collision can still dominate the frame because it multiplies lookups by:
-
-```text
-projectile count * candidate entity count * component checks per candidate
-```
-
-Current shape:
-
-```text
-for each ProjectileComponent
-  iterate every TransformComponent
-    ComponentManager.HasComponent<ProjectileTag>
-    ComponentManager.TryGetComponent<FactionComponent>
-    ComponentManager.HasComponent<StatComponent>
-    ComponentManager.TryGetComponent<JumpComponent>
-    ComponentManager.TryGetComponent<ColliderComponent>
-```
-
-Target shape:
-
-```text
-for each ProjectileComponent
-  use cached local pools
-  iterate FactionComponent candidates for normal faction-owned projectiles
-    target faction is read by GetByIndex
-    Transform/Stat/Jump/Collider are read by pool.TryGet/Contains
-```
-
-This phase does not introduce a global hot mapping table. It is a local system-level optimization for `System_Projectile`.
-
-### 5.2 Why Before Phase 2
-
-Profiler after Phase 1 showed the remaining cost concentrated around:
-
-- `System_Projectile.OnFixedUpdate`
-- `System_Projectile.CheckCollision`
-- repeated `ComponentManager.TryGetComponent`
-- repeated `ComponentManager.HasComponent`
-
-Phase 2 reduces large deterministic ID costs, but projectile collision mostly spends time scanning target candidates and checking multiple components. Therefore projectile-loop cleanup has better immediate risk/reward.
-
-### 5.3 Planned Changes
-
-At the start of `System_Projectile.OnFixedUpdate`, cache pools once:
-
-```csharp
-SparseSet<ProjectileComponent> projectilePool = cm.GetComponentPool<ProjectileComponent>();
-SparseSet<TransformComponent> transformPool = cm.GetComponentPool<TransformComponent>();
-SparseSet<VelocityComponent> velocityPool = cm.GetComponentPool<VelocityComponent>();
-SparseSet<SkillComponent> skillPool = cm.GetComponentPool<SkillComponent>();
-SparseSet<FactionComponent> factionPool = cm.GetComponentPool<FactionComponent>();
-SparseSet<StatComponent> statPool = cm.GetComponentPool<StatComponent>();
-SparseSet<JumpComponent> jumpPool = cm.GetComponentPool<JumpComponent>();
-SparseSet<ColliderComponent> colliderPool = cm.GetComponentPool<ColliderComponent>();
-SparseSet<ProjectileTag> projectileTagPool = cm.GetComponentPool<ProjectileTag>();
-```
-
-Movement lookup changes from manager path:
-
-```csharp
-cm.TryGetComponent<TransformComponent>(entityId, out var transform)
-cm.TryGetComponent<VelocityComponent>(entityId, out var velocity)
-```
-
-to direct pool path:
-
-```csharp
-transformPool.TryGet(entityId, out var transform)
-velocityPool.TryGet(entityId, out var velocity)
-```
-
-`CheckCollision` receives the hot pools as parameters so it does not repeatedly go through `ComponentManager`.
-
-### 5.4 Candidate Loop Strategy
-
-Fast path:
-
-```text
-if projectile owner has FactionComponent:
-  iterate FactionComponent pool
-```
-
-Benefits:
-
-- Skips world items, area effects, map loaders, skill entities, and other transform-only entities without faction.
-- Reads target faction with `factionPool.GetByIndex(i)` instead of another lookup.
-- Keeps `StatComponent` as an explicit filter for damageable targets.
-
-Fallback path:
-
-```text
-if projectile owner has no FactionComponent:
-  preserve existing behavior by iterating TransformComponent pool
-```
-
-This keeps migration-safe behavior for old or special projectiles.
-
-### 5.5 Detailed Filtering Order
-
-For each candidate:
-
-1. skip projectile entity itself
-2. skip projectile owner
-3. skip entities with `ProjectileTag`
-4. if owner has faction:
-   - target must have faction
-   - target faction must not be neutral
-   - target faction must differ from owner faction
-5. target must have `StatComponent`
-6. if target has `JumpComponent` and height is invincible, skip
-7. read target transform
-8. read optional collider
-9. run hitbox test
-10. apply damage/effects
-
-### 5.6 Expected Effect
-
-Expected improvements:
-
-- fewer total candidate iterations in projectile collision
-- fewer `ComponentManager.TryGetComponent` calls
-- fewer `ComponentManager.HasComponent` calls
-- more direct pool lookups in the hottest projectile path
-
-This will not eliminate all component lookup cost. It should reduce the biggest multiplier before considering a broader hot component mapping table.
-
-### 5.7 Risks
-
-| Risk | Mitigation |
-|------|------------|
-| target without faction should still be hittable in special cases | use Transform fallback only when owner has no faction |
-| behavior changes for neutral/factionless targets | preserve current owner-has-faction filtering exactly |
-| too many method parameters to `CheckCollision` | introduce a small private context struct if readability suffers |
-| optimization hides future broadphase need | profile again after this phase |
-
-### 5.8 Acceptance Criteria
-
-- Projectile movement still works.
-- Projectiles still ignore owner and other projectiles.
-- Same-faction and neutral filtering remains unchanged.
-- Damageable targets with `StatComponent` can still be hit.
-- Jump invincibility still skips hits.
-- Piercing projectiles still continue after hits.
-- Non-piercing projectiles still destroy on first hit.
-- Profiler shows lower `System_Projectile.CheckCollision` time and fewer manager lookup calls.
+- 대상: Transform/Velocity/Stat/Faction/Collider/Jump (+ State)
+- 제거 시 swap된 엔티티 매핑도 함께 갱신 필요 → `SparseRemoveResult` 도입
+- 프로파일링으로 핫 시스템에서만 사용
 
 ---
 
-## 6. Phase 1.6: Skill Loop Manager-Bypass Optimization
+## 7. Phase 4: Entity Generation 안전성
 
-Status: partially implemented in `Assets/Scripts/Common/System/System_Skill.cs`.
+**문제**: ID 재사용 후 stale 참조가 무관한 엔티티를 가리킴.
 
-### 6.1 Goal
+**대안**:
+- A: `EntityRef { Index, Generation }` 패킹 — 깔끔하지만 컴포넌트 필드 대량 변경
+- B: `int EntityId` 유지 + `EntityIdHelper` 검증 테이블
 
-Keep the projectile bottleneck visible for comparison, while reducing a separate non-projectile source of repeated ECS lookup overhead.
+영향 필드: AI/Projectile/AreaEffect/Buff/Skill/Npc/Relationship 등 다수.
 
-This phase intentionally does not change projectile collision behavior. It targets the primary `System_Skill.OnFixedUpdate` loop only.
-
-### 6.2 Implemented Scope
-
-At the start of `System_Skill.OnFixedUpdate`, cache the component manager and the pools used by the per-skill loop:
-
-```csharp
-ComponentManager cm = AR.s.Component;
-SparseSet<SkillComponent> skillPool = cm.GetComponentPool<SkillComponent>();
-SparseSet<SkillStateComponent> skillStatePool = cm.GetComponentPool<SkillStateComponent>();
-SparseSet<SkillTimingComponent> skillTimingPool = cm.GetComponentPool<SkillTimingComponent>();
-SparseSet<SkillCommandComponent> skillCommandPool = cm.GetComponentPool<SkillCommandComponent>();
-SparseSet<StateComponent> statePool = cm.GetComponentPool<StateComponent>();
-```
-
-Then replace repeated manager-path reads in the main loop:
-
-```text
-ComponentManager.TryGetComponent<SkillStateComponent>
-ComponentManager.TryGetComponent<SkillTimingComponent>
-ComponentManager.TryGetComponent<SkillCommandComponent>
-ComponentManager.TryGetComponent<StateComponent> inside ShouldCancelSkill
-```
-
-with direct pool reads:
-
-```text
-skillStatePool.TryGet
-skillTimingPool.TryGet
-skillCommandPool.TryGet
-statePool.TryGet
-```
-
-Writes still go through `ComponentManager.SetComponent`/`RemoveComponent` so tracking behavior stays unchanged.
-
-### 6.3 Deferred Scope
-
-Do not yet rewrite:
-
-- `ProcessSkillCommands`
-- state enter/exit handlers
-- skill hit processing
-- target search/range checks
-
-Those paths are more behavior-heavy and should be profiled separately.
-
-### 6.4 Acceptance Criteria
-
-- Skill cooldown ticking still works.
-- Running skills still update timing/state.
-- Stun cancellation still works.
-- Skill commands still start the correct skill.
-- Profiler shows fewer `ComponentManager.TryGetComponent` calls from `System_Skill.OnFixedUpdate`.
+**Phase 1과 결합 금지** — 정확성 작업으로 별도 진행.
 
 ---
 
-## 7. Phase 1.7: Render Loop Manager-Bypass Optimization
+## 8. 권장 순서
 
-Status: implemented in `Assets/Scripts/Common/System/System_Render.cs`.
-
-### 7.1 Goal
-
-Reduce non-projectile ECS lookup overhead in `System_Render.OnUpdate` while preserving the existing render/update flow.
-
-This phase intentionally keeps projectile collision unchanged so projectile remains available as a separate profiling stress case.
-
-### 7.2 Implemented Scope
-
-At the start of `System_Render.OnUpdate`, cache the hot pools once:
-
-```csharp
-SparseSet<TransformComponent> transformPool = _componentManager.GetComponentPool<TransformComponent>();
-SparseSet<VelocityComponent> velocityPool = _componentManager.GetComponentPool<VelocityComponent>();
-SparseSet<ColliderComponent> colliderPool = _componentManager.GetComponentPool<ColliderComponent>();
-SparseSet<JumpComponent> jumpPool = _componentManager.GetComponentPool<JumpComponent>();
-```
-
-Then replace manager-path reads in the per-transform loop:
-
-```text
-ComponentManager.TryGetComponent<VelocityComponent>
-ComponentManager.TryGetComponent<ColliderComponent>
-ComponentManager.TryGetComponent<JumpComponent>
-```
-
-with direct pool reads:
-
-```text
-velocityPool.TryGet
-colliderPool.TryGet
-jumpPool.TryGet
-```
-
-When render-side movement changes a `TransformComponent`, store it back through the already-iterated pool:
-
-```csharp
-transformPool.SetByIndex(i, transformComponent);
-```
-
-This avoids another manager lookup and matches the intent of updating the same dense transform element currently being processed.
-
-### 7.3 Deferred Scope
-
-Do not yet change:
-
-- entity-to-GameObject Dictionary mapping
-- Unity `Transform` property writes
-- jump/shadow visual behavior
-- movement ownership between `System_Render` and fixed update systems
-
-Those are separate architecture questions.
-
-### 7.4 Acceptance Criteria
-
-- Entities with velocity still move visually.
-- Collider sliding still applies when `ColliderComponent` exists.
-- Jump sprite height and shadow scale still update.
-- Non-jumping sprites still reset local Y to zero.
-- Profiler shows fewer `ComponentManager.TryGetComponent` calls from `System_Render.OnUpdate`.
+1. 프로파일링 → 베이스라인 확보
+2. Phase 1 (`SparseSet` 배열+폴백) 구현·검증
+3. 재프로파일링
+4. Phase 2/3은 현재 진행하지 않음
+5. 이후 프로파일링에서 명확한 병목으로 확인될 때만 Phase 2 또는 Phase 3 재검토
+6. Phase 4 (generation)는 별도 안전성 리팩토링
 
 ---
 
-## 8. Phase 1.8: AI Behavior Loop Manager-Bypass Optimization
+## 9. 초기 권장
 
-Status: implemented in `Assets/Scripts/Common/System/System_AI_Behavior.cs`.
-
-### 8.1 Goal
-
-Reduce repeated manager-path reads in the main AI behavior dispatch loop without changing AI state handler behavior.
-
-This keeps the work narrowly scoped: only the system loop that chooses which handler to call is changed.
-
-### 8.2 Implemented Scope
-
-Cache the state pool once:
-
-```csharp
-SparseSet<AIBehaviorTypeComponent> behaviorPool = componentManager.GetComponentPool<AIBehaviorTypeComponent>();
-SparseSet<AIStateComponent> statePool = componentManager.GetComponentPool<AIStateComponent>();
-```
-
-Then replace:
-
-```csharp
-componentManager.TryGetComponent<AIStateComponent>(entityId, out var stateComponent)
-```
-
-with:
-
-```csharp
-statePool.TryGet(entityId, out var stateComponent)
-```
-
-`AIBehaviorTypeComponent` was already read from the dense behavior pool with `GetByIndex`.
-
-### 8.3 Deferred Scope
-
-Do not yet optimize inside individual AI state handlers.
-
-Handlers such as `ChaseStateHandler`, `MeleeAttackStateHandler`, `RangedAttackStateHandler`, `PatrolStateHandler`, and `BuildStateHandler` still use normal `ComponentManager` access. That is intentional because those handlers contain more gameplay-specific branching and should be profiled separately.
-
-### 8.4 Acceptance Criteria
-
-- AI entities still dispatch to the same state handlers.
-- Entities without `AIStateComponent` are still skipped.
-- No AI state transition behavior changes.
-- Profiler shows fewer `ComponentManager.TryGetComponent<AIStateComponent>` calls from `System_AI_Behavior.OnFixedUpdate`.
-
----
-
-## 9. Phase 1.9: Faction Search Helper Optimization
-
-Status: implemented in `Assets/Scripts/Common/Utility/FactionHelper.cs` and `Assets/Scripts/Manager/ComponentManager.cs`.
-
-The first pass removed repeated manager-path component lookups and `Vector2.Angle`. The second pass replaced full faction-pool scans with an event-driven faction candidate index.
-
-### 9.1 Goal
-
-Reduce the cost of `FactionHelper.FindNearestEnemy`, which is shared by AI perception and stationary attack behavior.
-
-The function is called from:
-
-- `System_AI_Perception`
-- `StationaryAttackStateHandler`
-
-It already iterates the `FactionComponent` pool, which is the right high-level candidate set. The remaining cost was repeated manager-path component lookup and `Vector2.Angle` inside the candidate loop.
-
-### 9.2 First-Pass Implemented Scope
-
-Cache pools once before iterating candidates:
-
-```csharp
-SparseSet<FactionComponent> factionPool = cm.GetComponentPool<FactionComponent>();
-SparseSet<TransformComponent> transformPool = cm.GetComponentPool<TransformComponent>();
-SparseSet<StatComponent> statPool = cm.GetComponentPool<StatComponent>();
-```
-
-Replace per-candidate manager reads:
-
-```text
-ComponentManager.TryGetComponent<TransformComponent>
-ComponentManager.HasComponent<StatComponent>
-```
-
-with direct pool reads:
-
-```text
-transformPool.TryGet
-statPool.Contains
-```
-
-Replace FOV angle calculation:
-
-```csharp
-Vector2.Angle(forward, dirToCandidate) <= fieldOfView * 0.5f
-```
-
-with a dot/cos comparison:
-
-```csharp
-float halfFovCos = Mathf.Cos(fieldOfView * 0.5f * Mathf.Deg2Rad);
-float dot = Vector2.Dot(forward, toCandidate) / distance;
-dot >= halfFovCos
-```
-
-This preserves the same cone test while avoiding `Vector2.Angle`'s more expensive angle conversion.
-
-### 9.3 Second-Pass Implemented Scope
-
-`FactionHelper` now keeps direct candidate lists:
-
-```text
-Player faction entities
-Hostile faction entities
-```
-
-`ComponentManager` updates those lists from component lifecycle events:
-
-```text
-AddComponent<FactionComponent>    -> add entity to the new faction list
-SetComponent<FactionComponent>    -> move entity if faction changed
-RemoveComponent<FactionComponent> -> remove entity from the previous faction list
-RemoveAllComponents               -> remove entity from faction lists
-Reset                             -> clear all faction lists
-```
-
-`FindNearestEnemy` no longer scans every entity with `FactionComponent` for normal Player/Hostile searches:
-
-```text
-selfFaction == Hostile -> iterate Player list
-selfFaction == Player  -> iterate Hostile list
-selfFaction == Neutral -> iterate Player + Hostile lists, matching previous non-neutral fallback
-```
-
-### 9.4 Preserved Behavior
-
-- Candidate iteration now uses enemy faction lists instead of the full `FactionComponent` pool.
-- Same faction and neutral candidates are excluded by faction-list membership.
-- `nearestEnemySqrDistance` is still updated before range/FOV filtering, matching the previous lose-target behavior.
-- `requireStatComponent` still filters candidates when requested.
-- `targetPosition` still uses the selected target's transform position.
-
-### 9.5 Event-Driven Faction Candidate Index Rationale
-
-`FindNearestEnemy` was still expensive after direct pool reads, because each caller scanned the full `FactionComponent` pool before skipping same-faction candidates.
-
-Example:
-
-```text
-200 hostile monsters, 1 player
-
-Previous search shape:
-  every monster scans all faction entities
-  200 * 201 candidate visits
-
-Implemented search shape:
-  hostile monsters scan only Player faction candidates
-  200 * 1 candidate visits
-```
-
-Do not rebuild this index every frame. Faction membership changes only when a `FactionComponent` is added, updated, removed, or when an entity is destroyed/reset. Therefore the cache is maintained from component lifecycle hooks:
-
-```text
-FactionComponent Add    -> add entity to that faction list
-FactionComponent Set    -> move entity if faction changed
-FactionComponent Remove -> remove entity from faction list
-RemoveAllComponents     -> remove entity from all faction lists
-ComponentManager.Reset  -> clear all faction lists
-```
-
-The hot `FindNearestEnemy` path now chooses the enemy list directly:
-
-```text
-selfFaction == Hostile -> iterate Player list
-selfFaction == Player  -> iterate Hostile list
-selfFaction == Neutral -> iterate non-neutral lists, matching previous fallback behavior
-```
-
-The candidate list is only a broad candidate filter. The function must still validate per-candidate components before use:
-
-```text
-TransformComponent must exist
-StatComponent must exist when requireStatComponent is true
-range/FOV filters still apply
-```
-
-This keeps entity creation/destruction costs slightly higher, but removes repeated full faction scans from AI perception and stationary attack behavior.
-
-### 9.6 Deferred Scope
-
-Do not yet add spatial partitioning or team-specific target lists.
-
-If `FindNearestEnemy` remains hot after this pass, the next larger step is a broadphase structure, for example:
-
-- grid/spatial hash by world cell
-- cached nearest target per AI update slice
-
-### 9.7 Acceptance Criteria
-
-- AI perception still acquires enemies.
-- Stationary attack AI still finds targets.
-- FOV-limited AI still respects field of view.
-- Lose-target logic remains stable.
-- Profiler shows lower `FindNearestEnemy` time and fewer full-faction candidate visits.
-
----
-
-## 10. Phase 2: Small EntityId for Skill/Buff/Relationship
-
-### 10.1 Goal
-
-Stop encoding deterministic meaning into EntityId numbers.
-
-Current:
-
-```text
-deterministic meaning = EntityId formula
-```
-
-Target:
-
-```text
-EntityId = small recycled runtime ID
-deterministic meaning = key -> EntityId mapping
-```
-
-Important intent:
-
-The key map is not meant to move the same hot-path Dictionary lookup from `SparseSet<T>` to `EntityIdHelper`.
-
-It separates two different kinds of lookup.
-
-```text
-Meaning lookup, rare:
-  (ownerEntityId, slotIndex) -> skillEntityId
-  (targetEntityId, buffTableId) -> buffEntityId
-  (fromEntityId, toEntityId) -> relationshipEntityId
-
-Component lookup, frequent:
-  skillEntityId -> SkillComponent
-  skillEntityId -> SkillStateComponent
-  skillEntityId -> SkillTimingComponent
-  targetEntityId -> StatComponent
-```
-
-With deterministic large IDs, meaning lookup is cheap because the ID is computed, but all component lookups for that large ID go through the `SparseSet<T>` fallback Dictionary.
-
-With key maps, the key Dictionary should be used only when code needs to resolve a semantic key into an entity. Once a small `entityId` is known, normal ECS component access should use the direct sparse array path.
-
-Expected usage:
-
-```text
-Creation/deletion/equipment change/UI/command construction:
-  use key map if needed
-
-Per-frame combat/system loops:
-  use already stored small entityId
-  or iterate the component pool densely
-```
-
-Bad usage:
-
-```text
-Every frame, for every character slot:
-  Dictionary<SkillKey, int> lookup
-  then component lookup
-```
-
-That would reintroduce hash cost into the hot path.
-
-### 10.2 New Key Maps
-
-Skill:
-
-```csharp
-private readonly struct SkillKey
-{
-    public readonly int OwnerEntityId;
-    public readonly int SlotIndex;
-}
-
-private static readonly Dictionary<SkillKey, int> _skillEntityByOwnerSlot;
-private static readonly Dictionary<int, SkillKey> _skillKeyByEntityId;
-```
-
-Buff:
-
-```csharp
-private readonly struct BuffKey
-{
-    public readonly int TargetEntityId;
-    public readonly int BuffTableId;
-}
-
-private static readonly Dictionary<BuffKey, int> _buffEntityByTargetAndType;
-private static readonly Dictionary<int, BuffKey> _buffKeyByEntityId;
-```
-
-Relationship:
-
-```csharp
-private readonly struct RelationshipKey
-{
-    public readonly int FromEntityId;
-    public readonly int ToEntityId;
-}
-
-private static readonly Dictionary<RelationshipKey, int> _relationshipEntityByPair;
-private static readonly Dictionary<int, RelationshipKey> _relationshipKeyByEntityId;
-```
-
-### 10.3 New Behavior
-
-```text
-CreateSkillEntity(owner, slot)
-  if key exists: return existing ID
-  id = CreateEntity()
-  map key -> id
-  map id -> key
-  return id
-```
-
-Same idea for buff and relationship.
-
-### 10.4 Replace Formula-Based APIs
-
-Current API patterns to phase out:
-
-- `GetDeterministicId(ownerEntityId, EntityIdCategory.Skill, slotIndex)`
-- `GetOwnerEntityId(skillEntityId, EntityIdCategory.Skill)`
-- `GetIndex(skillEntityId, EntityIdCategory.Skill)`
-- `IsValidDeterministicId(...)`
-
-Target API patterns:
-
-- `TryGetSkillEntityId(ownerEntityId, slotIndex, out int skillEntityId)`
-- `TryGetSkillOwnerAndSlot(skillEntityId, out int ownerEntityId, out int slotIndex)`
-- `TryGetBuffEntityId(targetEntityId, buffTableId, out int buffEntityId)`
-- `TryGetBuffTargetAndType(buffEntityId, out int targetEntityId, out int buffTableId)`
-- `TryGetRelationshipEntityId(fromEntityId, toEntityId, out int relationshipEntityId)`
-- `TryGetRelationshipPair(relationshipEntityId, out int fromEntityId, out int toEntityId)`
-
-### 10.5 Migration Plan
-
-Do this in slices.
-
-1. Add new key maps while keeping old deterministic APIs.
-2. Change `CreateSkillEntity`, `CreateBuffEntity`, `CreateRelationshipEntity` to optionally use small IDs behind a feature flag.
-3. Replace call sites that compute IDs with lookup methods.
-4. Remove formula dependency after all call sites are migrated.
-5. Delete fallback compatibility only after save/load is confirmed.
-
-### 10.6 Save/Load Considerations
-
-Saved data may currently store deterministic IDs.
-
-Need decisions:
-
-- Are saved skill/buff/relationship entity IDs persisted?
-- Can old saves be migrated?
-- Should derived skill/buff/relationship entities be rebuilt on load instead of preserving exact IDs?
-
-Recommended:
-
-- Persistent world objects can keep saved EntityId.
-- Runtime-derived entities like skill/buff/relationship should prefer rebuilding from owner/slot or target/type keys.
-
-### 10.7 Phase 2 Risks
-
-| Risk | Mitigation |
-|------|------------|
-| old code still computes formula IDs | keep compatibility wrappers temporarily |
-| save files reference old IDs | add migration/rebuild path |
-| duplicate skill/buff entities | key map owns uniqueness |
-| destroying owner leaves derived maps dirty | centralize cleanup in `DestroyEntity` |
-
----
-
-## 11. Phase 3: Hot Component Mapping Table
-
-### 11.1 Goal
-
-If Phase 1 and Phase 2 are not enough, add a per-entity hot index mapping.
-
-```text
-entityId -> HotComponentMap
-```
-
-Example:
-
-```csharp
-public struct HotComponentMap
-{
-    public int TransformIndex;
-    public int VelocityIndex;
-    public int StatIndex;
-    public int FactionIndex;
-    public int ColliderIndex;
-    public int JumpIndex;
-}
-```
-
-Use `-1` for missing component.
-
-### 11.2 Scope
-
-Start only with hot components:
-
-- `TransformComponent`
-- `VelocityComponent`
-- `StatComponent`
-- `FactionComponent`
-- `ColliderComponent`
-- `JumpComponent`
-- maybe `StateComponent`
-
-Do not add every component.
-
-### 11.3 Integration Points
-
-When adding a hot component:
-
-```text
-SparseSet<T>.Add/Set
-  dense index assigned
-  ComponentManager updates HotComponentMap for entity
-```
-
-When removing:
-
-```text
-SparseSet<T>.Remove
-  swap-and-pop may move another entity
-  ComponentManager must update both removed entity and swapped entity mapping
-```
-
-This phase may require `SparseSet<T>` to report swap details to `ComponentManager`.
-
-Possible design:
-
-```csharp
-public readonly struct SparseRemoveResult
-{
-    public bool Removed;
-    public int RemovedEntityId;
-    public int MovedEntityId;
-    public int MovedNewDenseIndex;
-}
-```
-
-### 11.4 Usage Pattern
-
-Hot systems can avoid repeated sparse lookup:
-
-```text
-map = hotMaps[entityId]
-if map.TransformIndex >= 0
-  transform = transformPool.GetByIndex(map.TransformIndex)
-```
-
-Only use this in the hottest systems after profiling.
-
-Candidate systems:
-
-- `System_Projectile`
-- `System_Render`
-- `System_Skill`
-- `FactionHelper`
-- `System_AI_Perception`
-
-### 11.5 Risks
-
-| Risk | Mitigation |
-|------|------------|
-| map desync after component remove | add invariant checks in development builds |
-| too much ComponentManager coupling | only support selected hot components |
-| harder debugging | keep normal `TryGetComponent` path as fallback |
-
----
-
-## 12. Phase 4: Entity Generation Safety
-
-### 12.1 Goal
-
-Prevent stale entity references from pointing to a new entity after ID reuse.
-
-Current risk:
-
-```text
-missile.TargetEntityId = 42
-entity 42 dies
-ID 42 reused by unrelated NPC
-missile now targets unrelated NPC
-```
-
-### 12.2 Target Representation
-
-Option A: packed 64-bit entity reference.
-
-```csharp
-public readonly struct EntityRef
-{
-    public readonly int Index;
-    public readonly int Generation;
-}
-```
-
-Option B: keep `int EntityId`, add validation table in `EntityIdHelper`.
-
-Option A is cleaner but requires changing many component fields.
-
-### 12.3 Current Fields Affected
-
-Examples:
-
-- `AIComponent.TargetEntityId`
-- `ProjectileComponent.OwnerEntityId`
-- `ProjectileComponent.SkillEntityId`
-- `AreaEffectComponent.OwnerEntityId`
-- `BuffInstance.TargetEntityId`
-- `SkillComponent.OwnerEntityId`
-- `SkillTargetComponent.TargetId`
-- `NpcAssignmentComponent.AssignedObjectEntityId`
-- `NpcBuildAssignmentComponent.TaskEntityId`
-- `ObjectPlacementTaskComponent.AssignedNpcEntityId`
-- `ObjectPlacementTaskComponent.BuildingEntityId`
-- `PlayerNearbyServicesComponent.Nearest*EntityId`
-- `RelationshipComponent.FromEntityId`
-- `RelationshipComponent.ToEntityId`
-
-### 12.4 Recommended Timing
-
-Do not combine generation with Phase 1.
-
-Generation is primarily correctness work. It touches component data, save/load, factories, systems, and helper APIs.
-
----
-
-## 13. Implementation Order
-
-Recommended order:
-
-1. Profile current lookup cost.
-2. Implement `SparseSet<T>` array + fallback Dictionary.
-3. Validate gameplay and no GC allocations.
-4. Profile again.
-5. If large deterministic IDs still matter, migrate Skill/Buff/Relationship to small IDs with key maps.
-6. Profile again.
-7. If still necessary, add hot component mapping table to projectile/skill/render paths.
-8. Schedule generation as a separate safety refactor.
-
----
-
-## 14. Acceptance Criteria
-
-Phase 1 is complete when:
-
-- `SparseSet<T>` no longer uses Dictionary for normal small EntityIds.
-- Large deterministic IDs still work through fallback.
-- Existing systems compile without call site changes.
-- Add/Set/TryGet/Contains/Remove behavior is unchanged.
-- Removing from the middle of a pool keeps swapped entity lookup correct.
-- Projectile combat, skill casting, buff application, entity destroy, and render sync still work.
-- Profiler shows lower component lookup time in hot scenarios.
-
-Phase 2 is complete when:
-
-- Skill/Buff/Relationship entities can be created with small recycled IDs.
-- Deterministic uniqueness is provided by key maps.
-- Formula-based call sites are removed or fully wrapped.
-- Save/load behavior is documented and tested.
-
-Phase 3 is complete when:
-
-- Only measured hot systems use hot maps.
-- Hot maps remain consistent after add/remove/swap.
-- Normal `TryGetComponent` remains available as a safe fallback.
-
----
-
-## 15. Initial Recommendation
-
-Start with Phase 1 only.
-
-It has the best risk/reward ratio because it changes the internal sparse lookup mechanism while preserving the rest of the ECS surface.
-
-Do not start by rewriting `EntityIdHelper`. That work is valuable, but it is larger and should happen after the first profiling-confirmed improvement.
+**Phase 1만 시작.** 위험/보상 비율이 가장 좋고 공개 API를 유지함. `EntityIdHelper` 재작성은 프로파일링 확인된 첫 개선 이후로 미룰 것.

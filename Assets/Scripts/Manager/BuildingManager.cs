@@ -222,7 +222,7 @@ namespace ARPG.Building
                 Vector2Int chunkCoord = TileToChunk(saveData.WorldTileX, saveData.WorldTileY);
                 if (AR.s.Map == null || AR.s.Map.IsChunkActive(chunkCoord) == false)
                 {
-                    EntityIdHelper.DestroyEntity(createdId, false);
+                    EntityIdHelper.DestroyEntity(createdId, allowRecycle: false, keepRegistered: true);
                     if (entity != null)
                         Destroy(entity.gameObject);
                     return;
@@ -252,7 +252,7 @@ namespace ARPG.Building
             if (AR.s.Message.TryGetEntity(entityId, out var entity))
             {
                 // ID 재활용 방지 (다음 로드 시 같은 ID 사용)
-                EntityIdHelper.DestroyEntity(entityId, false);
+                EntityIdHelper.DestroyEntity(entityId, allowRecycle: false, keepRegistered: true);
                 Destroy(entity.gameObject);
             }
 

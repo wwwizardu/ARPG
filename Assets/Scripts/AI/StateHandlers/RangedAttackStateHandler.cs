@@ -31,7 +31,7 @@ namespace ARPG.AI.StateHandlers
                 return;
             }
 
-            if (cm.TryGetComponent<TransformComponent>(ai.TargetEntityId, out var targetTransform) == false)
+            if (AIStateHelper.TryGetValidTargetTransform(entityId, ref ai, out var targetTransform) == false)
             {
                 AIStateHelper.TransitionToState(entityId, AIStateHelper.GetDefaultState(entityId));
                 return;

@@ -149,8 +149,9 @@ namespace ARPG.Utility
         /// 엔티티 제거 (일반 엔티티 + 스킬 엔티티 모두 정리)
         /// </summary>
         /// <param name="entityId">제거할 엔티티 ID</param>
-        /// <param name="allowRecycle">ID 재활용 허용 여부 (기본값: true)</param>
-        public static void DestroyEntity(int entityId, bool allowRecycle = true)
+        /// <param name="allowRecycle">ID 재활용 허용 여부. 기본값은 오래된 EntityId 참조 방지를 위해 false.</param>
+        /// <param name="keepRegistered">저장 엔티티처럼 같은 ID를 나중에 다시 써야 하면 등록 상태를 유지한다.</param>
+        public static void DestroyEntity(int entityId, bool allowRecycle = false, bool keepRegistered = false)
         {
             if(AR.s == null || AR.s.Component == null)
                 return;
@@ -160,6 +161,10 @@ namespace ARPG.Utility
                 Debug.LogWarning($"[EntityIdHelper] Entity {entityId} is not registered");
                 return;
             }
+
+            // 대상 기반 결정적 버프 엔티티는 명시적으로 제거하지 않으면 대상보다 오래 남을 수 있다.
+            // 같은 ID를 나중에 재사용한 엔티티가 DoT/디버프를 이어받지 않도록 먼저 정리한다.
+            BuffHelper.RemoveAllBuffs(entityId);
 
             // 캐릭터 엔티티인 경우, 해당 캐릭터의 모든 스킬 엔티티도 제거
             if (_characterSkillSlots.ContainsKey(entityId))
@@ -192,15 +197,18 @@ namespace ARPG.Utility
             // 메인 엔티티의 모든 ECS 컴포넌트 제거
             AR.s.Component.RemoveAllComponents(entityId);
 
-            _registeredEntityIds.Remove(entityId);
+            if (keepRegistered == false)
+            {
+                _registeredEntityIds.Remove(entityId);
+            }
 
             // ID 재활용 허용
-            if (allowRecycle)
+            if (allowRecycle && keepRegistered == false)
             {
                 _recycledEntityIds.Enqueue(entityId);
             }
 
-            Debug.Log($"[EntityIdHelper] Entity destroyed - ID: {entityId} (Recycled: {allowRecycle})");
+            Debug.Log($"[EntityIdHelper] Entity destroyed - ID: {entityId} (Recycled: {allowRecycle && keepRegistered == false}, Reserved: {keepRegistered})");
         }
 
         /// <summary>
@@ -297,6 +305,24 @@ namespace ARPG.Utility
             return $"{category}EntityId={entityId} (OwnerId={ownerId}, Index={index})";
         }
 
+        private static bool IsTrackedSkillSlot(int characterEntityId, int slotIndex)
+        {
+            return _characterSkillSlots.TryGetValue(characterEntityId, out HashSet<int> slots) &&
+                   slots.Contains(slotIndex);
+        }
+
+        private static bool IsTrackedBuffType(int targetEntityId, int buffTableID)
+        {
+            return _targetBuffTypes.TryGetValue(targetEntityId, out HashSet<int> buffTypes) &&
+                   buffTypes.Contains(buffTableID);
+        }
+
+        private static bool IsTrackedRelationship(int fromEntityId, int toEntityId)
+        {
+            return _relationshipTargets.TryGetValue(fromEntityId, out HashSet<int> targets) &&
+                   targets.Contains(toEntityId);
+        }
+
         #endregion
 
         #region Skill Entity Management
@@ -347,6 +373,12 @@ namespace ARPG.Utility
             }
 
             // 등록
+            if (_registeredEntityIds.Contains(skillEntityId))
+            {
+                Debug.LogError($"[EntityIdHelper] Skill entity ID collision - ID: {skillEntityId}, Character: {characterEntityId}, Slot: {slotIndex}");
+                return -1;
+            }
+
             _registeredEntityIds.Add(skillEntityId);
             usedSlots.Add(slotIndex);
 
@@ -407,9 +439,9 @@ namespace ARPG.Utility
             int slotIndex = GetIndex(skillEntityId, EntityIdCategory.Skill);
 
             // 유효성 검증
-            if (IsValidDeterministicId(skillEntityId, EntityIdCategory.Skill) == false)
+            if (IsValidSkillEntity(skillEntityId) == false)
             {
-                Debug.LogWarning($"[EntityIdHelper] Invalid skill entity ID: {skillEntityId}");
+                Debug.LogWarning($"[EntityIdHelper] Invalid or untracked skill entity ID: {skillEntityId}");
                 return;
             }
 
@@ -436,7 +468,12 @@ namespace ARPG.Utility
             if (_registeredEntityIds.Contains(skillEntityId) == false)
                 return false;
 
-            return IsValidDeterministicId(skillEntityId, EntityIdCategory.Skill);
+            if (IsValidDeterministicId(skillEntityId, EntityIdCategory.Skill) == false)
+                return false;
+
+            int characterEntityId = GetOwnerEntityId(skillEntityId, EntityIdCategory.Skill);
+            int slotIndex = GetIndex(skillEntityId, EntityIdCategory.Skill);
+            return IsTrackedSkillSlot(characterEntityId, slotIndex);
         }
 
         /// <summary>
@@ -539,6 +576,11 @@ namespace ARPG.Utility
             // 이미 같은 버프가 존재하는지 확인
             if (_registeredEntityIds.Contains(buffEntityId))
             {
+                if (IsTrackedBuffType(targetEntityId, buffTableID) == false)
+                {
+                    Debug.LogError($"[EntityIdHelper] Buff entity ID collision - ID: {buffEntityId}, Target: {targetEntityId}, TableID: {buffTableID}");
+                }
+
                 // 이미 존재함 - BuffHelper에서 StackCount 증가 처리
                 return -1;
             }
@@ -574,9 +616,9 @@ namespace ARPG.Utility
             int buffTableID = GetIndex(buffEntityId, EntityIdCategory.Buff);
 
             // 유효성 검증
-            if (IsValidDeterministicId(buffEntityId, EntityIdCategory.Buff) == false)
+            if (IsValidBuffEntity(buffEntityId) == false)
             {
-                Debug.LogWarning($"[EntityIdHelper] Invalid buff entity ID: {buffEntityId}");
+                Debug.LogWarning($"[EntityIdHelper] Invalid or untracked buff entity ID: {buffEntityId}");
                 return;
             }
 
@@ -609,7 +651,12 @@ namespace ARPG.Utility
             if (_registeredEntityIds.Contains(buffEntityId) == false)
                 return false;
 
-            return IsValidDeterministicId(buffEntityId, EntityIdCategory.Buff);
+            if (IsValidDeterministicId(buffEntityId, EntityIdCategory.Buff) == false)
+                return false;
+
+            int targetEntityId = GetOwnerEntityId(buffEntityId, EntityIdCategory.Buff);
+            int buffTableID = GetIndex(buffEntityId, EntityIdCategory.Buff);
+            return IsTrackedBuffType(targetEntityId, buffTableID);
         }
 
         /// <summary>
@@ -665,7 +712,11 @@ namespace ARPG.Utility
 
             if (_registeredEntityIds.Contains(relationshipEntityId))
             {
-                Debug.LogWarning($"[EntityIdHelper] Relationship already exists: {fromEntityId} → {toEntityId}");
+                if (IsTrackedRelationship(fromEntityId, toEntityId))
+                    Debug.LogWarning($"[EntityIdHelper] Relationship already exists: {fromEntityId} → {toEntityId}");
+                else
+                    Debug.LogError($"[EntityIdHelper] Relationship entity ID collision - ID: {relationshipEntityId}, From: {fromEntityId}, To: {toEntityId}");
+
                 return -1;
             }
 
@@ -704,9 +755,9 @@ namespace ARPG.Utility
             int fromEntityId = GetOwnerEntityId(relationshipEntityId, EntityIdCategory.Relationship);
             int toEntityId = GetIndex(relationshipEntityId, EntityIdCategory.Relationship);
 
-            if (IsValidDeterministicId(relationshipEntityId, EntityIdCategory.Relationship) == false)
+            if (IsValidRelationshipEntity(relationshipEntityId) == false)
             {
-                Debug.LogWarning($"[EntityIdHelper] Invalid relationship entity ID: {relationshipEntityId}");
+                Debug.LogWarning($"[EntityIdHelper] Invalid or untracked relationship entity ID: {relationshipEntityId}");
                 return;
             }
 
@@ -749,6 +800,9 @@ namespace ARPG.Utility
             if (_registeredEntityIds.Contains(relationshipEntityId) == false)
                 return -1;
 
+            if (HasRelationship(fromEntityId, toEntityId) == false)
+                return -1;
+
             return relationshipEntityId;
         }
 
@@ -772,7 +826,12 @@ namespace ARPG.Utility
             if (_registeredEntityIds.Contains(relationshipEntityId) == false)
                 return false;
 
-            return IsValidDeterministicId(relationshipEntityId, EntityIdCategory.Relationship);
+            if (IsValidDeterministicId(relationshipEntityId, EntityIdCategory.Relationship) == false)
+                return false;
+
+            int fromEntityId = GetOwnerEntityId(relationshipEntityId, EntityIdCategory.Relationship);
+            int toEntityId = GetIndex(relationshipEntityId, EntityIdCategory.Relationship);
+            return IsTrackedRelationship(fromEntityId, toEntityId);
         }
 
         /// <summary>
