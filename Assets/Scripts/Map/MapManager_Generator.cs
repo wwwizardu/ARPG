@@ -121,8 +121,7 @@ namespace ARPG.Map
                     }
 
                     // 타일 데이터 조합
-                    ulong currentTile = chunk.tiles[x, y];
-                    chunk.tiles[x, y] = CombineTileData(currentTile, baseTileType, hillFlag, monsterSpawnFlag);
+                    chunk.tiles[x, y] = CombineTileData(0UL, baseTileType, hillFlag, monsterSpawnFlag);
                 }
             }
 
@@ -232,7 +231,11 @@ namespace ARPG.Map
                 MapChunkData chunk = _activeChunks[chunkKey];
                 _activeChunks.Remove(chunkKey);
 
-                RemoveChunkFromTilemap(chunk); // 타일맵에서 청크 제거
+                if (_renderedChunks.Remove(chunkKey))
+                {
+                    RemoveChunkFromTilemap(chunk); // 타일맵에서 청크 제거
+                }
+
                 chunk.Deactivate();
                 _chunkPool.Push(chunk);
             }
@@ -245,10 +248,18 @@ namespace ARPG.Map
 
             foreach (var chunk in _activeChunks.Values)
             {
+                Vector2Int chunkCoord = new Vector2Int(chunk.chunkX, chunk.chunkY);
+                if (_renderedChunks.Contains(chunkCoord))
+                {
+                    RemoveChunkFromTilemap(chunk);
+                }
+
                 chunk.Deactivate();
                 _chunkPool.Push(chunk);
             }
             _activeChunks.Clear();
+            _renderedChunks.Clear();
+            _currentPlayerChunk = InvalidChunk;
         }
 
         private Vector2Int WorldPositionToChunk(Vector3 worldPosition)
@@ -266,14 +277,17 @@ namespace ARPG.Map
                 {
                     Vector2Int chunkPos = new Vector2Int(_currentPlayerChunk.x + x, _currentPlayerChunk.y + y);
 
-                    if (_activeChunks.ContainsKey(chunkPos) == false)
+                    MapChunkData chunk;
+                    if (_activeChunks.TryGetValue(chunkPos, out chunk) == false)
                     {
-                        MapChunkData chunk = GetOrCreateChunk(chunkPos.x, chunkPos.y);
-                        if (chunk != null)
-                        {
-                            RenderChunkToTilemap(chunk);
-                            OnChunkActivated(chunkPos, chunk);
-                        }
+                        chunk = GetOrCreateChunk(chunkPos.x, chunkPos.y);
+                    }
+
+                    if (chunk != null && _renderedChunks.Contains(chunkPos) == false)
+                    {
+                        RenderChunkToTilemap(chunk);
+                        _renderedChunks.Add(chunkPos);
+                        OnChunkActivated(chunkPos, chunk);
                     }
                 }
             }
@@ -298,14 +312,18 @@ namespace ARPG.Map
 
             foreach (var chunkPos in chunksToReturn)
             {
-                OnChunkDeactivated(chunkPos);
+                if (_renderedChunks.Contains(chunkPos))
+                {
+                    OnChunkDeactivated(chunkPos);
+                }
+
                 ReturnChunkToPool(chunkPos.x, chunkPos.y);
             }
         }
 
         public int GetActiveChunkCount()
         {
-            return _activeChunks.Count;
+            return _renderedChunks.Count;
         }
 
         public int GetPooledChunkCount()
@@ -315,7 +333,7 @@ namespace ARPG.Map
 
         public List<Vector2Int> GetActiveChunkPositions()
         {
-            return new List<Vector2Int>(_activeChunks.Keys);
+            return new List<Vector2Int>(_renderedChunks);
         }
 
         public List<MapFileData> GetMapFileDataByType(MapType mapType)

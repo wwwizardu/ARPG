@@ -28,18 +28,23 @@ namespace ARPG.Map
         [SerializeField] private float _monsterSpawnRate = 0.1f;
 
         private int _randomSeed = 12345;
+        private static readonly Vector2Int InvalidChunk = new Vector2Int(-100000, -100000);
+
+        // _activeChunks stores generated chunk data. _renderedChunks is the visible/activated subset.
         private Dictionary<Vector2Int, MapChunkData> _activeChunks;
+        private HashSet<Vector2Int> _renderedChunks;
         private Dictionary<Vector2Int, MapFileData> _mapFileDataDic = new();
         private Dictionary<Vector2Int, List<TileModification>> _tileModifications = new();
         private Stack<MapChunkData> _chunkPool;
         private System.Random _randomGenerator;
-        private Vector2Int _currentPlayerChunk = new Vector2Int(-100000, -100000);
+        private Vector2Int _currentPlayerChunk = InvalidChunk;
         private int _loadRadius = 2;
         private const int POOL_SIZE = 20;
 
         public void Initialize()
         {
             _activeChunks = new Dictionary<Vector2Int, MapChunkData>();
+            _renderedChunks = new HashSet<Vector2Int>();
             _chunkPool = new Stack<MapChunkData>();
 
             InitializeChunkPool();
@@ -52,15 +57,22 @@ namespace ARPG.Map
         {
             _randomGenerator = new System.Random(_randomSeed);
 
-            foreach (var chunk in _activeChunks.Values)
+            foreach (var chunkPair in _activeChunks)
             {
+                if (_renderedChunks.Contains(chunkPair.Key))
+                {
+                    RemoveChunkFromTilemap(chunkPair.Value);
+                }
+
+                MapChunkData chunk = chunkPair.Value;
                 chunk.Deactivate();
                 _chunkPool.Push(chunk);
             }
 
             _activeChunks.Clear();
+            _renderedChunks.Clear();
             _tileModifications.Clear();
-            _currentPlayerChunk = Vector2Int.zero;
+            _currentPlayerChunk = InvalidChunk;
 
             OnResetSpawner();
 
@@ -73,9 +85,12 @@ namespace ARPG.Map
         /// </summary>
         private void OnBuildableTileLoaded(int buildableId)
         {
-            foreach (var chunk in _activeChunks.Values)
+            foreach (var chunkCoord in _renderedChunks)
             {
-                RenderChunkToTilemap(chunk);
+                if (_activeChunks.TryGetValue(chunkCoord, out MapChunkData chunk))
+                {
+                    RenderChunkToTilemap(chunk);
+                }
             }
         }
 
@@ -194,21 +209,21 @@ namespace ARPG.Map
             return (int)((tile & (ulong)GlobalEnum.TileFlag.ObjectLayerMask) >> 10);
         }
 
-        public Dictionary<Vector2Int, MapChunkData>.KeyCollection GetActiveChunkCoords()
+        public IEnumerable<Vector2Int> GetActiveChunkCoords()
         {
-            return _activeChunks.Keys;
+            return _renderedChunks;
         }
 
         public bool IsChunkActive(Vector2Int chunkCoord)
         {
-            return _activeChunks.ContainsKey(chunkCoord);
+            return _renderedChunks.Contains(chunkCoord);
         }
 
         public bool TryGetChunkSpawnPositions(Vector2Int chunkCoord, out List<Vector2Int> spawnPositions)
         {
-            if (_activeChunks.ContainsKey(chunkCoord))
+            if (_renderedChunks.Contains(chunkCoord) && _activeChunks.TryGetValue(chunkCoord, out MapChunkData chunk))
             {
-                spawnPositions = _activeChunks[chunkCoord].monsterSpawnPositions;
+                spawnPositions = chunk.monsterSpawnPositions;
                 return true;
             }
             spawnPositions = null;
@@ -330,7 +345,7 @@ namespace ARPG.Map
             SetTileModification(chunkCoord, localX, localY, objectId, false);
 
             // 활성 청크면 즉시 반영
-            if (_activeChunks.TryGetValue(chunkCoord, out MapChunkData chunk))
+            if (_renderedChunks.Contains(chunkCoord) && _activeChunks.TryGetValue(chunkCoord, out MapChunkData chunk))
             {
                 // 타일 데이터 갱신
                 ulong currentTile = chunk.tiles[localX, localY];
@@ -366,7 +381,7 @@ namespace ARPG.Map
             SetTileModification(chunkCoord, localX, localY, 0, true);
 
             // 활성 청크면 즉시 반영
-            if (_activeChunks.TryGetValue(chunkCoord, out MapChunkData chunk))
+            if (_renderedChunks.Contains(chunkCoord) && _activeChunks.TryGetValue(chunkCoord, out MapChunkData chunk))
             {
                 ulong currentTile = chunk.tiles[localX, localY];
                 currentTile &= ~(ulong)GlobalEnum.TileFlag.ObjectLayerMask;
