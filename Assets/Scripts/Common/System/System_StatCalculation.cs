@@ -285,6 +285,15 @@ namespace ARPG.Systems
                 case GE.Stat.PoisonAttackMax:
                     stat.FinalPoisonAttackMax = ApplyValue(stat.FinalPoisonAttackMax, modifier);
                     break;
+                case GE.Stat.Evasion:
+                    stat.FinalEvasion = ApplyValue(stat.FinalEvasion, modifier);
+                    break;
+                case GE.Stat.BlockChance:
+                    stat.FinalBlockChance = ApplyValue(stat.FinalBlockChance, modifier);
+                    break;
+                case GE.Stat.BlockReduction:
+                    stat.FinalBlockReduction = ApplyValue(stat.FinalBlockReduction, modifier);
+                    break;
                 case GE.Stat.ProjectileCountAdd:
                     stat.FinalProjectileCountAdd = ApplyValue(stat.FinalProjectileCountAdd, modifier);
                     break;

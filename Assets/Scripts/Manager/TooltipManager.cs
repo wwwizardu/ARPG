@@ -132,7 +132,6 @@ namespace ARPG.Manager
 
             if (activeContent == null)
             {
-                // 아직 지원하지 않는 ItemType (uGUI 툴팁이 담당 중) — 툴팁 표시 안 함
                 Hide();
                 return;
             }
@@ -381,7 +380,6 @@ namespace ARPG.Manager
 
         /// <summary>
         /// Equipment(무기/방어구) 컨텐츠 빌더. WeaponStats 캐시(Local 파이프라인 완료치) + Implicit/Affix Mod 라인 구성.
-        /// 표시 정책은 uGUI 측 UITooltipEquipment / TooltipEquipmentWeapon / TooltipEquipmentArmor와 동등.
         /// </summary>
         private void BuildEquipmentContent(ItemData equipItem)
         {

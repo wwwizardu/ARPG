@@ -147,7 +147,8 @@ namespace ARPG.Data
             if (inItem?.Equipment == null)
                 return false;
 
-            if (inItem.Equipment.EquipType != EquipHelper.SlotToEquipmentTypeMask(inEquipType))
+            GlobalEnum.EquipmentTypeMask allowedMask = EquipHelper.SlotToEquipmentTypeMask(inEquipType);
+            if (Utils.ContainsEquipmentType(allowedMask, inItem.Equipment.EquipType) == false)
                 return false;
 
             // 기존에 장착된 아이템이 있는 경우 교체할 아이템으로 설정

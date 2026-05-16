@@ -16,13 +16,21 @@ namespace ARPG.Utility
     /// </summary>
     public static class EquipHelper
     {
+        /// <summary>
+        /// 슬롯이 받을 수 있는 장비 타입 집합.
+        /// - WeaponRight(메인 무기): Weapon 전용. 방패는 거부.
+        /// - WeaponLeft(보조): Weapon | Shield. 한손+방패 또는 쌍수 무기 모두 허용.
+        /// 양손 무기(TwoHanded) 미래 확장 시: WeaponRight 마스크에 OR로 비트 추가하고,
+        /// PlayerData.EquipItem에서 "양손 무기 장착 시 WeaponLeft 강제 해제" 룰을 별도로 처리한다.
+        /// </summary>
         public static GE.EquipmentTypeMask SlotToEquipmentTypeMask(GE.EquipSlotType slotType)
         {
             switch (slotType)
             {
-                case GE.EquipSlotType.WeaponLeft:
                 case GE.EquipSlotType.WeaponRight:
                     return GE.EquipmentTypeMask.Weapon;
+                case GE.EquipSlotType.WeaponLeft:
+                    return GE.EquipmentTypeMask.Weapon | GE.EquipmentTypeMask.Shield;
                 case GE.EquipSlotType.Helmet:
                     return GE.EquipmentTypeMask.Helmet;
                 case GE.EquipSlotType.Armor:
@@ -42,20 +50,29 @@ namespace ARPG.Utility
                 case GE.EquipSlotType.EarringRight:
                     return GE.EquipmentTypeMask.Earring;
                 default:
-                    return GE.EquipmentTypeMask.Weapon;
+                    Debug.LogError($"[EquipHelper] SlotToEquipmentTypeMask - Unhandled slot: {slotType}");
+                    return GE.EquipmentTypeMask.None;
             }
         }
 
+        /// <summary>
+        /// 아이템의 단일 비트 EquipType에 가장 적합한 슬롯을 찾는다.
+        /// - Weapon: WeaponRight 우선(메인). Right가 차있으면 WeaponLeft(쌍수 보조)로.
+        /// - Shield: WeaponLeft 전용.
+        /// - 양손 무기 추가 시: WeaponRight 반환 + PlayerData.EquipItem에서 WeaponLeft 강제 해제 룰 필요.
+        /// </summary>
         public static GE.EquipSlotType GetBestSlot(GE.EquipmentTypeMask inEquipType, ItemData?[] inEquippedItems)
         {
             switch (inEquipType)
             {
                 case GE.EquipmentTypeMask.Weapon:
-                    return GetDualSlot(inEquippedItems, GE.EquipSlotType.WeaponLeft, GE.EquipSlotType.WeaponRight);
+                    return GetDualSlot(inEquippedItems, GE.EquipSlotType.WeaponRight, GE.EquipSlotType.WeaponLeft);
+                case GE.EquipmentTypeMask.Shield:
+                    return GE.EquipSlotType.WeaponLeft;
                 case GE.EquipmentTypeMask.Ring:
-                    return GetDualSlot(inEquippedItems, GE.EquipSlotType.RingLeft, GE.EquipSlotType.RingRight);
+                    return GetDualSlot(inEquippedItems, GE.EquipSlotType.RingRight, GE.EquipSlotType.RingLeft);
                 case GE.EquipmentTypeMask.Earring:
-                    return GetDualSlot(inEquippedItems, GE.EquipSlotType.EarringLeft, GE.EquipSlotType.EarringRight);
+                    return GetDualSlot(inEquippedItems, GE.EquipSlotType.EarringRight, GE.EquipSlotType.EarringLeft);
                 case GE.EquipmentTypeMask.Helmet:
                     return GE.EquipSlotType.Helmet;
                 case GE.EquipmentTypeMask.Armor:
@@ -69,7 +86,8 @@ namespace ARPG.Utility
                 case GE.EquipmentTypeMask.Belt:
                     return GE.EquipSlotType.Belt;
                 default:
-                    return GE.EquipSlotType.WeaponLeft;
+                    Debug.LogError($"[EquipHelper] GetBestSlot - Unhandled equip type: {inEquipType}");
+                    return GE.EquipSlotType.WeaponRight;
             }
         }
 

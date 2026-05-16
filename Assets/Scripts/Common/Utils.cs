@@ -16,6 +16,8 @@ public static class Utils
     {
         switch (inCategory)
         {
+            case GlobalEnum.ItemCategory.Weapon: return GlobalEnum.EquipmentTypeMask.Weapon;
+            case GlobalEnum.ItemCategory.Shield: return GlobalEnum.EquipmentTypeMask.Shield;
             case GlobalEnum.ItemCategory.Helmet: return GlobalEnum.EquipmentTypeMask.Helmet;
             case GlobalEnum.ItemCategory.Armor: return GlobalEnum.EquipmentTypeMask.Armor;
             case GlobalEnum.ItemCategory.Gloves: return GlobalEnum.EquipmentTypeMask.Gloves;
@@ -24,7 +26,9 @@ public static class Utils
             case GlobalEnum.ItemCategory.Necklace: return GlobalEnum.EquipmentTypeMask.Necklace;
             case GlobalEnum.ItemCategory.Ring: return GlobalEnum.EquipmentTypeMask.Ring;
             case GlobalEnum.ItemCategory.Earring: return GlobalEnum.EquipmentTypeMask.Earring;
-            default: return GlobalEnum.EquipmentTypeMask.Weapon;
+            default:
+                Debug.LogError($"[Utils] CategoryToEquipmentTypeMask - Unhandled category: {inCategory}");
+                return GlobalEnum.EquipmentTypeMask.None;
         }
     }
 

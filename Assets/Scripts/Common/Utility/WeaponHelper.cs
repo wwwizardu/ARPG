@@ -13,7 +13,7 @@ namespace ARPG.Utility
     {
         /// <summary>
         /// 엔티티의 장착 무기 반환. 플레이어 외에는 null.
-        /// Left → Right 순서로 조회.
+        /// WeaponRight(메인) 우선 → WeaponLeft(쌍수 보조). 슬롯에 방패가 들어있으면 무기로 인식하지 않는다.
         /// </summary>
         public static ItemData? GetEquippedWeapon(int entityId)
         {
@@ -21,9 +21,15 @@ namespace ARPG.Utility
                 return null;
 
             ItemData?[] equip = AR.s.Data.Player._inventoryEquip;
-            ItemData? leftWeapon = equip[(int)GE.EquipSlotType.WeaponLeft];
             ItemData? rightWeapon = equip[(int)GE.EquipSlotType.WeaponRight];
-            return leftWeapon ?? rightWeapon;
+            if (rightWeapon?.Equipment != null && rightWeapon.Equipment.EquipType == GE.EquipmentTypeMask.Weapon)
+                return rightWeapon;
+
+            ItemData? leftWeapon = equip[(int)GE.EquipSlotType.WeaponLeft];
+            if (leftWeapon?.Equipment != null && leftWeapon.Equipment.EquipType == GE.EquipmentTypeMask.Weapon)
+                return leftWeapon;
+
+            return null;
         }
 
         /// <summary>

@@ -63,7 +63,6 @@ namespace ARPG.Manager
 
         /// <summary>
         /// 책의 유효 페이지 슬롯 수 = 등급 기본값 + 인스턴스 roll 보너스(PageSlotsBonus).
-        /// v1에서는 PageSlotsBonus가 0 고정이지만, 필드는 미리 노출하여 후속 페이즈의 인스턴스 roll에 대비한다.
         /// </summary>
         public int GetPageSlots(ItemData? book)
         {

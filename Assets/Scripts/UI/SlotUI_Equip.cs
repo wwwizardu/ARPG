@@ -42,7 +42,8 @@ namespace ARPG.UI
             if (inItem.Equipment == null)
                 return false;
 
-            if (inItem.Equipment.EquipType != Utility.EquipHelper.SlotToEquipmentTypeMask(_equipSlotType))
+            GlobalEnum.EquipmentTypeMask allowedMask = Utility.EquipHelper.SlotToEquipmentTypeMask(_equipSlotType);
+            if (Utils.ContainsEquipmentType(allowedMask, inItem.Equipment.EquipType) == false)
                 return false;
 
             return true;
@@ -69,13 +70,13 @@ namespace ARPG.UI
         {
             if (_itemData != null)
             {
-                AR.s.UI.ShowTooltip_Equipment(_itemData, _rectTransform);
+                AR.s.Tooltip.Show(_itemData, GetSlotScreenRect(_rectTransform));
             }
         }
 
         protected override void OnExit(UnityEngine.EventSystems.PointerEventData eventData)
         {
-            AR.s.UI.HideTooltip();
+            AR.s.Tooltip.Hide();
         }
 
         protected override void OnClick(PointerEventData eventData)

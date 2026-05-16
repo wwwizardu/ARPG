@@ -71,12 +71,9 @@ namespace ARPG.UI
             if (_itemData?.Table == null)
                 return;
 
-            if (_itemData.Table.ItemType == GlobalEnum.ItemType.Equipment)
-            {
-                AR.s.UI.ShowTooltip_Equipment(_itemData, _rectTransform);
-            }
-            else if (_itemData.Table.ItemType == GlobalEnum.ItemType.SkillBook
-                  || _itemData.Table.ItemType == GlobalEnum.ItemType.SkillPage)
+            if (_itemData.Table.ItemType == GlobalEnum.ItemType.Equipment
+             || _itemData.Table.ItemType == GlobalEnum.ItemType.SkillBook
+             || _itemData.Table.ItemType == GlobalEnum.ItemType.SkillPage)
             {
                 AR.s.Tooltip.Show(_itemData, GetSlotScreenRect(_rectTransform));
             }
@@ -111,8 +108,6 @@ namespace ARPG.UI
         // 마우스가 UI 요소 밖으로 나갈 때 (툴팁 비활성화)
         public void OnPointerExit(PointerEventData eventData)
         {
-            //OnExit(eventData);
-            AR.s.UI.HideTooltip();
             AR.s.Tooltip.Hide();
         }
 

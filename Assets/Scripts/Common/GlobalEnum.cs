@@ -102,6 +102,7 @@ public class GlobalEnum
         PoisonAttackMax,    // 독 최대 공격력
         Evasion,            // 회피
         BlockChance,        // 블록 확률
+        BlockReduction,     // 막기 성공 시 피해 감소율 (%, 0이면 0.5 fallback)
         ProjectileCountAdd, // 발사체 추가 개수 (Add 합산만 의미 있음. SkillTable.BaseProjectileCount + 이 stat이 최종 발사 수)
 
         // ===== SkillEffect 효과 종류 (구 SkillEffectType에서 통합) =====
@@ -126,18 +127,18 @@ public class GlobalEnum
 
     public enum EquipSlotType
     {
-        WeaponLeft,     // 왼손 무기
         WeaponRight,    // 오른손 무기
+        WeaponLeft,     // 왼손 무기
         Helmet,         // 투구
         Armor,          // 갑옷
         Gloves,         // 장갑
         Boots,          // 부츠
         Necklace,       // 목걸이
-        RingLeft,       // 왼쪽 반지
         RingRight,      // 오른쪽 반지
+        RingLeft,       // 왼쪽 반지
         Belt,           // 허리띠
-        EarringLeft,    // 왼쪽 귀걸이
         EarringRight,   // 오른쪽 귀걸이
+        EarringLeft,    // 왼쪽 귀걸이
         Max,
     }
 
