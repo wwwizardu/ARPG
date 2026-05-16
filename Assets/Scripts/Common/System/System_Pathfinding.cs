@@ -78,6 +78,12 @@ namespace ARPG.Systems
 
                     if (found == false)
                     {
+                        if (cm.TryGetComponent<VelocityComponent>(entityId, out var velocity) == true)
+                        {
+                            velocity.Direction = Vector2.zero;
+                            cm.SetComponent(entityId, velocity);
+                        }
+
                         cm.SetComponent(entityId, pf);
                         continue;
                     }

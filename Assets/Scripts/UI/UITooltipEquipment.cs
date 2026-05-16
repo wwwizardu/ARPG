@@ -27,15 +27,35 @@ namespace ARPG.UI
             int statIndex = 0;
             var mods = inItemData.Equipment.Mods;
 
+            // 1) Implicit slot 먼저 출력 — 유니크/특수 옵션. 골드 컬러로 차별 표시.
             for (int i = 0; i < mods.Count; i++)
             {
                 var mod = mods[i];
                 if (mod.Table == null)
                     continue;
-
-                if (mod.Slot == GlobalEnum.ModSlot.Implicit)
+                if (mod.Slot != GlobalEnum.ModSlot.Implicit)
                     continue;
+                if (statIndex >= _textStat.Count)
+                    break;
 
+                string body = mod.Value2 > 0
+                    ? $"{mod.Table.Name}: {mod.Value1}~{mod.Value2}"
+                    : $"{mod.Table.Name}: {mod.Value1}";
+
+                _textStat[statIndex].text = $"<color=#FFD700>{body}</color>";
+                _textStat[statIndex].gameObject.SetActive(true);
+                statIndex++;
+            }
+
+            // 2) Prefix/Postfix slot 출력 — 랜덤 옵션. 일반색.
+            // Base slot은 무기/방어구 베이스 스탯 패널에서 처리하므로 여기선 skip.
+            for (int i = 0; i < mods.Count; i++)
+            {
+                var mod = mods[i];
+                if (mod.Table == null)
+                    continue;
+                if (mod.Slot != GlobalEnum.ModSlot.Prefix && mod.Slot != GlobalEnum.ModSlot.Postfix)
+                    continue;
                 if (statIndex >= _textStat.Count)
                     break;
 
@@ -57,7 +77,7 @@ namespace ARPG.UI
 
         private void SetEquipment(ItemData inItemData)
         {
-            if (inItemData.Equipment.EquipType == GlobalEnum.EquipmentType.Weapon)
+            if (inItemData.Equipment.EquipType == GlobalEnum.EquipmentTypeMask.Weapon)
             {
                 _weapon.Show(true, inItemData);
                 _armor.Show(false, null);

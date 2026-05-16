@@ -72,6 +72,7 @@ public class GlobalEnum
         AttackMin,          // 물리 최소 공격력
         AttackMax,          // 물리 최대 공격력
         CriRate,            // 치명타 확률
+        CriRateMul,         // 치명타 확률 증가 배율
         CriDamageMul,       // 치명타 피해 배율
         MoveSpeed,          // 이동 속도 (1초당 이동 거리)
         MoveSpeedMul,       // 이동 속도 증가 배율
@@ -140,38 +141,25 @@ public class GlobalEnum
         Max,
     }
 
-    public enum EquipmentType
-    {
-        Weapon,         // 무기
-        Helmet,         // 투구
-        Armor,          // 갑옷
-        Gloves,         // 장갑
-        Boots,          // 부츠
-        Necklace,       // 목걸이
-        Ring,           // 반지
-        Belt,           // 허리띠
-        Earring,        // 귀걸이
-    }
-
     /// <summary>
-    /// Mod가 붙을 수 있는 장비 타입 비트마스크. ModTable.AllowedEquipTypes에서 사용.
-    /// 한 mod가 여러 카테고리에 동시 허용될 수 있어 [Flags] 비트마스크로 표현.
+    /// EquipmentData.EquipType uses exactly one bit. ModTable.AllowedEquipTypes can use combined bits.
     /// </summary>
     [Flags]
     public enum EquipmentTypeMask
     {
         None       = 0,
         Weapon     = 1 << 0,
-        Helmet     = 1 << 1,
-        Armor      = 1 << 2,
-        Gloves     = 1 << 3,
-        Boots      = 1 << 4,
-        Necklace   = 1 << 5,
-        Ring       = 1 << 6,
-        Belt       = 1 << 7,
-        Earring    = 1 << 8,
+        Shield     = 1 << 1,
+        Helmet     = 1 << 2,
+        Armor      = 1 << 3,
+        Gloves     = 1 << 4,
+        Boots      = 1 << 5,
+        Necklace   = 1 << 6,
+        Ring       = 1 << 7,
+        Belt       = 1 << 8,
+        Earring    = 1 << 9,
 
-        AllArmor   = Helmet | Armor | Gloves | Boots | Belt,
+        AllArmor   = Helmet | Armor | Gloves | Boots | Belt | Shield,
         AllJewelry = Necklace | Ring | Earring,
         All        = AllArmor | AllJewelry | Weapon,
     }
@@ -418,9 +406,10 @@ public class GlobalEnum
     /// </summary>
     public enum ModSlot
     {
-        Implicit,      // 기본 내장 (아이템 타입에 고정)
+        Implicit,      // 유니크/특수 아이템에만 붙는 추가 옵션 (장비 자격 판별엔 사용 안 함)
         Prefix,        // 접두
         Postfix,       // 접미
+        Base,          // 모든 일반 장비의 표준 베이스 스탯 (EquipmentBaseStatTable에서 옴). 장비 자격 판별 기준
     }
 
     /// <summary>
@@ -441,4 +430,5 @@ public class GlobalEnum
     public const int PLAYER_SKILL_SLOT_COUNT = 10;          // 플레이어 스킬 슬롯 수 (0~9). 슬롯 0=좌클릭, 1=Space, 2~9=숫자키 1~8
     public const int DEFAULT_SKILLBOOK_ITEM_ID_COMMON = 5000; // 신규 플레이어에게 시드되는 Common 등급 책 ItemId
     public const int DEFAULT_STARTER_SKILL_ID = 1;          // 신규 플레이어 슬롯 0에 시드되는 기본 스킬 (Strike)
+    public const int DEFAULT_STARTER_WEAPON_ITEM_ID = 1;    // 신규 플레이어가 시작 시 우측 무기 슬롯에 장착하고 시작하는 무기 (낡은 단검)
 }

@@ -25,7 +25,9 @@ public class TooltipEquipmentArmor : MonoBehaviour
             if (mod.Table == null)
                 continue;
 
-            if (mod.Slot != GlobalEnum.ModSlot.Implicit)
+            // 방어구 베이스 스탯 패널: Base slot만 표시 (모든 일반 장비의 표준 옵션).
+            // Implicit slot은 유니크/특수 옵션이므로 UITooltipEquipment의 별도 라인에서 처리.
+            if (mod.Slot != GlobalEnum.ModSlot.Base)
                 continue;
 
             if (textIndex >= TextArmor.Length)

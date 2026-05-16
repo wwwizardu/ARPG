@@ -50,8 +50,7 @@ namespace ARPG.Editor
             // Phase D: JobBonusTable (직업별 시간당 가산 자원)
             await DownloadTable<JobBonusTable>("470575350&range=A:F", 1, SaveType.String);
 
-            await DownloadTable<WeaponBaseStatTable>("853198133&range=A:H", 1, SaveType.String);
-            
+
             await DownloadTable<DropTable>("1241586373&range=A:K", 1, SaveType.String);
 
             await DownloadTable<DropCurrencyTable>("2071520432&range=A:V", 1, SaveType.String);
@@ -79,6 +78,11 @@ namespace ARPG.Editor
             await DownloadTable<ModTierTable>("1782637736&range=A:J", 1, SaveType.String);
             
             await DownloadTable<ItemImplicitTable>("547967325&range=A:D", 1, SaveType.String);
+
+            // EquipmentBaseStat: A~N가 실제 데이터, O~S는 시트 가독성용 보조 컬럼(다운로드 제외).
+            // 슬롯당 3컬럼(ModId, Value1, Value2) × 4 슬롯 = 12컬럼 + Id + ItemId = 14컬럼.
+            // **고정값** — 베이스 스탯엔 RNG 없음 (아이템 정체성). Prefix/Postfix가 랜덤 옵션 담당.
+            await DownloadTable<EquipmentBaseStatTable>("972309111&range=A:N", 1, SaveType.String);
 
             await DownloadTable<VillageTable>("441028134&range=A:F", 1, SaveType.String);
 
@@ -110,8 +114,17 @@ namespace ARPG.Editor
         {
             string text = await DownloadTableData($"https://docs.google.com/spreadsheets/d/13j0_AI_6nSHHEkAHK2w9oRd-98xYYiUoP5spAv0U4TA/export?format=tsv&gid={inSheet}");
             var lines = Regex.Split(text, @"\r\n|\n\r|\n|\r");
+
+            Type tableType = typeof(T);
+
+            // 헤더만 있고 데이터 행이 0개인 경우에도 빈 리스트로 등록해 .bytes 파일이 갱신되도록 함.
+            // (이 조기 종료가 없으면 옛 .bytes 파일이 그대로 남아 stale 데이터로 동작)
             if (lines.Length <= 1)
-                return false;
+            {
+                if (_tableDic.ContainsKey(tableType) == false)
+                    _tableDic.Add(tableType, new List<T>());
+                return true;
+            }
 
             int dataStartLine = inStartLine;
 
@@ -121,7 +134,6 @@ namespace ARPG.Editor
                 CreateTable<T>(lines[i], tableList);
             }
 
-            Type tableType = typeof(T);
             if (_tableDic.ContainsKey(tableType) == false)
             {
                 _tableDic.Add(tableType, tableList);
@@ -172,10 +184,6 @@ namespace ARPG.Editor
                 else if (table is BuildableItemTable buildableItemTable)
                 {
                     ParseBuildableItemTable(buildableItemTable, values);
-                }
-                else if (table is WeaponBaseStatTable weaponBaseStatTable)
-                {
-                    ParseWeaponBaseStatTable(weaponBaseStatTable, values);
                 }
                 else if (table is DropTable dropTable)
                 {
@@ -236,6 +244,10 @@ namespace ARPG.Editor
                 else if (table is ItemImplicitTable itemImplicitTable)
                 {
                     ParseItemImplicitTable(itemImplicitTable, values);
+                }
+                else if (table is EquipmentBaseStatTable equipmentBaseStatTable)
+                {
+                    ParseEquipmentBaseStatTable(equipmentBaseStatTable, values);
                 }
                 else if (table is VillageTable villageTable)
                 {
@@ -489,8 +501,7 @@ namespace ARPG.Editor
             table.Description = values[7];
             table.DropRate = int.Parse(values[8]);
             table.BuildableItemId = int.Parse(values[9]);
-            table.EquipmentBastStatId = int.Parse(values[10]);
-            table.EquipmentStatId = int.Parse(values[11]);
+            // values[10] (BaseStatId), values[11] (StatId) 는 dead column. Item.EquipmentBastStatId/EquipmentStatId 필드 제거됨.
             table.SpriteName = values[12];
             table.DropLevel = int.Parse(values[13]);
 
@@ -613,23 +624,6 @@ namespace ARPG.Editor
             table.GroupRadius           = ParseFloatSafe(values, 11);
             table.InterGroupMinDistance = ParseFloatSafe(values, 12);
         }
-
-        private static void ParseWeaponBaseStatTable(WeaponBaseStatTable table, string[] values)
-        {
-            if (values.Length < 7)
-            {
-                Debug.LogError($"[ParseWeaponBaseStatTable] Invalid data length. Expected at least 7, got {values.Length}. Id: {table.Id}");
-                return;
-            }
-
-            // values[1] 은 웹에서만 사용한다.
-            table.EquipType = (GlobalEnum.EquipmentType)Enum.Parse(typeof(GlobalEnum.EquipmentType), values[2]);
-            table.AttackSpeed = float.Parse(values[3]);
-            table.Critical = int.Parse(values[4]);
-            table.DamageMin = int.Parse(values[5]);
-            table.DamageMax = int.Parse(values[6]);
-        }
-
 
         private static void ParseDropTable(DropTable table, string[] values)
         {
@@ -1011,9 +1005,7 @@ namespace ARPG.Editor
         }
 
         /// <summary>
-        /// GlobalEnum.EquipmentTypeMask 파싱. 파이프 구분('Weapon|AllArmor') 지원.
-        /// Implicit slot은 빈 칸 허용 (ItemImplicitTable이 ItemId 단위로 매칭하므로 풀 필터링과 무관).
-        /// Prefix/Postfix는 빈 칸 시 LogError. 숫자 문자열도 거부.
+        /// Parses ModTable.AllowedEquipTypes. Pipe-separated values are accepted.
         /// </summary>
         private static GlobalEnum.EquipmentTypeMask ParseEquipMaskStrict(string[] values, int index, int tableId, GlobalEnum.ModSlot slot)
         {
@@ -1033,8 +1025,16 @@ namespace ARPG.Editor
                 return GlobalEnum.EquipmentTypeMask.None;
             }
 
-            if (Enum.TryParse(typeof(GlobalEnum.EquipmentTypeMask), raw, true, out object parsed))
-                return (GlobalEnum.EquipmentTypeMask)parsed;
+            string enumRaw = raw.Replace("|", ",");
+            if (Enum.TryParse(typeof(GlobalEnum.EquipmentTypeMask), enumRaw, true, out object parsed))
+            {
+                GlobalEnum.EquipmentTypeMask mask = (GlobalEnum.EquipmentTypeMask)parsed;
+                if (Utils.IsValidEquipmentTypeMask(mask, isImplicit))
+                    return mask;
+
+                Debug.LogError($"[ParseModTable] Invalid AllowedEquipTypes mask: '{raw}' (Mod Id={tableId})");
+                return GlobalEnum.EquipmentTypeMask.None;
+            }
 
             Debug.LogError($"[ParseModTable] Unknown AllowedEquipTypes value: '{raw}' (Mod Id={tableId})");
             return GlobalEnum.EquipmentTypeMask.None;
@@ -1072,6 +1072,38 @@ namespace ARPG.Editor
             table.ItemId = int.Parse(values[1]);
             table.ModId = int.Parse(values[2]);
             table.Tier = int.Parse(values[3]);
+        }
+
+        private static void ParseEquipmentBaseStatTable(EquipmentBaseStatTable table, string[] values)
+        {
+            // 컬럼: Id, ItemId, (Base1ModId, Base1Value1, Base1Value2),
+            //                  (Base2ModId, Base2Value1, Base2Value2),
+            //                  (Base3ModId, Base3Value1, Base3Value2),
+            //                  (Base4ModId, Base4Value1, Base4Value2)
+            // 슬롯당 3컬럼 × 4 슬롯 = 12 + Id + ItemId = 14컬럼
+            if (values.Length < 14)
+            {
+                Debug.LogError($"[ParseEquipmentBaseStatTable] Invalid data length. Expected at least 14, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            table.ItemId = int.Parse(values[1]);
+
+            table.Base1ModId  = int.Parse(values[2]);
+            table.Base1Value1 = int.Parse(values[3]);
+            table.Base1Value2 = int.Parse(values[4]);
+
+            table.Base2ModId  = int.Parse(values[5]);
+            table.Base2Value1 = int.Parse(values[6]);
+            table.Base2Value2 = int.Parse(values[7]);
+
+            table.Base3ModId  = int.Parse(values[8]);
+            table.Base3Value1 = int.Parse(values[9]);
+            table.Base3Value2 = int.Parse(values[10]);
+
+            table.Base4ModId  = int.Parse(values[11]);
+            table.Base4Value1 = int.Parse(values[12]);
+            table.Base4Value2 = int.Parse(values[13]);
         }
 
         private static void ParseBuffEffectTable(BuffEffectTable table, string[] values)

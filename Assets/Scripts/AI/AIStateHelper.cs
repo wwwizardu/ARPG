@@ -10,6 +10,8 @@ namespace ARPG.AI
     /// </summary>
     public static class AIStateHelper
     {
+        private const float PATH_RETRY_COOLDOWN = 1f;
+
         public static void TransitionToState(int entityId, AIState newState)
         {
             ComponentManager cm = AR.s.Component;
@@ -133,10 +135,9 @@ namespace ARPG.AI
             if (cm.TryGetComponent<StatComponent>(entityId, out var stat) == false) return;
 
             // Speed 항상 설정 (PF 있어도 handler 의도한 속도 유지)
-            velocity.Speed = stat.FinalMoveSpeed * speedMultiplier;
+            Vector2 directDirection = (targetPosition - transform.Position).normalized;
+            velocity.Speed = stat.FinalMoveSpeed * stat.FinalMoveSpeedMul / 100f * speedMultiplier;
             // 임시 Direction (PF 미연산/실패 케이스 fallback). System_Pathfinding이 Following 상태면 덮어씀.
-            velocity.Direction = (targetPosition - transform.Position).normalized;
-            cm.SetComponent(entityId, velocity);
 
             // PathfindingComponent에 Goal 반영
             if (cm.TryGetComponent<PathfindingComponent>(entityId, out var pf))
@@ -153,16 +154,38 @@ namespace ARPG.AI
                     pf.Status = PathfindingStatus.Computing;
                     changed = true;
                 }
-                else if (pf.Status == PathfindingStatus.None || pf.Status == PathfindingStatus.Failed)
+                else if (pf.Status == PathfindingStatus.None)
                 {
-                    // 같은 Goal이지만 비활성/실패 상태면 재계산 트리거
+                    // 같은 Goal이지만 비활성 상태면 재계산 트리거
                     pf.Status = PathfindingStatus.Computing;
                     changed = true;
                 }
+                else if (pf.Status == PathfindingStatus.Failed)
+                {
+                    if (Time.time - pf.LastRecomputedTime >= PATH_RETRY_COOLDOWN)
+                    {
+                        pf.Status = PathfindingStatus.Computing;
+                        changed = true;
+                    }
+                    else
+                    {
+                        velocity.Direction = Vector2.zero;
+                        cm.SetComponent(entityId, velocity);
+                        return;
+                    }
+                }
+
+                velocity.Direction = directDirection;
+                cm.SetComponent(entityId, velocity);
 
                 if (changed == true)
                     cm.SetComponent(entityId, pf);
+
+                return;
             }
+
+            velocity.Direction = directDirection;
+            cm.SetComponent(entityId, velocity);
         }
 
         /// <summary>
@@ -177,7 +200,7 @@ namespace ARPG.AI
 
             Vector2 direction = (transform.Position - threatPosition).normalized;
             velocity.Direction = direction;
-            velocity.Speed = stat.FinalMoveSpeed * speedMultiplier;
+            velocity.Speed = stat.FinalMoveSpeed * stat.FinalMoveSpeedMul / 100f * speedMultiplier;
             cm.SetComponent(entityId, velocity);
         }
     }

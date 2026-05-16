@@ -471,9 +471,11 @@ namespace ARPG.Item
             if (inTable == null)
                 return null;
 
-            // Implicit Mod가 없는 아이템은 장비가 아님
-            var implicits = AR.s.Data.GetItemImplicits(inTable.Id);
-            if (implicits.Count == 0)
+            // 장비 자격 판별: 베이스 스탯이 있거나(일반 장비) Implicit이 있으면(유니크/특수) 장비.
+            // 둘 다 없으면 비장비 아이템.
+            bool hasBaseStat = AR.s.Data.GetEquipmentBaseStat(inTable.Id) != null;
+            bool hasImplicit = AR.s.Data.GetItemImplicits(inTable.Id).Count > 0;
+            if (hasBaseStat == false && hasImplicit == false)
                 return null;
 
             EquipmentData equipmentData = new EquipmentData()
@@ -482,19 +484,22 @@ namespace ARPG.Item
             };
 
             // EquipType 설정
-            equipmentData.EquipType = Utils.CategoryToEquipmentType(inTable.Category);
+            equipmentData.EquipType = Utils.CategoryToEquipmentTypeMask(inTable.Category);
             equipmentData.Quality = Random.Range(1, 101);
 
-            // 1. Implicit Mod 생성 (아이템 고정 옵션)
+            // 1. Base Mod 생성 (일반 장비의 표준 베이스 스탯)
+            equipmentData.InitBaseMods(inTable.Id);
+
+            // 2. Implicit Mod 생성 (유니크/특수 아이템의 추가 옵션)
             equipmentData.InitImplicitMods(inTable.Id);
 
-            // 2. Prefix Mod 랜덤 생성
+            // 3. Prefix Mod 랜덤 생성
             RollRandomMods(equipmentData, GlobalEnum.ModSlot.Prefix, Random.Range(1, 3), equipmentData.EquipType);
 
-            // 3. Postfix Mod 랜덤 생성
+            // 4. Postfix Mod 랜덤 생성
             RollRandomMods(equipmentData, GlobalEnum.ModSlot.Postfix, Random.Range(1, 3), equipmentData.EquipType);
 
-            // 4. 생성된 Mod들의 테이블 참조 연결
+            // 5. 생성된 Mod들의 테이블 참조 연결
             for (int i = 0; i < equipmentData.Mods.Count; i++)
             {
                 equipmentData.Mods[i].OnLoadCompleted();
@@ -504,9 +509,55 @@ namespace ARPG.Item
         }
 
         /// <summary>
+        /// 시작 무기/시나리오 보상 등 "Mod 없는 깔끔한 베이스" 장비 생성.
+        /// Base + Implicit만 적용, Prefix/Postfix 랜덤 롤 없음. Quality도 고정값 1.
+        /// </summary>
+        public ItemData? CreateBaseEquipment(int itemId)
+        {
+            ItemTable? itemTable = AR.s.Data.GetItem(itemId);
+            if (itemTable == null)
+            {
+                Debug.LogError($"[ItemManager] CreateBaseEquipment - ItemTable not found, itemId({itemId})");
+                return null;
+            }
+
+            bool hasBaseStat = AR.s.Data.GetEquipmentBaseStat(itemId) != null;
+            bool hasImplicit = AR.s.Data.GetItemImplicits(itemId).Count > 0;
+            if (hasBaseStat == false && hasImplicit == false)
+            {
+                Debug.LogError($"[ItemManager] CreateBaseEquipment - Item({itemId}) is not equipment (no Base/Implicit data)");
+                return null;
+            }
+
+            EquipmentData equipmentData = new EquipmentData()
+            {
+                Id = itemId,
+                Quality = 1,
+            };
+            equipmentData.EquipType = Utils.CategoryToEquipmentTypeMask(itemTable.Category);
+
+            equipmentData.InitBaseMods(itemId);
+            equipmentData.InitImplicitMods(itemId);
+
+            for (int i = 0; i < equipmentData.Mods.Count; i++)
+            {
+                equipmentData.Mods[i].OnLoadCompleted();
+            }
+
+            return new ItemData
+            {
+                Id = itemId,
+                ItemInstanceId = _instanceIdCounter++,
+                Quantity = 1,
+                Table = itemTable,
+                Equipment = equipmentData,
+            };
+        }
+
+        /// <summary>
         /// 지정 슬롯에 랜덤 Mod를 롤링하여 추가
         /// </summary>
-        private void RollRandomMods(EquipmentData equipment, GlobalEnum.ModSlot slot, int count, GlobalEnum.EquipmentType equipType)
+        private void RollRandomMods(EquipmentData equipment, GlobalEnum.ModSlot slot, int count, GlobalEnum.EquipmentTypeMask equipType)
         {
             List<ModTable> modPool = AR.s.Data.GetModPool(slot, equipType);
             if (modPool.Count == 0)

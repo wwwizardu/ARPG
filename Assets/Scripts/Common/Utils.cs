@@ -12,37 +12,51 @@ public static class Utils
         return true;
     }
 
-    public static GlobalEnum.EquipmentType CategoryToEquipmentType(GlobalEnum.ItemCategory inCategory)
+    public static GlobalEnum.EquipmentTypeMask CategoryToEquipmentTypeMask(GlobalEnum.ItemCategory inCategory)
     {
         switch (inCategory)
         {
-            case GlobalEnum.ItemCategory.Helmet: return GlobalEnum.EquipmentType.Helmet;
-            case GlobalEnum.ItemCategory.Armor: return GlobalEnum.EquipmentType.Armor;
-            case GlobalEnum.ItemCategory.Gloves: return GlobalEnum.EquipmentType.Gloves;
-            case GlobalEnum.ItemCategory.Boots: return GlobalEnum.EquipmentType.Boots;
-            case GlobalEnum.ItemCategory.Belt: return GlobalEnum.EquipmentType.Belt;
-            case GlobalEnum.ItemCategory.Necklace: return GlobalEnum.EquipmentType.Necklace;
-            case GlobalEnum.ItemCategory.Ring: return GlobalEnum.EquipmentType.Ring;
-            case GlobalEnum.ItemCategory.Earring: return GlobalEnum.EquipmentType.Earring;
-            default: return GlobalEnum.EquipmentType.Weapon;
+            case GlobalEnum.ItemCategory.Helmet: return GlobalEnum.EquipmentTypeMask.Helmet;
+            case GlobalEnum.ItemCategory.Armor: return GlobalEnum.EquipmentTypeMask.Armor;
+            case GlobalEnum.ItemCategory.Gloves: return GlobalEnum.EquipmentTypeMask.Gloves;
+            case GlobalEnum.ItemCategory.Boots: return GlobalEnum.EquipmentTypeMask.Boots;
+            case GlobalEnum.ItemCategory.Belt: return GlobalEnum.EquipmentTypeMask.Belt;
+            case GlobalEnum.ItemCategory.Necklace: return GlobalEnum.EquipmentTypeMask.Necklace;
+            case GlobalEnum.ItemCategory.Ring: return GlobalEnum.EquipmentTypeMask.Ring;
+            case GlobalEnum.ItemCategory.Earring: return GlobalEnum.EquipmentTypeMask.Earring;
+            default: return GlobalEnum.EquipmentTypeMask.Weapon;
         }
     }
 
-    public static GlobalEnum.EquipmentTypeMask EquipTypeToMaskBit(GlobalEnum.EquipmentType inEquipType)
+    public static bool IsValidEquipmentTypeMask(GlobalEnum.EquipmentTypeMask mask, bool allowNone = false)
     {
-        switch (inEquipType)
-        {
-            case GlobalEnum.EquipmentType.Weapon:   return GlobalEnum.EquipmentTypeMask.Weapon;
-            case GlobalEnum.EquipmentType.Helmet:   return GlobalEnum.EquipmentTypeMask.Helmet;
-            case GlobalEnum.EquipmentType.Armor:    return GlobalEnum.EquipmentTypeMask.Armor;
-            case GlobalEnum.EquipmentType.Gloves:   return GlobalEnum.EquipmentTypeMask.Gloves;
-            case GlobalEnum.EquipmentType.Boots:    return GlobalEnum.EquipmentTypeMask.Boots;
-            case GlobalEnum.EquipmentType.Necklace: return GlobalEnum.EquipmentTypeMask.Necklace;
-            case GlobalEnum.EquipmentType.Ring:     return GlobalEnum.EquipmentTypeMask.Ring;
-            case GlobalEnum.EquipmentType.Belt:     return GlobalEnum.EquipmentTypeMask.Belt;
-            case GlobalEnum.EquipmentType.Earring:  return GlobalEnum.EquipmentTypeMask.Earring;
-            default:                                return GlobalEnum.EquipmentTypeMask.None;
-        }
+        if (mask == GlobalEnum.EquipmentTypeMask.None)
+            return allowNone;
+
+        int bits = (int)mask;
+        int allBits = (int)GlobalEnum.EquipmentTypeMask.All;
+        return (bits & ~allBits) == 0;
+    }
+
+    public static bool IsSingleEquipmentTypeMask(GlobalEnum.EquipmentTypeMask mask)
+    {
+        int bits = (int)mask;
+        int allBits = (int)GlobalEnum.EquipmentTypeMask.All;
+
+        if (bits == 0)
+            return false;
+        if ((bits & ~allBits) != 0)
+            return false;
+
+        return (bits & (bits - 1)) == 0;
+    }
+
+    public static bool ContainsEquipmentType(GlobalEnum.EquipmentTypeMask allowed, GlobalEnum.EquipmentTypeMask singleType)
+    {
+        if (IsSingleEquipmentTypeMask(singleType) == false)
+            return false;
+
+        return (allowed & singleType) != 0;
     }
 
     public static bool IsApparel(this GlobalEnum.ItemCategory inCategory)

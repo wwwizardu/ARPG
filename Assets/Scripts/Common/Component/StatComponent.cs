@@ -31,6 +31,7 @@ namespace ARPG.Component
         public int BaseCriRate;         // 기본 치명타 확률
         public int BaseCriDamage;       // 기본 치명타 피해
         public int BaseMoveSpeed;       // 기본 이동 속도
+        public int BaseMoveSpeedMul;    // 기본 이동 속도 배율 (100 = 100%)
         public int BaseAttackSpeed;     // 기본 공격 속도
         public int BaseCastSpeed;       // 기본 시전 속도
         public int BaseDefense;         // 기본 방어력
@@ -81,6 +82,7 @@ namespace ARPG.Component
         public int FinalCriRate;
         public int FinalCriDamage;
         public int FinalMoveSpeed;
+        public int FinalMoveSpeedMul;   // 최종 이동 속도 배율 (100 = 100%)
         public int FinalAttackSpeed;
         public int FinalCastSpeed;
         public int FinalDefense;
@@ -155,6 +157,7 @@ namespace ARPG.Component
             BaseCriRate = statTable.CriRate;
             BaseCriDamage = statTable.CriDamage;
             BaseMoveSpeed = statTable.MoveSpeed;
+            BaseMoveSpeedMul = 100;
             BaseAttackSpeed = statTable.AttackSpeed;
             BaseCastSpeed = statTable.CastSpeed;
             BaseDefense = statTable.Defense;
@@ -204,6 +207,7 @@ namespace ARPG.Component
             FinalCriRate = BaseCriRate;
             FinalCriDamage = BaseCriDamage;
             FinalMoveSpeed = BaseMoveSpeed;
+            FinalMoveSpeedMul = BaseMoveSpeedMul;
             FinalAttackSpeed = BaseAttackSpeed;
             FinalCastSpeed = BaseCastSpeed;
             FinalDefense = BaseDefense;

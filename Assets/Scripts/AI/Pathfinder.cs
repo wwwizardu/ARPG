@@ -11,6 +11,7 @@ namespace ARPG.AI
     {
         public const int MaxNodesExpanded = 512;
         public const int MaxPathLength = 64;
+        private const int BLOCKED_GOAL_SEARCH_RADIUS = 4;
 
         // 1 unit = 1 tile, 청크는 8x8
         private const int CHUNK_SIZE = 8;
@@ -59,12 +60,18 @@ namespace ARPG.AI
                 Debug.LogWarning($"[Pathfinder] Goal tile {goal} in inactive chunk");
                 return false;
             }
-            // 목표 타일 자체가 막혀있으면 실패 (시작 타일은 캐릭터 위치이므로 검사 안 함)
+            // 목표 타일 자체가 막혀있으면 주변의 통행 가능 타일로 보정한다.
+            Vector2Int pathGoal = goal;
             if (AR.s.Map.IsTileBlocked(goal.x, goal.y) == true)
             {
-                Debug.LogWarning($"[Pathfinder] Goal tile {goal} is blocked");
-                return false;
+                if (TryFindNearestPassableGoal(start, goal, out pathGoal) == false)
+                {
+                    Debug.LogWarning($"[Pathfinder] Goal tile {goal} is blocked");
+                    return false;
+                }
             }
+            if (start == pathGoal)
+                return true;
 
             _gScore.Clear();
             _cameFrom.Clear();
@@ -72,7 +79,7 @@ namespace ARPG.AI
             _open.Clear();
 
             _gScore[start] = 0f;
-            _open.Push(start, OctileHeuristic(start, goal));
+            _open.Push(start, OctileHeuristic(start, pathGoal));
 
             int expanded = 0;
             while (_open.Count > 0 && expanded < MaxNodesExpanded)
@@ -81,21 +88,62 @@ namespace ARPG.AI
                 if (_closed.Contains(current) == true)
                     continue; // stale heap entry
 
-                if (current == goal)
+                if (current == pathGoal)
                 {
-                    return ReconstructPath(start, goal, outPath);
+                    return ReconstructPath(start, pathGoal, outPath);
                 }
 
                 _closed.Add(current);
                 expanded++;
 
-                ExpandNeighbors(current, goal);
+                ExpandNeighbors(current, pathGoal);
             }
 
             if (expanded >= MaxNodesExpanded)
-                Debug.LogWarning($"[Pathfinder] Node expansion limit ({MaxNodesExpanded}) reached: {start} → {goal}");
+                Debug.LogWarning($"[Pathfinder] Node expansion limit ({MaxNodesExpanded}) reached: {start} → {pathGoal}");
             else
-                Debug.LogWarning($"[Pathfinder] No path: {start} → {goal}");
+                Debug.LogWarning($"[Pathfinder] No path: {start} → {pathGoal}");
+            return false;
+        }
+
+        private static bool TryFindNearestPassableGoal(Vector2Int start, Vector2Int blockedGoal, out Vector2Int resolvedGoal)
+        {
+            resolvedGoal = blockedGoal;
+
+            for (int r = 1; r <= BLOCKED_GOAL_SEARCH_RADIUS; r++)
+            {
+                bool found = false;
+                float bestScore = float.MaxValue;
+                Vector2Int best = blockedGoal;
+
+                for (int dx = -r; dx <= r; dx++)
+                {
+                    for (int dy = -r; dy <= r; dy++)
+                    {
+                        if (Mathf.Abs(dx) != r && Mathf.Abs(dy) != r)
+                            continue;
+
+                        Vector2Int candidate = new Vector2Int(blockedGoal.x + dx, blockedGoal.y + dy);
+                        if (IsPassable(candidate) == false)
+                            continue;
+
+                        float score = OctileHeuristic(start, candidate);
+                        if (found == false || score < bestScore)
+                        {
+                            found = true;
+                            bestScore = score;
+                            best = candidate;
+                        }
+                    }
+                }
+
+                if (found == true)
+                {
+                    resolvedGoal = best;
+                    return true;
+                }
+            }
+
             return false;
         }
 

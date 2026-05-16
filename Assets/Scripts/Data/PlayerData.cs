@@ -73,6 +73,7 @@ namespace ARPG.Data
                 _skillBookSlots[i] = null;
             }
             SeedDefaultStarterSkillBook();
+            SeedDefaultStarterWeapon();
         }
 
         public void LoadCompleted()
@@ -93,6 +94,25 @@ namespace ARPG.Data
             for (int i = 0; i < _skillBookSlots.Length; i++)
             {
                 _skillBookSlots[i]?.OnLoadCompleted();
+            }
+        }
+
+        /// <summary>
+        /// 신규 플레이어에게 기본 무기(낡은 단검) 우측 슬롯에 장착 시드.
+        /// Prefix/Postfix 없는 깔끔한 베이스 무기. 시드 실패해도 게임 진행은 막지 않음.
+        /// </summary>
+        public void SeedDefaultStarterWeapon()
+        {
+            if (AR.s?.Item == null)
+            {
+                UnityEngine.Debug.LogWarning("[PlayerData] SeedDefaultStarterWeapon - ItemManager not ready, skipping seed");
+                return;
+            }
+
+            ItemData? weapon = AR.s.Item.CreateBaseEquipment(GlobalEnum.DEFAULT_STARTER_WEAPON_ITEM_ID);
+            if (weapon != null)
+            {
+                _inventoryEquip[(int)GlobalEnum.EquipSlotType.WeaponRight] = weapon;
             }
         }
 
@@ -127,7 +147,7 @@ namespace ARPG.Data
             if (inItem?.Equipment == null)
                 return false;
 
-            if (inItem.Equipment.EquipType != EquipHelper.SlotToEquipmentType(inEquipType))
+            if (inItem.Equipment.EquipType != EquipHelper.SlotToEquipmentTypeMask(inEquipType))
                 return false;
 
             // 기존에 장착된 아이템이 있는 경우 교체할 아이템으로 설정

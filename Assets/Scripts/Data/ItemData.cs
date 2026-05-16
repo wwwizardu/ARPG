@@ -164,7 +164,7 @@ namespace ARPG.Data
         /// </summary>
         public List<ModInstance> Mods = new();
 
-        public GE.EquipmentType EquipType { get; set; }
+        public GE.EquipmentTypeMask EquipType { get; set; }
 
         // ========== 무기 스탯 캐시 (NonSerialized) ==========
         [NonSerialized] private WeaponStatCache _weaponStats;
@@ -203,7 +203,7 @@ namespace ARPG.Data
                 return;
             }
 
-            EquipType = Utils.CategoryToEquipmentType(inItemTable.Category);
+            EquipType = Utils.CategoryToEquipmentTypeMask(inItemTable.Category);
 
             // ModInstance의 테이블 참조 연결
             for (int i = 0; i < Mods.Count; i++)
@@ -218,19 +218,24 @@ namespace ARPG.Data
 
         /// <summary>
         /// 자기 EquipType에 허용되지 않은 Prefix/Postfix mod 제거.
-        /// Implicit slot은 기획상 슬롯 제약 우회가 가능하므로 정리 대상에서 제외.
+        /// Base/Implicit slot은 기획상 슬롯 제약 우회가 가능하므로 정리 대상에서 제외.
         /// </summary>
         private void PurgeIncompatibleMods()
         {
-            GE.EquipmentTypeMask selfBit = Utils.EquipTypeToMaskBit(EquipType);
+            if (Utils.IsSingleEquipmentTypeMask(EquipType) == false)
+            {
+                Debug.LogWarning($"[EquipmentData] Invalid EquipType mask: {EquipType}");
+                return;
+            }
+
             for (int i = Mods.Count - 1; i >= 0; i--)
             {
                 ModInstance mod = Mods[i];
                 if (mod.Table == null)
                     continue;
-                if (mod.Slot == GE.ModSlot.Implicit)
+                if (mod.Slot == GE.ModSlot.Implicit || mod.Slot == GE.ModSlot.Base)
                     continue;
-                if ((mod.Table.AllowedEquipTypes & selfBit) == 0)
+                if (Utils.ContainsEquipmentType(mod.Table.AllowedEquipTypes, EquipType) == false)
                 {
                     Debug.LogWarning($"[EquipmentData] Purged incompatible mod from {EquipType}: {mod.Table.Name} (Allowed={mod.Table.AllowedEquipTypes})");
                     Mods.RemoveAt(i);
@@ -397,7 +402,38 @@ namespace ARPG.Data
         }
 
         /// <summary>
-        /// ItemImplicitTable 기반으로 Implicit Mod 초기화
+        /// EquipmentBaseStatTable 기반으로 베이스 스탯 Mod 초기화 (모든 일반 장비의 표준 옵션).
+        /// **고정값** — 베이스 스탯엔 RNG 없음. 같은 아이템은 항상 같은 베이스 스탯.
+        /// Prefix/Postfix 모드가 랜덤 옵션을 담당.
+        /// </summary>
+        public void InitBaseMods(int itemId)
+        {
+            var baseStat = AR.s.Data.GetEquipmentBaseStat(itemId);
+            if (baseStat == null)
+                return;
+
+            for (int slot = 0; slot < baseStat.Mods.Length; slot++)
+            {
+                var mod = baseStat.Mods[slot];
+                if (mod == null)
+                    continue;
+
+                int modId = baseStat.GetModId(slot);
+                (int value1, int value2) = baseStat.GetValues(slot);
+
+                Mods.Add(new ModInstance
+                {
+                    ModTableId = modId,
+                    Slot = GE.ModSlot.Base,
+                    Tier = 0,   // Base는 Tier 시스템 사용 안 함 (아이템별 커스텀 수치)
+                    Value1 = (ushort)value1,
+                    Value2 = (ushort)value2,
+                });
+            }
+        }
+
+        /// <summary>
+        /// ItemImplicitTable 기반으로 Implicit Mod 초기화 (유니크/특수 아이템의 추가 옵션).
         /// </summary>
         public void InitImplicitMods(int itemId)
         {

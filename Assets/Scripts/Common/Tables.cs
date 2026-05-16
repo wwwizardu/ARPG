@@ -111,23 +111,12 @@ namespace ARPG.Tables
         [JsonProperty("Level")] public int Level;
         [JsonProperty("Archetype")] public GE.MonsterArchetype Archetype = GE.MonsterArchetype.Normal;
 
-        [JsonIgnore] public WeaponBaseStatTable? Weapon;
         [JsonIgnore] public AiTable? AiTable;
 
 
         public override void LoadLate()
         {
             base.LoadLate();
-
-            WeaponBaseStatTable? equipmentTable = AR.s.Data?.WeaponBaseStatTable(WeaponId);
-            if (equipmentTable != null)
-            {
-                Weapon = equipmentTable;
-            }
-            else
-            {
-                Weapon = null;
-            }
 
             AiTable? aiTable = AR.s.Data?.GetAiTable(AiTableId);
             if (aiTable != null)
@@ -165,22 +154,11 @@ namespace ARPG.Tables
         [JsonProperty("DropRateBonus")] public int DropRateBonus;
         [JsonProperty("DropRarityBonus")] public int DropRarityBonus;
 
-        [JsonIgnore] public WeaponBaseStatTable? Weapon;
         [JsonIgnore] public AiTable? AiTable;
 
         public override void LoadLate()
         {
             base.LoadLate();
-
-            WeaponBaseStatTable? equipmentTable = AR.s.Data?.WeaponBaseStatTable(WeaponId);
-            if (equipmentTable != null)
-            {
-                Weapon = equipmentTable;
-            }
-            else
-            {
-                Weapon = null;
-            }
 
             AiTable? aiTable = AR.s.Data?.GetAiTable(AiTableId);
             if (aiTable != null)
@@ -213,8 +191,6 @@ namespace ARPG.Tables
         [JsonProperty("DropLevel")] public int DropLevel;
 
         [JsonProperty("BuildableItemId")] public int BuildableItemId;
-        [JsonProperty("EquipmentFixedStatId")] public int EquipmentBastStatId;
-        [JsonProperty("EquipmentStatId")] public int EquipmentStatId;
         [JsonProperty("SpriteName")] public string SpriteName = string.Empty;
 
         // Phase D: 상점 거래 컬럼
@@ -280,25 +256,72 @@ namespace ARPG.Tables
         [JsonProperty("Resource2PerHour")] public float Resource2PerHour;
     }
 
-    // EquipmentBaseStatTable 제거됨 → ModTable + ItemImplicitTable로 대체
-
+    /// <summary>
+    /// 장비 기본 베이스 스탯 테이블 — 모든 일반 장비의 표준 베이스 스탯 정의.
+    /// 와이드 포맷: 한 행 = 한 아이템, Base1~4 슬롯에 (ModId, Value1, Value2) 3쌍으로 베이스 옵션 명시.
+    /// **고정값** — 베이스 스탯엔 RNG 없음 (아이템 정체성). 같은 아이템은 항상 같은 베이스 스탯.
+    /// Prefix/Postfix 모드가 랜덤 옵션을 담당.
+    /// 장비 자격 판별 기준 (이 테이블에 행이 있어야 장비로 인정).
+    /// ItemImplicitTable은 유니크/특수 아이템의 추가 옵션 전용으로 의미가 분리됨.
+    /// </summary>
     [Serializable]
-    public class WeaponBaseStatTable : TableBase
+    public class EquipmentBaseStatTable : TableBase
     {
-        [JsonProperty("EquipType")] public GE.EquipmentType EquipType;
-        [JsonProperty("AttackSpeed")] public float AttackSpeed;
-        [JsonProperty("Critical")] public int Critical;
-        [JsonProperty("DamageMin")] public int DamageMin;
-        [JsonProperty("DamageMax")] public int DamageMax;
+        [JsonProperty("ItemId")] public int ItemId;
 
-        public WeaponBaseStatTable()
+        [JsonProperty("Base1ModId")] public int Base1ModId;
+        [JsonProperty("Base1Value1")] public int Base1Value1;
+        [JsonProperty("Base1Value2")] public int Base1Value2;
+
+        [JsonProperty("Base2ModId")] public int Base2ModId;
+        [JsonProperty("Base2Value1")] public int Base2Value1;
+        [JsonProperty("Base2Value2")] public int Base2Value2;
+
+        [JsonProperty("Base3ModId")] public int Base3ModId;
+        [JsonProperty("Base3Value1")] public int Base3Value1;
+        [JsonProperty("Base3Value2")] public int Base3Value2;
+
+        [JsonProperty("Base4ModId")] public int Base4ModId;
+        [JsonProperty("Base4Value1")] public int Base4Value1;
+        [JsonProperty("Base4Value2")] public int Base4Value2;
+
+        // LoadLate에서 해석된 ModTable 참조만 보유 (수치는 위 컬럼 직접 사용)
+        [JsonIgnore] public ModTable?[] Mods = new ModTable?[4];
+
+        public override void LoadLate()
         {
+            Mods[0] = Base1ModId > 0 ? AR.s.Data?.GetMod(Base1ModId) : null;
+            Mods[1] = Base2ModId > 0 ? AR.s.Data?.GetMod(Base2ModId) : null;
+            Mods[2] = Base3ModId > 0 ? AR.s.Data?.GetMod(Base3ModId) : null;
+            Mods[3] = Base4ModId > 0 ? AR.s.Data?.GetMod(Base4ModId) : null;
+        }
 
+        /// <summary>슬롯 인덱스(0~3)의 ModId 조회</summary>
+        public int GetModId(int slot)
+        {
+            switch (slot)
+            {
+                case 0: return Base1ModId;
+                case 1: return Base2ModId;
+                case 2: return Base3ModId;
+                case 3: return Base4ModId;
+                default: return 0;
+            }
+        }
+
+        /// <summary>슬롯 인덱스(0~3)의 (Value1, Value2) 조회</summary>
+        public (int value1, int value2) GetValues(int slot)
+        {
+            switch (slot)
+            {
+                case 0: return (Base1Value1, Base1Value2);
+                case 1: return (Base2Value1, Base2Value2);
+                case 2: return (Base3Value1, Base3Value2);
+                case 3: return (Base4Value1, Base4Value2);
+                default: return (0, 0);
+            }
         }
     }
-
-
-    // EquipmentStatTable 제거됨 → ModTable (Prefix/Postfix)로 대체
 
     [Serializable]
     public class DropTable : TableBase

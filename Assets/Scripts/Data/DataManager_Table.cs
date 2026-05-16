@@ -20,9 +20,10 @@ namespace ARPG.Data
         private ImmutableDictionary<int, Tables.StatTable> _statTable = null!;
         private ImmutableDictionary<int, Tables.ItemTable> _itemTable = null!;
         private ImmutableDictionary<int, Tables.BuildableItemTable> _buildableItemTable = null!;
-        // EquipmentBaseStatTable 제거됨 → ModTable + ItemImplicitTable로 대체
-        private ImmutableDictionary<int, Tables.WeaponBaseStatTable> _equipmentTable = null!;
-        // EquipmentStatTable 제거됨 → ModTable (Prefix/Postfix)로 대체
+        // 일반 장비의 표준 베이스 스탯 (ItemId → Base ModId/Tier 매핑). 장비 자격 판별 기준.
+        private ImmutableDictionary<int, Tables.EquipmentBaseStatTable> _equipmentBaseStatTable = null!;
+        // ItemId → EquipmentBaseStatTable 빠른 조회용 인덱스
+        private Dictionary<int, Tables.EquipmentBaseStatTable> _equipmentBaseStatByItemId = new();
         private ImmutableDictionary<int, Tables.DropTable> _dropTable = null!;
         private ImmutableDictionary<int, Tables.DropCurrencyTable> _dropCurrencyTable = null!;
         private ImmutableDictionary<int, Tables.DropEquipmentTable> _dropWeaponBaseStatTable = null!;
@@ -58,7 +59,7 @@ namespace ARPG.Data
                 LoadTable<Tables.StatTable>("StatTable.bytes", tables => _statTable = tables),
                 LoadTable<Tables.ItemTable>("ItemTable.bytes", tables => _itemTable = tables),
                 LoadTable<Tables.BuildableItemTable>("BuildableItemTable.bytes", tables => _buildableItemTable = tables),
-                LoadTable<Tables.WeaponBaseStatTable>("WeaponBaseStatTable.bytes", tables => _equipmentTable = tables),
+                LoadTable<Tables.EquipmentBaseStatTable>("EquipmentBaseStatTable.bytes", tables => _equipmentBaseStatTable = tables),
                 LoadTable<Tables.DropTable>("DropTable.bytes", tables => _dropTable = tables),
                 LoadTable<Tables.DropCurrencyTable>("DropCurrencyTable.bytes", tables => _dropCurrencyTable = tables),
                 LoadTable<Tables.DropEquipmentTable>("DropEquipmentTable.bytes", tables => _dropWeaponBaseStatTable = tables),
@@ -105,12 +106,6 @@ namespace ARPG.Data
             {
                 table.LoadLate();
             }
-
-            foreach (var table in _equipmentTable.Values)
-            {
-                table.LoadLate();
-            }
-
 
             foreach (var table in _dropTable.Values)
             {
@@ -167,6 +162,15 @@ namespace ARPG.Data
             foreach (var table in _itemImplicitTable.Values)
             {
                 table.LoadLate();
+            }
+
+            // EquipmentBaseStatTable → ModTable/ModTierTable 참조 연결 + ItemId 인덱스 구축
+            _equipmentBaseStatByItemId.Clear();
+            foreach (var table in _equipmentBaseStatTable.Values)
+            {
+                table.LoadLate();
+                if (table.ItemId > 0 && _equipmentBaseStatByItemId.ContainsKey(table.ItemId) == false)
+                    _equipmentBaseStatByItemId.Add(table.ItemId, table);
             }
 
             foreach (var table in _villageTable.Values)
@@ -284,19 +288,6 @@ namespace ARPG.Data
 
             return null;
         }
-
-        // GetEquipmentBaseStat 제거됨 → GetMod + GetItemImplicits로 대체
-
-        public Tables.WeaponBaseStatTable? WeaponBaseStatTable(int id)
-        {
-            if (_equipmentTable.TryGetValue(id, out var table))
-            {
-                return table;
-            }
-
-            return null;
-        }
-
 
         // GetEquipmentStat 제거됨 → GetMod + GetModTiers로 대체
 
@@ -555,6 +546,16 @@ namespace ARPG.Data
         }
 
         /// <summary>
+        /// 특정 아이템의 베이스 스탯 테이블 행 반환. 없으면 null (=장비 아님).
+        /// </summary>
+        public Tables.EquipmentBaseStatTable? GetEquipmentBaseStat(int itemId)
+        {
+            if (_equipmentBaseStatByItemId.TryGetValue(itemId, out var table))
+                return table;
+            return null;
+        }
+
+        /// <summary>
         /// 특정 아이템의 Implicit Mod 목록 반환
         /// </summary>
         public List<Tables.ItemImplicitTable> GetItemImplicits(int itemId)
@@ -571,15 +572,20 @@ namespace ARPG.Data
         /// <summary>
         /// 특정 슬롯/조건에 맞는 Mod 풀 반환 (랜덤 롤링용)
         /// </summary>
-        public List<Tables.ModTable> GetModPool(GlobalEnum.ModSlot slot, GlobalEnum.EquipmentType equipType)
+        public List<Tables.ModTable> GetModPool(GlobalEnum.ModSlot slot, GlobalEnum.EquipmentTypeMask equipType)
         {
-            GlobalEnum.EquipmentTypeMask bit = Utils.EquipTypeToMaskBit(equipType);
             List<Tables.ModTable> result = new();
+            if (Utils.IsSingleEquipmentTypeMask(equipType) == false)
+            {
+                UnityEngine.Debug.LogError($"[DataManager_Table] GetModPool - EquipType must be a single bit. Got: {equipType}");
+                return result;
+            }
+
             foreach (var table in _modTable.Values)
             {
                 if (table.Slot != slot)
                     continue;
-                if ((table.AllowedEquipTypes & bit) == 0)
+                if (Utils.ContainsEquipmentType(table.AllowedEquipTypes, equipType) == false)
                     continue;
                 result.Add(table);
             }

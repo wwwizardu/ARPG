@@ -16,57 +16,57 @@ namespace ARPG.Utility
     /// </summary>
     public static class EquipHelper
     {
-        public static GE.EquipmentType SlotToEquipmentType(GE.EquipSlotType slotType)
+        public static GE.EquipmentTypeMask SlotToEquipmentTypeMask(GE.EquipSlotType slotType)
         {
             switch (slotType)
             {
                 case GE.EquipSlotType.WeaponLeft:
                 case GE.EquipSlotType.WeaponRight:
-                    return GE.EquipmentType.Weapon;
+                    return GE.EquipmentTypeMask.Weapon;
                 case GE.EquipSlotType.Helmet:
-                    return GE.EquipmentType.Helmet;
+                    return GE.EquipmentTypeMask.Helmet;
                 case GE.EquipSlotType.Armor:
-                    return GE.EquipmentType.Armor;
+                    return GE.EquipmentTypeMask.Armor;
                 case GE.EquipSlotType.Gloves:
-                    return GE.EquipmentType.Gloves;
+                    return GE.EquipmentTypeMask.Gloves;
                 case GE.EquipSlotType.Boots:
-                    return GE.EquipmentType.Boots;
+                    return GE.EquipmentTypeMask.Boots;
                 case GE.EquipSlotType.Necklace:
-                    return GE.EquipmentType.Necklace;
+                    return GE.EquipmentTypeMask.Necklace;
                 case GE.EquipSlotType.RingLeft:
                 case GE.EquipSlotType.RingRight:
-                    return GE.EquipmentType.Ring;
+                    return GE.EquipmentTypeMask.Ring;
                 case GE.EquipSlotType.Belt:
-                    return GE.EquipmentType.Belt;
+                    return GE.EquipmentTypeMask.Belt;
                 case GE.EquipSlotType.EarringLeft:
                 case GE.EquipSlotType.EarringRight:
-                    return GE.EquipmentType.Earring;
+                    return GE.EquipmentTypeMask.Earring;
                 default:
-                    return GE.EquipmentType.Weapon;
+                    return GE.EquipmentTypeMask.Weapon;
             }
         }
 
-        public static GE.EquipSlotType GetBestSlot(GE.EquipmentType inEquipType, ItemData?[] inEquippedItems)
+        public static GE.EquipSlotType GetBestSlot(GE.EquipmentTypeMask inEquipType, ItemData?[] inEquippedItems)
         {
             switch (inEquipType)
             {
-                case GE.EquipmentType.Weapon:
+                case GE.EquipmentTypeMask.Weapon:
                     return GetDualSlot(inEquippedItems, GE.EquipSlotType.WeaponLeft, GE.EquipSlotType.WeaponRight);
-                case GE.EquipmentType.Ring:
+                case GE.EquipmentTypeMask.Ring:
                     return GetDualSlot(inEquippedItems, GE.EquipSlotType.RingLeft, GE.EquipSlotType.RingRight);
-                case GE.EquipmentType.Earring:
+                case GE.EquipmentTypeMask.Earring:
                     return GetDualSlot(inEquippedItems, GE.EquipSlotType.EarringLeft, GE.EquipSlotType.EarringRight);
-                case GE.EquipmentType.Helmet:
+                case GE.EquipmentTypeMask.Helmet:
                     return GE.EquipSlotType.Helmet;
-                case GE.EquipmentType.Armor:
+                case GE.EquipmentTypeMask.Armor:
                     return GE.EquipSlotType.Armor;
-                case GE.EquipmentType.Gloves:
+                case GE.EquipmentTypeMask.Gloves:
                     return GE.EquipSlotType.Gloves;
-                case GE.EquipmentType.Boots:
+                case GE.EquipmentTypeMask.Boots:
                     return GE.EquipSlotType.Boots;
-                case GE.EquipmentType.Necklace:
+                case GE.EquipmentTypeMask.Necklace:
                     return GE.EquipSlotType.Necklace;
-                case GE.EquipmentType.Belt:
+                case GE.EquipmentTypeMask.Belt:
                     return GE.EquipSlotType.Belt;
                 default:
                     return GE.EquipSlotType.WeaponLeft;
@@ -96,7 +96,7 @@ namespace ARPG.Utility
 
             int sourceId = item.ItemInstanceId;
             List<ModInstance> mods = item.Equipment.Mods;
-            bool isWeapon = item.Equipment.EquipType == GE.EquipmentType.Weapon;
+            bool isWeapon = item.Equipment.EquipType == GE.EquipmentTypeMask.Weapon;
 
             for (int i = 0; i < mods.Count; i++)
             {

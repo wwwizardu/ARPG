@@ -213,8 +213,10 @@ namespace ARPG.Systems
                     stat.FinalCriDamage = ApplyValue(stat.FinalCriDamage, modifier);
                     break;
                 case GE.Stat.MoveSpeed:
-                case GE.Stat.MoveSpeedMul:
                     stat.FinalMoveSpeed = ApplyValue(stat.FinalMoveSpeed, modifier);
+                    break;
+                case GE.Stat.MoveSpeedMul:
+                    stat.FinalMoveSpeedMul = ApplyValue(stat.FinalMoveSpeedMul, modifier);
                     break;
                 case GE.Stat.AttackSpeedMul:
                     stat.FinalAttackSpeed = ApplyValue(stat.FinalAttackSpeed, modifier);
