@@ -13,6 +13,7 @@
 .vsconfig
 
 *.csproj
+*.csproj.lscache
 *.sln
 *.user
 
