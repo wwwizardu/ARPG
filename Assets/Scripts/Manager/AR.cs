@@ -8,22 +8,22 @@ namespace ARPG
 {
     public class AR : PrefabSingleton<AR>
     {
-        [SerializeField] private Manager.MessageManager _messageManager;
-        [SerializeField] private Systems.SystemManager _systemManager;
-        [SerializeField] private Component.ComponentManager _componentManager;
-        [SerializeField] private Data.DataManager _dataManager;
-        [SerializeField] private MapManager _mapManager;
-        [SerializeField] private UIManager _uiManager;
-        [SerializeField] private ARPG.Monster.MonsterManager _monsterManager;
-        [SerializeField] private ARPG.Npc.NpcManager _npcManager;
-        [SerializeField] private ARPG.Building.BuildingManager _buildingManager;
+        [SerializeField] private Manager.MessageManager _messageManager = null!;
+        [SerializeField] private Systems.SystemManager _systemManager = null!;
+        [SerializeField] private Component.ComponentManager _componentManager = null!;
+        [SerializeField] private Data.DataManager _dataManager = null!;
+        [SerializeField] private MapManager _mapManager = null!;
+        [SerializeField] private UIManager _uiManager = null!;
+        [SerializeField] private ARPG.Monster.MonsterManager _monsterManager = null!;
+        [SerializeField] private ARPG.Npc.NpcManager _npcManager = null!;
+        [SerializeField] private ARPG.Building.BuildingManager _buildingManager = null!;
 
-        [SerializeField] private Item.ItemManager _itemManager;
-        [SerializeField] private Manager.LLMManager _llmManager;
-        [SerializeField] private Manager.TimeManager _timeManager;
-        [SerializeField] private Village.VillageManager _villageManager;
-        [SerializeField] private UI.FloatingTextManager _floatingTextManager;
-        [SerializeField] private Manager.TooltipManager _tooltipManager;
+        [SerializeField] private Item.ItemManager _itemManager = null!;
+        [SerializeField] private Manager.LLMManager _llmManager = null!;
+        [SerializeField] private Manager.TimeManager _timeManager = null!;
+        [SerializeField] private Village.VillageManager _villageManager = null!;
+        [SerializeField] private UI.FloatingTextManager _floatingTextManager = null!;
+        [SerializeField] private Manager.TooltipManager _tooltipManager = null!;
 
         private bool _initialized = false;
 

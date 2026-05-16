@@ -11,8 +11,8 @@ namespace ARPG.UI
 {
     public class CharacterUI : UIBase
     {
-        [SerializeField] private TextMeshProUGUI[] _textStat;
-        [SerializeField] private SlotUI_Equip[] _slots;
+        [SerializeField] private TextMeshProUGUI[] _textStat = null!;
+        [SerializeField] private SlotUI_Equip[] _slots = null!;
 
         private Data.ItemData?[]? _equippedItems = null;
 

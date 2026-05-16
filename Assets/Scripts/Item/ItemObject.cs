@@ -11,7 +11,7 @@ namespace ARPG.Item
 {
     public class ItemObject : EntityBase
     {
-        [SerializeField] private TextMeshPro _text;
+        [SerializeField] private TextMeshPro _text = null!;
         
         private ItemData _itemData = null!;
         private ItemTable _table = null!;

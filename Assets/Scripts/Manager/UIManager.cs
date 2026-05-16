@@ -78,30 +78,30 @@ namespace ARPG
         }
 
         [Header("Camera")]
-        [SerializeField] private Camera _uiCamera;
+        [SerializeField] private Camera _uiCamera = null!;
 
         [Header("Canvas")]
-        [SerializeField] private Transform _topCanvas;
-        [SerializeField] private Transform _mainCanvas;
+        [SerializeField] private Transform _topCanvas = null!;
+        [SerializeField] private Transform _mainCanvas = null!;
 
         [Header("Loading UI")]
-        [SerializeField] private UnityEngine.UI.Image _fadeInOutBG;
-        [SerializeField] private TextMeshProUGUI _loadingText;
-        [SerializeField] private TextMeshProUGUI _notifyText;
+        [SerializeField] private UnityEngine.UI.Image _fadeInOutBG = null!;
+        [SerializeField] private TextMeshProUGUI _loadingText = null!;
+        [SerializeField] private TextMeshProUGUI _notifyText = null!;
 
         [Header("Layer Root")]
-        [SerializeField] private Transform _topRoot;
-        [SerializeField] private Transform _popupRoot;
-        [SerializeField] private Transform _mainBase;
+        [SerializeField] private Transform _topRoot = null!;
+        [SerializeField] private Transform _popupRoot = null!;
+        [SerializeField] private Transform _mainBase = null!;
 
         [Header("Root")]
-        [SerializeField] private Transform _objectRoot;
+        [SerializeField] private Transform _objectRoot = null!;
 
         [Header("Waiting For Response")]
-        [SerializeField] private GameObject _waitingFor;
+        [SerializeField] private GameObject _waitingFor = null!;
 
         [Header("Drag And Drop Slot")]
-        [SerializeField] private SlotUI _dragSlot;
+        [SerializeField] private SlotUI _dragSlot = null!;
 
         private Dictionary<string, UIResource> _uiList = new Dictionary<string, UIResource>();
         private List<Base.UIBaseForm> _uiBaseList = new List<Base.UIBaseForm>(); // 항상 떠있어야 하는 UI는 이곳에 넣는다.
@@ -110,10 +110,10 @@ namespace ARPG
         private float _topCanvasCameraPlanDistance = 0f;
         private float _mainCanvasCameraPlanDistance = 0f;
 
-        private GraphicRaycaster _topLayerRaycaster;
-        private GraphicRaycaster _mainLayerRaycaster;
+        private GraphicRaycaster _topLayerRaycaster = null!;
+        private GraphicRaycaster _mainLayerRaycaster = null!;
 
-        private PointerEventData _pointerEventData;
+        private PointerEventData _pointerEventData = null!;
 
         private UITooltip? _tooltip = null;
         private Coroutine? _tooltipCoroutine = null;
@@ -134,7 +134,7 @@ namespace ARPG
 
         private Input.ArpgInput _input = new();
 
-        private Input.ArpgInputAction _inputSystem;
+        private Input.ArpgInputAction _inputSystem = null!;
 
         private Coroutine? _saveCoroutine = null;
 
@@ -216,7 +216,7 @@ namespace ARPG
         {
             if (_uiList.ContainsKey(inName) == false)
             {
-                T ui = LoadUI<T>(inName, inLayer);
+                T? ui = LoadUI<T>(inName, inLayer);
                 if (ui == null)
                 {
                     Debug.LogError($"[UIManager] Show - UI({inName}) is not found.");
@@ -251,15 +251,23 @@ namespace ARPG
                     return null;
                 }
 
-                if (outUI.UI.IsBase == true) // Base UI라면 그냥 리턴한다.
+                var existing = outUI.UI;
+                if (existing == null)
+                {
+                    Debug.LogError($"[UIManager] Show() - UI is null, inName({inName})");
+                    UnLock();
+                    return null;
+                }
+
+                if (existing.IsBase == true) // Base UI라면 그냥 리턴한다.
                 {
                     UnLock();
-                    return outUI.UI as T;
+                    return existing as T;
                 }
                 else
                 {
                     // 그 밑에 있는 UI라면 최상위로 위치를 옮긴다.
-                    int findIndex = _uiCurrentList.IndexOf(_uiList[inName].UI);
+                    int findIndex = _uiCurrentList.IndexOf(existing);
                     if (findIndex == -1)
                     {
                         Debug.LogError($"[UIManager] Show() - not found in _uiCurrentList, inName({inName})");
@@ -284,7 +292,7 @@ namespace ARPG
                 }
             }
 
-            T ui = LoadUI<T>(inName, inLayer);
+            T? ui = LoadUI<T>(inName, inLayer);
             if (ui == null)
             {
                 Debug.LogError($"[UIManager] Show - UI({inName}) is not found.");
@@ -532,7 +540,11 @@ namespace ARPG
             if (_uiList.ContainsKey(inName) == false)
                 return false;
 
-            return _uiList[inName].UI.gameObject.activeSelf;
+            var ui = _uiList[inName].UI;
+            if (ui == null)
+                return false;
+
+            return ui.gameObject.activeSelf;
         }
 
         public void UpdateInputActionMap()
@@ -850,7 +862,7 @@ namespace ARPG
             //    return false;
 
             // 빈 공간으로 지정된 Image가 클릭되면 그 UI를 닫는다.
-            Base.UIBase uiBase = FindEmptySpace(inPosition);
+            Base.UIBase? uiBase = FindEmptySpace(inPosition);
             if (uiBase == null)
                 return false;
 
@@ -880,7 +892,8 @@ namespace ARPG
 
         public Vector2 GetPositionTooltip(Vector3 inScreenPosition, Vector3 inScreenLeftPosition)
         {
-            if (_tooltip == null)
+            var tooltip = _tooltip;
+            if (tooltip == null)
                 return Vector2.zero;
 
             // Canvas 컴포넌트와 RectTransform 가져오기
@@ -896,7 +909,7 @@ namespace ARPG
             );
 
             // 툴팁 정보 가져오기
-            var tooltipRect = _tooltip.TooltipRect;
+            var tooltipRect = tooltip.TooltipRect;
             Vector2 tooltipSize = tooltipRect.sizeDelta;
             Vector2 tooltipPivot = tooltipRect.pivot;
 

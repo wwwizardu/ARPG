@@ -21,9 +21,9 @@ namespace ARPG.UI
         }
 
         [SerializeField] protected UISlotType _slotType = UISlotType.None;
-        [SerializeField] protected Image _BG;
-        [SerializeField] protected Image _Icon;
-        [SerializeField] protected TextMeshProUGUI _TextQuantity;
+        [SerializeField] protected Image _BG = null!;
+        [SerializeField] protected Image _Icon = null!;
+        [SerializeField] protected TextMeshProUGUI _TextQuantity = null!;
 
         protected int _slotIndex = -1;
 

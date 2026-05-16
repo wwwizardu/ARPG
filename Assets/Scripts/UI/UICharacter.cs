@@ -10,8 +10,8 @@ namespace ARPG.UI
 {
     public class UICharacter : UIBaseForm
     {
-        [SerializeField] private Transform _characterRoot;
-        [SerializeField] private Transform _inventoryRoot;
+        [SerializeField] private Transform _characterRoot = null!;
+        [SerializeField] private Transform _inventoryRoot = null!;
 
         private UIInventory? _inventoryUI;
         private CharacterUI? _characterUI;

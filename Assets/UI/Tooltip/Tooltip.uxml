@@ -41,11 +41,36 @@
                 </ui:VisualElement>
             </ui:VisualElement>
 
-            <!-- Equipment (추후 Phase 2에서 채움) -->
-            <ui:VisualElement name="content-equipment" class="tooltip-content" picking-mode="Ignore"/>
+            <!-- Equipment: 무기/방어구 베이스 스탯 + Implicit + Prefix/Postfix Mod -->
+            <ui:VisualElement name="content-equipment" class="tooltip-content" picking-mode="Ignore">
+                <ui:Label name="eq-name" class="tooltip-name"/>
+                <ui:Label name="eq-tier" class="tooltip-tier"/>
+                <ui:VisualElement class="tooltip-divider"/>
+                <!-- 무기 베이스 스탯 (고정 라인 — WeaponStats 캐시 기반) -->
+                <ui:VisualElement class="tooltip-stats">
+                    <ui:Label name="eq-dmg-physics" class="tooltip-statline"/>
+                    <ui:Label name="eq-dmg-fire" class="tooltip-statline"/>
+                    <ui:Label name="eq-dmg-ice" class="tooltip-statline"/>
+                    <ui:Label name="eq-dmg-lightning" class="tooltip-statline"/>
+                    <ui:Label name="eq-dmg-poison" class="tooltip-statline"/>
+                    <ui:Label name="eq-crit" class="tooltip-statline"/>
+                    <ui:Label name="eq-as" class="tooltip-statline"/>
+                </ui:VisualElement>
+                <!-- 방어구 베이스 Mod (동적 라인) -->
+                <ui:VisualElement name="eq-base-mods" class="tooltip-stats"/>
+                <!-- Implicit Mod (골드 컬러, 동적 라인) -->
+                <ui:VisualElement name="eq-implicit-mods" class="tooltip-stats"/>
+                <!-- Prefix/Postfix Mod (일반 컬러, 동적 라인) -->
+                <ui:VisualElement name="eq-affix-mods" class="tooltip-stats"/>
+            </ui:VisualElement>
 
-            <!-- 일반 아이템 (추후) -->
-            <ui:VisualElement name="content-item" class="tooltip-content" picking-mode="Ignore"/>
+            <!-- 일반 아이템: 이름 + Tier + 설명 -->
+            <ui:VisualElement name="content-item" class="tooltip-content" picking-mode="Ignore">
+                <ui:Label name="it-name" class="tooltip-name"/>
+                <ui:Label name="it-tier" class="tooltip-tier"/>
+                <ui:VisualElement class="tooltip-divider"/>
+                <ui:Label name="it-desc" class="tooltip-desc"/>
+            </ui:VisualElement>
 
         </ui:VisualElement>
     </ui:VisualElement>

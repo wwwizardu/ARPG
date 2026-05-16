@@ -130,7 +130,7 @@ namespace ARPG.Systems
 
             profile.SkillDamageMul = ownerStat.FinalSkillDamage > 0 ? ownerStat.FinalSkillDamage / 100f : 1f;
             profile.BaseDamageMul  = table.BaseDamageMul / 100f;
-            profile.LifeStealRatio = ownerStat.FinalLifeSteal / 100f;
+            profile.LifeStealRatio = (ownerStat.FinalLifeSteal + onHit.LifeStealBonus) / 100f;
 
             // UI/타이밍용 공격속도: 무기 AS × Skill.BaseAttackSpeedMul × (1 + Stat.FinalAttackSpeed%)
             float weaponAS = WeaponHelper.GetWeaponAttackSpeed(ownerEntityId);

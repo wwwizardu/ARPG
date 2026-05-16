@@ -9,8 +9,10 @@ SKILL_DESIGN.md §6.8 / [skill_effect_system.md](../../../Users/peace/.claude/pr
 
 - **트리거 8종**: `OnSkillCommand` / `OnSkillStart` / `OnHit` / `OnCrit` / `OnKill` / `OnProjectileSpawn` / `OnProjectileHit` / `OnSkillEnd`
 - **Context 가용 필드**: `OwnerEntityId`, `TargetEntityId`, `SkillEntityId`, `SkillId`, `TargetPosition`, `DamageResult`, `ProjectileEntityId`, `CancelOriginalCast`
-- **현재 구현됨 (4종)**: `LifeStealOnHit` / `ApplyBuffOnHit` / `DelegateToTotem` / `SpawnProjectile`
-- 이 문서의 모든 후보는 **enum 1줄 + Executor case 1개 + 시트 행 1개**로 추가 가능. 기존 `SkillTable` 변경 없음.
+- **현재 구현됨**:
+  - **EffectAction** (Executor 트리거 시점 실행): `ApplyBuffOnHit` / `DelegateToTotem` / `SpawnProjectile`
+  - **StatBonus** (Helper가 사전 합산 → 프로파일 캐시 → DamageCalculator 일괄 소비): `LifeSteal` / `ProjectileCountAdd`
+- 새 효과 추가 시 **EffectAction**: enum 1줄 + Executor case 1개 + 시트 행 1개. **StatBonus**: `SkillStatBonusOn*Component` 필드 1개 + Add case 1개 + 소비 지점 1줄(`System_SkillAttackProfileCalculation` 등) + 시트 행 1개. 어느 쪽이든 기존 `SkillTable` 변경 없음.
 
 각 아이디어 카드 구조:
 - **EffectType**: 새 enum 값
@@ -36,7 +38,7 @@ SKILL_DESIGN.md §6.8 / [skill_effect_system.md](../../../Users/peace/.claude/pr
 - **Param**: `Param1=회복량`, `Param2=DamageDealt 비율(%)`
 - **요약**: 명중 시 MP 회복. 스택 캐스터의 자원 순환용.
 - **사용 예**: "마법 무기에 +1 ManaOnHit" 같은 PoE식 옵션.
-- **구현 메모**: `LifeStealOnHit`과 거의 동일 구조 — HP 대신 MP 채움.
+- **구현 메모**: 두 갈래 선택 가능. (a) **EffectAction**으로 즉시 회복 처리 — Executor가 `ctx.OwnerEntityId`의 `StatComponent.CurrentMp`를 직접 회복. (b) **StatBonus**로 캐릭터 stat(`Stat.ManaOnHit` 추가)에 흡수해 데미지 처리 후 일괄 회복 — `LifeSteal` 통합 패턴 그대로. MP가 캐릭터 영구 stat으로도 의미 있으면 (b)가 일관됨.
 
 ### 3. ManaRestoreOnSkillEnd
 - **Trigger**: `OnSkillEnd`
@@ -188,7 +190,7 @@ SKILL_DESIGN.md §6.8 / [skill_effect_system.md](../../../Users/peace/.claude/pr
 
 | 단계 | 효과 | 이유 |
 |---|---|---|
-| 1차 (즉시) | #1 ManaRestoreOnKill, #2 ManaRestoreOnHit, #4 ApplyBuffOnSkillStart | `LifeStealOnHit` / `ApplyBuffOnHit` 구조 100% 재사용. 코드 변경 최소. |
+| 1차 (즉시) | #1 ManaRestoreOnKill, #2 ManaRestoreOnHit, #4 ApplyBuffOnSkillStart | `ApplyBuffOnHit` (EffectAction) 또는 `LifeSteal` (StatBonus) 구조 그대로 재사용 가능. 코드 변경 최소. |
 | 1차 | #6 KnockbackOnHit, #7 StunOnCrit | 컴포넌트 1~2개만 추가하면 됨. 게임 체감 변화 큼. |
 | 2차 | #10 SpawnAreaEffectOnHit, #11 SpawnAreaEffectOnKill | `EntityFactory.CreateAreaEffect` 진입점 확립이 선결. AoE 시스템 정리와 함께 진행. |
 | 2차 | #12~14 발사체 옵션 (Pierce/Chain/Fork) | `ProjectileComponent` 필드 확장 + 충돌 처리 분기. Stat합산형(`Stat.ProjectilePierceAdd`)과 짝지어 도입 권장. |

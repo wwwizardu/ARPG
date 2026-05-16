@@ -69,6 +69,7 @@ namespace ARPG.Data
         public int SkillId;
 
         [JsonProperty("SocketedPageItems")]
+        [SerializeReference]
         public List<ItemData> SocketedPages = new();
 
         public int PageCapacityBonus;
@@ -467,7 +468,8 @@ namespace ARPG.Data
             ushort total = 0;
             for (int i = 0; i < Mods.Count; i++)
             {
-                if (Mods[i].Table != null && Mods[i].Table.EffectType == effectType)
+                var table = Mods[i].Table;
+                if (table != null && table.EffectType == effectType)
                     total += Mods[i].Value1;
             }
             return total;
@@ -481,7 +483,8 @@ namespace ARPG.Data
             int min = 0, max = 0;
             for (int i = 0; i < Mods.Count; i++)
             {
-                if (Mods[i].Table != null && Mods[i].Table.EffectType == effectType)
+                var table = Mods[i].Table;
+                if (table != null && table.EffectType == effectType)
                 {
                     min += Mods[i].Value1;
                     max += Mods[i].Value2;
@@ -530,9 +533,10 @@ namespace ARPG.Data
             int val = 0;
             for (int i = 0; i < Mods.Count; i++)
             {
-                if (Mods[i].Table != null
-                    && Mods[i].Table.EffectType == GE.ModEffectType.FlatStat
-                    && Mods[i].Table.TargetStat == GE.Stat.CriRate)
+                var table = Mods[i].Table;
+                if (table != null
+                    && table.EffectType == GE.ModEffectType.FlatStat
+                    && table.TargetStat == GE.Stat.CriRate)
                 {
                     val += Mods[i].Value1;
                 }
@@ -545,9 +549,10 @@ namespace ARPG.Data
             ushort val = 0;
             for (int i = 0; i < Mods.Count; i++)
             {
-                if (Mods[i].Table != null
-                    && Mods[i].Table.EffectType == GE.ModEffectType.FlatStat
-                    && Mods[i].Table.TargetStat == GE.Stat.AttackSpeed)
+                var table = Mods[i].Table;
+                if (table != null
+                    && table.EffectType == GE.ModEffectType.FlatStat
+                    && table.TargetStat == GE.Stat.AttackSpeed)
                 {
                     val += Mods[i].Value1;
                 }

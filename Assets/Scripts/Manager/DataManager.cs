@@ -13,7 +13,7 @@ namespace ARPG.Data
 {
     public partial class DataManager : MonoBehaviour
     {
-        private const ushort CURRENT_WORLD_DATA_VERSION = 2;
+        private const ushort CURRENT_WORLD_DATA_VERSION = 3;
         private const ushort CURRENT_PLAYER_DATA_VERSION = 2;
         private WorldData _worldData = new();
         private List<PlayerData> _playerDataList = new();
@@ -68,7 +68,7 @@ namespace ARPG.Data
             Debug.Log("DataManager Reset");
         }
 
-        public async Task<bool> Load()
+        public Task<bool> Load()
         {
             string savePath = Path.Combine(Application.persistentDataPath, "Saved");
             string worldDataPath = Path.Combine(savePath, "WorldData.json");
@@ -253,7 +253,7 @@ namespace ARPG.Data
                 Debug.Log("[DataManager] PlayerData file not found, created default player");
             }
 
-            return true;
+            return Task.FromResult(true);
         }
 
         /// <summary>
@@ -539,6 +539,14 @@ namespace ARPG.Data
                 {
                     _worldData.TileModifications = new();
                 }
+            }
+
+            // 버전 2 -> 3: MerchantStockEntry 스키마 변경 (ItemTableId/SkillId/SkillEffectId → ItemData).
+            // 구 매물은 VillageManager.Load에서 Item=null로 역직렬화되어 자동 제거된다 — 여기서는 명시적 작업 불필요.
+            // 다음 상점 진입 시 EnsureMerchantStockFresh가 새 포맷으로 재롤한다.
+            if (fromVersion < 3 && toVersion >= 3)
+            {
+                // no-op (VillageManager.Load에서 처리). 버전 점프 사실만 기록.
             }
         }
 

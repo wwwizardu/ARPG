@@ -321,11 +321,13 @@
 **목적**: "명중 시 HP 흡수", "투사체 분리", "치명타 시 추가 발사체" 등의 옵션을 코드 분기 없이 데이터로 합성한다. PoE 보조 젬과 본질적으로 같은 모델.
 
 **구현 위치**:
-- `GlobalEnum.SkillTrigger` (8종 전체 정의), `GlobalEnum.SkillEffectType` (None/LifeStealOnHit/ApplyBuffOnHit/DelegateToTotem/SpawnProjectile 5종 구현)
-- `SkillEffectExecutor.Trigger(trigger, ctx, effectIds)` 단일 진입점, EffectType별 switch
+- `GlobalEnum.SkillTrigger` (8종 전체 정의)
+- `SkillEffectTable.Kind` 컬럼 (`StatBonus` / `EffectAction`)로 처리 경로 분기:
+  - **StatBonus** — `SkillStatBonusHelper.Rebuild`가 트리거별 `SkillStatBonusOn*Component`로 사전 합산. 매 적중마다 디스패치 없이 `SkillAttackProfileComponent`에 캐시되어 `DamageCalculator`가 일괄 소비. 예: `LifeSteal`, `ProjectileCountAdd`.
+  - **EffectAction** — `SkillEffectExecutor.Trigger(...)` 단일 진입점이 EffectType별 switch로 분기. 예: `ApplyBuff`, `DelegateToTotem`.
 - `SkillEffectContext` (OwnerId/TargetId/SkillId/TargetPos/DamageResult/IsCrit/CancelOriginalCast)
 - `SkillTable.SkillEffectIds: List<int>` 컬럼 + 구글 시트 SkillEffect 시트
-- 등록된 효과: 1001 LifeSteal_15%, 1002 OnHit_Bleed, 1010 Delegate_Totem_8s, 2003 MultiShot_3 (R2)
+- 등록된 효과: 1001 LifeSteal_15% (StatBonus), 1002 OnHit_Bleed (EffectAction), 1010 Delegate_Totem_8s (EffectAction), 2003 MultiShot_3 (StatBonus, R2)
 
 **옵션 합산 컨벤션**: 옵션은 두 종류로 나뉨.
 - **(1) 스킬 고유 속성**: `SkillTable` 컬럼으로 표현 (예: `ProjectileId`, `BaseProjectileCount`). 발사체 개수처럼 "스킬마다 다를 수 있지만 하나의 스킬 내에선 base 값"인 항목.
@@ -345,7 +347,8 @@ SkillTable
 
 SkillEffectTable                         // 새 테이블
 ├─ Id
-├─ EffectType: GE.SkillEffectType        // LifeStealOnHit, ApplyBuffOnHit, ProjectileSplit, ...
+├─ EffectType: GE.Stat                   // ApplyBuff/DelegateToTotem(EffectAction), LifeSteal/ProjectileCountAdd/...(StatBonus)
+├─ Kind: GE.SkillEffectKind              // StatBonus(Helper가 컴포넌트로 흡수) / EffectAction(Executor가 트리거 시점 실행)
 ├─ Trigger: GE.SkillTrigger              // OnSkillStart/OnHit/OnCrit/OnKill/OnProjectileSpawn/OnProjectileHit/OnSkillEnd/OnSkillCommand
 ├─ Param1, Param2, Param3: float
 └─ Probability: int
@@ -366,17 +369,17 @@ SkillEffectTable                         // 새 테이블
 **디스패처**: `SkillEffectExecutor` 정적 유틸 1곳에 모아 EffectType별 switch. `System_Skill`은 트리거 호출 1줄씩만 추가.
 
 **도입 효과 (예시)**:
-| 옵션 | EffectType | Trigger | Param 의미 |
-|---|---|---|---|
-| 명중 시 HP 흡수 (스킬 한정) | LifeStealOnHit | OnHit | Percent |
-| 점화 1스택 부여 | ApplyBuffOnHit | OnHit | BuffId, Stack |
-| 처치 시 마나 회복 | ManaRestoreOnKill | OnKill | Amount |
-| 치명타 시 추가 발사체 | SpawnProjectileOnCrit | OnCrit | ProjectileId, Count |
-| 투사체 분리 | SpawnProjectileOnHit | OnProjectileHit | Count, Spread, DamageRatio |
-| 시체 폭발 | SpawnAreaEffectOnKill | OnKill | Radius, Damage |
-| 명중 시 넉백 | KnockbackOnHit | OnHit | Force |
-| **토템 시전 위임** (§6.9) | DelegateToTotem | OnSkillCommand | TotemTableId, Duration |
-| **지뢰 시전 위임** (§6.9) | DelegateToMine | OnSkillCommand | MineTableId, MaxMines |
+| 옵션 | EffectType | Kind | Trigger | Param 의미 |
+|---|---|---|---|---|
+| 명중 시 HP 흡수 (스킬 한정) | LifeSteal | StatBonus | OnHit | Percent (캐릭터 stat과 합산되어 `profile.LifeStealRatio`로 캐시) |
+| 점화 1스택 부여 | ApplyBuff | EffectAction | OnHit | BuffId, Stack |
+| 처치 시 마나 회복 | ManaRestoreOnKill | EffectAction | OnKill | Amount |
+| 치명타 시 추가 발사체 | SpawnProjectileOnCrit | EffectAction | OnCrit | ProjectileId, Count |
+| 투사체 분리 | SpawnProjectileOnHit | EffectAction | OnProjectileHit | Count, Spread, DamageRatio |
+| 시체 폭발 | SpawnAreaEffectOnKill | EffectAction | OnKill | Radius, Damage |
+| 명중 시 넉백 | KnockbackOnHit | EffectAction | OnHit | Force |
+| **토템 시전 위임** (§6.9) | DelegateToTotem | EffectAction | OnSkillCommand | TotemTableId, Duration |
+| **지뢰 시전 위임** (§6.9) | DelegateToMine | EffectAction | OnSkillCommand | MineTableId, MaxMines |
 
 **영향**: §6.2(버프 적용)·§6.7·§6.9 모두 EffectType으로 흡수됨. 새 옵션 추가 시 EffectType enum 1줄 + 디스패처 case 1개 + 테이블 행 1개. 기존 SkillTable 행 변경 0.
 
@@ -460,3 +463,4 @@ ProjectileId 대역도 동일 규칙 권장: 화살 100번대, 마법 200번대.
 - 2026-05-04 (rev 2): §6.8 SkillEffect 골격 완료 표시 (Executor/Context/Trigger·EffectType enum/SkillEffect 시트). LifeStealOnHit/ApplyBuffOnHit/DelegateToTotem 3종 구현됨. A5 Lacerate 추가 (Skill 시트 Id=13, SkillEffectIds=[1002 OnHit_Bleed]).
 - 2026-05-04 (rev 3): R2 Multi Shot 구현 — `SkillEffectType.SpawnProjectile` + `Stat.ProjectileCountAdd` 추가. SkillEffect 2003 / Skill Id=101. 발사체 옵션 합산 컨벤션(Param=base, Stat=modifier) 도입. §6.4를 §6.8에 흡수. 분산 각도는 코드 상수(15°/발) 고정 — 추후 Stat 추가 시 교체 예정.
 - 2026-05-04 (rev 4): R2 설계 재검토 — SpawnProjectile EffectType 기반 접근은 "스킬당 별도 SkillEffect 행 필요"라는 조합 폭발 문제로 폐기. 대신 **`SkillTable.BaseProjectileCount` 컬럼**을 추가하고 System_Skill의 ProjectileId 분기를 N발 부채꼴 발사로 확장. R2는 `ProjectileId=1, BaseProjectileCount=3`만으로 정의. `Stat.ProjectileCountAdd`는 모든 발사체 스킬에 자동 적용. SpawnProjectile EffectType은 "스킬과 다른 종류의 발사체 스폰" 용도로 살려둠.
+- 2026-05-16: `LifeSteal` 효과 경로 단일화. 기존 `LifeStealOnHit` (EffectAction)을 폐기하고 `SkillEffectKind.StatBonus + EffectType.LifeSteal`로 통합. `SkillStatBonusOnHitComponent.LifeStealBonus` 필드 추가 → `SkillAttackProfileComponent.LifeStealRatio`에서 캐릭터 stat과 합산 캐시. SkillEffectExecutor의 `LifeStealOnHit` 케이스 제거, `DownloadTables.InferSkillEffectKindFromEffectType`에서 `LifeSteal` 분기 제거(이제 default StatBonus로 추론). 매 적중마다 트리거 디스패치 없이 `DamageCalculator`가 단일 비율로 흡혈 처리. SkillEffect 1001 행 `Kind=StatBonus` 확정.

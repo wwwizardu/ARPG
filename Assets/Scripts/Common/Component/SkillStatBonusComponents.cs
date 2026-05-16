@@ -79,6 +79,7 @@ namespace ARPG.Component
         public int LightningDamageAddBonusMax;
         public int PoisonDamageAddBonusMin;
         public int PoisonDamageAddBonusMax;
+        public int LifeStealBonus;
 
         public void Add(GE.Stat s, int value)
         {
@@ -99,6 +100,7 @@ namespace ARPG.Component
                 case GE.Stat.LightningAttackMax: LightningDamageAddBonusMax += value; break;
                 case GE.Stat.PoisonAttackMin:    PoisonDamageAddBonusMin += value; break;
                 case GE.Stat.PoisonAttackMax:    PoisonDamageAddBonusMax += value; break;
+                case GE.Stat.LifeSteal:          LifeStealBonus += value; break;
                 default:
                     Debug.LogWarning($"[SkillStatBonusOnHit] Unsupported stat: {s}");
                     break;

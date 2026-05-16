@@ -1,3 +1,4 @@
+#nullable enable
 using System.Collections.Generic;
 using ARPG.Component;
 using ARPG.Message;

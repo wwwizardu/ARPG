@@ -67,6 +67,21 @@
     display: none;
 }
 
+/* Implicit slot: 유니크/특수 옵션 — 골드 컬러로 일반 affix와 구분 */
+.tooltip-statline-implicit {
+    font-size: 13px;
+    color: rgb(255, 215, 100);
+    margin-top: 1px;
+    -unity-font-style: bold;
+}
+
+/* 방어구 베이스 / 일반 affix mod 라인 — 동적 추가용 (display 기본 flex) */
+.tooltip-modline {
+    font-size: 13px;
+    color: rgb(170, 200, 230);
+    margin-top: 1px;
+}
+
 /* 등급별 이름 색상 (1=Common, 2=Rare, 3=Epic) */
 .tooltip-tier-1 {
     color: rgb(220, 220, 220);

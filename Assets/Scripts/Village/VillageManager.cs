@@ -247,6 +247,21 @@ namespace ARPG.Village
                     data.PlacedObjects = new List<PlacedObjectSaveData>();
                 if (data.MerchantStock == null)
                     data.MerchantStock = new List<MerchantStockEntry>();
+
+                // 매물 ItemData 테이블 참조 복원 + 구 포맷(Item=null) 정리.
+                // V2→V3 매물 스키마 변경: ItemTableId/SkillId/SkillEffectId → ItemData. 구 엔트리는 Item=null이라 폐기 후
+                // EnsureMerchantStockFresh가 새 포맷으로 재롤한다.
+                for (int s = data.MerchantStock.Count - 1; s >= 0; s--)
+                {
+                    MerchantStockEntry entry = data.MerchantStock[s];
+                    if (entry == null || entry.Item == null)
+                    {
+                        data.MerchantStock.RemoveAt(s);
+                        continue;
+                    }
+                    entry.Item.OnLoadCompleted();
+                }
+
                 MigratePlacedObjectsFromTypeIds(data);
 
                 _villages[data.VillageId] = data;
@@ -741,41 +756,29 @@ namespace ARPG.Village
 
             MerchantStockEntry entry = v.MerchantStock[stockEntryIndex];
             if (entry.RemainingCount < amount) return -1;
+            if (entry.Item == null || entry.Item.Table == null) return -1;
 
-            Tables.ItemTable? item = AR.s.Data.GetItem(entry.ItemTableId);
-            if (item == null || item.BasePrice <= 0) return -1;
+            Tables.ItemTable item = entry.Item.Table;
+            if (item.BasePrice <= 0) return -1;
+
+            // Non-Stackable(Equipment/SkillBook/SkillPage)은 항상 1개 — 매물 인스턴스 자체를 손에 넣는다.
+            // Stackable(소비/자원류)은 amount만큼 새로 생성. 매물의 Item은 표시용 템플릿 역할.
+            if (item.Stackable == false)
+                amount = 1;
 
             int gold = item.BasePrice * amount;
             if (AR.s.Data.Player.Gold < gold) return -1;
 
-            // 구매 ItemData 생성 — 스킬북/스킬 페이지는 인스턴스 데이터를 채워야 인벤/UI에서 정상 인식
-            ARPG.Data.ItemData? purchase;
-            if (item.ItemType == GlobalEnum.ItemType.SkillBook)
+            ARPG.Data.ItemData purchase;
+            if (item.Stackable == false)
             {
-                if (entry.SkillId <= 0)
-                {
-                    Debug.LogError($"[Shop] SkillBook 매물에 SkillId가 비어있음. v{villageId} stockIdx={stockEntryIndex}");
-                    return -1;
-                }
-                purchase = AR.s.Item.CreateSkillBook(entry.ItemTableId, entry.SkillId);
-                if (purchase == null) return -1;
-                // amount는 항상 1로 강제 (Stackable=false)
-                amount = 1;
-            }
-            else if (item.ItemType == GlobalEnum.ItemType.SkillPage)
-            {
-                if (entry.SkillEffectId <= 0)
-                {
-                    Debug.LogError($"[Shop] SkillPage 매물에 SkillEffectId가 비어있음. v{villageId} stockIdx={stockEntryIndex}");
-                    return -1;
-                }
-                purchase = AR.s.Item.CreateSkillPage(entry.ItemTableId, entry.SkillEffectId);
-                if (purchase == null) return -1;
-                amount = 1;
+                purchase = entry.Item;
             }
             else
             {
-                purchase = new ARPG.Data.ItemData { Id = entry.ItemTableId, Quantity = amount };
+                ARPG.Data.ItemData? created = AR.s.Item.CreateInventoryItemData(item.Id, amount);
+                if (created == null) return -1;
+                purchase = created;
             }
 
             // 인벤토리에 추가 시도 (꽉 차 있으면 실패 — Gold 미차감)
@@ -785,6 +788,9 @@ namespace ARPG.Village
             AR.s.Data.Player.Gold -= gold;
             entry.RemainingCount -= amount;
             v.MerchantStock[stockEntryIndex] = entry;
+
+            // 매물 / Gold 변경을 즉시 영구화 (드랍 픽업과 동일 정책).
+            AR.s.Data.Save();
 
             Debug.Log($"[Shop] v{villageId} 구매 {item.Name} ×{amount} = {gold}G");
             AR.s.UI.SetNotify($"구매: {item.Name} ×{amount} = -{gold}G");
@@ -835,95 +841,25 @@ namespace ARPG.Village
                 Tables.ItemTable picked = pool[idx];
                 pool.RemoveAt(idx);
 
-                // 스킬북 매물: 같은 Tier 스킬 풀에서 SkillId도 함께 픽 (SKILLBOOK_DESIGN.md §10)
-                int skillId = 0;
-                if (picked.ItemType == GlobalEnum.ItemType.SkillBook)
+                // 매물 인스턴스를 roll 시점에 완성한다 — SkillBook/SkillPage/Equipment 분기 + 인스턴스 데이터 채움까지
+                // ItemManager.CreateInventoryItemData가 단일 진입점.
+                ARPG.Data.ItemData? rolled = AR.s.Item.CreateInventoryItemData(picked.Id);
+                if (rolled == null)
                 {
-                    skillId = PickRandomSkillIdByTier(picked.Tier);
-                    if (skillId <= 0)
-                    {
-                        // 매칭되는 스킬이 없으면 슬롯 스킵하고 다른 매물로 채우기 시도
-                        Debug.LogWarning($"[Shop] SkillBook ItemId({picked.Id}) Tier({picked.Tier})에 매칭되는 스킬 없음 — 매물 슬롯 스킵");
-                        i--; // 슬롯 카운트 복구
-                        if (pool.Count == 0) break;
-                        continue;
-                    }
-                }
-
-                // 스킬 페이지 매물: 같은 Tier(=PageCost 범위) SkillEffect 풀에서 픽 (SKILL_RUNE_DESIGN.md §8.2)
-                int skillEffectId = 0;
-                if (picked.ItemType == GlobalEnum.ItemType.SkillPage)
-                {
-                    skillEffectId = PickRandomSkillEffectIdByTier(picked.Tier);
-                    if (skillEffectId <= 0)
-                    {
-                        Debug.LogWarning($"[Shop] SkillPage ItemId({picked.Id}) Tier({picked.Tier})에 매칭되는 SkillEffect 없음 — 매물 슬롯 스킵");
-                        i--;
-                        if (pool.Count == 0) break;
-                        continue;
-                    }
+                    Debug.LogWarning($"[Shop] ItemId({picked.Id}) 매물 생성 실패 — 슬롯 스킵");
+                    i--; // 슬롯 카운트 복구
+                    if (pool.Count == 0) break;
+                    continue;
                 }
 
                 v.MerchantStock.Add(new MerchantStockEntry
                 {
-                    ItemTableId = picked.Id,
+                    Item = rolled,
                     RemainingCount = picked.Stackable ? Random.Range(3, 11) : 1,
-                    SkillId = skillId,
-                    SkillEffectId = skillEffectId,
                 });
             }
 
             Debug.Log($"[Shop] v{v.VillageId} 매물 재롤: {v.MerchantStock.Count}건");
-        }
-
-        /// <summary>
-        /// SkillTable에서 Tier 매칭 균등 랜덤. 없으면 0.
-        /// (ItemManager.PickRandomSkillByTier과 동일 로직 — VillageManager 내부 전용)
-        /// </summary>
-        private static int PickRandomSkillIdByTier(int tier)
-        {
-            if (AR.s.Data == null) return 0;
-
-            List<Tables.SkillTable> all = AR.s.Data.GetAllSkills();
-            int matchedCount = 0;
-            int picked = 0;
-            for (int i = 0; i < all.Count; i++)
-            {
-                if (all[i].Tier != tier) continue;
-                matchedCount++;
-                // Reservoir sampling (k=1)
-                if (Random.Range(0, matchedCount) == 0) picked = all[i].Id;
-            }
-            return picked;
-        }
-
-        /// <summary>
-        /// PageCost 범위로 Tier 매칭한 SkillEffect 풀에서 랜덤 픽 (SKILL_RUNE_DESIGN.md §8.2).
-        /// 매핑은 ItemManager.GetSkillPageTierByCost와 동일 정책 (≤10=1, ≤25=2, else=3).
-        /// </summary>
-        private static int PickRandomSkillEffectIdByTier(int tier)
-        {
-            if (AR.s.Data == null) return 0;
-
-            List<Tables.SkillEffectTable> all = AR.s.Data.GetAllSkillEffects();
-            int matchedCount = 0;
-            int picked = 0;
-            for (int i = 0; i < all.Count; i++)
-            {
-                Tables.SkillEffectTable effect = all[i];
-                if (effect.PageCost <= 0) continue;
-                if (PageCostToTier(effect.PageCost) != tier) continue;
-                matchedCount++;
-                if (Random.Range(0, matchedCount) == 0) picked = effect.Id;
-            }
-            return picked;
-        }
-
-        private static int PageCostToTier(int pageCost)
-        {
-            if (pageCost <= 10) return 1;
-            if (pageCost <= 25) return 2;
-            return 3;
         }
     }
 }

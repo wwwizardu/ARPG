@@ -56,7 +56,7 @@ namespace ARPG.UI
         {
             for (int i = 0; i < _pool.Count; i++)
             {
-                DOTween.Kill(_pool[i].Root.GetInstanceID());
+                DOTween.Kill(_pool[i].Root);
                 _pool[i].Root.SetActive(false);
                 _pool[i].CanvasGroup.alpha = 1f;
             }
@@ -78,7 +78,7 @@ namespace ARPG.UI
             FloatingTextItem item = _pool[_nextIndex];
             _nextIndex = (_nextIndex + 1) % _pool.Count;
 
-            DOTween.Kill(item.Root.GetInstanceID());
+            DOTween.Kill(item.Root);
 
             SetupTextContent(item, damageAmount, damageType, isCritical, isEvaded, isBlocked);
 
@@ -95,12 +95,11 @@ namespace ARPG.UI
             item.Root.transform.localScale = Vector3.one * baseScale;
             item.Root.SetActive(true);
 
-            int tweenId = item.Root.GetInstanceID();
             float duration = isEvaded ? 0.6f : ANIMATION_DURATION;
             float floatDist = isEvaded ? 0.5f : FLOAT_DISTANCE;
 
             Sequence seq = DOTween.Sequence();
-            seq.SetId(tweenId);
+            seq.SetId(item.Root);
 
             // 펀치 스케일 (타격감)
             if (isEvaded == false)

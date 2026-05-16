@@ -22,7 +22,7 @@ public abstract class PrefabSingleton<T> : MonoBehaviour where T : MonoBehaviour
             {
                 if (_instance == null)
                 {
-                    _instance = FindFirstObjectByType<T>();
+                    _instance = FindAnyObjectByType<T>();
 
                     if (_instance == null)
                     {

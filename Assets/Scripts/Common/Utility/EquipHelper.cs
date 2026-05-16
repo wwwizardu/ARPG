@@ -276,9 +276,10 @@ namespace ARPG.Utility
 
             for (int i = 0; i < equippedItems.Length; i++)
             {
-                if (equippedItems[i] != null)
+                ItemData? item = equippedItems[i];
+                if (item != null)
                 {
-                    ApplyEquipmentModifiers(playerEntityId, equippedItems[i]);
+                    ApplyEquipmentModifiers(playerEntityId, item);
                 }
             }
 

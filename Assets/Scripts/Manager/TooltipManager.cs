@@ -59,6 +59,25 @@ namespace ARPG.Manager
         private Label? _spEfficiency;
         private Label? _spCondition;
 
+        // Equipment 컨텐츠 element 캐시
+        private Label? _eqName;
+        private Label? _eqTier;
+        private Label? _eqDmgPhysics;
+        private Label? _eqDmgFire;
+        private Label? _eqDmgIce;
+        private Label? _eqDmgLightning;
+        private Label? _eqDmgPoison;
+        private Label? _eqCrit;
+        private Label? _eqAs;
+        private VisualElement? _eqBaseMods;
+        private VisualElement? _eqImplicitMods;
+        private VisualElement? _eqAffixMods;
+
+        // 일반 아이템 컨텐츠 element 캐시
+        private Label? _itName;
+        private Label? _itTier;
+        private Label? _itDesc;
+
         private bool _isReady = false;
 
         public void Initialize()
@@ -98,8 +117,16 @@ namespace ARPG.Manager
                         activeContent = _contentSkillPage;
                     }
                     break;
-                // Phase 2: Equipment / 일반 아이템 컨텐츠 빌더 추가
+                case GlobalEnum.ItemType.Equipment:
+                    if (item.Equipment != null)
+                    {
+                        BuildEquipmentContent(item);
+                        activeContent = _contentEquipment;
+                    }
+                    break;
                 default:
+                    BuildItemContent(item);
+                    activeContent = _contentItem;
                     break;
             }
 
@@ -353,6 +380,154 @@ namespace ARPG.Manager
         }
 
         /// <summary>
+        /// Equipment(무기/방어구) 컨텐츠 빌더. WeaponStats 캐시(Local 파이프라인 완료치) + Implicit/Affix Mod 라인 구성.
+        /// 표시 정책은 uGUI 측 UITooltipEquipment / TooltipEquipmentWeapon / TooltipEquipmentArmor와 동등.
+        /// </summary>
+        private void BuildEquipmentContent(ItemData equipItem)
+        {
+            string itemName = equipItem.Table?.Name ?? "장비";
+            int tier = equipItem.Table?.Tier ?? 0;
+            EquipmentData? equip = equipItem.Equipment;
+
+            ApplyTierName(_eqName, itemName, tier);
+            ApplyTierLabel(_eqTier, tier);
+
+            bool isWeapon = equip != null && equip.EquipType == GlobalEnum.EquipmentTypeMask.Weapon;
+
+            if (isWeapon && equip != null)
+            {
+                WeaponStatCache stats = equip.WeaponStats;
+                SetStatLine(_eqDmgPhysics, FormatDamageLine("물리 피해", stats.Physics));
+                SetStatLine(_eqDmgFire, FormatDamageLine("화염 피해", stats.Fire));
+                SetStatLine(_eqDmgIce, FormatDamageLine("냉기 피해", stats.Ice));
+                SetStatLine(_eqDmgLightning, FormatDamageLine("번개 피해", stats.Lightning));
+                SetStatLine(_eqDmgPoison, FormatDamageLine("독 피해", stats.Poison));
+                SetStatLine(_eqCrit, stats.CriRate > 0 ? $"치명타 확률: {stats.CriRate}%" : null);
+                SetStatLine(_eqAs, stats.AttackSpeed > 0f ? $"초당 공격 횟수: {stats.AttackSpeed:F2}" : null);
+            }
+            else
+            {
+                SetStatLine(_eqDmgPhysics, null);
+                SetStatLine(_eqDmgFire, null);
+                SetStatLine(_eqDmgIce, null);
+                SetStatLine(_eqDmgLightning, null);
+                SetStatLine(_eqDmgPoison, null);
+                SetStatLine(_eqCrit, null);
+                SetStatLine(_eqAs, null);
+            }
+
+            // 동적 Mod 라인 — 컨테이너 초기화 후 재구성
+            ClearChildren(_eqBaseMods);
+            ClearChildren(_eqImplicitMods);
+            ClearChildren(_eqAffixMods);
+
+            if (equip == null)
+                return;
+
+            // 방어구는 Base mod를 베이스 스탯 패널 대신 표시. 무기는 WeaponStats가 이미 통합 표시했으므로 Base 라인은 생략.
+            if (isWeapon == false)
+            {
+                for (int i = 0; i < equip.Mods.Count; i++)
+                {
+                    ModInstance mod = equip.Mods[i];
+                    if (mod.Table == null) continue;
+                    if (mod.Slot != GlobalEnum.ModSlot.Base) continue;
+                    AppendModLine(_eqBaseMods, mod, isImplicit: false);
+                }
+            }
+
+            for (int i = 0; i < equip.Mods.Count; i++)
+            {
+                ModInstance mod = equip.Mods[i];
+                if (mod.Table == null) continue;
+                if (mod.Slot != GlobalEnum.ModSlot.Implicit) continue;
+                AppendModLine(_eqImplicitMods, mod, isImplicit: true);
+            }
+
+            for (int i = 0; i < equip.Mods.Count; i++)
+            {
+                ModInstance mod = equip.Mods[i];
+                if (mod.Table == null) continue;
+                if (mod.Slot != GlobalEnum.ModSlot.Prefix && mod.Slot != GlobalEnum.ModSlot.Postfix) continue;
+                AppendModLine(_eqAffixMods, mod, isImplicit: false);
+            }
+        }
+
+        /// <summary>
+        /// 일반 아이템(자원/소비 등) 컨텐츠 빌더. 이름 + Tier + Description.
+        /// </summary>
+        private void BuildItemContent(ItemData item)
+        {
+            string itemName = item.Table?.Name ?? "아이템";
+            int tier = item.Table?.Tier ?? 0;
+            string desc = item.Table?.Description ?? string.Empty;
+
+            ApplyTierName(_itName, itemName, tier);
+            ApplyTierLabel(_itTier, tier);
+
+            if (_itDesc != null)
+            {
+                if (string.IsNullOrEmpty(desc))
+                {
+                    _itDesc.style.display = DisplayStyle.None;
+                }
+                else
+                {
+                    _itDesc.text = desc;
+                    _itDesc.style.display = DisplayStyle.Flex;
+                }
+            }
+        }
+
+        private static string? FormatDamageLine(string label, DamageRange range)
+        {
+            return range.Max > 0 ? $"{label}: {range.Min}~{range.Max}" : null;
+        }
+
+        private static void AppendModLine(VisualElement? container, ModInstance mod, bool isImplicit)
+        {
+            if (container == null || mod.Table == null) return;
+
+            string body = mod.Value2 > 0
+                ? $"{mod.Table.Name}: {mod.Value1}~{mod.Value2}"
+                : $"{mod.Table.Name}: {mod.Value1}";
+
+            Label line = new Label(body);
+            line.AddToClassList(isImplicit ? "tooltip-statline-implicit" : "tooltip-modline");
+            container.Add(line);
+        }
+
+        private static void ApplyTierName(Label? label, string text, int tier)
+        {
+            if (label == null) return;
+            label.text = text;
+            for (int i = 0; i < TIER_CLASSES.Length; i++)
+                label.RemoveFromClassList(TIER_CLASSES[i]);
+            if (1 <= tier && tier <= TIER_CLASSES.Length)
+                label.AddToClassList(TIER_CLASSES[tier - 1]);
+        }
+
+        private static void ApplyTierLabel(Label? label, int tier)
+        {
+            if (label == null) return;
+            if (tier > 0)
+            {
+                label.text = $"Tier {tier}";
+                label.style.display = DisplayStyle.Flex;
+            }
+            else
+            {
+                label.style.display = DisplayStyle.None;
+            }
+        }
+
+        private static void ClearChildren(VisualElement? element)
+        {
+            if (element == null) return;
+            element.Clear();
+        }
+
+        /// <summary>
         /// 책에 장착된 페이지(SkillEffectId만 들고 있는 케이스) 전용 빌더.
         /// ItemTable 의존이 없으며, 인벤토리 페이지 빌더와 분리해 표시 정책을 독립적으로 가져간다.
         /// </summary>
@@ -547,6 +722,23 @@ namespace ARPG.Manager
             _spCost = root.Q<Label>("sp-cost");
             _spEfficiency = root.Q<Label>("sp-efficiency");
             _spCondition = root.Q<Label>("sp-condition");
+
+            _eqName = root.Q<Label>("eq-name");
+            _eqTier = root.Q<Label>("eq-tier");
+            _eqDmgPhysics = root.Q<Label>("eq-dmg-physics");
+            _eqDmgFire = root.Q<Label>("eq-dmg-fire");
+            _eqDmgIce = root.Q<Label>("eq-dmg-ice");
+            _eqDmgLightning = root.Q<Label>("eq-dmg-lightning");
+            _eqDmgPoison = root.Q<Label>("eq-dmg-poison");
+            _eqCrit = root.Q<Label>("eq-crit");
+            _eqAs = root.Q<Label>("eq-as");
+            _eqBaseMods = root.Q<VisualElement>("eq-base-mods");
+            _eqImplicitMods = root.Q<VisualElement>("eq-implicit-mods");
+            _eqAffixMods = root.Q<VisualElement>("eq-affix-mods");
+
+            _itName = root.Q<Label>("it-name");
+            _itTier = root.Q<Label>("it-tier");
+            _itDesc = root.Q<Label>("it-desc");
 
             Hide();
         }

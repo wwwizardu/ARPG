@@ -792,7 +792,6 @@ namespace ARPG.Editor
         {
             switch (effectType)
             {
-                case GlobalEnum.Stat.LifeSteal:
                 case GlobalEnum.Stat.ApplyBuff:
                 case GlobalEnum.Stat.DelegateToTotem:
                     return GlobalEnum.SkillEffectKind.EffectAction;

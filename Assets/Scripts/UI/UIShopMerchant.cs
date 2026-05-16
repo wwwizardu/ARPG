@@ -203,9 +203,10 @@ namespace ARPG.UI
                 int stockIdx = i;
                 MerchantStockEntry entry = v.MerchantStock[i];
                 if (entry.RemainingCount <= 0) continue;
+                if (entry.Item == null || entry.Item.Table == null) continue;
 
-                Tables.ItemTable? table = AR.s.Data.GetItem(entry.ItemTableId);
-                if (table == null) continue;
+                ItemData stockItem = entry.Item;
+                Tables.ItemTable table = stockItem.Table;
 
                 int price = table.BasePrice;
                 bool canAfford = (AR.s.Data.Player?.Gold ?? 0) >= price;
@@ -225,16 +226,10 @@ namespace ARPG.UI
 
                 // 이름 + 재고 — 스킬북은 책 이름 옆에 스킬명, 스킬 페이지는 페이지 이름 옆에 효과명 부기
                 string displayName = table.Name;
-                if (table.ItemType == GlobalEnum.ItemType.SkillBook && entry.SkillId > 0)
-                {
-                    var skillTable = AR.s.Data.GetSkill(entry.SkillId);
-                    if (skillTable != null) displayName = $"{table.Name} — {skillTable.Name}";
-                }
-                else if (table.ItemType == GlobalEnum.ItemType.SkillPage && entry.SkillEffectId > 0)
-                {
-                    var effectTable = AR.s.Data.GetSkillEffect(entry.SkillEffectId);
-                    if (effectTable != null) displayName = $"{table.Name} — {effectTable.Name}";
-                }
+                if (stockItem.SkillBook?.Table != null)
+                    displayName = $"{table.Name} — {stockItem.SkillBook.Table.Name}";
+                else if (stockItem.SkillPage?.Table != null)
+                    displayName = $"{table.Name} — {stockItem.SkillPage.Table.Name}";
 
                 VisualElement info = new();
                 info.AddToClassList("shop-buy-info");
@@ -254,53 +249,14 @@ namespace ARPG.UI
                 buyBtn.clicked += () => OnClickBuyStock(stockIdx);
                 row.Add(buyBtn);
 
-                // 호버 툴팁 — 매물의 임시 ItemData를 빌드해 글로벌 툴팁에 넘긴다.
-                ItemData? hoverItem = BuildStockHoverItem(table, entry);
-                if (hoverItem != null)
-                {
-                    row.userData = hoverItem;
-                    VisualElement rowRef = row;
-                    row.RegisterCallback<MouseEnterEvent>(_ => AR.s.Tooltip.Show(rowRef.userData as ItemData, GetSlotScreenRect(rowRef)));
-                    row.RegisterCallback<MouseLeaveEvent>(_ => AR.s.Tooltip.Hide());
-                }
+                // 호버 툴팁 — roll 시점에 완성된 매물 ItemData를 그대로 넘긴다.
+                row.userData = stockItem;
+                VisualElement rowRef = row;
+                row.RegisterCallback<MouseEnterEvent>(_ => AR.s.Tooltip.Show(rowRef.userData as ItemData, GetSlotScreenRect(rowRef)));
+                row.RegisterCallback<MouseLeaveEvent>(_ => AR.s.Tooltip.Hide());
 
                 list.Add(row);
             }
-        }
-
-        /// <summary>
-        /// 매물 row 호버 시 글로벌 툴팁에 넘길 임시 ItemData 빌드.
-        /// SkillBook/SkillPage는 인스턴스 데이터를 채워야 툴팁 분기가 정상 작동.
-        /// </summary>
-        private static ItemData? BuildStockHoverItem(Tables.ItemTable table, MerchantStockEntry entry)
-        {
-            if (table.ItemType == GlobalEnum.ItemType.SkillBook && entry.SkillId > 0)
-            {
-                Tables.SkillTable? skill = AR.s.Data?.GetSkill(entry.SkillId);
-                if (skill == null) return null;
-                return new ItemData
-                {
-                    Id = table.Id,
-                    Quantity = 1,
-                    Table = table,
-                    SkillBook = new SkillBookData { SkillId = entry.SkillId, Table = skill },
-                };
-            }
-
-            if (table.ItemType == GlobalEnum.ItemType.SkillPage && entry.SkillEffectId > 0)
-            {
-                Tables.SkillEffectTable? effect = AR.s.Data?.GetSkillEffect(entry.SkillEffectId);
-                if (effect == null) return null;
-                return new ItemData
-                {
-                    Id = table.Id,
-                    Quantity = 1,
-                    Table = table,
-                    SkillPage = new SkillPageData { SkillEffectId = entry.SkillEffectId, Table = effect },
-                };
-            }
-
-            return new ItemData { Id = table.Id, Quantity = 1, Table = table };
         }
 
         /// <summary>

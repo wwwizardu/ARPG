@@ -4,13 +4,13 @@ using UnityEngine;
 
 public class TooltipEquipmentWeapon : MonoBehaviour
 {
-    [SerializeField] public TMPro.TextMeshProUGUI TextDamage;
-    [SerializeField] public TMPro.TextMeshProUGUI TextDamageFire;
-    [SerializeField] public TMPro.TextMeshProUGUI TextDamageIce;
-    [SerializeField] public TMPro.TextMeshProUGUI TextDamageLightning;
-    [SerializeField] public TMPro.TextMeshProUGUI TextDamagePosition;  // 독(Poison) 데미지 텍스트
-    [SerializeField] public TMPro.TextMeshProUGUI TexttCriticalRate;
-    [SerializeField] public TMPro.TextMeshProUGUI TexttAttackSpeed;
+    [SerializeField] public TMPro.TextMeshProUGUI TextDamage = null!;
+    [SerializeField] public TMPro.TextMeshProUGUI TextDamageFire = null!;
+    [SerializeField] public TMPro.TextMeshProUGUI TextDamageIce = null!;
+    [SerializeField] public TMPro.TextMeshProUGUI TextDamageLightning = null!;
+    [SerializeField] public TMPro.TextMeshProUGUI TextDamagePosition = null!;  // 독(Poison) 데미지 텍스트
+    [SerializeField] public TMPro.TextMeshProUGUI TexttCriticalRate = null!;
+    [SerializeField] public TMPro.TextMeshProUGUI TexttAttackSpeed = null!;
 
     public void Show(bool isShow, ItemData? inItemData)
     {

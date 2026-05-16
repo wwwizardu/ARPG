@@ -11,7 +11,7 @@ namespace ARPG.UI
     public class UIInventory : Base.UIBase
     {
         [SerializeField] int SlotCount = 20;
-        [SerializeField] Transform _slotRoot;
+        [SerializeField] Transform _slotRoot = null!;
 
         private SlotUI? []? _slotUIs = null;
         private Item.Inventory _inventory = null!;

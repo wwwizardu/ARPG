@@ -3,7 +3,7 @@ using UnityEngine;
 
 public class TooltipEquipmentArmor : MonoBehaviour
 {
-    [SerializeField] public TMPro.TextMeshProUGUI [] TextArmor;
+    [SerializeField] public TMPro.TextMeshProUGUI [] TextArmor = null!;
 
     public void Show(bool isShow, ARPG.Data.ItemData? inItemData)
     {

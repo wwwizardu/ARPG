@@ -15,7 +15,7 @@ namespace ARPG.Systems
 
         private Input.ArpgInputAction.PlayerActions? _input;
 
-        private ComponentManager _componentManager;
+        private ComponentManager _componentManager = null!;
         private int _playerEntityId;
 
         public void OnCreate()

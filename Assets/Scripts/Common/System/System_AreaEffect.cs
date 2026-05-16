@@ -1,3 +1,4 @@
+#nullable enable
 using ARPG.Component;
 using ARPG.Tables;
 using ARPG.Utility;

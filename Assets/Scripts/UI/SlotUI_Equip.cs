@@ -10,7 +10,7 @@ namespace ARPG.UI
     public class SlotUI_Equip : SlotUI
     {
         [SerializeField] private GlobalEnum.EquipSlotType _equipSlotType = GlobalEnum.EquipSlotType.Max;
-        [SerializeField] Image _BG_EquipType;
+        [SerializeField] Image _BG_EquipType = null!;
 
         public GlobalEnum.EquipSlotType EquipSlotType { get { return _equipSlotType; } }
 
