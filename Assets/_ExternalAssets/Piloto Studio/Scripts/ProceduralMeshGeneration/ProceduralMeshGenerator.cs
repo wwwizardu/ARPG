@@ -377,21 +377,11 @@ public class ProceduralMeshGenerator : MonoBehaviour
             ps = gameObject.AddComponent<ParticleSystem>();
 
         var main = ps.main;
-        main.loop = false;
-        main.startLifetime = 1f;
         main.startSpeed = 0f;
         main.startSize = 1f;
 
         main.startRotation3D = true;
         main.startRotationX = Mathf.Deg2Rad * 90f;
-
-        var emission = ps.emission;
-        emission.rateOverTime = 0f;
-        emission.rateOverDistance = 0f;
-        emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 1) });
-
-        var shape = ps.shape;
-        shape.enabled = false;
 
         var psr = GetComponent<ParticleSystemRenderer>();
         if (psr == null)

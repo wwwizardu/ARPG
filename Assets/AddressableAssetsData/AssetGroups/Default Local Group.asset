@@ -215,6 +215,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bbbaad6afcfd6284097fbbef99aa9fa5
+    m_Address: Effect/HitNormal
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c1310f69a2074e247a11b0f6060521f1
     m_Address: Sprites/Items/DryingRack
     m_ReadOnly: 0

@@ -13,5 +13,6 @@ AssetOrigin:
   productId: 337756
   packageName: Procedural Spell Indicators VFX
   packageVersion: 1.0
-  assetPath: Assets/Piloto Studio/Shaders_Reforged/Functions/Soft Particle.shadersubgraph
-  uploadId: 799444
+  assetPath: Assets/_ExternalAssets/Piloto Studio/Shaders_Reforged/Functions/Soft
+    Particle.shadersubgraph
+  uploadId: 888302
