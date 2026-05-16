@@ -9798,7 +9798,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2613402885239958255}
   - component: {fileID: 5617412718934499928}
-  - component: {fileID: -2960091131977993027}
+  - component: {fileID: 5083399920069147115}
   - component: {fileID: 5665306995661386592}
   - component: {fileID: 7427686231975901346}
   m_Layer: 0
@@ -9839,7 +9839,7 @@ MonoBehaviour:
   _visual: {fileID: 9011261873638073682}
   _entitySprite: {fileID: 0}
   _sr: {fileID: 0}
---- !u!114 &-2960091131977993027
+--- !u!114 &5083399920069147115
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -9848,11 +9848,12 @@ MonoBehaviour:
   m_GameObject: {fileID: 2482768722287565042}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6fcf2a0e70e33b24ab3d01598f2d01bb, type: 3}
+  m_Script: {fileID: 11500000, guid: a6dc066dd9099554a8266c5c07463843, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ARPG.Visual.PlayParticleOnEnable
-  _includeChildren: 1
-  _stopAndClearOnDisable: 1
+  m_EditorClassIdentifier: Assembly-CSharp::ARPG.Visual.EffectInstance
+  _isLoop: 1
+  _overrideDuration: 0
+  _autoDurationSafetyFactor: 1.2
 --- !u!198 &5665306995661386592
 ParticleSystem:
   m_ObjectHideFlags: 0

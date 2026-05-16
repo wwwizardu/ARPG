@@ -24,6 +24,7 @@ namespace ARPG
         [SerializeField] private Village.VillageManager _villageManager = null!;
         [SerializeField] private UI.FloatingTextManager _floatingTextManager = null!;
         [SerializeField] private Manager.TooltipManager _tooltipManager = null!;
+        [SerializeField] private Manager.EffectManager _effectManager = null!;
 
         private bool _initialized = false;
 
@@ -54,6 +55,7 @@ namespace ARPG
         public PlayerManager Player => _playerManager;
         public PlayerSkillManager PlayerSkill => _playerSkillManager;
         public TooltipManager Tooltip => _tooltipManager;
+        public Manager.EffectManager Effect => _effectManager;
 
         public Base.EntityBase? MyPlayer => _playerManager.MyPlayers;
 
@@ -87,6 +89,7 @@ namespace ARPG
             _villageManager.Initialize();
             _floatingTextManager.Initialize();
             _tooltipManager.Initialize();
+            _effectManager.Initialize();
 
             _initialized = true;
 
@@ -106,6 +109,7 @@ namespace ARPG
             _villageManager.Reset();
             _floatingTextManager.Reset();
             _tooltipManager.Reset();
+            _effectManager.Reset();
         }
         
         public void OnSceneLoadStart(Base.SceneBase inScene)

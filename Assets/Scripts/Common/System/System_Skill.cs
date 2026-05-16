@@ -3,6 +3,7 @@ using ARPG.Component;
 using ARPG.Factory;
 using ARPG.Skill.Combat;
 using ARPG.Utility;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 using GE = GlobalEnum;
 
@@ -1162,12 +1163,26 @@ namespace ARPG.Systems
                 SkillEffectExecutor.Trigger(GE.SkillTrigger.OnKill, ref hitCtx, skill.EffectiveSkillEffectIds);
             }
 
+            // HitEffect 스폰 — 회피 시 미스폰, 블록은 스폰. 위치는 타겟 몸통 중심
+            if (damageResult.IsEvaded == false && string.IsNullOrEmpty(skill.Table.HitEffect) == false)
+            {
+                if (pools.Transform.TryGet(targetEntityId, out var targetTransform))
+                {
+                    Vector2 effectPos = targetTransform.Position;
+                    if (pools.Collider.TryGet(targetEntityId, out var targetCollider))
+                    {
+                        effectPos += targetCollider.HitOffset;
+                    }
+                    AR.s.Effect.Spawn(skill.Table.HitEffect, effectPos, Quaternion.identity).Forget();
+                }
+            }
+
             Debug.Log($"[System_Skill] ApplySkillEffectToEntity - SkillEntityId: {skillEntityId}, SkillId: {skill.SkillId}, TargetEntityId: {targetEntityId}, Damage: {Mathf.RoundToInt(damageResult.FinalDamage)}, Critical: {damageResult.IsCritical}, Evaded: {damageResult.IsEvaded}, Blocked: {damageResult.IsBlocked}, RemainingHP: {targetStat.CurrentHp}/{targetStat.FinalMaxHp}");
 
             // TODO: 추가 구현 필요
             // - 버프/디버프 적용
             // - 넉백, CC 효과 등
-            // - 데미지 이펙트, 사운드 재생
+            // - 사운드 재생
         }
 
         /// <summary>
