@@ -15,11 +15,16 @@ namespace ARPG.Utility
 
         /// <summary>
         /// Chase/Attack 상태 전이 판정에 사용할 교전 사거리 제곱값.
-        /// - 사용 가능(쿨타임 풀림)한 스킬이 있으면 그 중 최대 SkillRangeMax의 제곱
-        /// - 모두 쿨타임 중이면 전체 스킬 중 최대 SkillRangeMax의 제곱 (대기 기준)
+        /// 유효 사거리 = `attacker.HitRadius + SkillRangeMax + target.HitRadius` (몸 가장자리에서 몸 가장자리로의 도달거리).
+        /// SkillRangeMax 의미: "몸 밖으로 뻗는 추가 사거리(팔/무기 길이)" — 큰 몹은 같은 SkillRangeMax로도 멀리 도달.
+        /// 실제 hit 판정(System_Skill.CircleVsSector)도 동일하게 `attacker.HitRadius + range + target.HitRadius`를 사용.
+        /// - 사용 가능(쿨타임 풀림)한 스킬이 있으면 그 중 최대 유효 사거리의 제곱
+        /// - 모두 쿨타임 중이면 전체 스킬 중 최대 유효 사거리의 제곱 (대기 기준)
         /// </summary>
-        public static float GetEngagementRangeSqr(int ownerEntityId, int slotCount)
+        public static float GetEngagementRangeSqr(int ownerEntityId, int targetEntityId, int slotCount)
         {
+            float ownerHitRadius = GetEntityHitRadius(ownerEntityId);
+            float targetHitRadius = GetEntityHitRadius(targetEntityId);
             float readyMaxSqr = 0f;
             float allMaxSqr = 0f;
 
@@ -38,7 +43,8 @@ namespace ARPG.Utility
                 if (rangeMax <= 0f)
                     continue;
 
-                float rangeSqr = rangeMax * rangeMax;
+                float effectiveRange = ownerHitRadius + rangeMax + targetHitRadius;
+                float rangeSqr = effectiveRange * effectiveRange;
                 if (rangeSqr > allMaxSqr)
                     allMaxSqr = rangeSqr;
 
@@ -56,12 +62,22 @@ namespace ARPG.Utility
             return readyMaxSqr > 0f ? readyMaxSqr : allMaxSqr;
         }
 
+        public static float GetEntityHitRadius(int entityId)
+        {
+            if (entityId == -1)
+                return 0f;
+            if (AR.s.Component.TryGetComponent<ColliderComponent>(entityId, out var collider) == false)
+                return 0f;
+            return collider.HitRadius;
+        }
+
         /// <summary>
         /// AI 엔티티가 발동할 스킬을 가중치 기반 랜덤으로 선택.
         /// AiTable.SkillWeight1/2/3 가중치와 쿨타임/사거리 조건을 모두 만족하는 슬롯 중 하나를 가중치 비율로 뽑는다.
+        /// 사거리 비교 시 `attacker.HitRadius + SkillRangeMax + target.HitRadius`를 유효 사거리로 사용 (몸 가장자리 기준).
         /// </summary>
         /// <returns>발동 가능한 스킬 슬롯 인덱스, 없으면 -1</returns>
-        public static int PickFireSkill(int ownerEntityId, Vector2 targetPosition, int slotCount)
+        public static int PickFireSkill(int ownerEntityId, int targetEntityId, Vector2 targetPosition, int slotCount)
         {
             if (AR.s.Component.TryGetComponent<AIComponent>(ownerEntityId, out var ai) == false)
                 return -1;
@@ -74,12 +90,14 @@ namespace ARPG.Utility
                 return -1;
 
             float sqrDistance = (ownerTransform.Position - targetPosition).sqrMagnitude;
+            float ownerHitRadius = GetEntityHitRadius(ownerEntityId);
+            float targetHitRadius = GetEntityHitRadius(targetEntityId);
 
             // 1차 패스: 총 가중치 계산
             int totalWeight = 0;
             for (int i = 0; i < slotCount; i++)
             {
-                if (IsFireCandidate(ownerEntityId, i, aiTable, sqrDistance, out int weight))
+                if (IsFireCandidate(ownerEntityId, i, aiTable, sqrDistance, ownerHitRadius, targetHitRadius, out int weight))
                     totalWeight += weight;
             }
 
@@ -91,7 +109,7 @@ namespace ARPG.Utility
             int acc = 0;
             for (int i = 0; i < slotCount; i++)
             {
-                if (IsFireCandidate(ownerEntityId, i, aiTable, sqrDistance, out int weight) == false)
+                if (IsFireCandidate(ownerEntityId, i, aiTable, sqrDistance, ownerHitRadius, targetHitRadius, out int weight) == false)
                     continue;
 
                 acc += weight;
@@ -102,7 +120,7 @@ namespace ARPG.Utility
             return -1;
         }
 
-        private static bool IsFireCandidate(int ownerEntityId, int slotIndex, AiTable aiTable, float sqrDistance, out int weight)
+        private static bool IsFireCandidate(int ownerEntityId, int slotIndex, AiTable aiTable, float sqrDistance, float ownerHitRadius, float targetHitRadius, out int weight)
         {
             weight = GetSkillWeight(aiTable, slotIndex);
             if (weight <= 0)
@@ -124,8 +142,12 @@ namespace ARPG.Utility
             }
 
             float rangeMax = skill.Table.SkillRangeMax;
-            if (rangeMax > 0f && sqrDistance > rangeMax * rangeMax)
-                return false;
+            if (rangeMax > 0f)
+            {
+                float effectiveMax = ownerHitRadius + rangeMax + targetHitRadius;
+                if (sqrDistance > effectiveMax * effectiveMax)
+                    return false;
+            }
 
             float rangeMin = skill.Table.SkillRangeMin;
             if (rangeMin > 0f && sqrDistance < rangeMin * rangeMin)

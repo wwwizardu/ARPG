@@ -450,7 +450,10 @@ namespace ARPG.Factory
                 LastDetectionTime = 0f
             });
 
-            float keepDistance = (behaviorType == AIBehaviorType.Ranged) ? 7f : 1.5f;
+            // KeepDistance는 AiTable에서 직접 읽음 (시트 미설정 시 Ranged 7, Melee 0 fallback)
+            float keepDistance = aiTable != null
+                ? aiTable.KeepDistance
+                : (behaviorType == AIBehaviorType.Ranged ? 7f : 0f);
 
             // NPC는 Patrol/PatrolRanged 프로필, 몬스터는 원래 BehaviorType 사용
             bool isNpc = AR.s.Component.HasComponent<NpcTag>(entityId);

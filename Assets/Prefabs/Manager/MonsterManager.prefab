@@ -44,8 +44,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a980fd3dc0ca143748bf6a6076ae74e3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _mainMonsterTableId: 1003
-  _subMonsterTableId: 1003
+  _mainMonsterTableId: 1004
+  _subMonsterTableId: 1004
   _mainGroupCount: {x: 1, y: 2}
   _mainGroupSize: {x: 5, y: 8}
   _subGroupCount: {x: 2, y: 3}

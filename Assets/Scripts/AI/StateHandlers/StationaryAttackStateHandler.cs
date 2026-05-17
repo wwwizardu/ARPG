@@ -40,7 +40,11 @@ namespace ARPG.AI.StateHandlers
             }
 
             // 사거리 내 적 탐색 (FOV 360 = 전방위)
-            float rangeSqr = skill.Table.SkillRangeMax * skill.Table.SkillRangeMax;
+            // 유효 사거리 = owner.HitRadius + SkillRangeMax ("몸 밖으로 뻗는 추가 사거리" 모델 일관성)
+            // target.HitRadius는 후보별로 다르므로 여기선 미반영. 실제 hit 판정은 System_Skill이 정확히 처리.
+            float ownerHitRadius = SkillHelper.GetEntityHitRadius(entityId);
+            float effectiveRange = ownerHitRadius + skill.Table.SkillRangeMax;
+            float rangeSqr = effectiveRange * effectiveRange;
             int targetId = FactionHelper.FindNearestEnemy(
                 entityId,
                 transform.Position,

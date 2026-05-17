@@ -26,88 +26,372 @@ namespace ARPG.Editor
     {
         private static Dictionary<Type, object> _tableDic;
 
-        [MenuItem("ARPG/Download Table", false, 1)]
-        private static async void DownloadTable()
+        private class TableEntry
+        {
+            public Type Type;
+            public string Sheet;
+            public int StartLine;
+            public SaveType SaveType;
+            public Func<Task<bool>> DownloadAction;
+        }
+
+        private static readonly List<TableEntry> _tableEntries = BuildTableEntries();
+
+        private static List<TableEntry> BuildTableEntries()
+        {
+            var list = new List<TableEntry>();
+            Register<CreatureTable>(list, "0&range=A:I");
+            Register<AiTable>(list, "947794841&range=A:L");
+            Register<MonsterTable>(list, "483012127&range=A:P");
+            Register<NpcTable>(list, "1460299278&range=A:O");
+            Register<MonsterArchetypeTable>(list, "1141585255&range=A:E");
+            Register<StatTable>(list, "318209064&range=A:AJ");
+            Register<ItemTable>(list, "2064107837&range=A:R");
+            Register<BuildableItemTable>(list, "534887250&range=A:Z");
+            // Phase D: JobBonusTable (직업별 시간당 가산 자원)
+            Register<JobBonusTable>(list, "470575350&range=A:F");
+            Register<DropTable>(list, "1241586373&range=A:K");
+            Register<DropCurrencyTable>(list, "2071520432&range=A:V");
+            Register<DropEquipmentTable>(list, "1267382287&range=A:V");
+            Register<SkillTable>(list, "92727160&range=A:AM");
+            // Phase 1: SkillEffect 합성 시스템용 테이블 (+ 스킬 페이지 비용 메타데이터 + Kind 분류 컬럼)
+            Register<SkillEffectTable>(list, "1681865950&range=A:M");
+            Register<SkillBookTable>(list, "1726438368&range=A:C");
+            // 장판(지속 영역 효과) 테이블
+            Register<AreaEffectTable>(list, "1891935594&range=A:M");
+            Register<BuffTable>(list, "127577579&range=A:J");
+            Register<AnimationTable>(list, "747631090&range=A:G");
+            Register<ProjectileTable>(list, "1810235418&range=A:G");
+            Register<ModTable>(list, "1571193978&range=A:J");
+            Register<ModTierTable>(list, "1782637736&range=A:J");
+            Register<ItemImplicitTable>(list, "547967325&range=A:D");
+            // EquipmentBaseStat: A~N가 실제 데이터, O~S는 시트 가독성용 보조 컬럼(다운로드 제외).
+            // 슬롯당 3컬럼(ModId, Value1, Value2) × 4 슬롯 = 12컬럼 + Id + ItemId = 14컬럼.
+            Register<EquipmentBaseStatTable>(list, "972309111&range=A:N");
+            Register<VillageTable>(list, "441028134&range=A:F");
+            Register<VillageStageTable>(list, "467145019&range=A:Q");
+            // 청크 Zone(시드 청크 (0,0) 기준 Chebyshev 거리+1)별 몬스터 스폰 파라미터
+            Register<ZoneTable>(list, "848445893&range=A:M");
+            //Register<BuffEffectTable>(list, "2104311648&range=A:K");
+            return list;
+        }
+
+        private static void Register<T>(List<TableEntry> list, string sheet, int startLine = 1, SaveType saveType = SaveType.String)
+            where T : TableBase, new()
+        {
+            list.Add(new TableEntry
+            {
+                Type = typeof(T),
+                Sheet = sheet,
+                StartLine = startLine,
+                SaveType = saveType,
+                DownloadAction = () => DownloadTable<T>(sheet, startLine, saveType)
+            });
+        }
+
+        [MenuItem("ARPG/Download Table/All", false, 1)]
+        private static async void DownloadAllTables()
         {
             _tableDic = new();
 
-            await DownloadTable<CreatureTable>("0&range=A:I", 1, SaveType.String);
-
-            await DownloadTable<AiTable>("947794841&range=A:K", 1, SaveType.String);
-
-            await DownloadTable<MonsterTable>("483012127&range=A:P", 1, SaveType.String);
-
-            await DownloadTable<NpcTable>("1460299278&range=A:O", 1, SaveType.String);
-
-            await DownloadTable<MonsterArchetypeTable>("1141585255&range=A:E", 1, SaveType.String);
-
-            await DownloadTable<StatTable>("318209064&range=A:AJ", 1, SaveType.String);
-
-            await DownloadTable<ItemTable>("2064107837&range=A:R", 1, SaveType.String);
-
-            await DownloadTable<BuildableItemTable>("534887250&range=A:Z", 1, SaveType.String);
-
-            // Phase D: JobBonusTable (직업별 시간당 가산 자원)
-            await DownloadTable<JobBonusTable>("470575350&range=A:F", 1, SaveType.String);
-
-
-            await DownloadTable<DropTable>("1241586373&range=A:K", 1, SaveType.String);
-
-            await DownloadTable<DropCurrencyTable>("2071520432&range=A:V", 1, SaveType.String);
-
-            await DownloadTable<DropEquipmentTable>("1267382287&range=A:V", 1, SaveType.String);
-
-            await DownloadTable<SkillTable>("92727160&range=A:AM", 1, SaveType.String);
-
-            // Phase 1: SkillEffect 합성 시스템용 테이블 (+ 스킬 페이지 비용 메타데이터 + Kind 분류 컬럼)
-            await DownloadTable<SkillEffectTable>("1681865950&range=A:M", 1, SaveType.String);
-
-            await DownloadTable<SkillBookTable>("1726438368&range=A:C", 1, SaveType.String);
-
-            // 장판(지속 영역 효과) 테이블
-            await DownloadTable<AreaEffectTable>("1891935594&range=A:M", 1, SaveType.String);
-
-            await DownloadTable<BuffTable>("127577579&range=A:J", 1, SaveType.String);
-
-            await DownloadTable<AnimationTable>("747631090&range=A:G", 1, SaveType.String);
-
-            await DownloadTable<ProjectileTable>("1810235418&range=A:G", 1, SaveType.String);
-
-            await DownloadTable<ModTable>("1571193978&range=A:J", 1, SaveType.String);
-
-            await DownloadTable<ModTierTable>("1782637736&range=A:J", 1, SaveType.String);
-            
-            await DownloadTable<ItemImplicitTable>("547967325&range=A:D", 1, SaveType.String);
-
-            // EquipmentBaseStat: A~N가 실제 데이터, O~S는 시트 가독성용 보조 컬럼(다운로드 제외).
-            // 슬롯당 3컬럼(ModId, Value1, Value2) × 4 슬롯 = 12컬럼 + Id + ItemId = 14컬럼.
-            // **고정값** — 베이스 스탯엔 RNG 없음 (아이템 정체성). Prefix/Postfix가 랜덤 옵션 담당.
-            await DownloadTable<EquipmentBaseStatTable>("972309111&range=A:N", 1, SaveType.String);
-
-            await DownloadTable<VillageTable>("441028134&range=A:F", 1, SaveType.String);
-
-            await DownloadTable<VillageStageTable>("467145019&range=A:Q", 1, SaveType.String);
-
-            // 청크 Zone(시드 청크 (0,0) 기준 Chebyshev 거리+1)별 몬스터 스폰 파라미터
-            await DownloadTable<ZoneTable>("848445893&range=A:M", 1, SaveType.String);
-
-            //await DownloadTable<BuffEffectTable>("2104311648&range=A:K", 1, SaveType.String);
+            for (int i = 0; i < _tableEntries.Count; i++)
+                await _tableEntries[i].DownloadAction();
 
             foreach (var tableType in _tableDic.Keys)
             {
                 var tableList = (IList)_tableDic[tableType];
                 if (tableList == null)
                 {
-                    Debug.LogError($"[DownloadTables] DownloadTable() - tableList({tableType}) is null");
+                    Debug.LogError($"[DownloadTables] DownloadAllTables() - tableList({tableType}) is null");
                     continue;
                 }
 
                 SaveTable(tableType.Name, _tableDic[tableType], SaveType.String);
             }
 
+            ValidateAiSetup();
+
             AssetDatabase.Refresh();
-            
+
             Debug.Log("download Completed...");
+        }
+
+        private static async Task DownloadSingleTable<T>() where T : TableBase, new()
+        {
+            TableEntry entry = null;
+            for (int i = 0; i < _tableEntries.Count; i++)
+            {
+                if (_tableEntries[i].Type == typeof(T))
+                {
+                    entry = _tableEntries[i];
+                    break;
+                }
+            }
+
+            if (entry == null)
+            {
+                Debug.LogError($"[DownloadTables] DownloadSingleTable - No entry registered for {typeof(T).Name}");
+                return;
+            }
+
+            _tableDic = new();
+            await entry.DownloadAction();
+
+            if (_tableDic.TryGetValue(typeof(T), out var tableList) == false || tableList == null)
+            {
+                Debug.LogError($"[DownloadTables] DownloadSingleTable - {typeof(T).Name} download failed");
+                return;
+            }
+
+            SaveTable(typeof(T).Name, tableList, entry.SaveType);
+
+            AssetDatabase.Refresh();
+
+            Debug.Log($"download {typeof(T).Name} Completed...");
+        }
+
+        // 알파벳 순으로 개별 테이블 다운로드 메뉴 (priority 100 → All과 분리되는 separator)
+        [MenuItem("ARPG/Download Table/AiTable", false, 100)]
+        private static async void DownloadAiTable() => await DownloadSingleTable<AiTable>();
+
+        [MenuItem("ARPG/Download Table/AnimationTable", false, 100)]
+        private static async void DownloadAnimationTable() => await DownloadSingleTable<AnimationTable>();
+
+        [MenuItem("ARPG/Download Table/AreaEffectTable", false, 100)]
+        private static async void DownloadAreaEffectTable() => await DownloadSingleTable<AreaEffectTable>();
+
+        [MenuItem("ARPG/Download Table/BuffTable", false, 100)]
+        private static async void DownloadBuffTable() => await DownloadSingleTable<BuffTable>();
+
+        [MenuItem("ARPG/Download Table/BuildableItemTable", false, 100)]
+        private static async void DownloadBuildableItemTable() => await DownloadSingleTable<BuildableItemTable>();
+
+        [MenuItem("ARPG/Download Table/CreatureTable", false, 100)]
+        private static async void DownloadCreatureTable() => await DownloadSingleTable<CreatureTable>();
+
+        [MenuItem("ARPG/Download Table/DropCurrencyTable", false, 100)]
+        private static async void DownloadDropCurrencyTable() => await DownloadSingleTable<DropCurrencyTable>();
+
+        [MenuItem("ARPG/Download Table/DropEquipmentTable", false, 100)]
+        private static async void DownloadDropEquipmentTable() => await DownloadSingleTable<DropEquipmentTable>();
+
+        [MenuItem("ARPG/Download Table/DropTable", false, 100)]
+        private static async void DownloadDropTable() => await DownloadSingleTable<DropTable>();
+
+        [MenuItem("ARPG/Download Table/EquipmentBaseStatTable", false, 100)]
+        private static async void DownloadEquipmentBaseStatTable() => await DownloadSingleTable<EquipmentBaseStatTable>();
+
+        [MenuItem("ARPG/Download Table/ItemImplicitTable", false, 100)]
+        private static async void DownloadItemImplicitTable() => await DownloadSingleTable<ItemImplicitTable>();
+
+        [MenuItem("ARPG/Download Table/ItemTable", false, 100)]
+        private static async void DownloadItemTable() => await DownloadSingleTable<ItemTable>();
+
+        [MenuItem("ARPG/Download Table/JobBonusTable", false, 100)]
+        private static async void DownloadJobBonusTable() => await DownloadSingleTable<JobBonusTable>();
+
+        [MenuItem("ARPG/Download Table/ModTable", false, 100)]
+        private static async void DownloadModTable() => await DownloadSingleTable<ModTable>();
+
+        [MenuItem("ARPG/Download Table/ModTierTable", false, 100)]
+        private static async void DownloadModTierTable() => await DownloadSingleTable<ModTierTable>();
+
+        [MenuItem("ARPG/Download Table/MonsterArchetypeTable", false, 100)]
+        private static async void DownloadMonsterArchetypeTable() => await DownloadSingleTable<MonsterArchetypeTable>();
+
+        [MenuItem("ARPG/Download Table/MonsterTable", false, 100)]
+        private static async void DownloadMonsterTable() => await DownloadSingleTable<MonsterTable>();
+
+        [MenuItem("ARPG/Download Table/NpcTable", false, 100)]
+        private static async void DownloadNpcTable() => await DownloadSingleTable<NpcTable>();
+
+        [MenuItem("ARPG/Download Table/ProjectileTable", false, 100)]
+        private static async void DownloadProjectileTable() => await DownloadSingleTable<ProjectileTable>();
+
+        [MenuItem("ARPG/Download Table/SkillBookTable", false, 100)]
+        private static async void DownloadSkillBookTable() => await DownloadSingleTable<SkillBookTable>();
+
+        [MenuItem("ARPG/Download Table/SkillEffectTable", false, 100)]
+        private static async void DownloadSkillEffectTable() => await DownloadSingleTable<SkillEffectTable>();
+
+        [MenuItem("ARPG/Download Table/SkillTable", false, 100)]
+        private static async void DownloadSkillTable() => await DownloadSingleTable<SkillTable>();
+
+        [MenuItem("ARPG/Download Table/StatTable", false, 100)]
+        private static async void DownloadStatTable() => await DownloadSingleTable<StatTable>();
+
+        [MenuItem("ARPG/Download Table/VillageStageTable", false, 100)]
+        private static async void DownloadVillageStageTable() => await DownloadSingleTable<VillageStageTable>();
+
+        [MenuItem("ARPG/Download Table/VillageTable", false, 100)]
+        private static async void DownloadVillageTable() => await DownloadSingleTable<VillageTable>();
+
+        [MenuItem("ARPG/Download Table/ZoneTable", false, 100)]
+        private static async void DownloadZoneTable() => await DownloadSingleTable<ZoneTable>();
+
+        /// <summary>
+        /// AI 관련 테이블 정합성 검증 — 다운로드 완료 후 실행.
+        /// 디자이너에게 시트 입력 실수를 즉시 피드백.
+        /// </summary>
+        private static void ValidateAiSetup()
+        {
+            List<AiTable> aiTables = GetTableList<AiTable>();
+            List<SkillTable> skillTables = GetTableList<SkillTable>();
+            List<MonsterTable> monsterTables = GetTableList<MonsterTable>();
+            List<NpcTable> npcTables = GetTableList<NpcTable>();
+
+            if (aiTables == null)
+            {
+                Debug.LogWarning("[ValidateAi] AiTable이 로드되지 않아 검증 건너뜀");
+                return;
+            }
+
+            Dictionary<int, AiTable> aiTableById = new();
+            for (int i = 0; i < aiTables.Count; i++)
+                aiTableById[aiTables[i].Id] = aiTables[i];
+
+            Dictionary<int, SkillTable> skillTableById = new();
+            if (skillTables != null)
+            {
+                for (int i = 0; i < skillTables.Count; i++)
+                    skillTableById[skillTables[i].Id] = skillTables[i];
+            }
+
+            int errors = 0;
+            int warnings = 0;
+
+            // ── Phase 1: AiTable 자체 검증 ──────────────────────────
+            for (int i = 0; i < aiTables.Count; i++)
+            {
+                AiTable ai = aiTables[i];
+                int[] skillIds = { ai.SkillId1, ai.SkillId2, ai.SkillId3 };
+                int[] weights = { ai.SkillWeight1, ai.SkillWeight2, ai.SkillWeight3 };
+
+                // [3] SkillId broken reference
+                for (int s = 0; s < skillIds.Length; s++)
+                {
+                    if (skillIds[s] == 0) continue;
+                    if (skillTableById.ContainsKey(skillIds[s]) == false)
+                    {
+                        Debug.LogError($"[ValidateAi] AiTable Id={ai.Id}({ai.Name}): SkillId{s + 1}={skillIds[s]} 가 SkillTable에 없음 (broken reference)");
+                        errors++;
+                    }
+                }
+
+                // [4] 스킬은 설정됐는데 모든 SkillWeight=0
+                bool hasAnySkill = skillIds[0] > 0 || skillIds[1] > 0 || skillIds[2] > 0;
+                int totalWeight = weights[0] + weights[1] + weights[2];
+                if (hasAnySkill == true && totalWeight <= 0)
+                {
+                    Debug.LogWarning($"[ValidateAi] AiTable Id={ai.Id}({ai.Name}): SkillId가 설정됐는데 모든 SkillWeight=0 → AI가 스킬을 절대 발사하지 않음");
+                    warnings++;
+                }
+
+                // [4-1] Weight>0인데 SkillId=0 (역방향)
+                for (int s = 0; s < skillIds.Length; s++)
+                {
+                    if (weights[s] > 0 && skillIds[s] == 0)
+                    {
+                        Debug.LogWarning($"[ValidateAi] AiTable Id={ai.Id}({ai.Name}): SkillWeight{s + 1}={weights[s]} > 0인데 SkillId{s + 1}=0 → 가중치 무효");
+                        warnings++;
+                    }
+                }
+
+                // [5] DetectionRange=0
+                if (ai.DetectionRange <= 0f)
+                {
+                    Debug.LogWarning($"[ValidateAi] AiTable Id={ai.Id}({ai.Name}): DetectionRange={ai.DetectionRange} → AI가 적을 감지 못 함");
+                    warnings++;
+                }
+            }
+
+            // ── Phase 2: SkillTable 자체 검증 ───────────────────────
+            if (skillTables != null)
+            {
+                for (int i = 0; i < skillTables.Count; i++)
+                {
+                    SkillTable sk = skillTables[i];
+
+                    // [2] SkillRangeMin > SkillRangeMax
+                    if (sk.SkillRangeMin > 0f && sk.SkillRangeMax > 0f && sk.SkillRangeMin > sk.SkillRangeMax)
+                    {
+                        Debug.LogError($"[ValidateAi] SkillTable Id={sk.Id}({sk.Name}): SkillRangeMin({sk.SkillRangeMin}) > SkillRangeMax({sk.SkillRangeMax}) → 영원히 발사 불가");
+                        errors++;
+                    }
+                }
+            }
+
+            // ── Phase 3: Creature × AiTable 조합 검증 (Check 1) ────
+            if (monsterTables != null)
+            {
+                for (int i = 0; i < monsterTables.Count; i++)
+                {
+                    ValidateCreatureAiPair("MonsterTable", monsterTables[i].Id, monsterTables[i].Name,
+                        monsterTables[i].HitRadius, monsterTables[i].AiTableId,
+                        aiTableById, skillTableById, ref errors, ref warnings);
+                }
+            }
+            if (npcTables != null)
+            {
+                for (int i = 0; i < npcTables.Count; i++)
+                {
+                    ValidateCreatureAiPair("NpcTable", npcTables[i].Id, npcTables[i].Name,
+                        npcTables[i].HitRadius, npcTables[i].AiTableId,
+                        aiTableById, skillTableById, ref errors, ref warnings);
+                }
+            }
+
+            if (errors == 0 && warnings == 0)
+                Debug.Log("[ValidateAi] AI 테이블 검증 완료 — 이상 없음");
+            else
+                Debug.Log($"[ValidateAi] AI 테이블 검증 완료 — Errors: {errors}, Warnings: {warnings}");
+        }
+
+        private static void ValidateCreatureAiPair(
+            string sourceTable, int creatureId, string creatureName, float creatureHitRadius, int aiTableId,
+            Dictionary<int, AiTable> aiTableById, Dictionary<int, SkillTable> skillTableById,
+            ref int errors, ref int warnings)
+        {
+            if (aiTableId == 0) return; // AI 없음
+
+            if (aiTableById.TryGetValue(aiTableId, out AiTable ai) == false)
+            {
+                Debug.LogError($"[ValidateAi] {sourceTable} Id={creatureId}({creatureName}): AiTableId={aiTableId} 가 AiTable에 없음 (broken reference)");
+                errors++;
+                return;
+            }
+
+            // 보수적 engagement 하한 = attacker.HitRadius + max(SkillRangeMax over slots)
+            // target.HitRadius=0 가정 — 이 값보다 KeepDistance가 크면 어떤 타겟이어도 핑퐁
+            float maxSkillRange = 0f;
+            int[] skillIds = { ai.SkillId1, ai.SkillId2, ai.SkillId3 };
+            for (int s = 0; s < skillIds.Length; s++)
+            {
+                if (skillIds[s] == 0) continue;
+                if (skillTableById.TryGetValue(skillIds[s], out SkillTable sk) == false) continue;
+                if (sk.SkillRangeMax > maxSkillRange)
+                    maxSkillRange = sk.SkillRangeMax;
+            }
+
+            // [1] KeepDistance >= conservative engagement → 핑퐁 위험
+            if (maxSkillRange > 0f && ai.KeepDistance > 0f)
+            {
+                float conservativeEngagement = creatureHitRadius + maxSkillRange;
+                if (ai.KeepDistance >= conservativeEngagement)
+                {
+                    Debug.LogWarning($"[ValidateAi] {sourceTable} Id={creatureId}({creatureName}) + AiTable Id={aiTableId}({ai.Name}): " +
+                        $"KeepDistance({ai.KeepDistance}) >= attacker.HitRadius({creatureHitRadius}) + maxSkillRangeMax({maxSkillRange}) = {conservativeEngagement} " +
+                        $"→ Attack 진입 즉시 Retreat 핑퐁 위험. KeepDistance를 {conservativeEngagement:F2} 미만으로 낮추거나 SkillRangeMax를 늘리세요");
+                    warnings++;
+                }
+            }
+        }
+
+        private static List<T> GetTableList<T>() where T : TableBase
+        {
+            if (_tableDic == null) return null;
+            if (_tableDic.TryGetValue(typeof(T), out object obj) == false) return null;
+            return obj as List<T>;
         }
 
         private static async Task<bool> DownloadTable<T>(string inSheet, int inStartLine, SaveType inSaveType) where T : TableBase, new()
@@ -853,9 +1137,9 @@ namespace ARPG.Editor
 
         private static void ParseAiTable(AiTable table, string[] values)
         {
-            if (values.Length < 11)
+            if (values.Length < 12)
             {
-                Debug.LogError($"[ParseAiTable] Invalid data length. Expected at least 11, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseAiTable] Invalid data length. Expected at least 12, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
@@ -863,12 +1147,13 @@ namespace ARPG.Editor
             table.AiType = (GlobalEnum.AiType)Enum.Parse(typeof(GlobalEnum.AiType), values[2]);
             table.BehaviorType = (AIBehaviorType)Enum.Parse(typeof(AIBehaviorType), values[3]);
             table.DetectionRange = float.Parse(values[4]);
-            table.SkillId1 = int.Parse(values[5]);
-            table.SkillWeight1 = int.Parse(values[6]);
-            table.SkillId2 = int.Parse(values[7]);
-            table.SkillWeight2 = int.Parse(values[8]);
-            table.SkillId3 = int.Parse(values[9]);
-            table.SkillWeight3 = int.Parse(values[10]);
+            table.KeepDistance = ParseFloatSafe(values, 5);
+            table.SkillId1 = int.Parse(values[6]);
+            table.SkillWeight1 = int.Parse(values[7]);
+            table.SkillId2 = int.Parse(values[8]);
+            table.SkillWeight2 = int.Parse(values[9]);
+            table.SkillId3 = int.Parse(values[10]);
+            table.SkillWeight3 = int.Parse(values[11]);
         }
 
         private static void ParseBuffTable(BuffTable table, string[] values)

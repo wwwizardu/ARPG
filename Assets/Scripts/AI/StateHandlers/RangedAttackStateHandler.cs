@@ -40,7 +40,7 @@ namespace ARPG.AI.StateHandlers
             float sqrDistance = (targetTransform.Position - transform.Position).sqrMagnitude;
 
             // 교전 사거리(쓸 수 있는 스킬 기준) 밖이면 Chase
-            float engagementSqr = SkillHelper.GetEngagementRangeSqr(entityId, SkillHelper.AiSkillSlotCount);
+            float engagementSqr = SkillHelper.GetEngagementRangeSqr(entityId, ai.TargetEntityId, SkillHelper.AiSkillSlotCount);
             if (engagementSqr > 0f && sqrDistance > engagementSqr)
             {
                 AIStateHelper.TransitionToState(entityId, AIState.Chase);
@@ -63,7 +63,7 @@ namespace ARPG.AI.StateHandlers
             }
 
             // 스킬 발동 - AiTable 가중치 기반 랜덤 선택
-            int slotIndex = SkillHelper.PickFireSkill(entityId, targetTransform.Position, SkillHelper.AiSkillSlotCount);
+            int slotIndex = SkillHelper.PickFireSkill(entityId, ai.TargetEntityId, targetTransform.Position, SkillHelper.AiSkillSlotCount);
             if (slotIndex < 0)
                 return;
 

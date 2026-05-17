@@ -1055,7 +1055,13 @@ namespace ARPG.Systems
             // 시전자 시점 기준은 발 좌표 그대로 (스킬 사거리 기획 의미상 발 기준)
             Vector2 originPosition = ownerTransform.Position;
 
-            float range = skill.Table.SkillTargetRange1;       // 거리
+            // 유효 사거리 = owner.HitRadius + SkillTargetRange1 ("몸 밖으로 뻗는 추가 사거리" 모델)
+            // 큰 몹은 동일한 SkillTargetRange1로도 자기 몸 너머까지 자연스럽게 도달
+            float ownerHitRadius = 0f;
+            if (colliderPool.TryGet(skill.OwnerEntityId, out var ownerCollider))
+                ownerHitRadius = ownerCollider.HitRadius;
+
+            float range = ownerHitRadius + skill.Table.SkillTargetRange1; // 거리(몸 가장자리 기준)
             float halfAngleDeg = skill.Table.SkillTargetRange2; // 한쪽 각도 (360이면 전방향)
             Vector2 forward = target.TargetDirection;
 

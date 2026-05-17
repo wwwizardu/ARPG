@@ -6,7 +6,7 @@ AI 엔티티가 여러 스킬을 가중치 기반 랜덤으로 선택하고, 스
 
 ## 데이터 모델
 
-### AiTable ([Tables.cs:309-321](Assets/Scripts/Common/Tables.cs#L309-L321))
+### AiTable ([Tables.cs:534-547](Assets/Scripts/Common/Tables.cs#L534-L547))
 
 ```csharp
 public class AiTable : TableBase
@@ -18,20 +18,22 @@ public class AiTable : TableBase
     public int SkillId1;      public int SkillWeight1;
     public int SkillId2;      public int SkillWeight2;
     public int SkillId3;      public int SkillWeight3;
+    public float KeepDistance;  // Attack에서 이보다 가까우면 Retreat. 0=후퇴 안함
 }
 ```
 
 - **슬롯 수**: 3 (`SkillHelper.AiSkillSlotCount`)
 - **가중치 의미**: 랜덤 선택 비율. `0`이면 해당 슬롯은 절대 선택되지 않음
 - **왜 AiTable에?** "스킬을 어느 빈도로 쓰는가"는 AI의 행동 설정. 같은 스킬도 AI별 비율을 달리 세팅 가능. 플레이어 전용 스킬은 AiTable에 없어서 자동으로 AI 선택에서 배제됨.
+- **KeepDistance**: 보통 Melee는 0(붙어서 공격), Ranged는 7(카이팅) 정도. 교전 사거리보다 크게 잡으면 Attack 진입 즉시 Retreat이 발동되어 핑퐁이 생기므로 주의.
 
-### 구글 시트 (AI 시트, gid=947794841, 범위 `A:K`)
+### 구글 시트 (AI 시트, gid=947794841, 범위 `A:L`)
 
 컬럼 배치는 **interleaved** (Id-Weight 쌍이 붙어있음):
 
-| A | B | C | D | E | F | G | H | I | J | K |
-|---|---|---|---|---|---|---|---|---|---|---|
-| Id | Name | AiType | BehaviorType | DetectionRange | SkillId1 | SkillWeight1 | SkillId2 | SkillWeight2 | SkillId3 | SkillWeight3 |
+| A | B | C | D | E | F | G | H | I | J | K | L |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Id | Name | AiType | BehaviorType | DetectionRange | SkillId1 | SkillWeight1 | SkillId2 | SkillWeight2 | SkillId3 | SkillWeight3 | KeepDistance |
 
 `DownloadTables.ParseAiTable`이 이 순서대로 파싱하므로 컬럼 순서 변경 금지.
 
@@ -45,10 +47,14 @@ public class AiTable : TableBase
 public const int AiSkillSlotCount = 3;
 
 // Chase/Attack 전이 판정용 교전 사거리(제곱). Chase와 Attack이 이 값을 공유해야 핑퐁 없음.
-public static float GetEngagementRangeSqr(int ownerEntityId, int slotCount);
+// 유효 사거리 = (attacker.HitRadius + SkillRangeMax + target.HitRadius)² — 몸 가장자리 기준.
+public static float GetEngagementRangeSqr(int ownerEntityId, int targetEntityId, int slotCount);
 
 // 가중치 기반 스킬 선택. AI 전용. -1이면 발동 가능한 슬롯 없음.
-public static int PickFireSkill(int ownerEntityId, Vector2 targetPosition, int slotCount);
+public static int PickFireSkill(int ownerEntityId, int targetEntityId, Vector2 targetPosition, int slotCount);
+
+// 엔티티의 HitRadius 조회 (ColliderComponent 없으면 0). 엔티티 ID -1도 안전.
+public static float GetEntityHitRadius(int entityId);
 
 // 플레이어/AI 공통. SkillCommandComponent 생성. 쿨타임/실행중이면 false.
 public static bool GetSkillCommandComponent(int slotIndex, int entityId, Vector2 targetPosition, out SkillCommandComponent command);
@@ -58,10 +64,22 @@ public static bool GetSkillCommandComponent(int slotIndex, int entityId, Vector2
 
 ## 교전 사거리 (GetEngagementRangeSqr)
 
-- **1순위**: 쿨타임이 풀려 있는 스킬들의 `SkillRangeMax` 중 최대값(제곱)
-- **Fallback**: 모두 쿨타임 중이면 전체 존재 스킬의 `SkillRangeMax` 중 최대값 → 그 자리에서 대기
+### 유효 사거리 공식
+
+```
+유효 사거리 = attacker.HitRadius + SkillRangeMax + target.HitRadius
+            └─ 자기 몸 반경 ──┘  └─ 팔/무기 reach ─┘  └─ 표적 몸 반경 ─┘
+```
+
+- **`SkillRangeMax`의 의미**: "몸 밖으로 뻗어나가는 스킬의 reach" (팔/무기 길이). 큰 몹은 같은 SkillRangeMax 값으로도 자기 몸 너머로 자연스럽게 도달.
+- **실제 hit 판정과 일치**: [System_Skill.CheckCircleRangeEntities](Assets/Scripts/Common/System/System_Skill.cs)도 동일하게 `owner.HitRadius + SkillTargetRange1`을 사용. AI가 fire하는 순간과 hit가 발생하는 순간의 사거리 정의가 동일해야 "맞을 거리에서만 fire"가 보장됨.
+
+### 슬롯 단위 선택
+
+- **1순위**: 쿨타임이 풀려 있는 스킬들의 유효 사거리 중 최대값(제곱)
+- **Fallback**: 모두 쿨타임 중이면 전체 존재 스킬의 유효 사거리 중 최대값 → 그 자리에서 대기
 - **핑퐁 방지 원리**: Chase→Attack과 Attack→Chase 전이가 동일한 이 값을 사용 → 판정이 뒤집히지 않음
-- **정적 `AttackRange` 불필요**: `AIBehaviorTypeComponent.AttackRange`에 의존하지 않음
+- **정적 `AttackRange` 불필요**: `AIBehaviorTypeComponent.AttackRange`에 의존하지 않음 (현재 dead field)
 
 ---
 
@@ -73,8 +91,8 @@ public static bool GetSkillCommandComponent(int slotIndex, int entityId, Vector2
 2. 스킬 엔티티 존재 안 함
 3. `SkillStateComponent.IsRunning == true`
 4. `SkillStateComponent.IsCooldownReady == false`
-5. `sqrDistance > SkillRangeMax²` (사거리 초과)
-6. `sqrDistance < SkillRangeMin²` (너무 가까움)
+5. `sqrDistance > (attacker.HitRadius + SkillRangeMax + target.HitRadius)²` (유효 사거리 초과)
+6. `sqrDistance < SkillRangeMin²` (너무 가까움 — 중심거리 기준, 몸 반경 보정 없음)
 
 ### 알고리즘 (2-pass)
 
@@ -106,12 +124,14 @@ distance² ≤ GetEngagementRangeSqr  →  Attack 전이
 ### Melee/Ranged Attack ([MeleeAttackStateHandler.cs](Assets/Scripts/AI/StateHandlers/MeleeAttackStateHandler.cs), [RangedAttackStateHandler.cs](Assets/Scripts/AI/StateHandlers/RangedAttackStateHandler.cs))
 ```
 distance² > GetEngagementRangeSqr  →  Chase 복귀
-KeepDistance 내부 진입              →  Retreat (기존 AIBehaviorTypeComponent.KeepDistance)
+KeepDistance 내부 진입              →  Retreat (AiTable.KeepDistance, EntityFactory가 컴포넌트에 복사)
 PickFireSkill → 슬롯 선택          →  GetSkillCommandComponent 발동
 선택 불가(쿨/사거리 전원 실패)        →  대기 (그 자리에 머무름)
 ```
 
 **Ranged만의 특이점**: `ATTACK_MIN_TIME` 경과 후에만 KeepDistance 기반 Retreat 허용
+
+> ⚠️ **KeepDistance 주의**: 값이 교전 사거리(`attacker.HitRadius + SkillRangeMax + target.HitRadius`)보다 크면 Attack 진입과 동시에 Retreat이 발동되어 **Attack ↔ Retreat ↔ Chase 핑퐁**이 발생함. Melee는 보통 0, Ranged는 교전 사거리보다 의도적으로 작게 잡을 것.
 
 ---
 
@@ -142,7 +162,9 @@ AI와 플레이어가 **동일한 `GetSkillCommandComponent`**로 발동 조건(
 
 [Tables.cs:261](Assets/Scripts/Common/Tables.cs#L261) (SkillTable)
 
-- `SkillRangeMin` / `SkillRangeMax`: 사거리. `0` = 무제한/무효
+- `SkillRangeMax`: **몸 밖으로 뻗는 추가 사거리** (팔/무기 reach). `0` = 무제한/무효. 실제 도달 거리 = `attacker.HitRadius + SkillRangeMax + target.HitRadius`. 같은 0.8 값이라도 거대 몹은 자기 몸 너머까지 자연스럽게 도달.
+- `SkillRangeMin`: 너무 가까우면 발사 안 함. 중심거리 기준 (몸 반경 보정 없음). `0` = 제한 없음.
+- `SkillTargetRange1`: 실제 hit 검정 사거리 (System_Skill.CheckCircleRangeEntities). 동일하게 `attacker.HitRadius`가 더해져 적용됨. 대개 `SkillRangeMax`와 같은 값으로 두면 됨.
 - `Cooltime`: 초 단위. `CooldownReduction` 스탯(0~90% 클램프) 적용됨
 - `SkillTargetType`: `SingleEntity`/`Direction`/`Position` — `GetSkillCommandComponent`가 스킬 테이블에서 읽어 command에 세팅
 
@@ -151,3 +173,27 @@ AI와 플레이어가 **동일한 `GetSkillCommandComponent`**로 발동 조건(
 ## 성능
 
 `GetEngagementRangeSqr`와 `PickFireSkill`은 AI 핸들러 OnUpdate(FixedUpdate 50fps)마다 호출. 슬롯 3 × 엔티티 수 × 2 pass ≈ 수만 TryGetComponent/초. SparseSet O(1)이라 현 규모에서는 병목 아님. 필요 시 캐싱+무효화 패턴으로 전환 가능.
+
+---
+
+## 테이블 정합성 검증
+
+[`DownloadTables.ValidateAiSetup`](Assets/Scripts/Editor/DownloadTables.cs)이 시트 다운로드 직후 자동 실행. 시트 입력 실수를 디자이너에게 즉시 피드백.
+
+### 검증 항목
+
+| # | 검사 | 심각도 |
+|---|---|---|
+| 1 | `KeepDistance ≥ attacker.HR + max(SkillRangeMax)` (target.HR=0 보수적 하한) | Warning — Attack↔Retreat 핑퐁 위험 |
+| 2 | `SkillRangeMin > SkillRangeMax` (각 SkillTable) | Error — 영원히 발사 불가 |
+| 3 | AiTable의 SkillId1/2/3 → SkillTable broken reference | Error |
+| 3-1 | Creature/Npc의 AiTableId → AiTable broken reference | Error |
+| 4 | SkillId 설정됐는데 모든 SkillWeight=0 | Warning — AI가 스킬 발사 안 함 |
+| 4-1 | SkillWeight>0인데 짝 SkillId=0 | Warning — 가중치 무효 |
+| 5 | DetectionRange=0 | Warning — 적을 감지 못 함 |
+
+검증 결과는 로그로 출력되고 마지막에 `Errors: N, Warnings: M` 요약. 시트 수정 → 다운로드 → 즉시 로그 확인 흐름.
+
+### Check 1의 보수성
+
+런타임 `target.HitRadius`를 모르기 때문에 가장 작은(0) 타겟을 가정한 하한 검사. 실제 큰 타겟이라면 engagement가 더 커서 안전할 수 있지만, 작은 타겟에선 확실히 핑퐁이 발생하므로 경고 정당함.

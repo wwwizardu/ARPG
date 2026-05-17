@@ -40,6 +40,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1dedb702bec21ad4799b32ffee22b4bc
+    m_Address: Animation/Bear
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2008348491dbf52499c601a47881fe76
     m_Address: Sprites/Items/MerchantStall
     m_ReadOnly: 0

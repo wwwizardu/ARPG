@@ -37,7 +37,7 @@ namespace ARPG.AI.StateHandlers
             float sqrDistance = (targetTransform.Position - transform.Position).sqrMagnitude;
 
             // 교전 사거리(쓸 수 있는 스킬의 최대 사거리) 안이면 Attack 전이
-            float engagementSqr = SkillHelper.GetEngagementRangeSqr(entityId, SkillHelper.AiSkillSlotCount);
+            float engagementSqr = SkillHelper.GetEngagementRangeSqr(entityId, ai.TargetEntityId, SkillHelper.AiSkillSlotCount);
             if (engagementSqr > 0f && sqrDistance <= engagementSqr)
             {
                 AIStateHelper.TransitionToState(entityId, AIState.Attack);

@@ -543,6 +543,7 @@ namespace ARPG.Tables
         [JsonProperty("SkillWeight2")] public int SkillWeight2;     // 스킬 2 선택 가중치
         [JsonProperty("SkillId3")] public int SkillId3;             // 스킬 3
         [JsonProperty("SkillWeight3")] public int SkillWeight3;     // 스킬 3 선택 가중치
+        [JsonProperty("KeepDistance")] public float KeepDistance;   // 유지 거리 (Attack에서 더 가까우면 Retreat. 0=후퇴 안함)
     }
 
     [Serializable]

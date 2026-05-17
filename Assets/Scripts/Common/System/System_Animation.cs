@@ -58,6 +58,14 @@ namespace ARPG.Systems
                 _componentManager.AddComponent(entityId, new AnimatorComponent());
             }
 
+            // 등록 시점에 현재 카테고리의 FrameDuration을 즉시 반영 — 초기 State가 Prev와 같아
+            // UpdateAnimatorFromState가 ChangeCategory를 호출하지 않는 경우 폴백 0.1f가 굳어버리는 문제 방지.
+            if (_componentManager != null && _componentManager.TryGetComponent<SpriteAnimationComponent>(entityId, out var spriteAnim) == true)
+            {
+                spriteAnim.FrameDuration = GetDefaultFrameDuration(entityId, spriteAnim.CurrentCategory);
+                _componentManager.SetComponent(entityId, spriteAnim);
+            }
+
             Debug.Log($"SpriteAnimationData registered for Entity {entityId}");
         }
 
