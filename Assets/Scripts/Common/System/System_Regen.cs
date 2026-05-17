@@ -78,6 +78,7 @@ namespace ARPG.Systems
                 }
 
                 // === MP 재생 ===
+                bool mpChanged = false;
                 if (stat.FinalMpGeneration > 0 && stat.CurrentMp < stat.FinalMaxMp)
                 {
                     regen.MpAccumulator += stat.FinalMpGeneration * inFixedDeltaTime;
@@ -87,6 +88,7 @@ namespace ARPG.Systems
                         stat.CurrentMp = Mathf.Min(stat.FinalMaxMp, stat.CurrentMp + whole);
                         regen.MpAccumulator -= whole;
                         statChanged = true;
+                        mpChanged = true;
                         if (stat.CurrentMp >= stat.FinalMaxMp)
                             regen.MpAccumulator = 0f;
                     }
@@ -102,6 +104,17 @@ namespace ARPG.Systems
                     cm.SetComponent(entityId, stat);
                 if (regenChanged)
                     cm.SetComponent(entityId, regen);
+
+                // MP가 실제로 증가한 틱에만 UI 갱신 메시지 발화 (정수 단위 변동 시점에 자연 빈도 제한됨)
+                if (mpChanged)
+                {
+                    AR.s.Message.SendToEntity(new ARPG.Message.ManaChangedMessage
+                    {
+                        TargetEntityId = entityId,
+                        CurrentMp = stat.CurrentMp,
+                        MaxMp = stat.FinalMaxMp,
+                    });
+                }
             }
         }
     }

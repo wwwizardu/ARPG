@@ -32,6 +32,7 @@ namespace ARPG.Data
         private ImmutableDictionary<int, Tables.SkillBookTable> _skillBookTable = null!;
         private ImmutableDictionary<int, Tables.AiTable> _aiTable = null!;
         private ImmutableDictionary<int, Tables.BuffTable> _buffTable = null!;
+        private Dictionary<GlobalEnum.BuffEffectType, Tables.BuffTable> _buffByEffectType = new();
         private ImmutableDictionary<int, Tables.BuffEffectTable> _buffEffectTable = null!;
         private ImmutableDictionary<int, Tables.AnimationTable> _animationTable = null!;
         private ImmutableDictionary<int, Tables.ProjectileTable> _projectileTable = null!;
@@ -132,9 +133,14 @@ namespace ARPG.Data
                 table.LoadLate();
             }
 
+            _buffByEffectType.Clear();
             foreach (var table in _buffTable.Values)
             {
                 table.LoadLate();
+                if (_buffByEffectType.TryGetValue(table.EffectType, out var existing) == false || table.Id < existing.Id)
+                {
+                    _buffByEffectType[table.EffectType] = table;
+                }
             }
 
             foreach (var table in _buffEffectTable.Values)
@@ -436,6 +442,16 @@ namespace ARPG.Data
         public List<Tables.SkillEffectTable> GetAllSkillEffects()
         {
             return new List<Tables.SkillEffectTable>(_skillEffectTable.Values);
+        }
+
+        public Tables.BuffTable? GetBuffByEffectType(GlobalEnum.BuffEffectType effectType)
+        {
+            if (_buffByEffectType.TryGetValue(effectType, out var table))
+            {
+                return table;
+            }
+
+            return null;
         }
 
         /// <summary>

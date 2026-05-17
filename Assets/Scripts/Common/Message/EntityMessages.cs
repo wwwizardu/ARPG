@@ -62,6 +62,18 @@ namespace ARPG.Message
     }
 
     /// <summary>
+    /// 마나 변경 메시지
+    /// CurrentMp가 변동되었을 때 전송 (스킬 시전 차감, 자연 회복 등).
+    /// HpBarView가 수신하여 MP바 fillAmount 갱신.
+    /// </summary>
+    public struct ManaChangedMessage : IEntityMessage
+    {
+        public int TargetEntityId { get; set; }
+        public int CurrentMp;
+        public int MaxMp;
+    }
+
+    /// <summary>
     /// 스탯 변경 메시지
     /// 엔티티의 스탯이 변경되었을 때 전송
     /// </summary>

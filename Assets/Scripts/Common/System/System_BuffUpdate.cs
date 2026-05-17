@@ -103,6 +103,8 @@ namespace ARPG.Systems
 
             // 스택에 따른 총 데미지 계산
             int totalDamage = buff.TickDamage * buff.StackCount;
+            if (totalDamage == 0)
+                return;
 
             // 속성 저항 적용 (DamageType에 따라 저항 계산)
             float reduction = GetReductionForDamageType(buff.DamageType, targetStat, totalDamage);

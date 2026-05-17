@@ -13,6 +13,59 @@ namespace ARPG.Utility
     /// </summary>
     public static class BuffHelper
     {
+        public static bool TryGetBuffTableByEffectType(GE.BuffEffectType effectType, out BuffTable buffTable)
+        {
+            buffTable = null;
+
+            BuffTable foundBuffTable = AR.s.Data?.GetBuffByEffectType(effectType);
+            if (foundBuffTable == null)
+            {
+                Debug.LogWarning($"[BuffHelper] BuffTable not found - EffectType: {effectType}");
+                return false;
+            }
+
+            buffTable = foundBuffTable;
+            return true;
+        }
+
+        public static int AddBuffByEffectType(int targetEntityId, GE.BuffEffectType effectType, float durationOverride = 0f)
+        {
+            if (TryGetBuffTableByEffectType(effectType, out BuffTable buffTable) == false)
+                return -1;
+
+            float duration = durationOverride > 0f ? durationOverride : buffTable.Duration;
+            return AddBuff(targetEntityId, buffTable.Id, duration);
+        }
+
+        public static int AddDamageBasedBuffByEffectType(int targetEntityId, GE.BuffEffectType effectType, float dealtDamage, float durationOverride = 0f)
+        {
+            if (TryGetBuffTableByEffectType(effectType, out BuffTable buffTable) == false)
+                return -1;
+
+            float duration = durationOverride > 0f ? durationOverride : buffTable.Duration;
+            return AddDamageBasedBuff(targetEntityId, buffTable.Id, dealtDamage, duration);
+        }
+
+        public static int AddDamageBasedBuff(int targetEntityId, int buffTableID, float dealtDamage, float duration)
+        {
+            if (dealtDamage <= 0f)
+                return -1;
+
+            BuffTable buffTable = AR.s.Data?.GetBuff(buffTableID);
+            if (buffTable == null)
+            {
+                Debug.LogError($"[BuffHelper] BuffTable not found - TableID: {buffTableID}");
+                return -1;
+            }
+
+            int buffEntityId = AddBuff(targetEntityId, buffTableID, duration);
+            if (buffEntityId == -1)
+                return -1;
+
+            ApplyDamageBasedBuffEffect(buffEntityId, buffTable, dealtDamage);
+            return buffEntityId;
+        }
+
         /// <summary>
         /// 타겟 엔티티에 버프 추가
         /// 같은 타입의 버프가 이미 존재하면 StackCount를 증가시킴
@@ -228,12 +281,44 @@ namespace ARPG.Utility
             return count;
         }
 
+        private static void ApplyDamageBasedBuffEffect(int buffEntityId, BuffTable buffTable, float dealtDamage)
+        {
+            if (AR.s.Component.TryGetComponent<BuffInstance>(buffEntityId, out BuffInstance buff) == false)
+            {
+                Debug.LogWarning($"[BuffHelper] Damage based buff entity has no BuffInstance - BuffEntityId: {buffEntityId}, TableID: {buffTable.Id}");
+                return;
+            }
+
+            switch (buffTable.EffectType)
+            {
+                case GE.BuffEffectType.Blooding:
+                    buff.DamageType = GE.DamageType.Physics;
+                    int newTickDamage = CalculateDamagePercent(dealtDamage, buffTable.EffectValue);
+                    buff.TickDamage = Mathf.Max(buff.TickDamage, newTickDamage);
+                    break;
+
+                default:
+                    return;
+            }
+
+            AR.s.Component.SetComponent(buffEntityId, buff);
+        }
+
+        private static int CalculateDamagePercent(float dealtDamage, int percent)
+        {
+            if (dealtDamage <= 0f || percent <= 0)
+                return 0;
+
+            int roundedDamage = Mathf.RoundToInt(dealtDamage);
+            return Mathf.Max(1, Mathf.FloorToInt(roundedDamage * percent * 0.01f));
+        }
+
         /// <summary>
         /// 버프 효과 타입에 따라 BuffInstance에 효과 데이터 설정
         /// </summary>
         private static void ApplyBuffEffect(ref BuffInstance buff, int targetEntityId, BuffTable buffTable)
         {
-            if (AR.s.Component.TryGetComponent<StatComponent>(targetEntityId, out StatComponent stat) == false)
+            if (AR.s.Component.TryGetComponent<StatComponent>(targetEntityId, out StatComponent _) == false)
             {
                 Debug.LogWarning($"[BuffHelper] Target entity has no StatComponent - TargetEntityId: {targetEntityId}, BuffTableId: {buffTable.Id}");
                 buff.TickDamage = 0;
@@ -246,7 +331,7 @@ namespace ARPG.Utility
                 case GE.BuffEffectType.Blooding:
                     // 출혈: 최대 체력의 퍼센트로 계산
                     buff.DamageType = GE.DamageType.Physics;
-                    buff.TickDamage = (int)(stat.FinalMaxHp * buffTable.EffectValue * 0.01f);
+                    buff.TickDamage = 0;
                     break;
 
                 case GE.BuffEffectType.Ignite:

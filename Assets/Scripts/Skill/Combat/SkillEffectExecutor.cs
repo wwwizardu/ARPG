@@ -112,16 +112,18 @@ namespace ARPG.Skill.Combat
             if (buffId <= 0 || ctx.TargetEntityId <= 0)
                 return;
 
-            float duration = effect.Param3;
-            if (duration <= 0f)
+            BuffTable? buffTable = AR.s.Data.GetBuff(buffId);
+            if (buffTable == null)
             {
-                BuffTable? buffTable = AR.s.Data.GetBuff(buffId);
-                if (buffTable == null)
-                {
-                    Debug.LogWarning($"[SkillEffect] ApplyBuffOnHit - BuffTable not found, BuffId={buffId}");
-                    return;
-                }
-                duration = buffTable.Duration;
+                Debug.LogWarning($"[SkillEffect] ApplyBuffOnHit - BuffTable not found, BuffId={buffId}");
+                return;
+            }
+
+            float duration = effect.Param3 > 0f ? effect.Param3 : buffTable.Duration;
+            if (buffTable.EffectType == GE.BuffEffectType.Blooding)
+            {
+                BuffHelper.AddDamageBasedBuff(ctx.TargetEntityId, buffId, ctx.DamageResult.FinalDamage, duration);
+                return;
             }
 
             BuffHelper.AddBuff(ctx.TargetEntityId, buffId, duration);

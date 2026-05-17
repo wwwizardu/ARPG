@@ -158,6 +158,18 @@ namespace ARPG.Systems
                 return;
             }
 
+            // 마나 가드 — 플레이어 전용. OnSkillCommand 효과 발화 전에 차단하여 효과 누수 방지
+            int manaCost = inSkill.Table != null ? inSkill.Table.Mana : 0;
+            bool isPlayerCaster = AR.s.Data != null && inSkill.OwnerEntityId == AR.s.Data.CurrentPlayerEntityId;
+            if (isPlayerCaster && manaCost > 0)
+            {
+                if (pools.Stat.TryGet(inSkill.OwnerEntityId, out var manaStat) == false || manaStat.CurrentMp < manaCost)
+                {
+                    AR.s.Component.RemoveComponent<SkillCommandComponent>(inSkill.OwnerEntityId);
+                    return;
+                }
+            }
+
             // [SkillEffect] OnSkillCommand 트리거 - 모든 전제조건 통과 후 1회만 발화
             // 위치: CheckEnableSkill / 컴포넌트 검증 이후, 실제 시전 처리 이전
             //   - Stunned 상태에서 효과(예: DelegateToTotem) 누수 방지
@@ -263,6 +275,20 @@ namespace ARPG.Systems
             // 스킬 시작
             OnChangeState(skillEntityId, ref skillState, ref inSkill, SkillState.Start, in pools);
             AR.s.Component.SetComponent(skillEntityId, skillState);
+
+            // 마나 차감 — 플레이어 전용, 시전 확정 후 1회. 차감 후 UI 갱신용 메시지 발화
+            if (isPlayerCaster && manaCost > 0 && pools.Stat.TryGet(inSkill.OwnerEntityId, out var spendStat))
+            {
+                spendStat.CurrentMp = Mathf.Max(0, spendStat.CurrentMp - manaCost);
+                AR.s.Component.SetComponent(inSkill.OwnerEntityId, spendStat);
+
+                AR.s.Message.SendToEntity(new ARPG.Message.ManaChangedMessage
+                {
+                    TargetEntityId = inSkill.OwnerEntityId,
+                    CurrentMp = spendStat.CurrentMp,
+                    MaxMp = spendStat.FinalMaxMp,
+                });
+            }
 
             // 커맨드 처리 완료 - 컴포넌트 제거
             AR.s.Component.RemoveComponent<SkillCommandComponent>(inSkill.OwnerEntityId);

@@ -426,33 +426,29 @@ namespace ARPG.Skill.Combat
             // 물리 데미지 > 0 → 출혈 판정
             if (result.PhysDamage > 0f)
             {
-                ApplyBleeding(skillEntityId, targetId, attackerStat, result.PhysDamage);
+                ApplyBleeding(skillEntityId, targetId, attackerStat, result);
             }
         }
 
         /// <summary>
         /// 출혈 발동 (물리 DoT)
         /// </summary>
-        private static void ApplyBleeding(int skillEntityId, int targetId, StatComponent attackerStat, float physDamage)
+        private static void ApplyBleeding(int skillEntityId, int targetId, StatComponent attackerStat, DamageResult result)
         {
-            int bloodingRate = attackerStat.FinalBloodingRate + 50;
+            int bloodingRate = attackerStat.FinalBloodingRate;
             if (AR.s.Component.TryGetComponent<SkillStatBonusOnHitComponent>(skillEntityId, out var onHit))
                 bloodingRate += onHit.BloodingRateBonus;
             if (Random.Range(0, 100) < bloodingRate)
             {
-                int bloodingDamage = Mathf.FloorToInt(physDamage * 0.3f);
+                int buffEntityId = Utility.BuffHelper.AddDamageBasedBuffByEffectType(targetId, GlobalEnum.BuffEffectType.Blooding, result.FinalDamage);
 
-                int bloodingBuffTableId = 1;
-                float bloodingDuration = 5f;
-
-                int buffEntityId = Utility.BuffHelper.AddBuff(targetId, bloodingBuffTableId, bloodingDuration);
 
                 if (buffEntityId != -1 && AR.s.Component.TryGetComponent<BuffInstance>(buffEntityId, out var buff))
                 {
-                    buff.TickDamage = bloodingDamage;
-                    AR.s.Component.SetComponent(buffEntityId, buff);
+                    float dealtDamage = result.FinalDamage;
+                    int bloodingDamage = buff.TickDamage;
 
-                    Debug.Log($"[DamageCalculator] 출혈 발동 - Target: {targetId}, PhysDamage: {physDamage:F0}, BloodingDamage: {bloodingDamage}");
+                    Debug.Log($"[DamageCalculator] 출혈 발동 - Target: {targetId}, Damage: {dealtDamage:F0}, BloodingDamage: {bloodingDamage}");
                 }
             }
         }
