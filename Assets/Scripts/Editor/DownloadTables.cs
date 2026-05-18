@@ -72,6 +72,9 @@ namespace ARPG.Editor
             Register<VillageStageTable>(list, "467145019&range=A:Q");
             // 청크 Zone(시드 청크 (0,0) 기준 Chebyshev 거리+1)별 몬스터 스폰 파라미터
             Register<ZoneTable>(list, "848445893&range=A:M");
+            // 절차적 역사 시스템 (Phase 1) — 카탈로그(재료) + 사건 템플릿
+            Register<HistoryEntityTable>(list, "2122459380&range=A:J");
+            Register<HistoryTemplateTable>(list, "948737654&range=A:I");
             //Register<BuffEffectTable>(list, "2104311648&range=A:K");
             return list;
         }
@@ -180,6 +183,12 @@ namespace ARPG.Editor
 
         [MenuItem("ARPG/Download Table/EquipmentBaseStatTable", false, 100)]
         private static async void DownloadEquipmentBaseStatTable() => await DownloadSingleTable<EquipmentBaseStatTable>();
+
+        [MenuItem("ARPG/Download Table/HistoryEntityTable", false, 100)]
+        private static async void DownloadHistoryEntityTable() => await DownloadSingleTable<HistoryEntityTable>();
+
+        [MenuItem("ARPG/Download Table/HistoryTemplateTable", false, 100)]
+        private static async void DownloadHistoryTemplateTable() => await DownloadSingleTable<HistoryTemplateTable>();
 
         [MenuItem("ARPG/Download Table/ItemImplicitTable", false, 100)]
         private static async void DownloadItemImplicitTable() => await DownloadSingleTable<ItemImplicitTable>();
@@ -549,6 +558,14 @@ namespace ARPG.Editor
                 {
                     ParseZoneTable(zoneTable, values);
                 }
+                else if (table is HistoryEntityTable historyEntityTable)
+                {
+                    ParseHistoryEntityTable(historyEntityTable, values);
+                }
+                else if (table is HistoryTemplateTable historyTemplateTable)
+                {
+                    ParseHistoryTemplateTable(historyTemplateTable, values);
+                }
                 else
                 {
                     Debug.LogError($"[DownloadTables] CreateTable - Unknown table type: {typeof(T)}");
@@ -853,6 +870,58 @@ namespace ARPG.Editor
             string s = values[index]?.Trim();
             if (string.IsNullOrEmpty(s)) return defaultValue;
             return float.TryParse(s, out float v) ? v : defaultValue;
+        }
+
+        /// <summary>
+        /// bool 컬럼 파서. "true"/"false" (대소문자 무관), "1"/"0", 빈 칸 모두 허용.
+        /// </summary>
+        private static bool ParseBoolSafe(string[] values, int index, bool defaultValue = false)
+        {
+            if (index >= values.Length) return defaultValue;
+            string s = values[index]?.Trim();
+            if (string.IsNullOrEmpty(s)) return defaultValue;
+            if (bool.TryParse(s, out bool v)) return v;
+            if (s == "1") return true;
+            if (s == "0") return false;
+            return defaultValue;
+        }
+
+        private static void ParseHistoryEntityTable(HistoryEntityTable table, string[] values)
+        {
+            if (values.Length < 10)
+            {
+                Debug.LogError($"[ParseHistoryEntityTable] Invalid data length. Expected at least 10, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            table.StringId            = values[1];
+            table.DisplayName         = values[2];
+            table.Type                = ParseIntSafe(values, 3);
+            table.TagsCsv             = values[4];
+            table.PreferredTerrainCsv = values[5];
+            table.HostileTagsCsv      = values[6];
+            table.StartingPopulation  = ParseIntSafe(values, 7);
+            table.ThreatLevel         = ParseIntSafe(values, 8);
+            table.EndsWithJongseong   = ParseBoolSafe(values, 9);
+        }
+
+        private static void ParseHistoryTemplateTable(HistoryTemplateTable table, string[] values)
+        {
+            if (values.Length < 8)
+            {
+                Debug.LogError($"[ParseHistoryTemplateTable] Invalid data length. Expected at least 8, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            table.StringId          = values[1];
+            table.Weight            = ParseIntSafe(values, 2);
+            table.EraRestrictionCsv = values[3];
+            table.CooldownYears     = ParseIntSafe(values, 4);
+            table.SlotsJson         = values[5];
+            table.TextTemplate      = values[6];
+            table.EffectsJson       = values[7];
+            // CanTriggerIdsCsv는 옵션 — 마지막 행에서 빈 셀이면 TSV split에 값이 누락될 수 있음
+            table.CanTriggerIdsCsv  = values.Length > 8 ? values[8] : string.Empty;
         }
 
         /// <summary>

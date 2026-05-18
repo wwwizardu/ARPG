@@ -1148,6 +1148,69 @@ Phase 0 ──→ Phase 1 ──→ Phase 2 ──→ Phase 3 ──→ Phase 4
 - **Phase 5는 Phase 4 완료 전에 시작 가능** (메시지 구독은 청크 hook과 독립).
 - **Phase 3과 Phase 5 병렬 작업 가능** (지리 통합 vs 메시지 통합).
 
+### 13.10 현재 진행 상황 (2026-05-19)
+
+#### Phase 0 — 인프라 셋업 ✅ 코드 완료
+
+신규 파일 11개 작성, 수정 파일 2개:
+
+- 컴포넌트 6종: `HistoryActorComponent`, `HistoryActorTagsComponent`, `HistoricalEventComponent` (+`ActorSlotPair`), `RegionComponent`, `SettlementComponent` (+`SettlementType`/`State`), `HistoryMemoryComponent` — 모두 `Assets/Scripts/Common/Component/History/`
+- 유틸 4개: `HistoryEra.cs`, `HistoryRng.cs` (SplitMix64), `DerivedSeed.cs` (6채널), `HistoryTagRegistry.cs` (SWAR popcount) — `Assets/Scripts/History/`
+- 매니저 1개: `HistoryManager.cs` (Initialize/Reset/GenerateOrLoad/OnChunkActivated 골격)
+- 수정: [ComponentManager.cs](../Assets/Scripts/Manager/ComponentManager.cs) `_poolSizes` 6종 등록, [AR.cs](../Assets/Scripts/Manager/AR.cs) 필드/프로퍼티/Initialize/Reset 4지점
+
+**남은 작업 (사용자 직접)**:
+- Unity 에디터에서 AR 프리팹에 `HistoryManager` 컴포넌트 추가 + `_historyManager` 필드 드래그 연결
+- Play 진입 시 콘솔 로그 확인 (`HistoryManager Initialized` + 풀 6개 생성)
+
+#### Phase 1 — 카탈로그 + 단일 사건 🟡 데이터 인프라 완료 / 본 코드 작업 보류
+
+**완료**:
+- 구글 시트 `HistoryEntity` 탭 시드 5행 (드워프/엘프/인간/화염신/드라카르)
+- 구글 시트 `HistoryTemplate` 탭 시드 1행 (`tmpl_monster_invasion`)
+- POCO 2종 `HistoryEntityTable`, `HistoryTemplateTable` — [Tables.cs](../Assets/Scripts/Common/Tables.cs) 끝부분
+- [DownloadTables.cs](../Assets/Scripts/Editor/DownloadTables.cs) 통합: Register × 2, MenuItem × 2, CreateTable 분기 × 2, Parse 메서드 × 2, `ParseBoolSafe` 헬퍼 추가
+- [DataManager_Table.cs](../Assets/Scripts/Data/DataManager_Table.cs) 통합: 필드 × 2, LoadTable 호출 × 2, `GetHistoryEntity`/`GetAllHistoryEntities`/`GetHistoryTemplate`/`GetAllHistoryTemplates`
+- LLM 인프라 검증 완료 ([LLMManager.cs](../Assets/Scripts/Manager/LLMManager.cs), [LLMClient.cs](../Assets/Scripts/Manager/LLMClient.cs))
+
+**남은 작업 (사용자 직접)**:
+- Unity 메뉴 `ARPG → Download Table → HistoryEntityTable` / `HistoryTemplateTable` 실행 → `.bytes` 2개 생성
+
+**보류 — 결정 필요 사항** (다음 세션 진입 시 결정 후 진행):
+
+1. **SlotsJson 정규화 방향**: 현재 한 셀에 raw JSON 통째 — 디자이너 가독성 낮음
+   - 옵션 A: `HistorySlot` 시트 분리 (외래키 `TemplateId`, 1슬롯 = 1행) — **추천**
+   - 옵션 B: `HistoryTemplate`에 슬롯 4개 고정 컬럼 펼치기 (24컬럼)
+   - 옵션 C: 미니 CSV 포맷 (`침략자:Monster:거대:고대,화염::;...`)
+
+2. **EffectsJson도 함께 정규화?**: 같은 가독성 문제. `HistoryEffect` 시트 분리하면 일관성 ↑
+
+3. **TextTemplate 컬럼의 역할 (LLM 도입 후)**:
+   - 1A: 그대로 유지 (의미 시드 + 폴백) — 변경 0
+   - 1B: 제거하고 `EventTags` 영문 키워드로 교체
+   - 1C: 유지 + `ToneHint` (예: tragic/ominous) + `LoreFormat` (예: epitaph/prophecy/chronicle) 추가 — **추천**
+
+4. **유적 글귀 저장 단위**:
+   - 사건 단위 (`Event.CachedShortText`): 1사건 = 1글귀 (같은 사건의 여러 유적 = 동일 텍스트)
+   - 유적 단위 (`LoreItem.InscribedText`): 1유적 = 1글귀 (같은 사건이라도 유적마다 다른 표현) — **추천**
+
+5. **LLM 호출 정책**:
+   - Lazy (유적 진입 / NPC 대화 시점) — **추천 (게임 시작 빠름)**
+   - Eager (백본 생성 직후 일괄 — 비추, 시작 지연 + 비용)
+
+#### 다음 세션 진입 절차
+
+1. 위 5개 결정 항목 확정
+2. 결정에 따라 시트 컬럼 재구성 (`SlotsJson`/`EffectsJson` 정규화, `TextTemplate` 컬럼 조정)
+3. POCO + DownloadTables + DataManager_Table 갱신
+4. 기존 시드 1행을 새 형식으로 재입력
+5. Phase 1 본 코드 작업 진입:
+   - `HistoryEntityType` enum, `SlotDefinition`/`EffectDefinition` POCO
+   - `HistoryDataLoader` (테이블 → `HistoryActorComponent` 인스턴스화)
+   - `SlotMatcher`, `KoreanJosaResolver`, `HistoryTextRenderer`
+   - LLM 통합 — `LoreInscriptionGenerator`, `NpcDialogueGenerator` (Phase 5 NPC 시스템과 연결)
+   - `HistoryGenerator.GenerateSingleEventForTest()` + cheat 명령
+
 ---
 
 ## 14. 주의사항 / 함정
@@ -1205,6 +1268,11 @@ Phase 0 ──→ Phase 1 ──→ Phase 2 ──→ Phase 3 ──→ Phase 4
 | **재료 정의 권한** | 시트 기반 .bytes (구글 시트 워크플로 일관성) | 능력치는 properties dict 확장 가능 |
 | **이름 생성** | Phase 1: 종족별 prefix/suffix 풀 / Phase 2: 절차적 음절 조합 | MVP 1.0 이후 |
 | **System Priority** | 260 / 480 / 820 (LateUpdate) | 검증된 빈 슬롯 |
+| **표현 시스템** | LLM 동적 생성 + KoreanJosaResolver 폴백 | NPC 대사 매번 다양화, 유적 글귀 다양화 (Phase 1 결정) |
+| **LLM 인프라** | `AR.s.LLM` (Groq Llama 3.3 70B, UniTask 비동기) | [LLMClient.cs](../Assets/Scripts/Manager/LLMClient.cs) 검증 완료 |
+| **유적 글귀 캐싱** | 첫 노출 시 LLM 1회 호출 → `WorldData`에 영구 저장 | 결정론 보장 + 비용/지연 분산 (lazy) |
+| **NPC 대사 캐싱** | 매번 LLM 호출, 캐시 없음 | 휘발성 OK — 같은 의미 다른 표현 (사용자 의도) |
+| **`KoreanJosaResolver`** | 폴백용 유지 (LLM 실패/오프라인 시 단순 토큰 치환) | API 키 없는 사용자/네트워크 오류 대비 |
 
 ---
 
@@ -1218,7 +1286,8 @@ Phase 0 ──→ Phase 1 ──→ Phase 2 ──→ Phase 3 ──→ Phase 4
 
 ---
 
-**문서 상태**: 설계 v2 (검증 완료, 구현 0%)
+**문서 상태**: 설계 v3 (Phase 0 코드 완료 / Phase 1 데이터 인프라 완료 / 본 코드 작업 보류)
 **작성일**: 2026-05-18
-**선행 의존**: Map 청크 시스템 (✅) · ECS 기반 (✅) · MessageManager Broadcast (✅) · WorldData 직렬화 (✅) · NPC 대사 시스템 (Milestone 4 이후)
+**최근 갱신**: 2026-05-19 — LLM 표현 시스템 결정, Phase 0~1 진행 상황 §13.10 추가
+**선행 의존**: Map 청크 시스템 (✅) · ECS 기반 (✅) · MessageManager Broadcast (✅) · WorldData 직렬화 (✅) · LLM 인프라 (✅ Groq Llama 3.3 70B) · NPC 대사 시스템 (Milestone 4 이후)
 **비검증 항목**: NPC 대사 시스템은 현재 미구현(README 35%). 본 시스템의 NPC 기억 부분(`System_HistoryNpcMemorySync`)은 그 시스템이 갖춰진 뒤 의미가 살아남.

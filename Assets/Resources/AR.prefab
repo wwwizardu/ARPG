@@ -88,6 +88,50 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c6fbebb788f513842bd73b8645ec329a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ARPG.Component.ComponentManager
+--- !u!1 &1547166485626590623
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6859265727168340630}
+  - component: {fileID: 8058175247610644153}
+  m_Layer: 0
+  m_Name: HistoryManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6859265727168340630
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1547166485626590623}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 3160730113525791529}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &8058175247610644153
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1547166485626590623}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 12416b62efd4263448ab470c9cd37b2a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ARPG.History.HistoryManager
 --- !u!1 &1890833265916900115
 GameObject:
   m_ObjectHideFlags: 0
@@ -178,6 +222,7 @@ Transform:
   - {fileID: 6141178472829971184}
   - {fileID: 5007564892639287315}
   - {fileID: 6529329711478129773}
+  - {fileID: 6859265727168340630}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &4782366772405765878
@@ -208,6 +253,7 @@ MonoBehaviour:
   _floatingTextManager: {fileID: 1343925151592219025}
   _tooltipManager: {fileID: 2341010318708867552}
   _effectManager: {fileID: 3203012458289296170}
+  _historyManager: {fileID: 8058175247610644153}
 --- !u!1 &3346169185060748625
 GameObject:
   m_ObjectHideFlags: 0

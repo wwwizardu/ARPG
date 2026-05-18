@@ -25,6 +25,7 @@ namespace ARPG
         [SerializeField] private UI.FloatingTextManager _floatingTextManager = null!;
         [SerializeField] private Manager.TooltipManager _tooltipManager = null!;
         [SerializeField] private Manager.EffectManager _effectManager = null!;
+        [SerializeField] private ARPG.History.HistoryManager _historyManager = null!;
 
         private bool _initialized = false;
 
@@ -56,6 +57,7 @@ namespace ARPG
         public PlayerSkillManager PlayerSkill => _playerSkillManager;
         public TooltipManager Tooltip => _tooltipManager;
         public Manager.EffectManager Effect => _effectManager;
+        public ARPG.History.HistoryManager History => _historyManager;
 
         public Base.EntityBase? MyPlayer => _playerManager.MyPlayers;
 
@@ -90,6 +92,7 @@ namespace ARPG
             _floatingTextManager.Initialize();
             _tooltipManager.Initialize();
             _effectManager.Initialize();
+            _historyManager.Initialize();
 
             _initialized = true;
 
@@ -110,6 +113,7 @@ namespace ARPG
             _floatingTextManager.Reset();
             _tooltipManager.Reset();
             _effectManager.Reset();
+            _historyManager.Reset();
         }
         
         public void OnSceneLoadStart(Base.SceneBase inScene)

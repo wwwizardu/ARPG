@@ -727,4 +727,40 @@ namespace ARPG.Tables
         [JsonProperty("InterGroupMinDistance")] public float InterGroupMinDistance;
     }
 
+    /// <summary>
+    /// 절차적 역사 시스템 — 사건 슬롯에 들어갈 재료(종족/신/괴물/장소/유물/영웅).
+    /// Type 정수 매핑: 0=Race, 1=God, 2=Monster, 3=Place, 4=Artifact, 5=Hero.
+    /// 태그/지형 CSV는 런타임에 HistoryTagRegistry로 비트마스크 변환됨.
+    /// </summary>
+    [Serializable]
+    public class HistoryEntityTable : TableBase
+    {
+        [JsonProperty("StringId")]            public string StringId = string.Empty;
+        [JsonProperty("DisplayName")]         public string DisplayName = string.Empty;
+        [JsonProperty("Type")]                public int Type;
+        [JsonProperty("TagsCsv")]             public string TagsCsv = string.Empty;
+        [JsonProperty("PreferredTerrainCsv")] public string PreferredTerrainCsv = string.Empty;
+        [JsonProperty("HostileTagsCsv")]      public string HostileTagsCsv = string.Empty;
+        [JsonProperty("StartingPopulation")]  public int StartingPopulation;
+        [JsonProperty("ThreatLevel")]         public int ThreatLevel;
+        [JsonProperty("EndsWithJongseong")]   public bool EndsWithJongseong;
+    }
+
+    /// <summary>
+    /// 절차적 역사 시스템 — 사건 청사진. SlotsJson/EffectsJson은 가변 길이라 raw string으로 보관,
+    /// 런타임에 SlotDefinition/EffectDefinition으로 deserialize (Phase 1 코드에서 처리).
+    /// </summary>
+    [Serializable]
+    public class HistoryTemplateTable : TableBase
+    {
+        [JsonProperty("StringId")]          public string StringId = string.Empty;
+        [JsonProperty("Weight")]            public int Weight;
+        [JsonProperty("EraRestrictionCsv")] public string EraRestrictionCsv = string.Empty;
+        [JsonProperty("CooldownYears")]     public int CooldownYears;
+        [JsonProperty("SlotsJson")]         public string SlotsJson = string.Empty;
+        [JsonProperty("TextTemplate")]      public string TextTemplate = string.Empty;
+        [JsonProperty("EffectsJson")]       public string EffectsJson = string.Empty;
+        [JsonProperty("CanTriggerIdsCsv")]  public string CanTriggerIdsCsv = string.Empty;
+    }
+
 }
