@@ -23,7 +23,90 @@ public class GlobalEnum
         Ground = 1,         // 맨땅
         Glass = 2,          // 잔디
         StoneGround = 3,    // 돌 바닥
-        
+        Sand = 4,           // 모래 (Desert/Steppe)
+        SwampMud = 5,       // 늪 진흙 (Swamp)
+        DryGrass = 6,       // 마른 풀 (Steppe)
+        Snow = 7,           // 눈 (Snow/Tundra)
+    }
+
+    /// <summary>
+    /// 바이옴 분류 (MAP_DESIGN.md §4.2). per-tile warped Perlin으로 결정.
+    /// Whittaker 모델 — 온도 × 습도 (1차) + 고도 (변형).
+    /// </summary>
+    public enum BiomeType
+    {
+        // 온도 × 습도 (Whittaker)
+        Plains = 0,         // 중간 온도 + 중간 습도
+        Forest = 1,         // 중간 온도 + 습함
+        Desert = 2,         // 더움 + 건조
+        Swamp = 3,          // 더움 + 매우 습함 / 저고도 + 습함
+        Steppe = 4,         // 더움 + 중간 습도 (초원)
+        Tundra = 5,         // 추움 + 건조
+        Snow = 6,           // 추움 + 중간~습함
+
+        // 고도 변형
+        Mountain = 10,      // 고도 ↑ — 다른 축 덮어쓰기
+
+        // 향후 (Live Backbone — Phase 7 이후)
+        Wasteland = 30,
+    }
+
+    /// <summary>
+    /// Race Settlement(MAP_DESIGN.md §7)의 종족 분류. biome → race 매핑에 사용.
+    /// </summary>
+    public enum RaceType
+    {
+        Human = 0,
+        Elf = 1,
+        Dwarf = 2,
+        Orc = 3,
+        Nomad = 4,
+        Lizardman = 5,
+        Yeti = 6,
+    }
+
+    /// <summary>
+    /// Race Settlement 크기. (race × size) 조합으로 청사진 카탈로그 선택.
+    /// Phase 진입 시 단계 수 결정 (§12 #14) — 우선 Village 1단계로 시작.
+    /// </summary>
+    public enum SettlementSize
+    {
+        Village = 0,        // 작은 마을 (~10-20 NPC)
+        Town = 1,           // 중형 마을 (~30-50)
+        City = 2,           // 대형 도시 (~100+)
+    }
+
+    /// <summary>
+    /// 유적 단편(LoreFragment)의 출신 종족 태그. race_origin (§6.1).
+    /// LoreFragment용이라 race_origin이 *과거의* 종족도 포함 가능 (Ancient, Monster 등).
+    /// </summary>
+    public enum RaceOrigin
+    {
+        Human = 0,
+        Elf = 1,
+        Dwarf = 2,
+        Orc = 3,
+        Nomad = 4,
+        Lizardman = 5,
+        Yeti = 6,
+        Ancient = 100,      // 멸종한 고대 종족
+        Monster = 101,      // 몬스터 둥지 폐허
+    }
+
+    /// <summary>
+    /// 유적 단편의 운명 키워드 (LoreFragment.FateKeyword, §6.1).
+    /// "이 종족이 어떻게 사라졌는가"를 단어 하나로 표현. LLM 프롬프트에 사용.
+    /// </summary>
+    public enum FateKeyword
+    {
+        Burned = 0,
+        Plagued = 1,
+        Betrayed = 2,
+        Sealed = 3,
+        Forgotten = 4,
+        Drowned = 5,
+        Conquered = 6,
+        Cursed = 7,
     }
 
     public enum ObjectType

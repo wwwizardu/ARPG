@@ -47,6 +47,9 @@ namespace ARPG.Map
             _renderedChunks = new HashSet<Vector2Int>();
             _chunkPool = new Stack<MapChunkData>();
 
+            // BiomeThemeEntry[] → Dictionary 변환 (MAP_DESIGN.md §4.5)
+            BuildThemeDictionary();
+
             InitializeChunkPool();
 
             // BuildableTileRegistry 로드 완료 시 활성 청크 재렌더 (lazy Addressable 로드 대응)
@@ -241,6 +244,18 @@ namespace ARPG.Map
 
             int dist = Mathf.Max(Mathf.Abs(chunkCoord.x), Mathf.Abs(chunkCoord.y));
             return Mathf.Clamp(dist + 1, 1, 99);
+        }
+
+        /// <summary>
+        /// 청크의 대표 biome 조회. MAP_DESIGN.md §6.5.2.
+        /// 활성 청크면 캐시 값(`chunk.chunkBiome`), 아니면 좌표로 즉시 계산 — 둘 다 결정론.
+        /// </summary>
+        public GlobalEnum.BiomeType GetChunkBiome(Vector2Int chunkCoord)
+        {
+            if (_activeChunks != null && _activeChunks.TryGetValue(chunkCoord, out var chunk))
+                return chunk.chunkBiome;
+
+            return BiomeNoise.ComputeChunkBiome(chunkCoord.x, chunkCoord.y, chunkSize, mapSeed);
         }
 
         /// <summary>

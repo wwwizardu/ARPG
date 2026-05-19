@@ -259,18 +259,23 @@ namespace ARPG.Monster
 
             _placedAnchorsCache.Clear();
 
+            // biome 기반 monster ID 선택 (MAP_DESIGN.md §6.5). 매핑 없으면 인스펙터 폴백.
+            GlobalEnum.BiomeType chunkBiome = AR.s.Map.GetChunkBiome(chunkCoord);
+            int mainId = BiomeMonsterMapping.GetMainMonsterId(chunkBiome, _mainMonsterTableId);
+            int subId  = BiomeMonsterMapping.GetSubMonsterId(chunkBiome, _subMonsterTableId);
+
             int mainCount = Random.Range(mainCountRange.x, mainCountRange.y + 1);
             for (int i = 0; i < mainCount; i++)
             {
                 int size = Random.Range(mainSizeRange.x, mainSizeRange.y + 1);
-                SpawnGroup(chunkCoord, spawnPositions, _mainMonsterTableId, size);
+                SpawnGroup(chunkCoord, spawnPositions, mainId, size);
             }
 
             int subCount = Random.Range(subCountRange.x, subCountRange.y + 1);
             for (int i = 0; i < subCount; i++)
             {
                 int size = Random.Range(subSizeRange.x, subSizeRange.y + 1);
-                SpawnGroup(chunkCoord, spawnPositions, _subMonsterTableId, size);
+                SpawnGroup(chunkCoord, spawnPositions, subId, size);
             }
 
             // 그룹이 하나도 안 떨어진 경우(거부 샘플링 실패 누적, Zone 1 안전지대 등)에도 청크는 스폰 처리됨으로 간주
@@ -397,7 +402,10 @@ namespace ARPG.Monster
 
             // 리스폰 시점에 어떤 종이 죽었는지 추적하지 않으므로 메인 종으로 통일.
             // 종별 추적이 필요해지면 ChunkMonsterData에 TableId 기록 추가.
-            return await SpawnMonsterAtPosition(worldPos, chunkCoord, _mainMonsterTableId, false);
+            // biome 기반 ID — Spawn 시점과 일관 (MAP_DESIGN.md §6.5).
+            GlobalEnum.BiomeType chunkBiome = AR.s.Map.GetChunkBiome(chunkCoord);
+            int mainId = BiomeMonsterMapping.GetMainMonsterId(chunkBiome, _mainMonsterTableId);
+            return await SpawnMonsterAtPosition(worldPos, chunkCoord, mainId, false);
         }
 
         private readonly List<Vector2Int> _expiredChunksCache = new();

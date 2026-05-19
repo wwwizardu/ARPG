@@ -32,6 +32,9 @@ namespace ARPG.Map
         public int chunkY;
         // 시드 청크 (0,0) 기준 Chebyshev 거리 + 1, [1,99] 클램프. GenerateChunkData에서 채움
         public int zone;
+        // 청크 biome = 청크가 속한 region의 biome (region 단위 단일 biome 정책, v1.8).
+        // MapManager_Renderer가 ThemeTileSet 선택 / MonsterManager가 monster pool 선택에 사용.
+        public GlobalEnum.BiomeType chunkBiome;
         public ulong[,] tiles;
         public bool isActive;
         public List<Vector2Int> monsterSpawnPositions;

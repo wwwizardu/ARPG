@@ -1,12 +1,24 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
 namespace ARPG.Map
 {
+    [System.Serializable]
+    public struct BiomeThemeEntry
+    {
+        public GlobalEnum.BiomeType Biome;
+        public ThemeTileSet TileSet;
+    }
+
     public partial class MapManager : MonoBehaviour
     {
         [Header("타일 에셋")]
-        [SerializeField] private ThemeTileSet _themeTileSet;
+        [SerializeField] private ThemeTileSet _themeTileSet;   // 기본/폴백 (BiomeThemeEntry 미설정 시)
+
+        [Header("바이옴별 타일 에셋 (MAP_DESIGN.md §4.5)")]
+        [SerializeField] private BiomeThemeEntry[] _themeEntries;
+        private Dictionary<GlobalEnum.BiomeType, ThemeTileSet> _themesByBiome;
 
         [Header("땅 룰 타일")]
         [SerializeField] private RuleTile _ruleTile;
@@ -25,10 +37,37 @@ namespace ARPG.Map
         private TileBase[] _tempObjectTileArray;
         private TileBase[] _tempNullArray;
 
+        /// <summary>
+        /// 인스펙터 _themeEntries → Dictionary 변환. Initialize에서 호출.
+        /// MAP_DESIGN.md §4.5.
+        /// </summary>
+        private void BuildThemeDictionary()
+        {
+            _themesByBiome = new Dictionary<GlobalEnum.BiomeType, ThemeTileSet>();
+            if (_themeEntries == null)
+                return;
+            for (int i = 0; i < _themeEntries.Length; i++)
+            {
+                if (_themeEntries[i].TileSet == null)
+                    continue;
+                _themesByBiome[_themeEntries[i].Biome] = _themeEntries[i].TileSet;
+            }
+        }
+
+        /// <summary>
+        /// biome → ThemeTileSet. 매핑 없으면 폴백 _themeTileSet.
+        /// </summary>
+        private ThemeTileSet ResolveThemeForBiome(GlobalEnum.BiomeType biome)
+        {
+            if (_themesByBiome != null && _themesByBiome.TryGetValue(biome, out ThemeTileSet ts) && ts != null)
+                return ts;
+            return _themeTileSet;
+        }
+
         private void RenderChunkToTilemap(MapChunkData chunk)
         {
             if (_tileMap == null || _themeTileSet == null || _themeTileSet.TileSet == null || _themeTileSet.TileSet.Length < 2) return;
-            
+
             // 배열 초기화 (필요시)
             if (_tempTileArray == null || _tempTileArray.Length != chunkSize * chunkSize)
             {
@@ -44,11 +83,14 @@ namespace ARPG.Map
             {
                 _tempObjectTileArray = new TileBase[chunkSize * chunkSize];
             }
-            
+
             // 청크 영역 정의
             _tempStartPos.Set(chunk.chunkX * chunkSize, chunk.chunkY * chunkSize, 0);
             _tempArea = new BoundsInt(_tempStartPos.x, _tempStartPos.y, 0, chunkSize, chunkSize, 1);
-            
+
+            // region 단위 단일 biome — 청크 1번 조회로 ThemeTileSet 결정 (MAP_DESIGN.md §4.5 v1.8)
+            ThemeTileSet theme = ResolveThemeForBiome(chunk.chunkBiome);
+
             for (int x = 0; x < chunkSize; x++)
             {
                 for (int y = 0; y < chunkSize; y++)
@@ -56,7 +98,7 @@ namespace ARPG.Map
                     ulong tileData = chunk.tiles[x, y];
                     int baseTileType = (int)(tileData & (ulong)GlobalEnum.TileFlag.GroundLayerMask); // 하위 10비트: 바닥 타입
                     bool isHill = (tileData & (ulong)GlobalEnum.TileFlag.Hill) != 0; // 20번째 비트: 언덕 여부
-                    ulong objectId = (tileData & (ulong)GlobalEnum.TileFlag.ObjectLayerMask) >> 10; 
+                    ulong objectId = (tileData & (ulong)GlobalEnum.TileFlag.ObjectLayerMask) >> 10;
 
                     int index = y * chunkSize + x; // 2D to 1D index
 
@@ -69,7 +111,7 @@ namespace ARPG.Map
                         }
                         else
                         {
-                            _tempTileArray[index] = _themeTileSet.TileSet.Length > baseTileType ? _themeTileSet.TileSet[baseTileType] : null;
+                            _tempTileArray[index] = (theme != null && theme.TileSet != null && theme.TileSet.Length > baseTileType) ? theme.TileSet[baseTileType] : null;
                         }
                     }
                     catch

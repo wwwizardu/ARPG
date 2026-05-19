@@ -78,10 +78,20 @@ namespace ARPG.Map
             int dist = Mathf.Max(Mathf.Abs(chunk.chunkX), Mathf.Abs(chunk.chunkY));
             chunk.zone = Mathf.Clamp(dist + 1, 1, 99);
 
+            // 청크 biome = 청크가 속한 region의 biome (region 단위 단일 biome 정책, MAP_DESIGN.md §4 v1.8).
+            // 한 region(4×4 청크 = 32×32 타일) 안 모든 청크가 같은 biome.
+            chunk.chunkBiome = BiomeNoise.ComputeChunkBiome(chunk.chunkX, chunk.chunkY, chunkSize, mapSeed);
+
+            // biome별 파라미터 — loop 밖에서 한 번만 조회
+            GlobalEnum.BiomeType biome = chunk.chunkBiome;
+            GlobalEnum.TileType baseTileType = BiomeTable.GetGroundTileType(biome);
+            float hillThreshold = BiomeTable.GetHillThreshold(biome);
+            float spawnRate = _monsterSpawnRate * BiomeTable.GetMonsterSpawnMultiplier(biome);
+
             // 몬스터 스폰 후보 위치 임시 저장
             _candidateSpawnPositions.Clear();
 
-            // 1. 절차적 생성으로 타일 데이터 생성
+            // 1. 타일 데이터 생성 — 청크 단일 biome 적용 (per-tile Perlin 호출 제거됨)
             for (int x = 0; x < chunkSize; x++)
             {
                 for (int y = 0; y < chunkSize; y++)
@@ -89,38 +99,23 @@ namespace ARPG.Map
                     int worldX = chunk.chunkX * chunkSize + x;
                     int worldY = chunk.chunkY * chunkSize + y;
 
-                    // 고도 노이즈 (언덕의 높이를 나타냄)
+                    // Hill 비트 — biome별 임계값. elevation 노이즈는 *변주*용으로 유지 (Hill 분포 결정)
                     float elevationNoise = Mathf.PerlinNoise(
                         (worldX + mapSeed) * (noiseScale * 0.3f),
                         (worldY + mapSeed) * (noiseScale * 0.3f)
                     );
-
-                    float terrainNoise = Mathf.PerlinNoise(
-                        (worldX + mapSeed) * noiseScale,
-                        (worldY + mapSeed) * noiseScale
-                    );
-
-                    // 바닥 타입 결정 (하위 4비트)
-                    GlobalEnum.TileType baseTileType;
-                    if (terrainNoise > 0.4f)
-                        baseTileType = GlobalEnum.TileType.Glass;
-                    else
-                        baseTileType = GlobalEnum.TileType.Ground;
-
-                    // 언덕 플래그 결정 (5번째 비트)
                     uint hillFlag = 0;
-                    if (elevationNoise > 0.6f)
+                    if (elevationNoise > hillThreshold)
                         hillFlag = (uint)GlobalEnum.TileFlag.Hill;
 
-                    // 몬스터 스폰 플래그 결정 (6번째 비트)
+                    // 몬스터 스폰 후보 — biome 보정 곱하기
                     uint monsterSpawnFlag = 0;
-                    if (hillFlag == 0 && _randomGenerator.NextDouble() < _monsterSpawnRate)
+                    if (hillFlag == 0 && _randomGenerator.NextDouble() < spawnRate)
                     {
                         monsterSpawnFlag = (uint)GlobalEnum.TileFlag.MonsterSpawn;
                         _candidateSpawnPositions.Add(new Vector2Int(x, y));
                     }
 
-                    // 타일 데이터 조합
                     chunk.tiles[x, y] = CombineTileData(0UL, baseTileType, hillFlag, monsterSpawnFlag);
                 }
             }

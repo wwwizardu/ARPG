@@ -13,6 +13,20 @@ namespace ARPG.History
         public const ulong ChannelRegion       = 0x52_45_47_49_4F_4E_5F_5FUL; // "REGION__"
         public const ulong ChannelVariant      = 0x56_41_52_49_41_4E_54_5FUL; // "VARIANT_"
 
+        // MAP_DESIGN.md §8.3 — per-tile biome 결정용
+        public const ulong ChannelWarpX        = 0x57_41_52_50_5F_58_5F_5FUL; // "WARP_X__"
+        public const ulong ChannelWarpY        = 0x57_41_52_50_5F_59_5F_5FUL; // "WARP_Y__"
+        public const ulong ChannelTemperature  = 0x54_45_4D_50_45_52_41_54UL; // "TEMPERAT"
+        public const ulong ChannelHumidity     = 0x48_55_4D_49_44_49_54_59UL; // "HUMIDITY"
+        public const ulong ChannelElevation    = 0x45_4C_45_56_41_54_49_4FUL; // "ELEVATIO"
+
+        // MAP_DESIGN.md §7 Race Settlement 배치용
+        public const ulong ChannelSettlement   = 0x53_45_54_54_4C_45_4D_4EUL; // "SETTLEMN"
+
+        // MAP_DESIGN.md §6 LoreFragment 배치용
+        public const ulong ChannelLoreCount    = 0x4C_4F_52_45_43_4E_54_5FUL; // "LORECNT_"
+        public const ulong ChannelLoreProp     = 0x4C_4F_52_45_50_52_4F_50UL; // "LOREPROP"
+
         public static ulong Derive(int worldSeed, ulong channel)
         {
             ulong x = unchecked((ulong)worldSeed * 0x9E3779B97F4A7C15UL) ^ channel;

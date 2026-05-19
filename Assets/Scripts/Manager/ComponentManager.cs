@@ -121,12 +121,13 @@ namespace ARPG.Component
             // 장비 Mod 풀 컴포넌트
             { typeof(ModPoolComponent), 10 },
 
-            // 절차적 역사 시스템 컴포넌트 (Phase 0)
+            // 유적 단편 (Lore Fragment) 시스템
+            { typeof(LoreFragmentComponent), 512 },          // region당 0~3 fragment × 활성 region 수
+
+            // Live Backbone(Phase 7) 예약 — 현재 미사용. 도입 시 부활.
             { typeof(HistoryActorComponent), 64 },           // 종족 + 신 + 괴물 카탈로그 인스턴스
             { typeof(HistoryActorTagsComponent), 64 },       // HistoryActorComponent와 1:1
-            { typeof(HistoricalEventComponent), 256 },       // 백본 ~40 + Live append 여유
-            { typeof(RegionComponent), 1024 },               // 32×32 region 격자
-            { typeof(SettlementComponent), 512 },            // 거점 (도시/폐허/봉인 던전 등)
+            { typeof(HistoricalEventComponent), 256 },       // Live 사건 append
             { typeof(HistoryMemoryComponent), 500 },         // NPC와 1:1 (최근 사건 캐시)
         };
 
