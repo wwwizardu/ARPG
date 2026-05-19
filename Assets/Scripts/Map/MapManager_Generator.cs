@@ -33,6 +33,30 @@ namespace ARPG.Map
             }
 
             LoadFixedMapFiles();
+            PlaceRaceSettlements();
+        }
+
+        /// <summary>
+        /// Phase 2 Race Settlement 절차 배치 — MAP_DESIGN.md §7. 결정론 (같은 mapSeed → 같은 결과).
+        /// v1 골격: chunk-grain 알고리즘으로 placement 계산 후 콘솔 로그.
+        /// race-specific 청사진(.bytes) 카탈로그 준비 시 _mapFileDataDic에 추가하는 단계로 확장.
+        /// </summary>
+        private void PlaceRaceSettlements()
+        {
+            var placements = RaceSettlementPlacer.ComputeAll(
+                mapSeed, chunkSize, minChunkX, maxChunkX, minChunkY, maxChunkY);
+
+            Debug.Log($"[MapManager] Race Settlement 계산 완료: {placements.Count}개 region에 배치");
+            for (int i = 0; i < placements.Count; i++)
+            {
+                var p = placements[i];
+                Debug.Log($"  [Settlement] region=({p.RegionCoord.x},{p.RegionCoord.y}) " +
+                          $"dominant={p.RegionDominantBiome} chunkBiome={p.ChunkBiome} " +
+                          $"→ Race={p.Race} Size={p.Size} " +
+                          $"chunk=({p.ChunkCoord.x},{p.ChunkCoord.y}) world=({p.WorldCoord.x},{p.WorldCoord.y})");
+            }
+
+            // TODO Phase 2 후속: race-specific blueprint 카탈로그 + 충돌 검사 + _mapFileDataDic 등록
         }
 
         private MapChunkData GetOrCreateChunk(int chunkX, int chunkY)

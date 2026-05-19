@@ -155,15 +155,18 @@
 
 ---
 
-## 4. 신규 — 바이옴 시스템 (Option A 축 + region 단위 단일 biome)
+## 4. 신규 — 바이옴 시스템 (v1.9: cluster-grained + Region histogram)
 
 ### 4.1 의도
 
-- **biome 단위**: **region 단위 단일** (4×4 청크 = 32×32 타일). 한 region 안 모든 청크/타일이 같은 biome.
-- **결정**: region 중심 좌표 1점에서 warped Perlin 샘플 → 그 region 전체에 적용.
-- **격자감 완화**: region size를 settlement 크기에 맞춰 작게(4×4 청크) — 시각상 거의 안 띔.
+> **v1.9 (2026-05-20) — Cluster-grained biome + Region histogram 도입**.
+> v1.8 region 단위 단일 biome은 settlement/lore 일관성을 보장했으나 **시각상 region 경계(32타일)가 칼날처럼 도드라지는 문제** 발생. v1.9에서 결정/시각을 분리: **시각은 cluster(2×2 타일) 단위로 다양**하고, **race/settlement 결정은 region histogram의 dominant biome 사용**.
 
-→ **옵션 Y(per-tile) 시도 후 v1.8에서 region 단위 단일 biome으로 회수**. settlement/lore 단위 모순(작은 patch에 잘못된 race) 원천 차단 + region grain을 작게 해 격자감도 최소화. §12 #10 결정 변경.
+- **biome 시각 단위**: **cluster (2×2 타일)**. 청크 내 4×4=16개 cluster, 각 cluster가 자기 biome으로 렌더.
+- **biome 결정 단위 (race/settlement)**: **Region (4×4 청크 = 32×32 타일)**. region이 256개 cluster의 histogram 보유 → `DominantBiome` 또는 `PickWeightedBiome(hash)`로 race 결정.
+- **격자감 완화**: cluster grain이 작아서(2타일) 자연스러운 변화. region 경계는 race 결정에만 영향, 시각은 cluster 단위로 흐트러짐.
+
+→ **v1.7 옵션 Y(per-tile)와 v1.8 region 단일의 절충안**. 시각 다양성(옵션 Y의 장점) + 문화 단위 일관성(v1.8의 장점)을 모두 확보. §12 #10 결정 재정정.
 
 **3축 채택 — Whittaker 모델**. 절차 생성 PCG의 표준이며, 본 프로젝트의 현재 상태(고도만 존재)를 자연 확장.
 
@@ -202,11 +205,13 @@ namespace ARPG
 
 128 비트마스크 태그 시스템(현재 [HistoryTagRegistry](../Assets/Scripts/History/Data/HistoryTagRegistry.cs))은 *부가 태그*용으로 보존. **BiomeType은 enum** — region당 1개 단순 분류.
 
-### 4.3 결정 채널 — region 단위 + domain warping
+### 4.3 결정 채널 — cluster 단위 + domain warping
 
-#### 4.3.1 핵심 함수 — `ComputeRegionBiome(regionGridX, regionGridY)` + `ComputeTileBiome`
+#### 4.3.1 핵심 함수 — `ComputeClusterBiome` + `ComputeTileBiome`
 
-> **v1.8 변경**: 한 region 안 모든 타일이 같은 biome. `ComputeRegionBiome`이 region 중심 좌표 1점에서 `ComputeTileBiome`을 호출. `ComputeChunkBiome`은 청크가 속한 region을 찾아 `ComputeRegionBiome` 반환. **per-tile Perlin 호출은 사라짐** (청크 64개 타일이 모두 같은 biome).
+> **v1.9 변경**: biome 결정 최소 단위 = **cluster (2×2 타일)**. `ComputeClusterBiome(clusterGridX, clusterGridY, mapSeed)`가 cluster 좌측-하단 코너 좌표에서 `ComputeTileBiome` 호출. 한 cluster 안 4개 타일은 같은 biome.
+> `ComputeChunkBiome`은 **청크 중심 cluster의 biome**을 반환 (legacy 1-biome caller용 — MonsterManager 등).
+> `ComputeRegionBiome`은 legacy 호환용으로 남김 (race 결정에는 사용하지 말 것 — `RegionData.DominantBiome` 권장).
 
 ```csharp
 public static BiomeType ComputeTileBiome(int worldX, int worldY)
@@ -240,93 +245,137 @@ public static BiomeType ComputeTileBiome(int worldX, int worldY)
 }
 ```
 
-**스케일 가이드**:
-- 온도 0.005 (가장 coarse) — 광역 기후대, 큰 면적
-- 습도 0.008 — 강수 패치
-- 고도 0.012 (가장 fine) — 산맥/저지대가 띄엄띄엄
-- warp 0.02 + amplitude 16 — 경계를 16타일 정도 흐트림 (지나치게 흐트러지지 않을 정도)
+**스케일 가이드** (v1.9.1 ×0.5 적용 — biome 패치 2배 확대):
+- 온도 **0.0025** (가장 coarse) — 주기 ~400 타일, 광역 기후대
+- 습도 **0.004** — 주기 ~250 타일, 강수 패치
+- 고도 **0.006** (가장 fine) — 주기 ~166 타일, 산맥/저지대
+- warp 0.02 + amplitude 16 — 경계를 16타일 정도 흐트림 (cluster grain과 결합해 자연스러운 경계)
+
+> **v1.9.1 (2026-05-20) 조정 사유**: 기본 스케일에서 "조금만 가도 biome 변하는" 체감 → 모든 scale ×0.5로 패치 크기 2배 확대.
 
 **시드 채널 분리** (`warpSeedA/B`, `tempSeed`, `humidSeed`, `elevSeed`)는 `DerivedSeed.Derive(mapSeed, channelId)` ([Phase 0 완료분](PROCEDURAL_HISTORY_DESIGN.md))로 생성.
 
-#### 4.3.2 region 단위 biome — v1.8 부활
+#### 4.3.2 cluster 단위 biome + Region histogram — v1.9
 
-> **v1.8 정정**: v1.3에서 폐지했던 region biome 개념을 *region size를 4×4 청크로 줄여서* 부활.
+> **v1.9 정정 (2026-05-20)**: v1.8 region 단일 biome → v1.9 **cluster(2×2)** 단위 biome 결정 + **Region histogram**으로 race 결정 분리.
 >
-> 옵션 Y(per-tile) 시도 시 발견된 문제: settlement/lore 같은 *문화 단위* 결정이 좌표 1점의 biome으로 결정되면, 주변이 다른 biome인 작은 patch에서 잘못된 race가 선택됨 (e.g., 산맥 한가운데 인간 마을).
+> v1.8의 문제: region 경계(32 타일)가 시각상 칼날처럼 도드라짐. Plains↔Snow 인접 region이면 32타일 직선 경계가 명확히 보임.
 >
-> 해결: **region 단위 단일 biome**. 4×4 청크(32×32 타일)면 시각상 격자감 거의 없음 + settlement/lore 단위 모순 0. v1.3의 "region이 너무 커서 인위감"은 region size 축소로 해결.
+> 해결: **시각/논리 분리**.
+> - **시각**: cluster(2×2 타일)마다 자기 biome으로 렌더 → 경계가 cluster grain(2 타일)으로 흐트러져 자연스러움.
+> - **race/settlement 결정**: Region 전체의 cluster histogram → `DominantBiome`으로 결정. 작은 patch에 잘못된 race가 들어가는 v1.7 옵션 Y의 문제 차단.
 >
-> `RegionComponent` ECS는 부활하지 않음 — biome 정보는 `MapChunkData.chunkBiome` 필드에 캐시 (한 region 안 모든 청크가 같은 값).
+> 저장:
+> - `MapChunkData.clusterBiomes[16]` — 청크 내 cluster biome 배열 (8/2 = 4×4 = 16).
+> - `MapChunkData.chunkBiome` — 청크 중심 cluster의 biome (MonsterManager 등 legacy 1-biome caller용 대표값).
+> - `RegionData.BiomeStats` — region 256개 cluster의 histogram (Lazy compute + cache).
 
 ### 4.4 청크 생성과의 연결
 
-`GenerateChunkData`가 **청크당 1번** `ComputeChunkBiome`을 호출 → 청크 전체에 적용:
+`GenerateChunkData`가 **청크 내 16개 cluster**의 biome을 미리 샘플 → cluster별 BiomeTable 룩업 캐시 → 셀 루프에서 cluster 인덱스로 즉시 조회.
 
 ```csharp
-// 청크 biome = region biome (한 region = 단일)
+// v1.9 cluster-grained — 청크 내 4×4=16 cluster의 biome 결정
+int clustersPerSide = chunkSize / BiomeNoise.CLUSTER_SIZE;   // 8 / 2 = 4
+int clusterCount = clustersPerSide * clustersPerSide;        // 16
+chunk.clusterBiomes = new BiomeType[clusterCount];
+
+for (int cx = 0; cx < clustersPerSide; cx++)
+for (int cy = 0; cy < clustersPerSide; cy++)
+{
+    int globalClusterX = chunk.chunkX * clustersPerSide + cx;
+    int globalClusterY = chunk.chunkY * clustersPerSide + cy;
+    chunk.clusterBiomes[cy * clustersPerSide + cx] =
+        BiomeNoise.ComputeClusterBiome(globalClusterX, globalClusterY, mapSeed);
+}
+
+// 청크 대표 biome (MonsterManager 등 1-biome caller용)
 chunk.chunkBiome = BiomeNoise.ComputeChunkBiome(chunk.chunkX, chunk.chunkY, chunkSize, mapSeed);
 
-var biome = chunk.chunkBiome;
-var baseTileType = BiomeTable.GetGroundTileType(biome);
-float hillThreshold = BiomeTable.GetHillThreshold(biome);
-float spawnRate = _monsterSpawnRate * BiomeTable.GetMonsterSpawnMultiplier(biome);
+// cluster별 파라미터 캐시 (BiomeTable 룩업 1회)
+TileType[] clusterBaseTileTypes = new TileType[clusterCount];
+float[]    clusterHillThresholds = new float[clusterCount];
+float[]    clusterSpawnRates = new float[clusterCount];
+for (int i = 0; i < clusterCount; i++) {
+    BiomeType cb = chunk.clusterBiomes[i];
+    clusterBaseTileTypes[i] = BiomeTable.GetGroundTileType(cb);
+    clusterHillThresholds[i] = BiomeTable.GetHillThreshold(cb);
+    clusterSpawnRates[i] = _monsterSpawnRate * BiomeTable.GetMonsterSpawnMultiplier(cb);
+}
 
+// 셀 루프 — cluster 인덱스로 룩업
 for (int x = 0; x < chunkSize; x++)
-  for (int y = 0; y < chunkSize; y++)
-  {
-      // 모든 타일이 같은 biome — Hill/Spawn 변주만 elevation Perlin으로
-      float elev = Mathf.PerlinNoise(...);
-      uint hill = elev > hillThreshold ? Hill : 0;
-      // ...
-      chunk.tiles[x,y] = CombineTileData(baseTileType, hill, spawn);
-  }
+for (int y = 0; y < chunkSize; y++)
+{
+    int clusterIdx = (y / BiomeNoise.CLUSTER_SIZE) * clustersPerSide + (x / BiomeNoise.CLUSTER_SIZE);
+    TileType baseTileType = clusterBaseTileTypes[clusterIdx];
+    float hillThreshold   = clusterHillThresholds[clusterIdx];
+    float spawnRate       = clusterSpawnRates[clusterIdx];
+    // ... Hill/Spawn flag 결정 후 CombineTileData
+}
 ```
 
-→ **청크당 5 Perlin** (region biome 결정 = warp 2 + temp/humid/elev 3). v1.7 옵션 Y(per-tile, 청크당 320 Perlin)보다 **64배 절감**. 그리고 코드 단순.
+**성능**:
+- 청크당 cluster biome 샘플 16회 × Perlin 5회 = **80 Perlin** (v1.7 옵션 Y의 1/4, v1.8 region 단일의 16배지만 절대량 무해)
+- 60fps 한 프레임의 ~0.1% — 무해
 
 | 바이옴 | Ground TileType | Hill 임계 보정 | MonsterSpawn 확률 |
 |--------|----------------|---------------|-----------------|
 | Plains | Glass (기존) | 기본 | 기본 |
 | Forest | Glass (다른 ThemeTileSet) | 기본 | 약간 ↑ |
-| Desert | Sand (신규) | ↓ | 기본 |
-| Swamp | SwampMud (신규) | ↓↓ | ↑ |
-| Steppe | DryGrass (신규) 또는 Glass | 기본 | 기본 |
-| Tundra | Snow (신규) | 기본 | ↓ |
-| Snow | Snow (신규) | 기본 | ↓ |
-| Mountain | StoneGround (기존, 미사용) | ↑↑ | ↑ |
+| Desert | Sand | ↓ | 기본 |
+| Swamp | SwampMud | ↓↓ | ↑ |
+| Steppe | DryGrass 또는 Glass | 기본 | 기본 |
+| Tundra | Snow | 기본 | ↓ |
+| Snow | Snow | 기본 | ↓ |
+| Mountain | StoneGround | ↑↑ | ↑ |
 
-→ **TileType enum 확장 필요**: `Sand`, `SwampMud`, `DryGrass`, `Snow` 추가 ([GlobalEnum.cs:20-27](../Assets/Scripts/Common/GlobalEnum.cs#L20-L27)). 비주얼은 ThemeTileSet에서 처리.
+→ TileType enum: `Sand`, `SwampMud`, `DryGrass`, `Snow` 추가 완료 ([GlobalEnum.cs:20-30](../Assets/Scripts/Common/GlobalEnum.cs#L20-L30)).
 
-**성능 고려**:
-- 청크 1개 = 64회 `ComputeTileBiome` 호출 = 노이즈 함수 ~5회 × 64 = 320회 Perlin
-- Perlin은 매우 빠르고, 청크 생성은 lazy → 한 청크당 ~수 ms 추가. 무해.
-- 활성 청크 풀(20개) × 320 = ~6400 Perlin 호출이 최악 / 한 프레임 분산되므로 60fps 유지.
+### 4.5 ThemeTileSet 통합 (Option A — Ground 단일 필드)
 
-### 4.5 ThemeTileSet 통합 ([THEME_TILESET_REFACTOR.md](THEME_TILESET_REFACTOR.md)와 합류)
+> **v1.9 정정**: 기존 `TileSet[]` (TileType-indexed 배열) 방식이 "Desert ThemeTileSet에 Snow 슬롯이 있는" 어색한 결합을 만들어, **Option A**로 리팩토링.
 
-`MapManager._themeTileSet` 단일 필드 → `Dictionary<BiomeType, ThemeTileSet>`로 확장. **선택은 청크 단위 1번** — chunk.chunkBiome으로 ThemeTileSet 1개 선택 후 모든 64 타일에 적용.
-
+**ThemeTileSet 구조** ([ThemeTileSet.cs](../Assets/Scripts/Map/Tile/ThemeTileSet.cs)):
 ```csharp
-// MapManager 인스펙터:
-[SerializeField] private BiomeThemeEntry[] _themeEntries;
-
-[Serializable]
-public struct BiomeThemeEntry
+public class ThemeTileSet : ScriptableObject
 {
-    public BiomeType Biome;
-    public ThemeTileSet TileSet;
+    public string themeName;
+    public Sprite themeIcon;
+    public TileBase Ground;          // ← v1.9 신규: 이 바이옴의 바닥 타일 1개
+    [Obsolete] public TileBase[] TileSet;   // legacy — MapFileSaver 에디터 룩업 전용
+    [Obsolete] public TileBase[] ObjectSet; // legacy
+    public TileBase[] NpcSet;
 }
 ```
 
-→ Initialize 시 `Dictionary<BiomeType, ThemeTileSet>`로 변환. 디자이너는 인스펙터에서 바이옴 ↔ ThemeTileSet 매핑. 렌더 단계에서 chunk.chunkBiome으로 ThemeTileSet 1개 선택.
+**MapManager 인스펙터** ([MapManager_Renderer.cs:16-20](../Assets/Scripts/Map/MapManager_Renderer.cs#L16-L20)):
+```csharp
+[SerializeField] private ThemeTileSet _themeTileSet;          // 폴백 (BiomeThemeEntry 미설정 시)
+[SerializeField] private BiomeThemeEntry[] _themeEntries;     // 바이옴별 매핑
 
-**격자감 평가** (region 4×4 청크 = 32×32 타일):
-- 격자 1 단위 = 32 타일 ≈ 캐릭터 30배 크기 → 자세히 봐야 보임
-- 한 시야(약 40×40 타일)에 region 1.5개 보임 → biome 변화 풍부
-- **시각 부족 시 보강 옵션**:
-  - A1 색조 variant — 같은 biome 안에서 자연스러운 다양성
-  - A2 transition tile — region 경계에서 dithering/transition (Don't Starve 식)
-  - 둘 다 *선택사항*. Phase 1 시각 검증 후 결정
+[Serializable]
+public struct BiomeThemeEntry { public BiomeType Biome; public ThemeTileSet TileSet; }
+```
+
+**렌더 로직 (v1.9 cluster-grained)** ([MapManager_Renderer.cs:108-150](../Assets/Scripts/Map/MapManager_Renderer.cs#L108-L150)):
+- 청크 렌더 시 cluster당 `ResolveThemeForBiome(chunk.clusterBiomes[i])` 호출하여 `_clusterThemes[16]` 캐시
+- 셀 루프에서 `_clusterThemes[clusterIdx].Ground` 사용 (cluster grain별 다른 비주얼)
+- `TileType.Ground` (맨땅, MapFileData 청사진용) → 바이옴 무관 `_ruleTile`로 분기 (옵션 A 핵심)
+- `TileType.None` → null (빈 칸, 진단 로그 남김)
+
+**누락 타일 진단 로그** ([MapManager_Renderer.cs](../Assets/Scripts/Map/MapManager_Renderer.cs)):
+- `theme == null` (매핑 + 폴백 모두 없음): biome별 1회 LogError
+- `theme.Ground == null` (필드 비었음): biome별 1회 LogError
+- `_ruleTile == null` (맨땅 폴백 없음): 세션 1회 LogError
+- `TileType.None` 셀 발견 (MapFileData overlay 잘못된 셀): chunk별 1회 LogError + tileData hex 출력
+- HashSet dedupe로 스팸 방지, `MapManager.Reset()`에서 `ClearMissingTileLog()` 호출
+
+**격자감 평가** (cluster grain = 2 타일):
+- v1.9 cluster grain(2 타일)이 캐릭터 2배 크기 → 자연스러운 변화
+- 시각 부족 시 보강 옵션 (선택사항):
+  - **A1 색조 variant** — 같은 biome 안에서 자연스러운 다양성
+  - **A2 transition tile** — cluster 경계 dithering/transition (Don't Starve 식)
 
 ### 4.6 부패도(Wasteland) bias — 폐지
 
@@ -334,21 +383,21 @@ public struct BiomeThemeEntry
 
 ---
 
-## 5. Region — 좌표 격자 헬퍼 + 단일 biome 단위
+## 5. Region — 좌표 격자 헬퍼 + Biome Histogram
 
 ### 5.1 정의
 
-**Region = 4×4 청크(=32×32 타일)를 묶는 *좌표 격자***. ECS entity 없음 — `RegionCoord` static 헬퍼 + `MapChunkData.chunkBiome` 캐시.
+**Region = 4×4 청크(=32×32 타일)를 묶는 *좌표 격자***. ECS entity 없음 — `RegionCoord` static 헬퍼 + `RegionData` lazy-cache (v1.9 신규).
 
-**역할** (v1.8):
-1. **단일 biome 단위** — 한 region 안 모든 청크/타일이 같은 biome (settlement/lore 단위 모순 차단)
+**역할** (v1.9):
+1. **biome histogram 단위** — 256개 cluster의 biome count → `DominantBiome` 또는 `PickWeightedBiome(hash)` 제공 (race/settlement 결정용)
 2. lore fragment 결정론 ID grouping (`fragmentId = regionId * 1000 + index`)
 3. Race Settlement 배치 단위
 
 ```csharp
 public static class RegionCoord
 {
-    public const int CHUNKS_PER_REGION = 4;   // v1.8 — 8→4 축소
+    public const int CHUNKS_PER_REGION = 4;
 
     public static Vector2Int ChunkToRegion(Vector2Int chunkCoord)
         => new Vector2Int(chunkCoord.x >> 2, chunkCoord.y >> 2);
@@ -361,7 +410,34 @@ public static class RegionCoord
 }
 ```
 
-- **맵 경계**: [-98, 98] 청크 → Region 좌표 ~[-24, 24], 약 49×49 = 2401 region 후보. **메모리 0** (entity / 데이터 구조 없음 — 좌표 변환만).
+### 5.1.1 RegionData (v1.9 신규)
+
+```csharp
+public class RegionData
+{
+    public Vector2Int Coord;
+    public Dictionary<BiomeType, int> BiomeStats;    // cluster count 집계
+    public BiomeType DominantBiome;                   // 최다 count (동률 시 enum 작은 값)
+    public int TotalClusters;
+
+    public static RegionData Compute(Vector2Int regionCoord, int chunkSize, int mapSeed);
+    public BiomeType PickWeightedBiome(uint hash);   // histogram 가중 결정론 선택
+}
+```
+
+**저장 위치** ([MapManager.cs](../Assets/Scripts/Manager/MapManager.cs)):
+- `Dictionary<Vector2Int, RegionData> _regionData` — lazy cache, `Reset()` 시 clear
+- `MapManager.GetOrCreateRegionData(regionCoord)` — 첫 호출 시 256 cluster 샘플 → 캐시
+- `MapManager.GetRegionDataForChunk(chunkCoord)` — chunk 좌표 → region 변환 후 위 호출
+
+**사용 (race 결정 예)**:
+```csharp
+RegionData rd = AR.s.Map.GetRegionDataForChunk(chunkCoord);
+BiomeType raceBiome = rd.DominantBiome;   // 또는 rd.PickWeightedBiome(hash) — Snow 12 + Plains 4 → 75% Snow
+int raceId = BiomeRaceTable.PickRace(raceBiome, hash);
+```
+
+- **맵 경계**: [-98, 98] 청크 → Region 좌표 ~[-24, 24], 약 49×49 = 2401 region 후보. 활성 region만 캐시 (Lazy) — 메모리 무해 (region당 Dictionary ~수십 바이트).
 
 ### 5.2 폐지된 것들 — RegionComponent + AmbientTag
 
@@ -369,8 +445,9 @@ public static class RegionCoord
 |------|------|------|
 | `RegionComponent` ECS struct | 폐지 | v1.3 §12 #11 |
 | `AmbientTag` 시스템 (Dictionary, RegionAmbientData) | 폐지 | v1.4 §12 #12 |
+| v1.8 region 단일 biome (`chunkBiome` = region biome) | 정정 (v1.9) | cluster-grained로 전환, `chunkBiome`은 chunk 중심 cluster 대표값 |
 
-→ **현재 region에 관한 데이터는 0**. 좌표 변환 static 함수만 존재. 향후 (Live Backbone 등) 필요 시 그때 재도입.
+→ **v1.9에서 `RegionData` 부활** (Histogram 한정, ECS는 아님). 좌표 변환 static 함수 + 데이터 캐시 클래스만 존재. 향후 (Live Backbone 등) 필요 시 확장.
 
 Phase 0에서 작성된 [`RegionComponent`](../Assets/Scripts/Common/Component/History/RegionComponent.cs)는 **Phase 1에서 제거**.
 
@@ -647,46 +724,64 @@ LoadFixedMapFiles() 직후 RaceSettlementPlacer.PlaceAll():
 
 → **신규 코드는 `RaceSettlementPlacer` 1개 클래스 + `RaceBiomeTable` 데이터 + N개 청사진 `.bytes` 파일**. 다른 시스템 영향 0.
 
-### 7.3 결정론 배치 흐름
+### 7.3 결정론 배치 흐름 — chunk-grain 정책 (v1.9)
+
+> **v1.9 정정**: v1.7 옵션 Y 방식 (`DeterministicCoord.InRegion` 한 점 추첨 후 그 좌표 biome 사용)은 *settlement footprint(8×8+)가 단일 cluster(2×2) 정보만으로 결정되어* footprint 영역이 다른 biome cluster에 걸치는 문제 발생. v1.9에서 **chunk-grain** 채택: region race는 dominant biome으로, settlement 배치는 race 호환 chunk(8×8) 단위로.
+
+**알고리즘** ([RaceSettlementPlacer.cs](../Assets/Scripts/Map/Race/RaceSettlementPlacer.cs)):
 
 ```csharp
-public class RaceSettlementPlacer
+public static class RaceSettlementPlacer
 {
-    public void PlaceAll(int mapSeed, Dictionary<Vector2Int, MapFileData> mapFileDic)
+    public static bool TryPlace(Vector2Int regionCoord, int mapSeed, int chunkSize, out SettlementPlacement placement)
     {
-        for (int rx = MIN_REGION_X; rx <= MAX_REGION_X; rx++)
-        for (int ry = MIN_REGION_Y; ry <= MAX_REGION_Y; ry++)
+        // 1) Region histogram → dominant biome (v1.9 cluster 통계)
+        RegionData rd = AR.s.Map.GetOrCreateRegionData(regionCoord);
+        BiomeType dominant = rd.DominantBiome;
+
+        // 2) race 선택 — Region dominant biome 기반 (lazy compute + cache)
+        ulong h = DerivedSeed.Derive(seedKey(regionCoord, mapSeed), DerivedSeed.ChannelSettlement);
+        RaceType? race = RaceBiomeTable.PickRace(dominant, h);
+        if (race.HasValue == false) return false;   // Wasteland 등 — settlement 없음
+
+        // 3) race 호환 chunk 후보 수집 — region 16 chunk 중 chunkBiome 매칭
+        List<Vector2Int> chunkCandidates = new();
+        Vector2Int regionChunkOrigin = RegionCoord.RegionChunkOrigin(regionCoord);
+        for (int cx = 0; cx < RegionCoord.CHUNKS_PER_REGION; cx++)
+        for (int cy = 0; cy < RegionCoord.CHUNKS_PER_REGION; cy++)
         {
-            int regionId = RegionCoord.ToRegionId(new Vector2Int(rx, ry));
-
-            // 1) 배치 여부 — 결정론
-            ulong h = SplitMix64((ulong)regionId * CHANNEL_SETTLEMENT * (ulong)mapSeed);
-            if (h % SETTLEMENT_FREQUENCY != 0) continue;   // 예: 5 → 20% region
-
-            // 2) 좌표 — region 안 결정론
-            Vector2Int coord = DeterministicCoord.InRegion(regionId, 0, mapSeed);
-
-            // 3) race — 좌표 타일의 actual biome 기반 (§4.3.1 ComputeTileBiome)
-            BiomeType biome = ComputeTileBiome(coord.x, coord.y);
-            RaceType race = RaceBiomeTable.Pick(biome, h);
-
-            // 4) size + variant
-            SettlementSize size = WeightedPick(SETTLEMENT_SIZES, h);
-            var variants = BlueprintCatalog.Get(race, size);
-            int variantIdx = (int)(SplitMix64(h ^ 0x5E) % (ulong)variants.Count);
-            MapFileData blueprint = variants[variantIdx];
-
-            // 5) 충돌 검사 — 기존 _mapFileDataDic entry와 bounding box 비교
-            if (HasOverlap(coord, blueprint, mapFileDic)) continue;
-
-            // 6) _mapFileDataDic에 추가 — 이후 기존 인프라가 알아서
-            mapFileDic[blueprint.StartPosition] = blueprint;
+            Vector2Int chunkCoord = new(regionChunkOrigin.x + cx, regionChunkOrigin.y + cy);
+            BiomeType chunkBiome = AR.s.Map.GetChunkBiome(chunkCoord);
+            if (RaceBiomeTable.IsCompatible(chunkBiome, race.Value))
+                chunkCandidates.Add(chunkCoord);
         }
+        if (chunkCandidates.Count == 0) return false;   // 호환 chunk 0개 → 그 region은 마을 없음
+
+        // 4) hash로 chunk 1개 선택
+        int chunkIdx = (int)(h % (ulong)chunkCandidates.Count);
+        Vector2Int chosenChunk = chunkCandidates[chunkIdx];
+
+        // 5) chunk 중심 좌표 — 청사진 footprint가 chunk 1개와 자연 매치
+        Vector2Int worldCoord = DeterministicCoord.ChunkCenter(chosenChunk, chunkSize);
+
+        placement = new SettlementPlacement { RegionCoord, ChunkCoord=chosenChunk, WorldCoord, Race=race.Value, ... };
+        return true;
     }
+
+    public static List<SettlementPlacement> ComputeAll(int mapSeed, int chunkSize, ...);  // 전체 맵 순회
 }
 ```
 
-`PlaceAll`은 게임 시작 시 [LoadFixedMapFiles()](../Assets/Scripts/Map/MapManager_Generator.cs#L352) 직후 1회 호출. 결정론이라 같은 mapSeed면 항상 같은 배치.
+**chunk-grain의 의미**:
+- biome 결정 단위 = **cluster (2×2 타일)** — 시각 자연스러움 (v1.9 §4)
+- race 결정 단위 = **Region histogram** — 문화 일관성
+- settlement 배치 단위 = **chunk (8×8 타일)** — race 호환 chunk만 후보, footprint와 자연 매치
+
+**호환 chunk 없는 region 처리**:
+- 예: Plains-dominant인데 16 chunk 모두 가장자리 noise로 Snow chunk로 잡혀버린 경우 — `chunkCandidates.Count == 0`이면 settlement 없음
+- 자연스러운 **배치 밀도 가중치** 효과 (§12 #15 자동 해결)
+
+**`ComputeAll`은 게임 시작 시** [`InitializeChunkPool`](../Assets/Scripts/Map/MapManager_Generator.cs)에서 `LoadFixedMapFiles()` 직후 호출. 결정론이라 같은 mapSeed면 항상 같은 배치. **현재(2026-05-20) 콘솔 로그만 출력 — race-specific 청사진 카탈로그 작업 후 `_mapFileDataDic` 등록 단계 추가 예정**.
 
 ### 7.4 RaceBiomeTable + Blueprint 카탈로그
 
@@ -888,12 +983,12 @@ public class LoreSaveData
 | 7 | 결정론적 monster spawn 보강 | 본 페이즈에서 함께 / 별도 페이즈 | 별도 (§13 Phase 5) |
 | 8 | RegionLookup 위치 | `AR.s.Region` 신규 매니저 / `MapManager` 내부 / `HistoryManager` 안 | `MapManager` 내부 — region은 맵의 일부 |
 | 9 | 바이옴 결정 축 (확정) | A. 온도+습도+고도 (3축) / B. + 마나 / C. + 물 근접 | **A 채택** (2026-05-19) — 마나/물근접은 후속 |
-| 10 | 바이옴 렌더링 방식 (확정) | X. RimWorld식 (region 단위 단일 + 시각 변주) / Y. Minecraft식 (per-tile warped Perlin) / Z. Voronoi | **X 채택 + region size 4×4 청크** (2026-05-19, v1.8 재결정) — Y 시도 후 발견된 settlement/lore 단위 모순(작은 patch에 잘못된 race) 해결 위해 region 단위 단일 biome으로 회수. 격자감은 region size 축소(8→4 청크)로 완화 |
+| 10 | 바이옴 렌더링 방식 (확정) | X. RimWorld식 (region 단위 단일) / Y. Minecraft식 (per-tile warped Perlin) / **Z. Cluster-grained + Region histogram** | **Z 채택** (2026-05-20, v1.9 재정정) — v1.8 옵션 X에서 region 경계(32 타일)가 시각상 칼날처럼 도드라지는 문제 발생. v1.9에서 **시각 = cluster (2×2 타일) 단위**, **race 결정 = Region histogram의 DominantBiome**으로 분리. 시각 자연스러움(옵션 Y 장점) + 문화 단위 일관성(옵션 X 장점) 모두 확보 |
 | 11 | RegionComponent ECS 폐지 (확정) | D-1. 필드 + entity 폐지, AmbientTag만 Dictionary로 / D-2. 필드만 제거, entity 유지 / D-3. BiomeDistribution 가중치 | **D-1 채택** (2026-05-19) — 옵션 Y로 region이 biome 단위 아니게 됐고, 남은 역할(AmbientTag)이 ECS struct 정당화 부족. `Dictionary<int, RegionAmbientData>` 한 개로 충분 |
 | 12 | AmbientTag 시스템 자체 폐지 (확정) | 유지 / **폐지** | **폐지 채택** (2026-05-19) — 최소 단위로 시작. region 단위 동적 누적은 현재 사용처가 없음 (Live Backbone Phase 7 이전에 의미 없음). 향후 필요 시 재도입. region에 관한 데이터 구조가 **0**으로 줄어듦 — `RegionCoord` static 헬퍼만 남음 |
 | 13 | Race-Biome 매핑 데이터 위치 | 코드 하드코딩 / 시트 `.bytes` 테이블 | Race Settlement Phase 진입 시 (콘텐츠 양 보고 결정) |
 | 14 | 마을 크기 종류 (Race Settlement) | 1단계 (Village만) / 3단계 (Village/Town/City) | Phase 진입 시 |
-| 15 | 배치 밀도 | region 당 ≤1 / N region 당 1 / 청크 단위 / 기타 | Phase 진입 시 — 실제 맵에서 보고 조정 |
+| 15 | 배치 밀도 (확정) | region 당 ≤1 / N region 당 1 / 청크 단위 / 기타 | **자연 가중치 채택** (2026-05-20, v1.9) — chunk-grain 알고리즘에서 race-호환 chunk 후보 풀 크기가 region마다 다름 → biome 분포가 곧 배치 밀도. Wasteland/race-호환 chunk 0개인 region은 자연스럽게 skip. 명시적 SETTLEMENT_FREQUENCY 게이트는 도입 안 함 |
 | 16 | 청사진 variant 개수 | (race × size) 조합당 1~3종 / 더 다양 | 콘텐츠 작업 시 |
 | 17 | LoreFragment 영역과의 충돌 회피 | 단순 bounding box / 우선순위 정의 (BaseTown > Race Settlement > LoreFragment L3) | Phase 진입 시 |
 | 18 | `VILLAGE_GROWTH_STAGES.md` 시스템과 연계 | 절차 settlement도 성장? / 정적 유지? | Phase 후속 (마을 시스템 안정화 후) |
@@ -919,10 +1014,11 @@ public class LoreSaveData
 - ✅ 폐지 파일 제거: `RegionComponent.cs`, `SettlementComponent.cs` (§12 #11, M1 Race Settlement 통합)
 - ✅ ComponentManager에서 `RegionComponent` / `SettlementComponent` 풀 등록 제거
 
-### Phase 1 — region 단위 바이옴 + Monster pool 통합 ✅ 코드 완료 (2026-05-19, v1.8)
+### Phase 1 — region 단위 바이옴 + Monster pool 통합 ✅ 코드 완료 (2026-05-19, v1.8 → 2026-05-20, v1.9)
 
 > **사용자 우선순위 (v1.4)**: 온도/습도로 biome이 잘 생성 + 거기에 맞춘 종족/몬스터 배치. LLM/state는 후순위.
-> **v1.8 재결정**: per-tile (옵션 Y) → **region 단위 단일 biome (옵션 X-방향, region size 4×4 청크)** 회수. 격자감은 region size 축소로 완화.
+> **v1.8**: per-tile (옵션 Y) → region 단위 단일 biome 회수.
+> **v1.9 재정정 (2026-05-20)**: region 단일 경계감 문제 → **Cluster-grained (2×2 타일)** 시각 + **Region histogram** race 결정으로 분리.
 
 **완료된 작업**:
 - ✅ [`Map/Region/RegionCoord.cs`](../Assets/Scripts/Map/Region/RegionCoord.cs) — 청크↔region 좌표 변환 (CHUNKS_PER_REGION = 4)
@@ -936,10 +1032,22 @@ public class LoreSaveData
 - ✅ `MonsterManager` — `SpawnInitialMonstersInChunk` + `RespawnMonsterInChunk`가 biome 기반 ID 선택 (인스펙터 폴백 보존)
 - ✅ `DerivedSeed` 신규 8채널 (WarpX/Y, Temperature, Humidity, Elevation, Settlement, LoreCount, LoreProp)
 
+**v1.9 추가 작업 (2026-05-20)**:
+- ✅ [`BiomeNoise.cs`](../Assets/Scripts/Map/Biome/BiomeNoise.cs) — `CLUSTER_SIZE = 2` 상수 + `ComputeClusterBiome(clusterGridX, clusterGridY, mapSeed)` 추가. `ComputeChunkBiome`은 청크 중심 cluster 샘플로 재정의 (legacy 1-biome caller용)
+- ✅ [`MapChunkData.cs`](../Assets/Scripts/Map/MapChunkData.cs) — `clusterBiomes[16]` 배열 필드 추가
+- ✅ [`MapManager_Generator.cs`](../Assets/Scripts/Map/MapManager_Generator.cs) — cluster biome 미리 샘플 → cluster당 BiomeTable 룩업 캐시 → 셀별 baseTileType/hillThreshold/spawnRate 적용
+- ✅ [`MapManager_Renderer.cs`](../Assets/Scripts/Map/MapManager_Renderer.cs) — `_clusterThemes[16]` 캐시 + 셀 루프에서 cluster 인덱스로 즉시 룩업. 누락 타일 진단 LogError 4종 (theme/Ground/_ruleTile/None) + dedupe
+- ✅ [`Region/RegionData.cs`](../Assets/Scripts/Map/Region/RegionData.cs) **신규** — `BiomeStats` histogram + `DominantBiome` + `PickWeightedBiome(hash)`. Lazy compute (256 cluster 샘플 → 캐시)
+- ✅ [`MapManager.cs`](../Assets/Scripts/Manager/MapManager.cs) — `_regionData` Dictionary cache + `GetOrCreateRegionData(regionCoord)` + `GetRegionDataForChunk(chunkCoord)` 공개 API. `Reset()` 시 clear
+- ✅ [`ThemeTileSet.cs`](../Assets/Scripts/Map/Tile/ThemeTileSet.cs) **Option A 리팩토링** — `Ground` 단일 필드 추가, 기존 `TileSet[]`은 `[Obsolete]` (MapFileSaver 에디터 룩업 전용)
+- ✅ Perlin scale ×0.5 적용 — biome 패치 크기 2배 확대 (TEMPERATURE 0.005→0.0025, HUMIDITY 0.008→0.004, ELEVATION 0.012→0.006)
+
 **남은 콘텐츠 작업 (사용자/디자이너)**:
-- AR 프리팹 MapManager 인스펙터에 `BiomeThemeEntry[]` 채우기 (biome별 ThemeTileSet)
+- AR 프리팹 MapManager 인스펙터에 `BiomeThemeEntry[]` 채우기 (biome별 ThemeTileSet) + 폴백 `_themeTileSet`
+- 각 ThemeTileSet SO의 `Ground` 필드에 해당 바이옴 바닥 타일 할당
 - `BiomeMonsterMapping.cs`에 case 추가 (monster ID 결정 후)
 - 시각 검증 후 *필요 시* A1(색조 variant) 또는 A2(transition tile) 보강
+- Desert/Tundra 임계값 조정 (확률 3% → 10%+) — 필요 시 §4.3.1 조정
 
 **원래 명세 (참고)**:
 
@@ -971,33 +1079,40 @@ public class LoreSaveData
 - **monster spawn 확인**: Forest 청크 진입 시 Forest 풀의 몬스터, Desert 청크 진입 시 Desert 풀의 몬스터 (인스펙터 박힌 단일 ID 안 씀)
 - `RegionCoord.ChunkToRegionId((23, 41))` = `RegionCoord.ToRegionId((2, 5))` 변환 일관성 단위 테스트
 
-### Phase 2 — Race Settlement 절차 배치 (1~2일)
+### Phase 2 — Race Settlement 절차 배치 ⏳ 코드 골격 완료 (2026-05-20, v1.9)
 
-> **사용자 우선순위 (v1.5)**: biome 생성 직후 종족별 살아있는 거점이 맵에 나타나야 함. 청사진 콘텐츠는 placeholder 1~2개로 시작.
+> **사용자 우선순위 (v1.5)**: biome 생성 직후 종족별 살아있는 거점이 맵에 나타나야 함.
+> **v1.9 골격**: 알고리즘/배치 결정 코드 ✅, 실제 청사진 적용 ❌ (콘텐츠 대기).
 
-**신규 파일**:
-- `Assets/Scripts/Map/Settlement/RaceSettlementPlacer.cs` — §7.3 흐름
-- `Assets/Scripts/Map/Settlement/RaceBiomeTable.cs` — POCO (또는 코드 하드코딩으로 시작 — §12 #13)
-- `Assets/Scripts/Map/Settlement/SettlementBlueprintCatalog.cs` — (race × size) → MapFileData 리스트
-- `Assets/_BinaryData/TilemapData/ElfVillage_small_01.bytes` — placeholder 청사진 1개
-- `Assets/_BinaryData/TilemapData/DwarfHold_small_01.bytes` — placeholder 청사진 1개
+**완료된 작업 (2026-05-20)**:
+- ✅ [`Map/Region/DeterministicCoord.cs`](../Assets/Scripts/Map/Region/DeterministicCoord.cs) — Region/Chunk 안 결정론 좌표 (`InRegion` / `InChunk` / `ChunkCenter` / `HashFor`)
+- ✅ [`Map/Race/RaceBiomeTable.cs`](../Assets/Scripts/Map/Race/RaceBiomeTable.cs) — biome → race 호환 매핑 (코드 하드코딩, 8 biome × 1~2 race)
+- ✅ [`Map/Race/RaceSettlementPlacer.cs`](../Assets/Scripts/Map/Race/RaceSettlementPlacer.cs) — **chunk-grain 알고리즘** (§7.3). `TryPlace(regionCoord)` + `ComputeAll(mapSeed)` 정적 메서드
+- ✅ `DerivedSeed.ChannelSettlement` (Phase 0에서 미리 예약된 채널 활용)
+- ✅ [`MapManager_Generator.cs`](../Assets/Scripts/Map/MapManager_Generator.cs) `InitializeChunkPool()`에서 `LoadFixedMapFiles()` 직후 `PlaceRaceSettlements()` 호출 → 콘솔 로그로 결정 검증
 
-**수정**:
-- `MapManager_Generator.cs` `LoadFixedMapFiles()` 직후 `RaceSettlementPlacer.PlaceAll(...)` 호출. `_mapFileDataDic`에 절차 entry 자동 추가
-- `DerivedSeed` — `CHANNEL_SETTLEMENT` 채널 추가
+**알고리즘 검증 콘솔 로그 형식**:
+```
+[MapManager] Race Settlement 계산 완료: N개 region에 배치
+  [Settlement] region=(-12,3) dominant=Plains chunkBiome=Plains → Race=Human Size=Village chunk=(-48,15) world=(-380,124)
+  ...
+```
 
-**검증**:
-- 같은 `mapSeed`에서 settlement 좌표/race/size 100% 재현
-- placeholder 청사진 2개여도 region 격자 따라 *여러 개* 배치되는지 확인
-- BaseTown과 좌표 겹치면 settlement 스킵 — 로그 확인
-- NPC 자동 스폰 — 기존 `RegisterAllNpcsToManager`가 동작하는지 (청사진 안에 NPC object 포함 시)
+**남은 작업 (콘텐츠 대기 → 코드 작업)**:
+- ❌ Race-specific 청사진 `.bytes` 파일 (디자이너 작업) — 예: `HumanVillage_small_01.bytes`, `ElfVillage_small_01.bytes`
+- ❌ `Map/Race/SettlementBlueprintCatalog.cs` 신규 — (race × size) → MapFileData 리스트
+- ❌ `RaceSettlementPlacer`에 청사진 로드 + 충돌 검사 + `_mapFileDataDic` 등록 단계 추가 (현재 콘솔 로그만)
+- ❌ NPC 통합 (race별 NPC 종 — 기존 `RegisterAllNpcsToManager` 흐름에 race 정보 흘리기)
 
-**Phase 진입 직전 결정 (§12 #13~#17)**:
-- Race-Biome 매핑 (코드 하드코딩으로 시작)
-- 크기 1단계 (Village만)로 시작
-- 배치 밀도 5 region당 1개 정도부터 — 실제 보고 조정
-- variant 1종부터, 후속 콘텐츠 확장
-- 충돌: 단순 bounding box
+**즉시 가능한 placeholder 경로** (콘텐츠 없이 시각 검증):
+- BaseTown.bytes 모든 race에 placeholder로 매핑 → 맵 곳곳에 같은 마을 박힘. race 구분은 콘솔 로그로
+- 또는 1×1 마커(비석/깃발 BuildableItem)만 박기 — 가장 가벼움
+
+**검증** (현재 콘솔 로그 단계):
+- ✅ 같은 `mapSeed`에서 settlement 좌표/race/size 100% 재현 (`ComputeAll` 두 번 호출 결과 비교)
+- biome dominant ↔ race 매핑 의도대로 작동 (예: Plains-dominant region → Human)
+- 호환 chunk 없는 region 스킵되는지 (예: Wasteland-dominant region)
+- chunk 분포 균등성 (region마다 다른 chunk 선택)
 
 ### Phase 3 — 유적 단편 배치 (2~3일)
 **신규 파일**:
