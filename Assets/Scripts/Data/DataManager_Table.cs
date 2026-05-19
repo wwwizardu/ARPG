@@ -49,8 +49,9 @@ namespace ARPG.Data
         // ZoneTable의 Zone 번호(=Id) 오름차순 정렬 캐시 — Cap 조회 시 사용
         private List<int> _zoneTableSortedIds = new();
         // 절차적 역사 시스템 (Phase 1) 카탈로그
-        private ImmutableDictionary<int, Tables.HistoryEntityTable> _historyEntityTable = null!;
-        private ImmutableDictionary<int, Tables.HistoryTemplateTable> _historyTemplateTable = null!;
+        // TODO: HistoryEntityTable / HistoryTemplateTable — bytes 파일 미생성 + 사용처 없음. History 시스템 구현 시 주석 해제.
+        // private ImmutableDictionary<int, Tables.HistoryEntityTable> _historyEntityTable = null!;
+        // private ImmutableDictionary<int, Tables.HistoryTemplateTable> _historyTemplateTable = null!;
 
         public async Task LoadTableAsync()
         {
@@ -82,9 +83,10 @@ namespace ARPG.Data
                 LoadTable<Tables.VillageTable>("VillageTable.bytes", tables => _villageTable = tables),
                 LoadTable<Tables.VillageStageTable>("VillageStageTable.bytes", tables => _villageStageTable = tables),
                 LoadTable<Tables.JobBonusTable>("JobBonusTable.bytes", tables => _jobBonusTable = tables),
-                LoadTable<Tables.ZoneTable>("ZoneTable.bytes", tables => _zoneTable = tables),
-                LoadTable<Tables.HistoryEntityTable>("HistoryEntityTable.bytes", tables => _historyEntityTable = tables),
-                LoadTable<Tables.HistoryTemplateTable>("HistoryTemplateTable.bytes", tables => _historyTemplateTable = tables)
+                LoadTable<Tables.ZoneTable>("ZoneTable.bytes", tables => _zoneTable = tables)
+                // TODO: History 시스템 구현 시 주석 해제 + bytes 파일 생성 (ARPG → Download Table 메뉴)
+                // , LoadTable<Tables.HistoryEntityTable>("HistoryEntityTable.bytes", tables => _historyEntityTable = tables)
+                // , LoadTable<Tables.HistoryTemplateTable>("HistoryTemplateTable.bytes", tables => _historyTemplateTable = tables)
             );
 
             // 모든 테이블 로드 후 LoadLate 실행
@@ -431,33 +433,34 @@ namespace ARPG.Data
             return _zoneTable.TryGetValue(best, out var table) ? table : null;
         }
 
-        public Tables.HistoryEntityTable? GetHistoryEntity(int id)
-        {
-            if (_historyEntityTable.TryGetValue(id, out var table))
-            {
-                return table;
-            }
-            return null;
-        }
-
-        public List<Tables.HistoryEntityTable> GetAllHistoryEntities()
-        {
-            return new List<Tables.HistoryEntityTable>(_historyEntityTable.Values);
-        }
-
-        public Tables.HistoryTemplateTable? GetHistoryTemplate(int id)
-        {
-            if (_historyTemplateTable.TryGetValue(id, out var table))
-            {
-                return table;
-            }
-            return null;
-        }
-
-        public List<Tables.HistoryTemplateTable> GetAllHistoryTemplates()
-        {
-            return new List<Tables.HistoryTemplateTable>(_historyTemplateTable.Values);
-        }
+        // TODO: History 시스템 구현 시 주석 해제 (필드/LoadTable 같이 복구)
+        // public Tables.HistoryEntityTable? GetHistoryEntity(int id)
+        // {
+        //     if (_historyEntityTable.TryGetValue(id, out var table))
+        //     {
+        //         return table;
+        //     }
+        //     return null;
+        // }
+        //
+        // public List<Tables.HistoryEntityTable> GetAllHistoryEntities()
+        // {
+        //     return new List<Tables.HistoryEntityTable>(_historyEntityTable.Values);
+        // }
+        //
+        // public Tables.HistoryTemplateTable? GetHistoryTemplate(int id)
+        // {
+        //     if (_historyTemplateTable.TryGetValue(id, out var table))
+        //     {
+        //         return table;
+        //     }
+        //     return null;
+        // }
+        //
+        // public List<Tables.HistoryTemplateTable> GetAllHistoryTemplates()
+        // {
+        //     return new List<Tables.HistoryTemplateTable>(_historyTemplateTable.Values);
+        // }
 
         public Tables.SkillEffectTable? GetSkillEffect(int id)
         {

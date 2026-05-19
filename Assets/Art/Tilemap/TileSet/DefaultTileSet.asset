@@ -14,6 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   themeName: Base
   themeIcon: {fileID: 0}
+  Ground: {fileID: 11400000, guid: bc52bf940ba3f314aba68dad5e76e7b7, type: 2}
   TileSet:
   - {fileID: 0}
   - {fileID: 11400000, guid: 84da37ec81c63d741a61bfc23661aff1, type: 2}

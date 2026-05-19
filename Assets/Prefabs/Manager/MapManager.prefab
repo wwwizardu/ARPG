@@ -73,6 +73,7 @@ Tilemap:
     e33: 1
 --- !u!483693784 &5895387544331128118
 TilemapRenderer:
+  serializedVersion: 2
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
@@ -118,6 +119,7 @@ TilemapRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 1
+  m_MaskInteraction: 0
   m_ChunkSize: {x: 32, y: 32, z: 32}
   m_ChunkCullingBounds: {x: 0, y: 0, z: 0}
   m_MaxChunkCount: 16
@@ -125,7 +127,6 @@ TilemapRenderer:
   m_SortOrder: 0
   m_Mode: 0
   m_DetectChunkCullingBounds: 0
-  m_MaskInteraction: 0
 --- !u!1 &1780834625597572614
 GameObject:
   m_ObjectHideFlags: 0
@@ -199,6 +200,7 @@ Tilemap:
     e33: 1
 --- !u!483693784 &7076018783636339065
 TilemapRenderer:
+  serializedVersion: 2
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
@@ -244,6 +246,7 @@ TilemapRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
+  m_MaskInteraction: 0
   m_ChunkSize: {x: 32, y: 32, z: 32}
   m_ChunkCullingBounds: {x: 0, y: 0, z: 0}
   m_MaxChunkCount: 16
@@ -251,7 +254,6 @@ TilemapRenderer:
   m_SortOrder: 0
   m_Mode: 0
   m_DetectChunkCullingBounds: 0
-  m_MaskInteraction: 0
 --- !u!1 &2098125398897266424
 GameObject:
   m_ObjectHideFlags: 0
@@ -372,6 +374,7 @@ Tilemap:
     e33: 1
 --- !u!483693784 &4688669388989653301
 TilemapRenderer:
+  serializedVersion: 2
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
@@ -417,6 +420,7 @@ TilemapRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 1
+  m_MaskInteraction: 0
   m_ChunkSize: {x: 32, y: 32, z: 32}
   m_ChunkCullingBounds: {x: 0, y: 0, z: 0}
   m_MaxChunkCount: 16
@@ -424,7 +428,6 @@ TilemapRenderer:
   m_SortOrder: 0
   m_Mode: 0
   m_DetectChunkCullingBounds: 0
-  m_MaskInteraction: 0
 --- !u!1 &8034648217058934653
 GameObject:
   m_ObjectHideFlags: 0
@@ -483,7 +486,23 @@ MonoBehaviour:
   maxChunkY: 50
   _monsterSpawnRate: 0.1
   _themeTileSet: {fileID: 11400000, guid: 460dc19b749967d42a7aaba5b52e8a6c, type: 2}
+  _themeEntries:
+  - Biome: 0
+    TileSet: {fileID: 11400000, guid: 2f5d3947c57c3114680ad7284d3f2682, type: 2}
+  - Biome: 1
+    TileSet: {fileID: 11400000, guid: a566c7fad1fa48f4db5876b7a22aeda9, type: 2}
+  - Biome: 2
+    TileSet: {fileID: 11400000, guid: 76131e269e903e246acdeb192d928e62, type: 2}
+  - Biome: 3
+    TileSet: {fileID: 11400000, guid: 82e5b53d736111942b05b6cdc91d0e59, type: 2}
+  - Biome: 4
+    TileSet: {fileID: 11400000, guid: b7e3a012905c9ae4e863c4e26ae25f50, type: 2}
+  - Biome: 5
+    TileSet: {fileID: 11400000, guid: ff219e6f44c3c1b4f9fb420913f23e06, type: 2}
+  - Biome: 6
+    TileSet: {fileID: 11400000, guid: 2d7bb1267a930b84899e40116fcce3b4, type: 2}
+  - Biome: 10
+    TileSet: {fileID: 11400000, guid: b7a714176d22d874ba7ffae1c093b54b, type: 2}
   _ruleTile: {fileID: 11400000, guid: 9224232a219ed3247958b19048036ec4, type: 2}
   _ruleTile_Hill: {fileID: 11400000, guid: 1188aa7e4c37d524ba8adfc85c91909e, type: 2}
-  _monsterPrefabs:
-  - {fileID: 1813093374385199624, guid: b3ab565fb587a73438158f9df3e12e67, type: 3}
+  _ruleTile_Object: {fileID: 0}

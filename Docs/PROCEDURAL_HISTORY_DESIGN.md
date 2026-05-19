@@ -1,5 +1,14 @@
 # 절차적 역사 생성 시스템 설계
 
+> **⚠ 현재 상태 (2026-05-19): 보류 중**
+> - POCO 정의 `HistoryEntityTable` / `HistoryTemplateTable`만 [Tables.cs](../Assets/Scripts/Common/Tables.cs)에 선언되어 있고, [DownloadTables.cs](../Assets/Scripts/Editor/DownloadTables.cs)에 다운로드 메뉴/파서가 등록되어 있음
+> - 그러나 `.bytes` 파일은 아직 생성되지 않았고 (`Assets/_BinaryData/TableData/`에 없음), 시스템 본체도 미구현. 호출처 0
+> - [DataManager_Table.cs](../Assets/Scripts/Data/DataManager_Table.cs)의 필드 / `LoadTable` 호출 / `GetHistoryEntity` 등 Getter 4종은 **주석 처리**되어 있음 (런타임 로딩 실패 방지)
+> - History 시스템 본 구현 시:
+>   1. Unity 메뉴 `ARPG → Download Table → HistoryEntityTable / HistoryTemplateTable`로 bytes 생성
+>   2. [DataManager_Table.cs](../Assets/Scripts/Data/DataManager_Table.cs)의 `TODO: History` 마커 주석 일괄 해제
+>   3. 그 후 본 문서 §0.1 이후 단계 진행
+
 > 상위 컨셉: 오픈월드 + NPC 자율 행동 (코어 키퍼 + 림월드 하이브리드)
 > 관련 문서: [gameOverview.md](gameOverview.md) · [dungeonSystem.md](dungeonSystem.md) · [VILLAGE_GROWTH_STAGES.md](VILLAGE_GROWTH_STAGES.md)
 >

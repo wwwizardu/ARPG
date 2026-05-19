@@ -78,20 +78,42 @@ namespace ARPG.Map
             int dist = Mathf.Max(Mathf.Abs(chunk.chunkX), Mathf.Abs(chunk.chunkY));
             chunk.zone = Mathf.Clamp(dist + 1, 1, 99);
 
-            // 청크 biome = 청크가 속한 region의 biome (region 단위 단일 biome 정책, MAP_DESIGN.md §4 v1.8).
-            // 한 region(4×4 청크 = 32×32 타일) 안 모든 청크가 같은 biome.
-            chunk.chunkBiome = BiomeNoise.ComputeChunkBiome(chunk.chunkX, chunk.chunkY, chunkSize, mapSeed);
+            // v1.9 cluster-grained biome — 청크 내 cluster마다 별도 biome 결정.
+            // 청크 8×8 / cluster 2×2 → 4×4 = 16 cluster per chunk. 시각 자연스러움 + race는 region histogram으로.
+            int clustersPerSide = chunkSize / BiomeNoise.CLUSTER_SIZE;
+            int clusterCount = clustersPerSide * clustersPerSide;
+            if (chunk.clusterBiomes == null || chunk.clusterBiomes.Length != clusterCount)
+                chunk.clusterBiomes = new GlobalEnum.BiomeType[clusterCount];
 
-            // biome별 파라미터 — loop 밖에서 한 번만 조회
-            GlobalEnum.BiomeType biome = chunk.chunkBiome;
-            GlobalEnum.TileType baseTileType = BiomeTable.GetGroundTileType(biome);
-            float hillThreshold = BiomeTable.GetHillThreshold(biome);
-            float spawnRate = _monsterSpawnRate * BiomeTable.GetMonsterSpawnMultiplier(biome);
+            for (int cx = 0; cx < clustersPerSide; cx++)
+            {
+                for (int cy = 0; cy < clustersPerSide; cy++)
+                {
+                    int globalClusterX = chunk.chunkX * clustersPerSide + cx;
+                    int globalClusterY = chunk.chunkY * clustersPerSide + cy;
+                    chunk.clusterBiomes[cy * clustersPerSide + cx] = BiomeNoise.ComputeClusterBiome(globalClusterX, globalClusterY, mapSeed);
+                }
+            }
+
+            // 청크 대표 biome = 청크 중심 cluster의 biome (MonsterManager 풀 선택 등 legacy 1-biome caller용).
+            chunk.chunkBiome = BiomeNoise.ComputeChunkBiome(chunk.chunkX, chunk.chunkY, chunkSize, mapSeed);
 
             // 몬스터 스폰 후보 위치 임시 저장
             _candidateSpawnPositions.Clear();
 
-            // 1. 타일 데이터 생성 — 청크 단일 biome 적용 (per-tile Perlin 호출 제거됨)
+            // 1. 타일 데이터 생성 — cluster 단위 biome 적용 (cluster당 BiomeTable 룩업 1회 캐시).
+            //    셀이 속한 cluster의 biome으로 baseTileType/hillThreshold/spawnRate 결정.
+            GlobalEnum.TileType[] clusterBaseTileTypes = new GlobalEnum.TileType[clusterCount];
+            float[] clusterHillThresholds = new float[clusterCount];
+            float[] clusterSpawnRates = new float[clusterCount];
+            for (int i = 0; i < clusterCount; i++)
+            {
+                GlobalEnum.BiomeType cb = chunk.clusterBiomes[i];
+                clusterBaseTileTypes[i] = BiomeTable.GetGroundTileType(cb);
+                clusterHillThresholds[i] = BiomeTable.GetHillThreshold(cb);
+                clusterSpawnRates[i] = _monsterSpawnRate * BiomeTable.GetMonsterSpawnMultiplier(cb);
+            }
+
             for (int x = 0; x < chunkSize; x++)
             {
                 for (int y = 0; y < chunkSize; y++)
@@ -99,7 +121,12 @@ namespace ARPG.Map
                     int worldX = chunk.chunkX * chunkSize + x;
                     int worldY = chunk.chunkY * chunkSize + y;
 
-                    // Hill 비트 — biome별 임계값. elevation 노이즈는 *변주*용으로 유지 (Hill 분포 결정)
+                    int clusterIdx = (y / BiomeNoise.CLUSTER_SIZE) * clustersPerSide + (x / BiomeNoise.CLUSTER_SIZE);
+                    GlobalEnum.TileType baseTileType = clusterBaseTileTypes[clusterIdx];
+                    float hillThreshold = clusterHillThresholds[clusterIdx];
+                    float spawnRate = clusterSpawnRates[clusterIdx];
+
+                    // Hill 비트 — cluster biome별 임계값. elevation 노이즈는 *변주*용으로 유지 (Hill 분포 결정)
                     float elevationNoise = Mathf.PerlinNoise(
                         (worldX + mapSeed) * (noiseScale * 0.3f),
                         (worldY + mapSeed) * (noiseScale * 0.3f)
@@ -108,7 +135,7 @@ namespace ARPG.Map
                     if (elevationNoise > hillThreshold)
                         hillFlag = (uint)GlobalEnum.TileFlag.Hill;
 
-                    // 몬스터 스폰 후보 — biome 보정 곱하기
+                    // 몬스터 스폰 후보 — cluster biome 보정 곱하기
                     uint monsterSpawnFlag = 0;
                     if (hillFlag == 0 && _randomGenerator.NextDouble() < spawnRate)
                     {

@@ -261,7 +261,8 @@ namespace ARPG.Map
             // 하위 10비트를 TileType으로 변환 (GroundLayerMask)
             GlobalEnum.TileType tileType = (GlobalEnum.TileType)(tileData & (ulong)GlobalEnum.TileFlag.GroundLayerMask);
 
-            // ThemeTileSet에서 해당 타일 가져오기
+            // ThemeTileSet에서 해당 타일 가져오기 — 에디터 도구의 .bytes 역변환 룩업 (MAP_DESIGN.md §4.5 Option A 이후 레거시 경로)
+#pragma warning disable 0618    // TileSet[]은 [Obsolete] 처리됨 — MapFileSaver 에디터 룩업 전용으로 의도적 사용
             if (_themeTileSet != null && _themeTileSet.TileSet != null)
             {
                 int tileIndex = (int)tileType;
@@ -270,6 +271,7 @@ namespace ARPG.Map
                     return _themeTileSet.TileSet[tileIndex] as CustomTile;
                 }
             }
+#pragma warning restore 0618
 
             Debug.LogError($"[MapFileSaver] ConvertUintToTile - TileType {tileType} not found in ThemeTileSet");
             return null;

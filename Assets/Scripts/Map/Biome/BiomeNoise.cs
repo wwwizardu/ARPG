@@ -14,11 +14,16 @@ namespace ARPG.Map
     /// </summary>
     public static class BiomeNoise
     {
+        // Cluster grain — biome 결정의 최소 단위 (타일).
+        // v1.8 region 단일 biome → v1.9 cluster-grained: cluster 단위로 biome 결정, region histogram으로 race 결정.
+        public const int CLUSTER_SIZE = 2;
+
         // 스케일 가이드 — MAP_DESIGN.md §4.3.1
-        private const float SCALE_WARP        = 0.02f;   // 좌표 흐트림용
-        private const float SCALE_TEMPERATURE = 0.005f;  // 가장 광역 — 큰 기후대
-        private const float SCALE_HUMIDITY    = 0.008f;  // 중간 — 강수 패치
-        private const float SCALE_ELEVATION   = 0.012f;  // 가장 fine — 산맥/저지
+        // v1.9.1: 모든 scale ×0.5 → biome 패치 크기 2배 (더 광활한 영역감)
+        private const float SCALE_WARP        = 0.02f;    // 좌표 흐트림용 (워프는 그대로 유지)
+        private const float SCALE_TEMPERATURE = 0.0025f;  // 주기 ~400 타일 — 큰 기후대
+        private const float SCALE_HUMIDITY    = 0.004f;   // 주기 ~250 타일 — 강수 패치
+        private const float SCALE_ELEVATION   = 0.006f;   // 주기 ~166 타일 — 산맥/저지
 
         private const float WARP_AMPLITUDE    = 16f;     // 경계 흐트림 강도(타일 단위)
 
@@ -68,8 +73,19 @@ namespace ARPG.Map
         }
 
         /// <summary>
-        /// region 중심 1점 샘플로 region 단위 biome 결정 (MAP_DESIGN.md §4, v1.8 옵션 X-방향 재채택).
-        /// 한 region 안의 모든 청크/타일은 이 biome으로 통일.
+        /// cluster 1점 샘플로 cluster 단위 biome 결정 (v1.9). cluster = CLUSTER_SIZE × CLUSTER_SIZE 타일.
+        /// 한 cluster 안의 모든 타일은 이 biome으로 통일. region histogram의 단위 = cluster.
+        /// </summary>
+        public static GlobalEnum.BiomeType ComputeClusterBiome(int clusterGridX, int clusterGridY, int mapSeed)
+        {
+            // cluster 좌측-하단 코너 타일 좌표 (deterministic, center보다 단순)
+            int sampleX = clusterGridX * CLUSTER_SIZE;
+            int sampleY = clusterGridY * CLUSTER_SIZE;
+            return ComputeTileBiome(sampleX, sampleY, mapSeed);
+        }
+
+        /// <summary>
+        /// region 중심 1점 샘플로 region 단위 biome 결정 (legacy v1.8 — race 결정용으로는 v1.9에서 RegionData.dominantBiome 사용 권장).
         /// </summary>
         public static GlobalEnum.BiomeType ComputeRegionBiome(int regionGridX, int regionGridY, int chunkSize, int mapSeed)
         {
@@ -80,15 +96,17 @@ namespace ARPG.Map
         }
 
         /// <summary>
-        /// 청크의 biome 조회. 청크가 속한 region의 biome 반환 (region 단위 단일 biome 정책).
-        /// MonsterManager 풀 선택 / Renderer ThemeTileSet 선택 등에 사용.
+        /// 청크의 대표 biome 조회 — 청크 중심 cluster의 biome 반환 (legacy 단일 biome 요구 caller용).
+        /// 세밀한 per-cluster biome은 MapChunkData.clusterBiomes 참조.
+        /// MonsterManager 풀 선택 등에서 1개 biome이 필요할 때 사용.
         /// </summary>
         public static GlobalEnum.BiomeType ComputeChunkBiome(int chunkX, int chunkY, int chunkSize, int mapSeed)
         {
-            // 청크가 속한 region 좌표
-            int regionGridX = chunkX >> 2;   // CHUNKS_PER_REGION = 4
-            int regionGridY = chunkY >> 2;
-            return ComputeRegionBiome(regionGridX, regionGridY, chunkSize, mapSeed);
+            // 청크 중심 cluster 1개 샘플 (per-cluster 정밀 결과는 GenerateChunkData에서 별도 계산).
+            int clustersPerChunkSide = chunkSize / CLUSTER_SIZE;
+            int centerClusterX = chunkX * clustersPerChunkSide + clustersPerChunkSide / 2;
+            int centerClusterY = chunkY * clustersPerChunkSide + clustersPerChunkSide / 2;
+            return ComputeClusterBiome(centerClusterX, centerClusterY, mapSeed);
         }
     }
 }

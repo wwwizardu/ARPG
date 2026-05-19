@@ -36,6 +36,23 @@ namespace ARPG.Map
         private TileBase[] _tempHillTileArray;
         private TileBase[] _tempObjectTileArray;
         private TileBase[] _tempNullArray;
+        // v1.9 cluster-grained — 청크당 cluster ThemeTileSet 캐시 (재사용으로 GC 0).
+        private ThemeTileSet[] _clusterThemes;
+
+        // 누락 타일 로그 dedupe — 같은 biome/케이스가 매 청크마다 스팸 로그 남기는 것 방지.
+        // MapManager.Reset()에서 ClearMissingTileLog() 호출하여 초기화.
+        private readonly HashSet<GlobalEnum.BiomeType> _loggedMissingTheme = new HashSet<GlobalEnum.BiomeType>();
+        private readonly HashSet<GlobalEnum.BiomeType> _loggedMissingGround = new HashSet<GlobalEnum.BiomeType>();
+        private readonly HashSet<Vector2Int> _loggedNoneCellChunks = new HashSet<Vector2Int>();
+        private bool _loggedMissingRuleTile = false;
+
+        public void ClearMissingTileLog()
+        {
+            _loggedMissingTheme.Clear();
+            _loggedMissingGround.Clear();
+            _loggedNoneCellChunks.Clear();
+            _loggedMissingRuleTile = false;
+        }
 
         /// <summary>
         /// 인스펙터 _themeEntries → Dictionary 변환. Initialize에서 호출.
@@ -66,7 +83,7 @@ namespace ARPG.Map
 
         private void RenderChunkToTilemap(MapChunkData chunk)
         {
-            if (_tileMap == null || _themeTileSet == null || _themeTileSet.TileSet == null || _themeTileSet.TileSet.Length < 2) return;
+            if (_tileMap == null) return;
 
             // 배열 초기화 (필요시)
             if (_tempTileArray == null || _tempTileArray.Length != chunkSize * chunkSize)
@@ -88,8 +105,31 @@ namespace ARPG.Map
             _tempStartPos.Set(chunk.chunkX * chunkSize, chunk.chunkY * chunkSize, 0);
             _tempArea = new BoundsInt(_tempStartPos.x, _tempStartPos.y, 0, chunkSize, chunkSize, 1);
 
-            // region 단위 단일 biome — 청크 1번 조회로 ThemeTileSet 결정 (MAP_DESIGN.md §4.5 v1.8)
-            ThemeTileSet theme = ResolveThemeForBiome(chunk.chunkBiome);
+            // v1.9 cluster-grained — 청크 내 cluster마다 ThemeTileSet 선택 (MapChunkData.clusterBiomes).
+            //   cluster당 ResolveThemeForBiome 1회 캐시 → 셀 루프에선 cluster 인덱스로 즉시 룩업.
+            int clustersPerSide = chunkSize / BiomeNoise.CLUSTER_SIZE;
+            int clusterCount = clustersPerSide * clustersPerSide;
+            if (_clusterThemes == null || _clusterThemes.Length != clusterCount)
+                _clusterThemes = new ThemeTileSet[clusterCount];
+
+            for (int i = 0; i < clusterCount; i++)
+            {
+                GlobalEnum.BiomeType cb = chunk.clusterBiomes[i];
+                ThemeTileSet t = ResolveThemeForBiome(cb);
+                _clusterThemes[i] = t;
+
+                // 누락 타일 감지 — biome별 1회만 로그 (dedupe)
+                if (t == null)
+                {
+                    if (_loggedMissingTheme.Add(cb))
+                        Debug.LogError($"[MapManager] ThemeTileSet 미설정 — biome={cb}, chunk=({chunk.chunkX},{chunk.chunkY}). 인스펙터의 Theme Entries에 해당 biome 매핑 또는 폴백 Theme Tile Set 확인 필요.");
+                }
+                else if (t.Ground == null)
+                {
+                    if (_loggedMissingGround.Add(cb))
+                        Debug.LogError($"[MapManager] ThemeTileSet.Ground 미설정 — biome={cb}, themeName='{t.themeName}', chunk=({chunk.chunkX},{chunk.chunkY}). 해당 ThemeTileSet SO의 Ground 필드에 바닥 타일 할당 필요.");
+                }
+            }
 
             for (int x = 0; x < chunkSize; x++)
             {
@@ -102,22 +142,39 @@ namespace ARPG.Map
 
                     int index = y * chunkSize + x; // 2D to 1D index
 
-                    // 바닥 타일 설정
-                    try
+                    // cluster theme 룩업 (셀이 속한 cluster의 캐시된 ThemeTileSet)
+                    int clusterIdx = (y / BiomeNoise.CLUSTER_SIZE) * clustersPerSide + (x / BiomeNoise.CLUSTER_SIZE);
+                    ThemeTileSet theme = _clusterThemes[clusterIdx];
+
+                    // 바닥 타일 설정 (MAP_DESIGN.md §4.5 Option A)
+                    //   - Ground (맨땅, MapFileData 청사진용): 바이옴 무관 단일 _ruleTile
+                    //   - None: null (빈 칸)
+                    //   - 그 외 절차 생성 바닥(Glass/Sand/Snow 등): cluster biome의 ThemeTileSet.Ground
+                    if (baseTileType == (int)GlobalEnum.TileType.Ground)
                     {
-                        if (baseTileType == (int)GlobalEnum.TileType.Ground)
+                        if (_ruleTile == null && _loggedMissingRuleTile == false)
                         {
-                            _tempTileArray[index] = _ruleTile;
+                            _loggedMissingRuleTile = true;
+                            Debug.LogError($"[MapManager] _ruleTile 미설정 — MapFileData 청사진의 Ground(맨땅) 타일이 렌더되지 않음. chunk=({chunk.chunkX},{chunk.chunkY}). 인스펙터의 '땅 룰 타일' 필드에 RuleTile 할당 필요.");
                         }
-                        else
-                        {
-                            _tempTileArray[index] = (theme != null && theme.TileSet != null && theme.TileSet.Length > baseTileType) ? theme.TileSet[baseTileType] : null;
-                        }
+                        _tempTileArray[index] = _ruleTile;
                     }
-                    catch
+                    else if (baseTileType == (int)GlobalEnum.TileType.None)
                     {
-                        Debug.LogError($"[MapManager] RenderChunkToTilemap - exception baseTileType({baseTileType}), Position({x},{y})");
+                        // None 셀 — 청크당 1회만 로그 (위치는 첫 발견 셀 기준).
+                        // 주 원인: MapFileData overlay가 objectId/Hill만 깔고 바닥 비트를 0으로 만든 청사진 셀.
+                        Vector2Int chunkKey = new Vector2Int(chunk.chunkX, chunk.chunkY);
+                        if (_loggedNoneCellChunks.Add(chunkKey))
+                        {
+                            int worldX = chunk.chunkX * chunkSize + x;
+                            int worldY = chunk.chunkY * chunkSize + y;
+                            Debug.LogError($"[MapManager] TileType.None 셀 — chunk=({chunk.chunkX},{chunk.chunkY}), local=({x},{y}), world=({worldX},{worldY}), tileData=0x{tileData:X}. MapFileData 청사진이 바닥 없이 오브젝트/Hill만 깐 가능성 (overlay 시 절차 생성 바닥이 0으로 덮어쓰여짐).");
+                        }
                         _tempTileArray[index] = null;
+                    }
+                    else
+                    {
+                        _tempTileArray[index] = theme != null ? theme.Ground : null;
                     }
 
                     // 언덕 타일 설정
@@ -139,6 +196,7 @@ namespace ARPG.Map
                         TileBase tile = BuildableTileRegistry.Get((int)objectId);
 #pragma warning disable 0618    // ObjectSet은 [Obsolete] 처리됨 — 의도적 fallback 사용
                         if (tile == null
+                            && _themeTileSet != null
                             && _themeTileSet.ObjectSet != null
                             && objectId < (ulong)_themeTileSet.ObjectSet.Length)
                         {

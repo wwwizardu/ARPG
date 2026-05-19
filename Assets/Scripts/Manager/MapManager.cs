@@ -35,6 +35,9 @@ namespace ARPG.Map
         private HashSet<Vector2Int> _renderedChunks;
         private Dictionary<Vector2Int, MapFileData> _mapFileDataDic = new();
         private Dictionary<Vector2Int, List<TileModification>> _tileModifications = new();
+        // v1.9 region histogram 캐시 — biome 통계 lazy compute (region 첫 조회 시 256 cluster 샘플).
+        // 메모리: region당 Dictionary<BiomeType,int> ~수십 바이트, 무해.
+        private Dictionary<Vector2Int, RegionData> _regionData = new();
         private Stack<MapChunkData> _chunkPool;
         private System.Random _randomGenerator;
         private Vector2Int _currentPlayerChunk = InvalidChunk;
@@ -75,7 +78,10 @@ namespace ARPG.Map
             _activeChunks.Clear();
             _renderedChunks.Clear();
             _tileModifications.Clear();
+            _regionData.Clear();
             _currentPlayerChunk = InvalidChunk;
+
+            ClearMissingTileLog();
 
             OnResetSpawner();
 
@@ -256,6 +262,26 @@ namespace ARPG.Map
                 return chunk.chunkBiome;
 
             return BiomeNoise.ComputeChunkBiome(chunkCoord.x, chunkCoord.y, chunkSize, mapSeed);
+        }
+
+        /// <summary>
+        /// region의 biome histogram 조회 (lazy compute + cache). v1.9 cluster-grained 정책.
+        /// race/settlement 결정 등에서 DominantBiome 또는 PickWeightedBiome 사용.
+        /// </summary>
+        public RegionData GetOrCreateRegionData(Vector2Int regionCoord)
+        {
+            if (_regionData.TryGetValue(regionCoord, out RegionData cached))
+                return cached;
+
+            RegionData fresh = RegionData.Compute(regionCoord, chunkSize, mapSeed);
+            _regionData[regionCoord] = fresh;
+            return fresh;
+        }
+
+        /// <summary>청크 좌표 기반 편의 함수 — region 변환 후 GetOrCreateRegionData 호출.</summary>
+        public RegionData GetRegionDataForChunk(Vector2Int chunkCoord)
+        {
+            return GetOrCreateRegionData(RegionCoord.ChunkToRegion(chunkCoord));
         }
 
         /// <summary>
