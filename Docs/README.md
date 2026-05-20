@@ -1,10 +1,10 @@
 # 🎮 ARPG 프로젝트 대시보드
 
-> **코어 키퍼** 스타일 오픈월드 탐험 + **림월드** 스타일 NPC 관계 시스템
+> **코어 키퍼** 스타일 오픈월드 탐험 + **림월드** 스타일 NPC 자율 시뮬레이션
 >
-> **현재 진행도**: ████████████░░░░░░░░░░░░░░░░░░ **35%**
+> **현재 진행도**: ████████████████████░░░░░░░░░░ **60%**
 
-**마지막 업데이트**: 2026-04-01
+**마지막 업데이트**: 2026-05-20
 
 ---
 
@@ -12,12 +12,16 @@
 
 | 항목 | 상태 | 다음 단계 |
 |------|------|----------|
-| **전투 시스템** | 🚧 40% | 데미지 계산, 히트 판정 구현 |
-| **AI 시스템** | 🚧 30% | 상태 머신 구현 |
-| **NPC 시스템** | 🚧 35% | 일일 루틴 로직 |
-| **던전 시스템** | ❌ 0% | Room+Corridor 알고리즘 |
-| **동료 시스템** | ❌ 0% | 영입 로직 설계 |
-| **상호작용** | ❌ 0% | 판정 시스템 구현 |
+| **전투 시스템** | ✅ 95% | VFX / 사운드 / 넉백 (후순위) |
+| **AI 시스템** | ✅ 90% | 몬스터별 세부 패턴, 길찾기 (보스급 다페이즈) |
+| **스킬 시스템** | ✅ 95% | 스킬북 장착 운용, 룬/이펙트 |
+| **마을 자가성장 Phase A~D** | ✅ 완료 | Phase E (배후 시뮬, 출생/분가) |
+| **여관(Inn) 고용 시스템** | ✅ 코드 완료 | 시트 데이터 입력 |
+| **상점 / 강화 / 제단 서비스** | ✅ 코드 완료 | 콘텐츠 확장 |
+| **NPC 관계 시스템** | 🚧 25% | 관계 변동 로직, N:N 관계 |
+| **퀘스트 시스템** | ❌ 0% | 퀘스트 발생/추적 |
+| **던전 시스템** | ⏸ 보류 | 오픈월드로 대체 운영 중 |
+| **절차적 역사 생성** | ⏸ 보류 | 대사/퀘스트 시스템 이후 본 구현 |
 
 ---
 
@@ -26,275 +30,210 @@
 ### 3대 축
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│  플레이어 액션   │ ←→ │  NPC 자율 행동   │ ←→ │  상호작용       │
+│  플레이어 액션   │ ←→ │  마을 자가성장   │ ←→ │  서비스 / 거래   │
 │                 │     │                 │     │                 │
-│ • 실시간 전투    │     │ • 8가지 성격     │     │ • 30가지 행동   │
-│ • 오픈월드 탐험  │     │ • 일일 루틴      │     │ • 관계 변동     │
-│ • 절차적 던전    │     │ • 자원 생산      │     │ • 동료 영입     │
-│ • 스킬/장비 성장 │     │ • 마을 발전      │     │ • 퀘스트 발생   │
+│ • 실시간 전투    │     │ • 자원 패시브    │     │ • 상점 양방향   │
+│ • 오픈월드 탐험  │     │ • 오브젝트 배치  │     │ • 강화/여관     │
+│ • 스킬북 장착    │     │ • Tier 승격     │     │ • Inn 고용      │
+│ • 장비 성장      │     │ • 외곽 벽 인프라 │     │ • NPC 직무      │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
 ```
 
 ### 게임 루프
 ```
-[오픈월드 탐험] → [던전 클리어] → [자원 획득]
-                                      ↓
-[다시 탐험] ← [동료 영입] ← [NPC 상호작용] ← [마을 귀환]
+[오픈월드 탐험] → [몬스터/자원 획득] → [마을 귀환]
+                                            ↓
+[다시 탐험] ← [고용/강화/구매] ← [상점에 매각, 골드 확보]
 ```
 
 ---
 
 ## 📚 기획 문서
 
-### 🌍 전체 개요
-**[gameOverview.md](./gameOverview.md)** - 게임 전체 구조
-- 게임 3대 축
-- Phase 1~3 (정착 → 확장 → 번영)
-- 기술 스택 (Unity 6 + 커스텀 ECS)
-- 개발 우선순위
+### 🌍 전체 개요 & 컨벤션
+- **[gameOverview.md](./gameOverview.md)** — 게임 3대 축, Phase 1~3, 기술 스택
+- **[implementationStatus.md](./implementationStatus.md)** ⭐ — 시스템별 구현 현황 + 로드맵
+- **[../CLAUDE.md](../CLAUDE.md)** — 코딩 컨벤션, 커스텀 ECS API
 
-### ⚔️ 핵심 시스템
-| 문서 | 내용 | 상태 |
+### ⚔️ 전투 / 스킬
+| 문서 | 내용 |
+|------|------|
+| **[combatSystem.md](./combatSystem.md)** | 실시간 전투, 페이즈, 데미지 6단계 공식 |
+| **[combatSystemCompletion.md](./combatSystemCompletion.md)** | 전투 완성 로드맵 (사실상 완료) |
+| **[BALANCE_DESIGN.md](./BALANCE_DESIGN.md)** | PoE2 톤 밸런스 곡선 / 방어 공식 / TTK |
+| **[SKILL_DESIGN.md](./SKILL_DESIGN.md)** | 현재 시스템 위 스킬 카탈로그 |
+| **[SKILLBOOK_DESIGN.md](./SKILLBOOK_DESIGN.md)** | 스킬북 장착식 스킬 (코드 완료) |
+| **[SKILL_RUNE_DESIGN.md](./SKILL_RUNE_DESIGN.md)** | 스킬 룬 / 모디파이어 |
+| **[SKILL_EFFECT_IDEAS.md](./SKILL_EFFECT_IDEAS.md)** | 스킬 이펙트 아이디어 |
+| **[AI_SKILL_SELECTION_IMPLEMENTATION.md](./AI_SKILL_SELECTION_IMPLEMENTATION.md)** | AI 다중 스킬 가중치 선택 |
+| **[ModSystem_Changelog.md](./ModSystem_Changelog.md)** | 장비/스탯 mod 시스템 변경 이력 |
+
+### 🤖 AI / 몬스터
+| 문서 | 내용 |
+|------|------|
+| **[monsterAIPattern.md](./monsterAIPattern.md)** | 몬스터 AI 패턴 |
+| **[MONSTER_SPAWN_DESIGN.md](./MONSTER_SPAWN_DESIGN.md)** | 데이터 주도 스폰 풀 (Zone × 등급) |
+| **[COLLISION_PATHFINDING_DESIGN.md](./COLLISION_PATHFINDING_DESIGN.md)** | 축 분리 슬라이딩 + 타일 A* |
+
+### 🏘️ 마을 / NPC 자가성장 ⭐
+| 문서 | 단계 | 상태 |
 |------|------|------|
-| **[combatSystem.md](./combatSystem.md)** | 실시간 전투, 스킬 페이즈, 데미지 계산 | 🚧 40% |
-| **[companionSystem.md](./companionSystem.md)** | 동료 영입, AI, 성장, 충성도 | ❌ 설계 완료 |
-| **[dungeonSystem.md](./dungeonSystem.md)** | 절차적 생성, 보스, 함정, 보상 | ❌ 설계 완료 |
-| **[interactionSystem.md](./interactionSystem.md)** | 30가지 행동, 판정 공식, 관계 변동 | ❌ 설계 완료 |
+| **[VILLAGE_GROWTH_STAGES.md](./VILLAGE_GROWTH_STAGES.md)** | 마을 성장 전체 기획 (Stage 0~4) | 본 문서 |
+| **[PHASE_A_DESIGN.md](./PHASE_A_DESIGN.md)** | MVP: NPC 1명 → Campfire 1개 | ✅ 완료 |
+| **[PHASE_B_DESIGN.md](./PHASE_B_DESIGN.md)** | 범용 배치 큐 + 오브젝트 6종 | ✅ 완료 |
+| **[PHASE_C_DESIGN.md](./PHASE_C_DESIGN.md)** | Tier 승격 + Stage 1·2 + 외곽 벽 | ✅ 완료 |
+| **[PHASE_D_DESIGN.md](./PHASE_D_DESIGN.md)** | 서비스 4종 + 상점 + 필요도 스코어 + 직무 | ✅ 코드 완료 |
+| **[BUILD_PRIORITY_DESIGN.md](./BUILD_PRIORITY_DESIGN.md)** | 자가 건설 4계층 가중치 점수 |
+| **[INN_HIRING_DESIGN.md](./INN_HIRING_DESIGN.md)** | 여관 기반 NPC 고용 (자연 이민 대체) |
 
-### 🏘️ 마을 시스템
-**[townDesign.md](./townDesign.md)** - NPC 자율 행동, 마을 발전
-- NPC 8가지 성격 스탯
-- 5가지 관계 스탯
-- 30가지 상호작용 행동
-- 자원 체인
-- 마을 발전 5단계
+### 🗺️ 맵 / 분위기
+| 문서 | 내용 |
+|------|------|
+| **[MAP_DESIGN.md](./MAP_DESIGN.md)** | 청크 8×8, Zone, 비트 레이아웃, 유적 단편 |
+| **[THEME_TILESET_REFACTOR.md](./THEME_TILESET_REFACTOR.md)** | 바이옴 비주얼 차별화 리팩토링 |
+| **[PROCEDURAL_HISTORY_DESIGN.md](./PROCEDURAL_HISTORY_DESIGN.md)** | 절차적 역사 생성 (⏸ 보류) |
 
-### 📊 구현 현황
-**[implementationStatus.md](./implementationStatus.md)** ⭐ **중요**
-- 시스템별 구현 현황 (완료/진행 중/미구현)
-- 30주 개발 로드맵
-- 이번 주/다음 주 작업 리스트
-- 리스크 & 대응
+### 🤝 동료 / 상호작용 (설계만)
+| 문서 | 상태 |
+|------|------|
+| **[companionSystem.md](./companionSystem.md)** | 설계 완료, 미구현 |
+| **[interactionSystem.md](./interactionSystem.md)** | 설계 완료, 미구현 |
+| **[dungeonSystem.md](./dungeonSystem.md)** | 설계 완료, ⏸ 오픈월드 운영으로 보류 |
+
+### 🛠️ 기술 / 시스템
+| 문서 | 내용 |
+|------|------|
+| **[ECS_PERFORMANCE_OPTIMIZATION_PLAN.md](./ECS_PERFORMANCE_OPTIMIZATION_PLAN.md)** | SparseSet 조회 비용 감소 단계별 계획 |
+| **[resourceSystem.md](./resourceSystem.md)** | 자원 시스템 개요 |
+
+### 📂 아카이브
+- **[archive/](./archive/)** — Phase A 초기 계획 / 체크리스트 등 (역사 참고용)
 
 ---
 
-## ✅ 구현 완료 (12개)
+## ✅ 구현 완료 시스템 (핵심 12개 + 마을 Phase A~D)
 
-| 시스템 | 설명 |
+### 기반 시스템
+| 시스템 | 비고 |
 |--------|------|
-| **ECS 아키텍처** | Component, System, SparseSet 완성 |
-| **맵 시스템** | 절차적 생성, 청크 로딩, Perlin Noise |
-| **스킬 시스템** | WindUp → Active → Recovery 페이즈 |
-| **버프 시스템** | StackCount 지원, 결정적 ID |
-| **스탯 시스템** | StatComponent, 재계산 로직 |
-| **아이템 시스템** | 인벤토리, 장비, 드랍 |
-| **입력/이동/애니메이션** | Unity Input System 통합 |
-| **시간 시스템** | 게임 내 시간, 배속 조절 |
+| **ECS 아키텍처** | Component / System / SparseSet / EntityIdHelper |
+| **맵 시스템** | 8×8 청크, Perlin Noise, BaseTown 오버레이, 결정론 |
+| **입력/이동/애니메이션** | Unity Input System 통합, 8방향 |
+| **시간 시스템** | 게임 시간 + 배속 조절 |
 | **렌더링** | URP 2D, 스프라이트 |
-| **치트 시스템** | 개발용 치트 |
+
+### 전투 / AI (95%↑)
+| 시스템 | 비고 |
+|--------|------|
+| **스킬 시스템** | WindUp→Active→Recovery, SkillTag(Flags), 쿨타임 감소 |
+| **스킬북 장착** | 인벤토리 책 → 슬롯 장착 → SkillId 갱신 |
+| **데미지 계산** | 6단계 공식, 치명타/회피/막기, 속성 5종 + 저항 |
+| **상태이상** | 점화/냉기/중독 독립 판정, DoT, 스택 |
+| **버프 시스템** | StackCount, 결정적 ID, StatModifier 통합 |
+| **스탯 시스템** | StatComponent 재계산, FinalElementAttack |
+| **발사체** | System_Projectile + AddressablePool 공용 풀 |
+| **AI 상태 머신** | Idle/Patrol/Chase/Attack/Retreat/Return |
+| **AI 행동** | Melee / Ranged + AiTable 다중 스킬 가중치 |
+| **데미지 텍스트** | FloatingTextManager + DOTween, 타입별 색상 |
+
+### 마을 자가성장 (Phase A~D 완료)
+| 시스템 | 비고 |
+|--------|------|
+| **자원 패시브 생산** | NPC당 시간 비례 Food/Wood/Stone, Stage별 배수 |
+| **자원 Cap** | Woodpile +100, Stockpile +80 등 데이터 주도 |
+| **범용 배치 큐** | ObjectPlacementTaskComponent + System_VillageBuildQueue |
+| **Tier 승격** | Settlement→Hamlet→Village→Town (4h 인터벌) |
+| **외곽 벽 인프라** | Palisade + Gate, Hamlet 진입 시 자동 계획 |
+| **PlacedObject Registry** | ECS 승격, tableId/tile 양방향 인덱스 |
+| **세트 판정** | ObjectSetCatalog (Forge/Inn/Birth 등) |
+| **ProvidedService 비트마스크** | Shop/Forge/Inn/Shrine |
+| **서비스 근접 집계** | System_VillageServiceProximity (0.3s) + F키 라우팅 |
+| **상점 양방향 거래** | 매물 풀 + 매각 + 자원 50% 환원 |
+| **필요도 스코어** | System_VillageNeedsEvaluation (2h) + 4계층 가중치 |
+| **NPC 직무 할당** | System_VillageJobAssignment + JobBonusTable |
+| **여관 고용** | Inn = Visitor 풀, 플레이어 능동 고용 (자연 이민 대체) |
+
+### 기타
+| 시스템 | 비고 |
+|--------|------|
+| **아이템 / 인벤토리 / 장비** | ItemTable, 드랍, UI 완성 |
+| **충돌 / 길찾기** | 축 분리 슬라이딩 + 타일 A* (Physics2D 미사용) |
+| **테이블 / 데이터 시스템** | .bytes 바이너리 + ImmutableDictionary, Addressable 로드 |
+| **치트 시스템** | UICheat (개발용) |
 
 ---
 
-## 🚧 진행 중 (8개)
+## 🚧 진행 중
 
-### 1. 전투 시스템 (40%)
-```
-✅ 스킬 시스템
-✅ 스탯 시스템
-⬜ 데미지 계산
-⬜ 히트 판정
-⬜ 사망 처리
-⬜ VFX/사운드
-```
-**다음 작업**: 데미지 계산 로직 구현
+### NPC 관계 시스템 (25%)
+- ✅ RelationshipComponent (4가지 관계)
+- ✅ System_Relationship 기본 구조
+- ⬜ 관계 변동 로직 / N:N / 이벤트
 
-### 2. AI 시스템 (30%)
-```
-✅ AIComponent
-✅ System_AI_Perception (기본)
-✅ System_AI_Behavior (기본)
-⬜ AI 상태 머신
-⬜ 타겟 감지
-⬜ 스킬 사용
-```
-**다음 작업**: Idle/Chase/Attack 상태 머신
+### NPC 일과 / 자율 의사결정 (35%)
+- ✅ NpcStatComponent (8가지 성격), NpcJobComponent
+- ⬜ 직업별 행동, 자율 의사결정, 일과 시뮬레이션 → **Phase E**
 
-### 3. NPC 시스템 (35%)
-```
-✅ NpcStatComponent (8가지 성격)
-✅ NpcJobComponent
-✅ NpcScheduleComponent
-⬜ 일일 루틴 로직
-⬜ 직업별 행동
-⬜ 자율 의사결정
-```
-**다음 작업**: NPC 스케줄 로직 구현
+### UI 시스템 (50%)
+- ✅ Inventory / Character / Shop / Forge / Inn / Shrine / MainMenu / HpBar / FloatingText
+- ⬜ 미니맵 / 퀘스트 UI / 대화 UI / 파티 UI
 
-### 4. 관계 시스템 (25%)
-```
-✅ RelationshipComponent
-✅ System_Relationship (기본)
-⬜ 관계 변동 로직
-⬜ NPC 간 관계 (N:N)
-⬜ 관계 이벤트
-```
-
-### 5. 마을 시스템 (30%)
-```
-✅ VillageData
-✅ System_VillageResource (기본)
-⬜ 자원 생산-가공-소비
-⬜ 건설 시스템
-⬜ 발전 단계 로직
-```
+### 절차적 역사 생성 (보류)
+- POCO/다운로드 메뉴만 등록, 시스템 본체 미구현
+- 대사/퀘스트 시스템 이후 재개
 
 ---
 
-## ❌ 미구현 (14개)
+## ❌ 미구현
 
-| 우선순위 | 시스템 | 예상 시간 |
-|---------|--------|----------|
-| 🔥 **High** | 던전 시스템 | 3~4주 |
-| 🔥 **High** | 동료 시스템 | 2~3주 |
-| 🔥 **High** | NPC 상호작용 | 3~4주 |
-| 🔥 **High** | 퀘스트 시스템 | 2~3주 |
-| 📝 **Medium** | 대화 시스템 | 2주 |
-| 📝 **Medium** | 크래프팅 | 1~2주 |
-| 📝 **Medium** | 건설 시스템 | 2~3주 |
-| 📝 **Medium** | 이벤트 시스템 | 2주 |
-| 🎨 **Low** | 세이브/로드 | 2~3주 |
-| 🎨 **Low** | 사운드 | 1주 |
-| 🎨 **Low** | 카메라 개선 | 1주 |
-| 🎨 **Low** | 튜토리얼 | 1~2주 |
-| 🎨 **Low** | 로컬라이제이션 | 1주 |
-| 🎨 **Low** | 최적화 | 지속적 |
+| 우선순위 | 시스템 | 의존성 |
+|---------|--------|--------|
+| 🔥 **High** | NPC 일과 시뮬 (Phase E) | 이동, 길찾기 |
+| 🔥 **High** | 출생 / 분가 / 이탈 (Phase E) | Population 확장 |
+| 🔥 **High** | NPC 상호작용 (30가지 행동) | 관계 시스템 |
+| 🔥 **High** | 퀘스트 시스템 | NPC 시스템 |
+| 📝 **Medium** | 대화 시스템 (LLM 통합 옵션) | NPC 시스템 |
+| 📝 **Medium** | 이벤트 / 침공 (Phase F) | 위협도, 벽 파괴 |
+| 📝 **Medium** | 동료 영입 / 명령 | 관계 시스템 |
+| 📝 **Medium** | 크래프팅 (장비 제작 Phase F+) | 아이템 시스템 |
+| 🎨 **Low** | 세이브/로드 보강 | 모든 시스템 |
+| 🎨 **Low** | 사운드 / VFX 통합 | — |
+| 🎨 **Low** | 카메라 개선 / 튜토리얼 / 로컬라이제이션 | — |
+| 🎨 **Low** | 절차적 역사 본 구현 | 대사/퀘스트 |
 
 ---
 
-## 🗓️ 개발 로드맵
-
-### 📅 Milestone 1: 핵심 게임플레이 (8주)
-**목표**: 오픈월드 탐험 + 전투 + 던전 클리어
+## 🗓️ Phase 로드맵 (마을 자가성장 트랙)
 
 ```
-Week 1-2:  전투 시스템 완성 ⭐ 현재 진행 중
-Week 3-4:  AI 시스템 완성
-Week 5-6:  던전 시스템 (기본)
-Week 7-8:  보스 & 보상
-```
-
-### 📅 Milestone 2: NPC 시스템 (6주)
-**목표**: NPC 상호작용 + 마을 발전
-
-```
-Week 9-10:  NPC 일일 루틴
-Week 11-12: 관계 시스템
-Week 13-14: 상호작용 시스템
-```
-
-### 📅 Milestone 3: 마을 & 동료 (6주)
-**목표**: 마을 건설 + 동료 영입
-
-```
-Week 15-16: 마을 자원 시스템
-Week 17-18: 동료 시스템
-Week 19-20: 건설 시스템
-```
-
-### 📅 Milestone 4: 콘텐츠 확장 (6주)
-**목표**: 퀘스트 + 이벤트
-
-```
-Week 21-22: 퀘스트 시스템
-Week 23-24: 대화 & 이벤트
-Week 25-26: 크래프팅 & 세이브
-```
-
-### 📅 Milestone 5: 폴리싱 (4주)
-**목표**: UI/UX + 최적화
-
-```
-Week 27-28: UI/UX 개선
-Week 29-30: 최적화 & 밸런싱
-```
-
-**총 예상 기간**: 30주 (약 7.5개월)
-**예상 완료**: 2026년 11월
-
----
-
-## 🔥 이번 주 작업 (Week 1-2)
-
-### 목표: 전투 시스템 완성
-
-#### ✅ Day 1-2: 데미지 계산 로직
-- [ ] `DamageCalculator.cs` 생성
-- [ ] 기본 데미지 공식
-- [ ] 치명타, 방어력, 회피 판정
-
-#### ✅ Day 3-4: 히트 판정
-- [ ] Collider2D 히트박스
-- [ ] `System_Skill` 히트 체크
-- [ ] 데미지 적용
-
-#### ✅ Day 5: HP 감소 & 사망
-- [ ] `System_HpCheck` 개선
-- [ ] 사망 처리
-- [ ] 플레이어 리스폰
-
-#### ✅ Day 6-7: 기본 VFX
-- [ ] 히트 이펙트
-- [ ] 사망 이펙트
-- [ ] 스킬 이펙트
-
-#### ✅ Day 8: 테스트 & 밸런싱
-- [ ] 전투 테스트
-- [ ] 밸런싱
-- [ ] 버그 수정
-
----
-
-## 📈 진행도 추이
-
-```
-현재 (2026-04-01): ████████████░░░░░░░░░░░░░░░░░░ 35%
-
-예상 진행도:
-2026-05-01: ████████████████░░░░░░░░░░░░░░ 45%
-2026-06-01: ████████████████████░░░░░░░░░░ 55%
-2026-07-01: ████████████████████████░░░░░░ 65%
-2026-08-01: ████████████████████████████░░ 75%
-2026-09-01: ████████████████████████████████ 85%
-2026-10-01: ████████████████████████████████ 95%
-2026-11-01: ████████████████████████████████ 100% 🎉
+✅ Phase A: 자가 생성 최소 루프 (MVP)         완료 2026-04-24
+✅ Phase B: 오브젝트 배치 핵심 (범용 큐)      완료 2026-04-24
+✅ Phase C: Tier 승격 + Stage 1·2 + 외벽     완료 2026-04-26
+✅ Phase D: 서비스 + 상점 + 필요도 + 직무     완료 2026-04-28
+⬜ Phase E: 배후 시뮬레이션 + 출생/분가       다음
+⬜ Phase F: 위협도 / 몬스터 침공 / 벽 파괴
+⬜ Phase G: City Stage + StoneWall + WatchTower
 ```
 
 ---
 
-## 🎨 주요 특징 (완성 시)
+## 🎨 핵심 게임플레이 (현재 가능)
 
-### 플레이어 경험
 ```
 🗺️  오픈월드 탐험
-  └─ 절차적 생성 맵, 청크 로딩
+  └─ 청크 기반, Perlin Noise, Zone 1~99, 결정론
 
 ⚔️  실시간 전투
-  └─ 스킬 시스템, 장비 성장
+  └─ 5속성 데미지 + 저항, 상태이상, 발사체 풀링, 가중치 AI
 
-🏰  절차적 생성 던전
-  └─ Tier 1~5, 보스 패턴
+📖  스킬북 장착
+  └─ 인벤토리 책을 슬롯에 장착 → 스킬 갱신
 
-👥  NPC 관계 시스템
-  └─ 8가지 성격, 30가지 상호작용
+🏘️  자가성장 마을
+  └─ 오브젝트 단위 자가 건설, 4-Stage Tier, 외곽 벽 자동
 
-🤝  동료 시스템
-  └─ 최대 3명, 직업별 특수 능력
-
-🏘️  마을 건설
-  └─ 자원 체인, 5단계 발전
-
-📜  퀘스트 & 이벤트
-  └─ 관계 기반 시나리오
+🛒  마을 서비스
+  └─ Shop(양방향 거래) / Forge(강화) / Inn(고용) / Shrine
 ```
 
 ---
@@ -303,30 +242,36 @@ Week 29-30: 최적화 & 밸런싱
 
 ### Unity
 - **Engine**: Unity 6000.0.42f1 (LTS)
-- **Rendering**: URP 17.0.4
+- **Rendering**: URP 17.0.4 (2D)
 - **Input**: Unity Input System 1.13.1
 
 ### 커스텀 ECS
 - **Component**: 순수 데이터 struct
-- **System**: 로직 클래스 (ISystem)
+- **System**: ISystem 인터페이스 (Update / FixedUpdate / LateUpdate)
 - **Storage**: SparseSet (O(1) 접근)
 - **NOT Unity DOTS**: 자체 구현
+- **Priority 대역**: Village 도메인은 50-69 (Resource 50-54 / Population 55-59 / Lifecycle 60-64 / Construction 65-69)
 
-### 절차적 생성
-- **맵**: Perlin Noise, 청크 로딩
-- **던전**: Room + Corridor 알고리즘
+### 데이터 / 인프라
+- **테이블**: `.bytes` 바이너리 + `ImmutableDictionary<int, T>`
+- **세이브**: Newtonsoft JSON (`WorldData`, `VillageData`)
+- **에셋**: Addressables (lazy 로드 + 캐시)
+- **오브젝트 풀**: AddressablePool (string 키 공용)
+- **충돌**: 축 분리 슬라이딩 + 타일 A* (Physics2D 미사용)
 
 ---
 
-## 📝 코딩 컨벤션
+## 📝 코딩 컨벤션 (요약)
 
 - **멤버 변수**: `_variableName` (언더스코어)
 - **메서드 순서**: public → protected → private
-- **루프**: `for` 사용 (foreach 금지)
+- **루프**: `for` 사용 (foreach 금지, GC 회피)
 - **거리 체크**: `SqrMagnitude` 사용
 - **조건문**: 명시적 비교 (`== false`, `== null`)
+- **데이터 정본화**: 코드에 TableId 분기 금지, 의미는 컬럼에 박는다
+- **하드코딩 금지**: BuildableItemTable / SetMemberTag 등 시트 + 사전으로 표현
 
-자세한 내용: [CLAUDE.md](../CLAUDE.md)
+자세한 내용: [../CLAUDE.md](../CLAUDE.md)
 
 ---
 
@@ -334,88 +279,69 @@ Week 29-30: 최적화 & 밸런싱
 
 ### 1. 프로젝트 파악
 ```
-1. 이 문서 (README.md) 읽기
-2. gameOverview.md 읽기
-3. implementationStatus.md에서 현재 상태 확인
+1. 이 문서 (README.md) — 전체 지도
+2. gameOverview.md — 컨셉
+3. implementationStatus.md — 시스템별 현황
+4. CLAUDE.md — 코딩 규약 + ECS API
 ```
 
-### 2. 시스템 이해
+### 2. 시스템 이해 (관심 영역별)
 ```
-1. combatSystem.md - 전투 어떻게 동작?
-2. townDesign.md - NPC 어떻게 행동?
-3. 관심 있는 시스템 문서 읽기
+전투/스킬     → combatSystem.md → SKILL_DESIGN.md → BALANCE_DESIGN.md
+마을 시뮬     → VILLAGE_GROWTH_STAGES.md → PHASE_A~D_DESIGN.md
+맵/탐험       → MAP_DESIGN.md → MONSTER_SPAWN_DESIGN.md
+AI            → AI_SKILL_SELECTION_IMPLEMENTATION.md → monsterAIPattern.md
+충돌/길찾기   → COLLISION_PATHFINDING_DESIGN.md
 ```
 
 ### 3. 구현 시작
 ```
-1. implementationStatus.md에서 "이번 주 작업" 확인
-2. 해당 시스템 문서 참조
+1. implementationStatus.md에서 "다음 작업" 확인
+2. 해당 시스템 문서 + 관련 Phase 문서 참조
 3. 코딩 컨벤션 (CLAUDE.md) 준수
-4. 완료 후 문서 업데이트
+4. 완료 후 implementationStatus.md / 본 문서 업데이트
 ```
 
 ---
 
-## 🤝 기획 에이전트 활용
+## 📂 폴더 구조
 
-### 질문 예시
-```
-"전투 시스템의 데미지 계산 어떻게 구현해?"
-→ combatSystem.md 기반 코드 제시
-
-"NPC 성격 스탯이 상호작용에 어떻게 영향을 줘?"
-→ interactionSystem.md 판정 공식 설명
-
-"다음에 뭘 만들어야 해?"
-→ implementationStatus.md 기반 추천
-
-"보스 HP 2000이 적당해?"
-→ 밸런스 분석 및 제안
-
-"퀘스트 시스템 설계해줘"
-→ 새로운 설계 문서 작성
-```
-
----
-
-## 📞 연락처 & 리소스
-
-### 문서
-- **기획 문서**: `Assets/Doc/`
-- **기술 문서**: `CLAUDE.md`, `BUFF_SYSTEM_IMPLEMENTATION.md`
-
-### 폴더 구조
 ```
 Assets/Scripts/
-├── Manager/          # 핵심 매니저
+├── Manager/          # GlobalManager, ComponentManager, SystemManager,
+│                     # DataManager, MapManager, VillageManager, MonsterManager,
+│                     # ItemManager, BuildingManager, TimeManager 등
 ├── Common/
-│   ├── Component/    # ECS 컴포넌트
-│   ├── System/       # ECS 시스템
-│   └── Interface/    # ISystem 인터페이스
-├── AI/               # AI 행동
-├── Buff/             # 버프
-├── Skill/            # 스킬
-├── Creature/         # 캐릭터
-├── Map/              # 맵 생성
-├── Village/          # 마을 시스템
-└── UI/               # UI
+│   ├── Component/    # ECS 컴포넌트 (struct)
+│   ├── System/       # ECS 시스템 (ISystem)
+│   ├── Interface/    # ISystem 인터페이스
+│   └── SparseSet.cs  # ECS 컴포넌트 저장소
+├── AI/               # AI 행동 (Melee/Ranged Behavior, AIStateHelper)
+├── Buff/             # 버프 시스템 (BuffInstance, BuffSystem)
+├── Skill/            # 스킬 헬퍼, DamageCalculator
+├── Creature/         # 캐릭터 구현
+├── Map/              # 청크 / 타일 / 바이옴
+├── Village/          # 마을 자가성장 관련
+├── Data/             # DataManager_Table, 세이브 데이터
+├── Factory/          # EntityFactory, BuildingFactory
+├── UI/               # UIInventory, UIShop, UIForge, UIInn, UIShrine, 등
+└── Editor/           # DownloadTables, 에디터 메뉴
 ```
 
 ---
 
 ## 🎯 핵심 목표
 
-> **"플레이어가 직접 싸우는 액션 RPG에서, NPC들은 자율적으로 살아 숨쉬며, 관계에 따라 다양한 이야기가 펼쳐지는 게임"**
+> **"플레이어가 직접 싸우는 액션 RPG에서, 마을은 시간이 흐르면 알아서 자라고, 플레이어는 그 마을의 상점·강화·여관을 통해 진짜 이득을 얻으며, NPC들은 자기 직업의 작업 오브젝트 옆에서 살아간다."**
 
-**현재 위치**: 핵심 시스템 구축 중 (35%)
-**다음 목표**: 전투 시스템 완성 (2주 내)
-**최종 목표**: 플레이 가능한 프로토타입 (7.5개월)
+**현재 위치**: 마을 자가성장 Phase A~D 완료, 전투/AI 핵심 로직 완성 (60%)
+**다음 목표**: Phase E (배후 시뮬레이션 + 출생/분가/이탈) + NPC 관계 시스템
 
 ---
 
-**문서 관리**:
-- 매주 금요일: 진행도 업데이트
-- 새 시스템 완료 시: 이 문서 업데이트
-- Milestone 완료 시: 로드맵 재검토
+**문서 관리 원칙**:
+- 매주 진행도 업데이트는 [implementationStatus.md](./implementationStatus.md)
+- Phase 완료 시 본 문서의 Phase 로드맵 + 빠른 참조 업데이트
+- 새 설계 문서 추가 시 본 문서의 "기획 문서" 섹션에 링크 등록
 
-**마지막 업데이트**: 2026-04-01 by Claude Code 기획 에이전트 🤖
+**마지막 업데이트**: 2026-05-20
