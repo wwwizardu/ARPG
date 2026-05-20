@@ -9,26 +9,6 @@ namespace ARPG.Map
     public static class BiomeTable
     {
         /// <summary>
-        /// biome → Ground TileType. GenerateChunkData에서 ApplyBiomeTile이 호출.
-        /// </summary>
-        public static GlobalEnum.TileType GetGroundTileType(GlobalEnum.BiomeType biome)
-        {
-            switch (biome)
-            {
-                case GlobalEnum.BiomeType.Desert:    return GlobalEnum.TileType.Sand;
-                case GlobalEnum.BiomeType.Swamp:     return GlobalEnum.TileType.SwampMud;
-                case GlobalEnum.BiomeType.Steppe:    return GlobalEnum.TileType.DryGrass;
-                case GlobalEnum.BiomeType.Tundra:    return GlobalEnum.TileType.Snow;
-                case GlobalEnum.BiomeType.Snow:      return GlobalEnum.TileType.Snow;
-                case GlobalEnum.BiomeType.Mountain:  return GlobalEnum.TileType.StoneGround;
-                case GlobalEnum.BiomeType.Wasteland: return GlobalEnum.TileType.Ground;   // 향후 Phase 7
-                case GlobalEnum.BiomeType.Forest:    return GlobalEnum.TileType.Glass;
-                case GlobalEnum.BiomeType.Plains:    return GlobalEnum.TileType.Glass;
-                default:                              return GlobalEnum.TileType.Glass;
-            }
-        }
-
-        /// <summary>
         /// biome별 Hill 비트 임계값. elevation 노이즈가 이 값을 넘으면 Hill 비트 ON.
         /// 0~1, 작을수록 hill이 많이 나옴.
         /// </summary>

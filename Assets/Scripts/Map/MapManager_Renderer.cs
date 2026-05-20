@@ -20,6 +20,9 @@ namespace ARPG.Map
         [SerializeField] private BiomeThemeEntry[] _themeEntries;
         private Dictionary<GlobalEnum.BiomeType, ThemeTileSet> _themesByBiome;
 
+        [Header("청사진 Ground 통합 타일셋")]
+        [SerializeField] private GroundTileSet _groundTileSet;
+
         [Header("땅 룰 타일")]
         [SerializeField] private RuleTile _ruleTile;
 
@@ -43,15 +46,13 @@ namespace ARPG.Map
         // MapManager.Reset()에서 ClearMissingTileLog() 호출하여 초기화.
         private readonly HashSet<GlobalEnum.BiomeType> _loggedMissingTheme = new HashSet<GlobalEnum.BiomeType>();
         private readonly HashSet<GlobalEnum.BiomeType> _loggedMissingGround = new HashSet<GlobalEnum.BiomeType>();
-        private readonly HashSet<Vector2Int> _loggedNoneCellChunks = new HashSet<Vector2Int>();
-        private bool _loggedMissingRuleTile = false;
+        private bool _loggedMissingGroundTileSet = false;
 
         public void ClearMissingTileLog()
         {
             _loggedMissingTheme.Clear();
             _loggedMissingGround.Clear();
-            _loggedNoneCellChunks.Clear();
-            _loggedMissingRuleTile = false;
+            _loggedMissingGroundTileSet = false;
         }
 
         /// <summary>
@@ -146,34 +147,27 @@ namespace ARPG.Map
                     int clusterIdx = (y / BiomeNoise.CLUSTER_SIZE) * clustersPerSide + (x / BiomeNoise.CLUSTER_SIZE);
                     ThemeTileSet theme = _clusterThemes[clusterIdx];
 
-                    // 바닥 타일 설정 (MAP_DESIGN.md §4.5 Option A)
-                    //   - Ground (맨땅, MapFileData 청사진용): 바이옴 무관 단일 _ruleTile
-                    //   - None: null (빈 칸)
-                    //   - 그 외 절차 생성 바닥(Glass/Sand/Snow 등): cluster biome의 ThemeTileSet.Ground
-                    if (baseTileType == (int)GlobalEnum.TileType.Ground)
+                    // 바닥 타일 설정 — GroundTileSet 통합 룩업
+                    //   - idx == 0: passthrough → cluster biome의 ThemeTileSet.Ground
+                    //   - idx > 0 + 유효 슬롯: GroundTileSet.tiles[idx]
+                    //   - 미할당 / 범위 밖 / null 슬롯: cluster biome으로 fallback
+                    if (baseTileType > 0
+                        && _groundTileSet != null
+                        && _groundTileSet.tiles != null
+                        && baseTileType < _groundTileSet.tiles.Length
+                        && _groundTileSet.tiles[baseTileType] != null)
                     {
-                        if (_ruleTile == null && _loggedMissingRuleTile == false)
-                        {
-                            _loggedMissingRuleTile = true;
-                            Debug.LogError($"[MapManager] _ruleTile 미설정 — MapFileData 청사진의 Ground(맨땅) 타일이 렌더되지 않음. chunk=({chunk.chunkX},{chunk.chunkY}). 인스펙터의 '땅 룰 타일' 필드에 RuleTile 할당 필요.");
-                        }
-                        _tempTileArray[index] = _ruleTile;
-                    }
-                    else if (baseTileType == (int)GlobalEnum.TileType.None)
-                    {
-                        // None 셀 — 청크당 1회만 로그 (위치는 첫 발견 셀 기준).
-                        // 주 원인: MapFileData overlay가 objectId/Hill만 깔고 바닥 비트를 0으로 만든 청사진 셀.
-                        Vector2Int chunkKey = new Vector2Int(chunk.chunkX, chunk.chunkY);
-                        if (_loggedNoneCellChunks.Add(chunkKey))
-                        {
-                            int worldX = chunk.chunkX * chunkSize + x;
-                            int worldY = chunk.chunkY * chunkSize + y;
-                            Debug.LogError($"[MapManager] TileType.None 셀 — chunk=({chunk.chunkX},{chunk.chunkY}), local=({x},{y}), world=({worldX},{worldY}), tileData=0x{tileData:X}. MapFileData 청사진이 바닥 없이 오브젝트/Hill만 깐 가능성 (overlay 시 절차 생성 바닥이 0으로 덮어쓰여짐).");
-                        }
-                        _tempTileArray[index] = null;
+                        _tempTileArray[index] = _groundTileSet.tiles[baseTileType];
                     }
                     else
                     {
+                        if (baseTileType > 0
+                            && _groundTileSet == null
+                            && _loggedMissingGroundTileSet == false)
+                        {
+                            _loggedMissingGroundTileSet = true;
+                            Debug.LogError($"[MapManager] _groundTileSet 미할당 — Inspector의 'Ground 통합 타일셋' 슬롯에 GroundTileSet 자산 할당 필요. cluster biome으로 fallback.");
+                        }
                         _tempTileArray[index] = theme != null ? theme.Ground : null;
                     }
 

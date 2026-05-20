@@ -8,7 +8,7 @@ namespace ARPG.Map
     {
         private List<Vector2Int> _candidateSpawnPositions = new List<Vector2Int>();
 
-        public static ulong CombineTileData(ulong currentTile, GlobalEnum.TileType inBaseTileType, uint inHillFlag, uint inMonsterSpawnFlag, ulong inObjectId = 0)
+        public static ulong CombineTileData(ulong currentTile, uint inGroundTileId, uint inHillFlag, uint inMonsterSpawnFlag, ulong inObjectId = 0)
         {
             // 기존 타일 데이터에서 수정할 비트들을 제외한 나머지 비트 유지
             // GroundLayerMask(0-9비트), ObjectLayerMask(10-19비트), Hill(20비트), MonsterSpawn(21비트)를 제거
@@ -17,9 +17,9 @@ namespace ARPG.Map
                                                   (ulong)GlobalEnum.TileFlag.Hill |
                                                   (ulong)GlobalEnum.TileFlag.MonsterSpawn);
 
-            // 새로운 값 설정: 바닥 타입(0-9비트) + 오브젝트 ID(10-19비트) + Hill 플래그 + MonsterSpawn 플래그
+            // 새로운 값 설정: GroundTileSet 인덱스(0-9비트) + 오브젝트 ID(10-19비트) + Hill 플래그 + MonsterSpawn 플래그
             return preservedBits |
-                   ((ulong)inBaseTileType & (ulong)GlobalEnum.TileFlag.GroundLayerMask) |
+                   ((ulong)inGroundTileId & (ulong)GlobalEnum.TileFlag.GroundLayerMask) |
                    ((inObjectId << 10) & (ulong)GlobalEnum.TileFlag.ObjectLayerMask) |
                    inHillFlag |
                    inMonsterSpawnFlag;
@@ -38,8 +38,8 @@ namespace ARPG.Map
 
         /// <summary>
         /// Phase 2 Race Settlement 절차 배치 — MAP_DESIGN.md §7. 결정론 (같은 mapSeed → 같은 결과).
-        /// v1 골격: chunk-grain 알고리즘으로 placement 계산 후 콘솔 로그.
-        /// race-specific 청사진(.bytes) 카탈로그 준비 시 _mapFileDataDic에 추가하는 단계로 확장.
+        /// 알고리즘: chunk-grain (region dominant biome → race → 호환 chunk 후보 풀 → hash 선택 → chunk 중심)
+        /// 청사진: 명명 규칙 `BaseTown_<Race>.bytes` (e.g., BaseTown_Dwarf.bytes). 파일 없으면 LogError + skip.
         /// </summary>
         private void PlaceRaceSettlements()
         {
@@ -47,16 +47,99 @@ namespace ARPG.Map
                 mapSeed, chunkSize, minChunkX, maxChunkX, minChunkY, maxChunkY);
 
             Debug.Log($"[MapManager] Race Settlement 계산 완료: {placements.Count}개 region에 배치");
+            int appliedCount = 0;
+            int skippedNoBlueprint = 0;
+            int skippedOverlap = 0;
             for (int i = 0; i < placements.Count; i++)
             {
                 var p = placements[i];
+
+                // 1) race별 청사진 로드 (명명 규칙)
+                MapFileData blueprint = LoadRaceBlueprint(p.Race);
+                if (blueprint == null)
+                {
+                    skippedNoBlueprint++;
+                    continue;   // LoadRaceBlueprint 내부에서 LogError 처리
+                }
+
+                // 2) 청사진 origin을 settlement 좌표로 이동 (chunk 중심 기준, 청사진 좌하단 = center - 사이즈/2)
+                Vector2Int newOrigin = new Vector2Int(
+                    p.WorldCoord.x - blueprint.Width / 2,
+                    p.WorldCoord.y - blueprint.Height / 2);
+                blueprint.SetStartPosition(newOrigin);
+
+                // 3) 충돌 검사 — 기존 _mapFileDataDic 엔트리들과 bounding box 비교
+                if (HasMapFileOverlap(blueprint))
+                {
+                    skippedOverlap++;
+                    Debug.LogWarning($"[MapManager] Settlement skip (overlap): region=({p.RegionCoord.x},{p.RegionCoord.y}) race={p.Race} origin=({newOrigin.x},{newOrigin.y}) size={blueprint.Width}x{blueprint.Height}");
+                    continue;
+                }
+
+                // 4) 등록 — 이후 OverlayMapFileData가 자동으로 청크에 적용
+                _mapFileDataDic[newOrigin] = blueprint;
+                appliedCount++;
                 Debug.Log($"  [Settlement] region=({p.RegionCoord.x},{p.RegionCoord.y}) " +
                           $"dominant={p.RegionDominantBiome} chunkBiome={p.ChunkBiome} " +
                           $"→ Race={p.Race} Size={p.Size} " +
-                          $"chunk=({p.ChunkCoord.x},{p.ChunkCoord.y}) world=({p.WorldCoord.x},{p.WorldCoord.y})");
+                          $"chunk=({p.ChunkCoord.x},{p.ChunkCoord.y}) origin=({newOrigin.x},{newOrigin.y}) {blueprint.Width}x{blueprint.Height}");
             }
 
-            // TODO Phase 2 후속: race-specific blueprint 카탈로그 + 충돌 검사 + _mapFileDataDic 등록
+            Debug.Log($"[MapManager] Settlement 배치 결과: 적용={appliedCount} / 청사진없음={skippedNoBlueprint} / 충돌스킵={skippedOverlap}");
+        }
+
+        /// <summary>
+        /// 명명 규칙 `BaseTown_<Race>.bytes`로 청사진 로드. 파일 없거나 읽기 실패 시 LogError 후 null 반환.
+        /// </summary>
+        private MapFileData LoadRaceBlueprint(GlobalEnum.RaceType race)
+        {
+            string filename = $"BaseTown_{race}.bytes";
+            string filePath = Path.Combine(Application.dataPath, "_BinaryData", "TilemapData", filename);
+
+            if (File.Exists(filePath) == false)
+            {
+                Debug.LogError($"[MapManager] Race 청사진 파일 없음 — {filename} (race={race}). 경로: {filePath}. Race settlement이 배치되지 않음.");
+                return null;
+            }
+
+            try
+            {
+                using (FileStream fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read))
+                using (BinaryReader reader = new BinaryReader(fileStream))
+                {
+                    return MapFileData.ReadFromBinary(reader);
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"[MapManager] Race 청사진 로드 실패 — {filename}: {e.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>새 청사진과 기존 _mapFileDataDic 엔트리들 간 bounding box 충돌 검사.</summary>
+        private bool HasMapFileOverlap(MapFileData candidate)
+        {
+            int candStartX = candidate.StartPosition.x;
+            int candStartY = candidate.StartPosition.y;
+            int candEndX = candStartX + candidate.Width - 1;
+            int candEndY = candStartY + candidate.Height - 1;
+
+            foreach (var pair in _mapFileDataDic)
+            {
+                MapFileData existing = pair.Value;
+                int exStartX = existing.StartPosition.x;
+                int exStartY = existing.StartPosition.y;
+                int exEndX = exStartX + existing.Width - 1;
+                int exEndY = exStartY + existing.Height - 1;
+
+                bool overlaps =
+                    candStartX <= exEndX && candEndX >= exStartX &&
+                    candStartY <= exEndY && candEndY >= exStartY;
+                if (overlaps)
+                    return true;
+            }
+            return false;
         }
 
         private MapChunkData GetOrCreateChunk(int chunkX, int chunkY)
@@ -126,14 +209,12 @@ namespace ARPG.Map
             _candidateSpawnPositions.Clear();
 
             // 1. 타일 데이터 생성 — cluster 단위 biome 적용 (cluster당 BiomeTable 룩업 1회 캐시).
-            //    셀이 속한 cluster의 biome으로 baseTileType/hillThreshold/spawnRate 결정.
-            GlobalEnum.TileType[] clusterBaseTileTypes = new GlobalEnum.TileType[clusterCount];
+            //    절차 생성 셀의 ground 비트는 0 (passthrough — 렌더러가 cluster biome.Ground로 직접 룩업).
             float[] clusterHillThresholds = new float[clusterCount];
             float[] clusterSpawnRates = new float[clusterCount];
             for (int i = 0; i < clusterCount; i++)
             {
                 GlobalEnum.BiomeType cb = chunk.clusterBiomes[i];
-                clusterBaseTileTypes[i] = BiomeTable.GetGroundTileType(cb);
                 clusterHillThresholds[i] = BiomeTable.GetHillThreshold(cb);
                 clusterSpawnRates[i] = _monsterSpawnRate * BiomeTable.GetMonsterSpawnMultiplier(cb);
             }
@@ -146,7 +227,6 @@ namespace ARPG.Map
                     int worldY = chunk.chunkY * chunkSize + y;
 
                     int clusterIdx = (y / BiomeNoise.CLUSTER_SIZE) * clustersPerSide + (x / BiomeNoise.CLUSTER_SIZE);
-                    GlobalEnum.TileType baseTileType = clusterBaseTileTypes[clusterIdx];
                     float hillThreshold = clusterHillThresholds[clusterIdx];
                     float spawnRate = clusterSpawnRates[clusterIdx];
 
@@ -167,7 +247,7 @@ namespace ARPG.Map
                         _candidateSpawnPositions.Add(new Vector2Int(x, y));
                     }
 
-                    chunk.tiles[x, y] = CombineTileData(0UL, baseTileType, hillFlag, monsterSpawnFlag);
+                    chunk.tiles[x, y] = CombineTileData(0UL, 0u, hillFlag, monsterSpawnFlag);
                 }
             }
 

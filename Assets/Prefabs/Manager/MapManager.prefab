@@ -503,6 +503,7 @@ MonoBehaviour:
     TileSet: {fileID: 11400000, guid: 2d7bb1267a930b84899e40116fcce3b4, type: 2}
   - Biome: 10
     TileSet: {fileID: 11400000, guid: b7a714176d22d874ba7ffae1c093b54b, type: 2}
+  _groundTileSet: {fileID: 11400000, guid: 94837ebba5f2e6545acc92090cc1096c, type: 2}
   _ruleTile: {fileID: 11400000, guid: 9224232a219ed3247958b19048036ec4, type: 2}
   _ruleTile_Hill: {fileID: 11400000, guid: 1188aa7e4c37d524ba8adfc85c91909e, type: 2}
   _ruleTile_Object: {fileID: 0}

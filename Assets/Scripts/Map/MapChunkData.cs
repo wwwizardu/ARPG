@@ -36,7 +36,7 @@ namespace ARPG.Map
         // 세밀한 per-cluster biome은 clusterBiomes 참조.
         public GlobalEnum.BiomeType chunkBiome;
         // cluster-grained biomes (v1.9): chunkSize / BiomeNoise.CLUSTER_SIZE per side.
-        // 8/2 = 4 → 16 entries. Renderer/Generator가 per-cluster theme/TileType 결정에 사용.
+        // 8/2 = 4 → 16 entries. Renderer/Generator가 per-cluster theme 결정에 사용.
         public GlobalEnum.BiomeType[] clusterBiomes;
         public ulong[,] tiles;
         public bool isActive;

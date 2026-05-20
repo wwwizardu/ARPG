@@ -172,14 +172,6 @@ namespace ARPG.Map
             }
         }
         
-        public GlobalEnum.TileType GetTileTypeAt(int worldX, int worldY)
-        {
-            ulong tileData = GetTileAt(worldX, worldY);
-            if (tileData == 0) return GlobalEnum.TileType.Ground; // 기본값
-            
-            return (GlobalEnum.TileType)(tileData & 0xF);
-        }
-        
         public bool IsHillAt(int worldX, int worldY)
         {
             ulong tileData = GetTileAt(worldX, worldY);

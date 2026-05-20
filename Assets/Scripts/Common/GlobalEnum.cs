@@ -17,18 +17,6 @@ public class GlobalEnum
         Npc,
     }
 
-    public enum TileType
-    {
-        None = 0,           // 빈 타일
-        Ground = 1,         // 맨땅
-        Glass = 2,          // 잔디
-        StoneGround = 3,    // 돌 바닥
-        Sand = 4,           // 모래 (Desert/Steppe)
-        SwampMud = 5,       // 늪 진흙 (Swamp)
-        DryGrass = 6,       // 마른 풀 (Steppe)
-        Snow = 7,           // 눈 (Snow/Tundra)
-    }
-
     /// <summary>
     /// 바이옴 분류 (MAP_DESIGN.md §4.2). per-tile warped Perlin으로 결정.
     /// Whittaker 모델 — 온도 × 습도 (1차) + 고도 (변형).

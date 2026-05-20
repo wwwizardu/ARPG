@@ -30,6 +30,12 @@ namespace ARPG.Map
         public int Height => _height;
         public Vector2Int StartPosition => _startPosition;
 
+        /// <summary>절차 배치 시 청사진의 origin을 다른 좌표로 옮기는 용도 (Race Settlement 등). MAP_DESIGN.md §7.3.</summary>
+        public void SetStartPosition(Vector2Int newStartPosition)
+        {
+            _startPosition = newStartPosition;
+        }
+
         public MapFileData(MapType mapType, int width, int height, Vector2Int startPosition)
         {
             _mapType = mapType;

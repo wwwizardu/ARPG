@@ -21,6 +21,7 @@ namespace ARPG.Map
         [Header("Map Settings")]
         [SerializeField] private MapType _mapType;
         [SerializeField] private ThemeTileSet _themeTileSet;
+        [SerializeField] private GroundTileSet _groundTileSet;
 
         [Header("Editor Only")]
         [SerializeField] private string _saveFileName = "";
@@ -111,7 +112,7 @@ namespace ARPG.Map
                     }
 
                     // 3. Ground 타일과 Object 타일 데이터를 통합하여 생성
-                    ulong tileData = MapManager.CombineTileData(0, (GlobalEnum.TileType)customTile.CustomData, 0, 0, objectId);
+                    ulong tileData = MapManager.CombineTileData(0, customTile.CustomData, 0, 0, objectId);
 
                     // 4. Y좌표를 뒤집어서 저장 (왼쪽 아래가 (0,0)이 되도록)
                     int flippedY = bounds.size.y - 1 - y;
@@ -251,29 +252,25 @@ namespace ARPG.Map
         }
 
         /// <summary>
-        /// uint를 TileBase로 변환합니다.
+        /// ulong tileData의 GroundLayerMask 비트를 GroundTileSet 인덱스로 사용해 TileBase 룩업.
         /// </summary>
         private CustomTile ConvertUintToTile(ulong tileData)
         {
             if (tileData == 0)
                 return null;
 
-            // 하위 10비트를 TileType으로 변환 (GroundLayerMask)
-            GlobalEnum.TileType tileType = (GlobalEnum.TileType)(tileData & (ulong)GlobalEnum.TileFlag.GroundLayerMask);
+            int idx = (int)(tileData & (ulong)GlobalEnum.TileFlag.GroundLayerMask);
+            if (idx == 0)
+                return null;
 
-            // ThemeTileSet에서 해당 타일 가져오기 — 에디터 도구의 .bytes 역변환 룩업 (MAP_DESIGN.md §4.5 Option A 이후 레거시 경로)
-#pragma warning disable 0618    // TileSet[]은 [Obsolete] 처리됨 — MapFileSaver 에디터 룩업 전용으로 의도적 사용
-            if (_themeTileSet != null && _themeTileSet.TileSet != null)
+            if (_groundTileSet != null && _groundTileSet.tiles != null
+                && idx < _groundTileSet.tiles.Length
+                && _groundTileSet.tiles[idx] != null)
             {
-                int tileIndex = (int)tileType;
-                if (tileIndex >= 0 && tileIndex < _themeTileSet.TileSet.Length)
-                {
-                    return _themeTileSet.TileSet[tileIndex] as CustomTile;
-                }
+                return _groundTileSet.tiles[idx] as CustomTile;
             }
-#pragma warning restore 0618
 
-            Debug.LogError($"[MapFileSaver] ConvertUintToTile - TileType {tileType} not found in ThemeTileSet");
+            Debug.LogError($"[MapFileSaver] ConvertUintToTile - GroundTileSet 인덱스 {idx} 미할당 (자산 없음/범위 밖/슬롯 null)");
             return null;
         }
 
