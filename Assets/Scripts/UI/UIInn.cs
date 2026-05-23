@@ -300,6 +300,20 @@ namespace ARPG.UI
             }
 
             int capturedId = entityId;
+
+            // 장비 미리보기 — UINpcInspect를 BindSaveData로 띄움 (방문자는 IsActive=false라 entityId 검색 불가)
+            Button inspectBtn = new() { title = "장비" };
+            inspectBtn.size = Size.S;
+            inspectBtn.variant = ButtonVariant.Default;
+            inspectBtn.AddToClassList("inn-visitor-hire-btn");
+            NpcSaveData capturedSave = saveData;
+            inspectBtn.clicked += () =>
+            {
+                var ui = AR.s.UI.Show<UINpcInspect>(AddressablePath.NpcInspect, UIManager.Layer.Popup);
+                ui?.BindSaveData(capturedSave);
+            };
+            actionRow.Add(inspectBtn);
+
             Button hireBtn = new() { title = $"Hire {hireCost}G" };
             hireBtn.size = Size.S;
             hireBtn.variant = ButtonVariant.Accent;

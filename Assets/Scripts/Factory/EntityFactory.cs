@@ -4,6 +4,7 @@ using System.Threading;
 using ARPG.Base;
 using ARPG.Component;
 using ARPG.Data;
+using ARPG.Npc;
 using ARPG.Tables;
 using ARPG.Utility;
 using Cysharp.Threading.Tasks;
@@ -112,9 +113,10 @@ namespace ARPG.Factory
         /// <summary>
         /// NpcTable 기반 NPC 엔티티 생성
         /// NpcTable → Stat + State + Velocity + AI
+        /// saveData가 주어지면 InventoryEquip의 장비 modifier를 ECS에 복원한다 (PlayerData와 동일 패턴).
         /// </summary>
         /// <returns>(entityId, entity) 튜플. 실패 시 (-1, null)</returns>
-        public static async UniTask<(int entityId, EntityBase? entity)> CreateNpc(int npcTableId, Vector3 position, Transform? parent = null, int savedEntityId = -1)
+        public static async UniTask<(int entityId, EntityBase? entity)> CreateNpc(int npcTableId, Vector3 position, Transform? parent = null, int savedEntityId = -1, NpcSaveData? saveData = null)
         {
             // 1. 테이블 로드
             NpcTable? table = AR.s.Data.GetNpc(npcTableId);
@@ -186,6 +188,13 @@ namespace ARPG.Factory
             if (table.AiTable != null)
             {
                 AddSkillsFromAiTable(entityId, table.AiTable);
+            }
+
+            // 장비 modifier 적용 (StatComponent에 합산). saveData.InventoryEquip의 ItemData는
+            // NpcManager가 신규 시드(SeedInitialEquipment) 또는 로드(OnLoadCompleted) 단계에서 이미 준비해 둔다.
+            if (saveData != null)
+            {
+                EquipHelper.ApplyAllEquipmentModifiers(entityId, saveData.InventoryEquip);
             }
 
             RegisterToSystems(entityId, obj, table.AnimationId);

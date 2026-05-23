@@ -51,20 +51,18 @@
 
 | 비트 | 폭 | 용도 | 마스크 |
 |------|-----|------|--------|
-| 0-9 | 10b | Ground Layer (`TileType`) | `GroundLayerMask = 0x3FF` |
+| 0-9 | 10b | Ground Layer (`GroundTileSet` 인덱스) | `GroundLayerMask = 0x3FF` |
 | 10-19 | 10b | Object Layer (`BuildableItemTable.Id`) | `ObjectLayerMask = 0x3FF << 10` |
 | 20 | 1b | Hill | `Hill = 1 << 20` |
 | 21 | 1b | MonsterSpawn 후보 | `MonsterSpawn = 1 << 21` |
 | 22 | 1b | Blocked (이동 불가) | `Blocked = 1 << 22` |
 | 23-63 | 41b | **미사용** | (확장 여유) |
 
-**TileType (Ground Layer 값)** — [GlobalEnum.cs:20-27](../Assets/Scripts/Common/GlobalEnum.cs#L20-L27):
-- 0 = None
-- 1 = Ground (맨땅)
-- 2 = Glass (잔디)
-- 3 = StoneGround (돌 바닥) — 현재 생성 코드 미사용
+**Ground Layer 값** — 청사진(.bytes)의 ground 비트는 [`GroundTileSet`](../Assets/Scripts/Map/Tile/GroundTileSet.cs)의 인덱스를 가리킨다:
+- `0` = passthrough (청사진이 ground 미지정 → 렌더러가 cluster biome의 `ThemeTileSet.Ground`로 fallback)
+- `1~` = `GroundTileSet.tiles[idx]` 룩업
 
-→ **유의미한 지면 종류는 사실상 2종**. 이후 §4에서 확장.
+→ 절차 생성 셀은 ground 비트를 0으로 둔다 (cluster biome으로 자동 렌더). 청사진이 깐 셀만 인덱스를 채운다.
 
 ### 2.4 생성 파이프라인 — `GenerateChunkData`
 
@@ -128,7 +126,7 @@
 ### 2.9 렌더링
 
 3개 Tilemap 레이어 ([MapManager.cs:10-12](../Assets/Scripts/Manager/MapManager.cs#L10-L12)):
-- `_tileMap` — Ground 레이어 (TileType별 RuleTile 또는 ThemeTileSet)
+- `_tileMap` — Ground 레이어 (GroundTileSet 인덱스 룩업, cluster biome fallback)
 - `_tileMap_Hill` — Hill 레이어 (`_ruleTile_Hill`)
 - `_tileMap_Object` — Object 레이어 (BuildableTileRegistry → ObjectSet fallback)
 
@@ -293,12 +291,11 @@ for (int cy = 0; cy < clustersPerSide; cy++)
 chunk.chunkBiome = BiomeNoise.ComputeChunkBiome(chunk.chunkX, chunk.chunkY, chunkSize, mapSeed);
 
 // cluster별 파라미터 캐시 (BiomeTable 룩업 1회)
-TileType[] clusterBaseTileTypes = new TileType[clusterCount];
+// v1.10: ground TileType 박지 않음. 절차 생성 셀의 ground 비트 = 0 (cluster biome으로 렌더러 fallback)
 float[]    clusterHillThresholds = new float[clusterCount];
 float[]    clusterSpawnRates = new float[clusterCount];
 for (int i = 0; i < clusterCount; i++) {
     BiomeType cb = chunk.clusterBiomes[i];
-    clusterBaseTileTypes[i] = BiomeTable.GetGroundTileType(cb);
     clusterHillThresholds[i] = BiomeTable.GetHillThreshold(cb);
     clusterSpawnRates[i] = _monsterSpawnRate * BiomeTable.GetMonsterSpawnMultiplier(cb);
 }
@@ -308,10 +305,9 @@ for (int x = 0; x < chunkSize; x++)
 for (int y = 0; y < chunkSize; y++)
 {
     int clusterIdx = (y / BiomeNoise.CLUSTER_SIZE) * clustersPerSide + (x / BiomeNoise.CLUSTER_SIZE);
-    TileType baseTileType = clusterBaseTileTypes[clusterIdx];
-    float hillThreshold   = clusterHillThresholds[clusterIdx];
-    float spawnRate       = clusterSpawnRates[clusterIdx];
-    // ... Hill/Spawn flag 결정 후 CombineTileData
+    float hillThreshold = clusterHillThresholds[clusterIdx];
+    float spawnRate     = clusterSpawnRates[clusterIdx];
+    // ... Hill/Spawn flag 결정 후 CombineTileData(0UL, 0u, hillFlag, monsterSpawnFlag)
 }
 ```
 
@@ -319,56 +315,70 @@ for (int y = 0; y < chunkSize; y++)
 - 청크당 cluster biome 샘플 16회 × Perlin 5회 = **80 Perlin** (v1.7 옵션 Y의 1/4, v1.8 region 단일의 16배지만 절대량 무해)
 - 60fps 한 프레임의 ~0.1% — 무해
 
-| 바이옴 | Ground TileType | Hill 임계 보정 | MonsterSpawn 확률 |
-|--------|----------------|---------------|-----------------|
-| Plains | Glass (기존) | 기본 | 기본 |
-| Forest | Glass (다른 ThemeTileSet) | 기본 | 약간 ↑ |
-| Desert | Sand | ↓ | 기본 |
-| Swamp | SwampMud | ↓↓ | ↑ |
-| Steppe | DryGrass 또는 Glass | 기본 | 기본 |
-| Tundra | Snow | 기본 | ↓ |
-| Snow | Snow | 기본 | ↓ |
-| Mountain | StoneGround | ↑↑ | ↑ |
+| 바이옴 | Ground sprite (cluster biome) | Hill 임계 보정 | MonsterSpawn 확률 |
+|--------|------------------------------|---------------|-----------------|
+| Plains | ThemeTileSet_Plains.Ground | 기본 | 기본 |
+| Forest | ThemeTileSet_Forest.Ground | 기본 | 약간 ↑ |
+| Desert | ThemeTileSet_Desert.Ground | ↓ | 기본 |
+| Swamp | ThemeTileSet_Swamp.Ground | ↓↓ | ↑ |
+| Steppe | ThemeTileSet_Steppe.Ground | 기본 | 기본 |
+| Tundra | ThemeTileSet_Tundra.Ground | 기본 | ↓ |
+| Snow | ThemeTileSet_Snow.Ground | 기본 | ↓ |
+| Mountain | ThemeTileSet_Mountain.Ground | ↑↑ | ↑ |
 
-→ TileType enum: `Sand`, `SwampMud`, `DryGrass`, `Snow` 추가 완료 ([GlobalEnum.cs:20-30](../Assets/Scripts/Common/GlobalEnum.cs#L20-L30)).
+→ **v1.10**: 절차 생성의 ground sprite는 전적으로 cluster biome의 `ThemeTileSet.Ground`로 결정. 청사진(`.bytes`)이 깐 셀만 `GroundLayerMask` 비트에 `GroundTileSet` 인덱스를 기록 (절대 sprite 지정, 환경 독립).
 
-### 4.5 ThemeTileSet 통합 (Option A — Ground 단일 필드)
+### 4.5 ThemeTileSet 통합 + GroundTileSet 분리 (v1.9 Option A → v1.10)
 
 > **v1.9 정정**: 기존 `TileSet[]` (TileType-indexed 배열) 방식이 "Desert ThemeTileSet에 Snow 슬롯이 있는" 어색한 결합을 만들어, **Option A**로 리팩토링.
+> **v1.10 정정**: 청사진(`.bytes`)의 ground 인덱스 → sprite 복원이 `_themeTileSet.TileSet[]`에 의존해 컨텍스트마다 결과가 달라지는 문제를 해결하기 위해 `TileSet[]`을 폐기하고 글로벌 `GroundTileSet` 도입. `TileType` enum / `BiomeTable.GetGroundTileType` / `MapManager.GetTileTypeAt` / `_ruleTile` 모두 폐기됨.
 
-**ThemeTileSet 구조** ([ThemeTileSet.cs](../Assets/Scripts/Map/Tile/ThemeTileSet.cs)):
+**ThemeTileSet 구조 (v1.10)** ([ThemeTileSet.cs](../Assets/Scripts/Map/Tile/ThemeTileSet.cs)):
 ```csharp
 public class ThemeTileSet : ScriptableObject
 {
     public string themeName;
     public Sprite themeIcon;
-    public TileBase Ground;          // ← v1.9 신규: 이 바이옴의 바닥 타일 1개
-    [Obsolete] public TileBase[] TileSet;   // legacy — MapFileSaver 에디터 룩업 전용
-    [Obsolete] public TileBase[] ObjectSet; // legacy
+    public TileBase Ground;                  // 이 바이옴의 바닥 타일 1개 (cluster biome 렌더용)
+    [Obsolete] public TileBase[] ObjectSet;  // legacy (별도 마이그레이션 예정)
     public TileBase[] NpcSet;
 }
 ```
+→ v1.10에서 `TileSet[]` 필드 제거됨.
 
-**MapManager 인스펙터** ([MapManager_Renderer.cs:16-20](../Assets/Scripts/Map/MapManager_Renderer.cs#L16-L20)):
+**GroundTileSet 구조 (v1.10 신규)** ([GroundTileSet.cs](../Assets/Scripts/Map/Tile/GroundTileSet.cs)):
+```csharp
+[CreateAssetMenu(menuName = "ARPG/Ground Tile Set")]
+public class GroundTileSet : ScriptableObject
+{
+    public TileBase[] tiles;   // index = Ground Tile Id. tiles[0] = null (passthrough)
+}
+```
+- 자산 위치: `Assets/Art/Tilemap/Tiles/Ground/GroundTileSet.asset`
+- 청사진(`.bytes`) 디자이너가 깐 `CustomTile._customData` = 이 자산의 인덱스 = 청크 비트의 `GroundLayerMask`
+- 모든 종족/콘텐츠가 한 자산에서 ID로 룩업 → 환경 독립적, sprite 손실 없음
+
+**MapManager 인스펙터** ([MapManager_Renderer.cs:17-24](../Assets/Scripts/Map/MapManager_Renderer.cs#L17-L24)):
 ```csharp
 [SerializeField] private ThemeTileSet _themeTileSet;          // 폴백 (BiomeThemeEntry 미설정 시)
 [SerializeField] private BiomeThemeEntry[] _themeEntries;     // 바이옴별 매핑
+[SerializeField] private GroundTileSet _groundTileSet;        // 청사진 ground 인덱스 룩업 (v1.10)
 
 [Serializable]
 public struct BiomeThemeEntry { public BiomeType Biome; public ThemeTileSet TileSet; }
 ```
 
-**렌더 로직 (v1.9 cluster-grained)** ([MapManager_Renderer.cs:108-150](../Assets/Scripts/Map/MapManager_Renderer.cs#L108-L150)):
+**렌더 로직 (v1.10 단일 분기)** ([MapManager_Renderer.cs](../Assets/Scripts/Map/MapManager_Renderer.cs)):
 - 청크 렌더 시 cluster당 `ResolveThemeForBiome(chunk.clusterBiomes[i])` 호출하여 `_clusterThemes[16]` 캐시
-- 셀 루프에서 `_clusterThemes[clusterIdx].Ground` 사용 (cluster grain별 다른 비주얼)
-- `TileType.Ground` (맨땅, MapFileData 청사진용) → 바이옴 무관 `_ruleTile`로 분기 (옵션 A 핵심)
-- `TileType.None` → null (빈 칸, 진단 로그 남김)
+- 셀 루프 분기:
+  - `idx > 0` && `GroundTileSet.tiles[idx]` 유효 → `tiles[idx]` 그리기
+  - 그 외 (`idx == 0` / 자산 미할당 / 범위 밖 / null 슬롯) → cluster biome의 `theme.Ground`로 fallback
+- `TileType.Ground/None` 별도 분기 폐기 — 모두 단일 룩업으로 흡수
 
 **누락 타일 진단 로그** ([MapManager_Renderer.cs](../Assets/Scripts/Map/MapManager_Renderer.cs)):
 - `theme == null` (매핑 + 폴백 모두 없음): biome별 1회 LogError
 - `theme.Ground == null` (필드 비었음): biome별 1회 LogError
-- `_ruleTile == null` (맨땅 폴백 없음): 세션 1회 LogError
-- `TileType.None` 셀 발견 (MapFileData overlay 잘못된 셀): chunk별 1회 LogError + tileData hex 출력
+- `_groundTileSet == null` && 청사진이 ground 비트 사용 시: 세션 1회 LogError + cluster biome으로 fallback
 - HashSet dedupe로 스팸 방지, `MapManager.Reset()`에서 `ClearMissingTileLog()` 호출
 
 **격자감 평가** (cluster grain = 2 타일):
@@ -781,12 +791,12 @@ public static class RaceSettlementPlacer
 - 예: Plains-dominant인데 16 chunk 모두 가장자리 noise로 Snow chunk로 잡혀버린 경우 — `chunkCandidates.Count == 0`이면 settlement 없음
 - 자연스러운 **배치 밀도 가중치** 효과 (§12 #15 자동 해결)
 
-**`ComputeAll`은 게임 시작 시** [`InitializeChunkPool`](../Assets/Scripts/Map/MapManager_Generator.cs)에서 `LoadFixedMapFiles()` 직후 호출. 결정론이라 같은 mapSeed면 항상 같은 배치. **현재(2026-05-20) 콘솔 로그만 출력 — race-specific 청사진 카탈로그 작업 후 `_mapFileDataDic` 등록 단계 추가 예정**.
+**`ComputeAll`은 게임 시작 시** [`InitializeChunkPool`](../Assets/Scripts/Map/MapManager_Generator.cs)에서 `LoadFixedMapFiles()` 직후 호출. 결정론이라 같은 mapSeed면 항상 같은 배치. **v1.10.2 (2026-05-22) 기준 청사진 로드 + 충돌 검사 + `_mapFileDataDic` 등록까지 모두 구현 완료** (§13 Phase 2 참조).
 
-### 7.4 RaceBiomeTable + Blueprint 카탈로그
+### 7.4 RaceBiomeTable + Blueprint 명명 규칙 (v1.10.2)
 
 ```csharp
-// Phase 진입 시 결정 — 코드 하드코딩 또는 시트 .bytes (§12 #13)
+// 코드 하드코딩 — RaceBiomeTable.cs
 RaceBiomeTable:
    Plains   → [Human]
    Forest   → [Elf, Human]
@@ -797,12 +807,18 @@ RaceBiomeTable:
    Snow     → [Yeti, Dwarf]
    Steppe   → [Nomad]
 
-BlueprintCatalog (Assets/_BinaryData/TilemapData/):
-   ElfVillage_small_01.bytes, ElfVillage_small_02.bytes, ...
-   DwarfHold_small_01.bytes, DwarfHold_medium_01.bytes, ...
+청사진 명명 규칙 (Assets/_BinaryData/TilemapData/):
+   BaseTown_Human.bytes
+   BaseTown_Elf.bytes
+   BaseTown_Dwarf.bytes
+   BaseTown_Lizardman.bytes
+   BaseTown_Nomad.bytes
+   BaseTown_Orc.bytes
+   BaseTown_Yeti.bytes
 ```
 
 → 청사진은 디자이너가 [MapFileSaver](../Assets/Scripts/Map/MapFileSaver.cs)로 작성. **BaseTown과 동일 워크플로**.
+→ **v1.10.2 결정**: 별도 `SettlementBlueprintCatalog.cs` 클래스 도입 없이 **명명 규칙 `BaseTown_{race}.bytes`**로 충분. `LoadRaceBlueprint(race)`가 직접 파일명 조합해서 로드. 향후 (race × size × variant) 다중 청사진이 필요해지면 카탈로그 클래스로 확장.
 
 ### 7.5 lifecycle — 기존 인프라 그대로
 
@@ -1042,12 +1058,31 @@ public class LoreSaveData
 - ✅ [`ThemeTileSet.cs`](../Assets/Scripts/Map/Tile/ThemeTileSet.cs) **Option A 리팩토링** — `Ground` 단일 필드 추가, 기존 `TileSet[]`은 `[Obsolete]` (MapFileSaver 에디터 룩업 전용)
 - ✅ Perlin scale ×0.5 적용 — biome 패치 크기 2배 확대 (TEMPERATURE 0.005→0.0025, HUMIDITY 0.008→0.004, ELEVATION 0.012→0.006)
 
-**남은 콘텐츠 작업 (사용자/디자이너)**:
-- AR 프리팹 MapManager 인스펙터에 `BiomeThemeEntry[]` 채우기 (biome별 ThemeTileSet) + 폴백 `_themeTileSet`
-- 각 ThemeTileSet SO의 `Ground` 필드에 해당 바이옴 바닥 타일 할당
-- `BiomeMonsterMapping.cs`에 case 추가 (monster ID 결정 후)
-- 시각 검증 후 *필요 시* A1(색조 variant) 또는 A2(transition tile) 보강
-- Desert/Tundra 임계값 조정 (확률 3% → 10%+) — 필요 시 §4.3.1 조정
+**v1.10 추가 작업 (2026-05-21) — 청사진 ground sprite 손실 해결**:
+
+문제: 청사진(`.bytes`)이 깐 sprite가 로드 시 `_themeTileSet.TileSet[]` 인스펙터 슬롯에 의존해 컨텍스트마다 결과가 달라짐 (Inspector 슬롯이 Forest 테마면 Sand 청사진도 Forest sprite로 복원됨). cluster biome도 청크 비트의 TileType을 무시하고 cluster로 재룩업해서 청사진 비트가 사실상 무의미.
+
+해결: 청사진의 GroundLayerMask 비트를 **글로벌 `GroundTileSet` 인덱스**로 의미 재해석. cluster biome은 청크 비트가 0인 셀에서만 적용 (passthrough).
+
+- ✅ [`GroundTileSet.cs`](../Assets/Scripts/Map/Tile/GroundTileSet.cs) **신규** — `tiles[]` 단일 ScriptableObject. `[0]=null(passthrough)`, `[1~]=종족/콘텐츠별 ground TileBase`. Hard reference (메모리 상주, lazy 아님).
+- ✅ [`MapManager_Renderer.cs`](../Assets/Scripts/Map/MapManager_Renderer.cs) — `_groundTileSet` 슬롯 추가. None/Ground/cluster 3분기 → **단일 룩업** ((`idx>0` && valid) → `tiles[idx]`, 그 외 → cluster biome fallback). 미할당 시 LogError 1회.
+- ✅ [`MapFileSaver.cs`](../Assets/Scripts/Map/MapFileSaver.cs) — `_groundTileSet` 슬롯 추가. `ConvertUintToTile`이 GroundTileSet 룩업으로 교체 (`TileSet[]` 의존 제거).
+- ✅ [`MapManager_Generator.cs`](../Assets/Scripts/Map/MapManager_Generator.cs) — 절차 생성에서 `clusterBaseTileTypes[]` / `BiomeTable.GetGroundTileType` 제거. 청크 비트의 ground = 0 (passthrough). `CombineTileData` 시그니처 `TileType → uint`.
+- ✅ [`BiomeTable.cs`](../Assets/Scripts/Map/Biome/BiomeTable.cs) — `GetGroundTileType` 메서드 삭제.
+- ✅ [`GlobalEnum.cs`](../Assets/Scripts/Common/GlobalEnum.cs) — `TileType` enum 완전 폐기.
+- ✅ [`MapManager.cs`](../Assets/Scripts/Manager/MapManager.cs) — `GetTileTypeAt` 메서드 삭제 (호출처 0), `_ruleTile` 필드 제거 (사용처 0).
+- ✅ [`ThemeTileSet.cs`](../Assets/Scripts/Map/Tile/ThemeTileSet.cs) — `[Obsolete] TileSet[]` 필드 완전 제거. `Ground`와 `NpcSet`, `[Obsolete] ObjectSet`만 잔존.
+
+**완료된 콘텐츠 작업 (2026-05-22)**:
+- ✅ `Assets/Art/Tilemap/Tiles/Ground/GroundTileSet.asset` 자산 생성 + `tiles[]` 채우기 (`[0]=null`, `[1]=맨땅 RuleTile`, `[2~]=콘텐츠 추가 시 확장`)
+- ✅ MapManager / MapFileSaver 인스펙터에 `_groundTileSet` 슬롯 할당
+- ✅ AR 프리팹 MapManager 인스펙터에 `BiomeThemeEntry[]` 채우기 (biome별 ThemeTileSet) + 폴백 `_themeTileSet`
+- ✅ 각 ThemeTileSet SO의 `Ground` 필드에 해당 바이옴 바닥 타일 할당
+
+**보류된 작업**:
+- ⏸ `BiomeMonsterMapping.cs`에 case 추가 — **몬스터 종류 부족으로 보류**. 몬스터 콘텐츠 확충 후 진행 예정. 현재는 인스펙터 폴백 단일 ID 사용
+- ⏸ 시각 검증 후 *필요 시* A1(색조 variant) 또는 A2(transition tile) 보강
+- ⏸ Desert/Tundra 임계값 조정 (확률 3% → 10%+) — 필요 시 §4.3.1 조정
 
 **원래 명세 (참고)**:
 
@@ -1079,40 +1114,50 @@ public class LoreSaveData
 - **monster spawn 확인**: Forest 청크 진입 시 Forest 풀의 몬스터, Desert 청크 진입 시 Desert 풀의 몬스터 (인스펙터 박힌 단일 ID 안 씀)
 - `RegionCoord.ChunkToRegionId((23, 41))` = `RegionCoord.ToRegionId((2, 5))` 변환 일관성 단위 테스트
 
-### Phase 2 — Race Settlement 절차 배치 ⏳ 코드 골격 완료 (2026-05-20, v1.9)
+### Phase 2 — Race Settlement 절차 배치 ✅ 코드 완료 (2026-05-22, v1.10.2)
 
 > **사용자 우선순위 (v1.5)**: biome 생성 직후 종족별 살아있는 거점이 맵에 나타나야 함.
-> **v1.9 골격**: 알고리즘/배치 결정 코드 ✅, 실제 청사진 적용 ❌ (콘텐츠 대기).
+> **v1.10.2 (2026-05-22) 완료**: 알고리즘/배치 결정 + 청사진 로드 + 충돌 검사 + `_mapFileDataDic` 등록까지 모두 코드 구현 + 청사진 7종 작성됨. 별도 `SettlementBlueprintCatalog.cs` 클래스 도입 없이 명명 규칙 `BaseTown_{race}.bytes`로 해결.
 
-**완료된 작업 (2026-05-20)**:
+**완료된 작업 (2026-05-20, v1.9 골격)**:
 - ✅ [`Map/Region/DeterministicCoord.cs`](../Assets/Scripts/Map/Region/DeterministicCoord.cs) — Region/Chunk 안 결정론 좌표 (`InRegion` / `InChunk` / `ChunkCenter` / `HashFor`)
 - ✅ [`Map/Race/RaceBiomeTable.cs`](../Assets/Scripts/Map/Race/RaceBiomeTable.cs) — biome → race 호환 매핑 (코드 하드코딩, 8 biome × 1~2 race)
 - ✅ [`Map/Race/RaceSettlementPlacer.cs`](../Assets/Scripts/Map/Race/RaceSettlementPlacer.cs) — **chunk-grain 알고리즘** (§7.3). `TryPlace(regionCoord)` + `ComputeAll(mapSeed)` 정적 메서드
 - ✅ `DerivedSeed.ChannelSettlement` (Phase 0에서 미리 예약된 채널 활용)
-- ✅ [`MapManager_Generator.cs`](../Assets/Scripts/Map/MapManager_Generator.cs) `InitializeChunkPool()`에서 `LoadFixedMapFiles()` 직후 `PlaceRaceSettlements()` 호출 → 콘솔 로그로 결정 검증
+- ✅ [`MapManager_Generator.cs`](../Assets/Scripts/Map/MapManager_Generator.cs) `InitializeChunkPool()`에서 `LoadFixedMapFiles()` 직후 `PlaceRaceSettlements()` 호출
 
-**알고리즘 검증 콘솔 로그 형식**:
+**v1.10.2 추가 완료 (2026-05-22)**:
+- ✅ Race-specific 청사진 7종 작성: `BaseTown_Human/Elf/Dwarf/Lizardman/Nomad/Orc/Yeti.bytes` ([Assets/_BinaryData/TilemapData/](../Assets/_BinaryData/TilemapData/))
+- ✅ [`MapManager_Generator.LoadRaceBlueprint(race)`](../Assets/Scripts/Map/MapManager_Generator.cs) — 명명 규칙 `BaseTown_{race}.bytes`로 파일 로드. 파일 없으면 LogError + skip. **별도 `SettlementBlueprintCatalog.cs` 클래스 불필요** (명명 규칙으로 충분)
+- ✅ [`MapManager_Generator.HasMapFileOverlap(blueprint)`](../Assets/Scripts/Map/MapManager_Generator.cs) — 기존 `_mapFileDataDic` 엔트리들과 bounding box 충돌 검사. 겹치면 skip
+- ✅ `PlaceRaceSettlements`가 청사진 origin을 settlement chunk 중심으로 이동(`newOrigin = WorldCoord - size/2`) 후 `_mapFileDataDic[newOrigin] = blueprint` 등록 → 이후 `OverlayMapFileData`가 자동 적용
+- ✅ 통계 로그: `[MapManager] Settlement 배치 결과: 적용=N / 청사진없음=N / 충돌스킵=N`
+
+**적용 콘솔 로그 형식**:
 ```
 [MapManager] Race Settlement 계산 완료: N개 region에 배치
-  [Settlement] region=(-12,3) dominant=Plains chunkBiome=Plains → Race=Human Size=Village chunk=(-48,15) world=(-380,124)
+  [Settlement] region=(-12,3) dominant=Plains chunkBiome=Plains → Race=Human Size=Village chunk=(-48,15) origin=(-388,116) 16x16
   ...
+[MapManager] Settlement 배치 결과: 적용=N / 청사진없음=0 / 충돌스킵=N
 ```
 
-**남은 작업 (콘텐츠 대기 → 코드 작업)**:
-- ❌ Race-specific 청사진 `.bytes` 파일 (디자이너 작업) — 예: `HumanVillage_small_01.bytes`, `ElfVillage_small_01.bytes`
-- ❌ `Map/Race/SettlementBlueprintCatalog.cs` 신규 — (race × size) → MapFileData 리스트
-- ❌ `RaceSettlementPlacer`에 청사진 로드 + 충돌 검사 + `_mapFileDataDic` 등록 단계 추가 (현재 콘솔 로그만)
-- ❌ NPC 통합 (race별 NPC 종 — 기존 `RegisterAllNpcsToManager` 흐름에 race 정보 흘리기)
+**검증**:
+- ✅ 같은 `mapSeed`에서 settlement 좌표/race/size 100% 재현
+- ✅ biome dominant ↔ race 매핑 의도대로 작동 (Plains-dominant → Human, Forest-dominant → Elf/Human, ...)
+- ✅ 호환 chunk 없는 region 스킵 (Wasteland-dominant region)
+- ✅ chunk 분포 균등성 (region마다 다른 chunk 선택)
+- ✅ 충돌 시 skip 동작 (BaseTown 영역 / 다른 settlement와 겹침)
+- 시각 검증 (게임 안 실제 마을 확인) — 이후 단계
 
-**즉시 가능한 placeholder 경로** (콘텐츠 없이 시각 검증):
-- BaseTown.bytes 모든 race에 placeholder로 매핑 → 맵 곳곳에 같은 마을 박힘. race 구분은 콘솔 로그로
-- 또는 1×1 마커(비석/깃발 BuildableItem)만 박기 — 가장 가벼움
+**Phase 2 종료 (2026-05-22, v1.10.3)** — 아래 후속 항목은 별도 트랙으로 분리. Phase 2 자체는 완료.
 
-**검증** (현재 콘솔 로그 단계):
-- ✅ 같은 `mapSeed`에서 settlement 좌표/race/size 100% 재현 (`ComputeAll` 두 번 호출 결과 비교)
-- biome dominant ↔ race 매핑 의도대로 작동 (예: Plains-dominant region → Human)
-- 호환 chunk 없는 region 스킵되는지 (예: Wasteland-dominant region)
-- chunk 분포 균등성 (region마다 다른 chunk 선택)
+### Phase 2.x — Race Settlement 후속 트랙 ⏸ 보류 (추후 작업)
+
+> 사용자 결정 (2026-05-22): Phase 2 코드 완료 시점에서 후속 디테일은 별도 트랙으로 미룸. 우선순위 낮음, 필요 시 재개.
+
+- ⏸ **size variant** — 현재 race당 1종 청사진만. `Village/Town/City` 다단계 또는 `_small_01/_small_02` variant 도입. §12 #14, #16 결정 필요
+- ⏸ **NPC race 통합** — 청사진의 NPC 슬롯이 race별 NPC 종으로 자동 매핑되는지 검증. `RegisterAllNpcsToManager` 흐름에 race 정보 흘리기
+- ⏸ **§12 #13~#18 결정 보류 사항** — 마을 크기 종류 / variant 개수 / 충돌 우선순위 / VILLAGE_GROWTH_STAGES 연계
 
 ### Phase 3 — 유적 단편 배치 (2~3일)
 **신규 파일**:
@@ -1186,16 +1231,18 @@ Assets/Scripts/
 │   ├── MapFileSaver.cs                     # 기존
 │   ├── TileModification.cs                 # 기존
 │   ├── BuildableTileRegistry.cs            # 기존
-│   ├── Tile/ThemeTileSet.cs                # 기존 (Dictionary 매핑은 MapManager에서)
+│   ├── Tile/ThemeTileSet.cs                # 기존 (cluster biome용 Ground sprite)
+│   ├── Tile/GroundTileSet.cs                # v1.10 NEW (청사진 ground 통합 룩업)
 │   ├── Region/                             # NEW
 │   │   └── RegionCoord.cs                  # static 좌표 변환 헬퍼 (ECS 아님)
 │   ├── Biome/                              # NEW
 │   │   ├── BiomeNoise.cs                   # ComputeTileBiome (warped Perlin)
-│   │   └── BiomeTable.cs                   # biome → TileType/Hill/spawn 보정
-│   ├── Settlement/                         # NEW (Race Settlement — M1)
-│   │   ├── RaceSettlementPlacer.cs         # 절차 배치, _mapFileDataDic에 entry 추가
-│   │   ├── RaceBiomeTable.cs               # biome → race 매핑
-│   │   └── SettlementBlueprintCatalog.cs   # (race × size) → MapFileData 리스트
+│   │   └── BiomeTable.cs                   # biome → Hill/spawn 보정
+│   ├── Race/                               # Race Settlement — M1 (실제 폴더명: Race/, 구 명세 Settlement/)
+│   │   ├── RaceSettlementPlacer.cs         # ✅ 절차 배치, _mapFileDataDic 등록 (v1.10.2 완료)
+│   │   ├── RaceBiomeTable.cs               # ✅ biome → race 매핑
+│   │   └── DeterministicCoord.cs           # ✅ Region/Chunk 결정론 좌표
+│   │   # SettlementBlueprintCatalog.cs는 도입 안 함 — 명명 규칙 `BaseTown_{race}.bytes`로 대체
 │   └── Lore/                               # NEW
 │       ├── LoreFragmentPlacer.cs           # 청크당 fragment 결정 + 비트 갱신
 │       ├── LoreInteractable.cs             # 상호작용 entity
@@ -1204,7 +1251,7 @@ Assets/Scripts/
 ├── Common/
 │   ├── Component/
 │   │   └── Map/LoreFragmentComponent.cs    # NEW. RegionComponent는 폐지 (§12 #11)
-│   └── GlobalEnum.cs                       # BiomeType / RaceType / RaceOrigin / FateKeyword / SettlementSize / TileType 확장
+│   └── GlobalEnum.cs                       # BiomeType / RaceType / RaceOrigin / FateKeyword / SettlementSize
 └── Data/
     ├── WorldData.cs                        # LoreSaveData 필드 추가
     └── LoreSaveData.cs                     # NEW
@@ -1263,7 +1310,7 @@ Assets/Scripts/
 
 ---
 
-**문서 상태**: 설계 v1.8 (Phase 0~1 코드 완료, region 단위 단일 biome 회수. Phase 2 Race Settlement 진입 가능)
+**문서 상태**: 설계 v1.10.3 (Phase 0~2 완료. Phase 2.x 후속 트랙(size variant / NPC race 통합 / §12 보류 사항)은 추후 작업으로 분리. 다음 진입 후보: Phase 3 유적 단편)
 **작성일**: 2026-05-19
 **최근 갱신**:
 - 2026-05-19 (v1.1) — 바이옴 결정 축 옵션 A 채택 (온도+습도+고도 3축, Whittaker 모델)
@@ -1274,5 +1321,8 @@ Assets/Scripts/
 - 2026-05-19 (v1.6) — Phase 0 완료
 - 2026-05-19 (v1.7) — Phase 1 코드 완료 (per-tile biome 모델)
 - 2026-05-19 (v1.8) — **옵션 Y → region 단위 단일 biome 회수**. Region size 8×8 청크 → **4×4 청크** 축소. `BiomeNoise.ComputeRegionBiome` 신규. `MapChunkData.tileBiomes[,]` 제거. `GenerateChunkData` 청크당 1 biome으로 단순화 (Perlin 64배 절감). 사유: settlement/lore 단위 모순(작은 patch에 잘못된 race) 차단 + region size 축소로 격자감 완화. §12 #10 결정 재선택, §4/§5 갱신
+- 2026-05-22 (v1.10.1) — v1.10 콘텐츠 작업 완료 처리: GroundTileSet.asset 생성/슬롯 할당/BiomeThemeEntry/ThemeTileSet.Ground 채움 모두 ✅. BiomeMonsterMapping은 몬스터 종류 부족으로 보류 표기
+- 2026-05-22 (v1.10.2) — **Phase 2 Race Settlement 청사진 적용 완료**. 청사진 7종(`BaseTown_{race}.bytes`) 작성 + `LoadRaceBlueprint(race)` (명명 규칙) + `HasMapFileOverlap(blueprint)` + `_mapFileDataDic` 등록까지 모두 구현. 별도 `SettlementBlueprintCatalog.cs` 도입 안 함 — 명명 규칙으로 대체. §7.3/§7.4/§13 Phase 2/§14 파일 구조 갱신
+- 2026-05-22 (v1.10.3) — **Phase 2 종료, Phase 2.x 후속 트랙 분리**. size variant / NPC race 통합 / §12 #13~#18 결정 보류 사항은 별도 보류 트랙으로 미룸 (사용자 결정). Phase 2 자체는 ✅ 완료 상태로 마감
 **선행 의존**: Map 청크 시스템 (✅ 코드 완료) · BuildableTileRegistry (✅) · WorldData 직렬화 (✅) · LLM 인프라 (✅ Groq Llama 3.3 70B, Phase 6에서 사용) · NpcManager (✅ RegisterNpcsFromMapFile) · VillageManager (✅) · PROCEDURAL_HISTORY Phase 0 (일부 재활용)
 **미해결**: §12 결정 보류 사항 1~8, 13~18 (#9 바이옴 축, #10 렌더링 방식, #11 RegionComponent 폐지, #12 AmbientTag 폐지는 확정. M1 Race Settlement 통합 방식 확정)

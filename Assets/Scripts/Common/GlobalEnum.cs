@@ -498,6 +498,9 @@ public class GlobalEnum
 
     static public ushort PLAYER_INVENTORY_SLOTCOUNT_MAX = 60;
 
+    // NPC 인벤토리 슬롯 수 (NpcSaveData.Inventory 길이). 변경 시 세이브 마이그레이션 필요.
+    public const int NPC_INVENTORY_SLOTCOUNT_MAX = 5;
+
     // 스킬북 시스템 (SKILLBOOK_DESIGN.md §3.1)
     public const int PLAYER_SKILL_SLOT_COUNT = 10;          // 플레이어 스킬 슬롯 수 (0~9). 슬롯 0=좌클릭, 1=Space, 2~9=숫자키 1~8
     public const int DEFAULT_SKILLBOOK_ITEM_ID_COMMON = 5000; // 신규 플레이어에게 시드되는 Common 등급 책 ItemId

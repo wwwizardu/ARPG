@@ -44,6 +44,8 @@ namespace ARPG.Editor
             Register<AiTable>(list, "947794841&range=A:L");
             Register<MonsterTable>(list, "483012127&range=A:P");
             Register<NpcTable>(list, "1460299278&range=A:O");
+            // NpcEquipTable — NPC 시작 장비 세트 (NpcTable.EquipTableId 참조). 슬롯별 ItemId 명시.
+            Register<NpcEquipTable>(list, "1566085089&range=A:N");
             Register<MonsterArchetypeTable>(list, "1141585255&range=A:E");
             Register<StatTable>(list, "318209064&range=A:AJ");
             Register<ItemTable>(list, "2064107837&range=A:R");
@@ -213,6 +215,9 @@ namespace ARPG.Editor
 
         [MenuItem("ARPG/Download Table/NpcTable", false, 100)]
         private static async void DownloadNpcTable() => await DownloadSingleTable<NpcTable>();
+
+        [MenuItem("ARPG/Download Table/NpcEquipTable", false, 100)]
+        private static async void DownloadNpcEquipTable() => await DownloadSingleTable<NpcEquipTable>();
 
         [MenuItem("ARPG/Download Table/ProjectileTable", false, 100)]
         private static async void DownloadProjectileTable() => await DownloadSingleTable<ProjectileTable>();
@@ -462,6 +467,10 @@ namespace ARPG.Editor
                 {
                     ParseNpcTable(npcTable, values);
                 }
+                else if (table is NpcEquipTable npcEquipTable)
+                {
+                    ParseNpcEquipTable(npcEquipTable, values);
+                }
                 else if (table is CreatureTable creatureTable)
                 {
                     ParseCreatureTable(creatureTable, values);
@@ -662,11 +671,38 @@ namespace ARPG.Editor
             table.PrefabName = values[7];
             table.AnimationId = int.Parse(values[8]);
             table.JobType = (GlobalEnum.JobType)Enum.Parse(typeof(GlobalEnum.JobType), values[9]);
-            table.WeaponId = int.Parse(values[10]);
+            // values[10]: 구 WeaponId 자리. 시트 컬럼명을 EquipTableId로 교체하고 NpcEquipTable.Id를 입력하라.
+            table.EquipTableId = int.Parse(values[10]);
             table.AiTableId = int.Parse(values[11]);
             table.DropId = int.Parse(values[12]);
             table.DropRateBonus = int.Parse(values[13]);
             table.DropRarityBonus = int.Parse(values[14]);
+        }
+
+        /// <summary>
+        /// NpcEquipTable 파싱. 컬럼: A=Id, B=WeaponRight, C=WeaponLeft, D=Helmet, E=Armor,
+        /// F=Gloves, G=Boots, H=Necklace, I=RingRight, J=RingLeft, K=Belt, L=EarringRight, M=EarringLeft, N=Note(설명).
+        /// </summary>
+        private static void ParseNpcEquipTable(NpcEquipTable table, string[] values)
+        {
+            if (values.Length < 13)
+            {
+                Debug.LogError($"[ParseNpcEquipTable] Invalid data length. Expected at least 13, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            table.WeaponRight = ParseIntSafe(values, 1);
+            table.WeaponLeft = ParseIntSafe(values, 2);
+            table.Helmet = ParseIntSafe(values, 3);
+            table.Armor = ParseIntSafe(values, 4);
+            table.Gloves = ParseIntSafe(values, 5);
+            table.Boots = ParseIntSafe(values, 6);
+            table.Necklace = ParseIntSafe(values, 7);
+            table.RingRight = ParseIntSafe(values, 8);
+            table.RingLeft = ParseIntSafe(values, 9);
+            table.Belt = ParseIntSafe(values, 10);
+            table.EarringRight = ParseIntSafe(values, 11);
+            table.EarringLeft = ParseIntSafe(values, 12);
         }
 
         private static void ParseStatTable(StatTable table, string[] values)

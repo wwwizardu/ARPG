@@ -1,0 +1,46 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements"
+         xmlns:appui="Unity.AppUI.UI"
+         editor-extension-mode="False">
+    <Style src="project://database/Assets/UI/NpcInspect/NpcInspect.uss"/>
+    <ui:VisualElement name="root" class="npc-root" picking-mode="Position">
+        <ui:VisualElement name="overlay" class="npc-overlay" picking-mode="Position"/>
+        <ui:VisualElement name="panel" class="npc-panel">
+            <ui:VisualElement class="npc-header">
+                <appui:Heading text="NPC 정보" size="L" class="npc-title"/>
+                <appui:IconButton name="close-btn" icon="x" class="npc-close-icon"/>
+            </ui:VisualElement>
+
+            <appui:Divider/>
+
+            <!-- 상단: 이름/직업/설명 -->
+            <ui:VisualElement class="npc-meta">
+                <appui:Text name="name-text" text="이름" class="npc-name"/>
+                <appui:Text name="job-text" text="직업" class="npc-job"/>
+                <appui:Text name="desc-text" text="설명" class="npc-desc"/>
+            </ui:VisualElement>
+
+            <appui:Divider/>
+
+            <!-- 본문: 좌(장비/인벤) | 우(성향/스탯) -->
+            <ui:VisualElement class="npc-body">
+                <!-- 좌측 컬럼 -->
+                <ui:VisualElement class="npc-col npc-col-left">
+                    <appui:Text text="장비" class="npc-section-title"/>
+                    <ui:VisualElement name="equip-grid" class="npc-equip-grid"/>
+
+                    <appui:Text text="인벤토리" class="npc-section-title"/>
+                    <ui:VisualElement name="inv-grid" class="npc-inv-grid"/>
+                </ui:VisualElement>
+
+                <!-- 우측 컬럼 (스크롤) -->
+                <ui:ScrollView class="npc-col npc-col-right" mode="Vertical">
+                    <appui:Text text="성향" class="npc-section-title"/>
+                    <ui:VisualElement name="personality-list" class="npc-stat-list"/>
+
+                    <appui:Text text="전투 스탯" class="npc-section-title"/>
+                    <ui:VisualElement name="stat-list" class="npc-stat-list"/>
+                </ui:ScrollView>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

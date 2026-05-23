@@ -23,9 +23,6 @@ namespace ARPG.Map
         [Header("청사진 Ground 통합 타일셋")]
         [SerializeField] private GroundTileSet _groundTileSet;
 
-        [Header("땅 룰 타일")]
-        [SerializeField] private RuleTile _ruleTile;
-
         [Header("언덕 룰 타일")]
         [SerializeField] private RuleTile _ruleTile_Hill;
 

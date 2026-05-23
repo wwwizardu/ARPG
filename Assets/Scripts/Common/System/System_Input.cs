@@ -138,10 +138,9 @@ namespace ARPG.Systems
             // 업데이트된 입력 컴포넌트 저장
             _componentManager.SetComponent(_playerEntityId, inputComponent);
 
-            // Phase D: F키(Interact) 입력 시 마을 서비스 UI 열기 (가까운 서비스 우선순위 라우팅)
+            // Interact 키 입력 시 가까운 후보(시설 + NPC) 중 거리 가장 가까운 것 UI 라우팅
             if (inputComponent.IsInteracting
-                && AR.s.Component.TryGetComponent<PlayerNearbyServicesComponent>(_playerEntityId, out var nearby)
-                && nearby.AvailableServices != ProvidedService.None)
+                && AR.s.Component.TryGetComponent<PlayerNearbyServicesComponent>(_playerEntityId, out var nearby))
             {
                 ServiceUIRouter.Open(nearby);
             }

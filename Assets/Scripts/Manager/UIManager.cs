@@ -37,6 +37,9 @@ namespace ARPG
 
         // 스킬북 UI (SKILLBOOK_DESIGN.md §5)
         public const string SkillBook = "UI/SkillBook";
+
+        // NPC 장비/인벤토리 검사 UI (NPC_EQUIPMENT_DESIGN.md UI 패스)
+        public const string NpcInspect = "UI/NpcInspect";
     }
 
     public class UIManager : MonoBehaviour, IPointerDownHandler, IPointerUpHandler

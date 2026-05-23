@@ -148,7 +148,8 @@ namespace ARPG.Tables
     public class NpcTable : CreatureTable
     {
         [JsonProperty("JobType")] public GE.JobType JobType;
-        [JsonProperty("WeaponId")] public int WeaponId;
+        // NPC 시작 장비 세트 — NpcEquipTable.Id 참조. 0이면 무장 없음.
+        [JsonProperty("EquipTableId")] public int EquipTableId;
         [JsonProperty("AiTableId")] public int AiTableId;
         [JsonProperty("DropId")] public int DropId;
         [JsonProperty("DropRateBonus")] public int DropRateBonus;
@@ -169,6 +170,48 @@ namespace ARPG.Tables
             {
                 AiTable = null;
             }
+        }
+    }
+
+    /// <summary>
+    /// NPC 시작 장비 세트(Option A — 고정 세트). 슬롯별 ItemId를 명시한다.
+    /// CreateNpc 신규 생성 경로에서 슬롯별로 ItemManager.CreateInventoryItemData(itemId)로 Prefix/Postfix까지 굴려 시드한다.
+    /// 0 = 슬롯 비움.
+    /// </summary>
+    [Serializable]
+    public class NpcEquipTable : TableBase
+    {
+        [JsonProperty("WeaponRight")] public int WeaponRight;
+        [JsonProperty("WeaponLeft")] public int WeaponLeft;
+        [JsonProperty("Helmet")] public int Helmet;
+        [JsonProperty("Armor")] public int Armor;
+        [JsonProperty("Gloves")] public int Gloves;
+        [JsonProperty("Boots")] public int Boots;
+        [JsonProperty("Necklace")] public int Necklace;
+        [JsonProperty("RingRight")] public int RingRight;
+        [JsonProperty("RingLeft")] public int RingLeft;
+        [JsonProperty("Belt")] public int Belt;
+        [JsonProperty("EarringRight")] public int EarringRight;
+        [JsonProperty("EarringLeft")] public int EarringLeft;
+
+        public int GetItemId(GE.EquipSlotType slot)
+        {
+            return slot switch
+            {
+                GE.EquipSlotType.WeaponRight => WeaponRight,
+                GE.EquipSlotType.WeaponLeft => WeaponLeft,
+                GE.EquipSlotType.Helmet => Helmet,
+                GE.EquipSlotType.Armor => Armor,
+                GE.EquipSlotType.Gloves => Gloves,
+                GE.EquipSlotType.Boots => Boots,
+                GE.EquipSlotType.Necklace => Necklace,
+                GE.EquipSlotType.RingRight => RingRight,
+                GE.EquipSlotType.RingLeft => RingLeft,
+                GE.EquipSlotType.Belt => Belt,
+                GE.EquipSlotType.EarringRight => EarringRight,
+                GE.EquipSlotType.EarringLeft => EarringLeft,
+                _ => 0,
+            };
         }
     }
 

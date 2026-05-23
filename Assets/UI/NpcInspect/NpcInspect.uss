@@ -1,0 +1,164 @@
+/* NpcInspect UI — Inn UI 톤과 통일 */
+
+.npc-root {
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+}
+
+.npc-overlay {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+}
+
+.npc-panel {
+    width: 720px;
+    max-height: 80%;
+    padding: 20px;
+    border-radius: 12px;
+    background-color: rgba(28, 28, 32, 0.96);
+    border-width: 1px;
+    border-color: rgba(180, 140, 80, 0.4);
+}
+
+.npc-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.npc-title {
+    color: rgb(220, 180, 100);
+}
+
+.npc-close-icon {
+    --appui-iconbutton-size: 32px;
+}
+
+/* ========== 메타 ========== */
+
+.npc-meta {
+    flex-direction: column;
+    padding-top: 8px;
+    padding-bottom: 8px;
+}
+
+.npc-name {
+    color: rgb(230, 220, 200);
+    -unity-font-style: bold;
+    font-size: 16px;
+    margin-bottom: 2px;
+}
+
+.npc-job {
+    color: rgb(180, 180, 200);
+    margin-bottom: 4px;
+}
+
+.npc-desc {
+    color: rgb(150, 150, 165);
+    -unity-font-style: italic;
+    white-space: normal;
+}
+
+/* ========== 본문 레이아웃 ========== */
+
+.npc-body {
+    flex-direction: row;
+    padding-top: 8px;
+}
+
+.npc-col {
+    flex-direction: column;
+    padding: 4px 8px;
+}
+
+.npc-col-left {
+    width: 320px;
+}
+
+.npc-col-right {
+    flex-grow: 1;
+    max-height: 480px;
+}
+
+.npc-section-title {
+    color: rgb(200, 170, 110);
+    -unity-font-style: bold;
+    margin-top: 8px;
+    margin-bottom: 4px;
+}
+
+/* ========== 슬롯 그리드 ========== */
+
+.npc-equip-grid {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+.npc-inv-grid {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+.npc-slot {
+    width: 56px;
+    height: 56px;
+    margin: 3px;
+    border-radius: 6px;
+    background-color: rgba(45, 45, 55, 0.85);
+    border-width: 1px;
+    border-color: rgba(120, 100, 70, 0.35);
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.npc-slot-icon {
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.npc-slot-empty {
+    color: rgba(120, 120, 130, 0.6);
+    font-size: 10px;
+    -unity-text-align: middle-center;
+    white-space: normal;
+}
+
+/* ========== 스탯/성향 리스트 ========== */
+
+.npc-stat-list {
+    flex-direction: column;
+    padding: 4px 0;
+}
+
+.npc-stat-row {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2px 6px;
+}
+
+.npc-stat-row:hover {
+    background-color: rgba(255, 255, 255, 0.04);
+    border-radius: 4px;
+}
+
+.npc-stat-label {
+    color: rgb(180, 180, 195);
+}
+
+.npc-stat-value {
+    color: rgb(230, 220, 200);
+    -unity-font-style: bold;
+}

@@ -71,6 +71,73 @@ namespace ARPG.Npc
         }
 
         /// <summary>
+        /// 플레이어 청크 + 인접 8청크의 활성 NPC 중 maxRange 이내 가장 가까운 NPC를 찾는다.
+        /// 청크 인덱스(_chunkNpcs) 기반이라 NPC 수와 무관하게 비용 일정.
+        /// 죽은 NPC, IsActive=false(예: Inn 방문자)는 제외.
+        /// </summary>
+        /// <returns>entityId. 없으면 -1. 거리 sqr은 out.</returns>
+        public int FindNearestActiveNpc(Vector2 worldPos, float maxRange, out float distanceSqr)
+        {
+            Vector2Int center = PositionToChunk(worldPos);
+            float maxSqr = maxRange * maxRange;
+            int bestId = -1;
+            float bestSqr = float.MaxValue;
+
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    Vector2Int c = new Vector2Int(center.x + dx, center.y + dy);
+                    if (_chunkNpcs.TryGetValue(c, out List<int>? ids) == false)
+                        continue;
+
+                    for (int i = 0; i < ids.Count; i++)
+                    {
+                        int id = ids[i];
+                        if (_npcSaveDict.TryGetValue(id, out NpcSaveData? sd) == false)
+                            continue;
+                        if (sd.IsActive == false)
+                            continue;
+                        if (sd.Condition == CharacterConditions.Dead)
+                            continue;
+                        if (AR.s.Component.TryGetComponent<TransformComponent>(id, out var tr) == false)
+                            continue;
+
+                        float ddx = tr.Position.x - worldPos.x;
+                        float ddy = tr.Position.y - worldPos.y;
+                        float sqr = ddx * ddx + ddy * ddy;
+                        if (sqr > maxSqr)
+                            continue;
+                        if (sqr < bestSqr)
+                        {
+                            bestSqr = sqr;
+                            bestId = id;
+                        }
+                    }
+                }
+            }
+
+            distanceSqr = bestId >= 0 ? bestSqr : float.MaxValue;
+            return bestId;
+        }
+
+        /// <summary>
+        /// NpcSaveData 생성 직후 호출. NpcTable.EquipTableId가 지정돼 있으면 NpcEquipTable 기반 시작 장비를 시드한다.
+        /// 신규 NPC 생성 경로 3곳(MapFile/SpawnNewNpc/Visitor)에서 모두 호출 — Load 경로는 호출하지 않음(기존 장비 보존).
+        /// </summary>
+        private void SeedNpcEquipment(NpcSaveData saveData)
+        {
+            if (saveData == null)
+                return;
+
+            NpcTable? table = AR.s.Data?.GetNpc(saveData.NpcTableId);
+            if (table == null || table.EquipTableId <= 0)
+                return;
+
+            NpcEquipHelper.SeedInitialEquipment(saveData, table.EquipTableId);
+        }
+
+        /// <summary>
         /// 맵 로드 시 1회 호출. MapFileData의 모든 NPC에 EntityId를 발급하고
         /// NpcSaveData로 등록, 청크별 매핑(_chunkNpcs)을 생성한다.
         /// </summary>
@@ -98,6 +165,8 @@ namespace ARPG.Npc
                     EntityId = entityId,  // 일관성 — 다른 생성 경로(SpawnNewNpc)도 채워줌
                     Description = PickDescription(GetPreferredJobType(obj.ObjectId)),
                 };
+
+                SeedNpcEquipment(saveData);
 
                 if (villageId >= 0)
                 {
@@ -176,6 +245,8 @@ namespace ARPG.Npc
                 VillageId = villageId,
                 Description = PickDescription(GetPreferredJobType(npcTableId)),
             };
+
+            SeedNpcEquipment(saveData);
 
             _npcSaveDict[entityId] = saveData;
 
@@ -308,8 +379,8 @@ namespace ARPG.Npc
             {
                 Vector3 spawnPos3D = new Vector3(saveData.Position.x, saveData.Position.y, -0.05f);
 
-                // 발급된 EntityId를 전달하여 동일한 ID로 엔티티 생성
-                var (createdId, entity) = await EntityFactory.CreateNpc(saveData.NpcTableId, spawnPos3D, _npcParent, entityId);
+                // 발급된 EntityId를 전달하여 동일한 ID로 엔티티 생성. saveData를 같이 넘겨 장비 modifier도 복원.
+                var (createdId, entity) = await EntityFactory.CreateNpc(saveData.NpcTableId, spawnPos3D, _npcParent, entityId, saveData);
 
                 if (createdId < 0 || entity == null)
                     return;
@@ -507,6 +578,9 @@ namespace ARPG.Npc
                 saveData.IsActive = false;
                 saveData.EntityId = entityId;
 
+                // 장비/인벤토리 ItemData의 ItemTable 참조 복원 (PlayerData.LoadCompleted와 동일 패턴)
+                saveData.OnLoadCompleted();
+
                 // 구 세이브 호환 — Description 필드가 없던 시점의 데이터는 직업 풀에서 채워준다
                 if (string.IsNullOrEmpty(saveData.Description))
                     saveData.Description = PickDescription(GetPreferredJobType(saveData.NpcTableId));
@@ -596,6 +670,8 @@ namespace ARPG.Npc
                 ArrivedGameTime = AR.s.Time.CurrentGameTime,
                 Description = PickDescription(GetPreferredJobType(npcTableId)),
             };
+
+            SeedNpcEquipment(saveData);
 
             _npcSaveDict[entityId] = saveData;
             AddVisitorToIndex(villageId, entityId);

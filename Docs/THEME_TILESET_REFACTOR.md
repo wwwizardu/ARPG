@@ -28,13 +28,15 @@
 
 → **Object 레이어는 ThemeTileSet에서 분리**가 자연스러워짐.
 
-### 1.3 현재 상태 (단계 1 완료)
+### 1.3 현재 상태 (v1.10 시점)
 
 | 자산 종류 | 로드 경로 | 비고 |
 |----------|----------|------|
 | **Object 신규 자산** (Anvil, Hearth, ...) | `BuildableTileRegistry` (Addressable per-tile) | ✅ Phase B/C 통합 완료 |
 | **Object 레거시 자산** (Stone, Npc, WoodWall) | `ThemeTileSet.ObjectSet` fallback | ⚠️ Deprecated, 단계 2 완료 시 제거 |
-| **Ground/Hill 지형** | `ThemeTileSet.TileSet[]` 직접 참조 | 👈 단계 2의 주 대상 |
+| **자연 지형 Ground (cluster biome)** | `ThemeTileSet.Ground` 단일 필드 (Hard reference, biome별 SO) | ✅ v1.9 Option A 적용 |
+| **청사진 Ground (`.bytes`)** | `GroundTileSet.tiles[idx]` 단일 ScriptableObject (Hard reference, 글로벌 ID) | ✅ v1.10 도입. 환경 독립적 sprite 복원 |
+| ~~`ThemeTileSet.TileSet[]`~~ | ~~`MapFileSaver` 에디터 룩업~~ | ✅ v1.10에서 완전 제거 |
 | **NpcSet** | (확인 필요 — 현재 사용 여부 미파악) | 단계 3에서 정리 |
 
 ---
@@ -51,6 +53,35 @@
 - 신규 코드/디자이너가 ObjectSet에 자산 추가하려 하면 **컴파일 경고로 안내**
 - 기존 fallback은 그대로 동작 (레거시 호환 유지)
 - 단계 2 시점에 본 단계의 `#pragma warning disable` + fallback 분기 제거
+
+---
+
+## 2.5 v1.10 정정 (2026-05-21) — 청사진 Ground 시스템 분리
+
+> 원래 단계 2의 "ThemeTileSet 자체를 Addressable로" 계획은 **청사진 ground sprite 손실 문제**를 같이 풀려고 했었음. v1.10에서 **두 문제를 분리**:
+>
+> 1. **자연 지형 ground (cluster biome)**: 단순. ThemeTileSet의 `Ground` 단일 필드 (v1.9 Option A) Hard reference 유지. Addressable lazy 전환은 보류 (실측 메모리 압박 발생 시 진행).
+> 2. **청사진 ground (`.bytes`)**: 글로벌 `GroundTileSet` ScriptableObject 신설로 해결. 청사진 비트가 절대 ID로 sprite 가리킴 → 환경 독립적 복원.
+
+### 변경 내용
+
+- ✅ [`GroundTileSet.cs`](../Assets/Scripts/Map/Tile/GroundTileSet.cs) **신규** — `tiles[]` ScriptableObject (Hard reference, 인덱스 직접 룩업)
+- ✅ [`ThemeTileSet.cs`](../Assets/Scripts/Map/Tile/ThemeTileSet.cs) — `[Obsolete] TileSet[]` 필드 완전 제거. `Ground`, `NpcSet`, `[Obsolete] ObjectSet`만 잔존
+- ✅ [`MapFileSaver.cs`](../Assets/Scripts/Map/MapFileSaver.cs) — `ConvertUintToTile`이 `ThemeTileSet.TileSet[]` 대신 `GroundTileSet.tiles[]` 룩업
+- ✅ [`MapManager_Renderer.cs`](../Assets/Scripts/Map/MapManager_Renderer.cs) — None/Ground/cluster 3분기 → 단일 룩업 분기로 단순화
+- ✅ `TileType` enum / `BiomeTable.GetGroundTileType` / `MapManager.GetTileTypeAt` / `_ruleTile` 폐기
+
+자세한 변경 사항은 [MAP_DESIGN.md §13 Phase 1 v1.10](MAP_DESIGN.md) 참조.
+
+### 효과
+
+- 청사진 디자이너가 깐 sprite가 **로드 시점·컨텍스트와 무관하게 정확히 복원** (Inspector `_themeTileSet` 슬롯 의존성 사라짐)
+- 자연 지형은 cluster biome으로 자동 적응 (기존 동작 유지)
+- 한 청크에서 자연 ground + 청사진 ground가 셀별로 독립적으로 결정됨
+
+### 단계 2 ("ThemeTileSet 자체를 Addressable로") 우선순위 변동
+
+청사진 ground 문제가 v1.10으로 분리 해결되면서, 단계 2의 본질적 트리거(메모리 압박 / 신규 바이옴 첫 추가) 외에는 시급성이 낮아짐. **여전히 유효한 계획이지만 §3.8의 트리거 발생 전까지 보류**.
 
 ---
 
@@ -78,7 +109,7 @@ Addressable Group: "Themes" (Default Local Group과 분리해 라이프사이클
 
 ### 3.3 ThemeTileSet 구조 정리
 
-단계 2에서 ObjectSet 완전 제거:
+단계 2에서 ObjectSet 완전 제거 (v1.10에서 `TileSet[]`은 이미 제거됨):
 
 ```csharp
 public class ThemeTileSet : ScriptableObject
@@ -87,8 +118,8 @@ public class ThemeTileSet : ScriptableObject
     public string themeName;
     public Sprite themeIcon;
 
-    [Header("Ground / Hill / Cliff / Water")]
-    public TileBase[] TileSet;
+    [Header("Biome Ground Tile")]
+    public TileBase Ground;        // v1.9 Option A — cluster biome 1개 sprite
 
     // ObjectSet 필드 삭제 (단계 1에서 deprecated → 단계 2에서 제거)
 
@@ -133,13 +164,17 @@ public static class ThemeTileSetRegistry
 
 ### 3.6 MapManager_Renderer 변경
 
+v1.10 기준 현재 cluster biome 렌더:
 ```csharp
-// 이전
-_tempTileArray[index] = _themeTileSet.TileSet[baseTileType];
+ThemeTileSet theme = _clusterThemes[clusterIdx];
+_tempTileArray[index] = theme != null ? theme.Ground : null;
+```
 
-// 이후
+단계 2 적용 시:
+```csharp
+// AcquireAsync는 미리 OnChunkActivated에서 호출, 셀 루프에서는 Get으로 즉시 룩업
 ThemeTileSet? activeTheme = ThemeTileSetRegistry.Get(currentChunkTheme);
-_tempTileArray[index] = activeTheme?.TileSet[baseTileType] ?? defaultGroundTile;
+_tempTileArray[index] = activeTheme?.Ground ?? defaultGroundTile;
 ```
 
 `currentChunkTheme`는 청크 단위 결정 (§4 참조).

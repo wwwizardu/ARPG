@@ -1,5 +1,8 @@
 #nullable enable
+using System.Collections.Generic;
 using ARPG.Creature;
+using ARPG.Data;
+using ARPG.Utility;
 using Newtonsoft.Json;
 using UnityEngine;
 
@@ -48,6 +51,13 @@ namespace ARPG.Npc
         // 같은 NpcTableId라도 NPC마다 다른 소개가 보이도록 데이터를 인스턴스에 둔다.
         public string Description = string.Empty;
 
+        // 장비 슬롯 (EquipSlotType.Max 길이) — null은 빈 슬롯.
+        // 신규 NPC는 NpcEquipTable 기반으로 시드, 재로드는 기존 ItemData 그대로 복원.
+        public ItemData?[] InventoryEquip = new ItemData?[(int)GlobalEnum.EquipSlotType.Max];
+
+        // NPC 인벤토리 (NPC_INVENTORY_SLOTCOUNT_MAX 칸). 슬롯 인덱스가 의미를 가지므로 null 슬롯 유지.
+        public List<ItemData?> Inventory = new List<ItemData?>();
+
         [JsonIgnore]
         public Vector2 Position
         {
@@ -69,6 +79,78 @@ namespace ARPG.Npc
             StayingAtVillageId = 0;
             ArrivedGameTime = 0f;
             Description = string.Empty;
+            EnsureSlotsInitialized();
+        }
+
+        /// <summary>
+        /// 장비/인벤토리 배열을 기대 길이로 보정한다. 구 세이브(필드 없음) 로드 시에도 안전.
+        /// 호출 측: 생성자, OnLoadCompleted.
+        /// </summary>
+        public void EnsureSlotsInitialized()
+        {
+            int slotMax = (int)GlobalEnum.EquipSlotType.Max;
+            if (InventoryEquip == null || InventoryEquip.Length != slotMax)
+            {
+                var newArr = new ItemData?[slotMax];
+                if (InventoryEquip != null)
+                {
+                    int copy = System.Math.Min(InventoryEquip.Length, slotMax);
+                    for (int i = 0; i < copy; i++) newArr[i] = InventoryEquip[i];
+                }
+                InventoryEquip = newArr;
+            }
+
+            if (Inventory == null)
+                Inventory = new List<ItemData?>();
+            while (Inventory.Count < GlobalEnum.NPC_INVENTORY_SLOTCOUNT_MAX)
+                Inventory.Add(null);
+        }
+
+        /// <summary>
+        /// 로드 직후 ItemData 내부 테이블 참조 복원. PlayerData.LoadCompleted와 동일 패턴.
+        /// </summary>
+        public void OnLoadCompleted()
+        {
+            EnsureSlotsInitialized();
+
+            for (int i = 0; i < InventoryEquip.Length; i++)
+                InventoryEquip[i]?.OnLoadCompleted();
+
+            for (int i = 0; i < Inventory.Count; i++)
+                Inventory[i]?.OnLoadCompleted();
+        }
+
+        public ItemData? GetEquipedItem(GlobalEnum.EquipSlotType slot)
+        {
+            return InventoryEquip[(int)slot];
+        }
+
+        public bool EquipItem(GlobalEnum.EquipSlotType slot, ItemData item, out ItemData? replacedItem)
+        {
+            replacedItem = null;
+            if (item == null || item.Equipment == null)
+                return false;
+
+            GlobalEnum.EquipmentTypeMask allowedMask = EquipHelper.SlotToEquipmentTypeMask(slot);
+            if (Utils.ContainsEquipmentType(allowedMask, item.Equipment.EquipType) == false)
+                return false;
+
+            if (InventoryEquip[(int)slot] != null)
+                replacedItem = InventoryEquip[(int)slot];
+
+            InventoryEquip[(int)slot] = item;
+            return true;
+        }
+
+        public bool UnequipItem(GlobalEnum.EquipSlotType slot, out ItemData? unequippedItem)
+        {
+            unequippedItem = null;
+            if (InventoryEquip[(int)slot] == null)
+                return false;
+
+            unequippedItem = InventoryEquip[(int)slot];
+            InventoryEquip[(int)slot] = null;
+            return true;
         }
     }
 }

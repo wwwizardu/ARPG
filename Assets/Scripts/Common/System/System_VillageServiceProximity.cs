@@ -29,6 +29,9 @@ namespace ARPG.Systems
         private const float INN_RANGE_SQR     = 4f * 4f;
         private const float SHRINE_RANGE_SQR  = 5f * 5f;
 
+        // NPC 클릭 임계 (NPC_EQUIPMENT_DESIGN.md UI 패스, Q2=1.5 tile)
+        private const float NPC_RANGE        = 1.5f;
+
         public void OnCreate() { }
 
         public void OnUpdate(float inDeltaTime)
@@ -60,23 +63,21 @@ namespace ARPG.Systems
                 AR.s.Component.AddComponent(playerEntityId, nearby);
             }
 
+            // 마을 안/밖과 무관하게 NPC는 검색 (월드 어디서든 NPC 클릭 가능)
+            ResetNearby(ref nearby);
+
+            int npcId = AR.s.Npc.FindNearestActiveNpc(playerTr.Position, NPC_RANGE, out float npcSqr);
+            nearby.NearestNpcEntityId = npcId;
+            nearby.NearestNpcDistanceSqr = npcId >= 0 ? npcSqr : float.MaxValue;
+
             if (villageId < 0)
             {
-                // 마을 밖 → 클리어
-                ResetNearby(ref nearby);
+                // 마을 밖 — 시설은 없지만 NPC는 위에서 처리됨
                 AR.s.Component.SetComponent(playerEntityId, nearby);
                 return;
             }
 
-            // 마을 안 → 검색 시작
-            ResetNearby(ref nearby);
             nearby.NearestVillageId = villageId;
-
-            float bestShopDist = float.MaxValue;
-            float bestForgeDist = float.MaxValue;
-            float bestInnDist = float.MaxValue;
-            float bestShrineDist = float.MaxValue;
-            float bestCivicDist = float.MaxValue;
 
             var entities = PlacedObjectRegistry.GetAllEntitiesInVillage(villageId);
             for (int i = 0; i < entities.Count; i++)
@@ -88,33 +89,33 @@ namespace ARPG.Systems
                 float dy = po.TileY - playerTr.Position.y;
                 float sqr = dx * dx + dy * dy;
 
-                if ((po.Service & ProvidedService.Shop) != 0 && sqr <= SHOP_RANGE_SQR && sqr < bestShopDist)
+                if ((po.Service & ProvidedService.Shop) != 0 && sqr <= SHOP_RANGE_SQR && sqr < nearby.NearestShopDistanceSqr)
                 {
-                    bestShopDist = sqr;
+                    nearby.NearestShopDistanceSqr = sqr;
                     nearby.NearestShopEntityId = entityId;
                     nearby.AvailableServices |= ProvidedService.Shop;
                 }
-                if ((po.Service & ProvidedService.Forge) != 0 && sqr <= FORGE_RANGE_SQR && sqr < bestForgeDist)
+                if ((po.Service & ProvidedService.Forge) != 0 && sqr <= FORGE_RANGE_SQR && sqr < nearby.NearestForgeDistanceSqr)
                 {
-                    bestForgeDist = sqr;
+                    nearby.NearestForgeDistanceSqr = sqr;
                     nearby.NearestForgeEntityId = entityId;
                     nearby.AvailableServices |= ProvidedService.Forge;
                 }
-                if ((po.Service & ProvidedService.Inn) != 0 && sqr <= INN_RANGE_SQR && sqr < bestInnDist)
+                if ((po.Service & ProvidedService.Inn) != 0 && sqr <= INN_RANGE_SQR && sqr < nearby.NearestInnDistanceSqr)
                 {
-                    bestInnDist = sqr;
+                    nearby.NearestInnDistanceSqr = sqr;
                     nearby.NearestInnEntityId = entityId;
                     nearby.AvailableServices |= ProvidedService.Inn;
                 }
-                if ((po.Service & ProvidedService.Shrine) != 0 && sqr <= SHRINE_RANGE_SQR && sqr < bestShrineDist)
+                if ((po.Service & ProvidedService.Shrine) != 0 && sqr <= SHRINE_RANGE_SQR && sqr < nearby.NearestShrineDistanceSqr)
                 {
-                    bestShrineDist = sqr;
+                    nearby.NearestShrineDistanceSqr = sqr;
                     nearby.NearestShrineEntityId = entityId;
                     nearby.AvailableServices |= ProvidedService.Shrine;
                 }
-                if ((po.Service & ProvidedService.Civic) != 0 && sqr <= SHRINE_RANGE_SQR && sqr < bestCivicDist)
+                if ((po.Service & ProvidedService.Civic) != 0 && sqr <= SHRINE_RANGE_SQR && sqr < nearby.NearestCivicDistanceSqr)
                 {
-                    bestCivicDist = sqr;
+                    nearby.NearestCivicDistanceSqr = sqr;
                     nearby.NearestCivicEntityId = entityId;
                     nearby.AvailableServices |= ProvidedService.Civic;
                 }
@@ -129,10 +130,17 @@ namespace ARPG.Systems
         {
             nearby.AvailableServices = ProvidedService.None;
             nearby.NearestShopEntityId = -1;
+            nearby.NearestShopDistanceSqr = float.MaxValue;
             nearby.NearestForgeEntityId = -1;
+            nearby.NearestForgeDistanceSqr = float.MaxValue;
             nearby.NearestInnEntityId = -1;
+            nearby.NearestInnDistanceSqr = float.MaxValue;
             nearby.NearestShrineEntityId = -1;
+            nearby.NearestShrineDistanceSqr = float.MaxValue;
             nearby.NearestCivicEntityId = -1;
+            nearby.NearestCivicDistanceSqr = float.MaxValue;
+            nearby.NearestNpcEntityId = -1;
+            nearby.NearestNpcDistanceSqr = float.MaxValue;
             nearby.NearestVillageId = -1;
         }
     }

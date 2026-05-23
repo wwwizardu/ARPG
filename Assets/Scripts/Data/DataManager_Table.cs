@@ -17,6 +17,8 @@ namespace ARPG.Data
         // Archetype enum → Table 빠른 조회 캐시 (LoadLate에서 구축)
         private Dictionary<GlobalEnum.MonsterArchetype, Tables.MonsterArchetypeTable> _monsterArchetypeByEnum = new();
         private ImmutableDictionary<int, Tables.NpcTable> _npcTable = null!;
+        // NPC 시작 장비 세트 (Option A — 고정 세트). NpcTable.EquipTableId가 참조.
+        private ImmutableDictionary<int, Tables.NpcEquipTable> _npcEquipTable = null!;
         private ImmutableDictionary<int, Tables.StatTable> _statTable = null!;
         private ImmutableDictionary<int, Tables.ItemTable> _itemTable = null!;
         private ImmutableDictionary<int, Tables.BuildableItemTable> _buildableItemTable = null!;
@@ -61,6 +63,7 @@ namespace ARPG.Data
                 LoadTable<Tables.MonsterTable>("MonsterTable.bytes", tables => _monsterTable = tables),
                 LoadTable<Tables.MonsterArchetypeTable>("MonsterArchetypeTable.bytes", tables => _monsterArchetypeTable = tables),
                 LoadTable<Tables.NpcTable>("NpcTable.bytes", tables => _npcTable = tables),
+                LoadTable<Tables.NpcEquipTable>("NpcEquipTable.bytes", tables => _npcEquipTable = tables),
                 LoadTable<Tables.StatTable>("StatTable.bytes", tables => _statTable = tables),
                 LoadTable<Tables.ItemTable>("ItemTable.bytes", tables => _itemTable = tables),
                 LoadTable<Tables.BuildableItemTable>("BuildableItemTable.bytes", tables => _buildableItemTable = tables),
@@ -257,6 +260,16 @@ namespace ARPG.Data
         public Tables.NpcTable? GetNpc(int id)
         {
             if (_npcTable.TryGetValue(id, out var table))
+            {
+                return table;
+            }
+
+            return null;
+        }
+
+        public Tables.NpcEquipTable? GetNpcEquipTable(int id)
+        {
+            if (_npcEquipTable.TryGetValue(id, out var table))
             {
                 return table;
             }
