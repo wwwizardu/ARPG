@@ -642,7 +642,7 @@ namespace ARPG.Systems
 
         // ========== Phase C: 벽 세그먼트 처리 ==========
 
-        // PHASE_C_DESIGN.md §15 결정 #2: 벽 1칸 건설 시간 0.5h (실시간 ~15초)
+        // VILLAGE_PHASES.md (Phase C 벽 인프라): 벽 1칸 건설 시간 0.5h (실시간 ~15초)
         private const float PALISADE_BUILD_HOURS = 0.5f;
         private const int PALISADE_TABLE_ID = 180;
         private const int PALISADE_GATE_TABLE_ID = 181;

@@ -272,7 +272,7 @@ namespace ARPG.Tables
         [JsonProperty("StorageCap_Wood")] public int StorageCap_Wood = 0;
         [JsonProperty("StorageCap_Stone")] public int StorageCap_Stone = 0;
 
-        // Phase D: 데이터 정본화 (no hardcoded TableId 정책 — PHASE_D_DESIGN.md §2.2)
+        // Phase D: 데이터 정본화 (no hardcoded TableId 정책 — VILLAGE_PHASES.md §4.2)
         // 구 Function 컬럼은 제거됨 (placeholder. 의미 없음).
         [JsonProperty("ProvidedService")] public int ProvidedService = 0;       // ProvidedService Flags enum 비트 OR
         [JsonProperty("Category")] public BuildableCategory Category = BuildableCategory.None;

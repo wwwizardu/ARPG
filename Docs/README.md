@@ -79,10 +79,7 @@
 | 문서 | 단계 | 상태 |
 |------|------|------|
 | **[VILLAGE_GROWTH_STAGES.md](./VILLAGE_GROWTH_STAGES.md)** | 마을 성장 전체 기획 (Stage 0~4) | 본 문서 |
-| **[PHASE_A_DESIGN.md](./PHASE_A_DESIGN.md)** | MVP: NPC 1명 → Campfire 1개 | ✅ 완료 |
-| **[PHASE_B_DESIGN.md](./PHASE_B_DESIGN.md)** | 범용 배치 큐 + 오브젝트 6종 | ✅ 완료 |
-| **[PHASE_C_DESIGN.md](./PHASE_C_DESIGN.md)** | Tier 승격 + Stage 1·2 + 외곽 벽 | ✅ 완료 |
-| **[PHASE_D_DESIGN.md](./PHASE_D_DESIGN.md)** | 서비스 4종 + 상점 + 필요도 스코어 + 직무 | ✅ 코드 완료 |
+| **[VILLAGE_PHASES.md](./VILLAGE_PHASES.md)** | Phase A~D 통합 요약 (MVP → BuildQueue → Tier 승격 + 외벽 → 서비스 + 직무) | ✅ 코드 완료 |
 | **[BUILD_PRIORITY_DESIGN.md](./BUILD_PRIORITY_DESIGN.md)** | 자가 건설 4계층 가중치 점수 |
 | **[INN_HIRING_DESIGN.md](./INN_HIRING_DESIGN.md)** | 여관 기반 NPC 고용 (자연 이민 대체) |
 

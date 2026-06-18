@@ -1,7 +1,7 @@
 # Phase A — Unity Editor 작업 체크리스트
 
 > 코드 작업은 완료됐음. 이 문서는 **Unity 에디터에서 수동으로 해야 하는 작업**만 나열.
-> 기획: [../PHASE_A_DESIGN.md](../PHASE_A_DESIGN.md) / 구현: [PHASE_A_IMPLEMENTATION.md](PHASE_A_IMPLEMENTATION.md)
+> 기획: [../VILLAGE_PHASES.md](../VILLAGE_PHASES.md) (Phase A 섹션) / 구현: [PHASE_A_IMPLEMENTATION.md](PHASE_A_IMPLEMENTATION.md)
 
 ---
 

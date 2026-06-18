@@ -1,6 +1,6 @@
 # 스킬북 시스템 — 설계 문서
 
-> 선행: [SKILL_DESIGN.md](SKILL_DESIGN.md) · [PHASE_D_DESIGN.md](PHASE_D_DESIGN.md) (상점 거래 컬럼)
+> 선행: [SKILL_DESIGN.md](SKILL_DESIGN.md) · [VILLAGE_PHASES.md](VILLAGE_PHASES.md) (Phase D 상점 거래 컬럼)
 >
 > **상태**: 코드 구현 완료 ✅. 시트 데이터 입력은 사용자 측 작업.
 >

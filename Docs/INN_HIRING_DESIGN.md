@@ -1,7 +1,7 @@
 # Inn 기반 NPC 고용 시스템 — 설계 문서
 
 > 상위 문서: [VILLAGE_GROWTH_STAGES.md](VILLAGE_GROWTH_STAGES.md)
-> 선행: [PHASE_C_DESIGN.md](PHASE_C_DESIGN.md) ✅ · [PHASE_D_DESIGN.md](PHASE_D_DESIGN.md) ✅
+> 선행: [VILLAGE_PHASES.md](VILLAGE_PHASES.md) (Phase C·D 섹션) ✅
 >
 > **목표**: NPC가 마을에 즉시 종속되는 현재 자연 이민 시스템을, **여관(Inn)이라는 입국 게이트 + 플레이어 능동 고용**으로 교체한다. 마을이 클수록 더 많은 손님이, 더 빠르게 도착하고, 여관 규모가 곧 노동력 풀이 된다.
 

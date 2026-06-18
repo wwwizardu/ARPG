@@ -1,6 +1,6 @@
 # 마을 자가 건설 우선순위 시스템 — 설계 문서
 
-> 상위 문서: [VILLAGE_GROWTH_STAGES.md](VILLAGE_GROWTH_STAGES.md) · [PHASE_D_DESIGN.md](PHASE_D_DESIGN.md)
+> 상위 문서: [VILLAGE_GROWTH_STAGES.md](VILLAGE_GROWTH_STAGES.md) · [VILLAGE_PHASES.md](VILLAGE_PHASES.md) (Phase D 섹션)
 > 관련: [INN_HIRING_DESIGN.md](INN_HIRING_DESIGN.md)
 >
 > **목표**: 마을이 자가 건설 시 어떤 오브젝트를 다음 차례에 지을지 결정하는 로직을 **4계층 가중치 점수 단일 시스템**으로 일원화한다. 기존 `VillageBuildRoadmap`(하드코딩 순서) + `VillageNeedsCache`(점수)의 이중 구조가 만들었던 일관성 문제를 해소한다.

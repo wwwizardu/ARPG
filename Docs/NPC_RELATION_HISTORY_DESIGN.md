@@ -8,7 +8,7 @@
 > **선행/관련 문서**:
 > - [MAP_DESIGN.md](MAP_DESIGN.md) — Region/biome/settlement 배치 (§7), Lore Fragment (§6)
 > - [PROCEDURAL_HISTORY_DESIGN.md](PROCEDURAL_HISTORY_DESIGN.md) — 4시대 템플릿 백본 (보류 중). 본 문서는 그 중 "현대(Current) 시대"의 정착지 층만 떼어 구체화한 것
-> - [PHASE_C_DESIGN.md](PHASE_C_DESIGN.md) — 마을 도메인 런타임 시스템 (Priority 50-69)
+> - [VILLAGE_PHASES.md](VILLAGE_PHASES.md) — 마을 도메인 런타임 시스템 (Priority 50-69, §4.1)
 > - [INN_HIRING_DESIGN.md](INN_HIRING_DESIGN.md) — InnVisitor → Resident 흐름
 
 ---

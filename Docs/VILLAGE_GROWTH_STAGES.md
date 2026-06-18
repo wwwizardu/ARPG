@@ -372,17 +372,13 @@ Category 예: `Housing / Storage / Production / Crafting / Service / Defense / D
 
 ## 10. 구현 Phase
 
-### Phase A — 자가 생성 최소 루프 (MVP) ✅ 완료 (2026-04-24)
-상세 → [PHASE_A_DESIGN.md](PHASE_A_DESIGN.md)
+### Phase A~D ✅ 모두 코드 완료 (2026-04-24 ~ 2026-04-28)
+상세 → [VILLAGE_PHASES.md](VILLAGE_PHASES.md) (4개 PHASE 문서 통합본)
 
-### Phase B — 오브젝트 배치 (핵심) ✅ 완료 (2026-04-24)
-상세 → [PHASE_B_DESIGN.md](PHASE_B_DESIGN.md)
-
-### Phase C — Tier 승격 + 벽 ✅ 완료 (2026-04-26)
-상세 → [PHASE_C_DESIGN.md](PHASE_C_DESIGN.md)
-
-### Phase D — 플레이어 이득 (루프 완성) ✅ 코드 완료 (2026-04-28)
-상세 → [PHASE_D_DESIGN.md](PHASE_D_DESIGN.md)
+- **Phase A** (MVP): NPC 1명 → Campfire 1개
+- **Phase B**: 범용 BuildQueue + 오브젝트 6종
+- **Phase C**: Tier 승격 + Stage 1·2 + 외곽 벽
+- **Phase D**: 서비스 4종 + 상점 + 필요도 스코어 + NPC 직무
 
 ### Phase E — 배후 시뮬레이션
 - [ ] `System_AbstractVillageSimulation`
