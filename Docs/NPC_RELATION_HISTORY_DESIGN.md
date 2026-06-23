@@ -1,6 +1,7 @@
 # NPC 관계 + 정착지 히스토리 설계 (초안)
 
 > **상태 (2026-06-12): 초안 — 미구현**
+> **(2026-06-18 갱신)**: 정치 모델에 **정복-병합(Conquer)** 도입 — 전쟁 승자가 패자를 파괴(Ruin)만 하는 게 아니라 자국에 편입(타종족 가능) → 다종족 제국 등장. 단일 제국 수렴 방지를 위한 **과확장 페널티(자기 제한)** 동반. 분열 동역학(Secession/왕국 간 전쟁/자동 스윕 튜닝)은 **Tier 3로 보류**. 상세 실행 분해는 [구현 계획](NPC_RELATION_HISTORY_PLAN.md) 참고.
 > 본 문서는 추후 [MAP_DESIGN.md](MAP_DESIGN.md)에 합류될 예정 (합류 지점은 §10 참고).
 >
 > **목표**: 절차 생성된 마을의 NPC들이 *서로 관계*(가족/친구/원한/파벌)를 가지고, 마을이 *합병되거나 왕국이 되는 히스토리*를 갖게 한다.
@@ -91,12 +92,13 @@ public struct SettlementSimState
     public Vector2Int RegionCoord;
     public int Population;              // 종족/biome 기반 초기값
     public int KingdomId;               // -1 = 무소속
-    public SettlementFate Fate;         // Alive / Ruined / Merged
+    public SettlementFate Fate;         // Alive / Ruined / Merged / Conquered
     public int MergedIntoId;            // Fate == Merged일 때
+    public int ConqueredByKingdomId;    // Fate == Conquered일 때 (정복국 KingdomId). 정착지는 생존
     public int FoundedYear;
 }
 
-public enum SettlementFate { Alive = 0, Ruined = 1, Merged = 2 }
+public enum SettlementFate { Alive = 0, Ruined = 1, Merged = 2, Conquered = 3 }
 ```
 
 - 정착지 간 우호도: `Dictionary<(int, int), int>` — **이웃만** (region 거리 ≤ 3, 정규화 페어). 전쌍 O(N²)을 만들지 않는다.
@@ -109,11 +111,16 @@ public enum SettlementFate { Alive = 0, Ruined = 1, Merged = 2 }
 ```
 1. 인구 성장:    pop += growthRate(race, biome) ± noise
 2. 이웃 페어 이벤트 추첨 (페어당 연 1회 roll):
-     가중치 = f(종족 호환(RaceRelationTable), 거리, 인구비, 현재 우호도)
-     → Trade / Skirmish / War / Alliance / Merge 중 0~1개
+     가중치 = f(종족 호환(RaceRelationTable), 거리, 인구비, 현재 우호도,
+                정복국 과확장 페널티)
+     → Trade / Skirmish / War / Alliance / Merge / Conquer 중 0~1개
 3. 사건 효과 적용:  우호도/인구 가감, Fate 변경
+     - War 해소 분기: 승자가 충분히 강하면(인구 우위 + 과확장 여유) 패자를 Conquer
+       (패자 KingdomId = 승자국, 정착지 생존, 타종족 가능) — 아니면 기존대로 pop −− / 폐허 확률
 4. 왕국 검사:     동맹 클러스터 크기 ≥ K → KingdomFound (최대 인구 정착지 = 수도)
                   기존 왕국 인접 + 우호 ≥ T → KingdomJoin
+     - 과확장 페널티: 왕국 멤버 수가 클수록 추가 정복/병합 가중치 감소 (자기 제한).
+       단일 제국 수렴을 막아 여러 다종족 지역 제국이 공존하게 하는 핵심 제동
 5. 사건을 Chronicle에 append
 ```
 
@@ -124,6 +131,7 @@ public enum SettlementFate { Alive = 0, Ruined = 1, Merged = 2 }
 | `Trade` | 우호 ≥ 0, 거리 가까움 | 우호 +, 양쪽 pop + | 상인 NPC의 우호 대사 |
 | `Skirmish` | 우호 < 0 | 우호 −, pop 소폭 − | 경계 대사 |
 | `War` | 우호 ≤ −T, 종족 적대 | 우호 −−, 패자 pop −−, 폐허 확률 | **원한 관계 + 유족 서사** |
+| `Conquer` | War 승리 + 인구 우위 + 승자국 과확장 여유 | 패자 `Fate=Conquered`, 정착지 생존하나 `KingdomId=승자국` (타종족 가능) | **피정복민 서사 — `ResentsKingdom` + 지배종족 거주민 대비 파벌 긴장** |
 | `Alliance` | 우호 ≥ +T | 동맹 마크 (왕국 전 단계) | 혼인 가계(두 마을에 걸친 가족) |
 | `Merge` | 동맹 + 인구비 ≥ 3:1, 또는 War 패배 | 작은 쪽 `Fate=Merged`, 인구 흡수 | **두 founder 혈통 파벌** |
 | `Ruin` | pop ≤ 0 | `Fate=Ruined` | (NPC 없음 — 맵 표현만, §4.5) |
@@ -164,8 +172,9 @@ public class KingdomData
 {
     public int KingdomId;
     public string Name;                  // 종족 어근 기반 절차 작명 (v1은 "{종족} 왕국 N" 수준)
+    public GlobalEnum.RaceType FoundingRace;  // 건국 종족(= 수도 종족). 피정복 타종족과 대비 → backfill 파벌 기준
     public int CapitalSettlementId;
-    public List<int> MemberSettlementIds = new();
+    public List<int> MemberSettlementIds = new();  // 정복으로 타종족 정착지 포함 가능 → 다종족 제국
 }
 ```
 
@@ -175,6 +184,7 @@ public class KingdomData
 ### 4.5 맵 표현과의 연결 (MAP_DESIGN 합류 포인트)
 
 - `Fate == Ruined / Merged` 정착지 → 마을 청사진 대신 **폐허 variant** 배치. Lore Fragment(§6)의 L3 청사진과 같은 메커니즘을 재사용하고, `FateKeyword`를 연대기 사건에서 가져온다 (War로 폐허 → `burned`, 합병 → `forgotten` 등).
+- `Fate == Conquered` 정착지는 **폐허가 아니다** — 정복국 깃발/점령 variant로 *살아있는 마을*로 표현(`FateKeyword = occupied`). 피정복 종족과 지배 종족이 한 마을·왕국에 공존하는 비주얼이 다종족 제국의 시각적 증거가 된다.
 - 즉 기존 Lore Fragment의 "랜덤 fate" 일부가 "연대기가 실제로 기록한 fate"로 승격된다. 랜덤 fragment는 그대로 공존 (고대 유적용).
 
 ### 4.6 비용 추정
@@ -252,6 +262,10 @@ public class NpcSentiment
                          일부에 ResentsMerge Sentiment (OriginEventId)
    - War 사건 있음     → 인구 비례 일부 NPC에 GrudgeAgainst(상대 마을 스폰 시 연결) 또는
                          LostFamilyToWar Sentiment + TargetSettlementId
+   - Conquer 사건 있음 → 이 마을이 피정복지면: 다수 NPC에 ResentsKingdom Sentiment
+                         (Loyalty 낮을수록 강함), 지배종족(KingdomData.FoundingRace) 거주민과
+                         초기 호감도 −, 전쟁 유족엔 LostFamilyToWar.
+                         지배종족 NPC는 ProudOfKingdom 경향 → 한 마을 안에 지배/피지배 파벌
    - KingdomFound/Join → ProudOfKingdom / ResentsKingdom Sentiment를 Loyalty 성향 따라 분포
 6. 호감도 시드:         RelationType → 초기 Affinity 매핑 후 _npcAffinity 등록
                          (Spouse +60, Sibling +40, Friend +30, Rival −20, Grudge −50, 파벌 교차 −10 등)
@@ -364,3 +378,14 @@ ECS 풀 추가 없음 — 본 설계는 의도적으로 ECS 컴포넌트를 만�
 3. **왕국 이름 작명** — v1 절차 작명("{종족} 왕국 N")으로 충분한가, 어근 조합 작명기를 만들 것인가.
 4. **NpcStat 생성의 시드화** — 현재 `UnityEngine.Random`(비결정론, 저장되므로 무해). 같은 시드 New Game 재현성을 원하면 backfill 채널로 통일할지.
 5. **InnVisitor 출신 정착지 부여** — 방문자에게 연대기 기반 출신지를 줄지 (v2 후보).
+6. **정복 annex 발동 조건 / 과확장 페널티** (2026-06-18 추가) — War 승리 시 Conquer 전환 확률, 왕국 멤버 수에 따른 확장 가중치 감쇠 곡선. "단일 제국 수렴 ↔ 과도한 파편화" 사이 밸런스. 시뮬이 빠르고 결정론이라 R1 덤프를 눈으로 보며 튜닝. 목표: 한 종족 제국이 맵을 다 먹지 않고 여러 지역 제국(일부 다종족)이 공존.
+
+### 11.1 정치 모델 단계 (2026-06-18 결정)
+
+| Tier | 범위 | 상태 |
+|------|------|------|
+| Tier 1 | 단일종족 지역 왕국 (Trade/War/Alliance/Merge/Kingdom) | 기반 |
+| **Tier 2 (채택)** | **+ 정복-병합(Conquer) + 과확장 페널티** → 다종족 제국 + 피정복민 서사 | **본 갱신 범위** |
+| Tier 3 (보류) | + 분열(Secession) + 왕국 간 전쟁 + 자동 스윕 튜닝 하니스 | 정복-병합 안정화 후 증분 도입 |
+
+> Tier 3는 통합/분열의 *반대 힘 균형* 튜닝이 비싸므로, Tier 2를 먼저 안정화하고 덤프가 너무 정적이면 분열을 *하나씩* 얹는다(모든 힘 동시 튜닝 회피). 자동 스윕 하니스는 그때 도입.

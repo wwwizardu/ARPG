@@ -50,7 +50,7 @@
 |-------|------|------------|------|------|
 | **R0-A** | 호감도 수치 채널 (설계가 있다고 가정했으나 미구현) | `NpcPairKey`, NpcManager 호감도 API, `WorldData.NpcAffinityList` | 없음 | 1.5~2일 |
 | **R0-B** | 히스토리/관계 데이터 모델 + 저장 + 마이그레이션 | `ChronicleEvent/SaveData`, `NpcRelationEntry`, `NpcSentiment`, WorldData 직렬화 | R0-A | 1.5~2일 |
-| **R1** | 정착지 연대기 시뮬 (New Game 1회) + 정착지↔마을 매핑 | `SettlementChronicleSimulator`, `RaceRelationTable`, 디버그 덤프 | R0-B | 3~4일 |
+| **R1** | 정착지 연대기 시뮬 (New Game 1회) + **정복-병합/과확장(Tier 2)** + 정착지↔마을 매핑 | `SettlementChronicleSimulator`, `RaceRelationTable`, 디버그 덤프 | R0-B | 4~5일 |
 | **R2** | NPC 관계 backfill (마을 첫 population) | 가구/가족/성격/파벌 생성기, 호감도 시드, `HasBeenPopulated` 훅 | R0-B (R1 선택) | 3~4일 |
 | **R3** | 런타임 연속 + 구 골격 제거 | `System_NpcAffinityDrift`(Priority 58.5), 출생/사망 훅, `RelationshipComponent`/`System_Relationship` 삭제 | R2 | 2일 |
 | **R4** | 표현 | NpcInspect 관계 탭, Sentiment 회고 대사 1종 | R2 (R1 있으면 회고 가능) | 2~3일 |
@@ -64,7 +64,7 @@ R0-A ──▶ R0-B ──▶ R1 ──┐
             (R2는 R0-B만 있으면 연대기-무관 관계까지는 동작; R1 있으면 연대기 제약 주입 + 회고 가능)
 ```
 
-**검증 마일스톤** (설계 §9): R1 완료 시 "연대기 텍스트 덤프"가 읽을 만한 역사인지 눈으로 평가. 재미없으면 R2 진입 전 사건 카탈로그/가중치만 튜닝.
+**검증 마일스톤** (설계 §9): R1 완료 시 "연대기 텍스트 덤프"가 읽을 만한 역사인지 눈으로 평가. 특히 **다종족 제국이 형성되는지** + **한 왕국이 맵을 다 먹지 않고 여러 지역 제국이 공존하는지**(과확장 페널티 작동) 확인. 단조롭거나 한 덩어리로 수렴하면 R2 진입 전 사건 카탈로그/정복·과확장 가중치만 튜닝.
 
 ---
 
@@ -111,10 +111,10 @@ R0-A ──▶ R0-B ──▶ R1 ──┐
 
 | 파일 | 내용 (설계 §4.3~4.4, §5.2) |
 |------|---------------------------|
-| `Assets/Scripts/History/Chronicle/ChronicleEvent.cs` (신규) | `ChronicleEvent{ int EventId; int Year; ChronicleEventType Type; int SubjectSettlementId; int ObjectSettlementId; int KingdomId; }` + `enum ChronicleEventType{ Trade, Skirmish, War, Alliance, Merge, Ruin, KingdomFound, KingdomJoin, Promotion }` |
+| `Assets/Scripts/History/Chronicle/ChronicleEvent.cs` (신규) | `ChronicleEvent{ int EventId; int Year; ChronicleEventType Type; int SubjectSettlementId; int ObjectSettlementId; int KingdomId; }` + `enum ChronicleEventType{ Trade, Skirmish, War, Conquer, Alliance, Merge, Ruin, KingdomFound, KingdomJoin, Promotion }` ※`Conquer`는 Tier 2(정복-병합) |
 | `.../ChronicleSaveData.cs` (신규) | `ChronicleSaveData{ int Version=1; int SimulatedYears; List<ChronicleEvent> Events; List<SettlementSnapshot> Settlements; List<KingdomData> Kingdoms; }` |
-| `.../SettlementSnapshot.cs` (신규) | 시뮬 최종 상태만: `SettlementId, Race, RegionCoord, Population, KingdomId, Fate, MergedIntoId, FoundedYear` (= `SettlementSimState`에서 시뮬-전용 필드 제외) + `enum SettlementFate{ Alive, Ruined, Merged }` |
-| `.../KingdomData.cs` (신규) | `KingdomData{ int KingdomId; string Name; int CapitalSettlementId; List<int> MemberSettlementIds; }` |
+| `.../SettlementSnapshot.cs` (신규) | 시뮬 최종 상태만: `SettlementId, Race, RegionCoord, Population, KingdomId, Fate, MergedIntoId, ConqueredByKingdomId, FoundedYear` (= `SettlementSimState`에서 시뮬-전용 필드 제외) + `enum SettlementFate{ Alive, Ruined, Merged, Conquered }` |
+| `.../KingdomData.cs` (신규) | `KingdomData{ int KingdomId; string Name; GlobalEnum.RaceType FoundingRace; int CapitalSettlementId; List<int> MemberSettlementIds; }` — `FoundingRace`(건국 종족)로 다종족 제국의 지배/피지배 종족 구분 |
 | `Assets/Scripts/Npc/NpcRelationEntry.cs` (신규) | `NpcRelationEntry{ int FromEntityId; int ToEntityId; NpcRelationType Type; int OriginEventId; }` + `enum NpcRelationType{ ParentOf=0, MentorOf=1, GrudgeAgainst=2, Spouse=100, Sibling=101, Friend=102, Rival=103 }` |
 | `Assets/Scripts/Npc/NpcSentiment.cs` (신규) | `NpcSentiment{ NpcSentimentType Type; int TargetSettlementId; int OriginEventId; }` + `enum NpcSentimentType{ LostFamilyToWar, ProudOfKingdom, ResentsMerge, ResentsKingdom, ... }` |
 | [WorldData.cs](../Assets/Scripts/Data/WorldData.cs) | `public ChronicleSaveData Chronicle = new();` + `public List<NpcRelationEntry> NpcRelationList = new();` |
@@ -150,6 +150,8 @@ R0-A ──▶ R0-B ──▶ R1 ──┐
 |------|------|
 | `Assets/Scripts/History/Chronicle/SettlementSimState.cs` (신규, 시뮬 전용) | 설계 §4.1 struct (저장 안 함). `SettlementSnapshot`로 평탄화하여 저장 |
 | `Assets/Scripts/History/Chronicle/SettlementChronicleSimulator.cs` (신규) | `ChronicleSaveData Simulate(int mapSeed, List<SettlementPlacement> placements, int years=150)`. 틱 루프(설계 §4.2): 인구성장 → 이웃 페어 이벤트 추첨 → 효과 적용 → 왕국 검사 → append. 모든 난수 `DerivedSeed.Derive(mapSeed, ChannelChronicle)` 계열만 (UnityEngine/System.Random 금지) |
+| **정복-병합 (Tier 2)** | War 해소 분기: 승자가 인구 우위 + 과확장 여유면 패자 `Fate=Conquered`(KingdomId=승자국, **타종족 가능**, 정착지 생존) → `Conquer` 이벤트. 아니면 기존 pop −−/폐허 |
+| **과확장 페널티 (Tier 2 필수 제동)** | 왕국 멤버 수가 클수록 추가 정복/병합 가중치 감쇠. **없으면 정복이 단일 제국 수렴을 악화** → 자기 제한으로 여러 다종족 지역 제국 공존 보장 |
 | `Tables.cs` + `.bytes` | `RaceRelationTable{ Id, RaceA, RaceB, BaseAffinity, WarWeight, TradeWeight, MergeAllowed }`. **미결정(§7-2)**: v1은 코드 상수 dict로 시작 가능 → 시트 작업 분리 |
 | 이웃 그래프 | `Dictionary<(int,int),int>` 우호도, **이웃만**(region 거리 ≤ 3, 정규화 페어). 전쌍 O(N²) 금지 |
 | New Game 호출부 | 맵 생성 직후(placement 확정 시점) 1회 호출 → `WorldData.Chronicle` 대입. 세이브 로드 경로는 호출 안 함 |
@@ -159,9 +161,11 @@ R0-A ──▶ R0-B ──▶ R1 ──┐
 ### 4.3 작업 체크리스트
 
 - [ ] `SettlementSimState` + 이웃 그래프 구축(region 거리 ≤ 3)
-- [ ] 틱 루프 5단계 구현, 사건 카탈로그 v1(설계 §4.3 표 8종)
+- [ ] 틱 루프 5단계 구현, 사건 카탈로그 v1(설계 §4.3 표 **9종**, `Conquer` 포함)
+- [ ] **정복-병합**: War 해소 시 Conquer 분기(패자 `Fate=Conquered`, KingdomId 재지정, 타종족 가능)
+- [ ] **과확장 페널티**: 왕국 크기별 확장 가중치 감쇠 (자기 제한 제동) + `KingdomData.FoundingRace` 기록
 - [ ] 왕국 클러스터 검사(`KingdomFound`/`KingdomJoin`), 수도 = 최대 인구
-- [ ] `RaceRelationTable` (v1 코드 상수 or .bytes — §7 결정 따름)
+- [ ] `RaceRelationTable` (v1 코드 상수 or .bytes — §9 결정 따름)
 - [ ] `SettlementSnapshot`/`KingdomData` 평탄화 저장
 - [ ] `SettlementId↔VillageId` 매핑 (`VillageData.SettlementId` 추가 + 등록 훅)
 - [ ] New Game 1회 호출 배선 + 로드 경로 비호출 가드
@@ -170,7 +174,9 @@ R0-A ──▶ R0-B ──▶ R1 ──┐
 ### 4.4 검증 기준
 
 - [ ] 같은 `mapSeed` New Game 2회 → **동일 Chronicle**(결정론)
-- [ ] 인과 모순 없음: `Merge`된 정착지가 이후 능동 사건 주체로 등장 안 함, `Ruin` 후 부활 없음
+- [ ] 인과 모순 없음: `Merge`/`Ruin` 정착지가 이후 능동 사건 주체로 등장 안 함, `Ruin` 후 부활 없음, `Conquered` 정착지는 생존하되 KingdomId가 승자국
+- [ ] **다종족 제국이 실제로 형성**된다 (`KingdomData.MemberSettlementIds`에 `FoundingRace`와 다른 종족 정착지 포함)
+- [ ] **단일 제국 수렴 안 함** — 한 왕국이 전체 정착지의 과반(예: >40%)을 먹지 않고 여러 지역 제국 공존 (과확장 페널티 작동 확인). 안 되면 페널티/연수 튜닝
 - [ ] 비용: 정착지 ~2,400 × 이웃 ~8 × 150틱이 New Game 시 **수십 ms** (설계 §4.6)
 - [ ] **덤프가 "읽을 만한 역사"인가** (사건 평탄화 함정 — 재미없으면 가중치 튜닝)
 
@@ -197,7 +203,7 @@ R0-A ──▶ R0-B ──▶ R1 ──┐
 |------|------|
 | `Assets/Scripts/Npc/Relation/NpcRelationBackfill.cs` (신규) | `void Generate(int villageId, int settlementId, IReadOnlyList<int> npcEntityIds)`. 마을 시드 `DerivedSeed.Derive(mapSeed ^ settlementId, ChannelRelationBackfill)`. 6단계(설계 §5.3): ①가구 분할 ②가족(Spouse/ParentOf/Sibling, 세대 ≤ 2) ③직업 MentorOf ④성격 가중 추첨(Friendliness→Friend↑, Pride×동일직업→Rival↑) ⑤연대기 제약 주입 ⑥호감도 시드 |
 | 호감도 시드 매핑 | RelationType→초기 Affinity (Spouse +60 / Sibling +40 / Friend +30 / Rival −20 / Grudge −50 / 파벌교차 −10). R0-A의 `SetAffinity` 사용 |
-| 연대기 제약 주입 | 이 마을 관련 `Chronicle.Events` 추출 → Merge: 두 파벌 분할 + `ResentsMerge`; War: `GrudgeAgainst`(상대 마을 스폰 시 연결) 또는 `LostFamilyToWar` Sentiment; KingdomFound/Join: Loyalty 성향 따라 `ProudOfKingdom`/`ResentsKingdom` 분포 |
+| 연대기 제약 주입 | 이 마을 관련 `Chronicle.Events` 추출 → Merge: 두 파벌 분할 + `ResentsMerge`; War: `GrudgeAgainst`(상대 마을 스폰 시 연결) 또는 `LostFamilyToWar` Sentiment; **Conquer(피정복지): 다수 NPC에 `ResentsKingdom`(Loyalty 낮을수록 강함), 지배종족(`KingdomData.FoundingRace`) 거주민과 초기 호감도 −, 한 마을 안 지배/피지배 파벌 형성**; KingdomFound/Join: Loyalty 성향 따라 `ProudOfKingdom`/`ResentsKingdom` 분포 |
 | 매니저 배선 | 생성된 엔트리 → NpcManager 관계 보관소(R0-B), Sentiment → 각 `NpcSaveData.Sentiments` |
 
 ### 5.4 작업 체크리스트
@@ -299,7 +305,9 @@ RaceRelationTable { Id, RaceA, RaceB, BaseAffinity, WarWeight, TradeWeight, Merg
 
 ## 9. 리스크 / 미결정 사항 (착수 전·중 결정)
 
-설계 §11 + 본 검증에서 추가된 항목.
+**✅ 결정됨 (2026-06-18)** — 정치 모델은 **Tier 2 (정복-병합 + 과확장 페널티)** 채택. 전쟁 승자가 패자를 자국에 편입(타종족 가능) → 다종족 제국 + 피정복민 서사. 과확장 페널티로 단일 제국 수렴 방지. **분열 동역학(Tier 3: Secession / 왕국 간 전쟁 / 자동 스윕 튜닝 하니스)은 보류** — Tier 2 안정화 후, 덤프가 너무 정적이면 *하나씩* 증분 도입(반대 힘 동시 튜닝 회피). 상세는 [설계 §11.1](NPC_RELATION_HISTORY_DESIGN.md).
+
+설계 §11 + 본 검증에서 추가된 미결정 항목.
 
 | # | 항목 | 출처 | 결정 시점 |
 |---|------|------|----------|
@@ -310,8 +318,9 @@ RaceRelationTable { Id, RaceA, RaceB, BaseAffinity, WarWeight, TradeWeight, Merg
 | 5 | **`NpcStatComponent` 비결정론** — `UnityEngine.Random` 생성, 영속화 안 됨. 같은 시드 재현성 원하면 backfill 채널로 시드화 필요 | 설계 §11-4 + 본 검증 §0.1 | R2 착수 시 |
 | 6 | `SettlementId↔VillageId` 매핑 방식 — `VillageData`에 필드 추가 vs 별도 매핑 테이블 | 본 검증 §0.1 | R1 |
 | 7 | InnVisitor 출신 정착지 부여 | 설계 §11-5 | v2 |
+| 8 | **정복 annex 발동 조건 / 과확장 페널티 곡선** — War 승리→Conquer 전환 확률, 왕국 크기별 확장 가중치 감쇠. "단일 제국 수렴 ↔ 과도 파편화" 밸런스 | 설계 §11-6 | R1 덤프 보고 튜닝 |
 
-**보류(설계 §9 하단)**: 라이브 합병/왕국, 왕국 게임플레이(세금/평판), 4축 관계, LLM 연대기 문장화, 혼인 기반 마을 간 가계.
+**보류**: Tier 3(Secession / 왕국 간 전쟁 / 자동 스윕 튜닝 하니스), 라이브 합병/왕국, 왕국 게임플레이(세금/평판), 4축 관계, LLM 연대기 문장화, 혼인 기반 마을 간 가계.
 
 ---
 
