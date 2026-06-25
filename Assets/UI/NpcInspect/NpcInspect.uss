@@ -15,8 +15,8 @@
 }
 
 .npc-panel {
-    width: 720px;
-    max-height: 80%;
+    width: 1120px;
+    max-height: 85%;
     padding: 20px;
     border-radius: 12px;
     background-color: rgba(28, 28, 32, 0.96);
@@ -74,16 +74,25 @@
 
 .npc-col {
     flex-direction: column;
-    padding: 4px 8px;
+    padding: 4px 10px;
 }
 
 .npc-col-left {
+    width: 360px;
+    border-right-width: 1px;
+    border-right-color: rgba(120, 100, 70, 0.25);
+}
+
+.npc-col-mid {
     width: 320px;
+    max-height: 520px;
+    border-right-width: 1px;
+    border-right-color: rgba(120, 100, 70, 0.25);
 }
 
 .npc-col-right {
     flex-grow: 1;
-    max-height: 480px;
+    max-height: 520px;
 }
 
 .npc-section-title {

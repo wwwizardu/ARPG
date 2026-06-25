@@ -48,6 +48,7 @@ namespace ARPG.Data
         // 현재 활성 플레이어 ID
         public int CurrentPlayerEntityId => _currentPlayerEntityId;
         public Dictionary<int, NpcSaveData> NpcSaveDatas => _worldData.NpcSaveDatas;
+        public List<NpcAffinityEntry> NpcAffinityList => _worldData.NpcAffinityList;
         public Dictionary<int, BuildingSaveData> BuildingSaveDatas => _worldData.BuildingSaveDatas;
 
         public async Task Initialize()
@@ -330,6 +331,7 @@ namespace ARPG.Data
 
                     // NpcData 저장
                     _worldData.NpcSaveDatas = AR.s.Npc.Save();
+                    _worldData.NpcAffinityList = AR.s.Npc.SaveAffinity();
 
                     // BuildingData 저장
                     _worldData.BuildingSaveDatas = AR.s.Building.Save();

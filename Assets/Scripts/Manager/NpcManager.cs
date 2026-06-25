@@ -19,6 +19,8 @@ namespace ARPG.Npc
         private Dictionary<Vector2Int, List<int>> _chunkNpcs = new();
         // Inn 고용 시스템 — 마을별 방문자 EntityId 인덱스 (런타임 캐시, 세이브 대상 아님)
         private Dictionary<int, List<int>> _innVisitorsByVillageId = new();
+        // NPC 간 호감도 (양방향 대칭, sparse — 만난 적 있는 페어만 등록)
+        private Dictionary<NpcPairKey, int> _npcAffinity = new();
         private Transform? _npcParent;
         private bool _isInitialLoaded = false;
         private int _chunkSize;
@@ -41,6 +43,8 @@ namespace ARPG.Npc
             {
                 Load(savedNpcs, AR.s.Map.chunkSize);
             }
+
+            LoadAffinity(AR.s.Data.NpcAffinityList);
         }
 
         public void Reset()
@@ -62,6 +66,7 @@ namespace ARPG.Npc
             _npcSaveDict.Clear();
             _chunkNpcs.Clear();
             _innVisitorsByVillageId.Clear();
+            _npcAffinity.Clear();
             _isInitialLoaded = false;
         }
 
@@ -455,6 +460,12 @@ namespace ARPG.Npc
                 saveData.SkillLevel = job.SkillLevel;
             }
 
+            // 성향 스냅샷 (런타임 변동 대비)
+            if (AR.s.Component.TryGetComponent<NpcStatComponent>(entityId, out var npcStat))
+            {
+                saveData.NpcStat = npcStat;
+            }
+
             // 청크 매핑 갱신 (이동으로 청크가 바뀌었으면)
             Vector2Int currentChunk = PositionToChunk(saveData.Position);
             if (currentChunk != originalChunk)
@@ -605,6 +616,108 @@ namespace ARPG.Npc
             _isInitialLoaded = true;
             Debug.Log($"[NpcManager] Loaded {_npcSaveDict.Count} NPCs from save data");
         }
+
+        #region NPC 호감도 (양방향 대칭, sparse)
+
+        /// <summary>
+        /// 두 NPC 사이의 호감도 조회. 만난 적 없으면 0 반환.
+        /// AI 행동 분기에서 매 프레임 호출 가능 — Dictionary lookup O(1).
+        /// </summary>
+        public int GetAffinity(int npcA, int npcB)
+        {
+            if (npcA == npcB)
+                return 0;
+            return _npcAffinity.TryGetValue(new NpcPairKey(npcA, npcB), out int value) ? value : 0;
+        }
+
+        /// <summary>
+        /// 두 NPC가 만난 적 있는지 (호감도 엔트리가 등록되어 있는지) 확인.
+        /// </summary>
+        public bool HasMet(int npcA, int npcB)
+        {
+            if (npcA == npcB)
+                return false;
+            return _npcAffinity.ContainsKey(new NpcPairKey(npcA, npcB));
+        }
+
+        /// <summary>
+        /// 호감도 값을 절대값으로 설정. 페어가 없으면 자동 등록.
+        /// </summary>
+        public void SetAffinity(int npcA, int npcB, int value)
+        {
+            if (npcA == npcB)
+                return;
+            _npcAffinity[new NpcPairKey(npcA, npcB)] = value;
+        }
+
+        /// <summary>
+        /// 호감도 값을 delta만큼 가감. 페어가 없으면 0에서 시작하여 등록 — '만남'의 기본 의미.
+        /// </summary>
+        public void ModifyAffinity(int npcA, int npcB, int delta)
+        {
+            if (npcA == npcB || delta == 0)
+            {
+                if (npcA != npcB)
+                {
+                    NpcPairKey key0 = new NpcPairKey(npcA, npcB);
+                    if (_npcAffinity.ContainsKey(key0) == false)
+                        _npcAffinity[key0] = 0;
+                }
+                return;
+            }
+
+            NpcPairKey key = new NpcPairKey(npcA, npcB);
+            _npcAffinity.TryGetValue(key, out int current);
+            _npcAffinity[key] = current + delta;
+        }
+
+        /// <summary>
+        /// 특정 NPC가 포함된 모든 호감도 엔트리 제거. NPC 영구 삭제 시 호출.
+        /// 청크 비활성화 등 일시적 제거에서는 호출하지 말 것.
+        /// </summary>
+        public void RemoveAllAffinityInvolving(int entityId)
+        {
+            if (_npcAffinity.Count == 0)
+                return;
+
+            List<NpcPairKey> toRemove = new List<NpcPairKey>();
+            foreach (var kvp in _npcAffinity)
+            {
+                if (kvp.Key.Lo == entityId || kvp.Key.Hi == entityId)
+                    toRemove.Add(kvp.Key);
+            }
+            for (int i = 0; i < toRemove.Count; i++)
+                _npcAffinity.Remove(toRemove[i]);
+        }
+
+        /// <summary>
+        /// 직렬화용 List 변환. DataManager.Save에서 호출.
+        /// </summary>
+        public List<NpcAffinityEntry> SaveAffinity()
+        {
+            List<NpcAffinityEntry> result = new List<NpcAffinityEntry>(_npcAffinity.Count);
+            foreach (var kvp in _npcAffinity)
+                result.Add(new NpcAffinityEntry(kvp.Key.Lo, kvp.Key.Hi, kvp.Value));
+            return result;
+        }
+
+        /// <summary>
+        /// 직렬화 List → Dictionary 복원. NpcManager.Initialize에서 호출.
+        /// </summary>
+        public void LoadAffinity(List<NpcAffinityEntry>? list)
+        {
+            _npcAffinity.Clear();
+            if (list == null)
+                return;
+
+            for (int i = 0; i < list.Count; i++)
+            {
+                NpcAffinityEntry entry = list[i];
+                _npcAffinity[new NpcPairKey(entry.NpcA, entry.NpcB)] = entry.Affinity;
+            }
+        }
+
+        #endregion
 
         #region Inn 고용 시스템 (INN_HIRING_DESIGN.md)
 

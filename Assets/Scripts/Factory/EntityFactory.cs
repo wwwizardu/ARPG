@@ -158,18 +158,8 @@ namespace ARPG.Factory
             // (Patrol/PatrolRanged BehaviorType 강제 + Patrol 초기 상태)
             AR.s.Component.AddComponent(entityId, new NpcTag());
 
-            // NPC 고유 성향 스탯 (랜덤 생성)
-            AR.s.Component.AddComponent(entityId, new NpcStatComponent
-            {
-                Friendliness = Random.Range(0, 101),
-                Honesty = Random.Range(0, 101),
-                Greed = Random.Range(0, 101),
-                Loyalty = Random.Range(0, 101),
-                Courage = Random.Range(0, 101),
-                Curiosity = Random.Range(0, 101),
-                Pride = Random.Range(0, 101),
-                Patience = Random.Range(0, 101)
-            });
+            // NPC 고유 성향 스탯 (saveData에 영속화됨, 신규 NPC는 생성자에서 랜덤 부여됨)
+            AR.s.Component.AddComponent(entityId, saveData != null ? saveData.NpcStat : new NpcStatComponent());
 
             // 마을 NPC 컴포넌트
             AR.s.Component.AddComponent(entityId, new NpcVillageComponent());

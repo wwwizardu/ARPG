@@ -1,5 +1,7 @@
 #nullable enable
+using System;
 using System.Collections.Generic;
+using ARPG.Component;
 using ARPG.Creature;
 using ARPG.Data;
 using ARPG.Utility;
@@ -51,6 +53,9 @@ namespace ARPG.Npc
         // 같은 NpcTableId라도 NPC마다 다른 소개가 보이도록 데이터를 인스턴스에 둔다.
         public string Description = string.Empty;
 
+        // NPC 고유 성향 (8가지 성격 스탯). 신규 생성 시 랜덤 부여 후 영속화.
+        public NpcStatComponent NpcStat;
+
         // 장비 슬롯 (EquipSlotType.Max 길이) — null은 빈 슬롯.
         // 신규 NPC는 NpcEquipTable 기반으로 시드, 재로드는 기존 ItemData 그대로 복원.
         public ItemData?[] InventoryEquip = new ItemData?[(int)GlobalEnum.EquipSlotType.Max];
@@ -79,6 +84,17 @@ namespace ARPG.Npc
             StayingAtVillageId = 0;
             ArrivedGameTime = 0f;
             Description = string.Empty;
+            NpcStat = new NpcStatComponent
+            {
+                Friendliness = UnityEngine.Random.Range(0, 101),
+                Honesty = UnityEngine.Random.Range(0, 101),
+                Greed = UnityEngine.Random.Range(0, 101),
+                Loyalty = UnityEngine.Random.Range(0, 101),
+                Courage = UnityEngine.Random.Range(0, 101),
+                Curiosity = UnityEngine.Random.Range(0, 101),
+                Pride = UnityEngine.Random.Range(0, 101),
+                Patience = UnityEngine.Random.Range(0, 101),
+            };
             EnsureSlotsInitialized();
         }
 
@@ -151,6 +167,57 @@ namespace ARPG.Npc
             unequippedItem = InventoryEquip[(int)slot];
             InventoryEquip[(int)slot] = null;
             return true;
+        }
+    }
+
+    /// <summary>
+    /// NPC 쌍의 정규화된 키. 양방향 대칭 호감도용 (A↔B = B↔A).
+    /// 작은 EntityId가 Lo, 큰 EntityId가 Hi에 들어가도록 생성자에서 정규화.
+    /// </summary>
+    public readonly struct NpcPairKey : IEquatable<NpcPairKey>
+    {
+        public readonly int Lo;
+        public readonly int Hi;
+
+        public NpcPairKey(int a, int b)
+        {
+            if (a < b)
+            {
+                Lo = a;
+                Hi = b;
+            }
+            else
+            {
+                Lo = b;
+                Hi = a;
+            }
+        }
+
+        public bool Equals(NpcPairKey other) => Lo == other.Lo && Hi == other.Hi;
+        public override bool Equals(object? obj) => obj is NpcPairKey other && Equals(other);
+        public override int GetHashCode() => HashCode.Combine(Lo, Hi);
+        public static bool operator ==(NpcPairKey a, NpcPairKey b) => a.Equals(b);
+        public static bool operator !=(NpcPairKey a, NpcPairKey b) => a.Equals(b) == false;
+    }
+
+    /// <summary>
+    /// 직렬화용 호감도 엔트리. WorldData에 List 형태로 저장.
+    /// 런타임에서는 NpcManager가 Dictionary&lt;NpcPairKey, int&gt;로 변환하여 보관.
+    /// </summary>
+    [Serializable]
+    public class NpcAffinityEntry
+    {
+        public int NpcA;
+        public int NpcB;
+        public int Affinity;
+
+        public NpcAffinityEntry() { }
+
+        public NpcAffinityEntry(int npcA, int npcB, int affinity)
+        {
+            NpcA = npcA;
+            NpcB = npcB;
+            Affinity = affinity;
         }
     }
 }
