@@ -1,0 +1,20 @@
+﻿═══ 정착지 S#1860 호적부 (seed 12345, density 0.12) ═══
+  종족 Lizardman | biome Swamp | 추상인구 553 | 운명 Conquered
+  소속: Human Kingdom 5 (지배종족 Human)
+  ⚔ 타종족(Human) 지배 하 — 피정복지
+  나를 정복한 마을: S#1960<Human>
+  전쟁 이력 상대: S#1960<Human>
+  스폰 NPC: 8명 (native 6 / 지배층 2)
+
+[NPC 명단]  ★=핵심 NPC
+  ★ #0  Branmund    (Human/Elder) h3 {지배층}  | ProudOfKingdom "Human Kingdom 5의 지배층"
+  ★ #1  Edric       (Human/Farmer) h3 {지배층}  | ProudOfKingdom "Human Kingdom 5의 지배층"
+  ★ #2  Kthkor      (Lizardman/Guard) h0  | ResentsKingdom→S#1960<Human> "Human 지배에 반감 (충성 66)"; LostFamilyToWar→S#1960<Human> "정복 전쟁에서 가족을 잃음"
+  ★ #3  Zikhiss     (Lizardman/Farmer) h0  | ResentsKingdom→S#1960<Human> "Human 지배에 반감 (충성 11)"; LostFamilyToWar→S#1960<Human> "정복 전쟁에서 가족을 잃음"
+    #4  Ssskor      (Lizardman/Guard) h0  | ProudOfKingdom "체념·순응"
+    #5  Ziktek      (Lizardman/Farmer) h1  | ProudOfKingdom "체념·순응"
+  ★ #6  Kthkor      (Lizardman/Guard) h1  | ResentsKingdom→S#1960<Human> "Human 지배에 반감 (충성 51)"
+  ★ #7  Zikssk      (Lizardman/Farmer) h2  | ResentsKingdom→S#1960<Human> "Human 지배에 반감 (충성 66)"
+
+[관계 요약] 총 12  부부 3 부모자식 2 형제 0 사제 5 친구 1 라이벌 1
+[Sentiment 요약] ProudOfKingdom 4  ResentsKingdom 4  LostFamilyToWar 2

@@ -67,12 +67,15 @@ public sealed class Simulator
     public IReadOnlyList<SettlementState> Settlements => _s;
     public IReadOnlyCollection<Kingdom> Kingdoms => _kingdoms.Values;
 
-    public Simulator(PlacementFile file)
+    /// <param name="density">[0,1] 정착지 유지 비율 — 결정론적으로 솎아 배치 밀도 축소 실험.</param>
+    public Simulator(PlacementFile file, double density = 1.0)
     {
         MapSeed = file.MapSeed;
         for (int i = 0; i < file.Settlements.Count; i++)
         {
             PlacementSettlement p = file.Settlements[i];
+            if (density < 1.0 && KeepRoll(p.Id, MapSeed) >= density)
+                continue;
             Biome biome = (Biome)p.Biome;
             var s = new SettlementState
             {
@@ -91,6 +94,13 @@ public sealed class Simulator
     }
 
     public SettlementState Get(int id) => _s[_idToIndex[id]];
+
+    // 정착지별 결정론 유지 확률 [0,1) — 밀도 솎기용 (id별 독립, 시드 의존)
+    private static double KeepRoll(int id, int mapSeed)
+    {
+        ulong h = DerivedSeed.Derive(unchecked(id * 73856093) ^ mapSeed, 0x0D17D17D17D17D17UL);
+        return (h >> 11) * (1.0 / 9007199254740992.0);
+    }
 
     public void Run()
     {

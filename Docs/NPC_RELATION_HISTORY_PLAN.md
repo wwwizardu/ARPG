@@ -1,6 +1,7 @@
 # NPC 관계 + 정착지 히스토리 — 구현 계획
 
 > **상태 (2026-06-18): 계획 — 미착수**
+> **(2026-06-26 갱신 — 런타임 LOD)**: 정착지 시뮬은 "New Game 1회"가 아니라 **게임 중 지속(근처=상세/멀리=추상)**. 런타임 모델·3층 저장 구조의 정본은 [PROCEDURAL_HISTORY_DESIGN.md §0](PROCEDURAL_HISTORY_DESIGN.md). 이로 인해 **R0-B 저장 구조가 1회 스냅샷 → 라이브 상태(WorldSimState)로 바뀌고**, R1~R4 외에 "런타임 추상 틱 + 실체화/fold-back" 작업이 추가된다(아래 §11 참고, 단계적 도입).
 > 본 문서는 [NPC_RELATION_HISTORY_DESIGN.md](NPC_RELATION_HISTORY_DESIGN.md)(설계 초안)를 실제 코드 현황에 맞춰 실행 가능한 작업 단위로 분해한 것이다.
 > 설계 문서가 "구현됨"으로 가정한 일부 자산이 실제로는 미구현임을 §0에서 먼저 정정하고, 그에 맞춰 Phase 범위를 조정했다.
 >
@@ -106,6 +107,8 @@ R0-A ──▶ R0-B ──▶ R1 ──┐
 ### 3.1 목표
 
 설계 §3~§5.2의 모든 직렬화 타입 정의 + WorldData 합류 + 버전 마이그레이션 골격. **이 Phase는 시뮬/생성 로직 없이 "데이터가 저장/복원되는가"만 책임진다.**
+
+> **⚠ 런타임 LOD 반영 (2026-06-26)**: 저장 구조는 [PROCEDURAL §0.3](PROCEDURAL_HISTORY_DESIGN.md)의 **3층(추상 라이브 / 연대기 / 실체화)** 을 따른다. 즉 추상 층은 *최종 스냅샷*이 아니라 **라이브 상태**: `SettlementSnapshot` → **`SettlementLiveState`**(Pop/KingdomId/Fate/IsMaterialized/VillageId + LastReconciledTime), 그리고 **`PairAffinity`(이웃 우호도)·`LastSimGameTime`·`SimRngState`** 를 담는 `WorldSimState`를 추가한다. `Chronicle.Events`는 append-only. 정착지↔마을 링크 `SettlementId`는 R1 산출물.
 
 ### 3.2 산출물 (파일별)
 
@@ -247,7 +250,7 @@ R0-A ──▶ R0-B ──▶ R1 ──┐
 - [ ] 출생/분가/사망 훅을 Phase C 기존 경로에 삽입 (신규 시스템 아님)
 - [ ] Live `Ruin`/`Promotion` append
 - [ ] `RelationshipComponent`/`System_Relationship`/관련 EntityIdHelper 코드 삭제 + 빌드 확인
-- [ ] **라이브 마을 합병/왕국 편입은 v1 범위 밖** — 훅 자리만 주석으로 명시
+- [ ] **멀리(추상) 정치 사건 지속(합병/왕국)은 v1 범위 밖** = [PROCEDURAL §0.4](PROCEDURAL_HISTORY_DESIGN.md) (나). v1 멀리-시뮬은 인구 동역학(가)만 — 훅 자리만 주석으로 명시
 
 ### 6.4 검증 기준
 
@@ -320,7 +323,9 @@ RaceRelationTable { Id, RaceA, RaceB, BaseAffinity, WarWeight, TradeWeight, Merg
 | 7 | InnVisitor 출신 정착지 부여 | 설계 §11-5 | v2 |
 | 8 | **정복 annex 발동 조건 / 과확장 페널티 곡선** — War 승리→Conquer 전환 확률, 왕국 크기별 확장 가중치 감쇠. "단일 제국 수렴 ↔ 과도 파편화" 밸런스 | 설계 §11-6 | R1 덤프 보고 튜닝 |
 
-**보류**: Tier 3(Secession / 왕국 간 전쟁 / 자동 스윕 튜닝 하니스), 라이브 합병/왕국, 왕국 게임플레이(세금/평판), 4축 관계, LLM 연대기 문장화, 혼인 기반 마을 간 가계.
+**보류**: 멀리(추상) **정치 사건 지속**([PROCEDURAL §0.4](PROCEDURAL_HISTORY_DESIGN.md) (나) — v1 멀리-시뮬은 인구 동역학(가)만), Tier 3(Secession / 왕국 간 전쟁 / 자동 스윕 튜닝 하니스), 왕국 게임플레이(세금/평판), 4축 관계, LLM 연대기 문장화, 혼인 기반 마을 간 가계.
+
+> **런타임 LOD 추가 작업 (R1~R4 외, 단계적)** — [PROCEDURAL §0](PROCEDURAL_HISTORY_DESIGN.md) 기준: ① 멀리-추상 틱(인구 동역학) 백그라운드 시스템 ② 실체화(추상→상세) + catch-up ③ fold-back(상세→추상) + 연대기 보존 정책. ④(나) 멀리 정치 사건 지속은 그 다음.
 
 ---
 

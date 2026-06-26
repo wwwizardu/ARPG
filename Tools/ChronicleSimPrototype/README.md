@@ -28,7 +28,23 @@ cd Tools/ChronicleSimPrototype
 dotnet run -- sweep placements          # 폴더 전체 집계 (★ 핵심)
 dotnet run -- stats placements/seed_12345.json   # 한 시드: 왕국 목록 + 통계
 dotnet run -- dump  placements/seed_12345.json   # 한 시드: 연대기 전문(긴 출력) + 위
+dotnet run -- denscompare placements             # 밀도별 비교 (정착지 수↓ → 왕국 수↓)
 ```
+
+선택 인자: `stats`/`sweep`/`villages`에 마지막 인자로 `density`(0~1) 추가 시 정착지를 결정론적으로 솎아 밀도 축소 실험 가능. 예: `sweep placements 0.25`.
+
+### 2b) L2 — NPC 관계 데모 (연대기 → NPC/관계/sentiment)
+```bash
+# 마을 1개 호적부: NPC 명단 + 가족/직업/친구 관계 + 연대기 sentiment (★=핵심 NPC)
+dotnet run -- dossier placements/seed_12345.json -1 0.12   # sid=-1 → 가장 극적인(정복당한) 마을 자동 선택
+dotnet run -- dossier placements/seed_12345.json 1860 0.12 # 특정 정착지 id 지정
+
+# 세계 전체: 마을 분류(피정복/전쟁/평시/외딴) + 생성될 NPC·관계·sentiment 총량
+dotnet run -- villages placements/seed_12345.json 0.12
+```
+- 추상 인구(시뮬용 세력 가중치) → 스폰 NPC 수로 환산, **마을당 상한 50명** (Settlement 4~6 … City 40~50).
+- 정복당한 타종족 마을 → 원주민 `ResentsKingdom`/유족 + 지배종족 점령층 `ProudOfKingdom` 분파.
+- L2 생성 로직은 `NpcBackfill.cs` (설계 §5.3). 실제 R2 backfill로 이전될 원형.
 
 ### 3) 합성 데이터 (⚠️ Unity 없이 빠른 스모크 테스트)
 실제 배치가 아니라 종족 클러스터를 흉내 낸 근사 분포. **결론용 아님** — 코드/파이프라인 확인이나 감 잡기용.

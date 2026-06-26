@@ -10,6 +10,9 @@ public static class DerivedSeed
     // 실제 코드에 추가될 신규 채널 (설계/계획 R0-B). 8글자 ASCII = "CHRONICL"
     public const ulong ChannelChronicle = 0x43_48_52_4F_4E_49_43_4CUL;
 
+    // L2 NPC 관계 backfill PRNG. "RELBKFIL"
+    public const ulong ChannelRelationBackfill = 0x52_45_4C_42_4B_46_49_4CUL;
+
     public static ulong Derive(int worldSeed, ulong channel)
     {
         ulong x = unchecked((ulong)worldSeed * 0x9E3779B97F4A7C15UL) ^ channel;

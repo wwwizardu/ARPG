@@ -1,5 +1,8 @@
 # 절차적 역사 생성 시스템 설계
 
+> **🔄 방향 갱신 (2026-06-26): 정착지 층 런타임 LOD 시뮬 도입 → §0 참고**
+> 현존 정착지는 New Game 1회 생성에 그치지 않고 **게임 중에도 계속 시뮬레이션**된다(플레이어 근처=상세/실체화, 멀리=추상). 깊은 과거 백본(창세기/고대/암흑기, §1~§16)은 기존대로 생성-1회·읽기전용 유지. 정착지 통폐합 시뮬 상세는 [NPC_RELATION_HISTORY_DESIGN.md](NPC_RELATION_HISTORY_DESIGN.md), 검증 프로토타입은 [Tools/ChronicleSimPrototype](../Tools/ChronicleSimPrototype/README.md).
+
 > **⚠ 현재 상태 (2026-05-19): 보류 중**
 > - POCO 정의 `HistoryEntityTable` / `HistoryTemplateTable`만 [Tables.cs](../Assets/Scripts/Common/Tables.cs)에 선언되어 있고, [DownloadTables.cs](../Assets/Scripts/Editor/DownloadTables.cs)에 다운로드 메뉴/파서가 등록되어 있음
 > - 그러나 `.bytes` 파일은 아직 생성되지 않았고 (`Assets/_BinaryData/TableData/`에 없음), 시스템 본체도 미구현. 호출처 0
@@ -20,9 +23,88 @@
 
 ---
 
+## 0. 런타임 LOD 시뮬레이션 — 살아있는 정착지 (2026-06-26 방향 갱신)
+
+> 본 절은 §1·§2의 "생성만 하고 게임 중엔 동결" 모델을 **정착지(현대) 층에 한해** 개정한다.
+> 깊은 과거(창세기/고대/암흑기) 백본은 여전히 생성-1회·읽기전용(§2.1)이지만, **현존 정착지는 게임 중에도 계속 시뮬레이션**된다.
+
+### 0.1 두 단계 + LOD (level-of-detail)
+
+```
+① New Game — 결정론적 시뮬 1회
+     · 정착지 배치 + 통폐합(합병/정복/왕국 형성) → 초기 세계 상태 + 연대기 생성
+     · 같은 시드 = 같은 시작 (결정론은 '생성 시점'까지만 보장 — §14.1)
+②   이후 — 런타임 지속 시뮬 (멈추지 않음). 해상도를 플레이어 거리로 결정 (LOD):
+     ├─ 근처  → 상세(실체화): NPC 개체 + VillageData + Phase C 시스템
+     └─ 멀리  → 추상: 정착지 단위 coarse 시뮬 계속 (저비용)
+```
+
+| | 근처 (실체화) | 멀리 (추상) |
+|---|---|---|
+| 단위 | 개별 NPC 엔티티 + VillageData | 정착지 1개 = 레코드 1개 |
+| 시뮬 | Phase C 라이브 시스템(인구/건설/관계 drift) | coarse 틱 (게임 1일/주 단위, time-slice) |
+| 비용 | 높음 (활성 마을 1~2개) | 낮음 (전체 정착지, 정수 연산) |
+| NPC | 스폰됨, 관계/sentiment 생성 | 없음 (추상 인구 수치만) |
+
+> ★ 성능 전제: 멀리-추상 틱을 가볍게 유지하려면 정착지 수가 관건. 배치 밀도를 region 추첨율로 줄이는 것(예: 2500→~300)이 LOD 런타임 시뮬의 사실상 전제조건.
+
+### 0.2 실체화 전환 (추상 ↔ 상세) — 살아있는 세계의 핵심 신규 로직
+
+| 방향 | 시점 | 동작 |
+|------|------|------|
+| **추상→상세** (materialize) | 플레이어 접근 | 추상 상태 + 연대기 → NPC 스폰·관계 backfill → VillageData 생성(SettlementId 링크). 오래 비웠으면 `LastSimGameTime`→현재 **fast-forward(catch-up)** 후 실체화 |
+| **상세→추상** (fold-back) | 플레이어 이탈 | 라이브 VillageData(인구/사망/건물/플레이어가 일으킨 사건)를 **추상 상태·연대기로 접어 넣고** 추상 틱 재개 |
+
+이 양방향 동기화(특히 fold-back의 라이브→추상 환산)가 정확성의 핵심 난제이자 버그 온상.
+
+### 0.3 저장 구조 (3층 — lazy materialization)
+
+```
+WorldData (세이브 루트, Newtonsoft JSON)
+│
+├─【1. 추상 층】 모든 정착지 — 항상 저장, 작음 (수백개 × 정수 = 수십 KB)
+│   └ WorldSimState
+│       · List<SettlementLiveState> Settlements   // '최종 스냅샷' 아니라 '현재 상태' (계속 변함)
+│       · List<PairAffinity> Affinities           // 이웃 우호도 — 추상 사건 구동의 핵심 상태
+│       · List<KingdomData> Kingdoms
+│       · long LastSimGameTime , ulong SimRngState // catch-up / 결정론 틱 커서
+│
+├─【2. 연대기】 append-only 사건 로그 (계속 누적 → 보존 정책 필요)
+│   └ List<ChronicleEvent> Events
+│
+└─【3. 실체화 층】 방문한 마을만 — 무겁고 lazy
+    · List<VillageData> VillageDatas (+ SettlementId 링크)
+    · Dictionary<int,NpcSaveData> NpcSaveDatas (+ Sentiments)
+    · List<NpcRelationEntry> NpcRelationList , List<NpcAffinityEntry> NpcAffinityList
+```
+
+```csharp
+class SettlementLiveState {
+    int SettlementId; RaceType Race; BiomeType Biome; Vector2Int RegionCoord, WorldCoord;
+    int Pop;                  // 라이브 추상 인구 (틱마다 변함; 실제 NPC 수 아님 = 세력 가중치)
+    int KingdomId; SettlementFate Fate; int ConqueredByKingdomId; int FoundedYear;
+    bool IsMaterialized;      // 실체화되면 true → 추상 틱 정지
+    int VillageId;            // 실체화 링크 (-1 = 미실체화)
+    long LastReconciledTime;
+}
+```
+
+핵심 원칙:
+1. **추상 ≠ 실체화 데이터 분리** — 안 가본 마을은 정수 몇 개(LiveState)만. NPC 50명을 수백 마을에 저장하지 않음. (기존 코드가 이미 이 방식: NpcSaveData는 스폰된 것만, [VillageData.HasBeenPopulated](../Assets/Scripts/Village/VillageData.cs#L20) 존재)
+2. **`SettlementId`가 두 층을 잇는 단일 키** — LiveState.VillageId ↔ VillageData.SettlementId.
+3. **연대기 append-only = 저장이 정본** — 플레이어 개입으로 세계가 시드 재생성과 달라지므로 다시 못 만든다. 따라서 LiveState/Affinity/Chronicle을 **반드시 영속화** (프로토타입은 메모리만, 실제는 세이브 필수).
+
+### 0.4 v1 범위 / 단계 (2026-06-26 결정)
+
+- **멀리-추상 시뮬은 v1엔 (가) 인구 동역학만.** 멀리서도 전쟁/합병/왕국이 계속 일어나는 **(나) 정치 사건 지속은 나중에 추가** — 저장 구조는 (나)를 수용하되 동작은 보류.
+- **결정론은 생성 시점만 보장.** 런타임은 플레이어 행동·방문 시점에 따라 갈라짐(의도된 동작).
+- 구현 단계: ① 저장 포맷 + 추상 틱(인구) → ② 실체화(추상→상세) + catch-up → ③ fold-back + 연대기 보존 정책 → (나중) 멀리 정치 사건 지속.
+
+---
+
 ## 1. 핵심 철학
 
-1. **시뮬레이션이 아닌 생성(Generation)** — 100년치 실시간 시뮬을 돌리지 않고, 템플릿 조합으로 "역사처럼 보이는" 결과만 만든다. 생성 자체는 New Game 시 수 초 내 완료.
+1. **시뮬레이션이 아닌 생성(Generation)** — 100년치 실시간 시뮬을 돌리지 않고, 템플릿 조합으로 "역사처럼 보이는" 결과만 만든다. 생성 자체는 New Game 시 수 초 내 완료. *(단, **현존 정착지 층은 §0의 런타임 LOD 시뮬로 개정** — 게임 중에도 계속 시뮬됨. 본 항목은 깊은 과거 백본에만 해당)*
 2. **콘텐츠와 규칙의 분리** — 종족/신/괴물(재료) + 사건 템플릿을 데이터 테이블로, 코드는 매처/렌더러만 → 모드/확장 친화.
 3. **태그 기반 매칭** — 템플릿 슬롯은 구체 ID가 아닌 태그(`ulong` 비트마스크) 조건으로 명시 → 새 재료 추가 시 기존 템플릿이 자동으로 활용.
 4. **결정론** — 모든 random 호출은 시드 기반. 같은 시드 = 같은 역사 = 같은 좌표 = 같은 유적 배치.
@@ -36,7 +118,7 @@
 ### 2.1 Past Backbone (과거 백본) — 게임 시작 전 생성
 - 4개 시대(창세기 / 고대 / 암흑기 / 현대)를 순차 생성
 - 결과물: `HistoricalEventComponent`, `SettlementComponent`, `RegionComponent.AmbientTags`
-- **읽기 전용**: 게임 중에는 변경되지 않음 (유적, 전설, 책 등으로만 표현)
+- **읽기 전용**: 게임 중에는 변경되지 않음 (유적, 전설, 책 등으로만 표현) — *단 현대 시대의 **현존 정착지는 §0 런타임 LOD 시뮬로 게임 중에도 변동**. 읽기전용은 창세기/고대/암흑기 백본에 한함*
 
 ### 2.2 Live Backbone (현재/미래 백본) — 플레이어 행동으로 추가
 - 플레이어가 보스 처치/마을 설립/던전 봉인 등 큰 행동을 하면 새 `HistoricalEvent` append
@@ -1297,6 +1379,6 @@ Phase 0 ──→ Phase 1 ──→ Phase 2 ──→ Phase 3 ──→ Phase 4
 
 **문서 상태**: 설계 v3 (Phase 0 코드 완료 / Phase 1 데이터 인프라 완료 / 본 코드 작업 보류)
 **작성일**: 2026-05-18
-**최근 갱신**: 2026-05-19 — LLM 표현 시스템 결정, Phase 0~1 진행 상황 §13.10 추가
+**최근 갱신**: 2026-06-26 — §0 런타임 LOD 시뮬레이션(살아있는 정착지) 도입: New Game 결정론 생성 → 런타임 지속 시뮬(근처 상세/멀리 추상), 3층 저장 구조. v1은 멀리-추상 인구 동역학만(정치 사건 지속은 추후). 이전: 2026-05-19 LLM 표현 시스템 결정
 **선행 의존**: Map 청크 시스템 (✅) · ECS 기반 (✅) · MessageManager Broadcast (✅) · WorldData 직렬화 (✅) · LLM 인프라 (✅ Groq Llama 3.3 70B) · NPC 대사 시스템 (Milestone 4 이후)
 **비검증 항목**: NPC 대사 시스템은 현재 미구현(README 35%). 본 시스템의 NPC 기억 부분(`System_HistoryNpcMemorySync`)은 그 시스템이 갖춰진 뒤 의미가 살아남.
