@@ -1,7 +1,9 @@
 # NPC 상호작용 시스템 설계 (Interaction System)
 
 ## 개요
-플레이어와 NPC 간 30가지 상호작용 행동 시스템. 성격, 관계, 플레이어 스탯을 종합하여 판정하고 결과에 따라 관계가 변동한다.
+플레이어와 NPC 간 30가지 상호작용 행동 시스템. 성격과 관계를 종합하여 판정하고 결과에 따라 관계가 변동한다.
+
+> **설계 노트**: 플레이어 전용 사회 스탯(설득력·매력·은신 등)은 두지 않는다. 플레이어와 NPC는 가능한 한 **통합 스탯**을 공유하며, 상호작용 판정은 **대상 NPC의 성향(`NpcStatComponent`) + 플레이어와의 관계 4축**만으로 계산한다. 구현은 ECS 컴포넌트/시스템이 아니라 **서비스(`InteractionHelper`) + 매니저(`NpcManager`) 데이터** 구조로 간다 (§1 참조).
 
 ---
 
@@ -12,7 +14,7 @@
 [플레이어 행동 선택]
         ↓
 [판정 공식 계산]
-  (성격 + 관계 + 플레이어 스탯)
+  (성격 + 관계)
         ↓
 [성공/실패 결정]
         ↓
@@ -21,17 +23,50 @@
 [결과 텍스트 & 이벤트]
 ```
 
-### 상호작용 컴포넌트
-```csharp
-public struct InteractionComponent
-{
-    public int InitiatorEntityId;  // 상호작용 시작자 (플레이어)
-    public int TargetEntityId;     // 대상 NPC
-    public InteractionType Type;   // 상호작용 종류
-    public float SuccessRate;      // 성공률 (0~100)
-    public bool IsProcessed;       // 처리 완료 여부
-}
+### 아키텍처: 서비스 + 매니저 데이터 (ECS 시스템 아님)
 
+상호작용은 플레이어가 UI에서 대상 NPC에게 일으키는 **1회성 이산 이벤트**다. 매 프레임 다수 엔티티를 순회하는 연속 시뮬레이션이 아니므로 ECS 컴포넌트/시스템(폴링)으로 모델링하지 않는다. 대신 네 계층으로 나눈다.
+
+| 계층 | 역할 | 구현 위치 |
+|------|------|-----------|
+| **데이터** | 4축 관계 보관 + 불변식(Trust 캡 등) | `NpcManager` (npcId 키 영속, ECS 컴포넌트 아님) |
+| **서비스** | 판정(성공률) + 결과 산출 | `InteractionHelper` (static, 무상태) |
+| **UI** | 행동 선택·표시·트리거 | `UINpcInteract` |
+| **부수효과** | 전투/AI/동료/퀘스트 실행 | 기존 ECS 시스템에 위임 |
+
+```
+UI(UINpcInteract) ──선택──▶ InteractionHelper.Resolve()
+                                 │ 읽기: NpcStatComponent / GetPlayerRelation
+                                 │ 쓰기: NpcManager.ModifyPlayerRelation()  ← Trust 캡 등 불변식
+                                 └ 위임: 전투/AI/동료/퀘스트 (기존 ECS)
+                            ◀─InteractionResult(반환 struct)──┘
+NpcManager._playerRelations ──Save/Load──▶ WorldData.PlayerNpcRelationList ──▶ 세이브
+```
+
+> NPC의 영속 id == 엔티티 id이므로(NPC↔NPC 호감도와 동일 규약), 서비스는 같은 id로 `NpcStatComponent`(라이브 컴포넌트)와 관계 데이터(영속)를 함께 조회한다. 상호작용은 NPC가 눈앞에 스폰돼 있을 때만 일어나므로 오프라인 NPC 조회 문제는 없다.
+
+### 서비스 API (InteractionHelper — static·무상태)
+
+```csharp
+// UI가 성공률을 미리 표시
+public static float GetSuccessRate(int npcId, InteractionType type);
+
+// 굴림 → 관계 변동 적용 → 부수효과 위임 → UI용 결과 반환
+public static InteractionResult Resolve(int npcId, InteractionType type);
+
+// UI 표시용 반환 struct (ECS 컴포넌트 아님)
+public struct InteractionResult
+{
+    public bool Success;
+    public int AffinityDelta, TrustDelta, FearDelta, IntimacyDelta;
+    public ResultKind Kind;   // 성공 / 실패 / 전투개시 / 경비호출 등
+}
+```
+
+타입별 공식·결과 델타는 v1 5종만 `switch`로 시작하고, 밸런싱 단계(§8)에서 계수를 시트/SO로 이관한다.
+
+### 상호작용 타입
+```csharp
 public enum InteractionType
 {
     // 대화 계열 (7가지)
@@ -78,34 +113,13 @@ public enum InteractionType
 
 ---
 
-## 2. 플레이어 스탯 (상호작용용)
-
-```csharp
-public struct PlayerSocialStats
-{
-    public int Persuasion;      // 설득력 (0~100)
-    public int Intimidation;    // 위협 (0~100)
-    public int Charisma;        // 매력 (0~100)
-    public int Insight;         // 통찰력 (0~100)
-    public int Stealth;         // 은신 (0~100)
-}
-```
-
-### 스탯 성장
-- **레벨업**: 포인트 분배
-- **장비**: 악세서리로 스탯 증가 (예: "은혀의 목걸이" = Persuasion +10)
-- **퀘스트 보상**: 특정 퀘스트 완료 시 영구 증가
-
----
-
-## 3. 판정 공식 (Interaction별)
+## 2. 판정 공식 (Interaction별)
 
 ### 기본 공식 구조
 ```csharp
 float CalculateSuccessRate(InteractionType type, int playerEntityId, int npcEntityId)
 {
-    // 1. 컴포넌트 가져오기
-    var playerStats = GetPlayerSocialStats(playerEntityId);
+    // 1. 컴포넌트 가져오기 (플레이어 측 입력 항 없음 — NPC 성향 + 관계만)
     var npcStat = GetComponent<NpcStatComponent>(npcEntityId);
     var relationship = GetRelationship(playerEntityId, npcEntityId);
 
@@ -113,12 +127,14 @@ float CalculateSuccessRate(InteractionType type, int playerEntityId, int npcEnti
     float baseRate = 50f;
 
     // 3. 상호작용별 가중치 적용
-    float modifiedRate = baseRate + CalculateModifiers(type, playerStats, npcStat, relationship);
+    float modifiedRate = baseRate + CalculateModifiers(type, npcStat, relationship);
 
     // 4. 최종 확률 (0~100 클램프)
     return Mathf.Clamp(modifiedRate, 0f, 100f);
 }
 ```
+
+> ※ 플레이어 사회 스탯을 제거하면서 각 공식의 player 항이 빠졌다. base 수치와 NPC/관계 가중치는 **추후 재밸런싱 대상**(§8 참조).
 
 ### 대화 계열
 
@@ -139,8 +155,6 @@ float CalculateSuccessRate(InteractionType type, int playerEntityId, int npcEnti
 **판정 공식**:
 ```csharp
 successRate = 50
-    + (playerStats.Charisma * 0.3f)
-    + (playerStats.Insight * 0.2f)
     + (relationship.Affinity * 0.3f)
     - (npcStat.Honesty * 0.2f)  // 정직하면 쉽게 알려줌
     + (relationship.Trust * 0.2f);
@@ -158,8 +172,6 @@ successRate = 50
 **판정 공식**:
 ```csharp
 successRate = 40
-    + (playerStats.Persuasion * 0.6f)
-    + (playerStats.Charisma * 0.3f)
     + (relationship.Trust * 0.4f)
     - (npcStat.Pride * 0.3f)      // 자존심 높으면 설득 어려움
     - (npcStat.Greed * 0.2f);     // 탐욕 높으면 이익 없이는 설득 어려움
@@ -177,11 +189,8 @@ successRate = 40
 **판정 공식**:
 ```csharp
 successRate = 30
-    + (playerStats.Persuasion * 0.5f)
-    + (playerStats.Charisma * 0.3f)
     - (npcStat.Honesty * 0.4f)    // 정직하면 거짓말 간파
-    - (npcStat.Curiosity * 0.2f)  // 호기심 높으면 의심
-    - (playerStats.Insight * 0.3f); // 통찰력 높으면 거짓말 잘함
+    - (npcStat.Curiosity * 0.2f); // 호기심 높으면 의심
 ```
 
 **결과**:
@@ -218,7 +227,6 @@ successRate = 50
 **판정 공식**:
 ```csharp
 successRate = 60
-    + (playerStats.Charisma * 0.5f)
     + (npcStat.Pride * 0.3f)      // 자존심 높으면 칭찬 좋아함
     - (npcStat.Honesty * 0.2f);   // 정직하면 아첨 싫어함
 ```
@@ -247,7 +255,6 @@ successRate = 60
 **판정 공식**:
 ```csharp
 successRate = 30
-    + (playerStats.Intimidation * 0.7f)
     - (npcStat.Courage * 0.5f)    // 용기 높으면 위협 안 먹힘
     - (npcStat.Pride * 0.3f)      // 자존심 높으면 저항
     + (relationship.Fear * 0.3f); // 이미 두려워하면 쉬움
@@ -265,7 +272,6 @@ successRate = 30
 **판정 공식**:
 ```csharp
 successRate = 40
-    + (playerStats.Charisma * 0.4f)
     + (npcStat.Friendliness * 0.3f)
     + (npcStat.Patience * 0.3f)
     - (relationship.Affinity < 0 ? -relationship.Affinity : 0); // 호감도 낮을수록 어려움
@@ -285,8 +291,6 @@ successRate = 40
 **판정 공식**:
 ```csharp
 successRate = 50
-    + (playerStats.Persuasion * 0.6f)
-    + (playerStats.Charisma * 0.4f)
     - (npcStat.Greed * 0.5f)      // 탐욕 높으면 흥정 어려움
     + (relationship.Affinity * 0.3f);
 ```
@@ -348,8 +352,7 @@ successRate = 20
 **판정 공식**:
 ```csharp
 successRate = 30
-    + (playerStats.Stealth * 0.8f)
-    - (npcStat.Curiosity * 0.3f)  // 호기심 높으면 눈치 빠름
+    - (npcStat.Curiosity * 0.3f)      // 호기심 높으면 눈치 빠름
     - (relationship.Intimacy * 0.2f); // 친밀하면 더 주시함
 ```
 
@@ -365,7 +368,6 @@ successRate = 30
 **판정 공식**:
 ```csharp
 successRate = 40
-    + (playerStats.Stealth * 0.7f)
     - (npcStat.Curiosity * 0.4f);
 ```
 
@@ -388,8 +390,7 @@ successRate = 30
     + (relationship.Intimacy * 0.2f)
     + (npcStat.Loyalty - 40) * 0.4f
     + (npcStat.Courage - 30) * 0.2f
-    - (npcStat.Greed * 0.1f)
-    + (playerStats.Charisma * 0.3f);
+    - (npcStat.Greed * 0.1f);
 ```
 
 **결과**:
@@ -429,38 +430,68 @@ successRate = 50
 
 ---
 
-## 4. 관계 변동 시스템
+## 3. 관계 변동 시스템
 
-### 관계 스탯 변동 범위
+### 관계 데이터 (NpcManager 소유)
 ```csharp
-public struct RelationshipComponent
+// 런타임 — NpcManager가 Dictionary<int npcId, PlayerRelation> 로 보관
+public struct PlayerRelation
 {
     public int Affinity;    // -100 ~ +100
     public int Trust;       // 0 ~ 100
     public int Fear;        // 0 ~ 100
     public int Intimacy;    // 0 ~ 100
+    public int TrustCap;    // 0 ~ 100, Trust 상한 (한번 깎이면 같이 하락)
+}
+
+// 세이브 DTO — WorldData.PlayerNpcRelationList 에 List 로 직렬화
+[Serializable]
+public class PlayerNpcRelationEntry
+{
+    public int NpcId;
+    public int Affinity, Trust, Fear, Intimacy;
+    public int TrustCap = 100;
 }
 ```
 
-### 변동 규칙
+저장은 NPC↔NPC 호감도와 **동일 패턴**: `NpcManager._playerRelations`(런타임 Dict) ↔ `WorldData.PlayerNpcRelationList`(세이브). 키는 npcId 단일(1명의 플레이어 → 다수 NPC라 페어 키 불필요). NPC **영구 삭제** 시 `NpcManager`의 기존 정리 훅에서 함께 제거하고, 청크 unload(일시 비활성)에는 유지한다.
+
+### 매니저 API (NpcManager, 플레이어 관계 region)
 ```csharp
-void ModifyRelationship(int playerId, int npcId, int affinityDelta, int trustDelta)
+public PlayerRelation GetPlayerRelation(int npcId);              // 없으면 기본값(전부 0, TrustCap=100)
+public bool HasMetPlayer(int npcId);
+public void ModifyPlayerRelation(int npcId, int dAff, int dTrust, int dFear, int dIntimacy);
+public void SetPlayerRelation(int npcId, PlayerRelation rel);    // 디버그/특수 세팅
+public List<PlayerNpcRelationEntry> SavePlayerRelations();
+public void LoadPlayerRelations(List<PlayerNpcRelationEntry>? list);
+```
+
+### 변동 규칙 (ModifyPlayerRelation 내부 — 불변식)
+변동 로직은 매니저에 둔다. 어떤 호출자(서비스·이벤트·퀘스트 보상)든 동일 규칙(Trust 비대칭·캡)을 강제로 따르게 하기 위함.
+```csharp
+public void ModifyPlayerRelation(int npcId, int dAff, int dTrust, int dFear, int dIntimacy)
 {
-    var rel = GetRelationship(playerId, npcId);
+    var rel = GetPlayerRelation(npcId);
 
-    // 1. Affinity 변동
-    rel.Affinity = Mathf.Clamp(rel.Affinity + affinityDelta, -100, 100);
+    // 1. Affinity
+    rel.Affinity = Mathf.Clamp(rel.Affinity + dAff, -100, 100);
 
-    // 2. Trust 변동 (감소는 빠르고, 증가는 느림)
-    if (trustDelta < 0)
-        rel.Trust = Mathf.Max(0, rel.Trust + trustDelta);  // 즉시 감소
+    // 2. Trust (감소는 즉시 / 증가는 절반, 상한은 TrustCap)
+    if (dTrust < 0)
+    {
+        rel.Trust = Mathf.Max(0, rel.Trust + dTrust);
+        rel.TrustCap = Mathf.Max(rel.Trust, rel.TrustCap + dTrust / 2); // 큰 폭 하락 시 상한도 영구 하락
+    }
     else
-        rel.Trust = Mathf.Min(100, rel.Trust + trustDelta / 2);  // 절반만 증가
+    {
+        rel.Trust = Mathf.Min(rel.TrustCap, rel.Trust + dTrust / 2);
+    }
 
-    // 3. Intimacy는 시간 경과 + 상호작용으로만 증가
-    // (일반 상호작용에서는 직접 증가 안 함)
+    // 3. Fear / Intimacy
+    rel.Fear = Mathf.Clamp(rel.Fear + dFear, 0, 100);
+    rel.Intimacy = Mathf.Clamp(rel.Intimacy + dIntimacy, 0, 100); // 일반 상호작용 외 시간 경과로도 증가
 
-    SetRelationship(playerId, npcId, rel);
+    SetPlayerRelation(npcId, rel);
 }
 ```
 
@@ -472,7 +503,7 @@ void ModifyRelationship(int playerId, int npcId, int affinityDelta, int trustDel
 
 ---
 
-## 5. 상호작용 UI
+## 4. 상호작용 UI
 
 ### 대화 창
 ```
@@ -514,7 +545,7 @@ void ModifyRelationship(int playerId, int npcId, int affinityDelta, int trustDel
 
 ---
 
-## 6. 특수 상호작용 (컨텍스트 기반)
+## 5. 특수 상호작용 (컨텍스트 기반)
 
 ### 상황별 추가 행동
 ```
@@ -531,16 +562,17 @@ void ModifyRelationship(int playerId, int npcId, int affinityDelta, int trustDel
 
 ---
 
-## 7. 구현 우선순위
+## 6. 구현 우선순위
 
 ### Phase 1: 기본 상호작용
-- [ ] InteractionComponent 정의
-- [ ] System_Interaction (판정 로직)
+- [ ] PlayerRelation 데이터 + NpcManager 관계 API (Get/Modify/Save/Load + 영구삭제 정리 훅)
+- [ ] 영속 배선 (WorldData.PlayerNpcRelationList ↔ DataManager Save/Load, Version 증가)
+- [ ] InteractionHelper 서비스 (GetSuccessRate / Resolve → InteractionResult)
 - [ ] 5가지 기본 행동 (CasualTalk, AskInfo, Compliment, GiveGift, Recruit)
-- [ ] 상호작용 UI (대화 창)
+- [ ] 상호작용 UI (UINpcInteract — 대화 창)
 
 ### Phase 2: 판정 시스템
-- [ ] 성공률 계산 공식 구현
+- [ ] 성공률 계산 공식 구현 (NPC 성향 + 관계 4축)
 - [ ] 주사위 굴리기 UI
 - [ ] 결과 텍스트 시스템
 
@@ -561,7 +593,7 @@ void ModifyRelationship(int playerId, int npcId, int affinityDelta, int trustDel
 
 ---
 
-## 8. 테스트 시나리오
+## 7. 테스트 시나리오
 
 ### 테스트 1: 기본 대화
 1. NPC에게 다가가기
@@ -584,12 +616,14 @@ void ModifyRelationship(int playerId, int npcId, int affinityDelta, int trustDel
 
 ---
 
-## 9. 밸런스 고려사항
+## 8. 밸런스 고려사항
 
 ### 성공률 범위
 - **너무 쉬움 (80% 이상)**: 긴장감 부족
 - **적정 (50~70%)**: 선택의 무게감
 - **너무 어려움 (30% 이하)**: 좌절감
+
+> 플레이어 사회 스탯 제거로 판정이 NPC 성향 + 관계 4축에만 의존한다. 따라서 동일 NPC·동일 관계 상태에서는 성공률이 고정되므로, 관계를 쌓아 성공률을 끌어올리는 흐름이 자연스럽도록 base/가중치를 튜닝한다.
 
 ### 관계 회복 비용
 - **Affinity 회복**: 비교적 쉬움 (선물, 칭찬)
@@ -602,6 +636,6 @@ void ModifyRelationship(int playerId, int npcId, int affinityDelta, int trustDel
 
 ---
 
-**Last Updated**: 2026-04-01
-**Status**: 설계 완료, 구현 대기 중
+**Last Updated**: 2026-06-26
+**Status**: 설계 완료, 구현 대기 중 (플레이어 사회 스탯 제거 — 판정은 NPC 성향 + 관계 4축 / 서비스 + 매니저 데이터 구조, ECS 아님)
 **Dependencies**: NPC 시스템, 관계 시스템, 대화 시스템
