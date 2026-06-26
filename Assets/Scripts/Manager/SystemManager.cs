@@ -61,9 +61,9 @@ namespace ARPG.Systems
             System_VillagePopulation villagePopulationSystem = new();
             RegisterSystems(villagePopulationSystem);
 
-            // Priority 58.5: Relationship System (3.0s) - 관계 패시브 변동
-            System_Relationship relationshipSystem = new();
-            RegisterSystems(relationshipSystem);
+            // Priority 58: NPC Relationship (3.0s) - 호감도 drift + (추후) 사건 기반 관계 변화. 구 System_Relationship 대체 (R3)
+            System_NpcRelationship npcRelationshipSystem = new();
+            RegisterSystems(npcRelationshipSystem);
 
             // Priority 60: Village Tier Progression (Lifecycle) - Stage 0→1→2→3 승격 (Phase C)
             System_VillageTierProgression villageTierSystem = new();

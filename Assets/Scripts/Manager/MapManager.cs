@@ -34,6 +34,8 @@ namespace ARPG.Map
         private Dictionary<Vector2Int, MapChunkData> _activeChunks;
         private HashSet<Vector2Int> _renderedChunks;
         private Dictionary<Vector2Int, MapFileData> _mapFileDataDic = new();
+        // R1: 절차 정착지 청사진 origin(StartPosition) → 연대기 SettlementId(placement 인덱스). 마을↔정착지 매핑용
+        private Dictionary<Vector2Int, int> _settlementIdByOrigin = new();
         private Dictionary<Vector2Int, List<TileModification>> _tileModifications = new();
         // v1.9 region histogram 캐시 — biome 통계 lazy compute (region 첫 조회 시 256 cluster 샘플).
         // 메모리: region당 Dictionary<BiomeType,int> ~수십 바이트, 무해.

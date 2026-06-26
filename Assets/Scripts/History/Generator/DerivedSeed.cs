@@ -27,6 +27,10 @@ namespace ARPG.History
         public const ulong ChannelLoreCount    = 0x4C_4F_52_45_43_4E_54_5FUL; // "LORECNT_"
         public const ulong ChannelLoreProp     = 0x4C_4F_52_45_50_52_4F_50UL; // "LOREPROP"
 
+        // WORLD_HISTORY_PLAN.md R0-B — 연대기 시뮬(L1) / NPC 관계 backfill(L2)용
+        public const ulong ChannelChronicle    = 0x43_48_52_4F_4E_49_43_4CUL; // "CHRONICL"
+        public const ulong ChannelRelationBackfill = 0x52_45_4C_42_4B_46_49_4CUL; // "RELBKFIL"
+
         public static ulong Derive(int worldSeed, ulong channel)
         {
             ulong x = unchecked((ulong)worldSeed * 0x9E3779B97F4A7C15UL) ^ channel;

@@ -32,10 +32,13 @@
                     <ui:VisualElement name="inv-grid" class="npc-inv-grid"/>
                 </ui:VisualElement>
 
-                <!-- 중간 컬럼: 성향 -->
+                <!-- 중간 컬럼: 성향 + 관계 -->
                 <ui:ScrollView class="npc-col npc-col-mid" mode="Vertical">
                     <appui:Text text="성향" class="npc-section-title"/>
                     <ui:VisualElement name="personality-list" class="npc-stat-list"/>
+
+                    <appui:Text text="관계" class="npc-section-title"/>
+                    <ui:VisualElement name="relation-list" class="npc-stat-list"/>
                 </ui:ScrollView>
 
                 <!-- 우측 컬럼: 전투 스탯 -->

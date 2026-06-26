@@ -20,6 +20,9 @@ namespace ARPG.Village
         public bool HasBeenPopulated;        // 기본 NPC가 한번이라도 스폰된 적 있는지
         public float DepletedAt;             // 전멸 감지 시각 (게임 시간). 0이면 정상
 
+        // R1: 정착지 연대기 ↔ 마을 링크. -1 = 미연결 (연대기 SettlementId, PROCEDURAL §3.4)
+        public int SettlementId = -1;
+
         // Phase A: 자원 생산 상태
         public int StoneTimer;               // Stone 5시간 누적 카운터 (0~4)
         public int HungerHoursAccumulated;   // Food 0 유지 누적 시간 (24h 넘으면 경고 1회)

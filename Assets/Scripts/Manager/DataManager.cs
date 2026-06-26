@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.IO;
 using System.Collections.Generic;
 using Newtonsoft.Json;
+using ARPG.History;
 using ARPG.Npc;
 using ARPG.Utility;
 using ARPG.Village;
@@ -13,7 +14,7 @@ namespace ARPG.Data
 {
     public partial class DataManager : MonoBehaviour
     {
-        private const ushort CURRENT_WORLD_DATA_VERSION = 3;
+        private const ushort CURRENT_WORLD_DATA_VERSION = 4;
         private const ushort CURRENT_PLAYER_DATA_VERSION = 2;
         private WorldData _worldData = new();
         private List<PlayerData> _playerDataList = new();
@@ -49,7 +50,10 @@ namespace ARPG.Data
         public int CurrentPlayerEntityId => _currentPlayerEntityId;
         public Dictionary<int, NpcSaveData> NpcSaveDatas => _worldData.NpcSaveDatas;
         public List<NpcAffinityEntry> NpcAffinityList => _worldData.NpcAffinityList;
+        public List<NpcRelationEntry> NpcRelationList => _worldData.NpcRelationList;
         public Dictionary<int, BuildingSaveData> BuildingSaveDatas => _worldData.BuildingSaveDatas;
+        // R1: 정착지 연대기 (New Game 1회 생성 후 저장이 정본)
+        public ChronicleSaveData Chronicle { get => _worldData.Chronicle; set => _worldData.Chronicle = value; }
 
         public async Task Initialize()
         {
@@ -332,6 +336,7 @@ namespace ARPG.Data
                     // NpcData 저장
                     _worldData.NpcSaveDatas = AR.s.Npc.Save();
                     _worldData.NpcAffinityList = AR.s.Npc.SaveAffinity();
+                    _worldData.NpcRelationList = AR.s.Npc.SaveRelations();
 
                     // BuildingData 저장
                     _worldData.BuildingSaveDatas = AR.s.Building.Save();
@@ -549,6 +554,13 @@ namespace ARPG.Data
             if (fromVersion < 3 && toVersion >= 3)
             {
                 // no-op (VillageManager.Load에서 처리). 버전 점프 사실만 기록.
+            }
+
+            // 버전 3 -> 4: 정착지 연대기(Chronicle) + NPC 관계(NpcRelationList) + NpcSentiment 추가 (R0-B).
+            // 신규 필드는 WorldData.LoadCompleted()에서 null 방어로 기본값(빈 컬렉션)이 채워진다 — 여기선 명시 작업 불필요.
+            if (fromVersion < 4 && toVersion >= 4)
+            {
+                // no-op (WorldData.LoadCompleted에서 처리). 버전 점프 사실만 기록.
             }
         }
 

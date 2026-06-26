@@ -141,6 +141,10 @@ namespace ARPG.Systems
 
             AR.s.UI.SetNotify($"마을 {v.VillageId} 승격: {prev} → {next}");
 
+            // R3: Live 연대기 — 승격 사건 (연대기에 연결된 마을만)
+            if (v.SettlementId >= 0)
+                AR.s.History.AppendLiveEvent(ARPG.History.ChronicleEventType.Promotion, v.SettlementId);
+
             Debug.Log($"[TierProgression] v{v.VillageId} {prev} → {next} (Bounds={newBounds}, Pop={v.Population})");
         }
     }

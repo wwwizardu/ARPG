@@ -56,6 +56,10 @@ namespace ARPG.Npc
         // NPC 고유 성향 (8가지 성격 스탯). 신규 생성 시 랜덤 부여 후 영속화.
         public NpcStatComponent NpcStat;
 
+        // NPC → 정착지 단위 감정 (피정복 반감/왕국 자부심 등). 관계 backfill(L2)이 시드. 보통 0~1개.
+        // 설계: NPC_RELATION_HISTORY_DESIGN.md §4.2
+        public List<NpcSentiment> Sentiments = new();
+
         // 장비 슬롯 (EquipSlotType.Max 길이) — null은 빈 슬롯.
         // 신규 NPC는 NpcEquipTable 기반으로 시드, 재로드는 기존 ItemData 그대로 복원.
         public ItemData?[] InventoryEquip = new ItemData?[(int)GlobalEnum.EquipSlotType.Max];
@@ -120,6 +124,10 @@ namespace ARPG.Npc
                 Inventory = new List<ItemData?>();
             while (Inventory.Count < GlobalEnum.NPC_INVENTORY_SLOTCOUNT_MAX)
                 Inventory.Add(null);
+
+            // 구 세이브(필드 없음) 로드 시 null 방어
+            if (Sentiments == null)
+                Sentiments = new List<NpcSentiment>();
         }
 
         /// <summary>

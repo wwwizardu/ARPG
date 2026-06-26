@@ -78,6 +78,7 @@ namespace ARPG.Map
 
                 // 4) 등록 — 이후 OverlayMapFileData가 자동으로 청크에 적용
                 _mapFileDataDic[newOrigin] = blueprint;
+                _settlementIdByOrigin[newOrigin] = i;   // R1: placement 인덱스 = 연대기 SettlementId
                 appliedCount++;
                 Debug.Log($"  [Settlement] region=({p.RegionCoord.x},{p.RegionCoord.y}) " +
                           $"dominant={p.RegionDominantBiome} chunkBiome={p.ChunkBiome} " +
@@ -475,9 +476,14 @@ namespace ARPG.Map
             return result;
         }
 
+        /// <summary>청사진 origin(StartPosition)에 연결된 연대기 SettlementId. 절차 정착지가 아니면 -1.</summary>
+        public int GetSettlementIdByOrigin(Vector2Int origin)
+            => _settlementIdByOrigin.TryGetValue(origin, out int id) ? id : -1;
+
         private void LoadFixedMapFiles()
         {
             _mapFileDataDic.Clear();
+            _settlementIdByOrigin.Clear();
 
             string filePath = Path.Combine(Application.dataPath, "_BinaryData", "TilemapData", "BaseTown.bytes");
 

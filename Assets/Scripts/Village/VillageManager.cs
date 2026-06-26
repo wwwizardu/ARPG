@@ -29,7 +29,13 @@ namespace ARPG.Village
                 // 마을 인덱스 + 1 을 VillageTableId로 사용 (관례). 없으면 기본 스폰은 no-op.
                 int tableId = i + 1;
                 RegisterVillage(i, villageCenter, tableId);
-                Debug.Log($"[VillageManager] Initial village {i} created at {villageCenter} (TableId={tableId})");
+
+                // R1: 절차 정착지 청사진이면 연대기 SettlementId 연결 (손으로 만든 BaseTown 등은 -1 유지)
+                int settlementId = AR.s.Map.GetSettlementIdByOrigin(mapFileData.StartPosition);
+                if (settlementId >= 0)
+                    LinkSettlement(i, settlementId);
+
+                Debug.Log($"[VillageManager] Initial village {i} created at {villageCenter} (TableId={tableId}, SettlementId={settlementId})");
             }
         }
 
@@ -64,6 +70,33 @@ namespace ARPG.Village
 
             CreateStorageEntity(data);
         }
+
+        // ── 정착지 연대기(SettlementId) ↔ 마을(VillageId) 매핑 (R1, PROCEDURAL §3.4) ──
+        // 정본은 VillageData.SettlementId(세이브됨). 마을 수가 적어 조회는 선형 스캔으로 충분.
+
+        /// <summary>마을 ↔ 정착지(연대기) 링크 설정. 정착지 실체화(materialize) 시 호출.</summary>
+        public void LinkSettlement(int villageId, int settlementId)
+        {
+            if (_villages.TryGetValue(villageId, out VillageData? data))
+                data.SettlementId = settlementId;
+        }
+
+        /// <summary>정착지 SettlementId로 연결된 마을 조회. 없으면 null.</summary>
+        public VillageData? GetVillageBySettlement(int settlementId)
+        {
+            if (settlementId < 0)
+                return null;
+            foreach (VillageData v in _villages.Values)
+            {
+                if (v.SettlementId == settlementId)
+                    return v;
+            }
+            return null;
+        }
+
+        /// <summary>마을의 연대기 SettlementId. 미연결이면 -1.</summary>
+        public int GetSettlementId(int villageId)
+            => _villages.TryGetValue(villageId, out VillageData? data) ? data.SettlementId : -1;
 
         public VillageData? GetVillage(int villageId)
         {

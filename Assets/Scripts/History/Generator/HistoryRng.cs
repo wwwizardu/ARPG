@@ -39,6 +39,12 @@ namespace ARPG.History
             return minInclusive + (int)(NextULong() % span);
         }
 
+        /// <summary>확률 p로 true (p &lt;= 0 → 항상 false, p &gt;= 1 → 항상 true).</summary>
+        public bool Chance(double p) => NextDouble() < p;
+
+        /// <summary>[-1, 1) 근사 노이즈.</summary>
+        public double Noise() => NextDouble() * 2.0 - 1.0;
+
         public ulong CurrentState => _state;
     }
 }

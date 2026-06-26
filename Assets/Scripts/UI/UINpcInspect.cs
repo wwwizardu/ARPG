@@ -28,6 +28,7 @@ namespace ARPG.UI
         private VisualElement? _invGrid;
         private VisualElement? _statList;
         private VisualElement? _personalityList;
+        private VisualElement? _relationList;
 
         private int _entityId = -1;
         private NpcSaveData? _saveData;
@@ -64,6 +65,7 @@ namespace ARPG.UI
             _invGrid = root.Q<VisualElement>("inv-grid");
             _statList = root.Q<VisualElement>("stat-list");
             _personalityList = root.Q<VisualElement>("personality-list");
+            _relationList = root.Q<VisualElement>("relation-list");
 
             if (_closeBtn != null) _closeBtn.clicked += () => Close();
         }
@@ -120,6 +122,7 @@ namespace ARPG.UI
             RebuildEquipGrid();
             RebuildInventoryGrid();
             RebuildPersonality();
+            RebuildRelations();
             RebuildStats();
         }
 
@@ -219,6 +222,68 @@ namespace ARPG.UI
             row.Add(val);
             _personalityList.Add(row);
         }
+
+        // R4: 관계 탭 — 가족/친구/원한 + 호감도. 데이터 정본은 NpcManager (활성/비활성 무관 조회 가능).
+        private void RebuildRelations()
+        {
+            if (_relationList == null) return;
+            _relationList.Clear();
+
+            if (_entityId < 0 || AR.s.Npc == null)
+                return;
+
+            var relations = AR.s.Npc.GetRelations(_entityId);
+            if (relations.Count == 0)
+            {
+                AddRelationRow("관계 없음", string.Empty);
+                return;
+            }
+
+            for (int i = 0; i < relations.Count; i++)
+            {
+                NpcRelationEntry rel = relations[i];
+                bool isFrom = rel.FromEntityId == _entityId;
+                int otherId = isFrom ? rel.ToEntityId : rel.FromEntityId;
+                string label = $"{RelationLabel(rel.Type, isFrom)} {ResolveNpcName(otherId)}";
+                int affinity = AR.s.Npc.GetAffinity(_entityId, otherId);
+                AddRelationRow(label, affinity.ToString());
+            }
+        }
+
+        private void AddRelationRow(string label, string value)
+        {
+            if (_relationList == null) return;
+            VisualElement row = new();
+            row.AddToClassList("npc-stat-row");
+            Text lab = new() { text = label };
+            lab.AddToClassList("npc-stat-label");
+            Text val = new() { text = value };
+            val.AddToClassList("npc-stat-value");
+            row.Add(lab);
+            row.Add(val);
+            _relationList.Add(row);
+        }
+
+        private string ResolveNpcName(int otherId)
+        {
+            NpcSaveData? other = AR.s.Npc?.GetSaveData(otherId);
+            if (other == null)
+                return $"NPC #{otherId}";
+            NpcTable? t = AR.s.Data?.GetNpc(other.NpcTableId);
+            return t?.Name ?? $"NPC #{otherId}";
+        }
+
+        private static string RelationLabel(NpcRelationType type, bool isFrom) => type switch
+        {
+            NpcRelationType.Spouse => "배우자",
+            NpcRelationType.Sibling => "형제",
+            NpcRelationType.Friend => "친구",
+            NpcRelationType.Rival => "라이벌",
+            NpcRelationType.ParentOf => isFrom ? "자녀" : "부모",
+            NpcRelationType.MentorOf => isFrom ? "제자" : "스승",
+            NpcRelationType.GrudgeAgainst => isFrom ? "원한" : "원한 대상",
+            _ => "관계",
+        };
 
         private void RebuildStats()
         {

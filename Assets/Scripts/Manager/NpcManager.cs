@@ -21,6 +21,11 @@ namespace ARPG.Npc
         private Dictionary<int, List<int>> _innVisitorsByVillageId = new();
         // NPC 간 호감도 (양방향 대칭, sparse — 만난 적 있는 페어만 등록)
         private Dictionary<NpcPairKey, int> _npcAffinity = new();
+        // 호감도 clamp 범위 (drift 누적 폭주 방지)
+        public const int AFFINITY_MIN = -100;
+        public const int AFFINITY_MAX = 100;
+        // NPC 간 유형 관계 (가족/친구/원한 등). 양방향 인덱스 — 같은 엔트리가 From/To 두 키에 등록됨
+        private Dictionary<int, List<NpcRelationEntry>> _npcRelations = new();
         private Transform? _npcParent;
         private bool _isInitialLoaded = false;
         private int _chunkSize;
@@ -45,6 +50,7 @@ namespace ARPG.Npc
             }
 
             LoadAffinity(AR.s.Data.NpcAffinityList);
+            LoadRelations(AR.s.Data.NpcRelationList);
         }
 
         public void Reset()
@@ -67,6 +73,7 @@ namespace ARPG.Npc
             _chunkNpcs.Clear();
             _innVisitorsByVillageId.Clear();
             _npcAffinity.Clear();
+            _npcRelations.Clear();
             _isInitialLoaded = false;
         }
 
@@ -296,6 +303,8 @@ namespace ARPG.Npc
             {
                 // 최초 생성 → 즉시 스폰
                 SpawnDefaultNpcsForVillage(village, table);
+                // R2: 첫 population 직후 1회 — 가족/직업/성격 관계 + 호감도 시드 + 연대기 sentiment
+                NpcRelationBackfill.Generate(village, village.NpcEntityIds);
                 village.HasBeenPopulated = true;
                 village.DepletedAt = 0f;
                 return;
@@ -529,6 +538,10 @@ namespace ARPG.Npc
                 {
                     village.DepletedAt = AR.s.Time.CurrentGameTime;
                     Debug.Log($"[NpcManager] Village {saveData.VillageId} depleted at game time {village.DepletedAt}");
+
+                    // R3: Live 연대기 — 마을 전멸 사건 (연대기에 연결된 마을만)
+                    if (village.SettlementId >= 0)
+                        AR.s.History.AppendLiveEvent(ARPG.History.ChronicleEventType.Ruin, village.SettlementId);
                 }
             }
         }
@@ -668,7 +681,7 @@ namespace ARPG.Npc
 
             NpcPairKey key = new NpcPairKey(npcA, npcB);
             _npcAffinity.TryGetValue(key, out int current);
-            _npcAffinity[key] = current + delta;
+            _npcAffinity[key] = Mathf.Clamp(current + delta, AFFINITY_MIN, AFFINITY_MAX);
         }
 
         /// <summary>
@@ -715,6 +728,125 @@ namespace ARPG.Npc
                 NpcAffinityEntry entry = list[i];
                 _npcAffinity[new NpcPairKey(entry.NpcA, entry.NpcB)] = entry.Affinity;
             }
+        }
+
+        #endregion
+
+        #region NPC 관계 (유형 채널, 양방향 인덱스, sparse)
+
+        /// <summary>
+        /// 관계 추가. 같은 엔트리를 From/To 양쪽 인덱스에 등록(양방향 조회). 정본은 매니저+WorldData.
+        /// 같은 (From,To,Type) 중복은 무시. self 관계(a==b)는 무시.
+        /// </summary>
+        public void AddRelation(int fromEntityId, int toEntityId, NpcRelationType type, int originEventId = -1)
+        {
+            if (fromEntityId == toEntityId)
+                return;
+            if (GetRelation(fromEntityId, toEntityId, type) != null)
+                return;
+
+            NpcRelationEntry entry = new NpcRelationEntry(fromEntityId, toEntityId, type, originEventId);
+            AddToRelationIndex(fromEntityId, entry);
+            AddToRelationIndex(toEntityId, entry);
+        }
+
+        /// <summary>
+        /// 해당 NPC가 관여한 모든 관계 엔트리(From 또는 To). 없으면 빈 리스트.
+        /// </summary>
+        public IReadOnlyList<NpcRelationEntry> GetRelations(int npcId)
+        {
+            if (_npcRelations.TryGetValue(npcId, out var list))
+                return list;
+            return System.Array.Empty<NpcRelationEntry>();
+        }
+
+        /// <summary>
+        /// 두 NPC 사이의 특정 유형 관계 1건 조회(방향 무관). 없으면 null.
+        /// </summary>
+        public NpcRelationEntry? GetRelation(int npcA, int npcB, NpcRelationType type)
+        {
+            if (npcA == npcB)
+                return null;
+            if (_npcRelations.TryGetValue(npcA, out var list) == false)
+                return null;
+
+            for (int i = 0; i < list.Count; i++)
+            {
+                NpcRelationEntry e = list[i];
+                if (e.Type != type)
+                    continue;
+                if ((e.FromEntityId == npcA && e.ToEntityId == npcB) ||
+                    (e.FromEntityId == npcB && e.ToEntityId == npcA))
+                    return e;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// 특정 NPC가 관여한 모든 관계 엔트리 제거. NPC 영구 삭제 시 호출(R3에서 사망 경로 배선).
+        /// 양방향 인덱스라 상대편 리스트에서도 제거한다.
+        /// </summary>
+        public void RemoveAllRelationsInvolving(int entityId)
+        {
+            if (_npcRelations.TryGetValue(entityId, out var list) == false)
+                return;
+
+            for (int i = 0; i < list.Count; i++)
+            {
+                NpcRelationEntry e = list[i];
+                int other = e.FromEntityId == entityId ? e.ToEntityId : e.FromEntityId;
+                if (_npcRelations.TryGetValue(other, out var otherList))
+                    otherList.Remove(e);
+            }
+            _npcRelations.Remove(entityId);
+        }
+
+        /// <summary>
+        /// 직렬화용 List 변환. 양방향 인덱스라 From 키에서만 추출하여 중복 제거. DataManager.Save에서 호출.
+        /// </summary>
+        public List<NpcRelationEntry> SaveRelations()
+        {
+            List<NpcRelationEntry> result = new List<NpcRelationEntry>();
+            foreach (var kvp in _npcRelations)
+            {
+                List<NpcRelationEntry> list = kvp.Value;
+                for (int i = 0; i < list.Count; i++)
+                {
+                    // 각 엔트리는 From/To 두 인덱스에 들어있음 → From 키에서만 emit하여 1회만 저장
+                    if (list[i].FromEntityId == kvp.Key)
+                        result.Add(list[i]);
+                }
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// 직렬화 List → 양방향 인덱스 복원. NpcManager.Initialize에서 호출.
+        /// </summary>
+        public void LoadRelations(List<NpcRelationEntry>? list)
+        {
+            _npcRelations.Clear();
+            if (list == null)
+                return;
+
+            for (int i = 0; i < list.Count; i++)
+            {
+                NpcRelationEntry entry = list[i];
+                if (entry.FromEntityId == entry.ToEntityId)
+                    continue;
+                AddToRelationIndex(entry.FromEntityId, entry);
+                AddToRelationIndex(entry.ToEntityId, entry);
+            }
+        }
+
+        private void AddToRelationIndex(int key, NpcRelationEntry entry)
+        {
+            if (_npcRelations.TryGetValue(key, out var list) == false)
+            {
+                list = new List<NpcRelationEntry>();
+                _npcRelations[key] = list;
+            }
+            list.Add(entry);
         }
 
         #endregion
@@ -939,6 +1071,10 @@ namespace ARPG.Npc
             // Visitor는 _chunkNpcs에 등록되지 않지만, 고용 직후 만료 케이스 대비 안전 호출
             Vector2Int chunkCoord = PositionToChunk(saveData.Position);
             RemoveNpcFromChunk(chunkCoord, entityId);
+
+            // R3: 영구 제거 경로 — 관여 호감도/관계 잔존물 정리 (방문자는 보통 관계 없음 = no-op)
+            RemoveAllAffinityInvolving(entityId);
+            RemoveAllRelationsInvolving(entityId);
             _npcSaveDict.Remove(entityId);
         }
 
