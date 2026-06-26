@@ -1,6 +1,12 @@
 # 월드 히스토리 (정착지 통폐합 + NPC 관계) — 구현 계획
 
-> **상태 (2026-06-18): 계획 — 미착수**
+> **상태 (2026-06-26): R0-A~R4 대부분 구현 — Unity 검증 전, 잔여 = R4 회고 대사 (다음에 진행)**
+> - **구현 완료** (브랜치 `feature/world-history-system`): R0-A 호감도 채널 · R0-B 데이터모델/저장(v4 마이그레이션) · R1 연대기 시뮬(Tier 2) · R2 정착지↔마을 매핑 + 관계 backfill · R3 `System_NpcRelationship` drift/구 골격 제거/Live 연대기(Ruin·Promotion)/호감도 clamp · **R4 NpcInspect 관계 탭**
+> - **다음에 할 잔여 작업**:
+>   - **R4 회고 대사** (Sentiment + `OriginEventId` → 연대기 1줄 회고, NpcInspect에 Sentiment 표시) — *미착수*
+>   - R3 보류분: 출생/분가 관계 훅(해당 시스템 미존재 — Phase E), resident 영구-사망 관계 정리(개별 영구제거 경로 부재), `EntityIdHelper` 구 관계 인프라 제거(dead no-op라 보류)
+>   - 정착지 이름 표기 방식 결정(회고 대사용 — Settlement에 표시명 없음), §11 런타임 LOD(멀리-추상 틱/실체화/fold-back)
+> - ⚠ **Unity 컴파일/플레이 검증 전** — 리컴파일 후 각 Phase 검증 기준 실행 필요.
 > **(2026-06-26 갱신 — 런타임 LOD)**: 정착지 시뮬은 "New Game 1회"가 아니라 **게임 중 지속(근처=상세/멀리=추상)**. 런타임 모델·3층 저장 구조의 정본은 [PROCEDURAL_HISTORY_DESIGN.md §0](PROCEDURAL_HISTORY_DESIGN.md). 이로 인해 **R0-B 저장 구조가 1회 스냅샷 → 라이브 상태(WorldSimState)로 바뀌고**, R1~R4 외에 "런타임 추상 틱 + 실체화/fold-back" 작업이 추가된다(아래 §11 참고, 단계적 도입).
 > 본 문서는 설계 2종을 실제 코드 현황에 맞춰 실행 가능한 작업 단위로 분해한 것이다. **설계는 2026-06-26 토픽별로 분리됨**: 정착지 통폐합/연대기 = [PROCEDURAL_HISTORY_DESIGN.md](PROCEDURAL_HISTORY_DESIGN.md)(주로 R1·R0-B 저장), NPC 개인 관계 = [NPC_RELATION_HISTORY_DESIGN.md](NPC_RELATION_HISTORY_DESIGN.md)(주로 R0-A·R2·R3·R4). 본 계획의 "설계 §X" 표기는 분리 전 기준이라 해당 내용이 둘 중 어느 문서로 갔는지 토픽으로 판단할 것.
 > 설계 문서가 "구현됨"으로 가정한 일부 자산이 실제로는 미구현임을 §0에서 먼저 정정하고, 그에 맞춰 Phase 범위를 조정했다.
@@ -47,14 +53,16 @@
 
 ## 1. Phase 요약
 
-| Phase | 내용 | 핵심 산출물 | 선행 | 추정 |
-|-------|------|------------|------|------|
-| **R0-A** | 호감도 수치 채널 (설계가 있다고 가정했으나 미구현) | `NpcPairKey`, NpcManager 호감도 API, `WorldData.NpcAffinityList` | 없음 | 1.5~2일 |
-| **R0-B** | 히스토리/관계 데이터 모델 + 저장 + 마이그레이션 | `ChronicleEvent/SaveData`, `NpcRelationEntry`, `NpcSentiment`, WorldData 직렬화 | R0-A | 1.5~2일 |
-| **R1** | 정착지 연대기 시뮬 (New Game 1회) + **정복-병합/과확장(Tier 2)** + 정착지↔마을 매핑 | `SettlementChronicleSimulator`, `RaceRelationTable`, 디버그 덤프 | R0-B | 4~5일 |
-| **R2** | NPC 관계 backfill (마을 첫 population) | 가구/가족/성격/파벌 생성기, 호감도 시드, `HasBeenPopulated` 훅 | R0-B (R1 선택) | 3~4일 |
-| **R3** | 런타임 연속 + 구 골격 제거 | `System_NpcRelationship`(Priority 58.5), 출생/사망 훅, `RelationshipComponent`/`System_Relationship` 삭제 | R2 | 2일 |
-| **R4** | 표현 | NpcInspect 관계 탭, Sentiment 회고 대사 1종 | R2 (R1 있으면 회고 가능) | 2~3일 |
+> 상태 범례: ✅ 구현 완료(Unity 검증 전) · 🟡 부분 완료 · ⬜ 미착수
+
+| Phase | 내용 | 핵심 산출물 | 선행 | 추정 | 상태 |
+|-------|------|------------|------|------|------|
+| **R0-A** | 호감도 수치 채널 (설계가 있다고 가정했으나 미구현) | `NpcPairKey`, NpcManager 호감도 API, `WorldData.NpcAffinityList` | 없음 | 1.5~2일 | ✅ (clamp는 R3에서 추가) |
+| **R0-B** | 히스토리/관계 데이터 모델 + 저장 + 마이그레이션 | `ChronicleEvent/SaveData`, `NpcRelationEntry`, `NpcSentiment`, WorldData 직렬화 | R0-A | 1.5~2일 | ✅ |
+| **R1** | 정착지 연대기 시뮬 (New Game 1회) + **정복-병합/과확장(Tier 2)** + 정착지↔마을 매핑 | `SettlementChronicleSimulator`, `RaceRelationTable`, 디버그 덤프 | R0-B | 4~5일 | ✅ (RaceRelationTable은 코드 상수) |
+| **R2** | NPC 관계 backfill (마을 첫 population) | 가구/가족/성격/파벌 생성기, 호감도 시드, `HasBeenPopulated` 훅 | R0-B (R1 선택) | 3~4일 | ✅ (다종족 파벌은 sentiment로 단순화) |
+| **R3** | 런타임 연속 + 구 골격 제거 | `System_NpcRelationship`(Priority 58), 출생/사망 훅, `RelationshipComponent`/`System_Relationship` 삭제 | R2 | 2일 | ✅ (출생/분가·resident 사망 훅 보류 — 헤더 참고) |
+| **R4** | 표현 | NpcInspect 관계 탭, Sentiment 회고 대사 1종 | R2 (R1 있으면 회고 가능) | 2~3일 | 🟡 **관계 탭 완료 / 회고 대사·Sentiment 표시 = 다음** |
 
 **의존 그래프**
 
@@ -263,6 +271,8 @@ R0-A ──▶ R0-B ──▶ R1 ──┐
 
 ## 7. R4 — 표현 (소비처)
 
+> **상태 (2026-06-26): 🟡 부분 완료** — NpcInspect **관계 탭 ✅** (회고 대사 + Sentiment 표시는 **다음에 진행**). 회고용 정착지 표시명(SettlementSnapshot에 이름 없음) 결정 필요.
+
 ### 7.1 목표
 
 설계 §7. 데이터를 플레이어가 볼 수 있게: NpcInspect 관계 탭 + Sentiment 회고 대사 1종.
@@ -276,9 +286,10 @@ R0-A ──▶ R0-B ──▶ R1 ──┐
 
 ### 7.3 작업 체크리스트
 
-- [ ] NpcInspect 관계 탭 UI + 바인딩(`GetRelations`/`GetAffinity`)
-- [ ] Sentiment/관계 → 대사 분기 최소 1종
-- [ ] `OriginEventId` → 연대기 사건 텍스트화 헬퍼 (R1 의존)
+- [x] NpcInspect 관계 탭 UI + 바인딩(`GetRelations`/`GetAffinity`) — ✅ 완료 (Unity 검증 전)
+- [ ] Sentiment/관계 → 대사 분기 최소 1종 — **다음에 진행**
+- [ ] `OriginEventId` → 연대기 사건 텍스트화 헬퍼 (R1 의존) — **다음에 진행**
+- [ ] NpcInspect에 Sentiment(마을/왕국 감정) 표시 — **다음에 진행**
 
 ### 7.4 검증 기준
 
