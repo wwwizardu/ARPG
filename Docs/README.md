@@ -88,7 +88,10 @@
 |------|------|
 | **[MAP_DESIGN.md](./MAP_DESIGN.md)** | 청크 8×8, Zone, 비트 레이아웃, 유적 단편 |
 | **[THEME_TILESET_REFACTOR.md](./THEME_TILESET_REFACTOR.md)** | 바이옴 비주얼 차별화 리팩토링 |
-| **[PROCEDURAL_HISTORY_DESIGN.md](./PROCEDURAL_HISTORY_DESIGN.md)** | 절차적 역사 생성 (⏸ 보류) |
+| **[PROCEDURAL_HISTORY_DESIGN.md](./PROCEDURAL_HISTORY_DESIGN.md)** | 정착지 통폐합 / 연대기 시뮬 (런타임 LOD) |
+| **[NPC_RELATION_HISTORY_DESIGN.md](./NPC_RELATION_HISTORY_DESIGN.md)** | NPC 개인 관계 (가족/원한/호감도) |
+| **[WORLD_HISTORY_PLAN.md](./WORLD_HISTORY_PLAN.md)** | 위 두 문서 구현 계획 (R0~R4) |
+| [archive/PROCEDURAL_HISTORY_BACKBONE.md](./archive/PROCEDURAL_HISTORY_BACKBONE.md) | 깊은 과거 백본 (템플릿 4시대) — ⛔ 미고려/아카이브 |
 
 ### 🤝 동료 / 상호작용 (설계만)
 | 문서 | 상태 |

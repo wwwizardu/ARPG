@@ -1,11 +1,11 @@
-# NPC 관계 + 정착지 히스토리 — 구현 계획
+# 월드 히스토리 (정착지 통폐합 + NPC 관계) — 구현 계획
 
 > **상태 (2026-06-18): 계획 — 미착수**
 > **(2026-06-26 갱신 — 런타임 LOD)**: 정착지 시뮬은 "New Game 1회"가 아니라 **게임 중 지속(근처=상세/멀리=추상)**. 런타임 모델·3층 저장 구조의 정본은 [PROCEDURAL_HISTORY_DESIGN.md §0](PROCEDURAL_HISTORY_DESIGN.md). 이로 인해 **R0-B 저장 구조가 1회 스냅샷 → 라이브 상태(WorldSimState)로 바뀌고**, R1~R4 외에 "런타임 추상 틱 + 실체화/fold-back" 작업이 추가된다(아래 §11 참고, 단계적 도입).
-> 본 문서는 [NPC_RELATION_HISTORY_DESIGN.md](NPC_RELATION_HISTORY_DESIGN.md)(설계 초안)를 실제 코드 현황에 맞춰 실행 가능한 작업 단위로 분해한 것이다.
+> 본 문서는 설계 2종을 실제 코드 현황에 맞춰 실행 가능한 작업 단위로 분해한 것이다. **설계는 2026-06-26 토픽별로 분리됨**: 정착지 통폐합/연대기 = [PROCEDURAL_HISTORY_DESIGN.md](PROCEDURAL_HISTORY_DESIGN.md)(주로 R1·R0-B 저장), NPC 개인 관계 = [NPC_RELATION_HISTORY_DESIGN.md](NPC_RELATION_HISTORY_DESIGN.md)(주로 R0-A·R2·R3·R4). 본 계획의 "설계 §X" 표기는 분리 전 기준이라 해당 내용이 둘 중 어느 문서로 갔는지 토픽으로 판단할 것.
 > 설계 문서가 "구현됨"으로 가정한 일부 자산이 실제로는 미구현임을 §0에서 먼저 정정하고, 그에 맞춰 Phase 범위를 조정했다.
 >
-> **선행 문서**: [NPC_RELATION_HISTORY_DESIGN.md](NPC_RELATION_HISTORY_DESIGN.md)(설계), [VILLAGE_PHASES.md](VILLAGE_PHASES.md)(런타임 도메인), [MAP_DESIGN.md](MAP_DESIGN.md)(정착지 배치)
+> **선행 문서**: [PROCEDURAL_HISTORY_DESIGN.md](PROCEDURAL_HISTORY_DESIGN.md)(정착지 통폐합/연대기 설계) · [NPC_RELATION_HISTORY_DESIGN.md](NPC_RELATION_HISTORY_DESIGN.md)(NPC 관계 설계) · [VILLAGE_PHASES.md](VILLAGE_PHASES.md)(런타임 도메인) · [MAP_DESIGN.md](MAP_DESIGN.md)(정착지 배치)
 
 ---
 
@@ -31,7 +31,7 @@
 | `DeterministicCoord` / `RegionCoord` | Assets/Scripts/Map/Region/ | 동작 중. `RegionCoord.CHUNKS_PER_REGION=4`, `ToRegionId` 등 |
 | `VillageData.HasBeenPopulated` / `DepletedAt` | [VillageData.cs:20-21](../Assets/Scripts/Village/VillageData.cs#L20) | 존재. backfill 트리거(§R2.1)/Live Ruin(§R3.3) 훅 자리로 사용 |
 | `RelationshipComponent`(Affinity/Trust/Fear/Intimacy 4축) | [RelationshipComponent.cs](../Assets/Scripts/Common/Component/RelationshipComponent.cs) | 스켈레톤. **폐기 대상**(§R3) |
-| `System_Relationship` | [System_Relationship.cs](../Assets/Scripts/Common/System/System_Relationship.cs) | **Priority 58.5**(설계는 58로 표기), `UpdateInterval` 3.0s, OnFixedUpdate TODO만. **폐기→`System_NpcAffinityDrift`로 대체** |
+| `System_Relationship` | [System_Relationship.cs](../Assets/Scripts/Common/System/System_Relationship.cs) | **Priority 58.5**(설계는 58로 표기), `UpdateInterval` 3.0s, OnFixedUpdate TODO만. **폐기→`System_NpcRelationship`로 대체** |
 | `EntityIdHelper` 관계 인프라 | [EntityIdHelper.cs](../Assets/Scripts/Common/EntityIdHelper.cs) | `_relationshipTargets`/`_relationshipSources` + Relationship 카테고리 offset 10,000,000 존재. **단, `CreateRelationshipEntity()` 메서드는 없음**(설계가 폐기 대상으로 적었으나 애초에 없음) |
 | Tables 로딩 | [Tables.cs](../Assets/Scripts/Common/Tables.cs), [DataManager_Table.cs](../Assets/Scripts/Data/DataManager_Table.cs) | POCO(`[JsonProperty]`) → `ImmutableDictionary<int,T>`, `.bytes`를 `LoadTableAsync`로 병렬 로드. **`RaceRelationTable` 추가는 이 패턴 그대로** |
 | `WorldData` | [WorldData.cs](../Assets/Scripts/Data/WorldData.cs) | `Version`(ushort) 필드 존재하나 **마이그레이션 로직 없음**(`LoadCompleted()` no-op). Newtonsoft JSON 전체 직렬화 |
@@ -53,7 +53,7 @@
 | **R0-B** | 히스토리/관계 데이터 모델 + 저장 + 마이그레이션 | `ChronicleEvent/SaveData`, `NpcRelationEntry`, `NpcSentiment`, WorldData 직렬화 | R0-A | 1.5~2일 |
 | **R1** | 정착지 연대기 시뮬 (New Game 1회) + **정복-병합/과확장(Tier 2)** + 정착지↔마을 매핑 | `SettlementChronicleSimulator`, `RaceRelationTable`, 디버그 덤프 | R0-B | 4~5일 |
 | **R2** | NPC 관계 backfill (마을 첫 population) | 가구/가족/성격/파벌 생성기, 호감도 시드, `HasBeenPopulated` 훅 | R0-B (R1 선택) | 3~4일 |
-| **R3** | 런타임 연속 + 구 골격 제거 | `System_NpcAffinityDrift`(Priority 58.5), 출생/사망 훅, `RelationshipComponent`/`System_Relationship` 삭제 | R2 | 2일 |
+| **R3** | 런타임 연속 + 구 골격 제거 | `System_NpcRelationship`(Priority 58.5), 출생/사망 훅, `RelationshipComponent`/`System_Relationship` 삭제 | R2 | 2일 |
 | **R4** | 표현 | NpcInspect 관계 탭, Sentiment 회고 대사 1종 | R2 (R1 있으면 회고 가능) | 2~3일 |
 
 **의존 그래프**
@@ -108,7 +108,7 @@ R0-A ──▶ R0-B ──▶ R1 ──┐
 
 설계 §3~§5.2의 모든 직렬화 타입 정의 + WorldData 합류 + 버전 마이그레이션 골격. **이 Phase는 시뮬/생성 로직 없이 "데이터가 저장/복원되는가"만 책임진다.**
 
-> **⚠ 런타임 LOD 반영 (2026-06-26)**: 저장 구조는 [PROCEDURAL §0.3](PROCEDURAL_HISTORY_DESIGN.md)의 **3층(추상 라이브 / 연대기 / 실체화)** 을 따른다. 즉 추상 층은 *최종 스냅샷*이 아니라 **라이브 상태**: `SettlementSnapshot` → **`SettlementLiveState`**(Pop/KingdomId/Fate/IsMaterialized/VillageId + LastReconciledTime), 그리고 **`PairAffinity`(이웃 우호도)·`LastSimGameTime`·`SimRngState`** 를 담는 `WorldSimState`를 추가한다. `Chronicle.Events`는 append-only. 정착지↔마을 링크 `SettlementId`는 R1 산출물.
+> **⚠ 런타임 LOD 반영 (2026-06-26)**: 저장 구조의 **정본은 [PROCEDURAL §0.3](PROCEDURAL_HISTORY_DESIGN.md)** (3층: 추상 라이브 / 연대기 / 실체화) — 구조체(`WorldSimState`/`SettlementLiveState`/`PairAffinity` 등) 정의는 그 문서를 따른다(여기 중복 기재 안 함). 본 R0-B의 영향: 추상 층이 *최종 스냅샷*이 아니라 **라이브 상태**가 되고, `Chronicle.Events`는 append-only, 정착지↔마을 링크 `SettlementId`는 R1 산출물. 아래 §3.2의 `SettlementSnapshot`은 연대기 스냅샷용, 런타임 추상 상태는 `SettlementLiveState`(PROCEDURAL §0.3).
 
 ### 3.2 산출물 (파일별)
 
@@ -237,7 +237,7 @@ R0-A ──▶ R0-B ──▶ R1 ──┐
 
 | 파일 | 내용 |
 |------|------|
-| `Assets/Scripts/Common/System/System_NpcAffinityDrift.cs` (신규) | `IFixedUpdateSystem`, **Priority 58.5**(구 System_Relationship 자리, Population 밴드 55-59), `UpdateInterval` 수 초. 같은 마을 + 둘 다 활성 NPC 페어만: 근접/같은 작업장 `ModifyAffinity(+1)`, `NpcStatComponent`(Friendliness/Patience) 가중. Rival/Grudge는 음수 drift |
+| `Assets/Scripts/Common/System/System_NpcRelationship.cs` (신규) | `IFixedUpdateSystem`, **Priority 58.5**(구 System_Relationship 자리, Population 밴드 55-59), `UpdateInterval` 수 초. 같은 마을 + 둘 다 활성 NPC 페어만: 근접/같은 작업장 `ModifyAffinity(+1)`, `NpcStatComponent`(Friendliness/Patience) 가중. Rival/Grudge는 음수 drift |
 | 출생 훅 | Phase C 출생 시스템: 부모 `ParentOf` + 형제 `Sibling` + 가족 호감도 시드 |
 | 분가 훅 | Phase C 분가: 가족 관계 유지(마을 달라져도 보존 → 마을 간 연결고리) |
 | 사망 훅 | NPC 영구 사망 경로: `RemoveAllAffinityInvolving`(R0-A) + relation 엔트리 정리 + 유족 Grudge/Sentiment 후보(사인 명확 시) |
@@ -246,7 +246,7 @@ R0-A ──▶ R0-B ──▶ R1 ──┐
 
 ### 6.3 작업 체크리스트
 
-- [ ] `System_NpcAffinityDrift` 작성 + SystemManager 등록(구 System_Relationship 등록 줄 교체, Priority 58.5 유지)
+- [ ] `System_NpcRelationship` 작성 + SystemManager 등록(구 System_Relationship 등록 줄 교체, Priority 58.5 유지)
 - [ ] 출생/분가/사망 훅을 Phase C 기존 경로에 삽입 (신규 시스템 아님)
 - [ ] Live `Ruin`/`Promotion` append
 - [ ] `RelationshipComponent`/`System_Relationship`/관련 EntityIdHelper 코드 삭제 + 빌드 확인
@@ -308,7 +308,7 @@ RaceRelationTable { Id, RaceA, RaceB, BaseAffinity, WarWeight, TradeWeight, Merg
 
 ## 9. 리스크 / 미결정 사항 (착수 전·중 결정)
 
-**✅ 결정됨 (2026-06-18)** — 정치 모델은 **Tier 2 (정복-병합 + 과확장 페널티)** 채택. 전쟁 승자가 패자를 자국에 편입(타종족 가능) → 다종족 제국 + 피정복민 서사. 과확장 페널티로 단일 제국 수렴 방지. **분열 동역학(Tier 3: Secession / 왕국 간 전쟁 / 자동 스윕 튜닝 하니스)은 보류** — Tier 2 안정화 후, 덤프가 너무 정적이면 *하나씩* 증분 도입(반대 힘 동시 튜닝 회피). 상세는 [설계 §11.1](NPC_RELATION_HISTORY_DESIGN.md).
+**✅ 결정됨 (2026-06-18)** — 정치 모델은 **Tier 2 (정복-병합 + 과확장 페널티)** 채택. 전쟁 승자가 패자를 자국에 편입(타종족 가능) → 다종족 제국 + 피정복민 서사. 과확장 페널티로 단일 제국 수렴 방지. **분열 동역학(Tier 3: Secession / 왕국 간 전쟁 / 자동 스윕 튜닝 하니스)은 보류** — Tier 2 안정화 후, 덤프가 너무 정적이면 *하나씩* 증분 도입(반대 힘 동시 튜닝 회피). 상세는 [PROCEDURAL_HISTORY_DESIGN.md §4](PROCEDURAL_HISTORY_DESIGN.md)(정치 모델).
 
 설계 §11 + 본 검증에서 추가된 미결정 항목.
 

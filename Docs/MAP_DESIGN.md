@@ -4,7 +4,7 @@
 >
 > **위치**: 코드는 대부분 작성됨 ([Assets/Scripts/Map/](../Assets/Scripts/Map/), [MapManager.cs](../Assets/Scripts/Manager/MapManager.cs)). 본 문서는 **현재 시스템의 사실 정리 + 유적 단편 시스템의 신규 설계**를 합친다.
 >
-> **선행/관련 문서**: [PROCEDURAL_HISTORY_DESIGN.md](PROCEDURAL_HISTORY_DESIGN.md) (history 통합 관점, 본 문서가 §6을 대체/흡수) · [THEME_TILESET_REFACTOR.md](THEME_TILESET_REFACTOR.md) (바이옴 비주얼) · [MONSTER_SPAWN_DESIGN.md](MONSTER_SPAWN_DESIGN.md) (스폰 풀)
+> **선행/관련 문서**: [PROCEDURAL_HISTORY_DESIGN.md](PROCEDURAL_HISTORY_DESIGN.md) (정착지 통폐합/연대기) · 공간 배치 백본은 [archive/PROCEDURAL_HISTORY_BACKBONE.md §6](archive/PROCEDURAL_HISTORY_BACKBONE.md)을 본 문서가 대체/흡수 · [THEME_TILESET_REFACTOR.md](THEME_TILESET_REFACTOR.md) (바이옴 비주얼) · [MONSTER_SPAWN_DESIGN.md](MONSTER_SPAWN_DESIGN.md) (스폰 풀)
 
 ---
 
@@ -251,7 +251,7 @@ public static BiomeType ComputeTileBiome(int worldX, int worldY)
 
 > **v1.9.1 (2026-05-20) 조정 사유**: 기본 스케일에서 "조금만 가도 biome 변하는" 체감 → 모든 scale ×0.5로 패치 크기 2배 확대.
 
-**시드 채널 분리** (`warpSeedA/B`, `tempSeed`, `humidSeed`, `elevSeed`)는 `DerivedSeed.Derive(mapSeed, channelId)` ([Phase 0 완료분](PROCEDURAL_HISTORY_DESIGN.md))로 생성.
+**시드 채널 분리** (`warpSeedA/B`, `tempSeed`, `humidSeed`, `elevSeed`)는 `DerivedSeed.Derive(mapSeed, channelId)` ([DerivedSeed.cs](../Assets/Scripts/History/Generator/DerivedSeed.cs), 구현됨)로 생성.
 
 #### 4.3.2 cluster 단위 biome + Region histogram — v1.9
 
@@ -510,7 +510,7 @@ public enum LoreFragmentState { Pristine = 0, Discovered = 1, Inscribed = 2 }
 - `FragmentId`만 결정론 ID로 유지. **`RegionId` 필드 제거** — AmbientTag 폐지로 region을 참조할 시스템 없음. fragmentId 안에 regionId가 이미 인코딩됨(`fragmentId / 1000 = regionId`).
 - `TileBiome`은 *이 fragment 좌표 타일의 actual biome*. 매번 `ComputeTileBiome` 호출하지 않게 캐시. race_origin/LLM prompt 등에서 사용.
 
-**유의어 정리**: PROCEDURAL_HISTORY_DESIGN의 `SettlementComponent` / `HistoryActorComponent`를 **이 단순 모델로 흡수**. Live Backbone(향후) 도입 시점에 `HistoricalEventComponent`만 따로 부활.
+**유의어 정리**: 백본([archive](archive/PROCEDURAL_HISTORY_BACKBONE.md))의 `SettlementComponent` / `HistoryActorComponent`를 **이 단순 모델로 흡수**. Live Backbone(향후) 도입 시점에 `HistoricalEventComponent`만 따로 부활.
 
 ### 6.3 비주얼 레벨
 
@@ -520,7 +520,7 @@ public enum LoreFragmentState { Pristine = 0, Discovered = 1, Inscribed = 2 }
 | **L2 Small Structure** | 폐허 잔해, 작은 무너진 벽 | 2×2~3×3 코드 패턴 | 하드코딩 패턴 배열 |
 | **L3 Blueprint** | 큰 폐허, 무덤, 도서관 | 5×5+ | `.bytes` 청사진 (BaseTown과 같은 포맷) |
 
-→ PROCEDURAL_HISTORY_DESIGN.md §6.6.4의 L1~L3 표를 그대로 채택. L4(내부 던전)는 본 문서 범위 밖 ([dungeonSystem.md](dungeonSystem.md)).
+→ 백본 [archive/PROCEDURAL_HISTORY_BACKBONE.md §6.6.4](archive/PROCEDURAL_HISTORY_BACKBONE.md)의 L1~L3 표를 그대로 채택. L4(내부 던전)는 본 문서 범위 밖 ([dungeonSystem.md](dungeonSystem.md)).
 
 ### 6.4 결정론 배치
 
@@ -575,7 +575,7 @@ public void OnChunkActivated(Vector2Int chunkCoord)
 }
 ```
 
-`DeterministicCoord.InRegion`은 [PROCEDURAL_HISTORY_DESIGN.md §6.4](PROCEDURAL_HISTORY_DESIGN.md) SplitMix64 구현 그대로. 이미 Phase 0에 있음.
+`DeterministicCoord.InRegion`은 [DeterministicCoord.cs](../Assets/Scripts/Map/Region/DeterministicCoord.cs) SplitMix64 구현 그대로. 이미 구현됨(설계 기록: [archive §6.4](archive/PROCEDURAL_HISTORY_BACKBONE.md)).
 
 **v1.3 변경점**:
 - ~~region.Biome 기반 race_origin~~ → **fragment 좌표 타일의 actual biome** 기반 (한 region 안 여러 biome 자연 처리)
@@ -856,7 +856,7 @@ RaceBiomeTable:
 - `_randomGenerator.NextDouble()` 호출 순서가 청크 로드 순서에 의존 → **같은 청크가 두 번째로 로드되면 다른 spawn 결과**
 
 ### 8.2 해결
-유적 시스템은 **모든 의사난수를 좌표 기반 hash**로 처리. PROCEDURAL_HISTORY_DESIGN에 이미 정의된 `HistoryRng` (SplitMix64) 채널 분리 활용:
+유적 시스템은 **모든 의사난수를 좌표 기반 hash**로 처리. 이미 정의된 `HistoryRng` (SplitMix64, 설계 기록: [archive](archive/PROCEDURAL_HISTORY_BACKBONE.md)) 채널 분리 활용:
 
 ```csharp
 // LoreFragment 채널
@@ -897,7 +897,7 @@ int fragmentCount = (int)(SplitMix64((ulong)regionId ^ CHANNEL_LORE_COUNT * (ulo
 4. 상태 → `Inscribed`. 다음부터는 캐시 텍스트만 표시.
 
 ### 9.2 저장 위치
-`WorldData.HistorySaveData.LoreInscriptions: Dictionary<int, string>` — PROCEDURAL_HISTORY §8.2의 `HistorySaveData` 클래스를 단순화해서 흡수.
+`WorldData.HistorySaveData.LoreInscriptions: Dictionary<int, string>` — 백본 [archive §8.2](archive/PROCEDURAL_HISTORY_BACKBONE.md)의 `HistorySaveData` 클래스를 단순화해서 흡수.
 
 ### 9.3 폴백
 LLM 실패/오프라인 시 KoreanJosaResolver 기반 단순 템플릿:
@@ -1199,7 +1199,7 @@ public class LoreSaveData
 ### Phase 6 — LLM 글귀 본격 + WorldData 마이그레이션 (2~3일)
 **신규**:
 - `LoreInscriptionGenerator.cs` — LLM 호출 + 캐시 (LLMManager 기존 인프라 활용)
-- `KoreanJosaResolver` 폴백 ([PROCEDURAL_HISTORY §9](PROCEDURAL_HISTORY_DESIGN.md) — 이미 설계됨)
+- `KoreanJosaResolver` 폴백 (설계: [archive/PROCEDURAL_HISTORY_BACKBONE.md §9](archive/PROCEDURAL_HISTORY_BACKBONE.md))
 - `LoreSaveData` 클래스 + `WorldData.LoreSaveData` 필드
 - `DataManager.MigrateWorldData` 분기 (Version 증가)
 
@@ -1207,7 +1207,7 @@ public class LoreSaveData
 - LoreFragment 조사 entity → 첫 진입 시 LLM 호출 → State 갱신 + 저장
 
 ### Phase 7 — Live Backbone 연결 (장기, 별도 트랙)
-PROCEDURAL_HISTORY §8 + 본 문서 §12 #4 옵션 A.
+백본 [archive §8](archive/PROCEDURAL_HISTORY_BACKBONE.md) + 본 문서 §12 #4 옵션 A. (런타임 Live 연대기는 [PROCEDURAL_HISTORY_DESIGN.md §5](PROCEDURAL_HISTORY_DESIGN.md)도 참고)
 - `System_LiveLoreCollector` — 보스 처치/마을 설립 broadcast → AmbientTag 갱신, 선택적으로 새 fragment 생성
 - 본 문서 범위에서는 hook만 열어둠
 
@@ -1289,9 +1289,11 @@ Assets/Scripts/
 
 ---
 
-## 16. PROCEDURAL_HISTORY_DESIGN.md와의 관계
+## 16. 절차적 역사 문서와의 관계
 
-본 문서 도입에 따라 PROCEDURAL_HISTORY 문서는 다음과 같이 정리:
+> **2026-06-26 갱신**: 구 `PROCEDURAL_HISTORY_DESIGN.md`가 분리됨 — 깊은 과거 백본(아래 표의 §1~§16)은 [archive/PROCEDURAL_HISTORY_BACKBONE.md](archive/PROCEDURAL_HISTORY_BACKBONE.md)로 이관(미고려), 정착지 통폐합/연대기는 활성 [PROCEDURAL_HISTORY_DESIGN.md](PROCEDURAL_HISTORY_DESIGN.md)로 재편. **아래 표의 섹션 번호는 아카이브 백본 문서 기준**이다.
+
+본 문서 도입에 따라 (구) 백본 문서는 다음과 같이 정리:
 
 | PROCEDURAL_HISTORY 섹션 | 본 문서 처리 |
 |------------------------|-------------|
@@ -1306,7 +1308,7 @@ Assets/Scripts/
 | §11~16 (예시/주의/결정) | 본 문서가 Lore 관점에서 재정리 |
 | §13.10 진행 상황 | Phase 0 자산 활용 가능 — 본 문서 §13 Phase 0이 짧은 이유 |
 
-→ PROCEDURAL_HISTORY 문서는 "장기 Live Backbone 트랙용 참고 문서"로 격하. 본 문서가 *현재 진행할 작업*의 정본.
+→ 백본 문서(아카이브)는 미고려 보존본. 정착지 통폐합/연대기는 [PROCEDURAL_HISTORY_DESIGN.md](PROCEDURAL_HISTORY_DESIGN.md), 공간 배치/유적은 본 문서가 정본.
 
 ---
 
