@@ -190,6 +190,7 @@ public class NpcSentiment
 3. **AI 행동 분기**: `GetAffinity` 기존 API 그대로 — backfill이 초기값을 깔아주므로 첫 만남부터 차등 행동
 4. **퀘스트 시드** (v2): Grudge/LostFamily Sentiment가 자연스러운 퀘스트 발주처
 5. **왕국 표현** (v2): 수도 마을 비주얼 차별화, 같은 왕국 마을 간 상인 재고/가격 연동
+6. **도전 이벤트 시드** (v2): `GrudgeAgainst`/`LostFamilyToWar`/`ResentsKingdom`이 위협 이벤트(복수극·컬트·구출 원정)의 씨앗 → [WORLD_EVENT_DESIGN.md](WORLD_EVENT_DESIGN.md) (퀘스트 시드와 달리 *전투/탐험* 도전 축)
 
 ---
 

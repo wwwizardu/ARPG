@@ -19,9 +19,9 @@
 | **여관(Inn) 고용 시스템** | ✅ 코드 완료 | 시트 데이터 입력 |
 | **상점 / 강화 / 제단 서비스** | ✅ 코드 완료 | 콘텐츠 확장 |
 | **NPC 관계 시스템** | 🚧 25% | 관계 변동 로직, N:N 관계 |
-| **퀘스트 시스템** | ❌ 0% | 퀘스트 발생/추적 |
+| **관계·선물 루프** | ❌ 0% | 대화·유추·선물·보답(interactionSystem §4) + NPC 소망 추적(QUEST_SYSTEM). 옛 "퀘스트 시스템" 대체 |
 | **던전 시스템** | ⏸ 보류 | 오픈월드로 대체 운영 중 |
-| **절차적 역사 생성** | ⏸ 보류 | 대사/퀘스트 시스템 이후 본 구현 |
+| **절차적 역사 생성** | ⏸ 보류 | 대화·소망 시스템 이후 본 구현 |
 
 ---
 
@@ -91,13 +91,15 @@
 | **[PROCEDURAL_HISTORY_DESIGN.md](./PROCEDURAL_HISTORY_DESIGN.md)** | 정착지 통폐합 / 연대기 시뮬 (런타임 LOD) |
 | **[NPC_RELATION_HISTORY_DESIGN.md](./NPC_RELATION_HISTORY_DESIGN.md)** | NPC 개인 관계 (가족/원한/호감도) |
 | **[WORLD_HISTORY_PLAN.md](./WORLD_HISTORY_PLAN.md)** | 위 두 문서 구현 계획 (R0~R4) |
+| **[NARRATIVE_ENGINE_DESIGN.md](./NARRATIVE_ENGINE_DESIGN.md)** ⭐ | 역사·관계 → LLM 대화·선호·소망 *생성* (핵심 재미 검증 1순위) |
+| **[QUEST_SYSTEM_DESIGN.md](./QUEST_SYSTEM_DESIGN.md)** ⭐ | 퀘스트 시스템 — NPC **소망(Wish)** 추적·완료·보상·기록 (소망 데이터 모델 정본). 관계·선물 루프는 interactionSystem §4 |
 | [archive/PROCEDURAL_HISTORY_BACKBONE.md](./archive/PROCEDURAL_HISTORY_BACKBONE.md) | 깊은 과거 백본 (템플릿 4시대) — ⛔ 미고려/아카이브 |
 
 ### 🤝 동료 / 상호작용 (설계만)
 | 문서 | 상태 |
 |------|------|
 | **[companionSystem.md](./companionSystem.md)** | 설계 완료, 미구현 |
-| **[interactionSystem.md](./interactionSystem.md)** | 설계 완료, 미구현 |
+| **[interactionSystem.md](./interactionSystem.md)** | 설계 완료, 미구현 — 30행동·관계 4축 + **관계·선물 몰입 루프**(§4: 대화·선호·유추 선물·보답) |
 | **[dungeonSystem.md](./dungeonSystem.md)** | 설계 완료, ⏸ 오픈월드 운영으로 보류 |
 
 ### 🛠️ 기술 / 시스템
@@ -176,11 +178,11 @@
 
 ### UI 시스템 (50%)
 - ✅ Inventory / Character / Shop / Forge / Inn / Shrine / MainMenu / HpBar / FloatingText
-- ⬜ 미니맵 / 퀘스트 UI / 대화 UI / 파티 UI
+- ⬜ 미니맵 / 관계·선물 UI / 대화 UI / 파티 UI
 
 ### 절차적 역사 생성 (보류)
 - POCO/다운로드 메뉴만 등록, 시스템 본체 미구현
-- 대사/퀘스트 시스템 이후 재개
+- 대화·소망 시스템 이후 재개
 
 ---
 
@@ -191,7 +193,8 @@
 | 🔥 **High** | NPC 일과 시뮬 (Phase E) | 이동, 길찾기 |
 | 🔥 **High** | 출생 / 분가 / 이탈 (Phase E) | Population 확장 |
 | 🔥 **High** | NPC 상호작용 (30가지 행동) | 관계 시스템 |
-| 🔥 **High** | 퀘스트 시스템 | NPC 시스템 |
+| 🔥 **High** | 관계·선물 루프 (대화·선호·선물·보답, interactionSystem §4) | NPC 시스템 |
+| 🔥 **High** | 퀘스트 — NPC 소망 (떠오름·추적·보상) | 관계·선물 루프 |
 | 📝 **Medium** | 대화 시스템 (LLM 통합 옵션) | NPC 시스템 |
 | 📝 **Medium** | 이벤트 / 침공 (Phase F) | 위협도, 벽 파괴 |
 | 📝 **Medium** | 동료 영입 / 명령 | 관계 시스템 |
@@ -199,7 +202,7 @@
 | 🎨 **Low** | 세이브/로드 보강 | 모든 시스템 |
 | 🎨 **Low** | 사운드 / VFX 통합 | — |
 | 🎨 **Low** | 카메라 개선 / 튜토리얼 / 로컬라이제이션 | — |
-| 🎨 **Low** | 절차적 역사 본 구현 | 대사/퀘스트 |
+| 🎨 **Low** | 절차적 역사 본 구현 | 대화·소망 |
 
 ---
 

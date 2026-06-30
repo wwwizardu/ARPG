@@ -2,6 +2,7 @@
 
 > **이 문서의 범위 (2026-06-26 재편)**: 정착지(매크로) 층 — 런타임 LOD 시뮬, 연대기(Chronicle) 생성, 왕국/정복-병합 정치 모델, 3층 저장 구조.
 > - **NPC 개인 관계**(가족/친구/원한/sentiment/호감도)는 → [NPC_RELATION_HISTORY_DESIGN.md](NPC_RELATION_HISTORY_DESIGN.md)
+> - **연대기를 씨앗으로 한 도전 이벤트**(고대신 각성/역병 확산/침공 등 — 플레이어가 맞서는 위협)는 → [WORLD_EVENT_DESIGN.md](WORLD_EVENT_DESIGN.md)
 > - **구현 계획/진행 상황**은 → [WORLD_HISTORY_PLAN.md](WORLD_HISTORY_PLAN.md)
 > - **깊은 과거 백본(창세기/고대/암흑기 — 템플릿 조합 4시대 생성)** 은 보류·미고려로 결정(2026-06-26) → [Docs/archive/PROCEDURAL_HISTORY_BACKBONE.md](archive/PROCEDURAL_HISTORY_BACKBONE.md)로 이관. 본 문서는 그 중 "현존 정착지(현대 시대)" 층만 떼어 런타임 LOD 모델로 구체화한 것이다.
 
@@ -286,6 +287,7 @@ public class KingdomData
   - 마을 전멸 (`DepletedAt` 확정 시) → `Ruin`
   - VillageStage 승격 Town/City 도달 → `Promotion` (신규 타입)
   - 플레이어 개입 사건 (보스 처치로 마을 구함 등) → `MessageManager.Broadcast`로 수집하는 패턴 (구 백본 §8 Live Backbone 트리거 설계 참고 — [archive](archive/PROCEDURAL_HISTORY_BACKBONE.md))
+  - **도전 이벤트 결과** (각성/역병/침공의 발생·해결) → [WORLD_EVENT_DESIGN.md](WORLD_EVENT_DESIGN.md). 신규 사건 타입(`Awakening`/`Blight`/`Siege` 등)은 §3.3 카탈로그에 합류(append-only)
 - **멀리(추상) 정착지의 정치 사건(합병/왕국/전쟁) 지속은 v1 범위 밖** = §0.4의 **(나)**. v1 런타임 멀리-시뮬은 **(가) 인구 동역학만** — 합병/왕국은 New Game 생성 시점까지만 일어남. 저장 구조(SettlementLiveState/Affinity)는 (나)를 수용하되 **동작은 추후** (백그라운드 정치 틱 추가 시 활성화).
 
 > NPC 개인 관계의 런타임 변동(호감도 drift, 출생/사망 관계 갱신)은 → [NPC_RELATION_HISTORY_DESIGN.md §5](NPC_RELATION_HISTORY_DESIGN.md).

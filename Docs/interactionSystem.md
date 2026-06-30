@@ -5,6 +5,8 @@
 
 > **설계 노트**: 플레이어 전용 사회 스탯(설득력·매력·은신 등)은 두지 않는다. 플레이어와 NPC는 가능한 한 **통합 스탯**을 공유하며, 상호작용 판정은 **대상 NPC의 성향(`NpcStatComponent`) + 플레이어와의 관계 4축**만으로 계산한다. 구현은 ECS 컴포넌트/시스템이 아니라 **서비스(`InteractionHelper`) + 매니저(`NpcManager`) 데이터** 구조로 간다 (§1 참조).
 
+> **관계·선물 몰입 루프 (2026-06-30)**: 본 문서는 **상호작용 판정·관계 4축의 정본**이며, 그 위에 얹히는 **대화로 사연 알아가기 → 선호 유추 → 선물 → 호감도 → 보답** 몰입 루프도 본 문서(§4)가 정본으로 다룬다(호감도 단계·단계별 대화·선호 모델·유추 선물·보답). NPC가 토로하는 **특정 소망(Wish)의 메커니즘**(목표 추적·완료·보상·영속화)만 [QUEST_SYSTEM_DESIGN.md](QUEST_SYSTEM_DESIGN.md)가, **대화·선호·소망의 LLM 생성**은 [NARRATIVE_ENGINE_DESIGN.md](NARRATIVE_ENGINE_DESIGN.md)가 담당. 옛 "퀘스트 수주(`AcceptQuest`)" 게시판·계약 모델은 폐기되고, NPC의 목표는 관계가 깊어질 때 자연 발생하는 "소망"으로 대체됐다(§4.7). 한편 *전투·탐험 도전 축*(역사가 낳은 위협 — 고대신 각성/침공 등)은 본 몰입 루프와 **별개 축**으로 → [WORLD_EVENT_DESIGN.md](WORLD_EVENT_DESIGN.md) (단 그 §3-E "가족 구출 원정"이 `Reunion` 소망과 교차).
+
 ---
 
 ## 1. 상호작용 구조
@@ -63,7 +65,7 @@ public struct InteractionResult
 }
 ```
 
-타입별 공식·결과 델타는 v1 5종만 `switch`로 시작하고, 밸런싱 단계(§8)에서 계수를 시트/SO로 이관한다.
+타입별 공식·결과 델타는 v1 5종만 `switch`로 시작하고, 밸런싱 단계(§9)에서 계수를 시트/SO로 이관한다.
 
 ### 상호작용 타입
 ```csharp
@@ -111,6 +113,8 @@ public enum InteractionType
 }
 ```
 
+> **`AcceptQuest`(퀘스트 수주)·`Commission`(의뢰) 재해석**: 방향 전환([QUEST_SYSTEM_DESIGN.md](QUEST_SYSTEM_DESIGN.md))으로 *퀘스트 목록에서 계약을 수락*하는 모델은 폐기됐다. NPC의 목표는 이제 관계가 깊어질 때 **자연 발생하는 "소망(Wish)"**(§4.7)으로 등장하며, 별도 "수주" 행동 없이 충족(선물/회수/재회)된다 — 떠오름은 §4.7, 추적·완료·보상 메커니즘은 [QUEST_SYSTEM_DESIGN.md](QUEST_SYSTEM_DESIGN.md). 이 두 타입은 MVP 행동 목록에서 제외하거나(§7 우선순위) 추후 "소망 인지/대화" 진입점으로 용도 변경한다.
+
 ---
 
 ## 2. 판정 공식 (Interaction별)
@@ -134,7 +138,7 @@ float CalculateSuccessRate(InteractionType type, int playerEntityId, int npcEnti
 }
 ```
 
-> ※ 플레이어 사회 스탯을 제거하면서 각 공식의 player 항이 빠졌다. base 수치와 NPC/관계 가중치는 **추후 재밸런싱 대상**(§8 참조).
+> ※ 플레이어 사회 스탯을 제거하면서 각 공식의 player 항이 빠졌다. base 수치와 NPC/관계 가중치는 **추후 재밸런싱 대상**(§9 참조).
 
 ### 대화 계열
 
@@ -311,6 +315,8 @@ successRate = 50
 - 중가 (10~50G): Affinity +7
 - 고가 (50G 이상): Affinity +15, Intimacy +5
 - NPC 선호 아이템: 추가 보너스 +10
+
+> **선호 판정 일반화 (§4 관계·선물 루프)**: 위 "선호 아이템 +10"은 단일 보너스가 아니라, NPC의 백본 사연에서 도출된 **선호/혐오 카테고리에 따른 반응 배수**(`Loved/Liked/Neutral/Disliked`)로 일반화된다 — `GiveGift`가 *관계 루프의 핵심 행동*으로 승격됐기 때문(정본 §4.4·§4.5). **혐오 아이템은 호감도를 깎을 수도** 있다(예: 전쟁으로 가족을 잃은 NPC에게 무기류). 또한 `GiveGift`로 **특정 소망(Wish) 아이템**을 건네면 호감도가 대폭 상승하며, 그 충족 메커니즘은 [QUEST_SYSTEM_DESIGN.md](QUEST_SYSTEM_DESIGN.md)가 담당한다(§4.7).
 
 ---
 
@@ -503,7 +509,124 @@ public void ModifyPlayerRelation(int npcId, int dAff, int dTrust, int dFear, int
 
 ---
 
-## 4. 상호작용 UI
+## 4. 관계·선물 몰입 루프 (호감도 단계 · 대화 · 선호 · 유추 선물 · 보답)
+
+> 30가지 상호작용(§1) 위에 얹히는 **몰입 레이어**다 — 대화로 NPC의 사연을 알아가고, 그 사연에서 *무엇을 주면 좋아할지* 헤아려 선물하고, 호감도가 오르면 NPC가 보답한다. **더 깊은 지역 진출을 강제하는 진행 엔진이 아니다**(진출 동기는 메인 이벤트 등 별도 시스템 몫). 본 절은 §3 관계 4축 위에서 동작한다. 대화·선호·소망의 *LLM 생성*은 [NARRATIVE_ENGINE_DESIGN.md](NARRATIVE_ENGINE_DESIGN.md), NPC가 토로하는 *특정 소망의 메커니즘(추적·완료·보상)*은 [QUEST_SYSTEM_DESIGN.md](QUEST_SYSTEM_DESIGN.md)가 담당.
+
+### 4.1 핵심 루프
+
+```
+                       ┌──────────────────────────────────────────┐
+                       ▼                                          │
+[대화] ─── 호감도가 오를수록 ───▶ [더 사적인 사연 공개]            │
+   │        (백본: 관계·Sentiment·연대기 점진 노출)               │
+   ▼                                                              │
+[유추] ─ 사연에서 "이걸 주면 좋아하겠다" 헤아림                    │
+   │                                                              │
+   ▼                                                              │
+[선물] ─ 선호 일치도 × 가치 → 호감도 변동 ───────────────────────┘
+   │
+   ├──▶ (호감도 단계 도달) NPC가 [특정 소망] 토로 ─▶ 충족(→ QUEST_SYSTEM) 시 대폭↑ + 보답
+   └──▶ (호감도 임계 도달) NPC가 [보답] (아이템/동료/교습/소개 …)
+```
+
+| 결 | 빈도/강도 | 동기 | 본문 |
+|----|----------|------|------|
+| **유추 선물** | 지속·잔잔(소~중폭) | 대화로 헤아린 선호 | §4.5 |
+| **특정 소망** | 이벤트성·대폭 | NPC가 토로한 구체적 갈망 | §4.7 → [QUEST_SYSTEM](QUEST_SYSTEM_DESIGN.md) |
+
+> 두 결 모두 **NPC의 백본(역사·관계·Sentiment)에서 자연 발생**한다. 선호도 소망도 임의 태그가 아니라 *그 NPC가 살아온 사연*에서 도출되므로, "이 세계에서만 말이 되는" 관계를 빚는다.
+
+### 4.2 호감도 단계 (AffinityTier)
+
+대화 심도·소망·보답의 게이트. `Affinity`(§3) 기준, `Intimacy`가 보조.
+
+```csharp
+public enum AffinityTier { Stranger, Acquaintance, Friend, Confidant }
+// 경계(잠정): <20 / 20–49 / 50–79 / 80+
+```
+
+| 단계 | 호감도(잠정) | 공개되는 백본 층 | 선호/소망 |
+|------|-------------|-----------------|----------|
+| **Stranger** | <20 | 직업·마을 표면 잡담 | 선호 힌트 거의 없음 |
+| **Acquaintance** | 20–49 | 종족·취향 일반론 | 거친 선호 카테고리 암시 |
+| **Friend** | 50–79 | 개인 관계·과거 일부(`GetRelations`·일부 `Sentiment`) | 구체적 선호 단서, **첫 소망 가능** |
+| **Confidant** | 80+ | 트라우마·핵심 `Sentiment`·연대기 사건(`OriginEventId`) | 깊은 소망, 보답 |
+
+### 4.3 단계별 대화 (사연 점진 공개 → 유추 단서)
+
+> 사람 관계처럼, 처음부터 속을 다 보이지 않는다. 호감도가 오를수록 NPC가 더 사적인 이야기를 꺼내고, 그 이야기가 곧 *선호·소망의 단서*가 된다. 이게 "유추"의 동력이다.
+
+- 게이트는 `Affinity` 중심, `Intimacy` 보조 — `Confide`(비밀 고백)·`AskInfo` 등 친밀도를 올리는 상호작용이 사적 대화를 앞당길 수 있다.
+- 각 단계의 대사는 **온디맨드 생성 + 결과 캐시**([NARRATIVE_ENGINE §6.3](NARRATIVE_ENGINE_DESIGN.md)). 단계가 오를 때 새 대화 토픽이 해금된다.
+- **시스템은 정답을 말하지 않는다.** 플레이어가 대화에서 "이 사람은 고향을 그리워하는구나 → 엘프 유물이면 좋아하겠다"를 스스로 잇는다. (단서를 충분히 흘리되 정답을 직접 말하지 않게 하는 보정은 §9 밸런스 — 너무 모호하면 좌절, 너무 친절하면 유추 재미 소실.)
+
+### 4.4 선호 (Preference) — 백본 유래, 정적 태그 아님
+
+선호는 NPC에 박아둔 고정 태그가 아니라 **백본 데이터에서 도출**한다. 그래야 대화로 드러난 사연과 *정합*하고("고향을 잃은 엘프"가 엘프 유물을 좋아함), 유추가 정직해진다.
+
+```csharp
+public struct GiftReaction          // 선물 시 시스템이 산출
+{
+    public ReactionTier Tier;       // Loved / Liked / Neutral / Disliked
+    public int AffinityDelta;       // §2 #11 GiveGift 가치 효과에 배수/보정
+    public string ReactionDialogue; // NPC 반응 대사(생성/캐시)
+}
+public enum ReactionTier { Loved, Liked, Neutral, Disliked }
+// 선물 카테고리 — 닫힌 어휘(아이템 테이블 태그와 매핑)
+public enum GiftCategory { Food, Craft, Gem, Relic, Lore, Weapon, Trinket, Flower, Drink, ... }
+```
+
+**선호 도출 규칙 (백본 → 선호↑/혐오↓)** — 생성([NARRATIVE_ENGINE §4.4](NARRATIVE_ENGINE_DESIGN.md))과 공유:
+
+| 입력 데이터 (백본) | → 선호/혐오 |
+|--------------------|------------|
+| 종족(Race) | Elf→`Lore`/`Flower`↑, Dwarf→`Gem`/`Craft`↑ (문화) |
+| `Sentiment: LostFamilyToWar` | 고향/추모 `Relic`/`Lore`↑, 전쟁 상기 `Weapon`↓ |
+| `Sentiment: ProudOfKingdom` | 소속 왕국 상징물↑ |
+| 관계 `MentorOf`(스승) | 기술서·`Lore`↑ |
+| 8성향 `Greed`↑ / `Pride`↑ | `Gem`/고가품↑ / 명예 `Trinket`↑·값싼 선물 싫어함 |
+| 직업(대장장이/농부 …) | `Craft`·광석↑ / `Food`·씨앗↑ |
+
+### 4.5 유추 선물 (Tier 1) — `GiveGift` 확장
+
+§2 #11 `GiveGift`의 *가치 효과* 위에 **선호 일치 판정**을 얹는다.
+
+1. 플레이어가 임의의 아이템 선물 (§2 #11 진입점)
+2. 시스템이 §4.4 규칙으로 **`GiftReaction` 산출**(`Loved/Liked/Neutral/Disliked`)
+3. **호감도 변동** = 가치 효과(저/중/고가) × 반응 배수 + 관계 맥락 보너스
+   - 예: `Loved` ×2.0, `Liked` ×1.3, `Neutral` ×1.0, **`Disliked` 음수**(전쟁으로 가족 잃은 NPC에게 무기류 등)
+   - §2 #11의 "선호 아이템 +10"은 이 반응 판정으로 **일반화**된다
+4. **반응 대사** → 유추가 맞았는지 체감
+5. `ModifyPlayerRelation`(§3) 반영 (불변식은 §3)
+
+> 같은 아이템도 NPC마다 반응이 다르다(선호가 백본 유래라). 이 *차이*가 "이 사람을 알아가는" 재미의 핵심.
+
+### 4.6 보답 (NPC → 플레이어)
+
+깊어진 관계에 NPC가 먼저 베푼다 — **순수한 관계 보상**(진출 게이트가 아님).
+
+| 트리거 | 보답 |
+|--------|------|
+| 호감도 임계(Friend/Confidant 진입) | 아이템/골드, NPC 특산물 |
+| 소망 충족 | §4.7 |
+| (확장) 깊은 신뢰 | 동료 합류(`Recruit`)·교습(`Teach`)·소개(`Introduce`) 해금 |
+
+- 무한 파밍 방지 위해 **쿨다운/임계 1회성**.
+
+### 4.7 특정 소망 (Tier 2) — 떠오름 → QUEST_SYSTEM 핸드오프
+
+NPC가 관계가 깊어질 때 백본 사연에서 비롯된 **구체적 소망**을 토로한다. 이는 구조적으로 **퀘스트**이므로, *떠오름·인지*는 본 문서가, *메커니즘(목표 추적·완료 판정·보상·상태·영속화)*은 [QUEST_SYSTEM_DESIGN.md](QUEST_SYSTEM_DESIGN.md)가 담당한다.
+
+1. **떠오름**: 호감도가 `Friend`↑에 이르고 깊은 대화 비트에서 NPC가 소망을 토로(예: "가문 인장이 옛 숲 신전에 봉인돼 있소…").
+2. **인지**: 퀘스트 게시판/수락 버튼 없음. 관계 패널에 *"이 NPC가 ~을 바람"* 정도로 은근히 표시(§5). 채워줄지는 플레이어 자유.
+3. **충족·보상**: 충족 판정·보상 지급은 [QUEST_SYSTEM](QUEST_SYSTEM_DESIGN.md). 충족 시 **호감도 대폭 상승** + 보답(§4.6) + 서사 반영이 본 루프로 되먹임.
+
+> **표면 UX는 끝까지 관계 프레이밍**이다 — "퀘스트를 받는다"가 아니라 "관계가 깊어져 그 사람의 갈망을 알게 되고 채워준다".
+
+---
+
+## 5. 상호작용 UI
 
 ### 대화 창
 ```
@@ -545,7 +668,7 @@ public void ModifyPlayerRelation(int npcId, int dAff, int dTrust, int dFear, int
 
 ---
 
-## 5. 특수 상호작용 (컨텍스트 기반)
+## 6. 특수 상호작용 (컨텍스트 기반)
 
 ### 상황별 추가 행동
 ```
@@ -562,7 +685,7 @@ public void ModifyPlayerRelation(int npcId, int dAff, int dTrust, int dFear, int
 
 ---
 
-## 6. 구현 우선순위
+## 7. 구현 우선순위
 
 ### Phase 1: 기본 상호작용
 - [ ] PlayerRelation 데이터 + NpcManager 관계 API (Get/Modify/Save/Load + 영구삭제 정리 훅)
@@ -593,7 +716,7 @@ public void ModifyPlayerRelation(int npcId, int dAff, int dTrust, int dFear, int
 
 ---
 
-## 7. 테스트 시나리오
+## 8. 테스트 시나리오
 
 ### 테스트 1: 기본 대화
 1. NPC에게 다가가기
@@ -616,7 +739,7 @@ public void ModifyPlayerRelation(int npcId, int dAff, int dTrust, int dFear, int
 
 ---
 
-## 8. 밸런스 고려사항
+## 9. 밸런스 고려사항
 
 ### 성공률 범위
 - **너무 쉬움 (80% 이상)**: 긴장감 부족
@@ -636,6 +759,6 @@ public void ModifyPlayerRelation(int npcId, int dAff, int dTrust, int dFear, int
 
 ---
 
-**Last Updated**: 2026-06-26
-**Status**: 설계 완료, 구현 대기 중 (플레이어 사회 스탯 제거 — 판정은 NPC 성향 + 관계 4축 / 서비스 + 매니저 데이터 구조, ECS 아님)
-**Dependencies**: NPC 시스템, 관계 시스템, 대화 시스템
+**Last Updated**: 2026-06-30
+**Status**: 설계 완료, 구현 대기 중 (플레이어 사회 스탯 제거 — 판정은 NPC 성향 + 관계 4축 / 서비스 + 매니저 데이터 구조, ECS 아님. §4 관계·선물 몰입 루프 편입 — 소망 메커니즘만 QUEST_SYSTEM)
+**Dependencies**: NPC 시스템, 관계 시스템, 대화 시스템(NARRATIVE_ENGINE 생성), 소망 추적(QUEST_SYSTEM)

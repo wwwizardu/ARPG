@@ -4,7 +4,7 @@
 >
 > **위치**: 코드는 대부분 작성됨 ([Assets/Scripts/Map/](../Assets/Scripts/Map/), [MapManager.cs](../Assets/Scripts/Manager/MapManager.cs)). 본 문서는 **현재 시스템의 사실 정리 + 유적 단편 시스템의 신규 설계**를 합친다.
 >
-> **선행/관련 문서**: [PROCEDURAL_HISTORY_DESIGN.md](PROCEDURAL_HISTORY_DESIGN.md) (정착지 통폐합/연대기) · 공간 배치 백본은 [archive/PROCEDURAL_HISTORY_BACKBONE.md §6](archive/PROCEDURAL_HISTORY_BACKBONE.md)을 본 문서가 대체/흡수 · [THEME_TILESET_REFACTOR.md](THEME_TILESET_REFACTOR.md) (바이옴 비주얼) · [MONSTER_SPAWN_DESIGN.md](MONSTER_SPAWN_DESIGN.md) (스폰 풀)
+> **선행/관련 문서**: [PROCEDURAL_HISTORY_DESIGN.md](PROCEDURAL_HISTORY_DESIGN.md) (정착지 통폐합/연대기) · 공간 배치 백본은 [archive/PROCEDURAL_HISTORY_BACKBONE.md §6](archive/PROCEDURAL_HISTORY_BACKBONE.md)을 본 문서가 대체/흡수 · [THEME_TILESET_REFACTOR.md](THEME_TILESET_REFACTOR.md) (바이옴 비주얼) · [MONSTER_SPAWN_DESIGN.md](MONSTER_SPAWN_DESIGN.md) (스폰 풀) · [WORLD_EVENT_DESIGN.md](WORLD_EVENT_DESIGN.md) (유적 단편 fate `sealed`/`plagued`/`burned`가 도전 이벤트의 씨앗)
 
 ---
 
