@@ -181,7 +181,7 @@ namespace ARPG.Map
                     // 오브젝트 타일 설정
                     // 1) BuildableTileRegistry (BuildableItemTable.Id → Addressable 로드) 우선 조회
                     // 2) 미스 시 레거시 ThemeTileSet.ObjectSet fallback — Phase A 이전 자산만 해당.
-                    //    Docs/THEME_TILESET_REFACTOR.md 단계 2~3 완료 시 fallback 분기 제거 예정.
+                    //    Docs/map/THEME_TILESET_REFACTOR.md 단계 2~3 완료 시 fallback 분기 제거 예정.
                     if (objectId > 0)
                     {
                         TileBase tile = BuildableTileRegistry.Get((int)objectId);

@@ -51,65 +51,65 @@
 ## 📚 기획 문서
 
 ### 🌍 전체 개요 & 컨벤션
-- **[gameOverview.md](./gameOverview.md)** — 게임 3대 축, Phase 1~3, 기술 스택
-- **[implementationStatus.md](./implementationStatus.md)** ⭐ — 시스템별 구현 현황 + 로드맵
+- **[gameOverview.md](overview/gameOverview.md)** — 게임 3대 축, Phase 1~3, 기술 스택
+- **[implementationStatus.md](overview/implementationStatus.md)** ⭐ — 시스템별 구현 현황 + 로드맵
 - **[../CLAUDE.md](../CLAUDE.md)** — 코딩 컨벤션, 커스텀 ECS API
 
 ### ⚔️ 전투 / 스킬
 | 문서 | 내용 |
 |------|------|
-| **[combatSystem.md](./combatSystem.md)** | 실시간 전투, 페이즈, 데미지 6단계 공식 |
-| **[combatSystemCompletion.md](./combatSystemCompletion.md)** | 전투 완성 로드맵 (사실상 완료) |
-| **[BALANCE_DESIGN.md](./BALANCE_DESIGN.md)** | PoE2 톤 밸런스 곡선 / 방어 공식 / TTK |
-| **[SKILL_DESIGN.md](./SKILL_DESIGN.md)** | 현재 시스템 위 스킬 카탈로그 |
-| **[SKILLBOOK_DESIGN.md](./SKILLBOOK_DESIGN.md)** | 스킬북 장착식 스킬 (코드 완료) |
-| **[SKILL_RUNE_DESIGN.md](./SKILL_RUNE_DESIGN.md)** | 스킬 룬 / 모디파이어 |
-| **[SKILL_EFFECT_IDEAS.md](./SKILL_EFFECT_IDEAS.md)** | 스킬 이펙트 아이디어 |
-| **[AI_SKILL_SELECTION_IMPLEMENTATION.md](./AI_SKILL_SELECTION_IMPLEMENTATION.md)** | AI 다중 스킬 가중치 선택 |
-| **[ModSystem_Changelog.md](./ModSystem_Changelog.md)** | 장비/스탯 mod 시스템 변경 이력 |
+| **[combatSystem.md](combat/combatSystem.md)** | 실시간 전투, 페이즈, 데미지 6단계 공식 |
+| **[combatSystemCompletion.md](combat/combatSystemCompletion.md)** | 전투 완성 로드맵 (사실상 완료) |
+| **[BALANCE_DESIGN.md](combat/BALANCE_DESIGN.md)** | PoE2 톤 밸런스 곡선 / 방어 공식 / TTK |
+| **[SKILL_DESIGN.md](combat/SKILL_DESIGN.md)** | 현재 시스템 위 스킬 카탈로그 |
+| **[SKILLBOOK_DESIGN.md](combat/SKILLBOOK_DESIGN.md)** | 스킬북 장착식 스킬 (코드 완료) |
+| **[SKILL_RUNE_DESIGN.md](combat/SKILL_RUNE_DESIGN.md)** | 스킬 룬 / 모디파이어 |
+| **[SKILL_EFFECT_IDEAS.md](combat/SKILL_EFFECT_IDEAS.md)** | 스킬 이펙트 아이디어 |
+| **[AI_SKILL_SELECTION_IMPLEMENTATION.md](combat/AI_SKILL_SELECTION_IMPLEMENTATION.md)** | AI 다중 스킬 가중치 선택 |
+| **[ModSystem_Changelog.md](combat/ModSystem_Changelog.md)** | 장비/스탯 mod 시스템 변경 이력 |
 
 ### 🤖 AI / 몬스터
 | 문서 | 내용 |
 |------|------|
-| **[monsterAIPattern.md](./monsterAIPattern.md)** | 몬스터 AI 패턴 |
-| **[MONSTER_SPAWN_DESIGN.md](./MONSTER_SPAWN_DESIGN.md)** | 데이터 주도 스폰 풀 (Zone × 등급) |
-| **[COLLISION_PATHFINDING_DESIGN.md](./COLLISION_PATHFINDING_DESIGN.md)** | 축 분리 슬라이딩 + 타일 A* |
+| **[monsterAIPattern.md](ai_monster/monsterAIPattern.md)** | 몬스터 AI 패턴 |
+| **[MONSTER_SPAWN_DESIGN.md](ai_monster/MONSTER_SPAWN_DESIGN.md)** | 데이터 주도 스폰 풀 (Zone × 등급) |
+| **[COLLISION_PATHFINDING_DESIGN.md](map/COLLISION_PATHFINDING_DESIGN.md)** | 축 분리 슬라이딩 + 타일 A* |
 
 ### 🏘️ 마을 / NPC 자가성장 ⭐
 | 문서 | 단계 | 상태 |
 |------|------|------|
-| **[VILLAGE_GROWTH_STAGES.md](./VILLAGE_GROWTH_STAGES.md)** | 마을 성장 전체 기획 (Stage 0~4) | 본 문서 |
-| **[VILLAGE_PHASES.md](./VILLAGE_PHASES.md)** | Phase A~D 통합 요약 (MVP → BuildQueue → Tier 승격 + 외벽 → 서비스 + 직무) | ✅ 코드 완료 |
-| **[BUILD_PRIORITY_DESIGN.md](./BUILD_PRIORITY_DESIGN.md)** | 자가 건설 4계층 가중치 점수 |
-| **[INN_HIRING_DESIGN.md](./INN_HIRING_DESIGN.md)** | 여관 기반 NPC 고용 (자연 이민 대체) |
+| **[VILLAGE_GROWTH_STAGES.md](village/VILLAGE_GROWTH_STAGES.md)** | 마을 성장 전체 기획 (Stage 0~4) | 본 문서 |
+| **[VILLAGE_PHASES.md](village/VILLAGE_PHASES.md)** | Phase A~D 통합 요약 (MVP → BuildQueue → Tier 승격 + 외벽 → 서비스 + 직무) | ✅ 코드 완료 |
+| **[BUILD_PRIORITY_DESIGN.md](village/BUILD_PRIORITY_DESIGN.md)** | 자가 건설 4계층 가중치 점수 |
+| **[INN_HIRING_DESIGN.md](village/INN_HIRING_DESIGN.md)** | 여관 기반 NPC 고용 (자연 이민 대체) |
 
 ### 🗺️ 맵 / 분위기
 | 문서 | 내용 |
 |------|------|
-| **[MAP_DESIGN.md](./MAP_DESIGN.md)** | 청크 8×8, Zone, 비트 레이아웃, 유적 단편 |
-| **[THEME_TILESET_REFACTOR.md](./THEME_TILESET_REFACTOR.md)** | 바이옴 비주얼 차별화 리팩토링 |
-| **[PROCEDURAL_HISTORY_DESIGN.md](./PROCEDURAL_HISTORY_DESIGN.md)** | 정착지 통폐합 / 연대기 시뮬 (런타임 LOD) |
-| **[NPC_RELATION_HISTORY_DESIGN.md](./NPC_RELATION_HISTORY_DESIGN.md)** | NPC 개인 관계 (가족/원한/호감도) |
-| **[WORLD_HISTORY_PLAN.md](./WORLD_HISTORY_PLAN.md)** | 위 두 문서 구현 계획 (R0~R4) |
-| **[NARRATIVE_ENGINE_DESIGN.md](./NARRATIVE_ENGINE_DESIGN.md)** ⭐ | 역사·관계 → LLM 대화·선호·소망 *생성* (핵심 재미 검증 1순위) |
-| **[QUEST_SYSTEM_DESIGN.md](./QUEST_SYSTEM_DESIGN.md)** ⭐ | 퀘스트 시스템 — NPC **소망(Wish)** 추적·완료·보상·기록 (소망 데이터 모델 정본). 관계·선물 루프는 interactionSystem §4 |
-| [archive/PROCEDURAL_HISTORY_BACKBONE.md](./archive/PROCEDURAL_HISTORY_BACKBONE.md) | 깊은 과거 백본 (템플릿 4시대) — ⛔ 미고려/아카이브 |
+| **[MAP_DESIGN.md](map/MAP_DESIGN.md)** | 청크 8×8, Zone, 비트 레이아웃, 유적 단편 |
+| **[THEME_TILESET_REFACTOR.md](map/THEME_TILESET_REFACTOR.md)** | 바이옴 비주얼 차별화 리팩토링 |
+| **[PROCEDURAL_HISTORY_DESIGN.md](world_history/PROCEDURAL_HISTORY_DESIGN.md)** | 정착지 통폐합 / 연대기 시뮬 (런타임 LOD) |
+| **[NPC_RELATION_HISTORY_DESIGN.md](npc/NPC_RELATION_HISTORY_DESIGN.md)** | NPC 개인 관계 (가족/원한/호감도) |
+| **[WORLD_HISTORY_PLAN.md](world_history/WORLD_HISTORY_PLAN.md)** | 위 두 문서 구현 계획 (R0~R4) |
+| **[NARRATIVE_ENGINE_DESIGN.md](world_history/NARRATIVE_ENGINE_DESIGN.md)** ⭐ | 역사·관계 → LLM 대화·선호·소망 *생성* (핵심 재미 검증 1순위) |
+| **[QUEST_SYSTEM_DESIGN.md](npc/QUEST_SYSTEM_DESIGN.md)** ⭐ | 퀘스트 시스템 — NPC **소망(Wish)** 추적·완료·보상·기록 (소망 데이터 모델 정본). 관계·선물 루프는 interactionSystem §4 |
+| [archive/PROCEDURAL_HISTORY_BACKBONE.md](_archive/PROCEDURAL_HISTORY_BACKBONE.md) | 깊은 과거 백본 (템플릿 4시대) — ⛔ 미고려/아카이브 |
 
 ### 🤝 동료 / 상호작용 (설계만)
 | 문서 | 상태 |
 |------|------|
-| **[companionSystem.md](./companionSystem.md)** | 설계 완료, 미구현 |
-| **[interactionSystem.md](./interactionSystem.md)** | 설계 완료, 미구현 — 30행동·관계 4축 + **관계·선물 몰입 루프**(§4: 대화·선호·유추 선물·보답) |
-| **[dungeonSystem.md](./dungeonSystem.md)** | 설계 완료, ⏸ 오픈월드 운영으로 보류 |
+| **[companionSystem.md](npc/companionSystem.md)** | 설계 완료, 미구현 |
+| **[interactionSystem.md](npc/interactionSystem.md)** | 설계 완료, 미구현 — 30행동·관계 4축 + **관계·선물 몰입 루프**(§4: 대화·선호·유추 선물·보답) |
+| **[dungeonSystem.md](_archive/dungeonSystem.md)** | 설계 완료, ⏸ 오픈월드 운영으로 보류 |
 
 ### 🛠️ 기술 / 시스템
 | 문서 | 내용 |
 |------|------|
-| **[ECS_PERFORMANCE_OPTIMIZATION_PLAN.md](./ECS_PERFORMANCE_OPTIMIZATION_PLAN.md)** | SparseSet 조회 비용 감소 단계별 계획 |
-| **[resourceSystem.md](./resourceSystem.md)** | 자원 시스템 개요 |
+| **[ECS_PERFORMANCE_OPTIMIZATION_PLAN.md](tech/ECS_PERFORMANCE_OPTIMIZATION_PLAN.md)** | SparseSet 조회 비용 감소 단계별 계획 |
+| **[resourceSystem.md](village/resourceSystem.md)** | 자원 시스템 개요 |
 
 ### 📂 아카이브
-- **[archive/](./archive/)** — Phase A 초기 계획 / 체크리스트 등 (역사 참고용)
+- **[archive/](archive)** — Phase A 초기 계획 / 체크리스트 등 (역사 참고용)
 
 ---
 
@@ -343,7 +343,7 @@ Assets/Scripts/
 ---
 
 **문서 관리 원칙**:
-- 매주 진행도 업데이트는 [implementationStatus.md](./implementationStatus.md)
+- 매주 진행도 업데이트는 [implementationStatus.md](overview/implementationStatus.md)
 - Phase 완료 시 본 문서의 Phase 로드맵 + 빠른 참조 업데이트
 - 새 설계 문서 추가 시 본 문서의 "기획 문서" 섹션에 링크 등록
 

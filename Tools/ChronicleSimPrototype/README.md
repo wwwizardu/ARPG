@@ -1,7 +1,7 @@
 # Chronicle Sim Prototype
 
 정착지 연대기 시뮬(설계 L1, Tier 2 = 정복-병합 + 과확장 페널티)을 **Unity 밖에서 빠르게 돌려보고 튜닝**하기 위한 독립 콘솔 도구.
-[WORLD_HISTORY_PLAN.md](../../Docs/WORLD_HISTORY_PLAN.md) R1의 위험(역사가 재미있게 나오나 / 한 덩어리로 수렴하나)을 R0 구현 전에 검증한다.
+[WORLD_HISTORY_PLAN.md](../../Docs/world_history/WORLD_HISTORY_PLAN.md) R1의 위험(역사가 재미있게 나오나 / 한 덩어리로 수렴하나)을 R0 구현 전에 검증한다.
 
 ## 왜 둘로 나눠져 있나 (하이브리드)
 

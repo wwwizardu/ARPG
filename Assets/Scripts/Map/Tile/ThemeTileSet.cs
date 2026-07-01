@@ -18,8 +18,8 @@ public class ThemeTileSet : ScriptableObject
     // ObjectSet — DEPRECATED.
     // Phase A 이후 신규 오브젝트는 BuildableTileRegistry(Addressable) 경로로 일원화됨.
     // 본 필드는 Phase A 이전 레거시 자산(Stone/Npc/WoodWall 등) fallback 호환용으로만 유지.
-    // 신규 추가 금지. 자세한 마이그레이션 계획은 Docs/THEME_TILESET_REFACTOR.md 참조.
-    [Obsolete("신규 오브젝트는 BuildableItemTable + Addressable로 등록. ObjectSet은 레거시 fallback 전용. 자세한 내용은 Docs/THEME_TILESET_REFACTOR.md")]
+    // 신규 추가 금지. 자세한 마이그레이션 계획은 Docs/map/THEME_TILESET_REFACTOR.md 참조.
+    [Obsolete("신규 오브젝트는 BuildableItemTable + Addressable로 등록. ObjectSet은 레거시 fallback 전용. 자세한 내용은 Docs/map/THEME_TILESET_REFACTOR.md")]
     [Header("Object (DEPRECATED — Phase A 이후 BuildableTileRegistry로 이관)")]
     public TileBase[] ObjectSet;
 

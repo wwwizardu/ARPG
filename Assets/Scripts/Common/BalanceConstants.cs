@@ -1,7 +1,7 @@
 namespace ARPG.Utility
 {
     /// <summary>
-    /// 밸런스 디자인 곡선 상수. Docs/BALANCE_DESIGN.md §3 참조.
+    /// 밸런스 디자인 곡선 상수. Docs/combat/BALANCE_DESIGN.md §3 참조.
     /// 시뮬 시트(Constants 탭)와 1:1 매칭 — 시트에서 검증한 값을 코드에 반영.
     /// 튜닝 시 시트 ↔ 이 파일 둘 다 갱신할 것.
     /// </summary>
