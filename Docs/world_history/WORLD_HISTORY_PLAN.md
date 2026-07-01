@@ -2,6 +2,7 @@
 
 > **상태 (2026-06-26): R0-A~R4 대부분 구현 — Unity 검증 전, 잔여 = R4 회고 대사 (다음에 진행)**
 > - **구현 완료** (브랜치 `feature/world-history-system`): R0-A 호감도 채널 · R0-B 데이터모델/저장(v4 마이그레이션) · R1 연대기 시뮬(Tier 2) · R2 정착지↔마을 매핑 + 관계 backfill · R3 `System_NpcRelationship` drift/구 골격 제거/Live 연대기(Ruin·Promotion)/호감도 clamp · **R4 NpcInspect 관계 탭**
+> - **⚠ 2026-07-01 변경**: R3의 `System_NpcRelationship` **패시브 근접 drift는 제거**됨(`.cs` 파일 + SystemManager 등록 삭제 완료). NPC↔NPC 호감도는 이제 **활동(원정) 결과 기반**으로 변동 → [NPC_ACTIVITY_DESIGN §8.3](../npc/NPC_ACTIVITY_DESIGN.md) · [NPC_RELATION_HISTORY §5.2](../npc/NPC_RELATION_HISTORY_DESIGN.md). (R3의 나머지 — Live 연대기·호감도 clamp·구 골격 제거 — 는 유효)
 > - **다음에 할 잔여 작업**:
 >   - **R4 회고 대사** (Sentiment + `OriginEventId` → 연대기 1줄 회고, NpcInspect에 Sentiment 표시) — *미착수*
 >   - R3 보류분: 출생/분가 관계 훅(해당 시스템 미존재 — Phase E), resident 영구-사망 관계 정리(개별 영구제거 경로 부재), `EntityIdHelper` 구 관계 인프라 제거(dead no-op라 보류)
@@ -37,7 +38,7 @@
 | `DeterministicCoord` / `RegionCoord` | Assets/Scripts/Map/Region/ | 동작 중. `RegionCoord.CHUNKS_PER_REGION=4`, `ToRegionId` 등 |
 | `VillageData.HasBeenPopulated` / `DepletedAt` | [VillageData.cs:20-21](../../Assets/Scripts/Village/VillageData.cs#L20) | 존재. backfill 트리거(§R2.1)/Live Ruin(§R3.3) 훅 자리로 사용 |
 | `RelationshipComponent`(Affinity/Trust/Fear/Intimacy 4축) | [RelationshipComponent.cs](../../Assets/Scripts/Common/Component/RelationshipComponent.cs) | 스켈레톤. **폐기 대상**(§R3) |
-| `System_Relationship` | [System_Relationship.cs](../../Assets/Scripts/Common/System/System_Relationship.cs) | **Priority 58.5**(설계는 58로 표기), `UpdateInterval` 3.0s, OnFixedUpdate TODO만. **폐기→`System_NpcRelationship`로 대체** |
+| `System_Relationship` | (삭제됨) | 구 스켈레톤. R3에서 `System_NpcRelationship`로 대체됐다가, **그 대체 시스템도 2026-07-01 제거**(패시브 drift 폐기 → 활동 기반). 헤더 배너 참조 |
 | `EntityIdHelper` 관계 인프라 | [EntityIdHelper.cs](../../Assets/Scripts/Common/EntityIdHelper.cs) | `_relationshipTargets`/`_relationshipSources` + Relationship 카테고리 offset 10,000,000 존재. **단, `CreateRelationshipEntity()` 메서드는 없음**(설계가 폐기 대상으로 적었으나 애초에 없음) |
 | Tables 로딩 | [Tables.cs](../../Assets/Scripts/Common/Tables.cs), [DataManager_Table.cs](../../Assets/Scripts/Data/DataManager_Table.cs) | POCO(`[JsonProperty]`) → `ImmutableDictionary<int,T>`, `.bytes`를 `LoadTableAsync`로 병렬 로드. **`RaceRelationTable` 추가는 이 패턴 그대로** |
 | `WorldData` | [WorldData.cs](../../Assets/Scripts/Data/WorldData.cs) | `Version`(ushort) 필드 존재하나 **마이그레이션 로직 없음**(`LoadCompleted()` no-op). Newtonsoft JSON 전체 직렬화 |
@@ -61,7 +62,7 @@
 | **R0-B** | 히스토리/관계 데이터 모델 + 저장 + 마이그레이션 | `ChronicleEvent/SaveData`, `NpcRelationEntry`, `NpcSentiment`, WorldData 직렬화 | R0-A | 1.5~2일 | ✅ |
 | **R1** | 정착지 연대기 시뮬 (New Game 1회) + **정복-병합/과확장(Tier 2)** + 정착지↔마을 매핑 | `SettlementChronicleSimulator`, `RaceRelationTable`, 디버그 덤프 | R0-B | 4~5일 | ✅ (RaceRelationTable은 코드 상수) |
 | **R2** | NPC 관계 backfill (마을 첫 population) | 가구/가족/성격/파벌 생성기, 호감도 시드, `HasBeenPopulated` 훅 | R0-B (R1 선택) | 3~4일 | ✅ (다종족 파벌은 sentiment로 단순화) |
-| **R3** | 런타임 연속 + 구 골격 제거 | `System_NpcRelationship`(Priority 58), 출생/사망 훅, `RelationshipComponent`/`System_Relationship` 삭제 | R2 | 2일 | ✅ (출생/분가·resident 사망 훅 보류 — 헤더 참고) |
+| **R3** | 런타임 연속 + 구 골격 제거 | ~~`System_NpcRelationship`(Priority 58)~~(2026-07-01 제거 — 활동 기반 전환), 출생/사망 훅, `RelationshipComponent`/`System_Relationship` 삭제 | R2 | 2일 | ✅ (drift 제거·출생/분가·resident 사망 훅 보류 — 헤더 참고) |
 | **R4** | 표현 | NpcInspect 관계 탭, Sentiment 회고 대사 1종 | R2 (R1 있으면 회고 가능) | 2~3일 | 🟡 **관계 탭 완료 / 회고 대사·Sentiment 표시 = 다음** |
 
 **의존 그래프**
@@ -240,6 +241,8 @@ R0-A ──▶ R0-B ──▶ R1 ──┐
 ### 6.1 목표
 
 설계 §6. 출생/사망 시 관계 갱신 + 호감도 자연 변동 + 구 `RelationshipComponent`/`System_Relationship` 제거.
+
+> **⚠ 2026-07-01 후속 변경**: 아래 §6.2/§6.3/§6.4의 **`System_NpcRelationship` 패시브 근접 drift는 제거됐다**(파일·등록 삭제 완료). NPC↔NPC 호감도는 활동(원정) 결과 기반으로 전환 → [NPC_ACTIVITY_DESIGN §8.3](../npc/NPC_ACTIVITY_DESIGN.md). 이 섹션의 drift 관련 산출물/체크리스트/검증 기준은 **무효**이며, 나머지(출생/사망 훅·Live 연대기·구 골격 제거)는 유효하다.
 
 ### 6.2 산출물 (파일별)
 

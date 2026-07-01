@@ -100,6 +100,7 @@
 |------|------|
 | **[companionSystem.md](npc/companionSystem.md)** | 설계 완료, 미구현 |
 | **[interactionSystem.md](npc/interactionSystem.md)** | 설계 완료, 미구현 — 30행동·관계 4축 + **관계·선물 몰입 루프**(§4: 대화·선호·유추 선물·보답) |
+| **[NPC_ACTIVITY_DESIGN.md](npc/NPC_ACTIVITY_DESIGN.md)** ⭐ | 설계 초안 — NPC 자율 행동/원정 (상주 서비스 vs 몬스터 처치·던전 탐험 파티, 부상·죽음, 월드이벤트 트리거). Phase E 자율 의사결정 정본 |
 | **[dungeonSystem.md](_archive/dungeonSystem.md)** | 설계 완료, ⏸ 오픈월드 운영으로 보류 |
 
 ### 🛠️ 기술 / 시스템
@@ -168,9 +169,8 @@
 ## 🚧 진행 중
 
 ### NPC 관계 시스템 (25%)
-- ✅ RelationshipComponent (4가지 관계)
-- ✅ System_Relationship 기본 구조
-- ⬜ 관계 변동 로직 / N:N / 이벤트
+- ✅ NpcManager 호감도/관계 데이터 + 초기 backfill (구 RelationshipComponent/System_Relationship 폐기)
+- ⬜ 런타임 호감도 변동 = **활동 기반**(설계 [NPC_ACTIVITY §8.3](npc/NPC_ACTIVITY_DESIGN.md), 패시브 drift 폐기) / N:N / 이벤트
 
 ### NPC 일과 / 자율 의사결정 (35%)
 - ✅ NpcStatComponent (8가지 성격), NpcJobComponent

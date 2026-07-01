@@ -113,7 +113,7 @@ class SettlementLiveState {
 |------|------|------|--------|------|
 | **L1. 정착지 연대기 시뮬** | New Game 1회 **+ 런타임 지속(LOD, §0)** | 정착지(수십~수백 개) 단위, 1년 틱 coarse 시뮬 | Chronicle(연대기) + 정치 스냅샷 (왕국/합병/폐허) | **본 문서 §3** |
 | **L2. NPC 관계 backfill** | 마을 첫 population 시 (lazy, 실체화) | 연대기를 제약조건으로 가족/친구/파벌/원한 생성 | `NpcRelationEntry` + 초기 호감도 시드 | [관계 §4](../npc/NPC_RELATION_HISTORY_DESIGN.md) |
-| **L3. 런타임 연속** | 게임 중 상시 | 기존 Phase C 시스템이 관계/연대기를 이어서 생성/변동 | 호감도 drift, Live 연대기 append | 본 문서 §5(연대기) + [관계 §5](../npc/NPC_RELATION_HISTORY_DESIGN.md)(관계) |
+| **L3. 런타임 연속** | 게임 중 상시 | 기존 Phase C 시스템이 관계/연대기를 이어서 생성/변동 | 호감도 변동(활동 기반), Live 연대기 append | 본 문서 §5(연대기) + [관계 §5](../npc/NPC_RELATION_HISTORY_DESIGN.md)(관계) |
 
 핵심 원칙:
 1. **시뮬은 정착지 granularity에서 멈춘다** — NPC 개인은 시뮬 대상이 아니다. ("오프라인 시뮬 안 함"은 NPC 개인 관계 granularity에 한함 — 정착지 추상 시뮬(§0)과는 별개 층)
@@ -290,7 +290,7 @@ public class KingdomData
   - **도전 이벤트 결과** (각성/역병/침공의 발생·해결) → [WORLD_EVENT_DESIGN.md](WORLD_EVENT_DESIGN.md). 신규 사건 타입(`Awakening`/`Blight`/`Siege` 등)은 §3.3 카탈로그에 합류(append-only)
 - **멀리(추상) 정착지의 정치 사건(합병/왕국/전쟁) 지속은 v1 범위 밖** = §0.4의 **(나)**. v1 런타임 멀리-시뮬은 **(가) 인구 동역학만** — 합병/왕국은 New Game 생성 시점까지만 일어남. 저장 구조(SettlementLiveState/Affinity)는 (나)를 수용하되 **동작은 추후** (백그라운드 정치 틱 추가 시 활성화).
 
-> NPC 개인 관계의 런타임 변동(호감도 drift, 출생/사망 관계 갱신)은 → [NPC_RELATION_HISTORY_DESIGN.md §5](../npc/NPC_RELATION_HISTORY_DESIGN.md).
+> NPC 개인 관계의 런타임 변동(호감도 변동 — 활동 기반, 출생/사망 관계 갱신)은 → [NPC_RELATION_HISTORY_DESIGN.md §5](../npc/NPC_RELATION_HISTORY_DESIGN.md).
 
 ---
 

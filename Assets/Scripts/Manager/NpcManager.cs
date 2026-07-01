@@ -337,16 +337,47 @@ namespace ARPG.Npc
             }
         }
 
+        // ── 인구 비례 NPC 스폰 (정착지 인구 → 물리 NPC 수 매핑) ──
+        // 코드 상수로 시작. 만족 후 필요하면 VillageTable/VillageStageTable 컬럼으로 승격.
+        private const int NPC_POP_DIVISOR = 50;  // 인구 K명당 물리 NPC 1명 (cap은 pop≈1250에서 도달)
+        private const int NPC_POP_CAP = 25;      // 마을 동시 물리 NPC 상한
+
+        /// <summary>
+        /// 마을에 스폰할 목표 NPC 수를 정착지 인구에 비례해 계산한다.
+        /// count = clamp(round(pop / NPC_POP_DIVISOR), floor, NPC_POP_CAP).
+        /// floor = min(roster, cap) — 디자이너 지정 로스터를 바닥 보장하되 roster가 cap 초과 시 Clamp 안전.
+        /// 연대기 링크 없음(pop &lt;= 0, 예: 손으로 만든 BaseTown)이면 기존 roster 개수 유지.
+        /// </summary>
+        private int ComputeTargetNpcCount(VillageData village, VillageTable table)
+        {
+            int roster = table.DefaultNpcIds.Count;
+            if (roster == 0)
+                return 0;
+
+            int pop = AR.s.History.GetSettlementPopulation(village.SettlementId);
+            if (pop <= 0)
+                return roster;
+
+            int scaled = Mathf.RoundToInt(pop / (float)NPC_POP_DIVISOR);
+            int floor = Mathf.Min(roster, NPC_POP_CAP);
+            return Mathf.Clamp(scaled, floor, NPC_POP_CAP);
+        }
+
         private void SpawnDefaultNpcsForVillage(VillageData village, VillageTable table)
         {
-            for (int i = 0; i < table.DefaultNpcIds.Count; i++)
+            int roster = table.DefaultNpcIds.Count;
+            if (roster == 0)
+                return;
+
+            int target = ComputeTargetNpcCount(village, table);
+            for (int i = 0; i < target; i++)
             {
-                int npcTableId = table.DefaultNpcIds[i];
+                int npcTableId = table.DefaultNpcIds[i % roster];  // 0..roster-1은 지정 로스터, 초과분은 아키타입 순환
                 Vector2 spawnPos = GetRandomSpawnPositionInVillage(village, table.SpawnRadius);
                 SpawnNewNpc(npcTableId, spawnPos, village.VillageId);
             }
 
-            Debug.Log($"[NpcManager] Spawned {table.DefaultNpcIds.Count} default NPCs for village {village.VillageId}");
+            Debug.Log($"[NpcManager] Spawned {target} NPCs for village {village.VillageId} (roster={roster}, pop-scaled)");
         }
 
         private Vector2 GetRandomSpawnPositionInVillage(VillageData village, float radius)

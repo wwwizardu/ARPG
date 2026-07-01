@@ -91,6 +91,28 @@ namespace ARPG.History
         }
 
         /// <summary>
+        /// settlementId의 최종 시뮬 인구(SettlementSnapshot.Population)를 반환한다.
+        /// 링크 없음(settlementId &lt; 0)/연대기 미생성/스냅샷 없음이면 0. 마을 수가 적어 선형 스캔으로 충분.
+        /// 용도: 마을 첫 population 시 NPC 스폰 수를 인구에 비례시키기 위한 조회.
+        /// </summary>
+        public int GetSettlementPopulation(int settlementId)
+        {
+            if (settlementId < 0)
+                return 0;
+
+            ChronicleSaveData c = AR.s.Data.Chronicle;
+            if (c == null || c.Settlements == null)
+                return 0;
+
+            for (int i = 0; i < c.Settlements.Count; i++)
+            {
+                if (c.Settlements[i].SettlementId == settlementId)
+                    return c.Settlements[i].Population;
+            }
+            return 0;
+        }
+
+        /// <summary>
         /// 청크 활성화 시 호출. Phase 4 이후 AmbientTag → VFX 트리거, Lore 아이템 spawn 등을 처리.
         /// </summary>
         public void OnChunkActivated(Vector2Int chunkCoord)

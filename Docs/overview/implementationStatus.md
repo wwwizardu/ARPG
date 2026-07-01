@@ -203,14 +203,14 @@ UI/UX:       ██████████████░░░░░░░░�
 - **다음 작업**: NPC 직업별 행동 구현
 
 #### 16. 관계 시스템 🚧
-- [X] RelationshipComponent (4가지 관계)
-- [X] System_Relationship (기본 구조)
-- [ ] 관계 변동 로직
-- [ ] NPC 간 관계 (N:N)
-- [ ] 관계 기반 이벤트
+- [X] NpcManager 호감도(`_npcAffinity`)/관계(`_npcRelations`) 데이터 + 저장
+- [X] 초기 관계 backfill (가족/친구/라이벌/원한)
+- [X] 구 `RelationshipComponent`/`System_Relationship` 폐기, 패시브 drift `System_NpcRelationship`도 제거 (2026-07-01)
+- [ ] 런타임 호감도 변동 = **활동 기반** (설계 [NPC_ACTIVITY_DESIGN §8.3](../npc/NPC_ACTIVITY_DESIGN.md))
+- [ ] NPC 간 관계 (N:N) / 관계 기반 이벤트
 - **현재 진행도**: 25%
-- **다음 작업**: 관계 변동 로직 구현
-- **파일**: `System_Relationship.cs` (TODO 상태)
+- **다음 작업**: 활동 기반 호감도 변동 (Phase E — NPC_ACTIVITY)
+- **파일**: `NpcManager.cs` (관계/호감도 데이터·API). 구 `System_Relationship.cs`/`System_NpcRelationship.cs`는 제거됨
 
 #### 17. 마을 시스템 🚧
 - [X] VillageData

@@ -23,7 +23,7 @@
 |------|------|------|--------|------|
 | L1. 정착지 연대기 시뮬 | New Game + 런타임 지속 | 정착지 단위 coarse 시뮬 | Chronicle + 정치 스냅샷 | [PROCEDURAL §3](../world_history/PROCEDURAL_HISTORY_DESIGN.md) |
 | **L2. NPC 관계 backfill** (§4) | 마을 첫 population 시 (lazy) | 연대기를 제약조건으로 가족/친구/파벌/원한 생성 | `NpcRelationEntry` + 초기 호감도 시드 | **본 문서** |
-| **L3. 런타임 연속** (§5) | 게임 중 상시 | 기존 Phase C 시스템이 관계를 이어서 생성/변동 | 호감도 drift, 출생/사망 관계 갱신 | **본 문서** |
+| **L3. 런타임 연속** (§5) | 게임 중 상시 | 기존 Phase C 시스템이 관계를 이어서 생성/변동 | 호감도 변동(활동 기반 §5.2), 출생/사망 관계 갱신 | **본 문서** |
 
 핵심 원칙:
 1. **NPC 개인은 시뮬 대상이 아니다** — 비활성(청크 unload) NPC 관계는 동결 (오프라인 시뮬 안 함). 단 이는 *개인 관계 granularity*에 한함 — 정착지 추상 시뮬([PROCEDURAL §0](../world_history/PROCEDURAL_HISTORY_DESIGN.md))과는 별개 층.
@@ -153,7 +153,7 @@ public class NpcSentiment
 | 항목 | 결정 | 사유 |
 |------|------|------|
 | `RelationshipComponent` (4축: Affinity/Trust/Fear/Intimacy) | **폐기** | 관계는 청크 unload된 NPC 간에도 존재해야 함 → 정본은 매니저+`WorldData`. 4축 세분화는 소비처(대사/AI)가 생기기 전엔 과잉. 필요해지면 `NpcRelationEntry`에 축 추가가 더 싸다 |
-| `System_Relationship` (Priority 58.5, TODO만 존재) | **폐기 → §5.2의 `System_NpcRelationship`로 대체** | 의도했던 "패시브 관계 변동"을 정본 저장소(NpcManager) 기준으로 다시 구현 |
+| `System_Relationship` (Priority 58.5, TODO만 존재) | **폐기** — 별도 패시브 관계 변동 시스템을 두지 않음 | 의도했던 "패시브 관계 변동"은 접었고, 호감도 런타임 변동은 [NPC_ACTIVITY_DESIGN §8.3](NPC_ACTIVITY_DESIGN.md)의 **활동 기반**이 담당(§5.2) |
 | `EntityIdHelper` 관계 인프라 | 다른 곳에서 안 쓰이면 정리 | 위와 동일 |
 
 > ECS "상태는 컴포넌트에" 원칙의 예외지만, 호감도(`_npcAffinity`)가 이미 같은 예외 전례다 — 관계 데이터는 *오프라인 NPC 간에도 살아있어야 하는* 월드 데이터라 엔티티 수명과 분리가 맞다.
@@ -171,11 +171,15 @@ public class NpcSentiment
 | 이민/Inn 고용 | NpcManager / INN_HIRING | 관계 없이 진입. `Sentiments`에 출신 정착지 1개 부여 가능 (v2) |
 | NPC 영구 사망 | `RemoveAllAffinityInvolving` 호출부 | relation 엔트리도 함께 정리 + **유족에 Grudge/Sentiment 생성 후보** (사인이 명확할 때) |
 
-### 5.2 호감도 자연 변동 — `System_NpcRelationship` (신규)
+### 5.2 호감도 런타임 변동 — 활동 기반 (패시브 drift 폐기)
 
-- `IFixedUpdateSystem`, **Priority 58.5** (구 System_Relationship 자리 — Population 밴드 55-59 내), `UpdateInterval` 수 초.
-- 같은 마을 + 둘 다 활성(스폰된) NPC 페어만 대상: 근접/같은 작업장이면 `ModifyAffinity(+1)`, `NpcStat`(Friendliness/Patience)이 변동 속도 가중. Rival/Grudge 관계는 음수 drift.
-- 활성 NPC만 보므로 비용은 활성 마을 1~2개 × 페어 수십 — 무해. 비활성 NPC 관계는 동결.
+> **2026-07-01 방향 변경**: "같은 마을에 있으면 자동으로 호감도가 오르는" **패시브 근접 drift 시스템(구 `System_NpcRelationship`, Priority 58.5)은 폐기**한다. NPC↔NPC 호감도는 대신 **함께 수행한 활동(원정)의 결과**로 변동한다 — 더 자연스럽고, 행동이 곧 관계 서사가 된다. 정본은 [NPC_ACTIVITY_DESIGN §8.3](NPC_ACTIVITY_DESIGN.md).
+
+- **초기 관계**(가족·형제·라이벌·원한)는 §4 backfill이 깔아준다 → **유지**.
+- **런타임 변동원 = 함께한 활동**: 파티로 원정을 무사히 마치면 멤버 간 호감도↑, 부상/전사면 상실·원한 → [NPC_ACTIVITY_DESIGN §8.3](NPC_ACTIVITY_DESIGN.md). 별도 패시브 시스템·per-frame 페어 순회 없음.
+- **이벤트 기반 변동**(사망 시 유족 `GrudgeAgainst`/`Sentiment`)은 §5.1 생명주기 훅 유지.
+
+> ~~구 설계: `IFixedUpdateSystem` Priority 58.5, 같은 마을 활성 페어 근접 시 `ModifyAffinity(+1)`, Friendliness/Patience 가중, Rival/Grudge 음수 drift~~ — 폐기.
 
 > 정착지 단위 Live 연대기 append(마을 전멸→`Ruin`, 승격→`Promotion`, 플레이어 개입)는 → [PROCEDURAL §5](../world_history/PROCEDURAL_HISTORY_DESIGN.md).
 
