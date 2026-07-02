@@ -305,6 +305,8 @@ ChronicleEvent(Type=Conquer, Year=412, Subject=S17, Object=S23, Kingdom=K3)
 
 ## 7. 검증 MVP (수직 슬라이스)
 
+> **실행 계획 → [NARRATIVE_ENGINE_SPIKE.md](NARRATIVE_ENGINE_SPIKE.md)**: 아래 슬라이스를 결정 확정본(범위=대화+소망 / 위협=시드 / 타이밍=하이브리드, 2026-07-02)으로 구체화한 스파이크 문서. 실제 착수는 그쪽 작업 순서를 따른다.
+
 핵심 재미를 *최소 비용*으로 증명하는 첫 슬라이스:
 
 1. **대상 1종**: NPC 상호작용 시 → 그 NPC의 관계·Sentiment·연대기 1~2건을 컨텍스트로 **단계별 대화 1~2개 + 선호 근거** 생성 (소망·보답은 다음 단계)

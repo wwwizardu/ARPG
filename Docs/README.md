@@ -92,6 +92,7 @@
 | **[NPC_RELATION_HISTORY_DESIGN.md](npc/NPC_RELATION_HISTORY_DESIGN.md)** | NPC 개인 관계 (가족/원한/호감도) |
 | **[WORLD_HISTORY_PLAN.md](world_history/WORLD_HISTORY_PLAN.md)** | 위 두 문서 구현 계획 (R0~R4) |
 | **[NARRATIVE_ENGINE_DESIGN.md](world_history/NARRATIVE_ENGINE_DESIGN.md)** ⭐ | 역사·관계 → LLM 대화·선호·소망 *생성* (핵심 재미 검증 1순위) |
+| **[NARRATIVE_ENGINE_SPIKE.md](world_history/NARRATIVE_ENGINE_SPIKE.md)** | 위 엔진 **검증 스파이크** — Groq/Llama로 대화+소망 실현 가능성 확인 (결정 확정 2026-07-02, 구현 대기) |
 | **[QUEST_SYSTEM_DESIGN.md](npc/QUEST_SYSTEM_DESIGN.md)** ⭐ | 퀘스트 시스템 — NPC **소망(Wish)** 추적·완료·보상·기록 (소망 데이터 모델 정본). 관계·선물 루프는 interactionSystem §4 |
 | [archive/PROCEDURAL_HISTORY_BACKBONE.md](_archive/PROCEDURAL_HISTORY_BACKBONE.md) | 깊은 과거 백본 (템플릿 4시대) — ⛔ 미고려/아카이브 |
 

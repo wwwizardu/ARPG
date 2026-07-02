@@ -4,6 +4,7 @@ using ARPG.Component;
 using ARPG.Data;
 using ARPG.Npc;
 using ARPG.Tables;
+using ARPG.Utility;
 using Unity.AppUI.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -68,6 +69,8 @@ namespace ARPG.UI
             _relationList = root.Q<VisualElement>("relation-list");
 
             if (_closeBtn != null) _closeBtn.clicked += () => Close();
+
+            BuildInteractionBar(root);
         }
 
         public void Bind(int entityId)
@@ -341,6 +344,68 @@ namespace ARPG.UI
             row.Add(lab);
             row.Add(val);
             _statList.Add(row);
+        }
+
+        // ── 상호작용 (허브 버튼) ──────────────────────────────────────────
+        // UINpcInspect가 상호작용 허브 역할. 버튼을 눌러 각 상호작용 함수를 호출하거나
+        // 전용 UI(거래·선물)를 연다. 실제 관계 반영/서브 UI는 다음 단계(TODO).
+
+        private void BuildInteractionBar(VisualElement root)
+        {
+            VisualElement bar = new();
+            bar.style.flexDirection = FlexDirection.Row;
+            bar.style.justifyContent = Justify.Center;
+            bar.style.marginTop = 8f;
+            bar.style.marginBottom = 8f;
+
+            Button talkBtn = new() { title = "대화" };
+            talkBtn.variant = ButtonVariant.Accent;
+            talkBtn.clicked += OnClickTalk;
+            bar.Add(talkBtn);
+
+            Button tradeBtn = new() { title = "거래" };
+            tradeBtn.clicked += OnClickTrade;
+            bar.Add(tradeBtn);
+
+            Button giftBtn = new() { title = "선물" };
+            giftBtn.clicked += OnClickGift;
+            bar.Add(giftBtn);
+
+            root.Add(bar);
+        }
+
+        private void OnClickTalk()
+        {
+            if (_entityId < 0) return;
+            InteractionResult result = InteractionHelper.Resolve(_entityId, InteractionType.Talk);
+            Debug.Log($"[UINpcInspect] 대화 → 성공={result.Success}, ΔAff={result.AffinityDelta}, ΔInt={result.IntimacyDelta} (관계 반영 TODO)");
+            // TODO: 관계 데이터 계층 반영 후 호감도/신뢰도 표시 갱신.
+        }
+
+        private void OnClickTrade()
+        {
+            if (_entityId < 0) return;
+            InteractionResult result = InteractionHelper.Resolve(_entityId, InteractionType.Trade);
+            if (result.Kind == ResultKind.OpenTrade)
+            {
+                // TODO: UINpcTrade 오픈 (NPC 인벤토리 기반 매매) — AR.s.UI.Show<UINpcTrade>(...).Bind(_entityId).
+                Debug.Log($"[UINpcInspect] 거래 → 거래 UI 오픈 예정 (npc={_entityId})");
+            }
+        }
+
+        private void OnClickGift()
+        {
+            if (_entityId < 0) return;
+            // TODO: 선물 아이템 선택 UI 오픈 → 선택 확정 시 OnGiftItemSelected(item) 호출.
+            Debug.Log($"[UINpcInspect] 선물 → 아이템 선택 UI 오픈 예정 (npc={_entityId})");
+        }
+
+        /// <summary>선물 아이템 선택 UI가 아이템을 확정하면 호출 (ResolveGift 호출부만 배선).</summary>
+        private void OnGiftItemSelected(ItemData item)
+        {
+            if (_entityId < 0) return;
+            GiftResult result = InteractionHelper.ResolveGift(_entityId, item);
+            Debug.Log($"[UINpcInspect] 선물 처리 → 반응={result.Tier}, ΔAff={result.AffinityDelta}, ΔInt={result.IntimacyDelta} (관계 반영 TODO)");
         }
 
         /// <summary>
