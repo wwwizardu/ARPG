@@ -163,6 +163,44 @@ public struct BadComponent
 4. **Choose correct update phase**: Update/FixedUpdate/LateUpdate
 5. **Use UpdateInterval**: For non-per-frame systems
 
+## Logic Placement Rules
+
+Before creating a new `static` helper class, ask **in order**:
+
+1. **Does it hold mutable state / have a lifecycle?** (needs reset, per-owner cleanup, or save/load)
+   → **No static.** Put the state in a Component / manager instance / save data.
+   A static class may still own the *pure logic* and receive that state as a parameter.
+2. **Is it gameplay logic that runs every tick?** → `System_*` (register in `SystemManager`).
+3. **Is it behavior tightly bound to one data type?** → a method/extension on that type.
+4. **Is it stateless pure logic used in more than one place?** → *now* a `static` class is fine —
+   keep it cohesive (single responsibility).
+
+**Guardrails (prevent helper-class sprawl):**
+
+- **Search for an existing home before creating a new class** — avoid duplicate / fragmented helpers.
+- Constant / read-only config as `static` fields is fine; **mutable `static` runtime state is not**
+  (it can't be reset, cleaned up, or saved — see the `_recent`-style anti-pattern).
+- Avoid grab-bag names: `*Util`, `*Helper`, `*Common`, generic `*Manager`. The name must state a responsibility.
+
+✅ **Good - cohesive, stateless, named for its job:**
+```csharp
+// Pure functions in, results out. State is passed in, not owned.
+public static class DialogueTopicSelector
+{
+    public static DialogueTopic Select(int npcId, List<DialogueTopic> topics,
+                                       AffinityTier tier, HashSet<DialogueTopicType> recent) { }
+}
+```
+
+❌ **Bad - mutable state hidden in a static:**
+```csharp
+public static class DialogueTopicSelector
+{
+    // Process-global, single-instance, no owner, never reset → belongs in a Component/manager/save.
+    private static readonly Dictionary<int, HashSet<DialogueTopicType>> _recent = new();
+}
+```
+
 ## Adding a New System
 
 1. Create system class implementing `ISystem` interface

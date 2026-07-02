@@ -2,7 +2,7 @@
 
 > **목적**: [NARRATIVE_ENGINE_DESIGN.md §7](NARRATIVE_ENGINE_DESIGN.md)의 "검증 MVP 수직 슬라이스"를 **결정 확정본**으로 구체화한 실행 계획. "**Groq/Llama로 이 몰입 루프(문맥 대화 → 호감도 상승 → NPC의 요청/소망)가 실제로 되는가**"를 최소 비용으로 증명하는 것이 유일한 목표다. 완성 코드가 아니라 **검증용 얇은 경로**를 만든다.
 >
-> **상태 (2026-07-02)**: 🟦 스파이크 계획 (구현 대기). 결정 3건 확정(§1).
+> **상태 (2026-07-02)**: 🟨 스파이크 **1차 구현 완료** (Unity 컴파일/실측 전). 대화·소망 생성 경로 + UINpcInspect 호출부 배선. 코드: `Assets/Scripts/Npc/Narrative/`(`NpcNarrativeTypes`/`NpcDialogueContextBuilder`/`NpcNarrativeService`) + `UINpcInspect` 대화 버튼. 대화 경로는 **토픽 카탈로그(§4.5 셔플백 + 니즈·소문·잡담)** 코드 반영. 미구현: `LLMClient` JSON 모드 옵션(프롬프트 강제 JSON으로 대체), 통과 기준(§5) 실측, 관계 실반영, 니즈 충족/보상·사연 토픽.
 >
 > **경계**: 본 문서는 *검증 스파이크*의 범위·설계·통과 기준까지. 대화·소망의 *정본 데이터 모델·동작*은 [QUEST_SYSTEM_DESIGN.md](../npc/QUEST_SYSTEM_DESIGN.md), *생성 엔진의 완성형*은 [NARRATIVE_ENGINE_DESIGN.md](NARRATIVE_ENGINE_DESIGN.md), *런타임 소비처(대화·선물·보답)*는 [interactionSystem.md §4](../npc/interactionSystem.md)가 담당한다. 스파이크는 이들의 **부분집합을 최소 구현**해 가설만 검증한다.
 >
@@ -91,6 +91,45 @@
 - **캐시**: 스파이크는 **런타임 dict**로 시작(첫 클릭 생성 → 재클릭 즉시). 세이브 영속(`WorldData`)은 통과 후 사소한 후속.
 - **티어**: Stranger/Acquaintance/Friend/Confidant ([interactionSystem §4.2](../npc/interactionSystem.md)). 관계 계층(`ModifyPlayerRelation`)이 아직 없으므로 **스파이크는 디버그로 티어 강제 전환**해 각 티어 대화를 관찰(R3). 소망은 Friend↑ 게이트.
 
+### 4.5 대화 토픽 카탈로그 — 셔플백 순환 (2026-07-02 재확정)
+
+추상 요청("알아서 말해봐")은 접지가 불안정하고, "가장 급한 니즈 1개만"은 매번 같은 말을 반복하게 한다. 그래서 **NPC의 레퍼토리(니즈·소문·잡담)를 대화할 때마다 돌려가며** 꺼낸다 — "이 사람과 얘기하니 매번 새롭다"는 몰입. NARRATIVE_ENGINE의 C-method + 템플릿 폴백을 대화 토픽에 적용해, **LLM 없어도 BaseLine이 나가고 있으면 그 토픽을 풍부하게 서술.**
+
+**재확정 결정** (앞선 "최고 가중치 1개"는 폐기):
+- **화제 캡 = NPC별 1~3(보통 2, npcId 시드로 안정)**: 각 NPC는 자기 소수 화제 안에서만 순환(만물박사 방지, 캐릭터성). 활성 긴급 니즈는 자동 포함, 나머지는 우선순위(Need>Rumor>Flavor)+NPC별 안정 tiebreak로 채움.
+- **선택 = 셔플백 + 긴급 새치기**: 레퍼토리 안에서 "최근 말한 토픽"을 추적해 아직 안 한 것을 순환, 다 돌면 리셋. 단 **긴급(기아·위협)** 은 우선 등장.
+- **v1 갈래 = 니즈 · 소문 · 잡담** (사연 Personal은 관계 계층 연결 후).
+- **니즈는 "표현만"** — 충족/보상 루프(ResolveGift 판정 등)는 별개 트랙.
+
+| 갈래 | 토픽 | 적용 규칙 | 티어 | 데이터 |
+|------|------|----------|------|--------|
+| 니즈 | `ClearThreat` ⚡ | 근처 위협>0 | Stranger | ThreatSeed/ThreatLevel |
+| 니즈 | `Food` ⚡ | 기아(`HungerHoursAccumulated>0`) | Stranger | VillageData |
+| 니즈 | `ResourceShortage` | 자원<상한25%(식량 제외) | Acq. | Resources/Caps |
+| 니즈 | `CraftMaterial` | 생산직(대장장이/광부/농부…) | Stranger | JobType |
+| 니즈 | `Medicine` | `Condition≠Normal` | Stranger | NpcSaveData |
+| 소문 | `HistoryRumor` | 주요 연대기 사건(War/Conquer/Ruin…) | Stranger | Chronicle.Events |
+| 소문 | `SettlementRumor`/`DangerRumor` | 몰락 정착지 | Stranger | Chronicle.Settlements |
+| 소문 | `Gossip` | 자기 Rival/Friend | Acq. | GetRelations |
+| 잡담 | `SmallTalk` | 항상 | Stranger | — |
+| 잡담 | `JobMood` | 직업(+성격) | Stranger | JobType |
+| 중립 | `Greeting` | 폴백 | Stranger | 이름 |
+
+```csharp
+enum DialogueTopicCategory { Neutral, Need, Rumor, Flavor }
+class DialogueTopic {
+    DialogueTopicType Type; DialogueTopicCategory Category;
+    AffinityTier MinTier;   // 티어 게이트
+    bool Urgent;            // 긴급(기아·위협) 새치기
+    List<string> Facts;     // LLM에 줄 근거(진짜 사실만)
+    string BaseLine;        // LLM 없을 때 대사
+}
+```
+
+**흐름**: `DialogueTopicSelector.Collect`(니즈·소문·잡담 산출) → `Select(npcId,…)`(셔플백+긴급 새치기) → 토픽-한정 프롬프트(주제 + `Facts` + `BaseLine` 참고) → LLM 풍부화, 없으면 `BaseLine`. **소문은 진짜 사실(연대기/관계) 1건을 건네 소문 말투만** 입힌다(환각 방지). 에스컬레이션은 티어 게이트(사연은 추후 Friend+).
+
+> **구현 상태**: 🟨 **코드 반영 완료**(`DialogueTopicSelector` 셔플백 + 3갈래, `NpcNarrativeService` 토픽-한정, Unity 컴파일 전). 니즈 충족/보상·사연 토픽·시간대(SmallTalk 시간 접지)는 후속.
+
 ---
 
 ## 5. 통과 기준
@@ -115,6 +154,7 @@
 | 디버그 훅 | [LLMManager.cs:53](../../Assets/Scripts/Manager/LLMManager.cs#L53) 재활용 | 키로 NPC·티어 순회 생성 |
 | 표시 | [UINpcInspect.cs](../../Assets/Scripts/UI/UINpcInspect.cs) 대화 패널(소폭) | 생성 대화 표시 |
 | 시드 위협 | 작은 struct/파라미터 | D2 격리 |
+| 대화 토픽 | `DialogueTopicType`/`DialogueTopic`/`DialogueTopicSelector`(신규) | 셔플백 순환 + 니즈·소문·잡담 3갈래, 대화 경로 토픽-한정화 (§4.5, ✅ 코드 반영) |
 
 > 백본(연대기/관계/Sentiment)·`LLMManager`(Groq/Llama)·`UINpcInspect`는 이미 존재하므로, 스파이크는 **"데이터 → 프롬프트 → 대화/소망"을 잇는 얇은 경로 + 검증·폴백**만 새로 만든다.
 
@@ -139,5 +179,5 @@
 ---
 
 **Last Updated**: 2026-07-02
-**Status**: 🟦 스파이크 계획 (구현 대기, 결정 3건 확정)
+**Status**: 🟨 스파이크 1차 구현 완료 (Unity 컴파일/실측 전, 결정 3건 확정)
 **Dependencies**: 백본(연대기/관계/Sentiment) ✅ 구현 · `LLMManager`(Groq/Llama) ✅ · `UINpcInspect` ✅

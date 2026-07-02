@@ -5,10 +5,13 @@ using ARPG.Data;
 using ARPG.Npc;
 using ARPG.Tables;
 using ARPG.Utility;
+using ARPG.Npc.Narrative;
+using Cysharp.Threading.Tasks;
 using Unity.AppUI.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
 using Text = Unity.AppUI.UI.Text;
+using Button = Unity.AppUI.UI.Button;
 using GE = GlobalEnum;
 
 namespace ARPG.UI
@@ -34,6 +37,10 @@ namespace ARPG.UI
         private int _entityId = -1;
         private NpcSaveData? _saveData;
         private VisualElement? _lastRoot;
+
+        // 내러티브 검증 스파이크 — 대화 버튼 연결용
+        private AffinityTier _debugTier = AffinityTier.Stranger;
+        private Text? _dialogueLabel;
 
         public override void Initialize(string inName, bool isForm = false)
         {
@@ -372,15 +379,59 @@ namespace ARPG.UI
             bar.Add(giftBtn);
 
             root.Add(bar);
+
+            _dialogueLabel = new Text { text = string.Empty };
+            _dialogueLabel.style.whiteSpace = WhiteSpace.Normal;
+            _dialogueLabel.style.marginLeft = 8f;
+            _dialogueLabel.style.marginRight = 8f;
+            root.Add(_dialogueLabel);
         }
 
         private void OnClickTalk()
         {
             if (_entityId < 0) return;
-            InteractionResult result = InteractionHelper.Resolve(_entityId, InteractionType.Talk);
-            Debug.Log($"[UINpcInspect] 대화 → 성공={result.Success}, ΔAff={result.AffinityDelta}, ΔInt={result.IntimacyDelta} (관계 반영 TODO)");
-            // TODO: 관계 데이터 계층 반영 후 호감도/신뢰도 표시 갱신.
+            OnClickTalkAsync().Forget();
         }
+
+        // 스파이크: 대화 클릭 → 백본 문맥 기반 LLM 대화(+Friend↑ 소망) 생성.
+        // 클릭마다 티어를 한 단계 올려 에스컬레이션(R3)을 관찰한다(관계 데이터 계층 미구현 우회).
+        private async UniTask OnClickTalkAsync()
+        {
+            AffinityTier tier = _debugTier;
+            _debugTier = NextTier(_debugTier);
+
+            ThreatSeed threat = new()
+            {
+                NearbyMonsters = true,
+                Note = "마을 근처에 몬스터가 출몰해 마을 밖으로 나가기가 위험하다.",
+            };
+
+            if (_dialogueLabel != null) _dialogueLabel.text = $"[{tier}] 생성 중…";
+
+            DialogueResult r = await NpcNarrativeService.GetDialogueAsync(_entityId, tier, threat);
+            string line = $"[{tier}/{r.Topic}/{r.Source}] {r.Text}";
+
+            if (tier >= AffinityTier.Friend)
+            {
+                NpcWish? wish = await NpcNarrativeService.GetOrGenerateWishAsync(_entityId, tier, threat);
+                if (wish != null)
+                {
+                    string fb = wish.IsFallback ? " [폴백]" : string.Empty;
+                    line += $"\n(소망 {wish.Kind}→{wish.TargetRef}{fb}) \"{wish.RevealDialogue}\"";
+                }
+            }
+
+            if (_dialogueLabel != null) _dialogueLabel.text = line;
+            Debug.Log($"[Narrative] npc={_entityId} {line}");
+        }
+
+        private static AffinityTier NextTier(AffinityTier t) => t switch
+        {
+            AffinityTier.Stranger => AffinityTier.Acquaintance,
+            AffinityTier.Acquaintance => AffinityTier.Friend,
+            AffinityTier.Friend => AffinityTier.Confidant,
+            _ => AffinityTier.Stranger,
+        };
 
         private void OnClickTrade()
         {
