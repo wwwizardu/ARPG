@@ -55,8 +55,8 @@ namespace ARPG.Systems
                 // 1단계: Base를 Final로 복사 (초기화)
                 stat.CopyBaseToFinal();
 
-                // 2단계: StatModifierHelper에서 모든 보정 가져오기
-                List<StatModifier>? modifiers = StatModifierHelper.GetModifiers(entityId);
+                // 2단계: DataManager(런타임)에서 모든 보정 가져오기
+                List<StatModifier>? modifiers = AR.s.Data.GetModifiers(entityId);
                 if (modifiers == null || modifiers.Count == 0)
                 {
                     // modifier가 없으면 Base = Final 그대로 저장

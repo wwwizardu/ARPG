@@ -70,6 +70,7 @@ namespace ARPG.Data
         public void Reset()
         {
             // 데이터 리셋 로직
+            ResetRuntimeData();   // 런타임(휘발성) 파티션 정리 — DataManager_Runtime
             Debug.Log("DataManager Reset");
         }
 

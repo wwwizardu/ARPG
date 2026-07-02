@@ -197,6 +197,9 @@ namespace ARPG.Utility
             // 메인 엔티티의 모든 ECS 컴포넌트 제거
             AR.s.Component.RemoveAllComponents(entityId);
 
+            // 스탯 수정치(런타임·비ECS)도 함께 정리 — 누수/ID 재활용 오염 방지
+            AR.s.Data.RemoveAllModifiers(entityId);
+
             if (keepRegistered == false)
             {
                 _registeredEntityIds.Remove(entityId);

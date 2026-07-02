@@ -1,6 +1,7 @@
 #nullable enable
 using System.Collections.Generic;
 using UnityEngine;
+using ARPG.Creature;
 using ARPG.History;
 using ARPG.Village;
 
@@ -27,9 +28,6 @@ namespace ARPG.Npc.Narrative
             GlobalEnum.ItemType.Herb,
         };
 
-        // NPC별 최근 말한 토픽 (셔플백: 소진 시 리셋)
-        private static readonly Dictionary<int, HashSet<DialogueTopicType>> _recent = new();
-
         // ── 산출 ──
         public static List<DialogueTopic> Collect(int npcId, NpcDialogueContext ctx, ThreatSeed threat)
         {
@@ -55,7 +53,7 @@ namespace ARPG.Npc.Narrative
         }
 
         // ── 선택: 레퍼토리 캡(NPC별 1~3) + 그 안에서 셔플백(긴급 새치기) ──
-        public static DialogueTopic Select(int npcId, List<DialogueTopic> topics, AffinityTier tier)
+        public static DialogueTopic Select(int npcId, List<DialogueTopic> topics, AffinityTier tier, HashSet<DialogueTopicType> recent)
         {
             // 티어 통과 토픽 수집 (Greeting은 폴백이라 캡에서 분리)
             List<DialogueTopic> applicable = new();
@@ -76,8 +74,6 @@ namespace ARPG.Npc.Narrative
             List<DialogueTopic> repertoire = BuildRepertoire(npcId, applicable);
             if (repertoire.Count == 0)
                 return greeting ?? GreetingFallback();
-
-            HashSet<DialogueTopicType> recent = GetRecent(npcId);
 
             // 1) 긴급 & 최근 안 함 → 2) 최근 안 한 것 → 3) 소진 시 리셋 후 재선택
             DialogueTopic? pick = PickRandom(repertoire, recent, urgentOnly: true);
@@ -361,16 +357,6 @@ namespace ARPG.Npc.Narrative
             if (cands.Count == 0)
                 return null;
             return cands[Random.Range(0, cands.Count)];
-        }
-
-        private static HashSet<DialogueTopicType> GetRecent(int npcId)
-        {
-            if (_recent.TryGetValue(npcId, out HashSet<DialogueTopicType> set) == false)
-            {
-                set = new HashSet<DialogueTopicType>();
-                _recent[npcId] = set;
-            }
-            return set;
         }
 
         private static DialogueTopic GreetingFallback() => new()

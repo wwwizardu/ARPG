@@ -178,8 +178,11 @@ Before creating a new `static` helper class, ask **in order**:
 **Guardrails (prevent helper-class sprawl):**
 
 - **Search for an existing home before creating a new class** — avoid duplicate / fragmented helpers.
-- Constant / read-only config as `static` fields is fine; **mutable `static` runtime state is not**
-  (it can't be reset, cleaned up, or saved — see the `_recent`-style anti-pattern).
+- Constant / read-only config as `static` fields is fine. **Mutable `static` state that persists across
+  operations is not** — per-entity / per-village state, caches, and shuffle bags need an owner with a
+  lifecycle (see the `_recent`-style anti-pattern: can't be reset, cleaned up, or saved).
+  - *Exception:* a scratch buffer `Clear()`ed before every use keeps no state between operations — a legit
+    GC-avoidance pattern (e.g. `Pathfinder` A* sets, `System_VillageJobAssignment._busyEntityIds`).
 - Avoid grab-bag names: `*Util`, `*Helper`, `*Common`, generic `*Manager`. The name must state a responsibility.
 
 ✅ **Good - cohesive, stateless, named for its job:**

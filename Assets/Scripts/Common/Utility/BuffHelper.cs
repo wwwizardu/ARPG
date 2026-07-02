@@ -404,7 +404,7 @@ namespace ARPG.Utility
         /// </summary>
         private static void AddStatModifier(int targetEntityId, int sourceBuffEntityId, GE.Stat statType, StatModifierType modifierType, int value, int priority)
         {
-            StatModifierHelper.AddStatModifier(targetEntityId, StatModifierSource.Buff, sourceBuffEntityId, statType, modifierType, value, priority);
+            AR.s.Data.AddStatModifier(targetEntityId, StatModifierSource.Buff, sourceBuffEntityId, statType, modifierType, value, priority);
         }
 
         /// <summary>
@@ -412,7 +412,7 @@ namespace ARPG.Utility
         /// </summary>
         private static void RemoveBuffModifiers(int targetEntityId, int buffEntityId)
         {
-            int removedCount = StatModifierHelper.RemoveModifiersBySource(targetEntityId, StatModifierSource.Buff, buffEntityId);
+            int removedCount = AR.s.Data.RemoveModifiersBySource(targetEntityId, StatModifierSource.Buff, buffEntityId);
             Debug.Log($"[BuffHelper] StatModifiers removed - Target: {targetEntityId}, BuffEntity: {buffEntityId}, Removed: {removedCount}");
         }
     }

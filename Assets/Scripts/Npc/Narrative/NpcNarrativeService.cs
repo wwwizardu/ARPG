@@ -9,15 +9,13 @@ using ARPG.Manager;
 namespace ARPG.Npc.Narrative
 {
     /// <summary>
-    /// 검증 스파이크: 백본 문맥 → LLM(Groq/Llama) → 대화·소망 생성. static·무상태(캐시만 보유).
-    /// 관계 실반영/세이브는 이번 스코프 밖 — 캐시는 런타임 dict, 티어는 호출측 지정.
+    /// 검증 스파이크: 백본 문맥 → LLM(Groq/Llama) → 대화·소망 생성. static·무상태(순수 로직만).
+    /// 대화·소망 캐시와 화제 셔플백은 NpcManager.Narrative(NpcNarrativeRuntime)가 소유 — 새 게임·씬 로드 시 Reset로 정리.
+    /// 관계 실반영/세이브는 이번 스코프 밖. 티어는 호출측 지정.
     /// 설계: Docs/world_history/NARRATIVE_ENGINE_SPIKE.md
     /// </summary>
     public static class NpcNarrativeService
     {
-        private static readonly Dictionary<(int, AffinityTier, DialogueTopicType), string> _dialogueCache = new();
-        private static readonly Dictionary<int, NpcWish> _wishCache = new();
-
         private const float DialogueTemperature = 0.8f;
         private const float WishTemperature = 0.7f;
 
@@ -30,10 +28,10 @@ namespace ARPG.Npc.Narrative
 
             // 토픽 선택 (상태·백본 → 적용 토픽 추림 → 티어 게이트 + 최고 가중치 1개)
             List<DialogueTopic> topics = DialogueTopicSelector.Collect(npcId, ctx, threat);
-            DialogueTopic topic = DialogueTopicSelector.Select(npcId, topics, tier);
+            DialogueTopic topic = DialogueTopicSelector.Select(npcId, topics, tier, AR.s.Npc.Narrative.GetRecentTopics(npcId));
 
             (int, AffinityTier, DialogueTopicType) key = (npcId, tier, topic.Type);
-            if (_dialogueCache.TryGetValue(key, out string cached))
+            if (AR.s.Npc.Narrative.TryGetDialogue(key, out string cached))
                 return new DialogueResult { Text = cached, Source = NarrativeSource.Cache, Tier = tier, Topic = topic.Type };
 
             string? text = null;
@@ -52,7 +50,7 @@ namespace ARPG.Npc.Narrative
                 return new DialogueResult { Text = topic.BaseLine, Source = NarrativeSource.Fallback, Tier = tier, Topic = topic.Type };
 
             string clean = text!.Trim();
-            _dialogueCache[key] = clean;
+            AR.s.Npc.Narrative.SetDialogue(key, clean);
             return new DialogueResult { Text = clean, Source = NarrativeSource.Llm, Tier = tier, Topic = topic.Type };
         }
 
@@ -61,7 +59,7 @@ namespace ARPG.Npc.Narrative
         {
             if (tier < AffinityTier.Friend)   // Friend↑ 게이트
                 return null;
-            if (_wishCache.TryGetValue(npcId, out NpcWish cached))
+            if (AR.s.Npc.Narrative.TryGetWish(npcId, out NpcWish cached))
                 return cached;
 
             NpcDialogueContext? ctx = NpcDialogueContextBuilder.Build(npcId, threat);
@@ -78,7 +76,7 @@ namespace ARPG.Npc.Narrative
             if (wish == null)
                 wish = FallbackWish(ctx, npcId);   // 규칙 템플릿 폴백
 
-            _wishCache[npcId] = wish;
+            AR.s.Npc.Narrative.SetWish(npcId, wish);
             return wish;
         }
 

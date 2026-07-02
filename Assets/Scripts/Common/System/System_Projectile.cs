@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using ARPG.Component;
 using ARPG.Skill.Combat;
 using ARPG.Utility;
@@ -100,70 +99,36 @@ namespace ARPG.Systems
             if (skillPool.TryGet(proj.SkillEntityId, out var skill) == false)
                 return false;
 
-            if (factionPool.TryGet(proj.OwnerEntityId, out var ownerFaction))
-            {
-                FactionHelper.GetEnemyFactionLists(ownerFaction.FactionId, out var primaryList, out var secondaryList);
-                bool hitAny = false;
-                bool stopEarly = ScanCandidateList(
-                    primaryList, projectileEntityId, ref proj, ref skill, position,
-                    transformPool, statPool, jumpPool, colliderPool, projectileTagPool, ref hitAny);
-                if (stopEarly == false)
-                {
-                    ScanCandidateList(
-                        secondaryList, projectileEntityId, ref proj, ref skill, position,
-                        transformPool, statPool, jumpPool, colliderPool, projectileTagPool, ref hitAny);
-                }
-                return hitAny;
-            }
-
-            // Owner has no faction — fall back to transform-pool scan to preserve migration-safe behavior.
-            bool fallbackHitAny = false;
+            // 역방향 인덱스 없이 transform 풀을 순회하며 진영으로 적만 거른다.
+            // 오너에 faction이 있으면 적대 대상만, 없으면 전부(마이그레이션 안전 동작 보존).
+            bool ownerHasFaction = factionPool.TryGet(proj.OwnerEntityId, out var ownerFaction);
+            bool hitAny = false;
             for (int i = 0; i < transformPool.Count; i++)
             {
                 int targetId = transformPool.GetEntityId(i);
-                if (TryHitCandidate(
-                        targetId, projectileEntityId, ref proj, ref skill, position,
-                        transformPool, statPool, jumpPool, colliderPool, projectileTagPool))
+                if (targetId == proj.OwnerEntityId)
+                    continue;
+
+                if (ownerHasFaction)
                 {
-                    fallbackHitAny = true;
-                    if (proj.IsPiercing == false)
-                        break;
+                    if (factionPool.TryGet(targetId, out var targetFaction) == false)
+                        continue;
+                    if (FactionHelper.IsFactionHostile(ownerFaction.FactionId, targetFaction.FactionId) == false)
+                        continue;
                 }
-            }
-            return fallbackHitAny;
-        }
 
-        // Returns true when the loop should stop early because a non-piercing projectile already hit.
-        private bool ScanCandidateList(
-            List<int> candidates,
-            int projectileEntityId,
-            ref ProjectileComponent proj,
-            ref SkillComponent skill,
-            Vector2 position,
-            SparseSet<TransformComponent> transformPool,
-            SparseSet<StatComponent> statPool,
-            SparseSet<JumpComponent> jumpPool,
-            SparseSet<ColliderComponent> colliderPool,
-            SparseSet<ProjectileTag> projectileTagPool,
-            ref bool hitAny)
-        {
-            if (candidates == null)
-                return false;
-
-            for (int i = 0; i < candidates.Count; i++)
-            {
-                int targetId = candidates[i];
                 if (TryHitCandidate(
                         targetId, projectileEntityId, ref proj, ref skill, position,
                         transformPool, statPool, jumpPool, colliderPool, projectileTagPool))
                 {
                     hitAny = true;
                     if (proj.IsPiercing == false)
-                        return true;
+                        break;
                 }
             }
-            return false;
+            return hitAny;
         }
+
 
         private bool TryHitCandidate(
             int targetId,

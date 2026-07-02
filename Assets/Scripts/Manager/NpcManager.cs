@@ -6,6 +6,7 @@ using ARPG.Component;
 using ARPG.Creature;
 using ARPG.Factory;
 using ARPG.Map;
+using ARPG.Npc.Narrative;
 using ARPG.Scene;
 using ARPG.Tables;
 using ARPG.Utility;
@@ -26,6 +27,9 @@ namespace ARPG.Npc
         public const int AFFINITY_MAX = 100;
         // NPC 간 유형 관계 (가족/친구/원한 등). 양방향 인덱스 — 같은 엔트리가 From/To 두 키에 등록됨
         private Dictionary<int, List<NpcRelationEntry>> _npcRelations = new();
+        // NPC 서사(대화·소망) 세션 런타임 — 휘발성(세이브 대상 아님). static 대신 매니저가 소유해 Reset()에서 정리
+        private readonly NpcNarrativeRuntime _narrative = new();
+        public NpcNarrativeRuntime Narrative => _narrative;
         private Transform? _npcParent;
         private bool _isInitialLoaded = false;
         private int _chunkSize;
@@ -74,6 +78,7 @@ namespace ARPG.Npc
             _innVisitorsByVillageId.Clear();
             _npcAffinity.Clear();
             _npcRelations.Clear();
+            _narrative.Reset();
             _isInitialLoaded = false;
         }
 

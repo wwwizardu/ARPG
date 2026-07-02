@@ -169,7 +169,7 @@ namespace ARPG.Utility
                     // 단일 스탯 추가 (+50 HP, +20 방어력 등)
                     if (mod.Value1 > 0)
                     {
-                        StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
+                        AR.s.Data.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
                             mod.Table.TargetStat, StatModifierType.Add, mod.Value1);
                     }
                     break;
@@ -177,46 +177,46 @@ namespace ARPG.Utility
                 case GE.ModEffectType.AddedPhysDamage:
                     // 물리 데미지 추가 (Value1=Min, Value2=Max)
                     if (mod.Value1 > 0)
-                        StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
+                        AR.s.Data.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
                             GE.Stat.AttackMin, StatModifierType.Add, mod.Value1);
                     if (mod.Value2 > 0)
-                        StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
+                        AR.s.Data.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
                             GE.Stat.AttackMax, StatModifierType.Add, mod.Value2);
                     break;
 
                 case GE.ModEffectType.AddedFireDamage:
                     if (mod.Value1 > 0)
-                        StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
+                        AR.s.Data.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
                             GE.Stat.FireAttackMin, StatModifierType.Add, mod.Value1);
                     if (mod.Value2 > 0)
-                        StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
+                        AR.s.Data.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
                             GE.Stat.FireAttackMax, StatModifierType.Add, mod.Value2);
                     break;
 
                 case GE.ModEffectType.AddedIceDamage:
                     if (mod.Value1 > 0)
-                        StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
+                        AR.s.Data.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
                             GE.Stat.IceAttackMin, StatModifierType.Add, mod.Value1);
                     if (mod.Value2 > 0)
-                        StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
+                        AR.s.Data.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
                             GE.Stat.IceAttackMax, StatModifierType.Add, mod.Value2);
                     break;
 
                 case GE.ModEffectType.AddedLightningDamage:
                     if (mod.Value1 > 0)
-                        StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
+                        AR.s.Data.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
                             GE.Stat.LightningAttackMin, StatModifierType.Add, mod.Value1);
                     if (mod.Value2 > 0)
-                        StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
+                        AR.s.Data.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
                             GE.Stat.LightningAttackMax, StatModifierType.Add, mod.Value2);
                     break;
 
                 case GE.ModEffectType.AddedPoisonDamage:
                     if (mod.Value1 > 0)
-                        StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
+                        AR.s.Data.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
                             GE.Stat.PoisonAttackMin, StatModifierType.Add, mod.Value1);
                     if (mod.Value2 > 0)
-                        StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
+                        AR.s.Data.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
                             GE.Stat.PoisonAttackMax, StatModifierType.Add, mod.Value2);
                     break;
 
@@ -224,7 +224,7 @@ namespace ARPG.Utility
                     // % 증가 스탯
                     if (mod.Value1 > 0)
                     {
-                        StatModifierHelper.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
+                        AR.s.Data.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
                             mod.Table.TargetStat, StatModifierType.Multiply, mod.Value1);
                     }
                     break;
@@ -265,7 +265,7 @@ namespace ARPG.Utility
         public static void RemoveEquipmentModifiers(int playerEntityId, int itemInstanceId)
         {
             // StatModifier 제거
-            int removedCount = StatModifierHelper.RemoveModifiersBySource(playerEntityId, StatModifierSource.Equipment, itemInstanceId);
+            int removedCount = AR.s.Data.RemoveModifiersBySource(playerEntityId, StatModifierSource.Equipment, itemInstanceId);
 
             // ModPoolComponent에서 제거
             if (AR.s.Component.TryGetComponent<ModPoolComponent>(playerEntityId, out var modPool))

@@ -930,20 +930,22 @@ namespace ARPG.Systems
             SparseSet<ColliderComponent> colliderPool = pools.Collider;
             SparseSet<FactionComponent> factionPool = pools.Faction;
 
-            if (factionPool.TryGet(casterEntityId, out var casterFaction))
-            {
-                FactionHelper.GetEnemyFactionLists(casterFaction.FactionId, out var primaryList, out var secondaryList);
-                FindClosestInList(primaryList, position, casterEntityId, transformPool, colliderPool, ref closestEntityId, ref closestSqrDistance);
-                FindClosestInList(secondaryList, position, casterEntityId, transformPool, colliderPool, ref closestEntityId, ref closestSqrDistance);
-                return closestEntityId;
-            }
-
-            // caster에 faction이 없으면 IsHostileTo의 "모두 적대" 폴백을 보존하기 위해 transform 풀 전체 순회
+            // 역방향 인덱스 없이 transform 풀을 순회하며 진영으로 적만 거른다.
+            // caster에 faction이 있으면 적대 대상만, 없으면 전부(마이그레이션 안전 동작 보존).
+            bool casterHasFaction = factionPool.TryGet(casterEntityId, out var casterFaction);
             for (int i = 0; i < transformPool.Count; i++)
             {
                 int entityId = transformPool.GetEntityId(i);
                 if (entityId == casterEntityId)
                     continue;
+
+                if (casterHasFaction)
+                {
+                    if (factionPool.TryGet(entityId, out var targetFaction) == false)
+                        continue;
+                    if (FactionHelper.IsFactionHostile(casterFaction.FactionId, targetFaction.FactionId) == false)
+                        continue;
+                }
 
                 TransformComponent entityTransform = transformPool.GetByIndex(i);
                 Vector2 entityCenter = entityTransform.Position;
@@ -962,43 +964,6 @@ namespace ARPG.Systems
 
             return closestEntityId;
         }
-
-        private void FindClosestInList(
-            System.Collections.Generic.List<int> candidates,
-            Vector2 position,
-            int casterEntityId,
-            SparseSet<TransformComponent> transformPool,
-            SparseSet<ColliderComponent> colliderPool,
-            ref int closestEntityId,
-            ref float closestSqrDistance)
-        {
-            if (candidates == null)
-                return;
-
-            for (int i = 0; i < candidates.Count; i++)
-            {
-                int entityId = candidates[i];
-                if (entityId == casterEntityId)
-                    continue;
-
-                if (transformPool.TryGet(entityId, out var entityTransform) == false)
-                    continue;
-
-                Vector2 entityCenter = entityTransform.Position;
-                if (colliderPool.TryGet(entityId, out var entityCollider))
-                {
-                    entityCenter += entityCollider.HitOffset;
-                }
-
-                float sqrDistance = HitboxMath.SqrDistance(entityCenter, position);
-                if (sqrDistance < closestSqrDistance)
-                {
-                    closestSqrDistance = sqrDistance;
-                    closestEntityId = entityId;
-                }
-            }
-        }
-
 
         /// <summary>
         /// 스킬 범위 내에 있는 엔티티들을 가져옵니다.
@@ -1065,65 +1030,24 @@ namespace ARPG.Systems
             float halfAngleDeg = skill.Table.SkillTargetRange2; // 한쪽 각도 (360이면 전방향)
             Vector2 forward = target.TargetDirection;
 
-            if (factionPool.TryGet(skill.OwnerEntityId, out var ownerFaction))
-            {
-                FactionHelper.GetEnemyFactionLists(ownerFaction.FactionId, out var primaryList, out var secondaryList);
-                CollectSectorHitsFromList(primaryList, skill.OwnerEntityId, originPosition, forward, range, halfAngleDeg, transformPool, colliderPool, outHitEntities);
-                CollectSectorHitsFromList(secondaryList, skill.OwnerEntityId, originPosition, forward, range, halfAngleDeg, transformPool, colliderPool, outHitEntities);
-                return;
-            }
-
-            // owner에 faction이 없으면 IsHostileTo의 "모두 적대" 폴백을 보존하기 위해 transform 풀 전체 순회
+            // 역방향 인덱스 없이 transform 풀을 순회하며 진영으로 적만 거른다.
+            // owner에 faction이 있으면 적대 대상만, 없으면 전부(마이그레이션 안전 동작 보존).
+            bool ownerHasFaction = factionPool.TryGet(skill.OwnerEntityId, out var ownerFaction);
             for (int i = 0; i < transformPool.Count; i++)
             {
                 int entityId = transformPool.GetEntityId(i);
                 if (entityId == skill.OwnerEntityId)
                     continue;
 
+                if (ownerHasFaction)
+                {
+                    if (factionPool.TryGet(entityId, out var targetFaction) == false)
+                        continue;
+                    if (FactionHelper.IsFactionHostile(ownerFaction.FactionId, targetFaction.FactionId) == false)
+                        continue;
+                }
+
                 TransformComponent entityTransform = transformPool.GetByIndex(i);
-                Vector2 entityCenter;
-                float entityRadius;
-                if (colliderPool.TryGet(entityId, out var entityCollider))
-                {
-                    entityCenter = entityTransform.Position + entityCollider.HitOffset;
-                    entityRadius = entityCollider.HitRadius;
-                }
-                else
-                {
-                    entityCenter = entityTransform.Position;
-                    entityRadius = 0f;
-                }
-
-                if (HitboxMath.CircleVsSector(entityCenter, entityRadius, originPosition, forward, range, halfAngleDeg))
-                {
-                    outHitEntities.Add(entityId);
-                }
-            }
-        }
-
-        private void CollectSectorHitsFromList(
-            System.Collections.Generic.List<int> candidates,
-            int ownerEntityId,
-            Vector2 originPosition,
-            Vector2 forward,
-            float range,
-            float halfAngleDeg,
-            SparseSet<TransformComponent> transformPool,
-            SparseSet<ColliderComponent> colliderPool,
-            System.Collections.Generic.List<int> outHitEntities)
-        {
-            if (candidates == null)
-                return;
-
-            for (int i = 0; i < candidates.Count; i++)
-            {
-                int entityId = candidates[i];
-                if (entityId == ownerEntityId)
-                    continue;
-
-                if (transformPool.TryGet(entityId, out var entityTransform) == false)
-                    continue;
-
                 Vector2 entityCenter;
                 float entityRadius;
                 if (colliderPool.TryGet(entityId, out var entityCollider))

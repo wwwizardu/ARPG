@@ -1,78 +1,29 @@
-using System.Collections.Generic;
 using ARPG.Component;
 using UnityEngine;
 
 namespace ARPG.Utility
 {
     /// <summary>
-    /// Shared faction checks and enemy search helpers.
+    /// 진영(적대) 판정과 가장 가까운 적 탐색.
+    /// 판정은 FactionComponent를 직접 조회한다 — 역방향 인덱스/캐시 없음.
+    /// 소비자는 자기 후보 집합(예: TransformComponent 풀)을 순회하며 IsHostileTo/IsFactionHostile로 적을 거른다.
     /// </summary>
     public static class FactionHelper
     {
-        private static readonly List<int> _playerFactionEntities = new List<int>(16);
-        private static readonly List<int> _hostileFactionEntities = new List<int>(256);
-
-        public static void OnFactionComponentSet(int entityId, Faction previousFaction, Faction nextFaction, bool hadPreviousFaction)
-        {
-            if (hadPreviousFaction)
-            {
-                if (previousFaction == nextFaction)
-                {
-                    AddToFactionList(entityId, nextFaction);
-                    return;
-                }
-
-                RemoveFromFactionList(entityId, previousFaction);
-            }
-
-            AddToFactionList(entityId, nextFaction);
-        }
-
-        public static void OnFactionComponentRemoved(int entityId, Faction previousFaction)
-        {
-            RemoveFromFactionList(entityId, previousFaction);
-        }
-
-        public static void OnEntityRemoved(int entityId)
-        {
-            RemoveFromFactionList(entityId, Faction.Player);
-            RemoveFromFactionList(entityId, Faction.Hostile);
-        }
-
-        public static void ClearFactionIndex()
-        {
-            _playerFactionEntities.Clear();
-            _hostileFactionEntities.Clear();
-        }
-
         /// <summary>
-        /// Returns the enemy candidate lists for a given self-faction.
-        /// Player/Hostile self gets one primary enemy list; Neutral self gets both Player and Hostile lists,
-        /// matching the existing non-Neutral fallback semantics used by AI perception and projectile collision.
+        /// 해소된 두 진영값 사이의 적대 판정. 중립(Neutral) 타겟은 결코 적대가 아니다.
+        /// (caster/target 진영이 이미 확정된 핫루프용 — 단일 규칙 chokepoint)
         /// </summary>
-        public static void GetEnemyFactionLists(Faction selfFaction, out List<int> primary, out List<int> secondary)
+        public static bool IsFactionHostile(Faction casterFaction, Faction targetFaction)
         {
-            switch (selfFaction)
-            {
-                case Faction.Player:
-                    primary = _hostileFactionEntities;
-                    secondary = null;
-                    return;
-                case Faction.Hostile:
-                    primary = _playerFactionEntities;
-                    secondary = null;
-                    return;
-                default:
-                    primary = _playerFactionEntities;
-                    secondary = _hostileFactionEntities;
-                    return;
-            }
+            if (targetFaction == Faction.Neutral)
+                return false;
+            return targetFaction != casterFaction;
         }
 
         /// <summary>
-        /// Returns whether caster and target are hostile to each other.
-        /// Missing caster faction is treated as hostile for migration safety.
-        /// Missing target faction or Neutral target is never hostile.
+        /// caster와 target이 서로 적대인지. caster 진영이 없으면 마이그레이션 안전을 위해 적대로 간주.
+        /// target 진영이 없거나 Neutral이면 적대 아님.
         /// </summary>
         public static bool IsHostileTo(int casterEntityId, int targetEntityId)
         {
@@ -81,13 +32,12 @@ namespace ARPG.Utility
                 return true;
             if (cm.TryGetComponent<FactionComponent>(targetEntityId, out var targetFaction) == false)
                 return false;
-            if (targetFaction.FactionId == Faction.Neutral)
-                return false;
-            return targetFaction.FactionId != casterFaction.FactionId;
+            return IsFactionHostile(casterFaction.FactionId, targetFaction.FactionId);
         }
 
         /// <summary>
-        /// Finds the nearest entity from hostile faction candidate lists.
+        /// TransformComponent를 가진 엔티티를 순회하며 self와 적대인 가장 가까운 적을 찾는다.
+        /// 역방향 인덱스 없이 후보를 진영(IsFactionHostile)으로 거른다.
         /// </summary>
         public static int FindNearestEnemy(
             int selfEntityId,
@@ -114,141 +64,24 @@ namespace ARPG.Utility
 
             SparseSet<TransformComponent> transformPool = cm.GetComponentPool<TransformComponent>();
             SparseSet<StatComponent> statPool = cm.GetComponentPool<StatComponent>();
+            SparseSet<FactionComponent> factionPool = cm.GetComponentPool<FactionComponent>();
 
-            List<int> primaryEnemyList = GetPrimaryEnemyList(selfFaction);
-            if (primaryEnemyList != null)
+            for (int i = 0; i < transformPool.Count; i++)
             {
-                SearchCandidates(
-                    primaryEnemyList,
-                    selfEntityId,
-                    selfPosition,
-                    maxRangeSqr,
-                    checkFOV,
-                    forward,
-                    halfFovCos,
-                    requireStatComponent,
-                    transformPool,
-                    statPool,
-                    ref targetPosition,
-                    ref nearestEnemySqrDistance,
-                    ref bestEntityId,
-                    ref bestSqrDistance);
-            }
-            else
-            {
-                // Preserve previous fallback behavior: Neutral/self-unknown searches non-neutral factions.
-                SearchCandidates(
-                    _playerFactionEntities,
-                    selfEntityId,
-                    selfPosition,
-                    maxRangeSqr,
-                    checkFOV,
-                    forward,
-                    halfFovCos,
-                    requireStatComponent,
-                    transformPool,
-                    statPool,
-                    ref targetPosition,
-                    ref nearestEnemySqrDistance,
-                    ref bestEntityId,
-                    ref bestSqrDistance);
-
-                SearchCandidates(
-                    _hostileFactionEntities,
-                    selfEntityId,
-                    selfPosition,
-                    maxRangeSqr,
-                    checkFOV,
-                    forward,
-                    halfFovCos,
-                    requireStatComponent,
-                    transformPool,
-                    statPool,
-                    ref targetPosition,
-                    ref nearestEnemySqrDistance,
-                    ref bestEntityId,
-                    ref bestSqrDistance);
-            }
-
-            return bestEntityId;
-        }
-
-        private static List<int> GetFactionList(Faction faction)
-        {
-            switch (faction)
-            {
-                case Faction.Player:
-                    return _playerFactionEntities;
-                case Faction.Hostile:
-                    return _hostileFactionEntities;
-                default:
-                    return null;
-            }
-        }
-
-        private static List<int> GetPrimaryEnemyList(Faction selfFaction)
-        {
-            switch (selfFaction)
-            {
-                case Faction.Player:
-                    return _hostileFactionEntities;
-                case Faction.Hostile:
-                    return _playerFactionEntities;
-                default:
-                    return null;
-            }
-        }
-
-        private static void AddToFactionList(int entityId, Faction faction)
-        {
-            List<int> list = GetFactionList(faction);
-            if (list == null || list.Contains(entityId))
-                return;
-
-            list.Add(entityId);
-        }
-
-        private static void RemoveFromFactionList(int entityId, Faction faction)
-        {
-            List<int> list = GetFactionList(faction);
-            if (list == null)
-                return;
-
-            int index = list.IndexOf(entityId);
-            if (index < 0)
-                return;
-
-            list.RemoveAt(index);
-        }
-
-        private static void SearchCandidates(
-            List<int> candidates,
-            int selfEntityId,
-            Vector2 selfPosition,
-            float maxRangeSqr,
-            bool checkFOV,
-            Vector2 forward,
-            float halfFovCos,
-            bool requireStatComponent,
-            SparseSet<TransformComponent> transformPool,
-            SparseSet<StatComponent> statPool,
-            ref Vector2 targetPosition,
-            ref float nearestEnemySqrDistance,
-            ref int bestEntityId,
-            ref float bestSqrDistance)
-        {
-            for (int i = 0; i < candidates.Count; i++)
-            {
-                int candidateId = candidates[i];
+                int candidateId = transformPool.GetEntityId(i);
                 if (candidateId == selfEntityId)
                     continue;
 
-                if (transformPool.TryGet(candidateId, out var candidateTransform) == false)
+                // 진영 필터 — 후보가 self와 적대일 때만 (진영 없으면 제외)
+                if (factionPool.TryGet(candidateId, out var candidateFaction) == false)
+                    continue;
+                if (IsFactionHostile(selfFaction, candidateFaction.FactionId) == false)
                     continue;
 
                 if (requireStatComponent && statPool.Contains(candidateId) == false)
                     continue;
 
+                TransformComponent candidateTransform = transformPool.GetByIndex(i);
                 Vector2 toCandidate = candidateTransform.Position - selfPosition;
                 float sqrDistance = toCandidate.sqrMagnitude;
 
@@ -276,6 +109,8 @@ namespace ARPG.Utility
                     targetPosition = candidateTransform.Position;
                 }
             }
+
+            return bestEntityId;
         }
     }
 }
