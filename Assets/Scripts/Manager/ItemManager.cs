@@ -154,7 +154,7 @@ namespace ARPG.Item
             // ECS 엔티티 제거 (WorldItemComponent 포함)
             if (item != null && item.EntityId >= 0)
             {
-                Utility.EntityIdHelper.DestroyEntity(item.EntityId);
+                AR.s.Entity.DestroyEntity(item.EntityId);
             }
 
             // Addressables로 생성한 오브젝트 해제

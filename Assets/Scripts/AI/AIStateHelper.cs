@@ -78,7 +78,7 @@ namespace ARPG.AI
 
             ComponentManager cm = AR.s.Component;
             int targetEntityId = ai.TargetEntityId;
-            if (EntityIdHelper.IsEntityRegistered(targetEntityId) == false ||
+            if (AR.s.Entity.IsEntityRegistered(targetEntityId) == false ||
                 cm.HasComponent<DestroyTag>(targetEntityId) ||
                 cm.TryGetComponent<TransformComponent>(targetEntityId, out targetTransform) == false ||
                 (requireStatComponent && cm.HasComponent<StatComponent>(targetEntityId) == false) ||

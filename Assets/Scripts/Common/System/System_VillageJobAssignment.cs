@@ -59,7 +59,7 @@ namespace ARPG.Systems
         private static void ProcessVillage(VillageData v)
         {
             // 1. 마을 PlacedObject 중 AssociatedJobType > 0인 것만 작업 오브젝트 후보
-            var allEntities = PlacedObjectRegistry.GetAllEntitiesInVillage(v.VillageId);
+            var allEntities = AR.s.Village.PlacedObjects.GetAllEntitiesInVillage(v.VillageId);
             List<(int entityId, int tableId, GlobalEnum.JobType job)> workplaces = new();
             for (int i = 0; i < allEntities.Count; i++)
             {

@@ -1,4 +1,5 @@
 using ARPG.Component;
+using ARPG.Manager;
 using ARPG.Tables;
 using ARPG.Utility;
 using UnityEngine;
@@ -77,7 +78,7 @@ namespace ARPG.Utility
         public static int AddBuff(int targetEntityId, int buffTableID, float duration)
         {
             // 1. 타겟 엔티티 유효성 검증
-            if (EntityIdHelper.IsEntityRegistered(targetEntityId) == false)
+            if (AR.s.Entity.IsEntityRegistered(targetEntityId) == false)
             {
                 Debug.LogError($"[BuffHelper] Target entity {targetEntityId} is not registered");
                 return -1;
@@ -92,9 +93,9 @@ namespace ARPG.Utility
             }
 
             // 3. 이미 같은 버프가 존재하는지 먼저 확인
-            int buffEntityId = EntityIdHelper.GetDeterministicId(targetEntityId, EntityIdCategory.Buff, buffTableID);
+            int buffEntityId = EntityManager.GetDeterministicId(targetEntityId, EntityIdCategory.Buff, buffTableID);
 
-            if (EntityIdHelper.IsValidBuffEntity(buffEntityId))
+            if (AR.s.Entity.IsValidBuffEntity(buffEntityId))
             {
                 // 이미 같은 버프가 존재 - StackCount 증가
                 if (AR.s.Component.TryGetComponent<BuffInstance>(buffEntityId, out BuffInstance existingBuff))
@@ -123,7 +124,7 @@ namespace ARPG.Utility
             }
 
             // 4. 신규 버프 Entity 생성 시도
-            buffEntityId = EntityIdHelper.CreateBuffEntity(targetEntityId, buffTableID);
+            buffEntityId = AR.s.Entity.CreateBuffEntity(targetEntityId, buffTableID);
 
             if (buffEntityId == -1)
             {
@@ -176,7 +177,7 @@ namespace ARPG.Utility
             AR.s.Component.RemoveComponent<BuffInstance>(buffEntityId);
 
             // 4. 버프 Entity 삭제 (결정적 ID 슬롯 해제)
-            EntityIdHelper.DestroyBuffEntity(buffEntityId);
+            AR.s.Entity.DestroyBuffEntity(buffEntityId);
 
             // 5. Dirty 태그 추가 (스탯 재계산 요청)
             AR.s.Component.AddComponent(targetEntityId, new StatDirtyTag());

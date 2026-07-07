@@ -7,7 +7,6 @@ using System.Collections.Generic;
 using Newtonsoft.Json;
 using ARPG.History;
 using ARPG.Npc;
-using ARPG.Utility;
 using ARPG.Village;
 
 namespace ARPG.Data
@@ -149,7 +148,7 @@ namespace ARPG.Data
             }
 
             // PlayerData 로드 (여러 플레이어 지원)
-            _currentPlayerEntityId = EntityIdHelper.CreateEntity();
+            _currentPlayerEntityId = AR.s.Entity.CreateEntity();
             _playerDataList.Clear();
             if (File.Exists(playerDataPath))
             {
@@ -178,7 +177,7 @@ namespace ARPG.Data
                             }
                             else // 나머지 플레이어는 새로운 엔티티 ID 할당
                             {
-                                playerData.PlayerId = EntityIdHelper.CreateEntity();
+                                playerData.PlayerId = AR.s.Entity.CreateEntity();
                             }
 
                             playerData.LoadCompleted();
@@ -227,7 +226,7 @@ namespace ARPG.Data
                                     }
                                     else // 나머지 플레이어는 새로운 엔티티 ID 할당
                                     {
-                                        playerData.PlayerId = EntityIdHelper.CreateEntity();
+                                        playerData.PlayerId = AR.s.Entity.CreateEntity();
                                     }
 
                                     playerData.LoadCompleted();
@@ -263,7 +262,7 @@ namespace ARPG.Data
         }
 
         /// <summary>
-        /// WorldData가 로드된 직후, saved 영구 EntityId(NPC/Building)를 EntityIdHelper에 일괄 등록한다.
+        /// WorldData가 로드된 직후, saved 영구 EntityId(NPC/Building)를 EntityManager에 일괄 등록한다.
         /// 이 단계 이후의 CreateEntity()는 등록된 ID를 자동으로 건너뛰므로 신규/saved ID 간 충돌이 방지됨.
         ///
         /// 호출 시점은 반드시 WorldData deserialize 직후 — Village.Load() / PlayerData CreateEntity()보다 먼저여야 함.
@@ -274,12 +273,12 @@ namespace ARPG.Data
             if (_worldData.NpcSaveDatas != null)
             {
                 foreach (var kvp in _worldData.NpcSaveDatas)
-                    EntityIdHelper.RegisterExistingEntity(kvp.Key);
+                    AR.s.Entity.RegisterExistingEntity(kvp.Key);
             }
             if (_worldData.BuildingSaveDatas != null)
             {
                 foreach (var kvp in _worldData.BuildingSaveDatas)
-                    EntityIdHelper.RegisterExistingEntity(kvp.Key);
+                    AR.s.Entity.RegisterExistingEntity(kvp.Key);
             }
         }
 

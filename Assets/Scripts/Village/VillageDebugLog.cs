@@ -107,7 +107,7 @@ namespace ARPG.Village
         private static string FormatServices(VillageData v)
         {
             ProvidedService all = ProvidedService.None;
-            var entities = PlacedObjectRegistry.GetAllEntitiesInVillage(v.VillageId);
+            var entities = AR.s.Village.PlacedObjects.GetAllEntitiesInVillage(v.VillageId);
             for (int i = 0; i < entities.Count; i++)
             {
                 if (AR.s.Component.TryGetComponent<PlacedObjectComponent>(entities[i], out var po))

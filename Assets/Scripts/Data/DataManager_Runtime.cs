@@ -64,7 +64,7 @@ namespace ARPG.Data
             return _modifiersByOwner[ownerEntityId];
         }
 
-        /// <summary>특정 엔티티의 모든 StatModifier 제거 (엔티티 사망 시 — EntityIdHelper.DestroyEntity에서 호출)</summary>
+        /// <summary>특정 엔티티의 모든 StatModifier 제거 (엔티티 사망 시 — EntityManager.DestroyEntity에서 호출)</summary>
         public void RemoveAllModifiers(int ownerEntityId)
         {
             _modifiersByOwner.Remove(ownerEntityId);

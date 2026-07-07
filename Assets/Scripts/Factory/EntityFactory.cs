@@ -4,6 +4,7 @@ using System.Threading;
 using ARPG.Base;
 using ARPG.Component;
 using ARPG.Data;
+using ARPG.Manager;
 using ARPG.Npc;
 using ARPG.Tables;
 using ARPG.Utility;
@@ -577,7 +578,7 @@ namespace ARPG.Factory
                 return -1;
             }
 
-            int totemId = EntityIdHelper.CreateEntity();
+            int totemId = AR.s.Entity.CreateEntity();
 
             // 위치/이동/충돌
             cm.AddComponent(totemId, new TransformComponent
@@ -670,7 +671,7 @@ namespace ARPG.Factory
                     faction = casterFaction.FactionId;
             }
 
-            int entityId = EntityIdHelper.CreateEntity();
+            int entityId = AR.s.Entity.CreateEntity();
 
             cm.AddComponent(entityId, new TransformComponent
             {
@@ -747,7 +748,7 @@ namespace ARPG.Factory
         /// </summary>
         public static void CreateSkill(int ownerEntityId, int slotIndex, int skillId)
         {
-            int skillEntityId = EntityIdHelper.CreateSkillEntity(ownerEntityId, slotIndex);
+            int skillEntityId = AR.s.Entity.CreateSkillEntity(ownerEntityId, slotIndex);
             if (skillEntityId == -1)
             {
                 Debug.LogError($"[EntityFactory] Failed to create skill entity. Owner: {ownerEntityId}, Slot: {slotIndex}, SkillId: {skillId}");
@@ -869,7 +870,7 @@ namespace ARPG.Factory
         /// </summary>
         public static void RemoveSkill(int ownerEntityId, int slotIndex)
         {
-            int skillEntityId = EntityIdHelper.GetDeterministicId(ownerEntityId, EntityIdCategory.Skill, slotIndex);
+            int skillEntityId = EntityManager.GetDeterministicId(ownerEntityId, EntityIdCategory.Skill, slotIndex);
             if (skillEntityId == -1)
             {
                 Debug.LogWarning($"[EntityFactory] RemoveSkill - Invalid skill entity ID. Owner: {ownerEntityId}, Slot: {slotIndex}");
@@ -877,12 +878,12 @@ namespace ARPG.Factory
             }
 
             // 등록되지 않은 슬롯(스킬 미장착)은 정상 케이스 — 경고 없이 무시
-            if (EntityIdHelper.IsEntityRegistered(skillEntityId) == false)
+            if (AR.s.Entity.IsEntityRegistered(skillEntityId) == false)
             {
                 return;
             }
 
-            EntityIdHelper.DestroySkillEntity(skillEntityId);
+            AR.s.Entity.DestroySkillEntity(skillEntityId);
         }
 
         /// <summary>

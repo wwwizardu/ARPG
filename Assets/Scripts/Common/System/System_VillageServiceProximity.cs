@@ -11,7 +11,7 @@ namespace ARPG.Systems
     ///
     /// 작동 방식:
     /// 1. 플레이어가 어느 마을 안인지 — VillageManager.FindVillageContaining (단 1개)
-    /// 2. 마을 안이면 PlacedObjectRegistry.GetAllEntitiesInVillage 순회
+    /// 2. 마을 안이면 AR.s.Village.PlacedObjects.GetAllEntitiesInVillage 순회
     /// 3. 각 PlacedObjectComponent의 Service 비트 + 거리로 가장 가까운 Shop/Forge/Inn/Shrine 결정
     /// 4. 마을 밖 → 모두 -1/None으로 클리어
     ///
@@ -79,7 +79,7 @@ namespace ARPG.Systems
 
             nearby.NearestVillageId = villageId;
 
-            var entities = PlacedObjectRegistry.GetAllEntitiesInVillage(villageId);
+            var entities = AR.s.Village.PlacedObjects.GetAllEntitiesInVillage(villageId);
             for (int i = 0; i < entities.Count; i++)
             {
                 int entityId = entities[i];

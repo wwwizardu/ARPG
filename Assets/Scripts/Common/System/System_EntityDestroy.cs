@@ -13,7 +13,7 @@ namespace ARPG.Systems
     /// 1. DestroyTag가 있는 엔티티 순회 (역순)
     /// 2. EntityRegistry에서 EntityBase 조회
     /// 3. EntityBase.OnEntityDestroy() 호출 (타입별 정리)
-    /// 4. EntityIdHelper.DestroyEntity() 호출 (ECS 컴포넌트 정리)
+    /// 4. AR.s.Entity.DestroyEntity() 호출 (ECS 컴포넌트 정리)
     /// 5. GameObject 파괴
     /// </summary>
     public class System_EntityDestroy : ILateUpdateSystem
@@ -74,7 +74,7 @@ namespace ARPG.Systems
                 if (AR.s.Message.TryGetEntity(entityId, out var entity))
                 {
                     entity.OnEntityDestroy();
-                    EntityIdHelper.DestroyEntity(entityId);
+                    AR.s.Entity.DestroyEntity(entityId);
 
                     // System_Render에서도 등록 해제 (딕셔너리 정리)
                     var renderSystem = AR.s.System.GetSystem<System_Render>();
@@ -128,7 +128,7 @@ namespace ARPG.Systems
                         renderSystem.UnregisterEntity(entityId);
                     }
 
-                    EntityIdHelper.DestroyEntity(entityId);
+                    AR.s.Entity.DestroyEntity(entityId);
                 }
             }
         }

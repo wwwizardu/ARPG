@@ -1,4 +1,5 @@
 using ARPG.Component;
+using ARPG.Manager;
 using ARPG.Message;
 using ARPG.Utility;
 using UnityEngine;
@@ -114,9 +115,9 @@ namespace ARPG.Systems
         /// </summary>
         private void StopOwnerSkills(ComponentManager cm, int ownerEntityId)
         {
-            for (int slotIndex = 0; slotIndex < EntityIdHelper.GetMaxIndex(EntityIdCategory.Skill); slotIndex++)
+            for (int slotIndex = 0; slotIndex < EntityManager.GetMaxIndex(EntityIdCategory.Skill); slotIndex++)
             {
-                int skillEntityId = EntityIdHelper.GetDeterministicId(ownerEntityId, EntityIdCategory.Skill, slotIndex);
+                int skillEntityId = EntityManager.GetDeterministicId(ownerEntityId, EntityIdCategory.Skill, slotIndex);
                 if (skillEntityId == -1)
                     continue;
 

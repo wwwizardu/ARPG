@@ -44,7 +44,7 @@ namespace ARPG.Building
                 int entityId = kvp.Key;
                 if (AR.s.Message.TryGetEntity(entityId, out var entity))
                 {
-                    EntityIdHelper.DestroyEntity(entityId);
+                    AR.s.Entity.DestroyEntity(entityId);
                     Destroy(entity.gameObject);
                 }
             }
@@ -91,7 +91,7 @@ namespace ARPG.Building
                 return -1;
             }
 
-            int entityId = EntityIdHelper.CreateEntity();
+            int entityId = AR.s.Entity.CreateEntity();
             BuildingSaveData saveData = new BuildingSaveData(tableId, worldTileX, worldTileY)
             {
                 EntityId = entityId,
@@ -222,7 +222,7 @@ namespace ARPG.Building
                 Vector2Int chunkCoord = TileToChunk(saveData.WorldTileX, saveData.WorldTileY);
                 if (AR.s.Map == null || AR.s.Map.IsChunkActive(chunkCoord) == false)
                 {
-                    EntityIdHelper.DestroyEntity(createdId, allowRecycle: false, keepRegistered: true);
+                    AR.s.Entity.DestroyEntity(createdId, allowRecycle: false, keepRegistered: true);
                     if (entity != null)
                         Destroy(entity.gameObject);
                     return;
@@ -252,7 +252,7 @@ namespace ARPG.Building
             if (AR.s.Message.TryGetEntity(entityId, out var entity))
             {
                 // ID 재활용 방지 (다음 로드 시 같은 ID 사용)
-                EntityIdHelper.DestroyEntity(entityId, allowRecycle: false, keepRegistered: true);
+                AR.s.Entity.DestroyEntity(entityId, allowRecycle: false, keepRegistered: true);
                 Destroy(entity.gameObject);
             }
 
@@ -306,7 +306,7 @@ namespace ARPG.Building
                 // task.BuildingEntityId 등 다른 시스템 참조가 stale 안 되도록.
                 // 등록은 AR.PreReserveSavedEntityIds()가 Initialize 단계에서 일괄 처리 — 여기서 다시 등록하면 이중 등록 LogError.
                 int entityId = kvp.Key > 0 ? kvp.Key
-                              : (saveData.EntityId > 0 ? saveData.EntityId : EntityIdHelper.CreateEntity());
+                              : (saveData.EntityId > 0 ? saveData.EntityId : AR.s.Entity.CreateEntity());
 
                 saveData.IsActive = false;
                 saveData.EntityId = entityId;

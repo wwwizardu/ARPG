@@ -9,7 +9,6 @@ using ARPG.Map;
 using ARPG.Npc.Narrative;
 using ARPG.Scene;
 using ARPG.Tables;
-using ARPG.Utility;
 using ARPG.Village;
 
 namespace ARPG.Npc
@@ -68,7 +67,7 @@ namespace ARPG.Npc
                 int entityId = kvp.Key;
                 if (AR.s.Message.TryGetEntity(entityId, out var entity))
                 {
-                    EntityIdHelper.DestroyEntity(entityId);
+                    AR.s.Entity.DestroyEntity(entityId);
                     Destroy(entity.gameObject);
                 }
             }
@@ -175,7 +174,7 @@ namespace ARPG.Npc
                 );
 
                 // EntityId 발급 (재활용 안 되도록 등록만)
-                int entityId = EntityIdHelper.CreateEntity();
+                int entityId = AR.s.Entity.CreateEntity();
 
                 NpcSaveData saveData = new NpcSaveData(obj.ObjectId, worldPos)
                 {
@@ -255,7 +254,7 @@ namespace ARPG.Npc
         /// </summary>
         public int SpawnNewNpc(int npcTableId, Vector2 position, int villageId = -1)
         {
-            int entityId = EntityIdHelper.CreateEntity();
+            int entityId = AR.s.Entity.CreateEntity();
             NpcSaveData saveData = new NpcSaveData(npcTableId, position)
             {
                 EntityId = entityId,
@@ -439,7 +438,7 @@ namespace ARPG.Npc
                 Vector2Int chunkCoord = PositionToChunk(saveData.Position);
                 if (AR.s.Map == null || AR.s.Map.IsChunkActive(chunkCoord) == false)
                 {
-                    EntityIdHelper.DestroyEntity(createdId, allowRecycle: false, keepRegistered: true);
+                    AR.s.Entity.DestroyEntity(createdId, allowRecycle: false, keepRegistered: true);
                     if (entity != null)
                         Destroy(entity.gameObject);
                     return;
@@ -467,7 +466,7 @@ namespace ARPG.Npc
 
                 // 진행 중 build task에 이 NPC가 배정돼 있었다면 NpcBuildAssignmentComponent 재부착 + Build 상태 전이.
                 // 청크 비활성으로 일시 디스폰됐다가 돌아온 경우, 그리고 게임 로드 후 첫 스폰 모두 동일 경로.
-                // EntityId가 세션 간 보존되므로(EntityIdHelper.RegisterExistingEntity) task.AssignedNpcEntityId가
+                // EntityId가 세션 간 보존되므로(AR.s.Entity.RegisterExistingEntity) task.AssignedNpcEntityId가
                 // 그대로 이 NPC의 createdId와 일치 → 매칭 성공 → 같은 NPC가 같은 빌딩을 이어서 짓는 상태로 복원.
                 ARPG.Systems.System_VillageBuildQueue.ReattachBuildAssignmentIfAny(createdId);
             }
@@ -522,7 +521,7 @@ namespace ARPG.Npc
             if (AR.s.Message.TryGetEntity(entityId, out var entity))
             {
                 // ID를 재활용하지 않음 (다음 스폰 시 동일 ID 사용)
-                EntityIdHelper.DestroyEntity(entityId, allowRecycle: false, keepRegistered: true);
+                AR.s.Entity.DestroyEntity(entityId, allowRecycle: false, keepRegistered: true);
                 Destroy(entity.gameObject);
             }
 
@@ -633,7 +632,7 @@ namespace ARPG.Npc
                 // dict key가 정본(저장 시점의 EntityId), saveData.EntityId는 백업 (둘 다 동일하나 안전망).
                 // 등록은 AR.PreReserveSavedEntityIds()가 Initialize 단계에서 일괄 처리 — 여기서 다시 등록하면 이중 등록 LogError.
                 int entityId = kvp.Key > 0 ? kvp.Key
-                              : (saveData.EntityId > 0 ? saveData.EntityId : EntityIdHelper.CreateEntity());
+                              : (saveData.EntityId > 0 ? saveData.EntityId : AR.s.Entity.CreateEntity());
 
                 saveData.IsActive = false;
                 saveData.EntityId = entityId;
@@ -941,7 +940,7 @@ namespace ARPG.Npc
         /// </summary>
         public int SpawnVisitorNpc(int npcTableId, Vector2 position, int villageId)
         {
-            int entityId = EntityIdHelper.CreateEntity();
+            int entityId = AR.s.Entity.CreateEntity();
             NpcSaveData saveData = new NpcSaveData(npcTableId, position)
             {
                 EntityId = entityId,
@@ -1101,8 +1100,8 @@ namespace ARPG.Npc
                     Destroy(entity.gameObject);
             }
 
-            // EntityIdHelper에서 ID 회수 (출현 여부와 무관하게 SpawnVisitorNpc에서 발급된 ID 해제)
-            EntityIdHelper.DestroyEntity(entityId, false);
+            // EntityManager에서 ID 회수 (출현 여부와 무관하게 SpawnVisitorNpc에서 발급된 ID 해제)
+            AR.s.Entity.DestroyEntity(entityId, false);
 
             // Visitor는 _chunkNpcs에 등록되지 않지만, 고용 직후 만료 케이스 대비 안전 호출
             Vector2Int chunkCoord = PositionToChunk(saveData.Position);

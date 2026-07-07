@@ -33,6 +33,8 @@ namespace ARPG
 
         private PlayerManager _playerManager = new PlayerManager();
         private PlayerSkillManager _playerSkillManager = new PlayerSkillManager();
+        // 엔티티 생명주기(ID 발급/등록/소멸 오케스트레이션) — 구 EntityIdHelper. plain class, 프리팹 배선 불필요
+        private Manager.EntityManager _entityManager = new Manager.EntityManager();
 
         public bool IsInitialized => _initialized;
 
@@ -59,6 +61,8 @@ namespace ARPG
         public Manager.EffectManager Effect => _effectManager;
         public ARPG.History.HistoryManager History => _historyManager;
 
+        public Manager.EntityManager Entity => _entityManager;
+
         public Base.EntityBase? MyPlayer => _playerManager.MyPlayers;
 
         protected override void Awake()
@@ -71,10 +75,10 @@ namespace ARPG
         public async void Initialize()
         {
             // 가장 먼저: EntityId 시스템을 깨끗한 상태로 리셋. 다른 어떤 매니저도 CreateEntity 호출하기 전.
-            ARPG.Utility.EntityIdHelper.Initialize();
+            _entityManager.Initialize();
 
             // 세이브 데이터 로드 — DataManager가 WorldData deserialize 직후 saved 영구 EntityId(NPC/Building)를
-            // EntityIdHelper에 사전 예약하므로, 이후 단계의 CreateEntity()는 saved ID와 충돌하지 않음.
+            // EntityManager에 사전 예약하므로, 이후 단계의 CreateEntity()는 saved ID와 충돌하지 않음.
             await _dataManager.Initialize();
 
             _componentManager.Initialize();

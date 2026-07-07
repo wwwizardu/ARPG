@@ -1,8 +1,9 @@
 #nullable enable
 using System.Collections.Generic;
+using ARPG.Utility;
 using UnityEngine;
 
-namespace ARPG.Utility
+namespace ARPG.Manager
 {
     /// <summary>
     /// 결정적 엔티티 ID 카테고리
@@ -16,63 +17,64 @@ namespace ARPG.Utility
     }
 
     /// <summary>
-    /// 엔티티 ID를 중앙에서 관리하는 헬퍼 클래스
+    /// 엔티티 생명주기 매니저 (구 EntityIdHelper) — AR이 소유하는 인스턴스.
     /// - 일반 엔티티: 0부터 순차적으로 증가하는 ID 할당
     /// - 결정적 엔티티: 카테고리별 오프셋 기반 ID (버프, 스킬 등)
-    /// - 엔티티 ID 중복 방지 및 유효성 검증
+    /// - 엔티티 ID 중복 방지 및 유효성 검증, 소멸 시 관련 상태(컴포넌트/버프/스탯 수정치/관계) 일괄 정리
+    /// 순수 ID 산술(GetDeterministicId 등)은 static — 상태를 만지지 않는다.
     /// </summary>
-    public static class EntityIdHelper
+    public class EntityManager
     {
         /// <summary>
         /// 다음에 할당될 일반 엔티티 ID
         /// </summary>
-        private static int _nextEntityId = 1;
+        private int _nextEntityId = 1;
 
         /// <summary>
         /// 등록된 모든 엔티티 ID를 추적하는 HashSet
         /// </summary>
-        private static readonly HashSet<int> _registeredEntityIds = new HashSet<int>();
+        private readonly HashSet<int> _registeredEntityIds = new HashSet<int>();
 
         /// <summary>
         /// 캐릭터별 할당된 스킬 슬롯을 추적 (characterEntityId -> 사용중인 슬롯 인덱스들)
         /// </summary>
-        private static readonly Dictionary<int, HashSet<int>> _characterSkillSlots = new Dictionary<int, HashSet<int>>();
+        private readonly Dictionary<int, HashSet<int>> _characterSkillSlots = new Dictionary<int, HashSet<int>>();
 
         /// <summary>
         /// 타겟별 버프 타입 추적 (targetEntityId -> 사용중인 buffTableID 집합)
         /// 같은 타입의 버프는 StackCount로 관리하므로 타입당 하나의 Entity만 존재
         /// </summary>
-        private static readonly Dictionary<int, HashSet<int>> _targetBuffTypes = new Dictionary<int, HashSet<int>>();
+        private readonly Dictionary<int, HashSet<int>> _targetBuffTypes = new Dictionary<int, HashSet<int>>();
 
         /// <summary>
         /// 재사용 가능한 엔티티 ID 풀 (삭제된 ID를 재활용)
         /// </summary>
-        private static readonly Queue<int> _recycledEntityIds = new Queue<int>();
+        private readonly Queue<int> _recycledEntityIds = new Queue<int>();
 
         /// <summary>
         /// 관계 추적: fromEntityId -> 관계를 맺고 있는 toEntityId 집합
         /// </summary>
-        private static readonly Dictionary<int, HashSet<int>> _relationshipTargets = new Dictionary<int, HashSet<int>>();
+        private readonly Dictionary<int, HashSet<int>> _relationshipTargets = new Dictionary<int, HashSet<int>>();
 
         /// <summary>
         /// 관계 역방향 추적: toEntityId -> 이 엔티티를 대상으로 관계를 맺고 있는 fromEntityId 집합
         /// 엔티티 삭제 시 역방향 관계도 정리하기 위해 사용
         /// </summary>
-        private static readonly Dictionary<int, HashSet<int>> _relationshipSources = new Dictionary<int, HashSet<int>>();
+        private readonly Dictionary<int, HashSet<int>> _relationshipSources = new Dictionary<int, HashSet<int>>();
 
         /// <summary>
-        /// 헬퍼 초기화 (게임 시작 시 또는 씬 전환 시 호출)
+        /// 초기화 (게임 시작 시 또는 씬 전환 시 호출 — 다른 매니저가 CreateEntity를 호출하기 전이어야 함)
         /// </summary>
-        public static void Initialize()
+        public void Initialize()
         {
             Reset();
-            Debug.Log("[EntityIdHelper] Initialized");
+            Debug.Log("[EntityManager] Initialized");
         }
 
         /// <summary>
         /// 모든 엔티티 정보 초기화
         /// </summary>
-        public static void Reset()
+        public void Reset()
         {
             _nextEntityId = 1;
             _registeredEntityIds.Clear();
@@ -81,7 +83,7 @@ namespace ARPG.Utility
             _recycledEntityIds.Clear();
             _relationshipTargets.Clear();
             _relationshipSources.Clear();
-            Debug.Log("[EntityIdHelper] Reset - All entities cleared");
+            Debug.Log("[EntityManager] Reset - All entities cleared");
         }
 
         #region General Entity Management
@@ -93,7 +95,7 @@ namespace ARPG.Utility
         ///   RegisterExistingEntity로 사전 예약된 ID는 자동으로 건너뜀 → ID 풀 낭비 없음.
         /// </summary>
         /// <returns>생성된 엔티티 ID</returns>
-        public static int CreateEntity()
+        public int CreateEntity()
         {
             int entityId;
 
@@ -112,7 +114,7 @@ namespace ARPG.Utility
             }
 
             _registeredEntityIds.Add(entityId);
-            Debug.Log($"[EntityIdHelper] Entity created - ID: {entityId}");
+            Debug.Log($"[EntityManager] Entity created - ID: {entityId}");
 
             return entityId;
         }
@@ -127,16 +129,16 @@ namespace ARPG.Utility
         ///
         /// 충돌(이미 등록된 ID 재예약 시도)은 호출 순서가 잘못됐다는 강한 신호이므로 LogError로 즉시 노출.
         /// </summary>
-        public static void RegisterExistingEntity(int entityId)
+        public void RegisterExistingEntity(int entityId)
         {
             if (entityId <= 0)
             {
-                Debug.LogWarning($"[EntityIdHelper] RegisterExistingEntity - 무효한 ID: {entityId}");
+                Debug.LogWarning($"[EntityManager] RegisterExistingEntity - 무효한 ID: {entityId}");
                 return;
             }
             if (_registeredEntityIds.Contains(entityId))
             {
-                Debug.LogError($"[EntityIdHelper] RegisterExistingEntity - ID {entityId}가 이미 등록되어 있음. " +
+                Debug.LogError($"[EntityManager] RegisterExistingEntity - ID {entityId}가 이미 등록되어 있음. " +
                                 "사전 예약 단계가 다른 엔티티 생성보다 늦게 호출됐거나, 같은 ID가 두 번 예약됨. " +
                                 "호출 순서를 점검하세요.");
                 return;
@@ -151,14 +153,14 @@ namespace ARPG.Utility
         /// <param name="entityId">제거할 엔티티 ID</param>
         /// <param name="allowRecycle">ID 재활용 허용 여부. 기본값은 오래된 EntityId 참조 방지를 위해 false.</param>
         /// <param name="keepRegistered">저장 엔티티처럼 같은 ID를 나중에 다시 써야 하면 등록 상태를 유지한다.</param>
-        public static void DestroyEntity(int entityId, bool allowRecycle = false, bool keepRegistered = false)
+        public void DestroyEntity(int entityId, bool allowRecycle = false, bool keepRegistered = false)
         {
             if(AR.s == null || AR.s.Component == null)
                 return;
 
             if (_registeredEntityIds.Contains(entityId) == false)
             {
-                Debug.LogWarning($"[EntityIdHelper] Entity {entityId} is not registered");
+                Debug.LogWarning($"[EntityManager] Entity {entityId} is not registered");
                 return;
             }
 
@@ -188,7 +190,7 @@ namespace ARPG.Utility
                 }
 
                 _characterSkillSlots.Remove(entityId);
-                Debug.Log($"[EntityIdHelper] Removed {skillEntitiesToRemove.Count} skill entities for character {entityId}");
+                Debug.Log($"[EntityManager] Removed {skillEntitiesToRemove.Count} skill entities for character {entityId}");
             }
 
             // 이 엔티티와 관련된 모든 관계 엔티티 제거
@@ -211,20 +213,20 @@ namespace ARPG.Utility
                 _recycledEntityIds.Enqueue(entityId);
             }
 
-            Debug.Log($"[EntityIdHelper] Entity destroyed - ID: {entityId} (Recycled: {allowRecycle && keepRegistered == false}, Reserved: {keepRegistered})");
+            Debug.Log($"[EntityManager] Entity destroyed - ID: {entityId} (Recycled: {allowRecycle && keepRegistered == false}, Reserved: {keepRegistered})");
         }
 
         /// <summary>
         /// 엔티티가 등록되어 있는지 확인
         /// </summary>
-        public static bool IsEntityRegistered(int entityId)
+        public bool IsEntityRegistered(int entityId)
         {
             return _registeredEntityIds.Contains(entityId);
         }
 
         #endregion
 
-        #region Deterministic ID Calculation
+        #region Deterministic ID Calculation (순수 static — 상태 접근 없음)
 
         /// <summary>
         /// 카테고리별 오프셋 정의
@@ -237,7 +239,7 @@ namespace ARPG.Utility
                 case EntityIdCategory.Skill:        return 1000000;
                 case EntityIdCategory.Relationship: return 10000000;
                 default:
-                    Debug.LogError($"[EntityIdHelper] Unknown category: {category}");
+                    Debug.LogError($"[EntityManager] Unknown category: {category}");
                     return 0;
             }
         }
@@ -253,7 +255,7 @@ namespace ARPG.Utility
                 case EntityIdCategory.Skill:        return 100;
                 case EntityIdCategory.Relationship: return 9999;
                 default:
-                    Debug.LogError($"[EntityIdHelper] Unknown category: {category}");
+                    Debug.LogError($"[EntityManager] Unknown category: {category}");
                     return 0;
             }
         }
@@ -266,7 +268,7 @@ namespace ARPG.Utility
             int maxIndex = GetMaxIndex(category);
             if (index < 0 || index > maxIndex)
             {
-                Debug.LogError($"[EntityIdHelper] Invalid index: {index} for category {category}. Must be between 0 and {maxIndex}");
+                Debug.LogError($"[EntityManager] Invalid index: {index} for category {category}. Must be between 0 and {maxIndex}");
                 return -1;
             }
 
@@ -308,19 +310,23 @@ namespace ARPG.Utility
             return $"{category}EntityId={entityId} (OwnerId={ownerId}, Index={index})";
         }
 
-        private static bool IsTrackedSkillSlot(int characterEntityId, int slotIndex)
+        #endregion
+
+        #region Tracked-State Checks (private)
+
+        private bool IsTrackedSkillSlot(int characterEntityId, int slotIndex)
         {
             return _characterSkillSlots.TryGetValue(characterEntityId, out HashSet<int> slots) &&
                    slots.Contains(slotIndex);
         }
 
-        private static bool IsTrackedBuffType(int targetEntityId, int buffTableID)
+        private bool IsTrackedBuffType(int targetEntityId, int buffTableID)
         {
             return _targetBuffTypes.TryGetValue(targetEntityId, out HashSet<int> buffTypes) &&
                    buffTypes.Contains(buffTableID);
         }
 
-        private static bool IsTrackedRelationship(int fromEntityId, int toEntityId)
+        private bool IsTrackedRelationship(int fromEntityId, int toEntityId)
         {
             return _relationshipTargets.TryGetValue(fromEntityId, out HashSet<int> targets) &&
                    targets.Contains(toEntityId);
@@ -336,12 +342,12 @@ namespace ARPG.Utility
         /// <param name="characterEntityId">스킬을 소유할 캐릭터의 엔티티 ID</param>
         /// <param name="slotIndex">스킬 슬롯 인덱스 (0부터 시작)</param>
         /// <returns>생성된 스킬 엔티티 ID, 실패시 -1</returns>
-        public static int CreateSkillEntity(int characterEntityId, int slotIndex)
+        public int CreateSkillEntity(int characterEntityId, int slotIndex)
         {
             // 캐릭터 엔티티가 등록되어 있는지 확인
             if (_registeredEntityIds.Contains(characterEntityId) == false)
             {
-                Debug.LogError($"[EntityIdHelper] Character entity {characterEntityId} is not registered");
+                Debug.LogError($"[EntityManager] Character entity {characterEntityId} is not registered");
                 return -1;
             }
 
@@ -349,7 +355,7 @@ namespace ARPG.Utility
             int maxSkillSlots = GetMaxIndex(EntityIdCategory.Skill);
             if (slotIndex < 0 || slotIndex >= maxSkillSlots)
             {
-                Debug.LogError($"[EntityIdHelper] Invalid slot index: {slotIndex}. Must be between 0 and {maxSkillSlots - 1}");
+                Debug.LogError($"[EntityManager] Invalid slot index: {slotIndex}. Must be between 0 and {maxSkillSlots - 1}");
                 return -1;
             }
 
@@ -362,7 +368,7 @@ namespace ARPG.Utility
             HashSet<int> usedSlots = _characterSkillSlots[characterEntityId];
             if (usedSlots.Contains(slotIndex))
             {
-                Debug.LogWarning($"[EntityIdHelper] Slot {slotIndex} is already assigned to character {characterEntityId}");
+                Debug.LogWarning($"[EntityManager] Slot {slotIndex} is already assigned to character {characterEntityId}");
                 int existingSkillId = GetDeterministicId(characterEntityId, EntityIdCategory.Skill, slotIndex);
                 return existingSkillId;
             }
@@ -371,21 +377,21 @@ namespace ARPG.Utility
             int skillEntityId = GetDeterministicId(characterEntityId, EntityIdCategory.Skill, slotIndex);
             if (skillEntityId == -1)
             {
-                Debug.LogError($"[EntityIdHelper] Failed to create skill entity ID");
+                Debug.LogError($"[EntityManager] Failed to create skill entity ID");
                 return -1;
             }
 
             // 등록
             if (_registeredEntityIds.Contains(skillEntityId))
             {
-                Debug.LogError($"[EntityIdHelper] Skill entity ID collision - ID: {skillEntityId}, Character: {characterEntityId}, Slot: {slotIndex}");
+                Debug.LogError($"[EntityManager] Skill entity ID collision - ID: {skillEntityId}, Character: {characterEntityId}, Slot: {slotIndex}");
                 return -1;
             }
 
             _registeredEntityIds.Add(skillEntityId);
             usedSlots.Add(slotIndex);
 
-            Debug.Log($"[EntityIdHelper] Skill entity created - ID: {skillEntityId}, Character: {characterEntityId}, Slot: {slotIndex}");
+            Debug.Log($"[EntityManager] Skill entity created - ID: {skillEntityId}, Character: {characterEntityId}, Slot: {slotIndex}");
             return skillEntityId;
         }
 
@@ -394,12 +400,12 @@ namespace ARPG.Utility
         /// </summary>
         /// <param name="characterEntityId">스킬을 소유할 캐릭터의 엔티티 ID</param>
         /// <returns>생성된 스킬 엔티티 ID, 실패시 -1</returns>
-        public static int CreateSkillEntityAuto(int characterEntityId)
+        public int CreateSkillEntityAuto(int characterEntityId)
         {
             // 캐릭터 엔티티가 등록되어 있는지 확인
             if (_registeredEntityIds.Contains(characterEntityId) == false)
             {
-                Debug.LogError($"[EntityIdHelper] Character entity {characterEntityId} is not registered");
+                Debug.LogError($"[EntityManager] Character entity {characterEntityId} is not registered");
                 return -1;
             }
 
@@ -421,7 +427,7 @@ namespace ARPG.Utility
                 }
             }
 
-            Debug.LogError($"[EntityIdHelper] No available skill slots for character {characterEntityId}. Max slots: {maxSlots}");
+            Debug.LogError($"[EntityManager] No available skill slots for character {characterEntityId}. Max slots: {maxSlots}");
             return -1;
         }
 
@@ -429,11 +435,11 @@ namespace ARPG.Utility
         /// 스킬 엔티티를 제거하고 슬롯 해제
         /// </summary>
         /// <param name="skillEntityId">제거할 스킬 엔티티 ID</param>
-        public static void DestroySkillEntity(int skillEntityId)
+        public void DestroySkillEntity(int skillEntityId)
         {
             if (_registeredEntityIds.Contains(skillEntityId) == false)
             {
-                Debug.LogWarning($"[EntityIdHelper] Skill entity {skillEntityId} is not registered");
+                Debug.LogWarning($"[EntityManager] Skill entity {skillEntityId} is not registered");
                 return;
             }
 
@@ -444,7 +450,7 @@ namespace ARPG.Utility
             // 유효성 검증
             if (IsValidSkillEntity(skillEntityId) == false)
             {
-                Debug.LogWarning($"[EntityIdHelper] Invalid or untracked skill entity ID: {skillEntityId}");
+                Debug.LogWarning($"[EntityManager] Invalid or untracked skill entity ID: {skillEntityId}");
                 return;
             }
 
@@ -460,13 +466,13 @@ namespace ARPG.Utility
                 _characterSkillSlots[characterEntityId].Remove(slotIndex);
             }
 
-            Debug.Log($"[EntityIdHelper] Skill entity destroyed - ID: {skillEntityId}, Character: {characterEntityId}, Slot: {slotIndex}");
+            Debug.Log($"[EntityManager] Skill entity destroyed - ID: {skillEntityId}, Character: {characterEntityId}, Slot: {slotIndex}");
         }
 
         /// <summary>
         /// 스킬 엔티티 ID가 유효한지 확인
         /// </summary>
-        public static bool IsValidSkillEntity(int skillEntityId)
+        public bool IsValidSkillEntity(int skillEntityId)
         {
             if (_registeredEntityIds.Contains(skillEntityId) == false)
                 return false;
@@ -482,7 +488,7 @@ namespace ARPG.Utility
         /// <summary>
         /// 캐릭터가 사용 중인 스킬 슬롯 개수 반환
         /// </summary>
-        public static int GetUsedSkillSlotCount(int characterEntityId)
+        public int GetUsedSkillSlotCount(int characterEntityId)
         {
             if (_characterSkillSlots.ContainsKey(characterEntityId))
             {
@@ -494,7 +500,7 @@ namespace ARPG.Utility
         /// <summary>
         /// 캐릭터의 특정 슬롯이 사용 중인지 확인
         /// </summary>
-        public static bool IsSkillSlotUsed(int characterEntityId, int slotIndex)
+        public bool IsSkillSlotUsed(int characterEntityId, int slotIndex)
         {
             if (_characterSkillSlots.ContainsKey(characterEntityId))
             {
@@ -507,7 +513,7 @@ namespace ARPG.Utility
         /// 캐릭터가 소유한 모든 스킬 엔티티 ID를 순회.
         /// 소유자 스탯 변경처럼 스킬 슬롯 역방향 조회가 필요한 시스템에서 사용.
         /// </summary>
-        public static void ForEachOwnedSkill(int characterEntityId, System.Action<int> action)
+        public void ForEachOwnedSkill(int characterEntityId, System.Action<int> action)
         {
             if (action == null)
                 return;
@@ -532,7 +538,7 @@ namespace ARPG.Utility
         /// 소유자 스탯/장비/스킬북 변경 시 그 캐릭터의 스킬 캐시들을 일괄 무효화하는 용도.
         /// 별도 역방향 인덱스 없이 _characterSkillSlots(소유자→슬롯)와 결정적 ID로 즉시 계산.
         /// </summary>
-        public static void MarkOwnedSkillsDirty<T>(int characterEntityId) where T : struct
+        public void MarkOwnedSkillsDirty<T>(int characterEntityId) where T : struct
         {
             ForEachOwnedSkill(characterEntityId, skillEntityId =>
             {
@@ -551,12 +557,12 @@ namespace ARPG.Utility
         /// <param name="targetEntityId">버프를 받을 타겟 엔티티 ID</param>
         /// <param name="buffTableID">버프 테이블 ID</param>
         /// <returns>생성된 버프 엔티티 ID, 이미 존재하거나 실패시 -1</returns>
-        public static int CreateBuffEntity(int targetEntityId, int buffTableID)
+        public int CreateBuffEntity(int targetEntityId, int buffTableID)
         {
             // 타겟 엔티티가 등록되어 있는지 확인
             if (_registeredEntityIds.Contains(targetEntityId) == false)
             {
-                Debug.LogError($"[EntityIdHelper] Target entity {targetEntityId} is not registered");
+                Debug.LogError($"[EntityManager] Target entity {targetEntityId} is not registered");
                 return -1;
             }
 
@@ -564,7 +570,7 @@ namespace ARPG.Utility
             int maxBuffTableId = GetMaxIndex(EntityIdCategory.Buff);
             if (buffTableID < 0 || buffTableID > maxBuffTableId)
             {
-                Debug.LogError($"[EntityIdHelper] Invalid buff table ID: {buffTableID}. Must be between 0 and {maxBuffTableId}");
+                Debug.LogError($"[EntityManager] Invalid buff table ID: {buffTableID}. Must be between 0 and {maxBuffTableId}");
                 return -1;
             }
 
@@ -572,7 +578,7 @@ namespace ARPG.Utility
             int buffEntityId = GetDeterministicId(targetEntityId, EntityIdCategory.Buff, buffTableID);
             if (buffEntityId == -1)
             {
-                Debug.LogError($"[EntityIdHelper] Failed to create buff entity ID");
+                Debug.LogError($"[EntityManager] Failed to create buff entity ID");
                 return -1;
             }
 
@@ -581,7 +587,7 @@ namespace ARPG.Utility
             {
                 if (IsTrackedBuffType(targetEntityId, buffTableID) == false)
                 {
-                    Debug.LogError($"[EntityIdHelper] Buff entity ID collision - ID: {buffEntityId}, Target: {targetEntityId}, TableID: {buffTableID}");
+                    Debug.LogError($"[EntityManager] Buff entity ID collision - ID: {buffEntityId}, Target: {targetEntityId}, TableID: {buffTableID}");
                 }
 
                 // 이미 존재함 - BuffHelper에서 StackCount 증가 처리
@@ -598,7 +604,7 @@ namespace ARPG.Utility
             _registeredEntityIds.Add(buffEntityId);
             _targetBuffTypes[targetEntityId].Add(buffTableID);
 
-            Debug.Log($"[EntityIdHelper] Buff entity created - ID: {buffEntityId}, Target: {targetEntityId}, TableID: {buffTableID}");
+            Debug.Log($"[EntityManager] Buff entity created - ID: {buffEntityId}, Target: {targetEntityId}, TableID: {buffTableID}");
             return buffEntityId;
         }
 
@@ -606,11 +612,11 @@ namespace ARPG.Utility
         /// 버프 엔티티를 제거하고 타입 추적에서 제거
         /// </summary>
         /// <param name="buffEntityId">제거할 버프 엔티티 ID</param>
-        public static void DestroyBuffEntity(int buffEntityId)
+        public void DestroyBuffEntity(int buffEntityId)
         {
             if (_registeredEntityIds.Contains(buffEntityId) == false)
             {
-                Debug.LogWarning($"[EntityIdHelper] Buff entity {buffEntityId} is not registered");
+                Debug.LogWarning($"[EntityManager] Buff entity {buffEntityId} is not registered");
                 return;
             }
 
@@ -621,7 +627,7 @@ namespace ARPG.Utility
             // 유효성 검증
             if (IsValidBuffEntity(buffEntityId) == false)
             {
-                Debug.LogWarning($"[EntityIdHelper] Invalid or untracked buff entity ID: {buffEntityId}");
+                Debug.LogWarning($"[EntityManager] Invalid or untracked buff entity ID: {buffEntityId}");
                 return;
             }
 
@@ -643,13 +649,13 @@ namespace ARPG.Utility
                 }
             }
 
-            Debug.Log($"[EntityIdHelper] Buff entity destroyed - ID: {buffEntityId}, Target: {targetEntityId}, TableID: {buffTableID}");
+            Debug.Log($"[EntityManager] Buff entity destroyed - ID: {buffEntityId}, Target: {targetEntityId}, TableID: {buffTableID}");
         }
 
         /// <summary>
         /// 버프 엔티티 ID가 유효한지 확인
         /// </summary>
-        public static bool IsValidBuffEntity(int buffEntityId)
+        public bool IsValidBuffEntity(int buffEntityId)
         {
             if (_registeredEntityIds.Contains(buffEntityId) == false)
                 return false;
@@ -665,7 +671,7 @@ namespace ARPG.Utility
         /// <summary>
         /// 타겟이 특정 버프 타입을 가지고 있는지 확인
         /// </summary>
-        public static bool HasBuffType(int targetEntityId, int buffTableID)
+        public bool HasBuffType(int targetEntityId, int buffTableID)
         {
             if (_targetBuffTypes.ContainsKey(targetEntityId))
             {
@@ -685,40 +691,40 @@ namespace ARPG.Utility
         /// <param name="fromEntityId">관계 주체 엔티티 ID</param>
         /// <param name="toEntityId">관계 대상 엔티티 ID</param>
         /// <returns>생성된 관계 엔티티 ID, 이미 존재하거나 실패시 -1</returns>
-        public static int CreateRelationshipEntity(int fromEntityId, int toEntityId)
+        public int CreateRelationshipEntity(int fromEntityId, int toEntityId)
         {
             if (_registeredEntityIds.Contains(fromEntityId) == false)
             {
-                Debug.LogError($"[EntityIdHelper] From entity {fromEntityId} is not registered");
+                Debug.LogError($"[EntityManager] From entity {fromEntityId} is not registered");
                 return -1;
             }
 
             if (_registeredEntityIds.Contains(toEntityId) == false)
             {
-                Debug.LogError($"[EntityIdHelper] To entity {toEntityId} is not registered");
+                Debug.LogError($"[EntityManager] To entity {toEntityId} is not registered");
                 return -1;
             }
 
             int maxIndex = GetMaxIndex(EntityIdCategory.Relationship);
             if (toEntityId < 0 || toEntityId > maxIndex)
             {
-                Debug.LogError($"[EntityIdHelper] To entity ID {toEntityId} exceeds max index {maxIndex}");
+                Debug.LogError($"[EntityManager] To entity ID {toEntityId} exceeds max index {maxIndex}");
                 return -1;
             }
 
             int relationshipEntityId = GetDeterministicId(fromEntityId, EntityIdCategory.Relationship, toEntityId);
             if (relationshipEntityId == -1)
             {
-                Debug.LogError($"[EntityIdHelper] Failed to create relationship entity ID");
+                Debug.LogError($"[EntityManager] Failed to create relationship entity ID");
                 return -1;
             }
 
             if (_registeredEntityIds.Contains(relationshipEntityId))
             {
                 if (IsTrackedRelationship(fromEntityId, toEntityId))
-                    Debug.LogWarning($"[EntityIdHelper] Relationship already exists: {fromEntityId} → {toEntityId}");
+                    Debug.LogWarning($"[EntityManager] Relationship already exists: {fromEntityId} → {toEntityId}");
                 else
-                    Debug.LogError($"[EntityIdHelper] Relationship entity ID collision - ID: {relationshipEntityId}, From: {fromEntityId}, To: {toEntityId}");
+                    Debug.LogError($"[EntityManager] Relationship entity ID collision - ID: {relationshipEntityId}, From: {fromEntityId}, To: {toEntityId}");
 
                 return -1;
             }
@@ -739,7 +745,7 @@ namespace ARPG.Utility
 
             _registeredEntityIds.Add(relationshipEntityId);
 
-            Debug.Log($"[EntityIdHelper] Relationship entity created - ID: {relationshipEntityId}, From: {fromEntityId}, To: {toEntityId}");
+            Debug.Log($"[EntityManager] Relationship entity created - ID: {relationshipEntityId}, From: {fromEntityId}, To: {toEntityId}");
             return relationshipEntityId;
         }
 
@@ -747,11 +753,11 @@ namespace ARPG.Utility
         /// 관계 엔티티 제거
         /// </summary>
         /// <param name="relationshipEntityId">제거할 관계 엔티티 ID</param>
-        public static void DestroyRelationshipEntity(int relationshipEntityId)
+        public void DestroyRelationshipEntity(int relationshipEntityId)
         {
             if (_registeredEntityIds.Contains(relationshipEntityId) == false)
             {
-                Debug.LogWarning($"[EntityIdHelper] Relationship entity {relationshipEntityId} is not registered");
+                Debug.LogWarning($"[EntityManager] Relationship entity {relationshipEntityId} is not registered");
                 return;
             }
 
@@ -760,7 +766,7 @@ namespace ARPG.Utility
 
             if (IsValidRelationshipEntity(relationshipEntityId) == false)
             {
-                Debug.LogWarning($"[EntityIdHelper] Invalid or untracked relationship entity ID: {relationshipEntityId}");
+                Debug.LogWarning($"[EntityManager] Invalid or untracked relationship entity ID: {relationshipEntityId}");
                 return;
             }
 
@@ -787,14 +793,14 @@ namespace ARPG.Utility
                 }
             }
 
-            Debug.Log($"[EntityIdHelper] Relationship entity destroyed - ID: {relationshipEntityId}, From: {fromEntityId}, To: {toEntityId}");
+            Debug.Log($"[EntityManager] Relationship entity destroyed - ID: {relationshipEntityId}, From: {fromEntityId}, To: {toEntityId}");
         }
 
         /// <summary>
         /// from → to 관계의 엔티티 ID 조회
         /// </summary>
         /// <returns>관계 엔티티 ID, 존재하지 않으면 -1</returns>
-        public static int GetRelationshipEntityId(int fromEntityId, int toEntityId)
+        public int GetRelationshipEntityId(int fromEntityId, int toEntityId)
         {
             int relationshipEntityId = GetDeterministicId(fromEntityId, EntityIdCategory.Relationship, toEntityId);
             if (relationshipEntityId == -1)
@@ -812,7 +818,7 @@ namespace ARPG.Utility
         /// <summary>
         /// from → to 관계가 존재하는지 확인
         /// </summary>
-        public static bool HasRelationship(int fromEntityId, int toEntityId)
+        public bool HasRelationship(int fromEntityId, int toEntityId)
         {
             if (_relationshipTargets.ContainsKey(fromEntityId))
             {
@@ -824,7 +830,7 @@ namespace ARPG.Utility
         /// <summary>
         /// 관계 엔티티 ID가 유효한지 확인
         /// </summary>
-        public static bool IsValidRelationshipEntity(int relationshipEntityId)
+        public bool IsValidRelationshipEntity(int relationshipEntityId)
         {
             if (_registeredEntityIds.Contains(relationshipEntityId) == false)
                 return false;
@@ -841,7 +847,7 @@ namespace ARPG.Utility
         /// 특정 엔티티가 관련된 모든 관계 엔티티를 제거
         /// (엔티티 삭제 시 호출)
         /// </summary>
-        public static void DestroyAllRelationshipsForEntity(int entityId)
+        public void DestroyAllRelationshipsForEntity(int entityId)
         {
             // 이 엔티티가 "from"인 관계 모두 제거
             if (_relationshipTargets.ContainsKey(entityId))
@@ -905,7 +911,7 @@ namespace ARPG.Utility
         /// <summary>
         /// 등록된 총 엔티티 수 반환
         /// </summary>
-        public static int GetTotalEntityCount()
+        public int GetTotalEntityCount()
         {
             return _registeredEntityIds.Count;
         }
@@ -913,7 +919,7 @@ namespace ARPG.Utility
         /// <summary>
         /// 재활용 대기 중인 엔티티 ID 개수 반환
         /// </summary>
-        public static int GetRecycledEntityCount()
+        public int GetRecycledEntityCount()
         {
             return _recycledEntityIds.Count;
         }
@@ -921,12 +927,12 @@ namespace ARPG.Utility
         /// <summary>
         /// 디버그용: 엔티티 정보 출력
         /// </summary>
-        public static void PrintDebugInfo()
+        public void PrintDebugInfo()
         {
-            Debug.Log($"[EntityIdHelper] Total entities: {_registeredEntityIds.Count}");
-            Debug.Log($"[EntityIdHelper] Next entity ID: {_nextEntityId}");
-            Debug.Log($"[EntityIdHelper] Recycled IDs available: {_recycledEntityIds.Count}");
-            Debug.Log($"[EntityIdHelper] Characters with skills: {_characterSkillSlots.Count}");
+            Debug.Log($"[EntityManager] Total entities: {_registeredEntityIds.Count}");
+            Debug.Log($"[EntityManager] Next entity ID: {_nextEntityId}");
+            Debug.Log($"[EntityManager] Recycled IDs available: {_recycledEntityIds.Count}");
+            Debug.Log($"[EntityManager] Characters with skills: {_characterSkillSlots.Count}");
 
             foreach (var kvp in _characterSkillSlots)
             {

@@ -1,4 +1,5 @@
 using ARPG.Component;
+using ARPG.Manager;
 using ARPG.Utility;
 using UnityEngine;
 
@@ -28,7 +29,7 @@ namespace ARPG.AI.StateHandlers
             if (cm.TryGetComponent<FactionComponent>(entityId, out var faction) == false) return;
 
             // 슬롯 0 스킬
-            int skillEntityId = EntityIdHelper.GetDeterministicId(entityId, EntityIdCategory.Skill, 0);
+            int skillEntityId = EntityManager.GetDeterministicId(entityId, EntityIdCategory.Skill, 0);
             if (cm.TryGetComponent<SkillComponent>(skillEntityId, out var skill) == false) return;
             if (skill.Table == null) return;
 

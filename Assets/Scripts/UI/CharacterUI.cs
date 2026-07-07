@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using ARPG.Base;
+using ARPG.Manager;
 using ARPG.Message;
 using ARPG.Skill.Combat;
 using ARPG.Utility;
@@ -155,7 +156,7 @@ namespace ARPG.UI
             _textStat[6].text = $"마나 재생 {_statComponent.FinalMpGeneration}";
 
             // 기본 스킬(슬롯 0) 기준 예상 데미지/치명타 계산 — DamageCalculator가 profile lazy build 처리
-            int basicSkillEntityId = EntityIdHelper.GetDeterministicId(playerId, EntityIdCategory.Skill, 0);
+            int basicSkillEntityId = EntityManager.GetDeterministicId(playerId, EntityIdCategory.Skill, 0);
             bool hasBasicSkill = AR.s.Component.HasComponent<Component.SkillComponent>(basicSkillEntityId);
 
             EstimatedDamage est;

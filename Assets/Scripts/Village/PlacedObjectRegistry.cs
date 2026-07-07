@@ -10,10 +10,11 @@ namespace ARPG.Village
     ///   - tableId → entityIds (HasObjectSet의 마을 전체 검사, MaxPerVillage 카운트 등)
     ///   - tileXY  → entityId  (특정 좌표의 PlacedObject 조회)
     ///
-    /// 이 레지스트리는 **휘발성** — 세이브에는 들어가지 않는다.
+    /// 이 인덱스는 **휘발성** — 세이브에는 들어가지 않는다.
     /// 정본은 VillageData.PlacedObjects (좌표/HP 등). 로드 시 VillageManager가 정본을 순회하며 재구성.
+    /// static이 아니라 VillageManager가 소유하는 인스턴스 — 수명(Reset/Load 재구성)은 VillageManager가 관리한다.
     /// </summary>
-    public static class PlacedObjectRegistry
+    public class PlacedObjectRegistry
     {
         private class VillageIndex
         {
@@ -21,9 +22,9 @@ namespace ARPG.Village
             public readonly Dictionary<Vector2Int, int> ByTile = new();          // tile → entityId
         }
 
-        private static readonly Dictionary<int, VillageIndex> _byVillage = new();
+        private readonly Dictionary<int, VillageIndex> _byVillage = new();
 
-        public static void Register(int villageId, int entityId, int tableId, Vector2Int tile)
+        public void Register(int villageId, int entityId, int tableId, Vector2Int tile)
         {
             if (_byVillage.TryGetValue(villageId, out var index) == false)
             {
@@ -44,7 +45,7 @@ namespace ARPG.Village
             index.ByTile[tile] = entityId;
         }
 
-        public static void Unregister(int villageId, int entityId)
+        public void Unregister(int villageId, int entityId)
         {
             if (_byVillage.TryGetValue(villageId, out var index) == false) return;
 
@@ -78,7 +79,7 @@ namespace ARPG.Village
         /// <summary>
         /// 마을 내 특정 TableId의 엔티티 목록. 없으면 null.
         /// </summary>
-        public static List<int>? GetEntitiesByTableId(int villageId, int tableId)
+        public List<int>? GetEntitiesByTableId(int villageId, int tableId)
         {
             if (_byVillage.TryGetValue(villageId, out var index) == false) return null;
             return index.ByTable.TryGetValue(tableId, out var list) ? list : null;
@@ -87,7 +88,7 @@ namespace ARPG.Village
         /// <summary>
         /// 특정 좌표의 PlacedObject 엔티티 ID. 없으면 -1.
         /// </summary>
-        public static int GetEntityAtTile(int villageId, Vector2Int tile)
+        public int GetEntityAtTile(int villageId, Vector2Int tile)
         {
             if (_byVillage.TryGetValue(villageId, out var index) == false) return -1;
             return index.ByTile.TryGetValue(tile, out int entityId) ? entityId : -1;
@@ -96,7 +97,7 @@ namespace ARPG.Village
         /// <summary>
         /// 마을 내 모든 PlacedObject 엔티티 (Range 0 = 마을 전체 검사 시 사용).
         /// </summary>
-        public static List<int> GetAllEntitiesInVillage(int villageId)
+        public List<int> GetAllEntitiesInVillage(int villageId)
         {
             var result = new List<int>();
             if (_byVillage.TryGetValue(villageId, out var index) == false) return result;
@@ -113,7 +114,7 @@ namespace ARPG.Village
         /// Bounds 내 PlacedObject 엔티티 (HasObjectSet 5×5 검사, ServiceProximity 등).
         /// 단순 Bounds.Contains 필터 — 마을 오브젝트 수가 적어 O(N) 무관.
         /// </summary>
-        public static List<int> GetAllEntitiesInBounds(int villageId, RectInt bounds)
+        public List<int> GetAllEntitiesInBounds(int villageId, RectInt bounds)
         {
             var result = new List<int>();
             if (_byVillage.TryGetValue(villageId, out var index) == false) return result;
@@ -129,7 +130,7 @@ namespace ARPG.Village
         /// <summary>
         /// 마을의 전체 인덱스 비우기 (Reset 시 호출).
         /// </summary>
-        public static void Clear(int villageId)
+        public void Clear(int villageId)
         {
             _byVillage.Remove(villageId);
         }
@@ -137,7 +138,7 @@ namespace ARPG.Village
         /// <summary>
         /// 모든 마을 인덱스 비우기 (전체 Reset).
         /// </summary>
-        public static void ClearAll()
+        public void ClearAll()
         {
             _byVillage.Clear();
         }

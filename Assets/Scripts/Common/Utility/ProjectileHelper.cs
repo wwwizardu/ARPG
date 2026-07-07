@@ -45,7 +45,7 @@ namespace ARPG.Utility
             obj.transform.rotation = Quaternion.Euler(0f, 0f, angle);
 
             // 엔티티 ID 발급
-            int entityId = EntityIdHelper.CreateEntity();
+            int entityId = AR.s.Entity.CreateEntity();
 
             // ECS 컴포넌트 추가
             AR.s.Component.AddComponent(entityId, new TransformComponent

@@ -15,7 +15,7 @@ namespace ARPG.Example
         private void Start()
         {
             // 플레이어 Entity 생성
-            _playerEntityId = EntityIdHelper.CreateEntity();
+            _playerEntityId = AR.s.Entity.CreateEntity();
 
             // 스탯 컴포넌트 추가
             StatComponent stat = new StatComponent

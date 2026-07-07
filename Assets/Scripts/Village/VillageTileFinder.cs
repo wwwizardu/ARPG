@@ -220,7 +220,7 @@ namespace ARPG.Village
                     // B2: 카테고리 클러스터 (마을 PlacedObject만)
                     if (villageId >= 0 && category != BuildableCategory.None)
                     {
-                        int neighborEntity = PlacedObjectRegistry.GetEntityAtTile(villageId, n);
+                        int neighborEntity = AR.s.Village.PlacedObjects.GetEntityAtTile(villageId, n);
                         if (neighborEntity < 0) continue;
                         if (AR.s.Component.TryGetComponent<ARPG.Component.PlacedObjectComponent>(neighborEntity, out var po) == false) continue;
 

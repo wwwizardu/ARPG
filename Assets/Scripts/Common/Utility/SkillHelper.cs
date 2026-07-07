@@ -1,5 +1,6 @@
 #nullable enable
 using ARPG.Component;
+using ARPG.Manager;
 using ARPG.Tables;
 using UnityEngine;
 
@@ -30,7 +31,7 @@ namespace ARPG.Utility
 
             for (int i = 0; i < slotCount; i++)
             {
-                int skillEntityId = EntityIdHelper.GetDeterministicId(ownerEntityId, EntityIdCategory.Skill, i);
+                int skillEntityId = EntityManager.GetDeterministicId(ownerEntityId, EntityIdCategory.Skill, i);
                 if (skillEntityId == -1)
                     continue;
 
@@ -126,7 +127,7 @@ namespace ARPG.Utility
             if (weight <= 0)
                 return false;
 
-            int skillEntityId = EntityIdHelper.GetDeterministicId(ownerEntityId, EntityIdCategory.Skill, slotIndex);
+            int skillEntityId = EntityManager.GetDeterministicId(ownerEntityId, EntityIdCategory.Skill, slotIndex);
             if (skillEntityId == -1)
                 return false;
 
@@ -177,7 +178,7 @@ namespace ARPG.Utility
         /// <returns>성공 시 true, 스킬이 없거나 실행 중이면 false</returns>
         public static bool GetSkillCommandComponent(int slotIndex, int entityId, Vector2 targetPosition, out SkillCommandComponent command)
         {
-            int skillEntityId = EntityIdHelper.GetDeterministicId(entityId, EntityIdCategory.Skill, slotIndex);
+            int skillEntityId = EntityManager.GetDeterministicId(entityId, EntityIdCategory.Skill, slotIndex);
             if (skillEntityId == -1)
             {
                 command = default;

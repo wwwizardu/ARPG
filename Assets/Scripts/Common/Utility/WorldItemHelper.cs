@@ -122,12 +122,12 @@ namespace ARPG.Utility
             // {
             //     if (worldItem.IsEquipment)
             //     {
-            //         EntityIdHelper.DestroyEntity(worldItem.EquipmentEntityId);
+            //         AR.s.Entity.DestroyEntity(worldItem.EquipmentEntityId);
             //     }
             // }
 
             // 월드 아이템 엔티티 제거
-            EntityIdHelper.DestroyEntity(worldItemEntityId);
+            AR.s.Entity.DestroyEntity(worldItemEntityId);
         }
 
         /// <summary>

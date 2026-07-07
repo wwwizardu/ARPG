@@ -34,7 +34,7 @@ namespace ARPG.Systems
             float now = AR.s.Time.CurrentGameTime;
 
             // Phase 1: 배정 NPC가 사망 등 영구 무효 상태인 task 정리 + 재배정.
-            // 로드 직후 stale ID 케이스는 EntityIdHelper.RegisterExistingEntity가 해결하므로 별도 우회 불필요.
+            // 로드 직후 stale ID 케이스는 AR.s.Entity.RegisterExistingEntity가 해결하므로 별도 우회 불필요.
             ReassignOrphanTasks();
 
             // Phase 1a: NPC가 현장에 있는 task의 진행시간 누적.
@@ -303,7 +303,7 @@ namespace ARPG.Systems
             }
 
             // Step A: task를 별도 entity에 부착 — N개 동시 task 확장의 발판
-            int taskEntityId = EntityIdHelper.CreateEntity();
+            int taskEntityId = AR.s.Entity.CreateEntity();
             ObjectPlacementTaskComponent task = new ObjectPlacementTaskComponent
             {
                 VillageId = v.VillageId,
@@ -333,7 +333,7 @@ namespace ARPG.Systems
         /// <summary>
         /// 배정된 NPC가 사라진 task(사망/오프라인)를 찾아 미배정 상태로 표시하고 다른 NPC로 재배정 시도.
         /// 매 BuildQueue 틱마다 호출 — 진행 중 task가 NPC 부재로 영원히 멈추지 않게 함.
-        /// 게임 로드 직후 stale ID 케이스는 EntityIdHelper.RegisterExistingEntity가 EntityId 자체를 보존하므로
+        /// 게임 로드 직후 stale ID 케이스는 AR.s.Entity.RegisterExistingEntity가 EntityId 자체를 보존하므로
         /// 이 함수는 실제 NPC 사망/이탈 시에만 동작.
         /// </summary>
         private static void ReassignOrphanTasks()
@@ -450,7 +450,7 @@ namespace ARPG.Systems
         {
             // 중복 방어: 즉시 컴포넌트 제거 + entity 폐기 (재활용 풀로)
             AR.s.Component.RemoveComponent<ObjectPlacementTaskComponent>(taskEntityId);
-            EntityIdHelper.DestroyEntity(taskEntityId);
+            AR.s.Entity.DestroyEntity(taskEntityId);
 
             // 배정 NPC 해제 — 다음 OnUpdate에서 BuildStateHandler가 GetDefaultState로 복귀
             ReleaseAssignedNpc(task.AssignedNpcEntityId, taskEntityId);
@@ -675,7 +675,7 @@ namespace ARPG.Systems
                 && AR.s.Village.ConsumeResource(v.VillageId, GlobalEnum.ItemType.Wood, table.Cost_Wood) == false)
                 return false;
 
-            int taskEntityId = EntityIdHelper.CreateEntity();
+            int taskEntityId = AR.s.Entity.CreateEntity();
             Vector2Int tile = new Vector2Int(seg.TileX, seg.TileY);
             ObjectPlacementTaskComponent task = new ObjectPlacementTaskComponent
             {

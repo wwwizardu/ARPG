@@ -48,7 +48,7 @@ namespace ARPG.Systems
         /// </summary>
         public static void BuildOwnedProfiles(int ownerEntityId)
         {
-            EntityIdHelper.ForEachOwnedSkill(ownerEntityId, skillEntityId =>
+            AR.s.Entity.ForEachOwnedSkill(ownerEntityId, skillEntityId =>
             {
                 BuildProfile(skillEntityId);
                 AR.s.Component.RemoveComponent<SkillAttackProfileDirtyTag>(skillEntityId);

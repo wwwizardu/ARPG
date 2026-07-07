@@ -62,7 +62,7 @@ namespace ARPG.Monster
                 var entity = _monsters[i];
                 if (entity != null && entity.gameObject != null)
                 {
-                    EntityIdHelper.DestroyEntity(entity.EntityId);
+                    AR.s.Entity.DestroyEntity(entity.EntityId);
                     Destroy(entity.gameObject);
                 }
             }
@@ -426,7 +426,7 @@ namespace ARPG.Monster
                         if (AR.s.Message.TryGetEntity(entityId, out var entity))
                         {
                             _monsters.Remove(entity);
-                            EntityIdHelper.DestroyEntity(entityId);
+                            AR.s.Entity.DestroyEntity(entityId);
                             Destroy(entity.gameObject);
                         }
                     }

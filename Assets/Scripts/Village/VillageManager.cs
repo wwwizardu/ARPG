@@ -12,6 +12,9 @@ namespace ARPG.Village
         private const int DEFAULT_RESOURCE_CAP = 50;
 
         private Dictionary<int, VillageData> _villages = new();
+        // PlacedObject 조회 인덱스 — 휘발성(세이브 아님). static 대신 매니저 소유, Reset/Load에서 수명 관리.
+        private readonly PlacedObjectRegistry _placedObjects = new();
+        public PlacedObjectRegistry PlacedObjects => _placedObjects;
 
         public void Initialize()
         {
@@ -45,12 +48,12 @@ namespace ARPG.Village
             {
                 if (data.EntityId >= 0)
                 {
-                    EntityIdHelper.DestroyEntity(data.EntityId, false);
+                    AR.s.Entity.DestroyEntity(data.EntityId, false);
                     data.EntityId = -1;
                 }
             }
             _villages.Clear();
-            PlacedObjectRegistry.ClearAll();
+            _placedObjects.ClearAll();
         }
 
         public void RegisterVillage(int villageId, Vector2 position, int tableId = 0)
@@ -360,7 +363,7 @@ namespace ARPG.Village
                 Tables.BuildableItemTable? t = AR.s.Data.GetBuildableItem(saved.TableId);
                 if (t == null) continue;
 
-                int entityId = EntityIdHelper.CreateEntity();
+                int entityId = AR.s.Entity.CreateEntity();
                 AR.s.Component.AddComponent(entityId, new PlacedObjectComponent
                 {
                     VillageId = data.VillageId,
@@ -374,14 +377,14 @@ namespace ARPG.Village
                     UsingNpcEntityId = -1,
                     LastUseGameTime = saved.LastUseGameTime,
                 });
-                PlacedObjectRegistry.Register(data.VillageId, entityId, saved.TableId,
+                _placedObjects.Register(data.VillageId, entityId, saved.TableId,
                     new Vector2Int(saved.TileX, saved.TileY));
             }
         }
 
         private void CreateStorageEntity(VillageData data)
         {
-            int entityId = EntityIdHelper.CreateEntity();
+            int entityId = AR.s.Entity.CreateEntity();
             data.EntityId = entityId;
 
             VillageStorageComponent storage = new VillageStorageComponent
@@ -513,7 +516,7 @@ namespace ARPG.Village
             };
             v.PlacedObjects.Add(saved);
 
-            int entityId = EntityIdHelper.CreateEntity();
+            int entityId = AR.s.Entity.CreateEntity();
             AR.s.Component.AddComponent(entityId, new PlacedObjectComponent
             {
                 VillageId = villageId,
@@ -527,7 +530,7 @@ namespace ARPG.Village
                 UsingNpcEntityId = -1,
                 LastUseGameTime = 0f,
             });
-            PlacedObjectRegistry.Register(villageId, entityId, tableId, new Vector2Int(tileX, tileY));
+            _placedObjects.Register(villageId, entityId, tableId, new Vector2Int(tileX, tileY));
         }
 
         private void AddCap(VillageData v, GlobalEnum.ItemType type, int delta)
@@ -649,10 +652,10 @@ namespace ARPG.Village
                 Tables.BuildableItemTable? buildTable = AR.s.Data.GetBuildableItem(snap.TableId);
                 float buildHours = (buildTable != null && buildTable.BuildHours > 0f) ? buildTable.BuildHours : 2f;
 
-                // EntityIdHelper.RegisterExistingEntity 덕분에 NpcManager.Load / BuildingManager.Load가
+                // AR.s.Entity.RegisterExistingEntity 덕분에 NpcManager.Load / BuildingManager.Load가
                 // 저장 EntityId를 그대로 재사용 → 저장된 AssignedNpcEntityId / BuildingEntityId가 그대로 유효.
                 // → 같은 NPC가 같은 빌딩을 이어서 짓는 상태로 정확히 복원됨.
-                int taskEntityId = ARPG.Utility.EntityIdHelper.CreateEntity();
+                int taskEntityId = AR.s.Entity.CreateEntity();
                 ObjectPlacementTaskComponent task = new ObjectPlacementTaskComponent
                 {
                     VillageId = v.VillageId,
@@ -703,13 +706,13 @@ namespace ARPG.Village
             List<int> entities;
             if (def.Range == 0)
             {
-                entities = PlacedObjectRegistry.GetAllEntitiesInVillage(villageId);
+                entities = _placedObjects.GetAllEntitiesInVillage(villageId);
             }
             else
             {
                 int half = def.Range / 2;
                 RectInt rect = new RectInt(anchor.x - half, anchor.y - half, def.Range, def.Range);
-                entities = PlacedObjectRegistry.GetAllEntitiesInBounds(villageId, rect);
+                entities = _placedObjects.GetAllEntitiesInBounds(villageId, rect);
             }
 
             SetMemberTag covered = SetMemberTag.None;
@@ -727,7 +730,7 @@ namespace ARPG.Village
         /// </summary>
         public int CountByService(int villageId, ProvidedService service)
         {
-            var entities = PlacedObjectRegistry.GetAllEntitiesInVillage(villageId);
+            var entities = _placedObjects.GetAllEntitiesInVillage(villageId);
             int count = 0;
             for (int i = 0; i < entities.Count; i++)
             {

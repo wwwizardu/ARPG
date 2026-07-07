@@ -90,7 +90,7 @@ namespace ARPG.Base
         {
             if (_entityId < 0)
             {
-                _entityId = EntityIdHelper.CreateEntity();
+                _entityId = AR.s.Entity.CreateEntity();
             }
 
             AR.s.Message.RegisterEntity(_entityId, this);
@@ -111,7 +111,7 @@ namespace ARPG.Base
             // EntityId가 할당되어 있지 않다면 생성
             if(_entityId < 0)
             {
-                _entityId = EntityIdHelper.CreateEntity();
+                _entityId = AR.s.Entity.CreateEntity();
             }
 
             Debug.Log($"[EntityBase] Entity initialized with EntityId: {_entityId}");
