@@ -332,13 +332,6 @@ namespace ARPG.UI
                 meta.AddToClassList("village-npc-meta");
                 info.Add(meta);
 
-                if (save.Status == NpcStatus.InnVisitor)
-                {
-                    Text status = new() { text = "여관 방문자" };
-                    status.AddToClassList("village-npc-status-visitor");
-                    info.Add(status);
-                }
-
                 card.Add(info);
                 _npcList.Add(card);
             }

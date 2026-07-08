@@ -19,6 +19,8 @@
 
 > 현존 정착지는 New Game 1회 생성에 그치지 않고 **게임 중에도 계속 시뮬레이션**된다(플레이어 근처=상세/실체화, 멀리=추상). 검증 프로토타입은 [Tools/ChronicleSimPrototype](../../Tools/ChronicleSimPrototype/README.md).
 
+> **구현 상태 (2026-07-08)**: **RL1**(추상 인구 틱, 시간 분할)·**RL2**(materialize+catch-up)·**RL3**(fold-back) **구현 완료** — 파일 목록·검증 기준은 [WORLD_HISTORY_PLAN §11](WORLD_HISTORY_PLAN.md). 아래 §0.2~0.4는 **설계 원안**이며, 실제 구현과의 차이(fold-back 환산 정책·`Pop` float·per-settlement 타임스탬프 등)는 각 소절 주석 참고. ④ 멀리 정치 사건 지속(§0.4 나)만 보류. ⚠ Unity 플레이 검증 전.
+
 ### 0.1 두 단계 + LOD (level-of-detail)
 
 ```
@@ -47,6 +49,8 @@
 | **상세→추상** (fold-back) | 플레이어 이탈 | 라이브 VillageData(인구/사망/건물/플레이어가 일으킨 사건)를 **추상 상태·연대기로 접어 넣고** 추상 틱 재개 |
 
 이 양방향 동기화(특히 fold-back의 라이브→추상 환산)가 정확성의 핵심 난제이자 버그 온상.
+
+> **⚠ 구현 이탈 (RL3, 2026-07-08)**: 위 fold-back의 "라이브 인구 → 추상 Pop **환산**"은 **v1에서 구현하지 않았다.** 물리 NPC는 상한(`NPC_POP_CAP=25`) 걸린 **표본**이라, "생존 NPC → Pop 역함수"(계획서 §6)는 큰 정착지에서 정보 손실이 크다(saturate → 매 방문마다 인구 오감소). 그래서 실제 `FoldBackSettlement`는 **Pop을 건드리지 않고 동결(IsMaterialized)만 해제 + `LastSimGameTime=now`로 추상 틱 재개**한다. 플레이어발 인구 변화(부분 사상자/전멸)의 추상 반영은 **전용 메커니즘으로 분리(후속)**; 전멸은 기존 `Ruin` 연대기 이벤트로 이미 기록. 상세 [WORLD_HISTORY_PLAN §11.4](WORLD_HISTORY_PLAN.md).
 
 > NPC 관계 backfill(materialize 시점에 호출되는 L2)의 알고리즘은 → [NPC_RELATION_HISTORY_DESIGN.md §4](../npc/NPC_RELATION_HISTORY_DESIGN.md).
 
@@ -82,6 +86,12 @@ class SettlementLiveState {
 }
 ```
 
+> **구현 노트 (RL1, 2026-07-08)**: 실제 [`SettlementLiveState`](../../Assets/Scripts/History/Chronicle/WorldSimState.cs)는 **struct**(배열 제자리 tick으로 GC 0)이며 설계와 다음이 다르다:
+> - `Pop`은 **`float`** — 하루 성장이 1 미만이어도 누적되도록(int면 소수점 손실로 정체).
+> - 좌표는 프로젝트 직렬화 규약대로 `WorldCoordX/Y`(int)로 분해. `RegionCoord`는 미보관(현재 불필요).
+> - `LastReconciledTime` 대신 **`float LastSimGameTime`**(게임-hour, 정착지별 시계) — 시간 분할 tick이 이 값으로 경과 일수를 계산.
+> - 전역 tick 커서/`SimRngState`는 `WorldSimState`(런타임)·`HistoryManager`(커서)에 보관.
+
 핵심 원칙:
 1. **추상 ≠ 실체화 데이터 분리** — 안 가본 마을은 정수 몇 개(LiveState)만. NPC 50명을 수백 마을에 저장하지 않음. (기존 코드가 이미 이 방식: NpcSaveData는 스폰된 것만, [VillageData.HasBeenPopulated](../../Assets/Scripts/Village/VillageData.cs#L20) 존재)
 2. **`SettlementId`가 두 층을 잇는 단일 키** — LiveState.VillageId ↔ VillageData.SettlementId.
@@ -93,7 +103,7 @@ class SettlementLiveState {
 
 - **멀리-추상 시뮬은 v1엔 (가) 인구 동역학만.** 멀리서도 전쟁/합병/왕국이 계속 일어나는 **(나) 정치 사건 지속은 나중에 추가** — 저장 구조는 (나)를 수용하되 동작은 보류.
 - **결정론은 생성 시점만 보장.** 런타임은 플레이어 행동·방문 시점에 따라 갈라짐(의도된 동작).
-- 구현 단계: ① 저장 포맷 + 추상 틱(인구) → ② 실체화(추상→상세) + catch-up → ③ fold-back + 연대기 보존 정책 → (나중) 멀리 정치 사건 지속.
+- 구현 단계: ① 저장 포맷 + 추상 틱(인구) ✅ **RL1** → ② 실체화(추상→상세) + catch-up ✅ **RL2** → ③ fold-back ✅ **RL3** (연대기 보존 정책은 기존 Live append 재사용) → (나중) 멀리 정치 사건 지속. **①②③ 2026-07-08 구현 완료** ([WORLD_HISTORY_PLAN §11](WORLD_HISTORY_PLAN.md)).
 
 ---
 
@@ -238,6 +248,8 @@ public class ChronicleSaveData
     public int SimulatedYears;
     public List<ChronicleEvent> Events = new();              // 수백 건 수준
     public List<SettlementSnapshot> Settlements = new();     // 최종 상태만 (런타임은 §0.3 SettlementLiveState)
+    // ↑ RL1(2026-07-08): SettlementSnapshot에 Biome + WorldCoordX/Y 추가됨 — 런타임 인구 성장 모델(BiomeData)과
+    //   materialize 위치 매칭에 필요. WorldSim(라이브 층)이 이 스냅샷에서 최초 1회 초기화된다.
     public List<KingdomData> Kingdoms = new();
 }
 

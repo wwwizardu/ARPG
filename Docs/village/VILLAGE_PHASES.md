@@ -4,6 +4,13 @@
 >
 > **상태**: Phase A/B/C/D 모두 코드 완료 (2026-04-24 ~ 2026-04-28). 후속 Phase E~G는 §5 참조.
 >
+> ⚠️ **2026-07-08 갱신 — NPC 단순화 반영** ([NPC_SIMPLIFICATION_PLAN](../npc/NPC_SIMPLIFICATION_PLAN.md)):
+> - **마을 경제 인구(`v.Population`)는 물리 NPC 수가 아니라 §0 추상 인구(정량화 pop/50·cap25)에서 소싱** (System_SettlementSim → `VillageManager.RefreshAllPopulationsFromAbstract`)
+> - **자원 생산은 인구 기반으로 통일** — 직업 보너스(JobAssignment) 제거, Iron/Gold도 인구 비례 편입
+> - **건물·벽은 자가 건설** — NPC 배정/BuildState 제거, 게임시간 타이머로 완성 (자원 소모는 유지)
+> - **이민/여관 고용(D 서비스 중 Inn 고용 경로) 제거** — 물리 NPC는 초기 1회 모험가 코호트뿐
+> - 아래 Phase D의 "직무(JobAssignment)" 관련 서술은 **폐기됨** — 기록용으로만 유지.
+>
 > 본 문서는 Phase A~D 4개 설계 문서를 통합한 요약본. 각 Phase의 핵심 결정과 산출물만 보존, 세부 히스토리는 생략.
 
 ---

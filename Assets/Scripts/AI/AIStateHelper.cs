@@ -50,18 +50,13 @@ namespace ARPG.AI
 
         /// <summary>
         /// NPC의 기본 상태 반환.
-        /// NPC + NpcBuildAssignmentComponent 보유 → Build (위협 처리 후 작업 재개)
         /// NPC → Patrol
         /// 몬스터 → Idle
         /// </summary>
         public static AIState GetDefaultState(int entityId)
         {
             if (IsNpc(entityId))
-            {
-                if (AR.s.Component.HasComponent<NpcBuildAssignmentComponent>(entityId))
-                    return AIState.Build;
                 return AIState.Patrol;
-            }
             return AIState.Idle;
         }
 

@@ -19,7 +19,7 @@ namespace ARPG.UI
     /// <summary>
     /// NPC 검사 패널 — 장비/인벤토리/성향/스탯 풀 노출.
     /// 읽기 전용: 슬롯 호버 시 툴팁만, 클릭은 무시.
-    /// 진입점: ServiceUIRouter (E키 근접 시), 또는 UIInn 방문자 카드(미리보기 진입).
+    /// 진입점: ServiceUIRouter (E키 근접 시).
     /// </summary>
     public class UINpcInspect : UIBaseForm
     {
@@ -92,18 +92,6 @@ namespace ARPG.UI
                 return;
             }
 
-            RefreshAll();
-        }
-
-        /// <summary>
-        /// Inn 방문자(IsActive=false) 미리보기용 — saveData를 직접 전달.
-        /// UIInn에서 방문자 카드 클릭 시 호출.
-        /// </summary>
-        public void BindSaveData(NpcSaveData saveData)
-        {
-            EnsureBound();
-            _entityId = saveData.EntityId;
-            _saveData = saveData;
             RefreshAll();
         }
 

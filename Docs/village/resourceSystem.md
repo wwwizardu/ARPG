@@ -1,8 +1,13 @@
 # 자원 생산-가공-소비 체인 설계 문서
 
+> ⚠️ **2026-07-08 갱신 — NPC 단순화 반영** ([NPC_SIMPLIFICATION_PLAN](../npc/NPC_SIMPLIFICATION_PLAN.md) D2/D3):
+> **자원 생산 주체는 NPC(직업)가 아니라 마을의 추상 인구(`v.Population`, §0 정량화 값)다.**
+> 직업별 생산/직업 보너스/Working 상태 연동은 폐기됨 — `System_VillagePassiveProduction`이
+> Food/Wood/Stone/Iron/Gold를 모두 인구 비례로 생산한다. 아래 직업 기반 서술은 기록용.
+
 **Last Updated**: 2026-04-09
 **관련 문서**: [townDesign.md](../townDesign.md), [implementationStatus.md](../overview/implementationStatus.md)
-**의존 시스템**: VillageManager, NpcManager, System_NpcSchedule, System_VillageResource
+**의존 시스템**: VillageManager, System_VillagePassiveProduction
 
 ---
 

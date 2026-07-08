@@ -521,8 +521,11 @@ namespace ARPG.History
                 {
                     SettlementId = s.SettlementId,
                     Race = s.Race,
+                    Biome = s.Biome,                 // 런타임 인구 성장 모델(BiomeData)이 사용
                     RegionCoordX = s.RegionX,
                     RegionCoordY = s.RegionY,
+                    WorldCoordX = s.WorldX,          // 런타임 LOD materialize 위치 매칭용
+                    WorldCoordY = s.WorldY,
                     Population = (int)Math.Round(s.Pop),
                     KingdomId = s.KingdomId,
                     Fate = s.Fate,

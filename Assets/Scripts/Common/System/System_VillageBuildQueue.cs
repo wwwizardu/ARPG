@@ -1,6 +1,4 @@
 #nullable enable
-using ARPG.AI;
-using ARPG.AI.StateHandlers;
 using ARPG.Component;
 using ARPG.Map;
 using ARPG.Utility;
@@ -11,12 +9,13 @@ using UnityEngine;
 namespace ARPG.Systems
 {
     /// <summary>
-    /// 마을의 범용 오브젝트 배치 큐.
+    /// 마을의 범용 오브젝트 배치 큐 — 자가 건설 (NPC_SIMPLIFICATION_PLAN D4).
     /// Step A (BUILD_PRIORITY_DESIGN.md): ObjectPlacementTaskComponent를 별도 task entity에 부착.
-    ///  - 동시 task 한도는 마을당 Population (Step B). 각 task당 NPC 1명 1:1 매칭.
+    ///  - 동시 task 한도는 마을당 Population (§0 추상 인구 정량화 값).
     ///  - VillageNeedsEvaluator가 점수 정렬한 후보 리스트를 받아 affordable + placeable한 첫 후보 채택.
-    ///  - 자원 차감 + 새 task entity 발급 + NPC 배정 + 시간 누적 → 완료 시 PlaceObject + entity 폐기.
-    ///  - AccumulatedHours는 NPC가 Build 상태로 현장에 도달했을 때만 누적된다 → 위협 발생 시 자동 일시정지.
+    ///  - 자원 차감 + 새 task entity 발급 + 게임시간 누적 → 완료 시 PlaceObject + entity 폐기.
+    ///  - NPC 배정 없음: AccumulatedHours는 게임시간 경과만큼 무조건 누적된다.
+    ///    단 건설중 빌딩이 데미지를 받으면 진행도가 후퇴한다 (HP↔진행도 양방향 동기화 유지).
     /// 우선순위 정책은 BUILD_PRIORITY_DESIGN.md §2 (4 Layer 점수) 참조.
     /// </summary>
     public class System_VillageBuildQueue : IFixedUpdateSystem
@@ -33,16 +32,10 @@ namespace ARPG.Systems
         {
             float now = AR.s.Time.CurrentGameTime;
 
-            // Phase 1: 배정 NPC가 사망 등 영구 무효 상태인 task 정리 + 재배정.
-            // 로드 직후 stale ID 케이스는 AR.s.Entity.RegisterExistingEntity가 해결하므로 별도 우회 불필요.
-            ReassignOrphanTasks();
-
-            // Phase 1a: NPC가 현장에 있는 task의 진행시간 누적.
+            // Phase 1a: 진행시간 누적 (자가 건설 — 게임시간 차분만큼 무조건 진행).
             // UpdateInterval(5초)마다 한 번 호출되므로, 게임시간 기준 dt를 직접 계산해 누적.
             //   AR.s.Time.CurrentGameTime은 게임시간(h)이므로 마지막 호출 이후 경과를 추적.
-            // 단순화: 매 호출에서 UpdateInterval(실시간 5초)을 게임시간으로 환산하지 않고,
-            //         AccumulatedHours는 게임시간 단위로 직접 다룬다 (StartedAt과 같은 단위).
-            //         호출 간격 동안 NPC가 작업 중이면 그 만큼 진행 — Time.CurrentGameTime 차분 사용.
+            //   AccumulatedHours는 게임시간 단위로 직접 다룬다 (StartedAt과 같은 단위).
             UpdateAccumulatedHours(now);
 
             // Phase 1b: 진행 중 task entity 풀 순회 → 완료된 task 처리
@@ -56,8 +49,7 @@ namespace ARPG.Systems
                 TryFinishAsync(task, taskEntityId).Forget();
             }
 
-            // Phase 2: 마을마다 동시 task 한도(=Pop)까지 신규 task 시도 (Step B).
-            // 각 task는 NPC 1명이 짓는 가정 — Pop 명일 때 동시 N개 빌드 진행.
+            // Phase 2: 마을마다 동시 task 한도(=Pop, 추상 인구 정량화)까지 신규 task 시도 (Step B).
             var villages = AR.s.Village.GetAllVillages();
             foreach (VillageData v in villages)
             {
@@ -83,7 +75,7 @@ namespace ARPG.Systems
         /// <summary>
         /// 모든 진행 중 task에 대해 진행도를 갱신하고 HP/AccumulatedHours를 양방향 동기화한다.
         /// 1) Pull: 빌딩 엔티티가 있고 외부 데미지로 CurrentHp가 떨어져 진행도보다 낮으면 AccumulatedHours를 끌어내림
-        /// 2) Push (NPC 작업 중): dt만큼 AccumulatedHours += → CurrentHp = (Acc/Duration)*MaxHp 로 빌딩에 반영
+        /// 2) Push (자가 건설): dt만큼 AccumulatedHours += → CurrentHp = (Acc/Duration)*MaxHp 로 빌딩에 반영
         /// 3) HpBarView 갱신: DamageMessage 발송으로 fillAmount 자동 갱신
         /// </summary>
         private void UpdateAccumulatedHours(float now)
@@ -137,18 +129,13 @@ namespace ARPG.Systems
                     }
                 }
 
-                // 2) Push — NPC가 현장에서 작업 중이면 진행도 누적
-                int npcId = task.AssignedNpcEntityId;
-                if (dtHours > 0f && npcId >= 0)
+                // 2) Push — 자가 건설: 게임시간 경과분만큼 무조건 누적 (D4, NPC 배정 없음)
+                if (dtHours > 0f)
                 {
-                    Vector2 sitePos = TileToWorld(task.TileX, task.TileY);
-                    if (BuildStateHandler.IsActivelyWorking(npcId, sitePos))
-                    {
-                        task.AccumulatedHours += dtHours;
-                        if (task.AccumulatedHours > task.BuildDurationHours)
-                            task.AccumulatedHours = task.BuildDurationHours;
-                        dirty = true;
-                    }
+                    task.AccumulatedHours += dtHours;
+                    if (task.AccumulatedHours > task.BuildDurationHours)
+                        task.AccumulatedHours = task.BuildDurationHours;
+                    dirty = true;
                 }
 
                 // 3) HP 반영 + UI 갱신
@@ -302,7 +289,8 @@ namespace ARPG.Systems
                 }
             }
 
-            // Step A: task를 별도 entity에 부착 — N개 동시 task 확장의 발판
+            // Step A: task를 별도 entity에 부착 — N개 동시 task 확장의 발판.
+            // 자가 건설(D4): NPC 배정 없이 타이머로만 진행.
             int taskEntityId = AR.s.Entity.CreateEntity();
             ObjectPlacementTaskComponent task = new ObjectPlacementTaskComponent
             {
@@ -315,135 +303,13 @@ namespace ARPG.Systems
                 BuildDurationHours = buildHours,
                 ReservedWoodCost = table.Cost_Wood,
                 ReservedStoneCost = table.Cost_Stone,
-                AssignedNpcEntityId = -1,
                 BuildingEntityId = buildingEntityId,
             };
-
-            // 미배정 NPC 1명에게 1:1 배정 (Build 상태로 강제 전이)
-            int npcId = AssignFreeNpcToTask(v, taskEntityId, tile.Value);
-            task.AssignedNpcEntityId = npcId;
             AR.s.Component.AddComponent(taskEntityId, task);
 
-            string assignNote = npcId >= 0 ? $"npc{npcId}" : "미배정(NPC 부족)";
             string buildingNote = buildingEntityId >= 0 ? $", building={buildingEntityId}" : "";
-            Debug.Log($"[BuildQueue] v{v.VillageId} 착수 '{table.Name}' (taskEntity={taskEntityId}, {assignNote}{buildingNote}): Wood -{table.Cost_Wood}, Stone -{table.Cost_Stone}, tile=({tile.Value.x},{tile.Value.y}), 필요={buildHours:F1}h");
+            Debug.Log($"[BuildQueue] v{v.VillageId} 착수 '{table.Name}' (taskEntity={taskEntityId}{buildingNote}): Wood -{table.Cost_Wood}, Stone -{table.Cost_Stone}, tile=({tile.Value.x},{tile.Value.y}), 필요={buildHours:F1}h");
             return BuildAttemptResult.Started;
-        }
-
-        /// <summary>
-        /// 배정된 NPC가 사라진 task(사망/오프라인)를 찾아 미배정 상태로 표시하고 다른 NPC로 재배정 시도.
-        /// 매 BuildQueue 틱마다 호출 — 진행 중 task가 NPC 부재로 영원히 멈추지 않게 함.
-        /// 게임 로드 직후 stale ID 케이스는 AR.s.Entity.RegisterExistingEntity가 EntityId 자체를 보존하므로
-        /// 이 함수는 실제 NPC 사망/이탈 시에만 동작.
-        /// </summary>
-        private static void ReassignOrphanTasks()
-        {
-            ComponentManager cm = AR.s.Component;
-            SparseSet<ObjectPlacementTaskComponent> pool = cm.GetComponentPool<ObjectPlacementTaskComponent>();
-            for (int i = 0; i < pool.Count; i++)
-            {
-                ObjectPlacementTaskComponent task = pool.GetByIndex(i);
-                int taskEntityId = pool.GetEntityId(i);
-
-                // 배정된 NPC가 활성 상태인지 검사 — NpcTag + TransformComponent 보유 여부로 판정
-                bool npcValid = task.AssignedNpcEntityId >= 0
-                    && cm.HasComponent<NpcTag>(task.AssignedNpcEntityId)
-                    && cm.HasComponent<TransformComponent>(task.AssignedNpcEntityId);
-                if (npcValid) continue;
-
-                // 무효 → 마을 내 다른 미배정 NPC에게 재배정 시도
-                VillageData? v = AR.s.Village.GetVillage(task.VillageId);
-                if (v == null) continue;
-
-                Vector2Int tile = new Vector2Int(task.TileX, task.TileY);
-                int newNpcId = AssignFreeNpcToTask(v, taskEntityId, tile);
-                task.AssignedNpcEntityId = newNpcId;
-                cm.SetComponent(taskEntityId, task);
-
-                if (newNpcId >= 0)
-                    Debug.Log($"[BuildQueue] v{v.VillageId} task{taskEntityId} 재배정 → npc{newNpcId}");
-            }
-        }
-
-        /// <summary>
-        /// 청크 재활성화 등으로 NPC entity가 다시 살아났을 때 호출.
-        /// 진행 중 task 풀에서 이 NPC가 배정된 task를 찾아 NpcBuildAssignmentComponent를 재부착하고
-        /// Build 상태로 전이한다.
-        /// </summary>
-        public static void ReattachBuildAssignmentIfAny(int npcEntityId)
-        {
-            ComponentManager cm = AR.s.Component;
-            SparseSet<ObjectPlacementTaskComponent> pool = cm.GetComponentPool<ObjectPlacementTaskComponent>();
-            for (int i = 0; i < pool.Count; i++)
-            {
-                ObjectPlacementTaskComponent t = pool.GetByIndex(i);
-                if (t.AssignedNpcEntityId != npcEntityId) continue;
-                int taskEntityId = pool.GetEntityId(i);
-                Vector2 sitePos = TileToWorld(t.TileX, t.TileY);
-                cm.AddComponent(npcEntityId, new NpcBuildAssignmentComponent
-                {
-                    TaskEntityId = taskEntityId,
-                    VillageId = t.VillageId,
-                    BuildSitePosition = sitePos,
-                });
-                ResetPatrolTargetForBuild(npcEntityId, sitePos);
-                AIStateHelper.TransitionToState(npcEntityId, AIState.Build);
-                return;
-            }
-        }
-
-        /// <summary>
-        /// 마을의 NpcBuildAssignmentComponent 미보유 NPC 중 첫 번째에 task 배정.
-        /// 부착 + Build 상태 강제 전이까지 처리. 반환: 배정된 NPC EntityId 또는 -1(여유 없음).
-        /// </summary>
-        private static int AssignFreeNpcToTask(VillageData v, int taskEntityId, Vector2Int tile)
-        {
-            ComponentManager cm = AR.s.Component;
-            Vector2 sitePos = TileToWorld(tile.x, tile.y);
-
-            for (int i = 0; i < v.NpcEntityIds.Count; i++)
-            {
-                int npcId = v.NpcEntityIds[i];
-                if (cm.HasComponent<NpcBuildAssignmentComponent>(npcId)) continue;
-                if (cm.HasComponent<NpcTag>(npcId) == false) continue;
-                // 활성 NPC만 — TransformComponent 보유 여부로 판정
-                if (cm.HasComponent<TransformComponent>(npcId) == false) continue;
-
-                cm.AddComponent(npcId, new NpcBuildAssignmentComponent
-                {
-                    TaskEntityId = taskEntityId,
-                    VillageId = v.VillageId,
-                    BuildSitePosition = sitePos,
-                });
-                // 이전 task의 PatrolTarget이 남아있으면 재배정 후 stale 상태로 진동을 일으킴.
-                // Build → Build 전이는 OnEnter를 호출하지 않으므로 여기서 직접 초기화.
-                ResetPatrolTargetForBuild(npcId, sitePos);
-                AIStateHelper.TransitionToState(npcId, AIState.Build);
-                return npcId;
-            }
-
-            return -1;
-        }
-
-        /// <summary>
-        /// NPC의 AIStateComponent.PatrolTarget을 새 build site로 갱신.
-        /// AssignFreeNpcToTask / ReattachBuildAssignmentIfAny에서 OnEnter 미호출 케이스 대응.
-        /// </summary>
-        private static void ResetPatrolTargetForBuild(int npcEntityId, Vector2 sitePos)
-        {
-            ComponentManager cm = AR.s.Component;
-            if (cm.TryGetComponent<AIStateComponent>(npcEntityId, out var ais) == false) return;
-            ais.PatrolTarget = sitePos;
-            ais.PatrolArrivalTime = 0f;
-            cm.SetComponent(npcEntityId, ais);
-        }
-
-        /// <summary>
-        /// 타일 좌표(정수) → 월드 좌표(타일 중심).
-        /// </summary>
-        private static Vector2 TileToWorld(int tileX, int tileY)
-        {
-            return new Vector2(tileX + 0.5f, tileY + 0.5f);
         }
 
         private async UniTask TryFinishAsync(ObjectPlacementTaskComponent task, int taskEntityId)
@@ -451,9 +317,6 @@ namespace ARPG.Systems
             // 중복 방어: 즉시 컴포넌트 제거 + entity 폐기 (재활용 풀로)
             AR.s.Component.RemoveComponent<ObjectPlacementTaskComponent>(taskEntityId);
             AR.s.Entity.DestroyEntity(taskEntityId);
-
-            // 배정 NPC 해제 — 다음 OnUpdate에서 BuildStateHandler가 GetDefaultState로 복귀
-            ReleaseAssignedNpc(task.AssignedNpcEntityId, taskEntityId);
 
             // task에는 VillageId만 있으므로 VillageData를 다시 조회
             VillageData? v = AR.s.Village.GetVillage(task.VillageId);
@@ -619,19 +482,6 @@ namespace ARPG.Systems
             // 만약 그렇지 않다면 BuildingFactory의 비공개 헬퍼를 internal로 노출하거나 동일 로직을 여기 복제 필요.
         }
 
-        /// <summary>
-        /// Task 종료(완료/취소) 시 NPC의 배정 컴포넌트를 해제. taskEntityId가 일치할 때만 제거.
-        /// (이미 다른 task에 재배정된 경우를 대비한 안전장치)
-        /// </summary>
-        public static void ReleaseAssignedNpc(int npcEntityId, int taskEntityId)
-        {
-            if (npcEntityId < 0) return;
-            ComponentManager cm = AR.s.Component;
-            if (cm.TryGetComponent<NpcBuildAssignmentComponent>(npcEntityId, out var build) == false) return;
-            if (build.TaskEntityId != taskEntityId) return;
-            cm.RemoveComponent<NpcBuildAssignmentComponent>(npcEntityId);
-        }
-
         private static void RefundReserved(VillageData v, ObjectPlacementTaskComponent task)
         {
             if (task.ReservedWoodCost > 0)
@@ -675,8 +525,8 @@ namespace ARPG.Systems
                 && AR.s.Village.ConsumeResource(v.VillageId, GlobalEnum.ItemType.Wood, table.Cost_Wood) == false)
                 return false;
 
+            // 자가 건설(D4): NPC 배정 없이 타이머로만 진행
             int taskEntityId = AR.s.Entity.CreateEntity();
-            Vector2Int tile = new Vector2Int(seg.TileX, seg.TileY);
             ObjectPlacementTaskComponent task = new ObjectPlacementTaskComponent
             {
                 VillageId = v.VillageId,
@@ -688,15 +538,11 @@ namespace ARPG.Systems
                 BuildDurationHours = PALISADE_BUILD_HOURS,
                 ReservedWoodCost = table.Cost_Wood,
                 ReservedStoneCost = 0,
-                AssignedNpcEntityId = -1,
+                BuildingEntityId = -1,
             };
-
-            int npcId = AssignFreeNpcToTask(v, taskEntityId, tile);
-            task.AssignedNpcEntityId = npcId;
             AR.s.Component.AddComponent(taskEntityId, task);
 
-            string assignNote = npcId >= 0 ? $"npc{npcId}" : "미배정(NPC 부족)";
-            Debug.Log($"[BuildQueue] v{v.VillageId} 벽 착수 seg{seg.SegmentId} '{table.Name}' (taskEntity={taskEntityId}, {assignNote}) tile=({seg.TileX},{seg.TileY})");
+            Debug.Log($"[BuildQueue] v{v.VillageId} 벽 착수 seg{seg.SegmentId} '{table.Name}' (taskEntity={taskEntityId}) tile=({seg.TileX},{seg.TileY})");
             return true;
         }
 

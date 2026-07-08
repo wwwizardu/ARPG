@@ -1,5 +1,9 @@
 # Inn 기반 NPC 고용 시스템 — 설계 문서
 
+> ⚠️ **DEPRECATED (2026-07-08)**: 이 시스템은 [NPC_SIMPLIFICATION_PLAN](../npc/NPC_SIMPLIFICATION_PLAN.md) D6에 따라 **제거되었다**.
+> 이민/방문자/고용 경로(System_VillagePopulation·NpcManager Inn region·UIInn의 방문자 카드/Hire)는 코드에서 삭제됨.
+> 여관 건물/서비스 근접 판정과 **UIInn의 휴식(+6h)/세이브 보조 기능은 잔존**(무인 여관). 아래 내용은 기록용으로만 유지.
+
 > 상위 문서: [VILLAGE_GROWTH_STAGES.md](VILLAGE_GROWTH_STAGES.md)
 > 선행: [VILLAGE_PHASES.md](VILLAGE_PHASES.md) (Phase C·D 섹션) ✅
 >

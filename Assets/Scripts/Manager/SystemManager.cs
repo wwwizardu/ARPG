@@ -53,13 +53,17 @@ namespace ARPG.Systems
             // ===== Village Domain (Priority 50-69) — see CLAUDE.md =====
             // 50-54: Resource / 55-59: Population / 60-64: Lifecycle / 65-69: Construction
 
+            // Priority 50: Settlement Sim (World LOD) - 멀리(추상) 정착지 인구 tick, 시간 분할 (PROCEDURAL §0)
+            // per-village 시스템보다 먼저 world 추상 상태 갱신
+            System_SettlementSim settlementSimSystem = new();
+            RegisterSystems(settlementSimSystem);
+
             // Priority 52: Village Passive Production (Resource) - 정수 기반 자원 생산/소비 (Phase A)
             System_VillagePassiveProduction villagePassiveProductionSystem = new();
             RegisterSystems(villagePassiveProductionSystem);
 
-            // Priority 56: Village Population (Population) - 정원 재스폰 + 자연 이민 (Phase A→C: 구 Respawn 흡수)
-            System_VillagePopulation villagePopulationSystem = new();
-            RegisterSystems(villagePopulationSystem);
+            // (제거) Priority 56 System_VillagePopulation — NPC 단순화(NPC_SIMPLIFICATION_PLAN D5/D6):
+            // 이민/여관 고용 제거 + 재스폰 보류. 초기 코호트 스폰은 MapManager.CreateMap의 EnsureAllVillagesPopulated가 담당.
 
             // (제거) Priority 58 System_NpcRelationship — 패시브 근접 호감도 drift 폐기.
             // NPC↔NPC 호감도는 활동(원정) 결과로 변동 (설계 NPC_ACTIVITY_DESIGN §8.3 / NPC_RELATION_HISTORY §5.2).
@@ -83,9 +87,8 @@ namespace ARPG.Systems
             System_VillageWallPlanner villageWallPlannerSystem = new();
             RegisterSystems(villageWallPlannerSystem);
 
-            // Priority 68: Village Job Assignment (Construction) - NPC 직업 ↔ 작업 오브젝트 매칭 (Phase D, 게임시간 1h)
-            System_VillageJobAssignment villageJobAssignmentSystem = new();
-            RegisterSystems(villageJobAssignmentSystem);
+            // (제거) Priority 68 System_VillageJobAssignment — NPC 단순화(NPC_SIMPLIFICATION_PLAN D1/D3):
+            // 직업↔작업오브젝트 매칭 폐기. 자원 생산은 인구(v.Population) 기반으로 통일.
 
             // Priority 70: Lifetime System (FixedUpdate) - LifetimeComponent 만료 시 DestroyTag 부착 (토템·지뢰·장판)
             // 토템의 자율 시전은 AI Behavior(50)의 Stationary 프로필에서 처리 (StationaryAttackStateHandler)

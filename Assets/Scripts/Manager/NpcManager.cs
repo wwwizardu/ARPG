@@ -17,8 +17,6 @@ namespace ARPG.Npc
     {
         private Dictionary<int, NpcSaveData> _npcSaveDict = new();
         private Dictionary<Vector2Int, List<int>> _chunkNpcs = new();
-        // Inn 고용 시스템 — 마을별 방문자 EntityId 인덱스 (런타임 캐시, 세이브 대상 아님)
-        private Dictionary<int, List<int>> _innVisitorsByVillageId = new();
         // NPC 간 호감도 (양방향 대칭, sparse — 만난 적 있는 페어만 등록)
         private Dictionary<NpcPairKey, int> _npcAffinity = new();
         // 호감도 clamp 범위 (drift 누적 폭주 방지)
@@ -32,10 +30,6 @@ namespace ARPG.Npc
         private Transform? _npcParent;
         private bool _isInitialLoaded = false;
         private int _chunkSize;
-
-        // INN_HIRING_DESIGN.md §2.3 / §2.10
-        private const int INN_CAPACITY = 2;
-        private const float VISITOR_STAY_DURATION_HOURS = 24f;
 
         [Header("NPC Activation")]
         [SerializeField] private float _activationDistance = 30f;
@@ -74,7 +68,6 @@ namespace ARPG.Npc
 
             _npcSaveDict.Clear();
             _chunkNpcs.Clear();
-            _innVisitorsByVillageId.Clear();
             _npcAffinity.Clear();
             _npcRelations.Clear();
             _narrative.Reset();
@@ -89,7 +82,7 @@ namespace ARPG.Npc
         /// <summary>
         /// 플레이어 청크 + 인접 8청크의 활성 NPC 중 maxRange 이내 가장 가까운 NPC를 찾는다.
         /// 청크 인덱스(_chunkNpcs) 기반이라 NPC 수와 무관하게 비용 일정.
-        /// 죽은 NPC, IsActive=false(예: Inn 방문자)는 제외.
+        /// 죽은 NPC, IsActive=false는 제외.
         /// </summary>
         /// <returns>entityId. 없으면 -1. 거리 sqr은 out.</returns>
         public int FindNearestActiveNpc(Vector2 worldPos, float maxRange, out float distanceSqr)
@@ -279,9 +272,9 @@ namespace ARPG.Npc
         }
 
         /// <summary>
-        /// 마을이 비어있으면(or 최초) 기본 NPC를 스폰한다.
-        /// - 최초: 즉시 스폰
-        /// - 전멸 후: 쿨타임 경과 시 재스폰
+        /// 마을 초기 1회 모험가 코호트 스폰 (NPC_SIMPLIFICATION_PLAN D5).
+        /// 스폰된 물리 NPC는 마을 경제와 분리된 모험가 — 재스폰/전멸 복구 없음 (초기 코호트로 재미 검증 먼저).
+        /// 맵파일에 NPC가 배치된 마을(NpcEntityIds already filled)은 기존과 동일하게 스킵.
         /// </summary>
         public void EnsureVillagePopulated(int villageId)
         {
@@ -292,8 +285,10 @@ namespace ARPG.Npc
             if (village.TableId <= 0)
                 return;
 
-            int aliveCount = CountAliveNpcs(village);
-            if (aliveCount > 0)
+            if (village.HasBeenPopulated)
+                return;
+
+            if (village.NpcEntityIds.Count > 0)
                 return;
 
             VillageTable? table = AR.s.Data.GetVillageTable(village.TableId);
@@ -303,30 +298,10 @@ namespace ARPG.Npc
                 return;
             }
 
-            if (village.HasBeenPopulated == false)
-            {
-                // 최초 생성 → 즉시 스폰
-                SpawnDefaultNpcsForVillage(village, table);
-                // R2: 첫 population 직후 1회 — 가족/직업/성격 관계 + 호감도 시드 + 연대기 sentiment
-                NpcRelationBackfill.Generate(village, village.NpcEntityIds);
-                village.HasBeenPopulated = true;
-                village.DepletedAt = 0f;
-                return;
-            }
-
-            // 전멸 상태 → 쿨타임 체크
-            float now = AR.s.Time.CurrentGameTime;
-            float elapsed = now - village.DepletedAt;
-            if (elapsed >= table.RespawnCooldown)
-            {
-                Debug.Log($"[EnsureVillagePopulated] v{villageId} 쿨타임 만료, 재스폰 (elapsed={elapsed:F2}h, cooldown={table.RespawnCooldown}h)");
-                SpawnDefaultNpcsForVillage(village, table);
-                village.DepletedAt = 0f;
-            }
-            else
-            {
-                Debug.Log($"[EnsureVillagePopulated] v{villageId} 쿨타임 대기 중 (elapsed={elapsed:F2}h / cooldown={table.RespawnCooldown}h, DepletedAt={village.DepletedAt:F2}, now={now:F2})");
-            }
+            SpawnDefaultNpcsForVillage(village, table);
+            // R2: 첫 population 직후 1회 — 함께 태어난 모험가 코호트의 가족/관계 + 호감도 시드 + 연대기 sentiment
+            NpcRelationBackfill.Generate(village, village.NpcEntityIds);
+            village.HasBeenPopulated = true;
         }
 
         /// <summary>
@@ -341,10 +316,10 @@ namespace ARPG.Npc
             }
         }
 
-        // ── 인구 비례 NPC 스폰 (정착지 인구 → 물리 NPC 수 매핑) ──
-        // 코드 상수로 시작. 만족 후 필요하면 VillageTable/VillageStageTable 컬럼으로 승격.
-        private const int NPC_POP_DIVISOR = 50;  // 인구 K명당 물리 NPC 1명 (cap은 pop≈1250에서 도달)
-        private const int NPC_POP_CAP = 25;      // 마을 동시 물리 NPC 상한
+        // ── 인구 비례 NPC 스폰 (정착지 인구 → 물리 모험가 코호트 수 매핑) ──
+        // 정량화 상수는 VillageManager와 공유 — v.Population(경제)과 동일 캘리브레이션 (NPC_SIMPLIFICATION_PLAN §3.2).
+        private const int NPC_POP_DIVISOR = VillageManager.ABSTRACT_POP_DIVISOR;
+        private const int NPC_POP_CAP = VillageManager.ABSTRACT_POP_CAP;
 
         /// <summary>
         /// 마을에 스폰할 목표 NPC 수를 정착지 인구에 비례해 계산한다.
@@ -394,21 +369,6 @@ namespace ARPG.Npc
             return village.Position + new Vector2(Mathf.Cos(angle) * r, Mathf.Sin(angle) * r);
         }
 
-        private int CountAliveNpcs(VillageData village)
-        {
-            int count = 0;
-            for (int i = 0; i < village.NpcEntityIds.Count; i++)
-            {
-                int eid = village.NpcEntityIds[i];
-                if (_npcSaveDict.TryGetValue(eid, out NpcSaveData? saveData) == false)
-                    continue;
-
-                if (saveData.Condition != CharacterConditions.Dead)
-                    count++;
-            }
-            return count;
-        }
-
         /// <summary>
         /// 비동기 NPC 엔티티 생성.
         /// await 도중 청크가 비활성화되거나 재활성화 레이스가 발생해도 일관성 유지:
@@ -454,21 +414,8 @@ namespace ARPG.Npc
                     AR.s.Component.SetComponent(createdId, village);
                 }
 
-                if (AR.s.Component.TryGetComponent<NpcJobComponent>(createdId, out var job))
-                {
-                    job.JobType = saveData.JobType;
-                    job.SkillLevel = saveData.SkillLevel;
-                    AR.s.Component.SetComponent(createdId, job);
-                }
-
                 saveData.EntityId = createdId;
                 saveData.IsActive = true;
-
-                // 진행 중 build task에 이 NPC가 배정돼 있었다면 NpcBuildAssignmentComponent 재부착 + Build 상태 전이.
-                // 청크 비활성으로 일시 디스폰됐다가 돌아온 경우, 그리고 게임 로드 후 첫 스폰 모두 동일 경로.
-                // EntityId가 세션 간 보존되므로(AR.s.Entity.RegisterExistingEntity) task.AssignedNpcEntityId가
-                // 그대로 이 NPC의 createdId와 일치 → 매칭 성공 → 같은 NPC가 같은 빌딩을 이어서 짓는 상태로 복원.
-                ARPG.Systems.System_VillageBuildQueue.ReattachBuildAssignmentIfAny(createdId);
             }
             finally
             {
@@ -496,12 +443,6 @@ namespace ARPG.Npc
             if (AR.s.Component.TryGetComponent<NpcVillageComponent>(entityId, out var village))
             {
                 saveData.VillageId = village.VillageId;
-            }
-
-            if (AR.s.Component.TryGetComponent<NpcJobComponent>(entityId, out var job))
-            {
-                saveData.JobType = job.JobType;
-                saveData.SkillLevel = job.SkillLevel;
             }
 
             // 성향 스냅샷 (런타임 변동 대비)
@@ -558,27 +499,8 @@ namespace ARPG.Npc
 
             saveData.IsActive = false;
 
-            // Visitor가 사망/이탈하면 인덱스에서 제거 (마을 전멸 체크는 Resident만)
-            if (saveData.Status == NpcStatus.InnVisitor)
-            {
-                RemoveVisitorFromIndex(saveData.StayingAtVillageId, entityId);
-                return;
-            }
-
-            // 사망이면 마을 전멸 체크
-            if (saveData.Condition == CharacterConditions.Dead && saveData.VillageId >= 0)
-            {
-                VillageData? village = AR.s.Village.GetVillage(saveData.VillageId);
-                if (village != null && village.DepletedAt <= 0f && CountAliveNpcs(village) == 0)
-                {
-                    village.DepletedAt = AR.s.Time.CurrentGameTime;
-                    Debug.Log($"[NpcManager] Village {saveData.VillageId} depleted at game time {village.DepletedAt}");
-
-                    // R3: Live 연대기 — 마을 전멸 사건 (연대기에 연결된 마을만)
-                    if (village.SettlementId >= 0)
-                        AR.s.History.AppendLiveEvent(ARPG.History.ChronicleEventType.Ruin, village.SettlementId);
-                }
-            }
+            // (제거) 물리-사망 기반 마을 전멸(DepletedAt/Ruin) 트리거 — NPC_SIMPLIFICATION_PLAN D7.
+            // 마을 폐허는 "추상 인구 0 → Ruin" 규칙으로 재정의하되 구현은 보류. 모험가 사망은 경제와 무관.
         }
 
         /// <summary>
@@ -616,7 +538,6 @@ namespace ARPG.Npc
         {
             _npcSaveDict.Clear();
             _chunkNpcs.Clear();
-            _innVisitorsByVillageId.Clear();
 
             if (npcSaveDatas == null || npcSaveDatas.Count == 0)
                 return;
@@ -627,8 +548,7 @@ namespace ARPG.Npc
             {
                 NpcSaveData saveData = kvp.Value;
 
-                // 저장된 EntityId 그대로 재사용 — 세션 간 NPC 동일성 보장.
-                // task.AssignedNpcEntityId 등 다른 시스템이 참조하는 ID가 stale 안 되도록.
+                // 저장된 EntityId 그대로 재사용 — 세션 간 NPC 동일성 보장 (관계/호감도 인덱스가 ID 참조).
                 // dict key가 정본(저장 시점의 EntityId), saveData.EntityId는 백업 (둘 다 동일하나 안전망).
                 // 등록은 AR.PreReserveSavedEntityIds()가 Initialize 단계에서 일괄 처리 — 여기서 다시 등록하면 이중 등록 LogError.
                 int entityId = kvp.Key > 0 ? kvp.Key
@@ -646,19 +566,13 @@ namespace ARPG.Npc
 
                 _npcSaveDict[entityId] = saveData;
 
-                // Inn 시스템 옵션 1: Visitor는 월드에 출현하지 않으므로 _chunkNpcs/마을 등록 모두 생략
-                if (saveData.Status == NpcStatus.InnVisitor)
-                {
-                    AddVisitorToIndex(saveData.StayingAtVillageId, entityId);
-                }
-                else
-                {
-                    Vector2Int chunkCoord = PositionToChunk(saveData.Position);
-                    AddNpcToChunk(chunkCoord, entityId);
+                // 구 세이브의 Inn 방문자(월드 미출현 NPC)는 Status 필드 제거로 일반 NPC와 동일 취급.
+                // VillageId=-1이라 마을 등록 없이 마지막 좌표에서 모험가로 복원된다 (§10 세이브 마이그레이션).
+                Vector2Int chunkCoord = PositionToChunk(saveData.Position);
+                AddNpcToChunk(chunkCoord, entityId);
 
-                    if (saveData.VillageId >= 0)
-                        AR.s.Village.RegisterNpcToVillage(saveData.VillageId, entityId);
-                }
+                if (saveData.VillageId >= 0)
+                    AR.s.Village.RegisterNpcToVillage(saveData.VillageId, entityId);
             }
 
             _isInitialLoaded = true;
@@ -886,7 +800,10 @@ namespace ARPG.Npc
 
         #endregion
 
-        #region Inn 고용 시스템 (INN_HIRING_DESIGN.md)
+        #region NPC 메타데이터 조회 / flavor
+
+        // (제거) Inn 고용/방문자 시스템 — NPC_SIMPLIFICATION_PLAN §4.1 (D6).
+        // INN_HIRING_DESIGN.md는 deprecated. 여관 건물/서비스 근접은 유지되나 고용 경로는 없다.
 
         /// <summary>
         /// EntityId에 매핑된 NpcSaveData를 반환. 없으면 null.
@@ -895,263 +812,6 @@ namespace ARPG.Npc
         public NpcSaveData? GetSaveData(int entityId)
         {
             return _npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) ? saveData : null;
-        }
-
-        /// <summary>
-        /// 여관에 머물 수 있는 방문자 수. 현재 고정 2 (§2.3).
-        /// 향후 Inn 업그레이드 시스템 도입 시 villageId 기반으로 InnLevel을 조회하도록 변경.
-        /// </summary>
-        public int GetInnCapacity(int villageId) => INN_CAPACITY;
-
-        /// <summary>
-        /// 마을의 현재 방문자 EntityId 목록을 반환. 만료된 방문자는 포함될 수 있음 — 호출자가 EvictExpiredVisitors 선행 권장.
-        /// </summary>
-        public List<int> GetInnVisitors(int villageId)
-        {
-            if (_innVisitorsByVillageId.TryGetValue(villageId, out List<int>? list) == false)
-                return new List<int>();
-            return list;
-        }
-
-        public int GetInnVisitorCount(int villageId)
-        {
-            if (_innVisitorsByVillageId.TryGetValue(villageId, out List<int>? list) == false)
-                return 0;
-            return list.Count;
-        }
-
-        /// <summary>
-        /// Visitor의 남은 체류 시간(게임시간 시) 반환. Resident이거나 만료/없으면 0.
-        /// </summary>
-        public float GetVisitorRemainingHours(int entityId)
-        {
-            if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false) return 0f;
-            if (saveData.Status != NpcStatus.InnVisitor) return 0f;
-
-            float elapsed = AR.s.Time.CurrentGameTime - saveData.ArrivedGameTime;
-            float remaining = VISITOR_STAY_DURATION_HOURS - elapsed;
-            return remaining > 0f ? remaining : 0f;
-        }
-
-        /// <summary>
-        /// 방문자 NPC를 등록한다 — 월드에 출현하지 않고 SaveData/UI 인덱스에만 존재.
-        /// 실제 GameObject/AI는 플레이어가 고용(<see cref="HireVisitor"/>)하는 시점에 처음 생성된다.
-        /// 도착 시각(ArrivedGameTime)을 기록하여 §2.10 만료 시스템과 연동.
-        /// </summary>
-        public int SpawnVisitorNpc(int npcTableId, Vector2 position, int villageId)
-        {
-            int entityId = AR.s.Entity.CreateEntity();
-            NpcSaveData saveData = new NpcSaveData(npcTableId, position)
-            {
-                EntityId = entityId,
-                VillageId = -1,
-                Status = NpcStatus.InnVisitor,
-                StayingAtVillageId = villageId,
-                ArrivedGameTime = AR.s.Time.CurrentGameTime,
-                Description = PickDescription(GetPreferredJobType(npcTableId)),
-            };
-
-            SeedNpcEquipment(saveData);
-
-            _npcSaveDict[entityId] = saveData;
-            AddVisitorToIndex(villageId, entityId);
-            // Visitor는 월드에 출현하지 않으므로 _chunkNpcs/SpawnNpc는 호출하지 않는다.
-            // saveData.Position은 고용 시 마을원으로 첫 출현할 좌표로 보존됨.
-
-            Debug.Log($"[NpcManager] Visitor 등록 v{villageId} entity={entityId} npcTableId={npcTableId} (UI 전용)");
-            return entityId;
-        }
-
-        /// <summary>
-        /// 방문자를 마을 정식 거주자로 승격한다.
-        /// 실패 사유는 failReason에 한국어 메시지로 반환 — UI 안내용.
-        /// </summary>
-        public bool HireVisitor(int entityId, out string failReason)
-        {
-            failReason = string.Empty;
-
-            if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
-            {
-                failReason = "방문자 정보를 찾을 수 없습니다.";
-                return false;
-            }
-
-            if (saveData.Status != NpcStatus.InnVisitor)
-            {
-                failReason = "고용 가능한 방문자가 아닙니다.";
-                return false;
-            }
-
-            int villageId = saveData.StayingAtVillageId;
-            VillageData? village = AR.s.Village.GetVillage(villageId);
-            if (village == null)
-            {
-                failReason = "마을을 찾을 수 없습니다.";
-                return false;
-            }
-
-            // 비용 계산 (§2.7) — Step 7에서 직업 보너스까지 합산
-            int hireCost = CalculateHireCost(saveData, village);
-            int playerGold = AR.s.Data.Player?.Gold ?? 0;
-            if (playerGold < hireCost)
-            {
-                failReason = $"골드 부족 (보유 {playerGold}G / 필요 {hireCost}G)";
-                return false;
-            }
-
-            // 식량 체크/차감 — 새 거주자 1명분(5)
-            const int FOOD_PER_NPC = 5;
-            if (AR.s.Component.TryGetComponent<VillageStorageComponent>(village.EntityId, out var storage) == false)
-            {
-                failReason = "마을 자원 정보를 찾을 수 없습니다.";
-                return false;
-            }
-            if (storage.FoodAmount < FOOD_PER_NPC)
-            {
-                failReason = $"식량 부족 (보유 {storage.FoodAmount} / 필요 {FOOD_PER_NPC})";
-                return false;
-            }
-
-            // 통과 — 자원 차감 + 상태 전이
-            if (hireCost > 0 && AR.s.Data.Player != null)
-                AR.s.Data.Player.Gold -= hireCost;
-
-            storage.FoodAmount -= FOOD_PER_NPC;
-            AR.s.Component.SetComponent(village.EntityId, storage);
-
-            RemoveVisitorFromIndex(villageId, entityId);
-            saveData.Status = NpcStatus.Resident;
-            saveData.VillageId = villageId;
-            saveData.StayingAtVillageId = 0;
-            saveData.JobType = saveData.JobType != GlobalEnum.JobType.None
-                ? saveData.JobType
-                : GetPreferredJobType(saveData.NpcTableId);
-
-            AR.s.Village.RegisterNpcToVillage(villageId, entityId);
-
-            // Visitor는 월드에 없던 상태 — 고용 시점에 처음 출현시킨다.
-            // SpawnNpc가 NpcVillageComponent.VillageId / NpcJobComponent.JobType을 saveData에서 동기화함.
-            Vector2Int chunkCoord = PositionToChunk(saveData.Position);
-            AddNpcToChunk(chunkCoord, entityId);
-            if (AR.s.Map.IsChunkActive(chunkCoord))
-                SpawnNpc(entityId, saveData).Forget();
-
-            Debug.Log($"[NpcManager] Visitor 고용 v{villageId} entity={entityId} cost={hireCost}G");
-            return true;
-        }
-
-        /// <summary>
-        /// 마을의 방문자 중 체류 시간 만료(24h 경과)된 자를 디스폰한다.
-        /// 매 이민 틱 진입 시 호출 (§2.10) — 별도 스케줄러 없음.
-        /// </summary>
-        public void EvictExpiredVisitors(int villageId)
-        {
-            if (_innVisitorsByVillageId.TryGetValue(villageId, out List<int>? list) == false)
-                return;
-            if (list.Count == 0) return;
-
-            float now = AR.s.Time.CurrentGameTime;
-
-            // 뒤에서부터 순회 — 제거 중 인덱스 보존
-            for (int i = list.Count - 1; i >= 0; i--)
-            {
-                int entityId = list[i];
-                if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
-                {
-                    list.RemoveAt(i);
-                    continue;
-                }
-
-                float elapsed = now - saveData.ArrivedGameTime;
-                if (elapsed < VISITOR_STAY_DURATION_HOURS) continue;
-
-                Debug.Log($"[NpcManager] Visitor 만료 이탈 v{villageId} entity={entityId} elapsed={elapsed:F1}h");
-                DespawnVisitor(entityId, saveData);
-                list.RemoveAt(i);
-            }
-        }
-
-        // ========== 내부 헬퍼 ==========
-
-        private void AddVisitorToIndex(int villageId, int entityId)
-        {
-            if (_innVisitorsByVillageId.TryGetValue(villageId, out List<int>? list) == false)
-            {
-                list = new List<int>();
-                _innVisitorsByVillageId[villageId] = list;
-            }
-            if (list.Contains(entityId) == false)
-                list.Add(entityId);
-        }
-
-        private void RemoveVisitorFromIndex(int villageId, int entityId)
-        {
-            if (_innVisitorsByVillageId.TryGetValue(villageId, out List<int>? list))
-                list.Remove(entityId);
-        }
-
-        private void DespawnVisitor(int entityId, NpcSaveData saveData)
-        {
-            // 옵션 1: Visitor는 월드에 출현하지 않으므로 IsActive=false가 일반적이지만,
-            // 고용 후 즉시 만료 등의 레이스를 대비해 활성 엔티티도 안전하게 정리.
-            if (saveData.IsActive && AR.s.Message.TryGetEntity(entityId, out var entity))
-            {
-                if (entity != null)
-                    Destroy(entity.gameObject);
-            }
-
-            // EntityManager에서 ID 회수 (출현 여부와 무관하게 SpawnVisitorNpc에서 발급된 ID 해제)
-            AR.s.Entity.DestroyEntity(entityId, false);
-
-            // Visitor는 _chunkNpcs에 등록되지 않지만, 고용 직후 만료 케이스 대비 안전 호출
-            Vector2Int chunkCoord = PositionToChunk(saveData.Position);
-            RemoveNpcFromChunk(chunkCoord, entityId);
-
-            // R3: 영구 제거 경로 — 관여 호감도/관계 잔존물 정리 (방문자는 보통 관계 없음 = no-op)
-            RemoveAllAffinityInvolving(entityId);
-            RemoveAllRelationsInvolving(entityId);
-            _npcSaveDict.Remove(entityId);
-        }
-
-        /// <summary>
-        /// INN_HIRING_DESIGN.md §2.7 — HireCost = BaseCost[Stage] + JobBonusCost[JobType].
-        /// 직업별 보너스는 단일 사전으로 시작(시트 컬럼 신설 회피); 후속 튜닝 시 JobBonusTable로 이관 검토.
-        /// </summary>
-        private int CalculateHireCost(NpcSaveData saveData, VillageData village)
-        {
-            Tables.VillageStageTable? stageTable = AR.s.Data.GetVillageStage(village.Stage);
-            int baseCost = stageTable != null ? stageTable.HireBaseCost : 0;
-            if (stageTable == null)
-                Debug.LogError($"[NpcManager] VillageStageTable not loaded — stage={village.Stage}");
-
-            GlobalEnum.JobType desiredJob = saveData.JobType != GlobalEnum.JobType.None
-                ? saveData.JobType
-                : GetPreferredJobType(saveData.NpcTableId);
-
-            return baseCost + GetJobBonusCost(desiredJob);
-        }
-
-        /// <summary>
-        /// §2.7 직업별 가산 비용 — 노동/채집은 0, 전문직일수록 비싸짐.
-        /// </summary>
-        private static int GetJobBonusCost(GlobalEnum.JobType jobType)
-        {
-            return jobType switch
-            {
-                GlobalEnum.JobType.None       => 0,
-                GlobalEnum.JobType.Gatherer   => 0,    // 만능 fallback
-                GlobalEnum.JobType.Woodcutter => 10,
-                GlobalEnum.JobType.Farmer     => 20,
-                GlobalEnum.JobType.Hunter     => 30,
-                GlobalEnum.JobType.Miner      => 30,
-                GlobalEnum.JobType.Builder    => 40,
-                GlobalEnum.JobType.Guard      => 50,
-                GlobalEnum.JobType.Merchant   => 50,
-                GlobalEnum.JobType.Blacksmith => 100,
-                GlobalEnum.JobType.Scholar    => 120,
-                GlobalEnum.JobType.Chief      => 200,
-                _ => 0,
-            };
         }
 
         private GlobalEnum.JobType GetPreferredJobType(int npcTableId)

@@ -16,15 +16,16 @@ namespace ARPG.Village
         public float PositionX;
         public float PositionY;
 
-        // 스폰/쿨타임 상태 (세이브 대상)
-        public bool HasBeenPopulated;        // 기본 NPC가 한번이라도 스폰된 적 있는지
-        public float DepletedAt;             // 전멸 감지 시각 (게임 시간). 0이면 정상
+        // 스폰 상태 (세이브 대상). 재스폰/전멸(DepletedAt)은 NPC 단순화(D5/D7)로 제거 — 초기 코호트 1회만.
+        public bool HasBeenPopulated;        // 초기 모험가 코호트가 스폰된 적 있는지
 
         // R1: 정착지 연대기 ↔ 마을 링크. -1 = 미연결 (연대기 SettlementId, PROCEDURAL §3.4)
         public int SettlementId = -1;
 
         // Phase A: 자원 생산 상태
         public int StoneTimer;               // Stone 5시간 누적 카운터 (0~4)
+        public int IronTimer;                // Iron 10시간 누적 카운터 (D3 — 인구 기반 생산)
+        public int GoldTimer;                // Gold 20시간 누적 카운터 (D3 — 인구 기반 생산)
         public int HungerHoursAccumulated;   // Food 0 유지 누적 시간 (24h 넘으면 경고 1회)
         public float RegisteredAt;           // 마을 등록 게임 시각
 
@@ -100,7 +101,6 @@ namespace ARPG.Village
             Population = 0;
             TableId = 0;
             HasBeenPopulated = false;
-            DepletedAt = 0f;
             StoneTimer = 0;
             HungerHoursAccumulated = 0;
             RegisteredAt = 0f;

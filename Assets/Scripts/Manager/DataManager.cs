@@ -53,6 +53,8 @@ namespace ARPG.Data
         public Dictionary<int, BuildingSaveData> BuildingSaveDatas => _worldData.BuildingSaveDatas;
         // R1: 정착지 연대기 (New Game 1회 생성 후 저장이 정본)
         public ChronicleSaveData Chronicle { get => _worldData.Chronicle; set => _worldData.Chronicle = value; }
+        // PROCEDURAL §0 런타임 LOD — 정착지 라이브 추상 층
+        public WorldSimState WorldSim => _worldData.WorldSim;
 
         public async Task Initialize()
         {

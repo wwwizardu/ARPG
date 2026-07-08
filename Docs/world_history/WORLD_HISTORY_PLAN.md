@@ -1,14 +1,16 @@
 # 월드 히스토리 (정착지 통폐합 + NPC 관계) — 구현 계획
 
-> **상태 (2026-06-26): R0-A~R4 대부분 구현 — Unity 검증 전, 잔여 = R4 회고 대사 (다음에 진행)**
+> **상태 (2026-07-08): R0-A~R4 대부분 + 런타임 LOD(RL1-3) 구현 — Unity 검증 전, 잔여 = R4 회고 대사 / NPC 소속 분리 (다음에 진행)**
 > - **구현 완료** (브랜치 `feature/world-history-system`): R0-A 호감도 채널 · R0-B 데이터모델/저장(v4 마이그레이션) · R1 연대기 시뮬(Tier 2) · R2 정착지↔마을 매핑 + 관계 backfill · R3 `System_NpcRelationship` drift/구 골격 제거/Live 연대기(Ruin·Promotion)/호감도 clamp · **R4 NpcInspect 관계 탭**
+> - **구현 완료 (2026-07-08 — 런타임 LOD §0)**: **RL1** 추상 인구 틱(시간 분할 라운드로빈) · **RL2** materialize+catch-up · **RL3** fold-back. 상세는 아래 **§11**. (④ 멀리 정치 사건 지속 = §0.4-나는 여전히 보류)
 > - **⚠ 2026-07-01 변경**: R3의 `System_NpcRelationship` **패시브 근접 drift는 제거**됨(`.cs` 파일 + SystemManager 등록 삭제 완료). NPC↔NPC 호감도는 이제 **활동(원정) 결과 기반**으로 변동 → [NPC_ACTIVITY_DESIGN §8.3](../npc/NPC_ACTIVITY_DESIGN.md) · [NPC_RELATION_HISTORY §5.2](../npc/NPC_RELATION_HISTORY_DESIGN.md). (R3의 나머지 — Live 연대기·호감도 clamp·구 골격 제거 — 는 유효)
 > - **다음에 할 잔여 작업**:
 >   - **R4 회고 대사** (Sentiment + `OriginEventId` → 연대기 1줄 회고, NpcInspect에 Sentiment 표시) — *미착수*
 >   - R3 보류분: 출생/분가 관계 훅(해당 시스템 미존재 — Phase E), resident 영구-사망 관계 정리(개별 영구제거 경로 부재), `EntityIdHelper` 구 관계 인프라 제거(dead no-op라 보류)
->   - 정착지 이름 표기 방식 결정(회고 대사용 — Settlement에 표시명 없음), §11 런타임 LOD(멀리-추상 틱/실체화/fold-back)
+>   - 정착지 이름 표기 방식 결정(회고 대사용 — Settlement에 표시명 없음)
+>   - **NPC 소속 분리 (Anchored/Free)** — 마을을 "소유자"가 아닌 "출생지/서비스 거점"으로. Free NPC는 자율 이동/탐험(§0 위에 얹는 별도 레이어, [NPC_ACTIVITY_DESIGN](../npc/NPC_ACTIVITY_DESIGN.md)) — *논의 중*
 > - ⚠ **Unity 컴파일/플레이 검증 전** — 리컴파일 후 각 Phase 검증 기준 실행 필요.
-> **(2026-06-26 갱신 — 런타임 LOD)**: 정착지 시뮬은 "New Game 1회"가 아니라 **게임 중 지속(근처=상세/멀리=추상)**. 런타임 모델·3층 저장 구조의 정본은 [PROCEDURAL_HISTORY_DESIGN.md §0](PROCEDURAL_HISTORY_DESIGN.md). 이로 인해 **R0-B 저장 구조가 1회 스냅샷 → 라이브 상태(WorldSimState)로 바뀌고**, R1~R4 외에 "런타임 추상 틱 + 실체화/fold-back" 작업이 추가된다(아래 §11 참고, 단계적 도입).
+> **(2026-06-26 갱신 — 런타임 LOD)**: 정착지 시뮬은 "New Game 1회"가 아니라 **게임 중 지속(근처=상세/멀리=추상)**. 런타임 모델·3층 저장 구조의 정본은 [PROCEDURAL_HISTORY_DESIGN.md §0](PROCEDURAL_HISTORY_DESIGN.md). 이로 인해 **R0-B 저장 구조가 1회 스냅샷 → 라이브 상태(WorldSimState)로 바뀌고**, R1~R4 외에 "런타임 추상 틱 + 실체화/fold-back" 작업이 추가됐다. **이 작업(RL1-3)은 2026-07-08 구현 완료 — 상세는 §11.** (멀리 정치 사건 지속 ④만 보류)
 > 본 문서는 설계 2종을 실제 코드 현황에 맞춰 실행 가능한 작업 단위로 분해한 것이다. **설계는 2026-06-26 토픽별로 분리됨**: 정착지 통폐합/연대기 = [PROCEDURAL_HISTORY_DESIGN.md](PROCEDURAL_HISTORY_DESIGN.md)(주로 R1·R0-B 저장), NPC 개인 관계 = [NPC_RELATION_HISTORY_DESIGN.md](../npc/NPC_RELATION_HISTORY_DESIGN.md)(주로 R0-A·R2·R3·R4). 본 계획의 "설계 §X" 표기는 분리 전 기준이라 해당 내용이 둘 중 어느 문서로 갔는지 토픽으로 판단할 것.
 > 설계 문서가 "구현됨"으로 가정한 일부 자산이 실제로는 미구현임을 §0에서 먼저 정정하고, 그에 맞춰 Phase 범위를 조정했다.
 >
@@ -339,7 +341,7 @@ RaceRelationTable { Id, RaceA, RaceB, BaseAffinity, WarWeight, TradeWeight, Merg
 
 **보류**: 멀리(추상) **정치 사건 지속**([PROCEDURAL §0.4](PROCEDURAL_HISTORY_DESIGN.md) (나) — v1 멀리-시뮬은 인구 동역학(가)만), Tier 3(Secession / 왕국 간 전쟁 / 자동 스윕 튜닝 하니스), 왕국 게임플레이(세금/평판), 4축 관계, LLM 연대기 문장화, 혼인 기반 마을 간 가계.
 
-> **런타임 LOD 추가 작업 (R1~R4 외, 단계적)** — [PROCEDURAL §0](PROCEDURAL_HISTORY_DESIGN.md) 기준: ① 멀리-추상 틱(인구 동역학) 백그라운드 시스템 ② 실체화(추상→상세) + catch-up ③ fold-back(상세→추상) + 연대기 보존 정책. ④(나) 멀리 정치 사건 지속은 그 다음.
+> **런타임 LOD 추가 작업 (R1~R4 외)** — [PROCEDURAL §0](PROCEDURAL_HISTORY_DESIGN.md) 기준: ① 멀리-추상 틱(인구 동역학) ✅ **RL1 구현** · ② 실체화(추상→상세)+catch-up ✅ **RL2 구현** · ③ fold-back(상세→추상) ✅ **RL3 구현** (상세 §11). ④(나) 멀리 정치 사건 지속은 **보류**.
 
 ---
 
@@ -350,3 +352,58 @@ RaceRelationTable { Id, RaceA, RaceB, BaseAffinity, WarWeight, TradeWeight, Merg
 3. **R1** (연대기 시뮬) — 덤프로 "읽을 만한 역사" 검증 (마일스톤). 재미없으면 여기서 튜닝하고 멈출 수 있음.
 4. **R2** (backfill) — R1 없이도 연대기-무관 관계까지는 착수 가능 (단계 분리).
 5. **R3 / R4** 병렬 가능 (둘 다 R2 의존).
+
+---
+
+## 11. 런타임 LOD (RL1-3) — 구현 완료 (2026-07-08)
+
+> [PROCEDURAL §0](PROCEDURAL_HISTORY_DESIGN.md) "근처=상세/멀리=추상"의 런타임 층. New Game 1회 생성(§3)과 별개로, **게임 중 정착지 인구가 계속 변동**하고 접근 시 실체화·이탈 시 추상 복귀한다. ⚠ **Unity 컴파일/플레이 검증 전** (여기서 컴파일 불가).
+
+### 11.1 신규 파일 / 변경
+
+| 파일 | 내용 |
+|------|------|
+| `Assets/Scripts/History/Chronicle/WorldSimState.cs` (신규) | `WorldSimState`(class, 세이브 멤버) + `SettlementLiveState`(**struct**, 배열 제자리 tick으로 GC 0) |
+| `Assets/Scripts/History/Chronicle/SettlementPopulationModel.cs` (신규) | `Advance(ref state, days)` — carry 지수접근 **닫힌형 O(1)** (시간 점프 catch-up도 스파이크 없음). `GameDaysPerSimYear=30` |
+| `Assets/Scripts/Common/System/System_SettlementSim.cs` (신규) | `IFixedUpdateSystem`, **Priority 50**, `UpdateInterval 0.5s`. `AdvanceAbstractSlice(K)` + `UpdateMaterialization()` 호출 (무상태) |
+| [WorldData.cs](../../Assets/Scripts/Data/WorldData.cs) | `WorldSimState WorldSim` 필드 + `LoadCompleted` null 가드(구세이브 마이그레이션) |
+| [DataManager.cs](../../Assets/Scripts/Manager/DataManager.cs) | `WorldSim` 프록시 |
+| [HistoryManager.cs](../../Assets/Scripts/History/HistoryManager.cs) | `EnsureWorldSimInitialized`(Chronicle→LiveState 1회) · `AdvanceAbstractSlice`(라운드로빈 커서, `DAY_HOURS=24`) · `UpdateMaterialization`(청크 활성 에지) · `MaterializeSettlement` · `FoldBackSettlement` · `GetSettlementPopulation`을 **라이브 우선**으로 전환(스냅샷 폴백) + `TryGetLiveIndex` |
+| [SettlementSnapshot.cs](../../Assets/Scripts/History/Chronicle/SettlementSnapshot.cs) | `Biome` + `WorldCoordX/Y` 필드 추가(런타임 성장 모델·materialize 위치 매칭용). Simulator `BuildSaveData`가 채움 |
+
+### 11.2 RL1 — 추상 인구 틱 (시간 분할)
+
+- 매 FixedUpdate 커서에서 `TICK_BUDGET=48`개만 순회 → **프레임당 비용 상수**(액션 게임 스파이크 방지).
+- 정착지마다 자기 `LastSimGameTime`(게임-hour). `days = floor((now-LastSimGameTime)/24)`, `days==0`이면 early-out(자동 스로틀), `IsMaterialized`면 스킵.
+- `Pop`은 **float**(하루 성장 <1이어도 누적). 조회는 `(int)`.
+
+### 11.3 RL2 — materialize + catch-up
+
+- `UpdateMaterialization`이 배치된 마을(`SettlementId>=0`) 중심 청크 `IsChunkActive` **상승 에지** → `MaterializeSettlement`: 인구 flush(catch-up) + `IsMaterialized=true` + `VillageId` 링크. NPC 스폰 수([ComputeTargetNpcCount](../../Assets/Scripts/Manager/NpcManager.cs#L356))는 이 flush된 인구를 자동 반영.
+
+### 11.4 RL3 — fold-back (⚠ 계획서와 이탈)
+
+- **하강 에지** → `FoldBackSettlement`: `IsMaterialized=false` + `LastSimGameTime=now`로 **동결 해제·추상 tick 재개**.
+- ⚠ **계획서 §6/설계 §0.2의 "생존 NPC → Pop 역환산(`NPC_POP_DIVISOR` 역함수)"은 구현하지 않음.** 물리 NPC는 상한(`NPC_POP_CAP=25`) 걸린 **표본**이라 역환산이 큰 정착지에서 정보 손실(saturate) → v1은 **Pop 미변경(동결 해제만)**. 플레이어발 인구 변화(부분 사상자/전멸)의 추상 반영은 **전용 메커니즘으로 분리(후속)**. 전멸은 기존 `Ruin` 연대기 이벤트로 이미 기록됨.
+
+### 11.5 검증 기준 (Unity 리컴파일 후)
+
+- [ ] New Game 진입 시 `[HistoryManager] WorldSim initialized from chronicle: N settlements` 로그.
+- [ ] 시간 크게 진행 → 안 가본 마을 인구 변동 / 재방문 시 `Materialize ... +Xd catch-up`.
+- [ ] 이탈 시 `FoldBack ... 추상 tick 재개`, 에지에서만(중복 없이) 로그.
+- [ ] 세이브→로드 후 `WorldSim` 라이브 값 보존(재초기화 안 됨).
+- [ ] 프레임당 비용 상수(프로파일러) — 정착지 수 무관.
+
+### 11.7 §0 추상 인구의 소비처 — 마을 경제 (2026-07-08, NPC 단순화)
+
+[NPC_SIMPLIFICATION_PLAN](../npc/NPC_SIMPLIFICATION_PLAN.md) D2로 **§0 추상 인구가 마을 경제(`v.Population`)의 유일한 입력원**이 됐다:
+
+- `System_SettlementSim`이 매 tick `VillageManager.RefreshAllPopulationsFromAbstract()` 호출 → 연대기 연결 마을의 `v.Population = Quantize(GetSettlementPopulation(SettlementId))` (pop/50·cap25 — `VillageManager.ABSTRACT_POP_DIVISOR/CAP`, NPC 스폰 정량화와 공유).
+- 자원 생산(Food/Wood/Stone/Iron/Gold)·Tier 승격·건설 동시성이 모두 이 값을 읽는다. **물리 NPC 수(`NpcEntityIds.Count`)는 경제를 구동하지 않는다** (명단/UI 전용).
+- 로드 시 세이브된 `Population` 값은 신뢰하지 않고 첫 tick에 재계산된다.
+
+### 11.8 후속
+
+- 플레이어발 인구 변화의 fold-back 반영 메커니즘(위 11.4).
+- ~~NPC 소속 분리(Anchored/Free)~~ → **폐기** ([NPC_SIMPLIFICATION_PLAN](../npc/NPC_SIMPLIFICATION_PLAN.md) D1 — 모든 물리 NPC = 모험가 단일). 모험가 자율 이동/이주/탐험은 [NPC_ACTIVITY_DESIGN](../npc/NPC_ACTIVITY_DESIGN.md)의 후속 레이어.
+- ④ 멀리 정치 사건 지속(§0.4-나).

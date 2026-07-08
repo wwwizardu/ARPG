@@ -24,6 +24,10 @@ namespace ARPG.Data
         public ChronicleSaveData Chronicle = new();
         public List<NpcRelationEntry> NpcRelationList = new();
 
+        // PROCEDURAL_HISTORY §0 런타임 LOD — 게임 중 변동하는 정착지 라이브 추상 층.
+        // Chronicle(정지 스냅샷)과 분리. 최초/구세이브는 HistoryManager가 Chronicle에서 초기화.
+        public WorldSimState WorldSim = new();
+
         public void Initialize()
         {
             WorldDropItemDatas.Clear();
@@ -45,6 +49,13 @@ namespace ARPG.Data
                 Chronicle.Settlements = new();
             if (Chronicle.Kingdoms == null)
                 Chronicle.Kingdoms = new();
+
+            // 런타임 LOD (PROCEDURAL §0): 구세이브엔 WorldSim이 없음 → 빈 컨테이너 보장.
+            // 실제 채우기(Chronicle → LiveState)는 HistoryManager.Initialize가 담당.
+            if (WorldSim == null)
+                WorldSim = new();
+            if (WorldSim.Settlements == null)
+                WorldSim.Settlements = System.Array.Empty<SettlementLiveState>();
         }
 
         public bool AddDropItem(float inPosX, float inPosZ, ItemData inItem)

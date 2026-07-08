@@ -14,9 +14,12 @@ namespace ARPG.History
     {
         public int SettlementId;             // placement 인덱스 기반 결정론 ID
         public GlobalEnum.RaceType Race;
+        public GlobalEnum.BiomeType Biome;   // ChunkBiome (settlement 위치 청크). 런타임 인구 성장 모델(BiomeData)이 사용
         // 프로젝트 직렬화 규약: Unity 벡터 타입을 저장하지 않고 int X/Y로 분해 (NpcSaveData.Position과 동일 패턴)
         public int RegionCoordX;
         public int RegionCoordY;
+        public int WorldCoordX;              // 정착지 월드 좌표 — 런타임 LOD materialize(§0.2) 위치 매칭용
+        public int WorldCoordY;
         public int Population;
         public int KingdomId = -1;           // 무소속 = -1
         public SettlementFate Fate;
@@ -29,6 +32,13 @@ namespace ARPG.History
         {
             get => new Vector2Int(RegionCoordX, RegionCoordY);
             set { RegionCoordX = value.x; RegionCoordY = value.y; }
+        }
+
+        [JsonIgnore]
+        public Vector2Int WorldCoord
+        {
+            get => new Vector2Int(WorldCoordX, WorldCoordY);
+            set { WorldCoordX = value.x; WorldCoordY = value.y; }
         }
     }
 

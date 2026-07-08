@@ -54,11 +54,10 @@ namespace ARPG.Village
             string threat = v.ThreatLevel > 0f ? $" Threat={v.ThreatLevel:F2}" : "";
             string tier = FormatTierCheck(v, s, AR.s.Time.CurrentGameTime);
 
-            // Phase D: 활성 서비스 + Jobs 할당률
+            // Phase D: 활성 서비스
             string services = FormatServices(v);
-            string jobs = FormatJobs(v);
 
-            Debug.Log($"[VillageSnapshot] v{v.VillageId} Stage={v.Stage} Pop={v.Population}/{targetPop} {food} {wood} {stone} Hunger={s.HungerHoursAccumulated}h StoneTimer={s.StoneTimer}/5 {bounds}{wall}{threat} {services} {jobs} Build={build} Placed=[{placed}] {tier}");
+            Debug.Log($"[VillageSnapshot] v{v.VillageId} Stage={v.Stage} Pop={v.Population}/{targetPop} {food} {wood} {stone} Hunger={s.HungerHoursAccumulated}h StoneTimer={s.StoneTimer}/5 {bounds}{wall}{threat} {services} Build={build} Placed=[{placed}] {tier}");
         }
 
         // 모든 임계값은 VillageStageTable에서 조회 — System_VillageTierProgression.CanPromoteTo와 동일 정본
@@ -117,19 +116,6 @@ namespace ARPG.Village
             return $"Services={all}";
         }
 
-        // Phase D: 마을 NPC 중 NpcAssignmentComponent 보유 수 / 전체
-        private static string FormatJobs(VillageData v)
-        {
-            int total = v.NpcEntityIds.Count;
-            int assigned = 0;
-            for (int i = 0; i < total; i++)
-            {
-                if (AR.s.Component.HasComponent<NpcAssignmentComponent>(v.NpcEntityIds[i]))
-                    assigned++;
-            }
-            return $"Jobs={assigned}/{total}";
-        }
-
         private static string Fmt(string label, int amount, int cap, bool surplus)
         {
             string tail = surplus ? "*" : "";
@@ -164,10 +150,7 @@ namespace ARPG.Village
 
             Tables.BuildableItemTable? curTable = AR.s.Data.GetBuildableItem(task.TargetTableId);
             string curName = curTable != null ? curTable.Name : $"Id{task.TargetTableId}";
-            string npcNote = task.AssignedNpcEntityId >= 0
-                ? $", npc{task.AssignedNpcEntityId}"
-                : ", 미배정";
-            return $"{curName} {pct}%(누적 {task.AccumulatedHours:F1}/{total:F1}h, 남은 {remain:F1}h, tile={task.TileX},{task.TileY}{npcNote})";
+            return $"{curName} {pct}%(누적 {task.AccumulatedHours:F1}/{total:F1}h, 남은 {remain:F1}h, tile={task.TileX},{task.TileY})";
         }
 
         /// <summary>

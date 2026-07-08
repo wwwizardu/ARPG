@@ -164,7 +164,6 @@ namespace ARPG.Factory
 
             // 마을 NPC 컴포넌트
             AR.s.Component.AddComponent(entityId, new NpcVillageComponent());
-            AR.s.Component.AddComponent(entityId, new NpcJobComponent());
 
             if (table.AiTableId > 0)
             {

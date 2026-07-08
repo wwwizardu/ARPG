@@ -17,12 +17,11 @@ namespace ARPG.Village
     {
         public int TableId;
         public float StartedAt;
-        public float AccumulatedHours;       // NPC가 실제 작업한 누적 시간 — 완료 판정 정본
+        public float AccumulatedHours;       // 자가 건설 누적 시간 — 완료 판정 정본 (D4)
         public int TileX;
         public int TileY;
         public int ReservedWood;
         public int ReservedStone;
-        public int AssignedNpcEntityId = -1; // Task에 배정됐던 NPC EntityId — 로드 시 재부착용
         public int BuildingEntityId = -1;    // 시작 시 생성된 건설중 빌딩 엔티티 — 로드 시 진행도 동기화에 사용
     }
 }

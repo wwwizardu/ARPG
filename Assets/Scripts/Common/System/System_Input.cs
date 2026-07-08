@@ -62,7 +62,7 @@ namespace ARPG.Systems
                     return;
             }
 
-            // [TEST] B키 — Inn UI 열기 (실제 InnBed 없이 테스트용)
+            // [TEST] B키 — Inn UI 열기 (실제 InnBed 없이 테스트용, 휴식/세이브 전용 — 고용 경로는 D6로 제거)
             if (Keyboard.current != null && Keyboard.current.bKey.wasPressedThisFrame)
             {
                 var innUI = AR.s.UI.Show<UI.UIInn>(AddressablePath.Inn, UIManager.Layer.Main);

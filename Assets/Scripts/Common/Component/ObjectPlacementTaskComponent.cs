@@ -7,8 +7,8 @@ namespace ARPG.Component
     /// 별도 task entity에 부착됨 (마을당 최대 Population 개 동시 진행).
     /// 세이브는 VillageData.ActiveBuildTasks(List&lt;BuildTaskSnapshot&gt;)로 미러링.
     ///
-    /// 진행 시간은 AccumulatedHours가 정본. 배정된 NPC가 Build 상태로 현장에 도달했을 때만 누적된다.
-    /// 위협 감지로 NPC가 Flee/Chase 전이하면 자동으로 일시정지, 복귀 시 재개.
+    /// 자가 건설 (NPC_SIMPLIFICATION_PLAN D4): NPC 배정 없이 게임시간 경과만큼 AccumulatedHours가 누적된다.
+    /// 단 건설중 빌딩이 데미지를 받으면 진행도가 후퇴한다 (System_VillageBuildQueue HP↔진행도 동기화).
     /// 완료 판정: AccumulatedHours &gt;= BuildDurationHours.
     /// </summary>
     public struct ObjectPlacementTaskComponent
@@ -22,7 +22,6 @@ namespace ARPG.Component
         public float BuildDurationHours;   // 완료까지 필요한 게임시간
         public int ReservedWoodCost;       // 착수 시 차감한 자원 (배치 실패 시 환불용)
         public int ReservedStoneCost;
-        public int AssignedNpcEntityId;    // 배정된 NPC의 EntityId (-1 = 미배정)
         public int BuildingEntityId;       // 즉시 생성된 건설중 빌딩 엔티티 (-1 = SpawnType.Tile 또는 미생성)
     }
 }

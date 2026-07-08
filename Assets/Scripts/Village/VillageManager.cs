@@ -216,8 +216,50 @@ namespace ARPG.Village
             if (data.NpcEntityIds.Contains(npcEntityId))
                 return;
 
+            // NpcEntityIds는 물리 모험가 명단(코호트/UI 전용) — 경제(v.Population)를 구동하지 않는다.
+            // v.Population은 §0 추상 인구에서만 소싱 (RefreshPopulationFromAbstract).
             data.NpcEntityIds.Add(npcEntityId);
-            data.Population = data.NpcEntityIds.Count;
+        }
+
+        // ── §0 추상 인구 → 마을 경제 인구(v.Population) 소싱 (NPC_SIMPLIFICATION_PLAN §3.2) ──
+        // 정량화(pop/50·cap25)는 기존 NPC 스폰 수 캘리브레이션 재사용 — 생산/Tier 임계값 재튜닝 회피.
+        public const int ABSTRACT_POP_DIVISOR = 50;  // 추상 인구 K명당 경제 인구 1
+        public const int ABSTRACT_POP_CAP = 25;      // 경제 인구 상한 (pop≈1250에서 도달)
+
+        /// <summary>
+        /// 추상 인구(수백~수천)를 마을 경제 단위로 정량화. pop&lt;=0이면 0 (경제 정지).
+        /// raw 값을 그대로 쓰면 생산이 폭주하므로 반드시 이 정량화를 거칠 것 (§10 리스크).
+        /// </summary>
+        public static int QuantizeAbstractPopulation(int abstractPop)
+        {
+            if (abstractPop <= 0)
+                return 0;
+            return Mathf.Clamp(Mathf.RoundToInt(abstractPop / (float)ABSTRACT_POP_DIVISOR), 1, ABSTRACT_POP_CAP);
+        }
+
+        /// <summary>
+        /// 모든 마을의 v.Population을 §0 추상 인구에서 재계산.
+        /// System_SettlementSim이 매 tick 호출 (per-village 시스템들보다 먼저, Priority 50).
+        /// 로드 직후 세이브된 Population도 이 경로로 덮어써 재계산된다 (§10 세이브 마이그레이션).
+        /// </summary>
+        public void RefreshAllPopulationsFromAbstract()
+        {
+            foreach (VillageData v in _villages.Values)
+                RefreshPopulationFromAbstract(v);
+        }
+
+        private static void RefreshPopulationFromAbstract(VillageData v)
+        {
+            if (v.SettlementId >= 0)
+            {
+                int abstractPop = AR.s.History.GetSettlementPopulation(v.SettlementId);
+                v.Population = QuantizeAbstractPopulation(abstractPop);
+            }
+            else
+            {
+                // 연대기 미연결(수제작 마을, 예: BaseTown) — 추상 인구가 없으므로 물리 코호트 수 유지 (기존 동작)
+                v.Population = v.NpcEntityIds.Count;
+            }
         }
 
         public List<VillageData> Save()
@@ -581,7 +623,6 @@ namespace ARPG.Village
                     TileY = t.TileY,
                     ReservedWood = t.ReservedWoodCost,
                     ReservedStone = t.ReservedStoneCost,
-                    AssignedNpcEntityId = t.AssignedNpcEntityId,
                     BuildingEntityId = t.BuildingEntityId,
                 });
             }
@@ -652,9 +693,9 @@ namespace ARPG.Village
                 Tables.BuildableItemTable? buildTable = AR.s.Data.GetBuildableItem(snap.TableId);
                 float buildHours = (buildTable != null && buildTable.BuildHours > 0f) ? buildTable.BuildHours : 2f;
 
-                // AR.s.Entity.RegisterExistingEntity 덕분에 NpcManager.Load / BuildingManager.Load가
-                // 저장 EntityId를 그대로 재사용 → 저장된 AssignedNpcEntityId / BuildingEntityId가 그대로 유효.
-                // → 같은 NPC가 같은 빌딩을 이어서 짓는 상태로 정확히 복원됨.
+                // AR.s.Entity.RegisterExistingEntity 덕분에 BuildingManager.Load가 저장 EntityId를 그대로
+                // 재사용 → 저장된 BuildingEntityId가 그대로 유효 (진행도↔HP 동기화 복원).
+                // 자가 건설(D4): NPC 재부착 없음 — 타이머가 이어서 진행.
                 int taskEntityId = AR.s.Entity.CreateEntity();
                 ObjectPlacementTaskComponent task = new ObjectPlacementTaskComponent
                 {
@@ -667,28 +708,11 @@ namespace ARPG.Village
                     BuildDurationHours = buildHours,
                     ReservedWoodCost = snap.ReservedWood,
                     ReservedStoneCost = snap.ReservedStone,
-                    AssignedNpcEntityId = snap.AssignedNpcEntityId,
                     BuildingEntityId = snap.BuildingEntityId,
                 };
                 AR.s.Component.AddComponent(taskEntityId, task);
 
-                // 배정됐던 NPC가 있으면 NpcBuildAssignmentComponent를 재부착해서
-                // 다음 AI 틱에 즉시 BuildState로 진입하도록.
-                // (NPC 자체는 NpcManager.SpawnNpc에서 청크 활성 시 만들어짐 — 그때 ReattachBuildAssignmentIfAny가
-                //  컴포넌트 재부착을 처리하므로 여기서는 안 해도 되지만, 활성 NPC가 있을 경우를 대비해 즉시 부착)
-                if (snap.AssignedNpcEntityId >= 0
-                    && AR.s.Component.HasComponent<TransformComponent>(snap.AssignedNpcEntityId))
-                {
-                    Vector2 sitePos = new Vector2(snap.TileX + 0.5f, snap.TileY + 0.5f);
-                    AR.s.Component.AddComponent(snap.AssignedNpcEntityId, new NpcBuildAssignmentComponent
-                    {
-                        TaskEntityId = taskEntityId,
-                        VillageId = v.VillageId,
-                        BuildSitePosition = sitePos,
-                    });
-                }
-
-                Debug.Log($"[BuildQueue] v{v.VillageId} 로드 후 태스크 복원 #{i+1}/{v.ActiveBuildTasks.Count}: taskEntity={taskEntityId} TableId={task.TargetTableId}, tile=({task.TileX},{task.TileY}), 시작={task.StartedAt:F1}h, 누적={task.AccumulatedHours:F2}h, npc={task.AssignedNpcEntityId}, building={task.BuildingEntityId}");
+                Debug.Log($"[BuildQueue] v{v.VillageId} 로드 후 태스크 복원 #{i+1}/{v.ActiveBuildTasks.Count}: taskEntity={taskEntityId} TableId={task.TargetTableId}, tile=({task.TileX},{task.TileY}), 시작={task.StartedAt:F1}h, 누적={task.AccumulatedHours:F2}h, building={task.BuildingEntityId}");
             }
         }
 

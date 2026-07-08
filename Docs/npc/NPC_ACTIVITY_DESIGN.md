@@ -1,5 +1,10 @@
 # NPC 자율 행동 & 원정 설계 (Activity / Venture System)
 
+> ⚠️ **2026-07-08 갱신 — NPC 단순화 반영** ([NPC_SIMPLIFICATION_PLAN](NPC_SIMPLIFICATION_PLAN.md) D1):
+> **모든 물리 NPC = 모험가(Adventurer) 단일**로 확정. 본 문서의 **Anchored(정주)/Worker(생산) 분류와 관련 절(§2 D1, §3.1 행동 클래스 등)은 폐기**됐다 —
+> 상인·대장장이 등 마을 종속 NPC는 존재하지 않으며 서비스는 무인 건물이 제공하고, 자원 생산은 §0 추상 인구가 구동한다.
+> 이 문서의 유효 범위는 **모험가의 활동/원정(Venture) 축**으로 축소된다. 아래 한 줄 요약·본문 중 정주/생산 NPC 서술은 기록용.
+
 > **한 줄 요약**: 마을에 꼭 필요한 NPC(상인·대장장이 등)는 스케줄 없이 마을에 상주하며 서비스를 제공하고, 나머지 NPC는 **자기 직업/성향에 맞는 활동(몬스터 처치·던전 탐험 등)** 을 **혼자 또는 파티로** 수행한다. 활동 도중 NPC는 **부상·죽음**을 당할 수 있고 **월드 이벤트를 트리거**할 수 있다. 활동은 대부분 **LOD 기반 추상 시뮬레이션**으로 해결되어 관측 가능한 드라마(떠남 → 귀환/전사)를 만든다.
 
 > **이 문서의 위치**: [README](../README.md)가 말하는 "NPC 일과 / 자율 의사결정 (Phase E)" 중 **자율 의사결정·활동 축**의 정본이다. 시계 기반 하루 일과(수면/식사 사이클)는 본 문서 범위가 아니다(§1.3 참조). 플레이어→NPC 상호작용은 [interactionSystem.md](interactionSystem.md), NPC↔NPC 관계 데이터는 [NPC_RELATION_HISTORY_DESIGN.md](NPC_RELATION_HISTORY_DESIGN.md), NPC가 트리거하는 도전 이벤트는 [WORLD_EVENT_DESIGN.md](../world_history/WORLD_EVENT_DESIGN.md), 활동의 무대가 되는 오프라인/근거리 시뮬 규약은 [PROCEDURAL_HISTORY_DESIGN.md](../world_history/PROCEDURAL_HISTORY_DESIGN.md)가 담당한다.

@@ -92,7 +92,6 @@ namespace ARPG.Component
             { typeof(ActivationDistanceComponent), 500 },      // 거리 기반 활성화
 
             // 마을 시스템 컴포넌트
-            { typeof(NpcJobComponent), 200 },
             { typeof(NpcVillageComponent), 200 },
             { typeof(VillageStorageComponent), 32 },   // 마을 1개당 1개, 현재 <10, 여유 32
             { typeof(VillageComponent), 32 },          // 마을 1개당 1개 (Phase C: Stage/Bounds/Threat)
@@ -103,8 +102,6 @@ namespace ARPG.Component
             // Phase D 마을 시스템 컴포넌트
             { typeof(PlacedObjectComponent), 1024 },   // 마을당 수십~수백 오브젝트 × 5~10마을
             { typeof(PlayerNearbyServicesComponent), 8 }, // 플레이어 1명당 1개 (멀티 대비 8)
-            { typeof(NpcAssignmentComponent), 256 },   // 직무 할당된 NPC만 (마을당 ~30 × 5마을)
-            { typeof(NpcBuildAssignmentComponent), 32 }, // 진행 중 build task에 1:1 배정된 NPC (마을당 ~Pop개 × 5마을)
 
             // 건물 시스템 컴포넌트 (BuildingManager 관리)
             { typeof(BuildingTag), 200 },
