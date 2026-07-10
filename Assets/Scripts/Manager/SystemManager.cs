@@ -68,6 +68,10 @@ namespace ARPG.Systems
             // (제거) Priority 58 System_NpcRelationship — 패시브 근접 호감도 drift 폐기.
             // NPC↔NPC 호감도는 활동(원정) 결과로 변동 (설계 NPC_ACTIVITY_DESIGN §8.3 / NPC_RELATION_HISTORY §5.2).
 
+            // Priority 59: NPC Simulation (Population) - 오프스크린 개인 활동 시간분할 tick
+            System_NpcSim npcSimSystem = new();
+            RegisterSystems(npcSimSystem);
+
             // Priority 60: Village Tier Progression (Lifecycle) - Stage 0→1→2→3 승격 (Phase C)
             System_VillageTierProgression villageTierSystem = new();
             RegisterSystems(villageTierSystem);

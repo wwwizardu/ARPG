@@ -30,6 +30,7 @@ namespace ARPG.History
         // WORLD_HISTORY_PLAN.md R0-B — 연대기 시뮬(L1) / NPC 관계 backfill(L2)용
         public const ulong ChannelChronicle    = 0x43_48_52_4F_4E_49_43_4CUL; // "CHRONICL"
         public const ulong ChannelRelationBackfill = 0x52_45_4C_42_4B_46_49_4CUL; // "RELBKFIL"
+        public const ulong ChannelNpcActivity = 0x4E_50_43_41_43_54_49_56UL; // "NPCACTIV"
 
         public static ulong Derive(int worldSeed, ulong channel)
         {

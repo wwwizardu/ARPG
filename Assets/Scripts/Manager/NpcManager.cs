@@ -17,6 +17,9 @@ namespace ARPG.Npc
     {
         private Dictionary<int, NpcSaveData> _npcSaveDict = new();
         private Dictionary<Vector2Int, List<int>> _chunkNpcs = new();
+        // 결정론적 오프스크린 시뮬레이션 순서. Dictionary 열거 순서에 의존하지 않는다.
+        private List<int> _simulationNpcIds = new();
+        private int _simulationCursor;
         // NPC 간 호감도 (양방향 대칭, sparse — 만난 적 있는 페어만 등록)
         private Dictionary<NpcPairKey, int> _npcAffinity = new();
         // 호감도 clamp 범위 (drift 누적 폭주 방지)
@@ -68,6 +71,8 @@ namespace ARPG.Npc
 
             _npcSaveDict.Clear();
             _chunkNpcs.Clear();
+            _simulationNpcIds.Clear();
+            _simulationCursor = 0;
             _npcAffinity.Clear();
             _npcRelations.Clear();
             _narrative.Reset();
@@ -184,6 +189,7 @@ namespace ARPG.Npc
                 }
 
                 _npcSaveDict[entityId] = saveData;
+                AddNpcToSimulation(entityId);
 
                 Vector2Int chunkCoord = PositionToChunk(worldPos);
                 AddNpcToChunk(chunkCoord, entityId);
@@ -258,6 +264,7 @@ namespace ARPG.Npc
             SeedNpcEquipment(saveData);
 
             _npcSaveDict[entityId] = saveData;
+            AddNpcToSimulation(entityId);
 
             Vector2Int chunkCoord = PositionToChunk(position);
             AddNpcToChunk(chunkCoord, entityId);
@@ -538,6 +545,8 @@ namespace ARPG.Npc
         {
             _npcSaveDict.Clear();
             _chunkNpcs.Clear();
+            _simulationNpcIds.Clear();
+            _simulationCursor = 0;
 
             if (npcSaveDatas == null || npcSaveDatas.Count == 0)
                 return;
@@ -565,6 +574,7 @@ namespace ARPG.Npc
                     saveData.Description = PickDescription(GetPreferredJobType(saveData.NpcTableId));
 
                 _npcSaveDict[entityId] = saveData;
+                AddNpcToSimulation(entityId);
 
                 // 구 세이브의 Inn 방문자(월드 미출현 NPC)는 Status 필드 제거로 일반 NPC와 동일 취급.
                 // VillageId=-1이라 마을 등록 없이 마지막 좌표에서 모험가로 복원된다 (§10 세이브 마이그레이션).
@@ -814,6 +824,42 @@ namespace ARPG.Npc
             return _npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) ? saveData : null;
         }
 
+        /// <summary>
+        /// 시간분할 NPC 시뮬레이션용 다음 오프스크린 NPC를 결정론적 순서로 반환한다.
+        /// 활성 ECS NPC의 활동 표현은 LOD 승격 단계에서 별도로 연결한다.
+        /// </summary>
+        public bool TryGetNextOffscreenSimulationNpc(out int entityId, out NpcSaveData? saveData)
+        {
+            entityId = -1;
+            saveData = null;
+
+            int count = _simulationNpcIds.Count;
+            for (int i = 0; i < count; i++)
+            {
+                // 커서가 끝에 도달하면 처음으로 돌아가 모든 NPC를 공정하게 순회한다.
+                if (_simulationCursor >= _simulationNpcIds.Count)
+                    _simulationCursor = 0;
+
+                int candidateId = _simulationNpcIds[_simulationCursor];
+                _simulationCursor++;
+
+                if (_npcSaveDict.TryGetValue(candidateId, out NpcSaveData? candidate) == false)
+                    continue;
+                if (candidate.IsActive)
+                    // NS1은 오프스크린 레코드만 전진한다. 활성 ECS 표현 연결은 LOD 단계의 책임이다.
+                    continue;
+                if (candidate.Condition == CharacterConditions.Dead ||
+                    candidate.Activity.Phase == NpcActivityPhase.Dead)
+                    continue;
+
+                entityId = candidateId;
+                saveData = candidate;
+                return true;
+            }
+
+            return false;
+        }
+
         private GlobalEnum.JobType GetPreferredJobType(int npcTableId)
         {
             Tables.NpcTable? table = AR.s.Data.GetNpc(npcTableId);
@@ -927,6 +973,22 @@ namespace ARPG.Npc
                 _chunkNpcs[chunkCoord] = list;
             }
             list.Add(entityId);
+        }
+
+        private void AddNpcToSimulation(int entityId)
+        {
+            // 엔티티 ID 오름차순을 유지해 생성/로드 Dictionary의 열거 순서와 무관한 순회를 보장한다.
+            int index = _simulationNpcIds.BinarySearch(entityId);
+            if (index >= 0)
+                return;
+
+            int insertIndex = ~index;
+            _simulationNpcIds.Insert(insertIndex, entityId);
+            // 현재 커서 앞에 삽입된 항목 때문에 다음 대상이 밀리지 않도록 보정한다.
+            if (insertIndex <= _simulationCursor)
+                _simulationCursor++;
+            if (_simulationCursor >= _simulationNpcIds.Count)
+                _simulationCursor = 0;
         }
 
         private void RemoveNpcFromChunk(Vector2Int chunkCoord, int entityId)

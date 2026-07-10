@@ -41,6 +41,10 @@ namespace ARPG.Npc
         // NPC 고유 성향 (8가지 성격 스탯). 신규 생성 시 랜덤 부여 후 영속화.
         public NpcStatComponent NpcStat;
 
+        // NPC 시뮬레이션 정본. ECS 엔티티가 없는 오프스크린 상태에서도 계속 전진한다.
+        public NpcActivityState Activity = new();
+        public float LastSimGameTime;
+
         // NPC → 정착지 단위 감정 (피정복 반감/왕국 자부심 등). 관계 backfill(L2)이 시드. 보통 0~1개.
         // 설계: NPC_RELATION_HISTORY_DESIGN.md §4.2
         public List<NpcSentiment> Sentiments = new();
@@ -110,6 +114,9 @@ namespace ARPG.Npc
             // 구 세이브(필드 없음) 로드 시 null 방어
             if (Sentiments == null)
                 Sentiments = new List<NpcSentiment>();
+            if (Activity == null)
+                Activity = new NpcActivityState();
+            Activity.EnsureInitialized();
         }
 
         /// <summary>

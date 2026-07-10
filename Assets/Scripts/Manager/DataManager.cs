@@ -13,7 +13,7 @@ namespace ARPG.Data
 {
     public partial class DataManager : MonoBehaviour
     {
-        private const ushort CURRENT_WORLD_DATA_VERSION = 4;
+        private const ushort CURRENT_WORLD_DATA_VERSION = 5;
         private const ushort CURRENT_PLAYER_DATA_VERSION = 2;
         private WorldData _worldData = new();
         private List<PlayerData> _playerDataList = new();
@@ -563,6 +563,13 @@ namespace ARPG.Data
             if (fromVersion < 4 && toVersion >= 4)
             {
                 // no-op (WorldData.LoadCompleted에서 처리). 버전 점프 사실만 기록.
+            }
+
+            // 버전 4 -> 5: NPC 개인 활동 상태(NpcActivityState) + 개인 시뮬레이션 시계 추가.
+            // 구 세이브의 기본 상태 보정은 NpcSaveData.OnLoadCompleted에서 처리한다.
+            if (fromVersion < 5 && toVersion >= 5)
+            {
+                // no-op (NpcSaveData.OnLoadCompleted에서 처리).
             }
         }
 
