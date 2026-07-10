@@ -267,6 +267,8 @@ public class KingdomData
 - **저장이 정본**: 한 번 생성된 연대기는 시드로 재생성하지 않는다 (원칙 §1-2).
 - VillageManager가 정착지를 실제 `VillageData`로 등록할 때 `SettlementId ↔ VillageId` 매핑을 보관 → 연대기 조회 경로. (`VillageData.SettlementId` 필드 추가 필요 — [PLAN R1](WORLD_HISTORY_PLAN.md))
 
+> **사건 정본(event elaboration) — 후속 (2026-07-09, 미구현)**: NPC 대사의 교차 일관성을 위해, 거친 사건에 **공유 디테일**(사실 척추)을 lazy 생성·캐시하는 층이 논의됐다. `ChronicleEvent`는 append-only 불변이므로 수정하지 않고, **EventId-키 별도 store**(예: 여기 `ChronicleSaveData`에 elaboration 리스트)로 얹는다 — 정본 데이터 위치는 이 연대기 층. 생성·소비·지식 거리 설계는 [NARRATIVE_ENGINE §4.8](NARRATIVE_ENGINE_DESIGN.md).
+
 ### 3.5 맵 표현과의 연결 (MAP_DESIGN 합류 포인트)
 
 - `Fate == Ruined / Merged` 정착지 → 마을 청사진 대신 **폐허 variant** 배치. Lore Fragment의 L3 청사진과 같은 메커니즘을 재사용하고, `FateKeyword`를 연대기 사건에서 가져온다 (War로 폐허 → `burned`, 합병 → `forgotten` 등).

@@ -96,10 +96,10 @@ public interface ILateUpdateSystem : ISystem      // Camera, final sync
 | 100-500 | Gameplay (movement, skills, buffs) | FixedUpdate/Update |
 | 500-1000 | Animation, rendering | Update |
 
-**Village domain sub-bands** (Phase C에서 도입, see [VILLAGE_PHASES.md §4.1](Docs/village/VILLAGE_PHASES.md)):
+**Village domain sub-bands** (introduced in Phase C, see [VILLAGE_PHASES.md §4.1](Docs/village/VILLAGE_PHASES.md)):
 - 50-54: Resource (PassiveProduction)
-- 55-59: Population (재스폰, 이민, 출생, 분가)
-- 60-64: Lifecycle (Tier 승격, 평판, 위협도)
+- 55-59: Population (respawn, immigration, birth, household split)
+- 60-64: Lifecycle (Tier promotion, reputation, threat level)
 - 65-69: Construction (BuildQueue, Wall)
 
 ### Component Iteration Pattern
@@ -254,3 +254,18 @@ RegisterSystems(new System_MyFeature());
 ## Tool Execution Safety
 
 **CRITICAL**: Run tools sequentially only. Issue one tool, wait for result, then continue. DO NOT call multiple tools in parallel. This overrides all other efficiency guidelines.
+
+## Wiki Reference Rules
+
+The `Wiki/` folder is a knowledge layer that synthesizes the original docs and code. See `Wiki/_SCHEMA.md` for operating rules.
+
+- Before starting **work that requires design, synthesis, or "why"** (architecture decisions, changes spanning multiple systems, confirming design intent):
+  **read** the relevant `Wiki/<topic>.md` **first**.
+- **Entry path** (funnel — go deeper only as needed):
+  1. Not sure which topics the work touches? Read `Wiki/README.md` (the map) first.
+  2. Then read the relevant `Wiki/<topic>.md` page(s) — include every topic the work spans, not just the primary one.
+  3. Then read **only** the original `Docs/` sections the topic page points to as canonical — do not read whole doc folders.
+  - If no `Wiki/<topic>.md` exists yet for a topic, fall back to the map (`Wiki/README.md`) + the original docs it lists.
+- Simple single-file work (straightforward implementation, bug fixes) does not require reading the wiki (saves context).
+- If the wiki and the code appear to disagree, **stop and report.** Do not fix the wiki on your own (the source of truth wins).
+- If you made an important design decision during work that is not in the wiki, **propose** adding it to the relevant page (record it after human confirmation).

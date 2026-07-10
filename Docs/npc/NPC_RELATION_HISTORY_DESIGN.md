@@ -119,6 +119,8 @@ public class NpcSentiment
 }
 ```
 
+> **NPC 전기 로그(biography) — 후속 (2026-07-09, 미구현)**: `Sentiments`의 sibling 채널로, NPC가 *어디 살았고 무엇을 했는지*를 EventId·SettlementId **참조(색인)** 로 기록하는 로그가 논의됐다 — (a) 거주 이력 `List<{SettlementId, from, to}>`(현재 단일 `VillageId` 확장), (b) 겪은 일 `List<{EventId, HowKnown, when}>`. NPC 대사의 **지식 거리**(어느 사건을 얼마나 직접 아는가)의 입력이 된다. 쓰는 쪽은 이동·원정([NPC_ACTIVITY §8.3](NPC_ACTIVITY_DESIGN.md), Phase E), 설계 정본은 [NARRATIVE_ENGINE §4.8](../world_history/NARRATIVE_ENGINE_DESIGN.md).
+
 ### 4.3 생성 알고리즘
 
 입력: 마을 NPC 목록(`NpcSaveData` — 성향/직업), 이 마을의 연대기 추출(`Chronicle.Events.Where(SettlementId 관련)` — [PROCEDURAL §3](../world_history/PROCEDURAL_HISTORY_DESIGN.md)), 마을 시드(`DerivedSeed.Derive(mapSeed ^ settlementId, ChannelRelationBackfill)`).

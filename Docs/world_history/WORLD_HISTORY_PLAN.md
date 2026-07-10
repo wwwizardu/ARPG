@@ -8,7 +8,7 @@
 >   - **R4 회고 대사** (Sentiment + `OriginEventId` → 연대기 1줄 회고, NpcInspect에 Sentiment 표시) — *미착수*
 >   - R3 보류분: 출생/분가 관계 훅(해당 시스템 미존재 — Phase E), resident 영구-사망 관계 정리(개별 영구제거 경로 부재), `EntityIdHelper` 구 관계 인프라 제거(dead no-op라 보류)
 >   - 정착지 이름 표기 방식 결정(회고 대사용 — Settlement에 표시명 없음)
->   - **NPC 소속 분리 (Anchored/Free)** — 마을을 "소유자"가 아닌 "출생지/서비스 거점"으로. Free NPC는 자율 이동/탐험(§0 위에 얹는 별도 레이어, [NPC_ACTIVITY_DESIGN](../npc/NPC_ACTIVITY_DESIGN.md)) — *논의 중*
+>   - ~~**NPC 소속 분리 (Anchored/Free)**~~ — **폐기** (2026-07-08, [NPC_SIMPLIFICATION_PLAN](../npc/NPC_SIMPLIFICATION_PLAN.md) D1: 모든 물리 NPC = 모험가 단일, 마을-NPC 분리는 그 계획으로 구현 완료 — §11.8 참조). 모험가 자율 이동/탐험은 [NPC_ACTIVITY_DESIGN](../npc/NPC_ACTIVITY_DESIGN.md) 후속 레이어
 > - ⚠ **Unity 컴파일/플레이 검증 전** — 리컴파일 후 각 Phase 검증 기준 실행 필요.
 > **(2026-06-26 갱신 — 런타임 LOD)**: 정착지 시뮬은 "New Game 1회"가 아니라 **게임 중 지속(근처=상세/멀리=추상)**. 런타임 모델·3층 저장 구조의 정본은 [PROCEDURAL_HISTORY_DESIGN.md §0](PROCEDURAL_HISTORY_DESIGN.md). 이로 인해 **R0-B 저장 구조가 1회 스냅샷 → 라이브 상태(WorldSimState)로 바뀌고**, R1~R4 외에 "런타임 추상 틱 + 실체화/fold-back" 작업이 추가됐다. **이 작업(RL1-3)은 2026-07-08 구현 완료 — 상세는 §11.** (멀리 정치 사건 지속 ④만 보류)
 > 본 문서는 설계 2종을 실제 코드 현황에 맞춰 실행 가능한 작업 단위로 분해한 것이다. **설계는 2026-06-26 토픽별로 분리됨**: 정착지 통폐합/연대기 = [PROCEDURAL_HISTORY_DESIGN.md](PROCEDURAL_HISTORY_DESIGN.md)(주로 R1·R0-B 저장), NPC 개인 관계 = [NPC_RELATION_HISTORY_DESIGN.md](../npc/NPC_RELATION_HISTORY_DESIGN.md)(주로 R0-A·R2·R3·R4). 본 계획의 "설계 §X" 표기는 분리 전 기준이라 해당 내용이 둘 중 어느 문서로 갔는지 토픽으로 판단할 것.

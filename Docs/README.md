@@ -4,7 +4,7 @@
 >
 > **현재 진행도**: ████████████████████░░░░░░░░░░ **60%**
 
-**마지막 업데이트**: 2026-05-20
+**마지막 업데이트**: 2026-07-09
 
 ---
 
@@ -16,12 +16,12 @@
 | **AI 시스템** | ✅ 90% | 몬스터별 세부 패턴, 길찾기 (보스급 다페이즈) |
 | **스킬 시스템** | ✅ 95% | 스킬북 장착 운용, 룬/이펙트 |
 | **마을 자가성장 Phase A~D** | ✅ 완료 | Phase E (배후 시뮬, 출생/분가) |
-| **여관(Inn) 고용 시스템** | ✅ 코드 완료 | 시트 데이터 입력 |
+| ~~여관(Inn) 고용 시스템~~ | ❌ 제거됨 (2026-07-08, NPC 단순화 D6) | UIInn은 휴식(+6h)/세이브 전용으로 축소 유지 |
 | **상점 / 강화 / 제단 서비스** | ✅ 코드 완료 | 콘텐츠 확장 |
 | **NPC 관계 시스템** | 🚧 25% | 관계 변동 로직, N:N 관계 |
 | **관계·선물 루프** | ❌ 0% | 대화·유추·선물·보답(interactionSystem §4) + NPC 소망 추적(QUEST_SYSTEM). 옛 "퀘스트 시스템" 대체 |
 | **던전 시스템** | ⏸ 보류 | 오픈월드로 대체 운영 중 |
-| **절차적 역사 생성** | ⏸ 보류 | 대화·소망 시스템 이후 본 구현 |
+| **절차적 역사 생성 (백본)** | ✅ 코드 완료 (R0~R4 대부분 + RL1-3) | Unity 플레이 검증, R4 회고 대사, 멀리 정치 사건 지속 |
 
 ---
 
@@ -34,8 +34,8 @@
 │                 │     │                 │     │                 │
 │ • 실시간 전투    │     │ • 자원 패시브    │     │ • 상점 양방향   │
 │ • 오픈월드 탐험  │     │ • 오브젝트 배치  │     │ • 강화/여관     │
-│ • 스킬북 장착    │     │ • Tier 승격     │     │ • Inn 고용      │
-│ • 장비 성장      │     │ • 외곽 벽 인프라 │     │ • NPC 직무      │
+│ • 스킬북 장착    │     │ • Tier 승격     │     │ • 제단 서비스   │
+│ • 장비 성장      │     │ • 외곽 벽 인프라 │     │ • 무인 건물     │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
 ```
 
@@ -43,7 +43,7 @@
 ```
 [오픈월드 탐험] → [몬스터/자원 획득] → [마을 귀환]
                                             ↓
-[다시 탐험] ← [고용/강화/구매] ← [상점에 매각, 골드 확보]
+[다시 탐험] ← [강화/구매/휴식] ← [상점에 매각, 골드 확보]
 ```
 
 ---
@@ -79,9 +79,9 @@
 | 문서 | 단계 | 상태 |
 |------|------|------|
 | **[VILLAGE_GROWTH_STAGES.md](village/VILLAGE_GROWTH_STAGES.md)** | 마을 성장 전체 기획 (Stage 0~4) | 본 문서 |
-| **[VILLAGE_PHASES.md](village/VILLAGE_PHASES.md)** | Phase A~D 통합 요약 (MVP → BuildQueue → Tier 승격 + 외벽 → 서비스 + 직무) | ✅ 코드 완료 |
+| **[VILLAGE_PHASES.md](village/VILLAGE_PHASES.md)** | Phase A~D 통합 요약 (MVP → BuildQueue → Tier 승격 + 외벽 → 서비스). ⚠ 직무/작업자·NPC 건설은 2026-07-08 단순화로 추상 인구·자가 건설로 대체 | ✅ 코드 완료 |
 | **[BUILD_PRIORITY_DESIGN.md](village/BUILD_PRIORITY_DESIGN.md)** | 자가 건설 4계층 가중치 점수 |
-| **[INN_HIRING_DESIGN.md](village/INN_HIRING_DESIGN.md)** | 여관 기반 NPC 고용 (자연 이민 대체) |
+| ~~[INN_HIRING_DESIGN.md](village/INN_HIRING_DESIGN.md)~~ | ⛔ **폐기** (2026-07-08 단순화 D6 — 여관 고용/이민 제거) |
 
 ### 🗺️ 맵 / 분위기
 | 문서 | 내용 |
@@ -92,7 +92,7 @@
 | **[NPC_RELATION_HISTORY_DESIGN.md](npc/NPC_RELATION_HISTORY_DESIGN.md)** | NPC 개인 관계 (가족/원한/호감도) |
 | **[WORLD_HISTORY_PLAN.md](world_history/WORLD_HISTORY_PLAN.md)** | 위 두 문서 구현 계획 (R0~R4) |
 | **[NARRATIVE_ENGINE_DESIGN.md](world_history/NARRATIVE_ENGINE_DESIGN.md)** ⭐ | 역사·관계 → LLM 대화·선호·소망 *생성* (핵심 재미 검증 1순위) |
-| **[NARRATIVE_ENGINE_SPIKE.md](world_history/NARRATIVE_ENGINE_SPIKE.md)** | 위 엔진 **검증 스파이크** — Groq/Llama로 대화+소망 실현 가능성 확인 (결정 확정 2026-07-02, 구현 대기) |
+| **[NARRATIVE_ENGINE_SPIKE.md](world_history/NARRATIVE_ENGINE_SPIKE.md)** | 위 엔진 **검증 스파이크** — Groq/Llama로 대화+소망 실현 가능성 확인 (🟨 1차 구현 완료 2026-07-02, Unity 실측 전) |
 | **[QUEST_SYSTEM_DESIGN.md](npc/QUEST_SYSTEM_DESIGN.md)** ⭐ | 퀘스트 시스템 — NPC **소망(Wish)** 추적·완료·보상·기록 (소망 데이터 모델 정본). 관계·선물 루프는 interactionSystem §4 |
 | [archive/PROCEDURAL_HISTORY_BACKBONE.md](_archive/PROCEDURAL_HISTORY_BACKBONE.md) | 깊은 과거 백본 (템플릿 4시대) — ⛔ 미고려/아카이브 |
 
@@ -101,7 +101,8 @@
 |------|------|
 | **[companionSystem.md](npc/companionSystem.md)** | 설계 완료, 미구현 |
 | **[interactionSystem.md](npc/interactionSystem.md)** | 설계 완료, 미구현 — 30행동·관계 4축 + **관계·선물 몰입 루프**(§4: 대화·선호·유추 선물·보답) |
-| **[NPC_ACTIVITY_DESIGN.md](npc/NPC_ACTIVITY_DESIGN.md)** ⭐ | 설계 초안 — NPC 자율 행동/원정 (상주 서비스 vs 몬스터 처치·던전 탐험 파티, 부상·죽음, 월드이벤트 트리거). Phase E 자율 의사결정 정본 |
+| **[NPC_ACTIVITY_DESIGN.md](npc/NPC_ACTIVITY_DESIGN.md)** ⭐ | 설계 초안 — 모험가 자율 행동/원정 (몬스터 처치·던전 탐험 파티, 부상·죽음, 월드이벤트 트리거). 활동 *내용* 정본 (⚠ 정주/작업자 분류는 단순화로 폐기 — 모험가 단일. 시뮬 *프레임*은 NPC_SIMULATION으로 승격) |
+| **[NPC_SIMULATION_DESIGN.md](npc/NPC_SIMULATION_DESIGN.md)** ⭐ | 설계 초안 (2026-07-09) — 개별 NPC LOD 시뮬 *기반*: 근처=풀 ECS/멀리=경량 상태 tick, 오프스크린 상태머신, 로밍·월드 영향. NPC 시뮬 아키텍처 정본 |
 | **[dungeonSystem.md](_archive/dungeonSystem.md)** | 설계 완료, ⏸ 오픈월드 운영으로 보류 |
 
 ### 🛠️ 기술 / 시스템
@@ -143,9 +144,9 @@
 ### 마을 자가성장 (Phase A~D 완료)
 | 시스템 | 비고 |
 |--------|------|
-| **자원 패시브 생산** | NPC당 시간 비례 Food/Wood/Stone, Stage별 배수 |
+| **자원 패시브 생산** | **추상 인구** 비례 Food/Wood/Stone/Iron/Gold, Stage별 배수 (2026-07-08 단순화 D2/D3 — 물리 NPC 수·직업보너스 아님) |
 | **자원 Cap** | Woodpile +100, Stockpile +80 등 데이터 주도 |
-| **범용 배치 큐** | ObjectPlacementTaskComponent + System_VillageBuildQueue |
+| **범용 배치 큐 (자가 건설)** | ObjectPlacementTaskComponent + System_VillageBuildQueue — 타이머로 자가 완성, 자원 소모 유지 (2026-07-08 단순화 D4 — NPC 배정 제거) |
 | **Tier 승격** | Settlement→Hamlet→Village→Town (4h 인터벌) |
 | **외곽 벽 인프라** | Palisade + Gate, Hamlet 진입 시 자동 계획 |
 | **PlacedObject Registry** | ECS 승격, tableId/tile 양방향 인덱스 |
@@ -154,8 +155,8 @@
 | **서비스 근접 집계** | System_VillageServiceProximity (0.3s) + F키 라우팅 |
 | **상점 양방향 거래** | 매물 풀 + 매각 + 자원 50% 환원 |
 | **필요도 스코어** | System_VillageNeedsEvaluation (2h) + 4계층 가중치 |
-| **NPC 직무 할당** | System_VillageJobAssignment + JobBonusTable |
-| **여관 고용** | Inn = Visitor 풀, 플레이어 능동 고용 (자연 이민 대체) |
+| ~~NPC 직무 할당~~ | **제거됨** (2026-07-08 단순화 SP4 — System_VillageJobAssignment 삭제. 자원은 인구 기반) |
+| ~~여관 고용~~ | **제거됨** (2026-07-08 단순화 SP5 — Visitor/고용 경로 삭제, 이민도 제거) |
 
 ### 기타
 | 시스템 | 비고 |
@@ -173,17 +174,19 @@
 - ✅ NpcManager 호감도/관계 데이터 + 초기 backfill (구 RelationshipComponent/System_Relationship 폐기)
 - ⬜ 런타임 호감도 변동 = **활동 기반**(설계 [NPC_ACTIVITY §8.3](npc/NPC_ACTIVITY_DESIGN.md), 패시브 drift 폐기) / N:N / 이벤트
 
-### NPC 일과 / 자율 의사결정 (35%)
-- ✅ NpcStatComponent (8가지 성격), NpcJobComponent
-- ⬜ 직업별 행동, 자율 의사결정, 일과 시뮬레이션 → **Phase E**
+### NPC 일과 / 자율 의사결정 (Phase E 대기)
+- ✅ NpcStatComponent (8가지 성격) — 물리 NPC = 모험가 단일 (2026-07-08 단순화)
+- ⚠ NpcJobComponent·System_VillageJobAssignment는 **삭제됨** (직무 기계 시스템 폐기, JobType은 flavor·장비 시드용으로만 잔존)
+- ⬜ 모험가 자율 행동·원정·의사결정 → **Phase E** ([NPC_ACTIVITY_DESIGN](npc/NPC_ACTIVITY_DESIGN.md))
 
 ### UI 시스템 (50%)
 - ✅ Inventory / Character / Shop / Forge / Inn / Shrine / MainMenu / HpBar / FloatingText
 - ⬜ 미니맵 / 관계·선물 UI / 대화 UI / 파티 UI
 
-### 절차적 역사 생성 (보류)
-- POCO/다운로드 메뉴만 등록, 시스템 본체 미구현
-- 대화·소망 시스템 이후 재개
+### 절차적 역사 생성 (백본 코드 완료 — 2026-07-08)
+- ✅ 연대기 시뮬(R1) · 관계 backfill(R2) · Live 연대기(R3) · NpcInspect 관계 탭(R4 일부)
+- ✅ 런타임 LOD(RL1-3): 추상 인구 틱 + materialize/catch-up + fold-back — 추상 인구가 마을 경제(`v.Population`)의 입력원 (NPC 단순화 연동)
+- ⬜ Unity 플레이 검증, R4 회고 대사·Sentiment 표시, 멀리 정치 사건 지속(보류) — [WORLD_HISTORY_PLAN.md](world_history/WORLD_HISTORY_PLAN.md)
 
 ---
 
@@ -203,7 +206,7 @@
 | 🎨 **Low** | 세이브/로드 보강 | 모든 시스템 |
 | 🎨 **Low** | 사운드 / VFX 통합 | — |
 | 🎨 **Low** | 카메라 개선 / 튜토리얼 / 로컬라이제이션 | — |
-| 🎨 **Low** | 절차적 역사 본 구현 | 대화·소망 |
+| 🎨 **Low** | 절차적 역사 잔여 (R4 회고 대사, 멀리 정치 사건 지속) | 대화·소망 |
 
 ---
 
@@ -237,7 +240,7 @@
   └─ 오브젝트 단위 자가 건설, 4-Stage Tier, 외곽 벽 자동
 
 🛒  마을 서비스
-  └─ Shop(양방향 거래) / Forge(강화) / Inn(고용) / Shrine
+  └─ Shop(양방향 거래) / Forge(강화) / Inn(휴식) / Shrine — 무인 건물
 ```
 
 ---
@@ -336,7 +339,7 @@ Assets/Scripts/
 
 ## 🎯 핵심 목표
 
-> **"플레이어가 직접 싸우는 액션 RPG에서, 마을은 시간이 흐르면 알아서 자라고, 플레이어는 그 마을의 상점·강화·여관을 통해 진짜 이득을 얻으며, NPC들은 자기 직업의 작업 오브젝트 옆에서 살아간다."**
+> **"플레이어가 직접 싸우는 액션 RPG에서, 마을은 시간이 흐르면 추상 인구를 바탕으로 알아서 자라고, 플레이어는 그 마을의 상점·강화·여관을 통해 진짜 이득을 얻으며, NPC들은 모험가로서 세계를 누비고 그들이 겪은 일이 관계와 역사로 쌓인다."**
 
 **현재 위치**: 마을 자가성장 Phase A~D 완료, 전투/AI 핵심 로직 완성 (60%)
 **다음 목표**: Phase E (배후 시뮬레이션 + 출생/분가/이탈) + NPC 관계 시스템
@@ -348,4 +351,4 @@ Assets/Scripts/
 - Phase 완료 시 본 문서의 Phase 로드맵 + 빠른 참조 업데이트
 - 새 설계 문서 추가 시 본 문서의 "기획 문서" 섹션에 링크 등록
 
-**마지막 업데이트**: 2026-05-20
+**마지막 업데이트**: 2026-07-09

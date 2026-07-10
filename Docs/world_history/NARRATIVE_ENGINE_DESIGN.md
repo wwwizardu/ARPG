@@ -83,6 +83,7 @@ LLM에 먹일 배경은 전부 백본(R0~R4, [WORLD_HISTORY_PLAN.md](WORLD_HISTO
 | **선호 근거** | NPC가 *무엇을 좋아할지*의 근거(선호/혐오 `GiftCategory`) + 선물 반응 대사 | 종족·`Sentiment`·관계·성격·직업 ([interactionSystem §4.4](../npc/interactionSystem.md)) | 中빈도·低비용 |
 | **소망 (Wish)** | NPC 개인 사연(원한·가족사·상실)에서 비롯된 *구체적 갈망*(특정 아이템/재회/유물 회수) | NPC 관계망 + 관련 연대기 + 인접 NPC/마을/폐허 | 低빈도·高비용 |
 | **이벤트** | 마을/지역 단위로 벌어지는 상황(분쟁·재회·복수·교역 제안 등) | 마을 NPC 집합 + 연대기 + 파벌 | 低빈도·高비용 |
+| **사건 정본** (event elaboration) | 거친 연대기 사건의 *공유 디테일*(척추: 누가·언제·어디·결과) — NPC 간 모순 방지용 | `ChronicleEvent` + 관련 정착지·왕국 (full 컨텍스트) | 低빈도·**사건당 1회**·캐시=정본 (§4.8) |
 
 > 비용이 높을수록 더 적게, 더 좋은 모델/더 많은 컨텍스트로 생성한다 (§6 모델 티어링).
 >
@@ -206,6 +207,7 @@ ChronicleEvent(Type=Conquer, Year=412, Subject=S17, Object=S23, Kingdom=K3)
 - [ ] 언급한 사건이 `ContextEventIds`에 실제로 있는가 (없는 역사 지어내기 차단)
 - [ ] 보상이 허용 범위(아이템 테이블/골드 상한) 내인가
 - [ ] 금칙어/길이/언어 검사
+- [ ] **교차 일관성 (§4.8)**: firsthand 사건은 그 EventId의 정본(사실 척추)과 어긋나지 않는가 — distant 소문은 예외(발산 허용)
 - → 실패 시: 재생성 1회 → 재실패 시 **규칙 기반 폴백 템플릿**으로 대체(엔진이 멈추지 않게)
 
 ### 4.7 워크드 예시 (데이터 → 대화·선호·소망 한 바퀴)
@@ -247,6 +249,43 @@ ChronicleEvent(Type=Conquer, Year=412, Subject=S17, Object=S23, Kingdom=K3)
 **변주**: 같은 컨텍스트에서 candidates의 `npc#1857`(여동생)을 집으면 `Reunion` 소망(재회)이 나오고, 충족 시 Live 연대기 append → 한 데이터가 여러 결을 낳음(H3).
 
 **판정**: 대화 힌트·선호·소망의 모든 조각(폐허=LoreFragment, 여동생=Sibling, 정복=Chronicle, 동기=Sentiment)이 데이터에서 직접 도출 → **데이터 충분성 확인**. 핵심은 플레이어가 **C(소망)를 듣기 전에 A(대화)만으로 선호를 유추**할 수 있다는 것(H1). 단, *소형 모델(Llama)의 실제 품질·형식 준수*는 키 연결 후 실측 필요.
+
+### 4.8 교차 일관성 — 사건 정본화 + 지식 거리
+
+> **상태 (2026-07-09 추가)**: 🟦 설계 결정(논의 정리). 미구현. 착수 전 스파이크에서 **실제 충돌 빈도부터 측정**(맨 끝 순서). 데이터 위치는 [PROCEDURAL §3.4](PROCEDURAL_HISTORY_DESIGN.md)(사건 정본 store)·[NPC_RELATION_HISTORY §4.2](../npc/NPC_RELATION_HISTORY_DESIGN.md)(NPC 전기 로그).
+
+**문제**: §4.6 가드는 *"없는 사건·죽은 NPC 지어내기"*(H2)는 막지만, **실재하는 거친 사건에 여러 NPC가 서로 모순된 디테일을 붙이는 것**은 못 막는다. 연대기 사건(`ChronicleEvent`)은 (연도·타입·정착지·왕국)뿐 서술이 없어(§2.1), NPC마다 그 위를 독립·즉석 생성하기 때문 — 같은 정복을 A는 "세 겨울 포위", B는 "하룻밤 기습"으로. 가드 `usedEventIds⊆context`는 *실재 사건 참조*만 볼 뿐 *디테일의 상호 정합*은 보지 않는다.
+
+**원칙 — 사실 vs 관점 분리**:
+- **객관적 척추(누가·언제·어디·결과)** = 여러 NPC가 반드시 일치.
+- **주관적 살(왜·감정·누구 탓)** = 갈려도 좋다 (라쇼몽 — 정복지 원한·선전은 오히려 서사).
+- 세계 사실은 **NPC가 아니라 안정적 대상(사건/장소/왕국)에 앵커**한다. NPC는 사실의 *사본*이 아니라 *색인 + 관점*만 갖는다(관계·Sentiment의 `OriginEventId`가 이미 그 색인). NPC는 이동·소멸(LOD)하므로 사실의 소유자로 부적합 — 사실은 연대기(WorldData)에서 NPC보다 오래 산다([RELATION_HISTORY §4.4](../npc/NPC_RELATION_HISTORY_DESIGN.md) "엔티티 수명과 분리"의 연장).
+
+**해결 ① 사건 정본화 (event elaboration)** — 거친 사건이 대사에 **처음 참조될 때 정본 디테일을 1회 생성**해 EventId에 붙여 캐시, 이후 그 사건을 아는 모든 NPC가 **같은 정본**을 참조한다.
+- **lazy·선택적**: 실제로 입에 오르고 무거운 사건(War/Conquer/Ruin)에만. 대부분 사건은 플레이어에게 안 닿음.
+- **데이터 위치**: `ChronicleEvent`는 append-only(불변)이므로 수정하지 않고, **EventId-키 별도 store**(예: `ChronicleSaveData`에 elaboration 리스트)로 옆에 얹는다([PROCEDURAL §3.4](PROCEDURAL_HISTORY_DESIGN.md)).
+- **재사용 패턴**: 캐시=정본(§6.3) · LOD 실체화([PROCEDURAL §0](PROCEDURAL_HISTORY_DESIGN.md)) · C-method 닫힌 어휘(§4.4). 정본 자체도 full 컨텍스트로 신중히(70B) 1회 생성, 이후 per-NPC 대사는 싸게.
+- **코드 훅**: 현재 [DialogueTopicSelector.AddRumors](../../Assets/Scripts/Npc/Narrative/DialogueTopicSelector.cs)가 `FlattenEvent(e)`(거친 1줄)를 Fact로 넘김 → firsthand면 캐시된 정본으로 교체.
+
+**해결 ② 지식 거리 (knowledge distance)** — "이 NPC가 이 사건을 얼마나 직접 알 만한가"를 **NPC–사건 링크의 최강값**으로 잰다. 물리 거리가 아니라 *정보적 가까움*. 자격·디테일 깊이·정본 일치 엄격도를 **동시에** 정한다.
+
+| 거리 | 근거 (데이터) | 정본 사용 | 일치 요구 |
+|------|------|------|------|
+| **직접** | 겪은 일 로그(원정/deed) · 관계·Sentiment `OriginEventId` | full | 엄수 |
+| **가까움** | 거주 이력(과거·현재 정착지)의 그 정착지 사건 | full/부분 | 엄수 |
+| **멂(소문)** | 개인 링크 없음 — 전파(거리 감쇠)로만 | 거친 골격 / thin slice | 느슨 (어긋나도 자연스러움) |
+| **자격 없음** | 아무 링크 없음 | — | — |
+
+- MVP는 이 그라디언트를 **두 레인**으로: firsthand/local(정밀·정본 엄수) vs distant rumor(흐릿·전파 게이트·발산 허용).
+- 현재 코드는 Gossip만 관계 링크를 쓰고, HistoryRumor/SettlementRumor는 전 세계에서 `Random.Range`로 **무게이트 픽** → distant 레인의 자격 게이팅(소문 전파)이 미설계 부분([WORLD_EVENT §8 #4](WORLD_EVENT_DESIGN.md)).
+
+**해결 ③ NPC 전기 로그 (biography)** — 지식 거리의 *입력*. NPC가 어디 살았고 무엇을 했는지를 **NPC 소유로 기록하되 내용은 EventId·SettlementId 참조(색인)** — 사실은 연대기에.
+- **데이터 위치**: `NpcSaveData`에 (a) 거주 이력, (b) 겪은 일 로그. 현재는 단일 `VillageId`만 있음 — [RELATION_HISTORY §4.2](../npc/NPC_RELATION_HISTORY_DESIGN.md) `Sentiments`의 sibling 채널. **상세 스키마·이벤트 카탈로그·보존 정책의 정본은 [NPC_SIMULATION §5.1](../npc/NPC_SIMULATION_DESIGN.md)** — 겪은 일은 연대기 EventId 참조뿐 아니라 **NPC 레벨 열린 이벤트**(원정 결과·전우사망·구출·배신·발견 등, 원정 리졸버가 참가자에 1회 기록)를 포함한다.
+- **A→B 이동 NPC가 A의 사건을 말하는 근거**: 로그의 A-거주 링크가 그 사건을 "가까움"으로 올린다 (**같은 사건도 화자에 따라 거리가 다름**). 두 A→B 이주민은 A 사건 E의 **동일 정본**을 참조하므로 서로 안 어긋난다.
+- **쓰는 쪽(대부분 Phase E)**: 이동→거주 이력 append, 원정→deed 로그 append([NPC_ACTIVITY §8.3](../npc/NPC_ACTIVITY_DESIGN.md)). 씨앗: backfill이 출생 정착지·관계 `OriginEventId`를 심음(구현됨). MVP는 씨앗만으로 동작.
+- 죽은 NPC의 **기억(색인)은 사라지고 세계 사실(연대기)은 남는다**.
+
+**착수 순서**: 스파이크(§7)에서 같은 사건을 NPC 2~3명에게 물어 **사실 충돌 빈도부터 측정** → 심하면 정본화 층 건설. 과설계 회피. 미결정은 §8(#10~) 참조.
 
 ---
 
@@ -334,6 +373,11 @@ ChronicleEvent(Type=Conquer, Year=412, Subject=S17, Object=S23, Kingdom=K3)
 | 7 | **한국어 톤/품질** | 종족·성격별 말투 일관성, 검수 루프 |
 | 8 | **관계/선물 UI** | 관계·선물 시스템 0% — 대화/선물/소망 표시 UI 별도 설계 필요([interactionSystem §5](../npc/interactionSystem.md) 관계 패널 + [QUEST_SYSTEM §7](../npc/QUEST_SYSTEM_DESIGN.md) 소망 표시). 옛 퀘스트 로그/추적기는 불필요 |
 | 9 | **대화의 "유추 가능성" 보정** | (옛 "대사 LLM 적용 미결정"은 적용 방향으로 해소.) 새 과제: 대화가 선호 단서를 **충분히 흘리되 정답을 직접 말하지 않게** — 너무 모호하면 좌절, 너무 친절하면 유추 재미 소실([interactionSystem §4.3·§9](../npc/interactionSystem.md)) |
+| 10 | **정본화 앵커 범위** (§4.8) | 사건(EventId)만 먼저 vs 장소·왕국까지. **유적은 Map 도메인**(`LoreFragmentComponent`, 좌표 주소)이라 사건 EventId와 키 체계가 달라 별도 결정 |
+| 11 | **정본 디테일 슬롯** (§4.8) | 어떤 사실을 척추로 고정할지 — 충돌 막을 만큼 닫되 경직·비용 안 되게. 척추(누가/언제/어디/결과)만 닫고 나머지 풀기 |
+| 12 | **거주 이력 시간 창** (§4.8) | 거주에 `from~to`를 두어 "그 시기 사건만 직접 안다"로 갈지(리얼·복잡) vs "살았음→앎"으로 단순화(MVP) |
+| 13 | **소문 전파 게이팅** (§4.8) | distant 레인 자격 — 거리/시간 감쇠, 어느 NPC가 무엇을 아는가. [WORLD_EVENT §8 #4](WORLD_EVENT_DESIGN.md)와 인프라 공유 |
+| 14 | **전기 로그 스키마** (§4.8) | 거주 이력·겪은 일을 두 리스트로 vs 하나로. `HowKnown` 등급 수(Lived/Did/Witnessed/Heard) |
 
 ---
 

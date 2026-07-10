@@ -2,7 +2,10 @@
 
 > **목표**: NPC의 **소망(Wish)** 이 게임 안에서 *동작*하는 방식을 설계한다 — 관계가 깊어질 때 떠오른 소망을 추적하고, 충족을 판정해 보상(호감도 대폭↑ + 보답)을 주고, 그 상태가 세이브에 **기록**되기까지. **소망은 구조적으로 퀘스트다**(목표 대상 + 충족 판정 + 보상 + 상태). 그래서 본 문서는 퀘스트 시스템의 정본이되, *게시판에서 계약을 수락하는* 옛 모델이 아니라 **관계 속에서 자연 발생하는 소망**을 다룬다.
 >
-> **상태 (2026-06-30)**: 🟦 설계 초안 (미구현, 0%).
+> **상태 (2026-07-09 갱신)**: 🟦 설계 초안 — 본 문서 소관 **메커니즘(추적·완료·보상·영속화)은 미구현**.
+> 단 소망 타입 골격(`NpcWish`·`WishKind`·`WishState`·`WishCandidate`)은 내러티브 검증 스파이크가 **부분집합으로 선구현**했다
+> ([NpcNarrativeTypes.cs](../../Assets/Scripts/Npc/Narrative/NpcNarrativeTypes.cs) — 파일 주석에 "정본은 QUEST §2, 추후 ARPG.Quest 이관" 명시).
+> 구현 착수 시 스파이크 타입을 §2 정본 스키마로 이관·확장할 것.
 >
 > **경계 (3분할)**:
 > - 소망이 *어떻게 떠오르나*(호감도 단계·대화로 사연 공개·플레이어 유추) → [interactionSystem.md §4](interactionSystem.md) (관계·선물 몰입 루프)
@@ -38,6 +41,9 @@
 > 프로젝트 패턴(POCO + Newtonsoft 직렬화, `WorldData` 합류) 준수. 관계/연대기 시스템처럼 **ECS 컴포넌트가 아닌 매니저 + `WorldData`**에 상태를 둔다(엔티티 수명과 분리). 클래스명은 잠정.
 
 **2층 구조 — 기계 골격 + 내러티브 스킨**: 게임이 *결정론적으로 실행·검증*하는 기계 골격(목표·대상·보상)과, 생성기가 채우는 내러티브 스킨(대사)을 한 객체에 담되 역할을 분리한다.
+
+> **스파이크 선구현 (2026-07-09 확인)**: 아래 스키마의 부분집합이 [NpcNarrativeTypes.cs](../../Assets/Scripts/Npc/Narrative/NpcNarrativeTypes.cs)에 이미 존재한다.
+> 차이: 스파이크판 `NpcWish`는 `WishId`·`Objectives`·`RevealTierGate`·`Title`이 없고, 대상을 `QuestObjective` 대신 `TargetRef`(string ref)로 든다. **본 스키마가 정본** — 구현 시 이쪽으로 이관.
 
 ```csharp
 // Assets/Scripts/Quest/NpcWish.cs (제안)

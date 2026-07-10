@@ -1,5 +1,9 @@
 # NPC 장비/인벤토리 시스템 설계
 
+> ⚠️ **2026-07-09 갱신 — NPC 단순화 반영** ([NPC_SIMPLIFICATION_PLAN](NPC_SIMPLIFICATION_PLAN.md) SP5, 2026-07-08 구현):
+> 여관 고용/방문자 시스템 제거로 본 문서의 **방문자 관련 서술은 구식**이 됐다 —
+> §4.1의 `SpawnVisitorNpc` 시드 경로(현행 장비 시드는 2경로), §8.4의 진입 경로 2(Inn 방문자 카드 "장비" 버튼 · `UINpcInspect.BindSaveData`)는 **삭제된 코드**다. 해당 지점에 취소선으로 표시했다.
+
 ## 1. 목표
 
 NPC에게 장비 슬롯 12칸 + 인벤토리 5칸을 부여한다. 장비 스탯은 플레이어와 동일한 경로로 `StatComponent`에 반영된다. 청크 비활성/활성 사이클을 거쳐도 데이터가 영속화된다.
@@ -54,13 +58,13 @@ NPC 신규 생성 시 슬롯별 ItemId로 `ItemManager.CreateInventoryItemData(i
 
 ## 4. 시드 흐름
 
-### 4.1 신규 생성 (3 경로 — [NpcManager](../../Assets/Scripts/Manager/NpcManager.cs))
+### 4.1 신규 생성 (2 경로 — [NpcManager](../../Assets/Scripts/Manager/NpcManager.cs))
 
 | 경로 | 위치 |
 |---|---|
 | 맵 파일 로드 | `RegisterNpcsFromMapFile` |
 | 런타임 신규 스폰 | `SpawnNewNpc` |
-| 여관 방문자 등록 | `SpawnVisitorNpc` |
+| ~~여관 방문자 등록~~ | ~~`SpawnVisitorNpc`~~ — **삭제됨** (2026-07-08, SP5 방문자 시스템 제거) |
 
 모든 경로에서 `new NpcSaveData(...)` 직후 `SeedNpcEquipment(saveData)` 호출.
 
@@ -122,7 +126,7 @@ var (createdId, entity) = await EntityFactory.CreateNpc(
 - `MonsterTable.WeaponId`는 별도 컬럼으로 그대로 유지(이 작업과 무관).
 
 **UI 패스**
-- 변경 파일: `PlayerNearbyServicesComponent.cs`, `System_VillageServiceProximity.cs`, `System_Input.cs`, `ServiceUIRouter.cs`, `UIManager.cs`(AddressablePath), `UIInn.cs`(방문자 카드에 "장비" 버튼)
+- 변경 파일: `PlayerNearbyServicesComponent.cs`, `System_VillageServiceProximity.cs`, `System_Input.cs`, `ServiceUIRouter.cs`, `UIManager.cs`(AddressablePath), ~~`UIInn.cs`(방문자 카드에 "장비" 버튼)~~ (SP5에서 방문자 UI 제거 — UIInn은 휴식/세이브 전용으로 축소)
 - 신규 파일: `Assets/Scripts/UI/UINpcInspect.cs`, `Assets/UI/NpcInspect/NpcInspect.uxml`, `Assets/UI/NpcInspect/NpcInspect.uss`
 
 ## 8. UI — NPC 검사 패널 (UINpcInspect)
@@ -141,7 +145,7 @@ var (createdId, entity) = await EntityFactory.CreateNpc(
 ### 8.2 NPC 거리 검색 — 청크 인덱스 활용
 [NpcManager.FindNearestActiveNpc](../../Assets/Scripts/Manager/NpcManager.cs):
 - 플레이어 청크 + 인접 8청크의 `_chunkNpcs`만 순회
-- `IsActive==false`(Inn 방문자), `Condition==Dead` 제외
+- `IsActive==false`(~~Inn 방문자~~ → 현행: 비활성 NPC), `Condition==Dead` 제외
 - NPC 수와 무관하게 클릭당 평균 ~45회 거리 계산
 
 ### 8.3 UI 구조 (UI Toolkit)
@@ -162,7 +166,7 @@ var (createdId, entity) = await EntityFactory.CreateNpc(
 
 ### 8.4 진입 경로
 1. **월드에서 E키**: ServiceUIRouter → 시설보다 NPC가 가까우면 NPC 패널 (`UINpcInspect.Bind(entityId)`)
-2. **Inn 방문자 카드의 "장비" 버튼**: 방문자는 월드에 없어 entityId 검색이 안 되므로 saveData를 직접 주입 (`UINpcInspect.BindSaveData(saveData)`). 단, 방문자는 ECS 컴포넌트가 없어 성향/전투 스탯은 표시 안 됨(장비/인벤만)
+2. ~~**Inn 방문자 카드의 "장비" 버튼**: 방문자는 월드에 없어 entityId 검색이 안 되므로 saveData를 직접 주입 (`UINpcInspect.BindSaveData(saveData)`). 단, 방문자는 ECS 컴포넌트가 없어 성향/전투 스탯은 표시 안 됨(장비/인벤만)~~ — **삭제됨** (2026-07-08, SP5 방문자 시스템 제거. `BindSaveData`도 코드에서 제거됨. 현행 진입 경로는 1번뿐)
 
 ### 8.5 Unity 측 추가 작업 (사용자 수동)
 - `Assets/UI/NpcInspect/NpcInspect.prefab` 생성 — `UIDocument` 컴포넌트 + `UINpcInspect` MonoBehaviour

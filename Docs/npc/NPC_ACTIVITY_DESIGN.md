@@ -216,6 +216,8 @@ NpcManager._ventures ──Save/Load──▶ WorldData.VentureList
 - **LOD-gated**: 실체화(materialized) 마을에 대해서만 편성 로직 수행(§D4).
 - 두 페이즈를 매 틱 처리: (1) 신규 편성, (2) 만기 원정 판정. 판정은 LOD-무관(§6.2).
 
+> ⚠️ **2026-07-09 갱신 — 시뮬 프레임 재정의** ([NPC_SIMULATION_DESIGN](NPC_SIMULATION_DESIGN.md) D6): "모든 NPC 개별 시뮬" 결정으로 **편성(발진)도 LOD-무관**이 된다 — 오프스크린 개인도 스스로 원정을 시작한다. 아래 §6.2의 "편성=실체화 마을만"은 그 문서로 승격됐다. 본 문서의 활동 카탈로그·`RollOutcome`·`ScoreActivity`·죽음/부상·이벤트 트리거 등 **부품은 (간소화해) 그대로 유효**하며, "언제·어디서 시뮬되나"의 프레임만 NPC_SIMULATION이 소유한다. 또한 **오프스크린 이동(연속 좌표)·기본 조우(정지·대화→이벤트)는 NPC_SIMULATION D11이 코어로 정의** — 단 본 문서 §1.3/§13의 *파티 전투 조우·합류*(실시간 전투)는 여전히 후속(v4).
+
 ### 6.2 편성=LOD-gated, 판정=LOD-무관 (핵심)
 
 - **편성**은 살아있는 NPC·마을 필요도·관계를 읽어야 하므로 실체화 마을에서만.
@@ -330,6 +332,8 @@ NPC↔NPC 호감도는 **"같은 마을에 있으면 자동 상승"하는 패시
 - **저장**: `NpcManager` 호감도/관계 데이터에 `ModifyAffinity`/`AddRelation`로 반영(기존 API, ±100 clamp).
 - **초기 관계 유지**: 가족·형제·라이벌 등 초기 backfill([NPC_RELATION_HISTORY §4](NPC_RELATION_HISTORY_DESIGN.md))은 그대로. 본 절은 그 위에서의 **런타임 변동**만 담당하며, [NPC_RELATION_HISTORY §5.2](NPC_RELATION_HISTORY_DESIGN.md)의 패시브 drift 시스템을 **대체**한다.
 - **솔로 활동**은 파티 관계 변동 없음(개인 `SkillLevel`·평판 등만 변동).
+
+> **전기 로그 append — 후속 (2026-07-09, 미구현)**: 원정 결과가 사건에 닿으면(EventTriggered·처치·실종 등) 참가 NPC의 **전기 로그**(겪은 일)에 그 EventId를 `Witnessed/Did`로 append → 이후 그 NPC가 firsthand로 회고 가능("내가 그걸 깨운 원정대에 있었소"). 이는 NPC 대사의 *지식 거리* 입력이 된다. 로그 스키마·소비 설계는 [NARRATIVE_ENGINE §4.8](../world_history/NARRATIVE_ENGINE_DESIGN.md), 데이터 채널은 [NPC_RELATION_HISTORY §4.2](NPC_RELATION_HISTORY_DESIGN.md).
 
 ---
 
