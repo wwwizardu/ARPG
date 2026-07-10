@@ -4,10 +4,11 @@
 name: npc
 description: NPC 도메인 종합 — 문서 7장의 정본 매핑, 최신성 순서, 코드 구현 현황, 인접 도메인 경계.
 type: topic
-last_updated: 2026-07-09
+last_updated: 2026-07-10
 sources:
   - Docs/npc/ 전체 7장 (본문 정독)
   - Assets/Scripts/Npc/, Assets/Scripts/Manager/NpcManager.cs (심볼 수준)
+  - Assets/Scripts/Common/System/System_NpcSim.cs, Assets/Scripts/Npc/NpcActivityResolver.cs
 ---
 
 ## 1. 한눈에 보기
@@ -15,6 +16,8 @@ sources:
 NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/원한) 그리고 플레이어와(호감도 4축) 관계를 갖고, 대화로 사연이 드러나고, 선물·소망 충족으로 관계가 깊어지며, 모험가로서 자율 활동을 한다. [src: Docs/npc/interactionSystem.md §개요, Docs/npc/NPC_ACTIVITY_DESIGN.md §1.2]
 
 **가장 중요한 최근 사건**: 2026-07-08 **NPC 단순화**가 코드까지 반영됐다 — 모든 물리 NPC는 **모험가 단일**, 마을 경제는 물리 NPC가 아닌 **추상 인구**가 구동, 건물은 자가 건설, 이민/여관 고용 제거. 이 결정은 npc 폴더의 다른 문서 일부를 부분적으로 구식화했다(§3). [src: Docs/npc/NPC_SIMPLIFICATION_PLAN.md §2, §Status]
+
+**현재 MVP**: 모든 생존 NPC는 `System_NpcSim`의 시간분할 처리 대상이며, 활동 범위는 Rest와 솔로 Hunt다. Hunt는 Food·부상·사망·`Fell` 연대기·전기에 결과를 남기고, 활동 중 LOD 전환도 이어진다. [src: Docs/npc/NPC_SIMULATION_DESIGN.md §11.1, Assets/Scripts/Common/System/System_NpcSim.cs]
 
 ## 2. 정본 매핑 — "이걸 물으면 이 문서의 이 절"
 
@@ -26,10 +29,10 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 | 소망(Wish) 데이터 모델·상태머신·추적·완료·보상·영속화 | [QUEST_SYSTEM_DESIGN §2–6](../Docs/npc/QUEST_SYSTEM_DESIGN.md) | 소망 *떠오름*은 interactionSystem §4.7 |
 | 소망·대화·선호의 **LLM 생성** | [NARRATIVE_ENGINE_DESIGN](../Docs/world_history/NARRATIVE_ENGINE_DESIGN.md) (world_history 소속) | 후보 어휘는 QUEST_SYSTEM §8과 공유 |
 | NPC↔NPC 관계(가족/원한/Sentiment)·backfill | [NPC_RELATION_HISTORY_DESIGN §4](../Docs/npc/NPC_RELATION_HISTORY_DESIGN.md) | 연대기(L1)는 PROCEDURAL_HISTORY 소관 |
-| NPC 전기 로그(거주 이력·겪은 일)·지식 거리 | **상세 스키마 = [NPC_SIMULATION §5.1](../Docs/npc/NPC_SIMULATION_DESIGN.md)** / 개념·지식거리 = [NARRATIVE_ENGINE §4.8](../Docs/world_history/NARRATIVE_ENGINE_DESIGN.md) / 채널 = [RELATION_HISTORY §4.2](../Docs/npc/NPC_RELATION_HISTORY_DESIGN.md) | 2026-07-09 설계, 미구현. deed = 연대기 참조 + NPC 레벨 열린 이벤트(원정 결과·전우사망 등), NPC당 캡 |
+| NPC 전기 로그(거주 이력·겪은 일)·지식 거리 | **상세 스키마 = [NPC_SIMULATION §5.1](../Docs/npc/NPC_SIMULATION_DESIGN.md)** / 개념·지식거리 = [NARRATIVE_ENGINE §4.8](../Docs/world_history/NARRATIVE_ENGINE_DESIGN.md) / 채널 = [RELATION_HISTORY §4.2](../Docs/npc/NPC_RELATION_HISTORY_DESIGN.md) | `Deeds` 중 사망(`Fell`) 기록은 구현됨. 거주 이력·다른 사건 카탈로그는 후속. [src: Assets/Scripts/Manager/NpcManager.cs, Docs/npc/NPC_SIMULATION_DESIGN.md §11.1] |
 | NPC↔NPC 호감도 **런타임 변동** | [NPC_ACTIVITY_DESIGN §8.3](../Docs/npc/NPC_ACTIVITY_DESIGN.md) | **활동 기반**. 패시브 근접 drift(구 System_NpcRelationship)는 폐기 [src: NPC_RELATION_HISTORY §5.2] |
 | 모험가 자율 활동/원정(Venture)·부상·죽음 — 활동 *내용* | [NPC_ACTIVITY_DESIGN §4–10](../Docs/npc/NPC_ACTIVITY_DESIGN.md) | 단 Anchored/Worker 분류는 폐기(§3). 시뮬 프레임은 아래로 승격 |
-| NPC 시뮬 *기반*(개별 LOD·오프스크린 상태·로밍·월드영향) | [NPC_SIMULATION_DESIGN](../Docs/npc/NPC_SIMULATION_DESIGN.md) | 2026-07-09 설계 초안(미구현). **핵심 결정 D1~D12 완료** — 개별 시뮬·고정총량(보충)·오프스크린 상태·연속이동/조우·전기 로그·행동선택. 잔여 = 세부 튜닝(실측 후)·범위 밖(노변 이벤트) |
+| NPC 시뮬 *기반*(개별 LOD·오프스크린 상태·로밍·월드영향) | [NPC_SIMULATION_DESIGN](../Docs/npc/NPC_SIMULATION_DESIGN.md) | MVP 구현 완료: Rest/솔로 Hunt, 개인 LOD 전환, 결과 반영, 전역 총량/점진 보충. 파티·이주·WORLD_EVENT 유발은 후속. [src: Docs/npc/NPC_SIMULATION_DESIGN.md §11, Assets/Scripts/Common/System/System_NpcSim.cs] |
 | NPC=모험가 단일화·경제 분리·자가 건설 (확정 결정) | [NPC_SIMPLIFICATION_PLAN §2](../Docs/npc/NPC_SIMPLIFICATION_PLAN.md) | 구현 완료 (2026-07-08) |
 | 동료(파티 영입·명령·성장) | [companionSystem](../Docs/npc/companionSystem.md) | 최구식 문서 — §3 주의 필수 |
 | NPC 장비 12슬롯·검사 UI(UINpcInspect) | [NPC_EQUIPMENT_DESIGN](../Docs/npc/NPC_EQUIPMENT_DESIGN.md) | 구현 완료 |
@@ -38,12 +41,13 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 
 갱신일 역순. 뒤 문서와 충돌하면 **앞(최신) 문서가 이긴다**.
 
-1. **NPC_SIMPLIFICATION_PLAN** (2026-07-08, 구현 완료) — 최상위. Anchored/Worker 분류, 이민/여관 고용, NPC 직무·건설을 전부 폐기했다. [src: 동 문서 §2, §4.1]
-2. **interactionSystem / QUEST_SYSTEM_DESIGN** (2026-07-02 / 06-30) — 관계·선물·소망 축의 현행 정본. 서로 경계가 명시돼 있어 충돌 없음.
-3. **NPC_ACTIVITY_DESIGN** (2026-07-01) — 문서 상단 배너가 스스로 밝히듯 **§2 D1·§3.1(행동 클래스 3분류)은 폐기**, 유효 범위는 "모험가의 원정 축"만. [src: 동 문서 상단 배너]
-4. **NPC_RELATION_HISTORY_DESIGN** (2026-06-26) — 유효하나 §5.1 표의 "이민/Inn 고용" 행은 단순화로 무의미해짐 [추론: SIMPLIFICATION D6이 이민·고용을 제거].
-5. **NPC_EQUIPMENT_DESIGN** — 구현 완료 문서지만 §4.1 `SpawnVisitorNpc`·§8.4 "Inn 방문자 카드" 경로는 단순화 SP5에서 삭제됨 — 문서에 취소선·배너로 반영 완료(2026-07-09). [src: Docs/npc/NPC_EQUIPMENT_DESIGN.md 상단 배너]
-6. **companionSystem** (2026-04-01, 미구현) — 가장 오래됨. `player.Charisma` 판정(§2)은 이후 "플레이어 사회 스탯 없음" 결정과 충돌 [src: interactionSystem 설계 노트], 대장장이/상인 동료(§7)는 모험가 단일화와 충돌 [추론]. 파티 크기·시너지 *개념*만 NPC_ACTIVITY §7.2가 재사용.
+1. **NPC_SIMULATION_DESIGN** (2026-07-10, MVP 구현 완료) — 개인 LOD 시뮬, Rest/솔로 Hunt, 결과 반영, 전역 총량 보충의 현재 정본. [src: Docs/npc/NPC_SIMULATION_DESIGN.md §11.1]
+2. **NPC_SIMPLIFICATION_PLAN** (2026-07-08, 구현 완료) — Anchored/Worker 분류, 이민/여관 고용, NPC 직무·건설을 전부 폐기했다. [src: Docs/npc/NPC_SIMPLIFICATION_PLAN.md §2, §4.1]
+3. **interactionSystem / QUEST_SYSTEM_DESIGN** (2026-07-02 / 06-30) — 관계·선물·소망 축의 현행 정본. 서로 경계가 명시돼 있어 충돌 없음.
+4. **NPC_ACTIVITY_DESIGN** (2026-07-01) — **§2 D1·§3.1(행동 클래스 3분류)은 폐기**됐고, 현재 MVP가 아닌 파티·추가 활동 설계의 참고 문서다. [src: Docs/npc/NPC_ACTIVITY_DESIGN.md 상단 배너, Docs/npc/NPC_SIMULATION_DESIGN.md §10]
+5. **NPC_RELATION_HISTORY_DESIGN** (2026-06-26) — 유효하나 §5.1 표의 "이민/Inn 고용" 행은 단순화로 무의미해짐 [inference: Docs/npc/NPC_SIMPLIFICATION_PLAN.md D6].
+6. **NPC_EQUIPMENT_DESIGN** — 구현 완료 문서지만 §4.1 `SpawnVisitorNpc`·§8.4 "Inn 방문자 카드" 경로는 단순화 SP5에서 삭제됨. [src: Docs/npc/NPC_EQUIPMENT_DESIGN.md 상단 배너]
+7. **companionSystem** (2026-04-01, 미구현) — 가장 오래됨. `player.Charisma` 판정(§2)은 이후 "플레이어 사회 스탯 없음" 결정과 충돌 [src: Docs/npc/interactionSystem.md 설계 노트], 대장장이/상인 동료(§7)는 모험가 단일화와 충돌 [inference]. 파티 크기·시너지 *개념*만 NPC_ACTIVITY §7.2가 재사용.
 
 ## 4. 코드 현황 — 설계 vs 구현
 
@@ -54,7 +58,10 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 | 대화 토픽 선택·내러티브 런타임 | NARRATIVE_ENGINE(+SPIKE) | [Scripts/Npc/Narrative/](../Assets/Scripts/Npc/Narrative/) — DialogueTopicSelector, NpcNarrativeService(`Llm/Cache/Fallback`), `AffinityTier`, `NpcWish`/`WishState` 타입 | 🚧 부분 구현 — 타입·선택 로직 존재 |
 | 플레이어↔NPC 관계 4축(`PlayerRelation`) | interactionSystem §3 | NpcManager에 해당 API 없음 (GetPlayerRelation/ModifyPlayerRelation 부재) | ❌ 미구현 |
 | 선물·선호 판정(`GiftReaction`) / 소망 추적·보상 | interactionSystem §4 / QUEST_SYSTEM | 타입 골격(`NpcWish`, `WishKind`)만 Narrative에 존재 | ❌ 미구현 (문서상 0%) |
-| 원정(Venture) 시스템 | NPC_ACTIVITY §5–7 | NpcManager에 `_ventures` 없음, System_NpcActivity 없음 | ❌ 미구현 |
+| 개인 활동 시뮬(MVP) | NPC_SIMULATION §11.1 | `System_NpcSim`, `NpcActivityState`, `NpcActivityResolver` — Rest/솔로 Hunt, 결정론 결과, analytic Hunt 경로 | ✅ 구현 [src: Assets/Scripts/Common/System/System_NpcSim.cs, Assets/Scripts/Npc/NpcActivityResolver.cs] |
+| 전역 NPC 총량·점진 보충 | NPC_SIMULATION D9 | `NpcPopulationState`, `NpcManager.EnsureAllVillagesPopulated`/`TryReplenishGlobalPopulation` | ✅ 구현 [src: Assets/Scripts/Npc/NpcPopulationState.cs, Assets/Scripts/Manager/NpcManager.cs] |
+| 사망 관계 기억 | NPC_SIMULATION §9-10 | `DeceasedRelationMemory`, `NpcManager.MarkNpcDead`, `UINpcInspect` | ✅ 구현 [src: Assets/Scripts/Npc/NpcRelationEntry.cs, Assets/Scripts/Manager/NpcManager.cs, Assets/Scripts/UI/UINpcInspect.cs] |
+| 파티 원정·이주·WORLD_EVENT 유발 | NPC_SIMULATION NS4 | MVP 범위 밖 | ❌ 미구현 [src: Docs/npc/NPC_SIMULATION_DESIGN.md §11] |
 | 동료 시스템 | companionSystem | 없음 | ❌ 미구현 |
 | NPC 장비·검사 UI | NPC_EQUIPMENT | NpcEquipHelper, UINpcInspect | ✅ 구현 |
 
@@ -65,7 +72,7 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 - **world_history와 가장 깊게 얽힌다** (→ [world_history.md](world_history.md)): 대화·소망의 LLM *생성*은 NARRATIVE_ENGINE(world_history) 소관이지만 **코드는 `Scripts/Npc/Narrative/`에 있다**. 연대기(L1)는 PROCEDURAL_HISTORY가 만들고, npc의 backfill(L2)이 그것을 *입력*으로 쓴다. [src: NPC_RELATION_HISTORY §1]
 - **village**: 단순화 이후 마을 경제(`v.Population`)는 물리 NPC와 무관 — 추상 인구(§0, world_history)에서 소싱. NPC 관련 시스템은 Village Priority 대역(50-69)의 Population 밴드(55-59)를 쓴다. [src: NPC_SIMPLIFICATION §3.2, NPC_ACTIVITY §12]
 - **WORLD_EVENT**: 원정 결과 `EventTriggered` → 이벤트 디렉터 핸드오프. `Reunion` 소망 × "가족 구출 원정"(§3-E) 교차. [src: NPC_ACTIVITY §9, QUEST_SYSTEM §경계]
-- **아키텍처 관례**: 이 도메인은 의도적으로 **ECS 컴포넌트를 만들지 않는다** — 관계/원정 상태는 오프라인 NPC 간에도 살아야 하므로 정본은 `NpcManager` + `WorldData`. [src: NPC_RELATION_HISTORY §4.4, NPC_ACTIVITY §2 D3]
+- **아키텍처 관례**: 영속 관계·활동 상태의 정본은 `NpcManager` + `WorldData`/`NpcSaveData`다. 실체화 Hunt의 기본 AI만 멈추기 위해 `NpcActivityPausedTag`를 일시 ECS 태그로 사용한다. [src: Assets/Scripts/Manager/NpcManager.cs, Assets/Scripts/Common/System/System_NpcSim.cs]
 
 ## 6. 작업별 읽기 가이드
 
@@ -73,7 +80,8 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 |------------|-------------------|
 | 관계·선물 루프 / 상호작용 구현 | interactionSystem §1–4 → QUEST_SYSTEM(소망 걸치면) |
 | 소망(퀘스트) 구현 | QUEST_SYSTEM 전체 → interactionSystem §4.7 → NARRATIVE_ENGINE §4 |
-| NPC 자율 활동(Phase E) | NPC_SIMPLIFICATION(현행 전제) → NPC_ACTIVITY(폐기 절 제외) |
+| 현재 NPC 자율 활동(MVP) | NPC_SIMULATION §11.1 → `System_NpcSim` → `NpcActivityResolver` |
+| 파티·이주·WORLD_EVENT 확장 | NPC_SIMULATION NS4 → NPC_ACTIVITY(참고 범위) → WORLD_EVENT |
 | NPC 관계 데이터 다루기 | NPC_RELATION_HISTORY → NpcManager 관계 region 코드 |
 | 대화 시스템 | NARRATIVE_ENGINE(+SPIKE) → Scripts/Npc/Narrative/ 현행 코드 |
 | 동료 시스템 | companionSystem — 단 §3의 충돌 지점 확인 후 착수 |
