@@ -51,12 +51,22 @@ namespace ARPG.Npc
             return NpcHuntOutcome.Failed;
         }
 
+        /// <summary>성공한 Hunt가 마을에 가져오는 최소 식량 보상. v1은 Food만 다룬다.</summary>
+        public static int GetHuntFoodYield(NpcSaveData saveData, int entityId,
+            float startGameTime, int worldSeed)
+        {
+            HistoryRng rng = CreateRng(entityId, startGameTime, worldSeed, 2);
+            float capability = Mathf.Clamp01(saveData.NpcStat.Courage / 100f + saveData.SkillLevel / 20f);
+            int baseYield = capability >= 0.70f ? 3 : capability >= 0.35f ? 2 : 1;
+            return baseYield + (rng.Chance(0.20d) ? 1 : 0);
+        }
+
         private static HistoryRng CreateRng(int entityId, float startGameTime, int worldSeed, int salt)
         {
             // 활동 시작시각을 1/100 게임시간 단위로 양자화한다.
             // 같은 월드·NPC·활동 시작시각·판정 종류는 세이브/로드 뒤에도 같은 난수열을 얻는다.
             int startTick = Mathf.FloorToInt(startGameTime * 100f);
-            // salt=0은 활동 선택, salt=1은 Hunt 결과에 사용해 두 롤의 난수열을 분리한다.
+            // salt=0은 활동 선택, salt=1은 Hunt 결과, salt=2는 보상에 사용해 난수열을 분리한다.
             int key = unchecked(worldSeed ^ (entityId * 486187739) ^ (startTick * 16777619) ^ salt);
             return new HistoryRng(DerivedSeed.Derive(key, DerivedSeed.ChannelNpcActivity));
         }

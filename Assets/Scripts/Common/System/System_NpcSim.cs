@@ -126,10 +126,12 @@ namespace ARPG.Systems
         private static void ResolveHunt(NpcSaveData saveData, int entityId, float outcomeGameTime, int worldSeed)
         {
             NpcActivityState activity = saveData.Activity;
+            float huntStartedGameTime = activity.PhaseStartedGameTime;
             NpcHuntOutcome outcome = NpcActivityResolver.ResolveHunt(saveData, entityId,
-                activity.PhaseStartedGameTime, worldSeed);
+                huntStartedGameTime, worldSeed);
 
             activity.LastHuntOutcome = outcome;
+            activity.LastHuntFoodYield = 0;
             // NS2에서 이 스냅샷을 소비해 보상, 관계 변화, 전기·연대기 반영을 수행한다.
             activity.LastOutcomeGameTime = outcomeGameTime;
             activity.Kind = NpcActivityKind.None;
@@ -139,10 +141,8 @@ namespace ARPG.Systems
 
             if (outcome == NpcHuntOutcome.Dead)
             {
-                // NS1은 저장 상태만 Dead로 전환한다. 관계/청크 정리와 Chronicle Fell append는 NS2 책임이다.
-                activity.Phase = NpcActivityPhase.Dead;
-                activity.PhaseEndGameTime = 0f;
-                saveData.Condition = ARPG.Creature.CharacterConditions.Dead;
+                // 매니저가 관계·호감도·마을 명단·시뮬레이션 순회·연대기를 함께 정리한다.
+                AR.s.Npc.MarkOffscreenNpcDead(entityId, outcomeGameTime);
                 return;
             }
 
@@ -156,6 +156,15 @@ namespace ARPG.Systems
 
             activity.Phase = NpcActivityPhase.Idle;
             activity.PhaseEndGameTime = 0f;
+
+            if (outcome == NpcHuntOutcome.Success && saveData.VillageId >= 0)
+            {
+                int foodYield = NpcActivityResolver.GetHuntFoodYield(saveData, entityId,
+                    huntStartedGameTime, worldSeed);
+                activity.LastHuntFoodYield = foodYield;
+                // 오프스크린 Hunt마다 UI 알림을 만들지 않도록 조용히 자원만 반영한다.
+                AR.s.Village.ProduceResource(saveData.VillageId, GlobalEnum.ItemType.Food, foodYield, false);
+            }
         }
     }
 }

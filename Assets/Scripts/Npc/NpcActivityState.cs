@@ -53,6 +53,7 @@ namespace ARPG.Npc
         public float PhaseEndGameTime;
         // 보상·전기·연대기 반영(NS2)이 소비할 마지막 Hunt 결과 스냅샷.
         public NpcHuntOutcome LastHuntOutcome = NpcHuntOutcome.None;
+        public int LastHuntFoodYield;
         public float LastOutcomeGameTime;
 
         public void EnsureInitialized()

@@ -112,6 +112,14 @@ namespace ARPG.Village
 
         public void ProduceResource(int villageId, GlobalEnum.ItemType type, int amount)
         {
+            ProduceResource(villageId, type, amount, true);
+        }
+
+        /// <summary>
+        /// 자원을 생산한다. 오프스크린 시뮬레이션은 플레이어 알림 없이 같은 저장/스토리지 동기화 경로를 사용한다.
+        /// </summary>
+        public void ProduceResource(int villageId, GlobalEnum.ItemType type, int amount, bool showNotify)
+        {
             if (_villages.TryGetValue(villageId, out VillageData? data) == false)
                 return;
 
@@ -123,7 +131,8 @@ namespace ARPG.Village
 
             SyncStorageComponent(data);
 
-            AR.s.UI.SetNotify(BuildResourceStatusNotify(data));
+            if (showNotify)
+                AR.s.UI.SetNotify(BuildResourceStatusNotify(data));
         }
 
         public bool ConsumeResource(int villageId, GlobalEnum.ItemType type, int amount)
@@ -219,6 +228,18 @@ namespace ARPG.Village
             // NpcEntityIds는 물리 모험가 명단(코호트/UI 전용) — 경제(v.Population)를 구동하지 않는다.
             // v.Population은 §0 추상 인구에서만 소싱 (RefreshPopulationFromAbstract).
             data.NpcEntityIds.Add(npcEntityId);
+        }
+
+        /// <summary>
+        /// 영구 사망 또는 이주로 물리 모험가 명단에서 제외한다.
+        /// 경제 인구(v.Population)는 추상 인구를 소싱하므로 이 호출로 바뀌지 않는다.
+        /// </summary>
+        public void UnregisterNpcFromVillage(int villageId, int npcEntityId)
+        {
+            if (_villages.TryGetValue(villageId, out VillageData? data) == false)
+                return;
+
+            data.NpcEntityIds.Remove(npcEntityId);
         }
 
         // ── §0 추상 인구 → 마을 경제 인구(v.Population) 소싱 (NPC_SIMPLIFICATION_PLAN §3.2) ──

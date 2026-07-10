@@ -45,6 +45,9 @@ namespace ARPG.Npc
         public NpcActivityState Activity = new();
         public float LastSimGameTime;
 
+        // 대사 회고와 지식 거리의 입력. 평범한 사냥 성공은 기록하지 않고 의미 있는 사건만 보존한다.
+        public List<NpcDeedEntry> Deeds = new();
+
         // NPC → 정착지 단위 감정 (피정복 반감/왕국 자부심 등). 관계 backfill(L2)이 시드. 보통 0~1개.
         // 설계: NPC_RELATION_HISTORY_DESIGN.md §4.2
         public List<NpcSentiment> Sentiments = new();
@@ -117,6 +120,8 @@ namespace ARPG.Npc
             if (Activity == null)
                 Activity = new NpcActivityState();
             Activity.EnsureInitialized();
+            if (Deeds == null)
+                Deeds = new List<NpcDeedEntry>();
         }
 
         /// <summary>

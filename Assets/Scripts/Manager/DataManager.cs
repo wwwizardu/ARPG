@@ -13,7 +13,7 @@ namespace ARPG.Data
 {
     public partial class DataManager : MonoBehaviour
     {
-        private const ushort CURRENT_WORLD_DATA_VERSION = 5;
+        private const ushort CURRENT_WORLD_DATA_VERSION = 6;
         private const ushort CURRENT_PLAYER_DATA_VERSION = 2;
         private WorldData _worldData = new();
         private List<PlayerData> _playerDataList = new();
@@ -568,6 +568,13 @@ namespace ARPG.Data
             // 버전 4 -> 5: NPC 개인 활동 상태(NpcActivityState) + 개인 시뮬레이션 시계 추가.
             // 구 세이브의 기본 상태 보정은 NpcSaveData.OnLoadCompleted에서 처리한다.
             if (fromVersion < 5 && toVersion >= 5)
+            {
+                // no-op (NpcSaveData.OnLoadCompleted에서 처리).
+            }
+
+            // 버전 5 -> 6: NPC 전기(Deeds) + Hunt 식량 보상 스냅샷 추가.
+            // 구 세이브의 빈 전기 목록 보정은 NpcSaveData.OnLoadCompleted에서 처리한다.
+            if (fromVersion < 6 && toVersion >= 6)
             {
                 // no-op (NpcSaveData.OnLoadCompleted에서 처리).
             }

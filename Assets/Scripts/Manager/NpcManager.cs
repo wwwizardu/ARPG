@@ -5,6 +5,7 @@ using UnityEngine;
 using ARPG.Component;
 using ARPG.Creature;
 using ARPG.Factory;
+using ARPG.History;
 using ARPG.Map;
 using ARPG.Npc.Narrative;
 using ARPG.Scene;
@@ -860,6 +861,51 @@ namespace ARPG.Npc
             return false;
         }
 
+        /// <summary>
+        /// ECS 엔티티가 없는 NPC의 영구 사망을 정리한다.
+        /// NPC 저장 데이터는 전기/연대기 회고를 위해 보존하되, 활동 순회와 관계 채널에서는 제거한다.
+        /// </summary>
+        public void MarkOffscreenNpcDead(int entityId, float when)
+        {
+            if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
+                return;
+            if (saveData.Condition == CharacterConditions.Dead ||
+                saveData.Activity.Phase == NpcActivityPhase.Dead)
+                return;
+
+            saveData.Condition = CharacterConditions.Dead;
+            saveData.Activity.Phase = NpcActivityPhase.Dead;
+            saveData.Activity.Kind = NpcActivityKind.None;
+            saveData.Activity.PhaseEndGameTime = 0f;
+            saveData.LastSimGameTime = when;
+
+            RemoveNpcFromSimulation(entityId);
+            RemoveAllAffinityInvolving(entityId);
+            RemoveAllRelationsInvolving(entityId);
+            AR.s.Village.UnregisterNpcFromVillage(saveData.VillageId, entityId);
+
+            int settlementId = AR.s.Village.GetSettlementId(saveData.VillageId);
+            int eventId = settlementId >= 0
+                ? AR.s.History.AppendLiveEvent(ChronicleEventType.Fell, settlementId)
+                : -1;
+            AddDeed(entityId, NpcDeedKind.Fell, eventId, NpcKnowledgeLevel.Did, when, entityId);
+        }
+
+        /// <summary>
+        /// NPC 전기에 사건을 추가한다. 중요도가 낮은 기록부터 제거해 세이브 크기를 제한한다.
+        /// </summary>
+        public void AddDeed(int entityId, NpcDeedKind kind, int refEventId,
+            NpcKnowledgeLevel howKnown, float when, int participantId)
+        {
+            if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
+                return;
+
+            NpcDeedEntry entry = new NpcDeedEntry(kind, refEventId, howKnown, when);
+            entry.Participants.Add(participantId);
+            saveData.Deeds.Add(entry);
+            TrimDeeds(saveData.Deeds);
+        }
+
         private GlobalEnum.JobType GetPreferredJobType(int npcTableId)
         {
             Tables.NpcTable? table = AR.s.Data.GetNpc(npcTableId);
@@ -989,6 +1035,47 @@ namespace ARPG.Npc
                 _simulationCursor++;
             if (_simulationCursor >= _simulationNpcIds.Count)
                 _simulationCursor = 0;
+        }
+
+        private void RemoveNpcFromSimulation(int entityId)
+        {
+            int index = _simulationNpcIds.BinarySearch(entityId);
+            if (index < 0)
+                return;
+
+            _simulationNpcIds.RemoveAt(index);
+            if (index < _simulationCursor)
+                _simulationCursor--;
+            if (_simulationCursor < 0 || _simulationCursor >= _simulationNpcIds.Count)
+                _simulationCursor = 0;
+        }
+
+        private static void TrimDeeds(List<NpcDeedEntry> deeds)
+        {
+            const int maxDeedCount = 16;
+            while (deeds.Count > maxDeedCount)
+            {
+                int leastImportantIndex = 0;
+                int leastImportance = GetDeedImportance(deeds[0].Kind);
+
+                for (int i = 1; i < deeds.Count; i++)
+                {
+                    int importance = GetDeedImportance(deeds[i].Kind);
+                    if (importance < leastImportance ||
+                        (importance == leastImportance && deeds[i].When < deeds[leastImportantIndex].When))
+                    {
+                        leastImportantIndex = i;
+                        leastImportance = importance;
+                    }
+                }
+
+                deeds.RemoveAt(leastImportantIndex);
+            }
+        }
+
+        private static int GetDeedImportance(NpcDeedKind kind)
+        {
+            return kind == NpcDeedKind.Fell ? 100 : 10;
         }
 
         private void RemoveNpcFromChunk(Vector2Int chunkCoord, int entityId)

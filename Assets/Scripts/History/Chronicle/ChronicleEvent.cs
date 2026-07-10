@@ -43,5 +43,6 @@ namespace ARPG.History
         KingdomFound = 7,
         KingdomJoin = 8,
         Promotion = 9,      // VillageStage 승격 (Live append)
+        Fell = 10,          // NPC 오프스크린 활동 중 영구 사망 (Live append)
     }
 }

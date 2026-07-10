@@ -84,17 +84,18 @@ namespace ARPG.History
         /// 예: 마을 전멸(Ruin), VillageStage 승격(Promotion), 플레이어 개입.
         /// 연대기가 없으면(미생성) 무시. Year는 생성 시뮬 기간(현재 = SimulatedYears)으로 표기.
         /// </summary>
-        public void AppendLiveEvent(ChronicleEventType type, int subjectSettlementId,
+        public int AppendLiveEvent(ChronicleEventType type, int subjectSettlementId,
             int objectSettlementId = -1, int kingdomId = -1)
         {
             ChronicleSaveData c = AR.s.Data.Chronicle;
             if (c == null)
-                return;
+                return -1;
             if (c.Events == null)
                 c.Events = new List<ChronicleEvent>();
 
             int nextId = c.Events.Count > 0 ? c.Events[c.Events.Count - 1].EventId + 1 : 0;
             c.Events.Add(new ChronicleEvent(nextId, c.SimulatedYears, type, subjectSettlementId, objectSettlementId, kingdomId));
+            return nextId;
         }
 
         /// <summary>
