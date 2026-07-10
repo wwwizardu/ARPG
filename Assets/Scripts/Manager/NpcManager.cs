@@ -24,6 +24,8 @@ namespace ARPG.Npc
         private int _simulationCursor;
         // NPC 간 호감도 (양방향 대칭, sparse — 만난 적 있는 페어만 등록)
         private Dictionary<NpcPairKey, int> _npcAffinity = new();
+        // 플레이어↔NPC 관계. NPC ID가 키이며, 청크 unload와 무관하게 유지한다.
+        private Dictionary<int, PlayerRelation> _playerRelations = new();
         // 호감도 clamp 범위 (drift 누적 폭주 방지)
         public const int AFFINITY_MIN = -100;
         public const int AFFINITY_MAX = 100;
@@ -52,6 +54,7 @@ namespace ARPG.Npc
             }
 
             LoadAffinity(AR.s.Data.NpcAffinityList);
+            LoadPlayerRelations(AR.s.Data.PlayerNpcRelationList);
             LoadRelations(AR.s.Data.NpcRelationList);
         }
 
@@ -76,6 +79,7 @@ namespace ARPG.Npc
             _simulationNpcIds.Clear();
             _simulationCursor = 0;
             _npcAffinity.Clear();
+            _playerRelations.Clear();
             _npcRelations.Clear();
             _narrative.Reset();
             _isInitialLoaded = false;
@@ -907,6 +911,110 @@ namespace ARPG.Npc
             }
         }
 
+        #region Player-NPC Relationship
+
+        /// <summary>
+        /// 플레이어와 NPC 사이의 관계를 조회한다. 아직 상호작용하지 않은 NPC는 기본 관계를 반환한다.
+        /// </summary>
+        public PlayerRelation GetPlayerRelation(int npcId)
+        {
+            return _playerRelations.TryGetValue(npcId, out PlayerRelation relation)
+                ? relation
+                : PlayerRelation.Default;
+        }
+
+        /// <summary>
+        /// 플레이어가 해당 NPC와 관계를 만든 적이 있는지 반환한다.
+        /// </summary>
+        public bool HasMetPlayer(int npcId)
+        {
+            return _playerRelations.ContainsKey(npcId);
+        }
+
+        /// <summary>
+        /// 플레이어 관계를 절대값으로 설정한다. 모든 관계 변경은 이 메서드의 범위 보정을 거친다.
+        /// </summary>
+        public void SetPlayerRelation(int npcId, PlayerRelation relation)
+        {
+            if (npcId < 0)
+                return;
+
+            relation.Affinity = Mathf.Clamp(relation.Affinity, AFFINITY_MIN, AFFINITY_MAX);
+            relation.TrustCap = Mathf.Clamp(relation.TrustCap, 0, 100);
+            relation.Trust = Mathf.Clamp(relation.Trust, 0, relation.TrustCap);
+            relation.Fear = Mathf.Clamp(relation.Fear, 0, 100);
+            relation.Intimacy = Mathf.Clamp(relation.Intimacy, 0, 100);
+            _playerRelations[npcId] = relation;
+        }
+
+        /// <summary>
+        /// 플레이어 관계를 delta만큼 변경한다. Trust는 하락이 빠르고 회복은 절반 속도이며,
+        /// 큰 하락은 회복 가능한 상한(TrustCap)도 낮춘다.
+        /// </summary>
+        public void ModifyPlayerRelation(int npcId, int dAff, int dTrust, int dFear, int dIntimacy)
+        {
+            if (npcId < 0)
+                return;
+
+            PlayerRelation relation = GetPlayerRelation(npcId);
+            relation.Affinity = Mathf.Clamp(relation.Affinity + dAff, AFFINITY_MIN, AFFINITY_MAX);
+
+            if (dTrust < 0)
+            {
+                relation.Trust = Mathf.Max(0, relation.Trust + dTrust);
+                relation.TrustCap = Mathf.Max(relation.Trust, relation.TrustCap + dTrust / 2);
+            }
+            else if (dTrust > 0)
+            {
+                relation.Trust = Mathf.Min(relation.TrustCap, relation.Trust + dTrust / 2);
+            }
+
+            relation.Fear = Mathf.Clamp(relation.Fear + dFear, 0, 100);
+            relation.Intimacy = Mathf.Clamp(relation.Intimacy + dIntimacy, 0, 100);
+            SetPlayerRelation(npcId, relation);
+        }
+
+        /// <summary>
+        /// 직렬화용 List 변환. DataManager.Save에서 호출한다.
+        /// </summary>
+        public List<PlayerNpcRelationEntry> SavePlayerRelations()
+        {
+            List<PlayerNpcRelationEntry> result = new List<PlayerNpcRelationEntry>(_playerRelations.Count);
+            List<int> npcIds = new List<int>(_playerRelations.Keys);
+            for (int i = 0; i < npcIds.Count; i++)
+            {
+                int npcId = npcIds[i];
+                result.Add(new PlayerNpcRelationEntry(npcId, _playerRelations[npcId]));
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// 직렬화 List에서 플레이어 관계를 복원한다. 구 세이브의 null 목록은 빈 상태로 처리한다.
+        /// </summary>
+        public void LoadPlayerRelations(List<PlayerNpcRelationEntry>? list)
+        {
+            _playerRelations.Clear();
+            if (list == null)
+                return;
+
+            for (int i = 0; i < list.Count; i++)
+            {
+                PlayerNpcRelationEntry entry = list[i];
+                SetPlayerRelation(entry.NpcId, entry.ToRelation());
+            }
+        }
+
+        /// <summary>
+        /// NPC 영구 삭제 시 플레이어 관계를 제거한다. 일시적 청크 비활성화에서는 호출하지 않는다.
+        /// </summary>
+        public void RemovePlayerRelation(int npcId)
+        {
+            _playerRelations.Remove(npcId);
+        }
+
+        #endregion
+
         #endregion
 
         #region NPC 관계 (유형 채널, 양방향 인덱스, sparse)
@@ -1146,6 +1254,7 @@ namespace ARPG.Npc
 
             RemoveNpcFromSimulation(entityId);
             RemoveAllAffinityInvolving(entityId);
+            RemovePlayerRelation(entityId);
             RecordDeceasedRelationMemories(entityId, ResolveNpcDisplayName(saveData), eventId, when);
             RemoveAllRelationsInvolving(entityId);
             AR.s.Village.UnregisterNpcFromVillage(saveData.VillageId, entityId);

@@ -62,7 +62,7 @@ namespace ARPG.Utility
 
         /// <summary>
         /// 인자 없는 상호작용 처리 (v1: 대화). 거래는 UI 오픈 신호만, 선물은 ResolveGift 사용.
-        /// 관계 변동은 NpcManager.ModifyPlayerRelation 경유(불변식 단일 지점) — 관계 데이터 계층 구현 후 연결.
+        /// 관계 변동은 NpcManager.ModifyPlayerRelation 경유(불변식 단일 지점)로 반영한다.
         /// </summary>
         public static InteractionResult Resolve(int npcId, InteractionType type)
         {
@@ -70,7 +70,7 @@ namespace ARPG.Utility
             {
                 case InteractionType.Talk:
                     // 항상 성공 — Affinity +1, Intimacy +1 (설계 §2 Talk).
-                    // TODO: NpcManager.ModifyPlayerRelation(npcId, 1, 0, 0, 1);
+                    AR.s.Npc.ModifyPlayerRelation(npcId, 1, 0, 0, 1);
                     return new InteractionResult
                     {
                         Success = true,
@@ -95,7 +95,8 @@ namespace ARPG.Utility
         /// <summary>
         /// 선물 처리 — 아이템 가치 tier → 호감도 (설계 §2 Gift).
         /// 선호/혐오 반응 배수는 NPC 백본 유래(NARRATIVE_ENGINE)로 추후 일반화 — v1은 Neutral.
-        /// 관계 변동은 NpcManager.ModifyPlayerRelation 경유 — 관계 데이터 계층 구현 후 연결.
+        /// 호출자는 인벤토리 아이템 차감이 성공한 뒤에만 이 메서드를 호출해야 한다.
+        /// 관계 변동은 NpcManager.ModifyPlayerRelation 경유로 반영한다.
         /// </summary>
         public static GiftResult ResolveGift(int npcId, ItemData? item)
         {
@@ -122,7 +123,7 @@ namespace ARPG.Utility
             // TODO: 선호/혐오 카테고리 배수 (Loved×2.0 / Disliked 음수 …) — 백본 유래(설계 §4.4/§4.5).
             GiftReactionTier tier = GiftReactionTier.Neutral;
 
-            // TODO: NpcManager.ModifyPlayerRelation(npcId, affinityDelta, 0, 0, intimacyDelta);
+            AR.s.Npc.ModifyPlayerRelation(npcId, affinityDelta, 0, 0, intimacyDelta);
             return new GiftResult
             {
                 Success = true,

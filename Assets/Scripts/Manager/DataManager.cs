@@ -13,7 +13,7 @@ namespace ARPG.Data
 {
     public partial class DataManager : MonoBehaviour
     {
-        private const ushort CURRENT_WORLD_DATA_VERSION = 10;
+        private const ushort CURRENT_WORLD_DATA_VERSION = 11;
         private const ushort CURRENT_PLAYER_DATA_VERSION = 2;
         private WorldData _worldData = new();
         private List<PlayerData> _playerDataList = new();
@@ -49,6 +49,7 @@ namespace ARPG.Data
         public int CurrentPlayerEntityId => _currentPlayerEntityId;
         public Dictionary<int, NpcSaveData> NpcSaveDatas => _worldData.NpcSaveDatas;
         public List<NpcAffinityEntry> NpcAffinityList => _worldData.NpcAffinityList;
+        public List<PlayerNpcRelationEntry> PlayerNpcRelationList => _worldData.PlayerNpcRelationList;
         public List<NpcRelationEntry> NpcRelationList => _worldData.NpcRelationList;
         public NpcPopulationState NpcPopulation => _worldData.NpcPopulation;
         public Dictionary<int, BuildingSaveData> BuildingSaveDatas => _worldData.BuildingSaveDatas;
@@ -339,6 +340,7 @@ namespace ARPG.Data
                     // NpcData 저장
                     _worldData.NpcSaveDatas = AR.s.Npc.Save();
                     _worldData.NpcAffinityList = AR.s.Npc.SaveAffinity();
+                    _worldData.PlayerNpcRelationList = AR.s.Npc.SavePlayerRelations();
                     _worldData.NpcRelationList = AR.s.Npc.SaveRelations();
 
                     // BuildingData 저장
@@ -597,6 +599,13 @@ namespace ARPG.Data
 
             // 버전 8 -> 9: 맵 전체 NPC 목표 수와 점진 보충 상태 추가.
             if (fromVersion < 9 && toVersion >= 9)
+            {
+                // no-op (WorldData.LoadCompleted에서 처리).
+            }
+
+            // 버전 10 -> 11: 플레이어↔NPC 관계(PlayerNpcRelationList) 추가.
+            // 구 세이브는 WorldData.LoadCompleted에서 빈 목록으로 보정된다.
+            if (fromVersion < 11 && toVersion >= 11)
             {
                 // no-op (WorldData.LoadCompleted에서 처리).
             }

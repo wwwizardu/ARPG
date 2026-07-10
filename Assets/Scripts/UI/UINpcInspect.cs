@@ -1,4 +1,5 @@
 #nullable enable
+using System.Collections.Generic;
 using ARPG.Base;
 using ARPG.Component;
 using ARPG.Data;
@@ -40,8 +41,9 @@ namespace ARPG.UI
         private VisualElement? _lastRoot;
 
         // 내러티브 검증 스파이크 — 대화 버튼 연결용
-        private AffinityTier _debugTier = AffinityTier.Stranger;
         private Text? _dialogueLabel;
+        private VisualElement? _giftList;
+        private static readonly bool _enableWishSpike = false;
 
         public override void Initialize(string inName, bool isForm = false)
         {
@@ -447,6 +449,12 @@ namespace ARPG.UI
             _dialogueLabel.style.marginLeft = 8f;
             _dialogueLabel.style.marginRight = 8f;
             root.Add(_dialogueLabel);
+
+            _giftList = new VisualElement();
+            _giftList.style.marginLeft = 8f;
+            _giftList.style.marginRight = 8f;
+            _giftList.style.display = DisplayStyle.None;
+            root.Add(_giftList);
         }
 
         private void OnClickTalk()
@@ -459,8 +467,9 @@ namespace ARPG.UI
         // 클릭마다 티어를 한 단계 올려 에스컬레이션(R3)을 관찰한다(관계 데이터 계층 미구현 우회).
         private async UniTask OnClickTalkAsync()
         {
-            AffinityTier tier = _debugTier;
-            _debugTier = NextTier(_debugTier);
+            InteractionResult interaction = InteractionHelper.Resolve(_entityId, InteractionType.Talk);
+            PlayerRelation relation = AR.s.Npc.GetPlayerRelation(_entityId);
+            AffinityTier tier = GetAffinityTier(relation.Affinity);
 
             ThreatSeed threat = new()
             {
@@ -471,9 +480,9 @@ namespace ARPG.UI
             if (_dialogueLabel != null) _dialogueLabel.text = $"[{tier}] 생성 중…";
 
             DialogueResult r = await NpcNarrativeService.GetDialogueAsync(_entityId, tier, threat);
-            string line = $"[{tier}/{r.Topic}/{r.Source}] {r.Text}";
+            string line = $"[{tier}/{r.Topic}/{r.Source}] {r.Text}\n호감도 +{interaction.AffinityDelta}, 친밀도 +{interaction.IntimacyDelta}";
 
-            if (tier >= AffinityTier.Friend)
+            if (_enableWishSpike && tier >= AffinityTier.Friend)
             {
                 NpcWish? wish = await NpcNarrativeService.GetOrGenerateWishAsync(_entityId, tier, threat);
                 if (wish != null)
@@ -487,12 +496,12 @@ namespace ARPG.UI
             Debug.Log($"[Narrative] npc={_entityId} {line}");
         }
 
-        private static AffinityTier NextTier(AffinityTier t) => t switch
+        private static AffinityTier GetAffinityTier(int affinity) => affinity switch
         {
-            AffinityTier.Stranger => AffinityTier.Acquaintance,
-            AffinityTier.Acquaintance => AffinityTier.Friend,
-            AffinityTier.Friend => AffinityTier.Confidant,
-            _ => AffinityTier.Stranger,
+            < 20 => AffinityTier.Stranger,
+            < 50 => AffinityTier.Acquaintance,
+            < 80 => AffinityTier.Friend,
+            _ => AffinityTier.Confidant,
         };
 
         private void OnClickTrade()
@@ -509,8 +518,59 @@ namespace ARPG.UI
         private void OnClickGift()
         {
             if (_entityId < 0) return;
-            // TODO: 선물 아이템 선택 UI 오픈 → 선택 확정 시 OnGiftItemSelected(item) 호출.
-            Debug.Log($"[UINpcInspect] 선물 → 아이템 선택 UI 오픈 예정 (npc={_entityId})");
+            BuildGiftSelection();
+        }
+
+        private void BuildGiftSelection()
+        {
+            if (_giftList == null || AR.s.Player == null)
+                return;
+
+            _giftList.Clear();
+            _giftList.style.display = DisplayStyle.Flex;
+            _giftList.Add(new Text { text = "선물할 아이템을 선택하세요." });
+
+            List<ItemData?> items = AR.s.Player.Inventory.Items;
+            int selectableCount = 0;
+            for (int i = 0; i < items.Count; i++)
+            {
+                ItemData? item = items[i];
+                if (item == null || item.Table == null)
+                    continue;
+
+                int slotIndex = i;
+                Button itemButton = new() { title = $"{item.Table.Name} x{item.Quantity}" };
+                itemButton.clicked += () => OnGiftItemSelected(slotIndex);
+                _giftList.Add(itemButton);
+                selectableCount++;
+            }
+
+            if (selectableCount == 0)
+                _giftList.Add(new Text { text = "선물할 아이템이 없습니다." });
+        }
+
+        private void OnGiftItemSelected(int slotIndex)
+        {
+            if (_entityId < 0 || AR.s.Player == null)
+                return;
+
+            ItemData? item = AR.s.Player.Inventory.GetItemBySlotIndex(slotIndex);
+            if (item == null)
+                return;
+
+            if (AR.s.Player.Inventory.RemoveItem(slotIndex, 1, out _) == false)
+            {
+                if (_dialogueLabel != null)
+                    _dialogueLabel.text = "선물을 전달하지 못했습니다.";
+                return;
+            }
+
+            OnGiftItemSelected(item);
+            if (_giftList != null)
+            {
+                _giftList.Clear();
+                _giftList.style.display = DisplayStyle.None;
+            }
         }
 
         /// <summary>선물 아이템 선택 UI가 아이템을 확정하면 호출 (ResolveGift 호출부만 배선).</summary>
@@ -518,7 +578,9 @@ namespace ARPG.UI
         {
             if (_entityId < 0) return;
             GiftResult result = InteractionHelper.ResolveGift(_entityId, item);
-            Debug.Log($"[UINpcInspect] 선물 처리 → 반응={result.Tier}, ΔAff={result.AffinityDelta}, ΔInt={result.IntimacyDelta} (관계 반영 TODO)");
+            if (_dialogueLabel != null)
+                _dialogueLabel.text = $"선물을 건넸습니다. 호감도 +{result.AffinityDelta}, 친밀도 +{result.IntimacyDelta}";
+            Debug.Log($"[UINpcInspect] 선물 처리 → 반응={result.Tier}, ΔAff={result.AffinityDelta}, ΔInt={result.IntimacyDelta}");
         }
 
         /// <summary>

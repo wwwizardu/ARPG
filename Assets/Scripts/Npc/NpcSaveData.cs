@@ -227,4 +227,64 @@ namespace ARPG.Npc
             Affinity = affinity;
         }
     }
+
+    /// <summary>
+    /// 플레이어 한 명과 NPC 한 명 사이의 영속 관계 상태.
+    /// 정본은 NpcManager이며, 청크 비활성화와 무관하게 WorldData에 저장된다.
+    /// </summary>
+    public struct PlayerRelation
+    {
+        public int Affinity;
+        public int Trust;
+        public int Fear;
+        public int Intimacy;
+        public int TrustCap;
+
+        public static PlayerRelation Default => new PlayerRelation
+        {
+            Affinity = 0,
+            Trust = 0,
+            Fear = 0,
+            Intimacy = 0,
+            TrustCap = 100,
+        };
+    }
+
+    /// <summary>
+    /// PlayerRelation의 직렬화 DTO. 한 명의 플레이어만 지원하므로 NPC ID만 키로 보관한다.
+    /// </summary>
+    [Serializable]
+    public class PlayerNpcRelationEntry
+    {
+        public int NpcId;
+        public int Affinity;
+        public int Trust;
+        public int Fear;
+        public int Intimacy;
+        public int TrustCap = 100;
+
+        public PlayerNpcRelationEntry() { }
+
+        public PlayerNpcRelationEntry(int npcId, PlayerRelation relation)
+        {
+            NpcId = npcId;
+            Affinity = relation.Affinity;
+            Trust = relation.Trust;
+            Fear = relation.Fear;
+            Intimacy = relation.Intimacy;
+            TrustCap = relation.TrustCap;
+        }
+
+        public PlayerRelation ToRelation()
+        {
+            return new PlayerRelation
+            {
+                Affinity = Affinity,
+                Trust = Trust,
+                Fear = Fear,
+                Intimacy = Intimacy,
+                TrustCap = TrustCap,
+            };
+        }
+    }
 }

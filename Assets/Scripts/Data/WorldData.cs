@@ -11,12 +11,13 @@ namespace ARPG.Data
     [Serializable]
     public class WorldData
     {
-        public ushort Version = 10;
+        public ushort Version = 11;
 
         public List<WorldDropItemData> WorldDropItemDatas = new();
         public List<VillageData> VillageDatas = new();
         public Dictionary<int, NpcSaveData> NpcSaveDatas = new();
         public List<NpcAffinityEntry> NpcAffinityList = new();
+        public List<PlayerNpcRelationEntry> PlayerNpcRelationList = new();
         public Dictionary<int, BuildingSaveData> BuildingSaveDatas = new();
         public List<ChunkModificationData> TileModifications = new();
 
@@ -41,6 +42,8 @@ namespace ARPG.Data
             // 구버전 세이브(신규 필드 없는 JSON) 로드 시 null 방어 — 기본값 채우기 (R0-B 마이그레이션)
             if (NpcAffinityList == null)
                 NpcAffinityList = new();
+            if (PlayerNpcRelationList == null)
+                PlayerNpcRelationList = new();
             if (NpcRelationList == null)
                 NpcRelationList = new();
             if (NpcPopulation == null)
