@@ -11,7 +11,7 @@ namespace ARPG.Data
     [Serializable]
     public class WorldData
     {
-        public ushort Version = 8;
+        public ushort Version = 10;
 
         public List<WorldDropItemData> WorldDropItemDatas = new();
         public List<VillageData> VillageDatas = new();
@@ -23,6 +23,8 @@ namespace ARPG.Data
         // WORLD_HISTORY_PLAN.md R0-B — 정착지 연대기(L1) + NPC 관계(L2)
         public ChronicleSaveData Chronicle = new();
         public List<NpcRelationEntry> NpcRelationList = new();
+        // 물리 모험가의 전역 목표 수와 보충 시각. 경제 인구와 무관하다.
+        public NpcPopulationState NpcPopulation = new();
 
         // PROCEDURAL_HISTORY §0 런타임 LOD — 게임 중 변동하는 정착지 라이브 추상 층.
         // Chronicle(정지 스냅샷)과 분리. 최초/구세이브는 HistoryManager가 Chronicle에서 초기화.
@@ -41,6 +43,8 @@ namespace ARPG.Data
                 NpcAffinityList = new();
             if (NpcRelationList == null)
                 NpcRelationList = new();
+            if (NpcPopulation == null)
+                NpcPopulation = new();
             if (Chronicle == null)
                 Chronicle = new();
             if (Chronicle.Events == null)

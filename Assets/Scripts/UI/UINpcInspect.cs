@@ -33,6 +33,7 @@ namespace ARPG.UI
         private VisualElement? _statList;
         private VisualElement? _personalityList;
         private VisualElement? _relationList;
+        private VisualElement? _activityList;
 
         private int _entityId = -1;
         private NpcSaveData? _saveData;
@@ -74,6 +75,7 @@ namespace ARPG.UI
             _statList = root.Q<VisualElement>("stat-list");
             _personalityList = root.Q<VisualElement>("personality-list");
             _relationList = root.Q<VisualElement>("relation-list");
+            _activityList = root.Q<VisualElement>("activity-list");
 
             if (_closeBtn != null) _closeBtn.clicked += () => Close();
 
@@ -121,8 +123,72 @@ namespace ARPG.UI
             RebuildInventoryGrid();
             RebuildPersonality();
             RebuildRelations();
+            RebuildActivity();
             RebuildStats();
         }
+
+        private void RebuildActivity()
+        {
+            if (_activityList == null || _saveData == null)
+                return;
+
+            _activityList.Clear();
+
+            NpcActivityState activity = _saveData.Activity;
+            AddActivityRow("현재 활동", GetActivityLabel(activity));
+
+            if (activity.PhaseEndGameTime > AR.s.Time.CurrentGameTime &&
+                (activity.Kind != NpcActivityKind.None || activity.Phase == NpcActivityPhase.Wounded))
+            {
+                float remainingHours = activity.PhaseEndGameTime - AR.s.Time.CurrentGameTime;
+                AddActivityRow("남은 시간", $"{remainingHours:F1}시간");
+            }
+
+            if (activity.LastHuntOutcome == NpcHuntOutcome.None)
+                return;
+
+            AddActivityRow("마지막 사냥", GetHuntOutcomeLabel(activity.LastHuntOutcome));
+            if (activity.LastHuntOutcome == NpcHuntOutcome.Success)
+                AddActivityRow("획득 식량", $"+{activity.LastHuntFoodYield}");
+        }
+
+        private void AddActivityRow(string label, string value)
+        {
+            if (_activityList == null)
+                return;
+
+            VisualElement row = new();
+            row.AddToClassList("npc-stat-row");
+            Text lab = new() { text = label };
+            lab.AddToClassList("npc-stat-label");
+            Text val = new() { text = value };
+            val.AddToClassList("npc-stat-value");
+            row.Add(lab);
+            row.Add(val);
+            _activityList.Add(row);
+        }
+
+        private static string GetActivityLabel(NpcActivityState activity)
+        {
+            if (activity.Phase == NpcActivityPhase.Dead)
+                return "사망";
+            if (activity.Phase == NpcActivityPhase.Wounded)
+                return "부상 회복 중";
+            if (activity.Kind == NpcActivityKind.Hunt)
+                return "사냥 중";
+            if (activity.Kind == NpcActivityKind.Rest)
+                return "휴식 중";
+            return "대기";
+        }
+
+        private static string GetHuntOutcomeLabel(NpcHuntOutcome outcome) => outcome switch
+        {
+            NpcHuntOutcome.Success => "성공",
+            NpcHuntOutcome.Failed => "실패",
+            NpcHuntOutcome.Wounded => "부상",
+            NpcHuntOutcome.Dead => "사망",
+            _ => "없음",
+        };
 
         private void RebuildEquipGrid()
         {
@@ -227,11 +293,12 @@ namespace ARPG.UI
             if (_relationList == null) return;
             _relationList.Clear();
 
-            if (_entityId < 0 || AR.s.Npc == null)
+            NpcSaveData? saveData = _saveData;
+            if (_entityId < 0 || saveData == null || AR.s.Npc == null)
                 return;
 
             var relations = AR.s.Npc.GetRelations(_entityId);
-            if (relations.Count == 0)
+            if (relations.Count == 0 && saveData.DeceasedRelations.Count == 0)
             {
                 AddRelationRow("관계 없음", string.Empty);
                 return;
@@ -245,6 +312,13 @@ namespace ARPG.UI
                 string label = $"{RelationLabel(rel.Type, isFrom)} {ResolveNpcName(otherId)}";
                 int affinity = AR.s.Npc.GetAffinity(_entityId, otherId);
                 AddRelationRow(label, affinity.ToString());
+            }
+
+            for (int i = 0; i < saveData.DeceasedRelations.Count; i++)
+            {
+                DeceasedRelationMemory memory = saveData.DeceasedRelations[i];
+                string label = $"고인 {RelationLabel(memory.RelationType, memory.WasFromEntity)} {memory.DeceasedNpcName}";
+                AddRelationRow(label, "사망");
             }
         }
 

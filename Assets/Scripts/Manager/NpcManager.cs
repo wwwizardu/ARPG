@@ -281,83 +281,225 @@ namespace ARPG.Npc
         }
 
         /// <summary>
-        /// 마을 초기 1회 모험가 코호트 스폰 (NPC_SIMPLIFICATION_PLAN D5).
-        /// 스폰된 물리 NPC는 마을 경제와 분리된 모험가 — 재스폰/전멸 복구 없음 (초기 코호트로 재미 검증 먼저).
-        /// 맵파일에 NPC가 배치된 마을(NpcEntityIds already filled)은 기존과 동일하게 스킵.
+        /// 단일 마을 초기화 호환 진입점. 전역 총량 배분을 보장하기 위해 모든 마을을 함께 처리한다.
         /// </summary>
         public void EnsureVillagePopulated(int villageId)
         {
-            VillageData? village = AR.s.Village.GetVillage(villageId);
-            if (village == null)
-                return;
-
-            if (village.TableId <= 0)
-                return;
-
-            if (village.HasBeenPopulated)
-                return;
-
-            if (village.NpcEntityIds.Count > 0)
-                return;
-
-            VillageTable? table = AR.s.Data.GetVillageTable(village.TableId);
-            if (table == null || table.DefaultNpcIds.Count == 0)
-            {
-                Debug.LogWarning($"[EnsureVillagePopulated] v{villageId} TableId={village.TableId} 테이블 없음 or DefaultNpcList 비어있음");
-                return;
-            }
-
-            SpawnDefaultNpcsForVillage(village, table);
-            // R2: 첫 population 직후 1회 — 함께 태어난 모험가 코호트의 가족/관계 + 호감도 시드 + 연대기 sentiment
-            NpcRelationBackfill.Generate(village, village.NpcEntityIds);
-            village.HasBeenPopulated = true;
+            EnsureAllVillagesPopulated();
         }
 
         /// <summary>
-        /// 등록된 모든 마을에 대해 EnsureVillagePopulated 호출.
+        /// 새 월드의 물리 모험가를 전역 목표 수 안에서 정착지 추상 인구 비율로 최초 배분한다.
+        /// 이미 로드된 월드는 HasBeenPopulated 가드로 보존한다.
         /// </summary>
         public void EnsureAllVillagesPopulated()
         {
-            var villages = AR.s.Village.GetAllVillages();
-            foreach (var village in villages)
-            {
-                EnsureVillagePopulated(village.VillageId);
-            }
-        }
-
-        // ── 인구 비례 NPC 스폰 (정착지 인구 → 물리 모험가 코호트 수 매핑) ──
-        // 정량화 상수는 VillageManager와 공유 — v.Population(경제)과 동일 캘리브레이션 (NPC_SIMPLIFICATION_PLAN §3.2).
-        private const int NPC_POP_DIVISOR = VillageManager.ABSTRACT_POP_DIVISOR;
-        private const int NPC_POP_CAP = VillageManager.ABSTRACT_POP_CAP;
-
-        /// <summary>
-        /// 마을에 스폰할 목표 NPC 수를 정착지 인구에 비례해 계산한다.
-        /// count = clamp(round(pop / NPC_POP_DIVISOR), floor, NPC_POP_CAP).
-        /// floor = min(roster, cap) — 디자이너 지정 로스터를 바닥 보장하되 roster가 cap 초과 시 Clamp 안전.
-        /// 연대기 링크 없음(pop &lt;= 0, 예: 손으로 만든 BaseTown)이면 기존 roster 개수 유지.
-        /// </summary>
-        private int ComputeTargetNpcCount(VillageData village, VillageTable table)
-        {
-            int roster = table.DefaultNpcIds.Count;
-            if (roster == 0)
-                return 0;
-
-            int pop = AR.s.History.GetSettlementPopulation(village.SettlementId);
-            if (pop <= 0)
-                return roster;
-
-            int scaled = Mathf.RoundToInt(pop / (float)NPC_POP_DIVISOR);
-            int floor = Mathf.Min(roster, NPC_POP_CAP);
-            return Mathf.Clamp(scaled, floor, NPC_POP_CAP);
-        }
-
-        private void SpawnDefaultNpcsForVillage(VillageData village, VillageTable table)
-        {
-            int roster = table.DefaultNpcIds.Count;
-            if (roster == 0)
+            List<VillageData> candidates = CollectPopulationCandidates();
+            if (candidates.Count == 0)
                 return;
 
-            int target = ComputeTargetNpcCount(village, table);
+            NpcPopulationState population = AR.s.Data.NpcPopulation;
+            if (population.TargetNpcCount < 0)
+                population.TargetNpcCount = DetermineGlobalNpcTarget();
+
+            int[] allocations = AllocateInitialNpcCounts(candidates,
+                Mathf.Max(0, population.TargetNpcCount - GetLivingNpcCount()));
+
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                VillageData village = candidates[i];
+                if (village.HasBeenPopulated)
+                    continue;
+
+                VillageTable? table = AR.s.Data.GetVillageTable(village.TableId);
+                if (table == null || table.DefaultNpcIds.Count == 0)
+                    continue;
+
+                SpawnDefaultNpcsForVillage(village, table, allocations[i]);
+                if (village.NpcEntityIds.Count > 0)
+                    NpcRelationBackfill.Generate(village, village.NpcEntityIds);
+                village.HasBeenPopulated = true;
+            }
+
+            if (population.NextReplenishGameTime <= 0f)
+                population.NextReplenishGameTime = AR.s.Time.CurrentGameTime + ReplenishIntervalHours;
+        }
+
+        /// <summary>
+        /// 전역 목표보다 생존 모험가가 적을 때, 일정 간격으로 한 명만 보충한다.
+        /// 경제 인구에는 영향을 주지 않으며, 보충 대상은 초기 배분 비율 대비 부족한 마을이다.
+        /// </summary>
+        public void TryReplenishGlobalPopulation(float now)
+        {
+            NpcPopulationState population = AR.s.Data.NpcPopulation;
+            if (population.TargetNpcCount <= 0 || now < population.NextReplenishGameTime)
+                return;
+
+            population.NextReplenishGameTime = now + ReplenishIntervalHours;
+            if (GetLivingNpcCount() >= population.TargetNpcCount)
+                return;
+
+            List<VillageData> candidates = CollectPopulationCandidates();
+            if (candidates.Count == 0)
+                return;
+
+            int villageIndex = SelectReplenishVillage(candidates, population);
+            if (villageIndex < 0)
+                return;
+
+            VillageData village = candidates[villageIndex];
+            VillageTable? table = AR.s.Data.GetVillageTable(village.TableId);
+            if (table == null || table.DefaultNpcIds.Count == 0)
+                return;
+
+            int tableIndex = (GetLivingNpcCount() + population.ReplenishVillageCursor) % table.DefaultNpcIds.Count;
+            Vector2 spawnPosition = GetRandomSpawnPositionInVillage(village, table.SpawnRadius);
+            SpawnNewNpc(table.DefaultNpcIds[tableIndex], spawnPosition, village.VillageId);
+            population.ReplenishVillageCursor = (villageIndex + 1) % candidates.Count;
+        }
+
+        private const float ReplenishIntervalHours = 6f;
+
+        /// <summary>
+        /// 맵의 청크 폭을 기준으로 목표 모험가 수를 정한다.
+        /// 맵 생성 UI의 규모 선택이 생기면 이 값을 저장된 preset으로 대체한다.
+        /// </summary>
+        private int DetermineGlobalNpcTarget()
+        {
+            int width = AR.s.Map.maxChunkX - AR.s.Map.minChunkX + 1;
+            int height = AR.s.Map.maxChunkY - AR.s.Map.minChunkY + 1;
+            int longestSide = Mathf.Max(width, height);
+            if (longestSide <= 64)
+                return 100;
+            if (longestSide <= 128)
+                return 150;
+            return 200;
+        }
+
+        private List<VillageData> CollectPopulationCandidates()
+        {
+            List<VillageData> result = new();
+            List<VillageData> allVillages = new(AR.s.Village.GetAllVillages());
+            for (int i = 0; i < allVillages.Count; i++)
+            {
+                VillageData village = allVillages[i];
+                VillageTable? table = AR.s.Data.GetVillageTable(village.TableId);
+                if (table == null || table.DefaultNpcIds.Count == 0)
+                    continue;
+                result.Add(village);
+            }
+            result.Sort((a, b) => a.VillageId.CompareTo(b.VillageId));
+            return result;
+        }
+
+        private int[] AllocateInitialNpcCounts(List<VillageData> villages, int totalToAllocate)
+        {
+            int[] allocations = new int[villages.Count];
+            if (totalToAllocate <= 0)
+                return allocations;
+
+            int[] weights = new int[villages.Count];
+            int totalWeight = 0;
+            for (int i = 0; i < villages.Count; i++)
+            {
+                int population = AR.s.History.GetSettlementPopulation(villages[i].SettlementId);
+                weights[i] = population > 0 ? population : 1;
+                totalWeight += weights[i];
+            }
+
+            int assigned = 0;
+            for (int i = 0; i < villages.Count; i++)
+            {
+                allocations[i] = (int)((long)totalToAllocate * weights[i] / totalWeight);
+                assigned += allocations[i];
+            }
+
+            for (int remaining = totalToAllocate - assigned; remaining > 0; remaining--)
+            {
+                int bestIndex = 0;
+                long bestRemainder = -1;
+                for (int i = 0; i < villages.Count; i++)
+                {
+                    long remainder = (long)totalToAllocate * weights[i] % totalWeight;
+                    if (remainder > bestRemainder)
+                    {
+                        bestIndex = i;
+                        bestRemainder = remainder;
+                    }
+                }
+                allocations[bestIndex]++;
+                weights[bestIndex] = 0;
+            }
+
+            return allocations;
+        }
+
+        private int SelectReplenishVillage(List<VillageData> villages, NpcPopulationState population)
+        {
+            int totalWeight = 0;
+            int[] weights = new int[villages.Count];
+            for (int i = 0; i < villages.Count; i++)
+            {
+                int settlementPopulation = AR.s.History.GetSettlementPopulation(villages[i].SettlementId);
+                weights[i] = settlementPopulation > 0 ? settlementPopulation : 1;
+                totalWeight += weights[i];
+            }
+
+            int bestIndex = -1;
+            float bestDeficit = float.MinValue;
+            int start = population.ReplenishVillageCursor % villages.Count;
+            for (int offset = 0; offset < villages.Count; offset++)
+            {
+                int index = (start + offset) % villages.Count;
+                float desired = population.TargetNpcCount * (weights[index] / (float)totalWeight);
+                float deficit = desired - GetLivingNpcCountForVillage(villages[index].VillageId);
+                if (deficit > bestDeficit)
+                {
+                    bestIndex = index;
+                    bestDeficit = deficit;
+                }
+            }
+
+            return bestIndex;
+        }
+
+        private int GetLivingNpcCount()
+        {
+            int count = 0;
+            for (int i = 0; i < _simulationNpcIds.Count; i++)
+            {
+                int entityId = _simulationNpcIds[i];
+                if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
+                    continue;
+                if (saveData.Condition != CharacterConditions.Dead &&
+                    saveData.Activity.Phase != NpcActivityPhase.Dead)
+                    count++;
+            }
+            return count;
+        }
+
+        private int GetLivingNpcCountForVillage(int villageId)
+        {
+            int count = 0;
+            for (int i = 0; i < _simulationNpcIds.Count; i++)
+            {
+                int entityId = _simulationNpcIds[i];
+                if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
+                    continue;
+                if (saveData.VillageId != villageId || saveData.Condition == CharacterConditions.Dead ||
+                    saveData.Activity.Phase == NpcActivityPhase.Dead)
+                    continue;
+                count++;
+            }
+            return count;
+        }
+
+        private void SpawnDefaultNpcsForVillage(VillageData village, VillageTable table, int target)
+        {
+            int roster = table.DefaultNpcIds.Count;
+            if (roster == 0 || target <= 0)
+                return;
+
             for (int i = 0; i < target; i++)
             {
                 int npcTableId = table.DefaultNpcIds[i % roster];  // 0..roster-1은 지정 로스터, 초과분은 아키타입 순환
@@ -997,15 +1139,17 @@ namespace ARPG.Npc
             saveData.Activity.PhaseEndGameTime = 0f;
             saveData.LastSimGameTime = when;
 
-            RemoveNpcFromSimulation(entityId);
-            RemoveAllAffinityInvolving(entityId);
-            RemoveAllRelationsInvolving(entityId);
-            AR.s.Village.UnregisterNpcFromVillage(saveData.VillageId, entityId);
-
             int settlementId = AR.s.Village.GetSettlementId(saveData.VillageId);
             int eventId = settlementId >= 0
                 ? AR.s.History.AppendLiveEvent(ChronicleEventType.Fell, settlementId)
                 : -1;
+
+            RemoveNpcFromSimulation(entityId);
+            RemoveAllAffinityInvolving(entityId);
+            RecordDeceasedRelationMemories(entityId, ResolveNpcDisplayName(saveData), eventId, when);
+            RemoveAllRelationsInvolving(entityId);
+            AR.s.Village.UnregisterNpcFromVillage(saveData.VillageId, entityId);
+
             AddDeed(entityId, NpcDeedKind.Fell, eventId, NpcKnowledgeLevel.Did, when, entityId);
 
             if (saveData.IsActive)
@@ -1019,6 +1163,35 @@ namespace ARPG.Npc
                 // LateUpdate의 System_EntityDestroy가 UnregisterNpcByEntityId와 GameObject 파괴를 수행한다.
                 AR.s.Component.AddComponent(entityId, new DestroyTag());
             }
+        }
+
+        private void RecordDeceasedRelationMemories(int deceasedEntityId, string deceasedName,
+            int fellEventId, float deathGameTime)
+        {
+            if (_npcRelations.TryGetValue(deceasedEntityId, out List<NpcRelationEntry>? relations) == false)
+                return;
+
+            for (int i = 0; i < relations.Count; i++)
+            {
+                NpcRelationEntry relation = relations[i];
+                int survivorEntityId = relation.FromEntityId == deceasedEntityId
+                    ? relation.ToEntityId
+                    : relation.FromEntityId;
+                if (_npcSaveDict.TryGetValue(survivorEntityId, out NpcSaveData? survivor) == false)
+                    continue;
+                if (survivor.Condition == CharacterConditions.Dead ||
+                    survivor.Activity.Phase == NpcActivityPhase.Dead)
+                    continue;
+
+                bool wasFromEntity = relation.FromEntityId == survivorEntityId;
+                survivor.DeceasedRelations.Add(new DeceasedRelationMemory(deceasedEntityId, deceasedName,
+                    relation.Type, wasFromEntity, fellEventId, deathGameTime));
+            }
+        }
+
+        private static string ResolveNpcDisplayName(NpcSaveData saveData)
+        {
+            return AR.s.Data.GetNpc(saveData.NpcTableId)?.Name ?? $"NPC #{saveData.EntityId}";
         }
 
         /// <summary>

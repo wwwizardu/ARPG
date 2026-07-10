@@ -35,10 +35,12 @@ namespace ARPG.Systems
             {
                 if (AR.s.Npc.TryGetNextSimulationNpc(out int entityId, out NpcSaveData? saveData) == false ||
                     saveData == null)
-                    return;
+                    break;
 
                 AdvanceNpcActivity(saveData, entityId, now, worldSeed);
             }
+
+            AR.s.Npc.TryReplenishGlobalPopulation(now);
         }
 
         private static void AdvanceNpcActivity(NpcSaveData saveData, int entityId, float now, int worldSeed)
@@ -176,6 +178,7 @@ namespace ARPG.Systems
             if (outcome == NpcHuntOutcome.Dead)
             {
                 // 매니저가 관계·호감도·마을 명단·시뮬레이션 순회·연대기를 함께 정리한다.
+                NotifyHuntOutcome(saveData, entityId, outcome, 0);
                 AR.s.Npc.MarkNpcDead(entityId, outcomeGameTime);
                 return;
             }
@@ -183,6 +186,7 @@ namespace ARPG.Systems
             if (outcome == NpcHuntOutcome.Wounded)
             {
                 // 부상자는 회복 종료시각까지 다음 Hunt 선택에서 제외된다.
+                NotifyHuntOutcome(saveData, entityId, outcome, 0);
                 activity.Phase = NpcActivityPhase.Wounded;
                 activity.PhaseEndGameTime = outcomeGameTime + NpcActivityResolver.WoundedRecoveryHours;
                 return;
@@ -200,6 +204,30 @@ namespace ARPG.Systems
                 // 오프스크린 Hunt마다 UI 알림을 만들지 않도록 조용히 자원만 반영한다.
                 AR.s.Village.ProduceResource(saveData.VillageId, GlobalEnum.ItemType.Food, foodYield, false);
             }
+
+            NotifyHuntOutcome(saveData, entityId, outcome, activity.LastHuntFoodYield);
+        }
+
+        private static void NotifyHuntOutcome(NpcSaveData saveData, int entityId,
+            NpcHuntOutcome outcome, int foodYield)
+        {
+            // SetNotify는 단일 표시이므로, 보이지 않는 NPC의 평범한 성공·실패는 피드를 덮어쓰지 않는다.
+            // 부상과 사망은 위치와 관계없이 중요한 세계 변화이므로 항상 알린다.
+            if (saveData.IsActive == false && outcome != NpcHuntOutcome.Wounded && outcome != NpcHuntOutcome.Dead)
+                return;
+
+            string name = AR.s.Data.GetNpc(saveData.NpcTableId)?.Name ?? $"NPC #{entityId}";
+            string message = outcome switch
+            {
+                NpcHuntOutcome.Success => $"{name}: 사냥 성공, 식량 +{foodYield}",
+                NpcHuntOutcome.Failed => $"{name}: 사냥에 실패했습니다.",
+                NpcHuntOutcome.Wounded => $"{name}: 사냥 중 부상을 입었습니다.",
+                NpcHuntOutcome.Dead => $"{name}: 사냥에서 돌아오지 못했습니다.",
+                _ => string.Empty,
+            };
+
+            if (string.IsNullOrEmpty(message) == false)
+                AR.s.UI.SetNotify(message);
         }
     }
 }

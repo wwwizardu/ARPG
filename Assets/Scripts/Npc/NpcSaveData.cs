@@ -48,6 +48,9 @@ namespace ARPG.Npc
         // 대사 회고와 지식 거리의 입력. 평범한 사냥 성공은 기록하지 않고 의미 있는 사건만 보존한다.
         public List<NpcDeedEntry> Deeds = new();
 
+        // 사망 NPC의 관계를 현재 관계 그래프와 분리해 보존하는 회고용 스냅샷.
+        public List<DeceasedRelationMemory> DeceasedRelations = new();
+
         // NPC → 정착지 단위 감정 (피정복 반감/왕국 자부심 등). 관계 backfill(L2)이 시드. 보통 0~1개.
         // 설계: NPC_RELATION_HISTORY_DESIGN.md §4.2
         public List<NpcSentiment> Sentiments = new();
@@ -122,6 +125,8 @@ namespace ARPG.Npc
             Activity.EnsureInitialized();
             if (Deeds == null)
                 Deeds = new List<NpcDeedEntry>();
+            if (DeceasedRelations == null)
+                DeceasedRelations = new List<DeceasedRelationMemory>();
         }
 
         /// <summary>

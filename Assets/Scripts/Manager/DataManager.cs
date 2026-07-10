@@ -13,7 +13,7 @@ namespace ARPG.Data
 {
     public partial class DataManager : MonoBehaviour
     {
-        private const ushort CURRENT_WORLD_DATA_VERSION = 8;
+        private const ushort CURRENT_WORLD_DATA_VERSION = 10;
         private const ushort CURRENT_PLAYER_DATA_VERSION = 2;
         private WorldData _worldData = new();
         private List<PlayerData> _playerDataList = new();
@@ -50,6 +50,7 @@ namespace ARPG.Data
         public Dictionary<int, NpcSaveData> NpcSaveDatas => _worldData.NpcSaveDatas;
         public List<NpcAffinityEntry> NpcAffinityList => _worldData.NpcAffinityList;
         public List<NpcRelationEntry> NpcRelationList => _worldData.NpcRelationList;
+        public NpcPopulationState NpcPopulation => _worldData.NpcPopulation;
         public Dictionary<int, BuildingSaveData> BuildingSaveDatas => _worldData.BuildingSaveDatas;
         // R1: 정착지 연대기 (New Game 1회 생성 후 저장이 정본)
         public ChronicleSaveData Chronicle { get => _worldData.Chronicle; set => _worldData.Chronicle = value; }
@@ -540,6 +541,7 @@ namespace ARPG.Data
         private void MigrateWorldData(ushort fromVersion, ushort toVersion)
         {
             Debug.Log($"[DataManager] Migrating WorldData from version {fromVersion} to {toVersion}");
+            MigrateDeceasedRelationMemories(fromVersion, toVersion);
 
             // 버전 1 -> 2: TileModifications 필드 추가
             if (fromVersion < 2 && toVersion >= 2)
@@ -591,6 +593,22 @@ namespace ARPG.Data
             if (fromVersion < 8 && toVersion >= 8)
             {
                 // no-op (NpcActivityState.EnsureInitialized에서 처리).
+            }
+
+            // 버전 8 -> 9: 맵 전체 NPC 목표 수와 점진 보충 상태 추가.
+            if (fromVersion < 9 && toVersion >= 9)
+            {
+                // no-op (WorldData.LoadCompleted에서 처리).
+            }
+        }
+
+        // 버전 9 -> 10: 생존 NPC의 사망 관계 기억(DeceasedRelations) 추가.
+        // 기존 NPC의 빈 목록 보정은 NpcSaveData.OnLoadCompleted에서 처리한다.
+        private void MigrateDeceasedRelationMemories(ushort fromVersion, ushort toVersion)
+        {
+            if (fromVersion < 10 && toVersion >= 10)
+            {
+                // no-op (NpcSaveData.OnLoadCompleted에서 처리).
             }
         }
 

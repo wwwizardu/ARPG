@@ -26,6 +26,34 @@ namespace ARPG.Npc
         }
     }
 
+    /// <summary>
+    /// 사망으로 활성 관계 그래프에서 제거된 NPC를 생존 NPC가 회고할 수 있도록 남기는 불변 스냅샷.
+    /// 현재 관계 판정과 호감도 계산에는 사용하지 않는다.
+    /// </summary>
+    [Serializable]
+    public class DeceasedRelationMemory
+    {
+        public int DeceasedNpcEntityId;
+        public string DeceasedNpcName = string.Empty;
+        public NpcRelationType RelationType;
+        public bool WasFromEntity;
+        public int FellEventId = -1;
+        public float DeathGameTime;
+
+        public DeceasedRelationMemory() { }
+
+        public DeceasedRelationMemory(int deceasedNpcEntityId, string deceasedNpcName,
+            NpcRelationType relationType, bool wasFromEntity, int fellEventId, float deathGameTime)
+        {
+            DeceasedNpcEntityId = deceasedNpcEntityId;
+            DeceasedNpcName = deceasedNpcName;
+            RelationType = relationType;
+            WasFromEntity = wasFromEntity;
+            FellEventId = fellEventId;
+            DeathGameTime = deathGameTime;
+        }
+    }
+
     public enum NpcRelationType
     {
         // 방향성 (From → To)
