@@ -13,7 +13,7 @@ namespace ARPG.Data
 {
     public partial class DataManager : MonoBehaviour
     {
-        private const ushort CURRENT_WORLD_DATA_VERSION = 7;
+        private const ushort CURRENT_WORLD_DATA_VERSION = 8;
         private const ushort CURRENT_PLAYER_DATA_VERSION = 2;
         private WorldData _worldData = new();
         private List<PlayerData> _playerDataList = new();
@@ -584,6 +584,13 @@ namespace ARPG.Data
             if (fromVersion < 7 && toVersion >= 7)
             {
                 // no-op (NpcActivityState 기본값으로 처리).
+            }
+
+            // 버전 7 -> 8: 활동 경로의 귀환점·구간 비율과 결과 판정 전용 출발 시각 추가.
+            // 구 경로의 기본값 복원은 NpcActivityState.EnsureInitialized에서 처리한다.
+            if (fromVersion < 8 && toVersion >= 8)
+            {
+                // no-op (NpcActivityState.EnsureInitialized에서 처리).
             }
         }
 

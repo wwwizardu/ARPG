@@ -11,7 +11,7 @@ namespace ARPG.Data
     [Serializable]
     public class WorldData
     {
-        public ushort Version = 7;
+        public ushort Version = 8;
 
         public List<WorldDropItemData> WorldDropItemDatas = new();
         public List<VillageData> VillageDatas = new();

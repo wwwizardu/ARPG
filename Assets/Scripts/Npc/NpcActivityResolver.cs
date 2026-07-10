@@ -86,9 +86,13 @@ namespace ARPG.Npc
 
             float progress = Mathf.Clamp01((gameTime - activity.PhaseStartedGameTime) /
                 (activity.PhaseEndGameTime - activity.PhaseStartedGameTime));
-            if (progress <= 0.5f)
-                return Vector2.Lerp(activity.OriginPosition, activity.TargetPosition, progress * 2f);
-            return Vector2.Lerp(activity.TargetPosition, activity.OriginPosition, (progress - 0.5f) * 2f);
+            float outboundFraction = Mathf.Clamp01(activity.OutboundFraction);
+            if (outboundFraction <= 0f)
+                return Vector2.Lerp(activity.TargetPosition, activity.ReturnPosition, progress);
+            if (outboundFraction >= 1f || progress <= outboundFraction)
+                return Vector2.Lerp(activity.OriginPosition, activity.TargetPosition, progress / outboundFraction);
+            return Vector2.Lerp(activity.TargetPosition, activity.ReturnPosition,
+                (progress - outboundFraction) / (1f - outboundFraction));
         }
 
         private static HistoryRng CreateRng(int entityId, float startGameTime, int worldSeed, int salt)

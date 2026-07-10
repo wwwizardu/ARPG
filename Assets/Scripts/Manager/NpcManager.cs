@@ -462,6 +462,8 @@ namespace ARPG.Npc
                 saveData.NpcStat = npcStat;
             }
 
+            ResumeHuntPathFromCurrentPosition(saveData, AR.s.Time.CurrentGameTime);
+
             // 청크 매핑 갱신 (이동으로 청크가 바뀌었으면)
             Vector2Int currentChunk = PositionToChunk(saveData.Position);
             if (currentChunk != originalChunk)
@@ -491,6 +493,63 @@ namespace ARPG.Npc
             // Patrol이 새 스폰 직후 위치를 떠나지 않도록 AI/경로 이동을 중지한다.
             AR.s.Component.AddComponent(entityId, new NpcActivityPausedTag());
             AIStateHelper.StopMovement(entityId);
+        }
+
+        private static void ResumeHuntPathFromCurrentPosition(NpcSaveData saveData, float now)
+        {
+            NpcActivityState activity = saveData.Activity;
+            if (activity.Kind != NpcActivityKind.Hunt || activity.HasMovementPath == false)
+                return;
+            if (activity.PhaseEndGameTime <= now)
+                return;
+
+            float oldDuration = activity.PhaseEndGameTime - activity.PhaseStartedGameTime;
+            if (oldDuration <= 0f)
+                return;
+
+            float oldPathLength = Vector2.Distance(activity.OriginPosition, activity.TargetPosition) +
+                Vector2.Distance(activity.TargetPosition, activity.ReturnPosition);
+            if (oldPathLength <= 0.01f)
+                return;
+
+            float oldProgress = Mathf.Clamp01((now - activity.PhaseStartedGameTime) / oldDuration);
+            float speed = oldPathLength / oldDuration;
+            Vector2 currentPosition = saveData.Position;
+            Vector2 target;
+            Vector2 returnPosition;
+
+            if (oldProgress < activity.OutboundFraction)
+            {
+                target = activity.TargetPosition;
+                returnPosition = activity.ReturnPosition;
+            }
+            else
+            {
+                // 귀환 구간에 진입했다면 현재 위치에서 귀환점으로 바로 이동한다.
+                target = activity.ReturnPosition;
+                returnPosition = activity.ReturnPosition;
+            }
+
+            float outboundLength = Vector2.Distance(currentPosition, target);
+            float returnLength = Vector2.Distance(target, returnPosition);
+            float remainingLength = outboundLength + returnLength;
+            if (remainingLength <= 0.01f)
+            {
+                activity.OriginPosition = currentPosition;
+                activity.TargetPosition = currentPosition;
+                activity.ReturnPosition = currentPosition;
+                activity.OutboundFraction = 1f;
+                activity.PhaseStartedGameTime = now;
+                activity.PhaseEndGameTime = now;
+                return;
+            }
+
+            activity.OriginPosition = currentPosition;
+            activity.TargetPosition = target;
+            activity.ReturnPosition = returnPosition;
+            activity.OutboundFraction = outboundLength / remainingLength;
+            activity.PhaseStartedGameTime = now;
+            activity.PhaseEndGameTime = now + remainingLength / speed;
         }
 
         /// <summary>
@@ -842,10 +901,10 @@ namespace ARPG.Npc
         }
 
         /// <summary>
-        /// 시간분할 NPC 시뮬레이션용 다음 오프스크린 NPC를 결정론적 순서로 반환한다.
-        /// 활성 ECS NPC의 활동 표현은 LOD 승격 단계에서 별도로 연결한다.
+        /// 시간분할 NPC 시뮬레이션용 다음 NPC를 결정론적 순서로 반환한다.
+        /// 활성 NPC도 같은 활동 시계로 처리하되, 위치 표현만 ECS 조우 상태에 맡긴다.
         /// </summary>
-        public bool TryGetNextOffscreenSimulationNpc(out int entityId, out NpcSaveData? saveData)
+        public bool TryGetNextSimulationNpc(out int entityId, out NpcSaveData? saveData)
         {
             entityId = -1;
             saveData = null;
@@ -862,9 +921,6 @@ namespace ARPG.Npc
 
                 if (_npcSaveDict.TryGetValue(candidateId, out NpcSaveData? candidate) == false)
                     continue;
-                if (candidate.IsActive)
-                    // NS1은 오프스크린 레코드만 전진한다. 활성 ECS 표현 연결은 LOD 단계의 책임이다.
-                    continue;
                 if (candidate.Condition == CharacterConditions.Dead ||
                     candidate.Activity.Phase == NpcActivityPhase.Dead)
                     continue;
@@ -875,6 +931,31 @@ namespace ARPG.Npc
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// 활성 청크 NPC가 Hunt를 시작하면 그 자리에서 AI를 정지시켜 조우 상태로 만든다.
+        /// 오프스크린 NPC는 다음 승격 시 SpawnNpc에서 같은 처리를 받는다.
+        /// </summary>
+        public void PauseMaterializedNpcActivity(int entityId)
+        {
+            if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
+                return;
+            if (saveData.IsActive == false)
+                return;
+
+            PauseMaterializedActivity(entityId, saveData);
+        }
+
+        /// <summary>활동 결과가 확정된 활성 NPC의 조우 대기 태그를 제거해 기본 AI를 재개한다.</summary>
+        public void ResumeMaterializedNpcActivity(int entityId)
+        {
+            if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
+                return;
+            if (saveData.IsActive == false)
+                return;
+
+            AR.s.Component.RemoveComponent<NpcActivityPausedTag>(entityId);
         }
 
         /// <summary>
@@ -902,7 +983,7 @@ namespace ARPG.Npc
         /// ECS 엔티티가 없는 NPC의 영구 사망을 정리한다.
         /// NPC 저장 데이터는 전기/연대기 회고를 위해 보존하되, 활동 순회와 관계 채널에서는 제거한다.
         /// </summary>
-        public void MarkOffscreenNpcDead(int entityId, float when)
+        public void MarkNpcDead(int entityId, float when)
         {
             if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
                 return;
@@ -926,6 +1007,18 @@ namespace ARPG.Npc
                 ? AR.s.History.AppendLiveEvent(ChronicleEventType.Fell, settlementId)
                 : -1;
             AddDeed(entityId, NpcDeedKind.Fell, eventId, NpcKnowledgeLevel.Did, when, entityId);
+
+            if (saveData.IsActive)
+            {
+                if (AR.s.Component.TryGetComponent<StateComponent>(entityId, out var state))
+                {
+                    state.Condition = CharacterConditions.Dead;
+                    AR.s.Component.SetComponent(entityId, state);
+                }
+
+                // LateUpdate의 System_EntityDestroy가 UnregisterNpcByEntityId와 GameObject 파괴를 수행한다.
+                AR.s.Component.AddComponent(entityId, new DestroyTag());
+            }
         }
 
         /// <summary>

@@ -53,7 +53,13 @@ namespace ARPG.Npc
         public float OriginPositionY;
         public float TargetPositionX;
         public float TargetPositionY;
+        public float ReturnPositionX;
+        public float ReturnPositionY;
+        // 전체 구간에서 TargetPosition에 도달하는 비율. 왕복 길이가 달라져도 일정 속도를 유지한다.
+        public float OutboundFraction;
         public bool HasMovementPath;
+        // 경로 재계산과 무관하게 Hunt 결과 난수의 정체성을 유지하는 최초 출발 시각.
+        public float OutcomeSeedGameTime;
         // 게임시간 단위(hour). 실제 중간 시뮬레이션 없이 이 종료 시각에서만 상태를 전이한다.
         public float PhaseStartedGameTime;
         public float PhaseEndGameTime;
@@ -78,11 +84,27 @@ namespace ARPG.Npc
             set { TargetPositionX = value.x; TargetPositionY = value.y; }
         }
 
+        [System.Xml.Serialization.XmlIgnore]
+        [Newtonsoft.Json.JsonIgnore]
+        public UnityEngine.Vector2 ReturnPosition
+        {
+            get => new UnityEngine.Vector2(ReturnPositionX, ReturnPositionY);
+            set { ReturnPositionX = value.x; ReturnPositionY = value.y; }
+        }
+
         public void EnsureInitialized()
         {
             // 구 세이브 JSON에는 새 필드가 없을 수 있으므로 문자열만 최소 보정한다.
             if (TargetKey == null)
                 TargetKey = string.Empty;
+            if (HasMovementPath && OutboundFraction <= 0f)
+            {
+                // v7 이전 왕복 경로는 Origin→Target→Origin만 저장했으므로 귀환점과 비율을 복원한다.
+                ReturnPosition = OriginPosition;
+                OutboundFraction = 0.5f;
+            }
+            if (Kind == NpcActivityKind.Hunt && OutcomeSeedGameTime <= 0f)
+                OutcomeSeedGameTime = PhaseStartedGameTime;
         }
     }
 }

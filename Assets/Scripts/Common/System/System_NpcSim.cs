@@ -33,7 +33,7 @@ namespace ARPG.Systems
             // NpcManager가 정렬된 ID 순서와 커서를 소유한다. 시스템은 순회 상태를 저장하지 않는다.
             for (int i = 0; i < TickBudget; i++)
             {
-                if (AR.s.Npc.TryGetNextOffscreenSimulationNpc(out int entityId, out NpcSaveData? saveData) == false ||
+                if (AR.s.Npc.TryGetNextSimulationNpc(out int entityId, out NpcSaveData? saveData) == false ||
                     saveData == null)
                     return;
 
@@ -80,6 +80,7 @@ namespace ARPG.Systems
                     activity.PhaseStartedGameTime = transitionTime;
                     activity.PhaseEndGameTime = 0f;
                     saveData.LastSimGameTime = transitionTime;
+                    AR.s.Npc.ResumeMaterializedNpcActivity(entityId);
                     continue;
                 }
 
@@ -132,8 +133,13 @@ namespace ARPG.Systems
                 activity.OriginPosition = saveData.Position;
                 activity.TargetPosition = NpcActivityResolver.GetHuntTargetPosition(saveData.Position, entityId,
                     startGameTime, worldSeed, minX, maxX, minY, maxY);
+                activity.ReturnPosition = saveData.Position;
+                activity.OutboundFraction = 0.5f;
+                activity.OutcomeSeedGameTime = startGameTime;
             }
             saveData.LastSimGameTime = startGameTime;
+            if (kind == NpcActivityKind.Hunt)
+                AR.s.Npc.PauseMaterializedNpcActivity(entityId);
         }
 
         private static void UpdateAnalyticPosition(NpcSaveData saveData, int entityId, float now)
@@ -151,8 +157,11 @@ namespace ARPG.Systems
         {
             NpcActivityState activity = saveData.Activity;
             float huntStartedGameTime = activity.PhaseStartedGameTime;
+            float outcomeSeedGameTime = activity.OutcomeSeedGameTime > 0f
+                ? activity.OutcomeSeedGameTime
+                : huntStartedGameTime;
             NpcHuntOutcome outcome = NpcActivityResolver.ResolveHunt(saveData, entityId,
-                huntStartedGameTime, worldSeed);
+                outcomeSeedGameTime, worldSeed);
 
             activity.LastHuntOutcome = outcome;
             activity.LastHuntFoodYield = 0;
@@ -167,7 +176,7 @@ namespace ARPG.Systems
             if (outcome == NpcHuntOutcome.Dead)
             {
                 // 매니저가 관계·호감도·마을 명단·시뮬레이션 순회·연대기를 함께 정리한다.
-                AR.s.Npc.MarkOffscreenNpcDead(entityId, outcomeGameTime);
+                AR.s.Npc.MarkNpcDead(entityId, outcomeGameTime);
                 return;
             }
 
@@ -181,11 +190,12 @@ namespace ARPG.Systems
 
             activity.Phase = NpcActivityPhase.Idle;
             activity.PhaseEndGameTime = 0f;
+            AR.s.Npc.ResumeMaterializedNpcActivity(entityId);
 
             if (outcome == NpcHuntOutcome.Success && saveData.VillageId >= 0)
             {
                 int foodYield = NpcActivityResolver.GetHuntFoodYield(saveData, entityId,
-                    huntStartedGameTime, worldSeed);
+                    outcomeSeedGameTime, worldSeed);
                 activity.LastHuntFoodYield = foodYield;
                 // 오프스크린 Hunt마다 UI 알림을 만들지 않도록 조용히 자원만 반영한다.
                 AR.s.Village.ProduceResource(saveData.VillageId, GlobalEnum.ItemType.Food, foodYield, false);
