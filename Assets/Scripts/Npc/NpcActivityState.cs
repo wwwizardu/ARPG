@@ -42,6 +42,8 @@ namespace ARPG.Npc
     [Serializable]
     public class NpcActivityState
     {
+        // -1이면 개인 활동. 0 이상의 값이면 NpcPartyState가 활동 시간축과 결과를 소유한다.
+        public int PartyId = -1;
         // Phase는 표현 단계, Kind는 그 단계에서 진행 중인 실제 활동을 분리해 표현한다.
         // 예: 휴식은 제자리 활동이므로 Phase=Idle, Kind=Rest로 저장한다.
         public NpcActivityPhase Phase = NpcActivityPhase.Idle;
@@ -105,6 +107,8 @@ namespace ARPG.Npc
             }
             if (Kind == NpcActivityKind.Hunt && OutcomeSeedGameTime <= 0f)
                 OutcomeSeedGameTime = PhaseStartedGameTime;
+            if (PartyId < -1)
+                PartyId = -1;
         }
     }
 }

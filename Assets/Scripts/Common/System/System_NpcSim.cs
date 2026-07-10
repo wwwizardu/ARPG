@@ -1,6 +1,9 @@
 #nullable enable
 using ARPG.Npc;
 using ARPG.Scene;
+using ARPG.Creature;
+using System.Collections.Generic;
+using UnityEngine;
 
 namespace ARPG.Systems
 {
@@ -33,11 +36,14 @@ namespace ARPG.Systems
             // NpcManager가 정렬된 ID 순서와 커서를 소유한다. 시스템은 순회 상태를 저장하지 않는다.
             for (int i = 0; i < TickBudget; i++)
             {
-                if (AR.s.Npc.TryGetNextSimulationNpc(out int entityId, out NpcSaveData? saveData) == false ||
-                    saveData == null)
+                if (AR.s.Npc.TryGetNextSimulationWork(out int entityId, out NpcSaveData? saveData,
+                    out NpcPartyState? party) == false)
                     break;
 
-                AdvanceNpcActivity(saveData, entityId, now, worldSeed);
+                if (party != null)
+                    AdvancePartyActivity(party, now, worldSeed);
+                else if (saveData != null)
+                    AdvanceNpcActivity(saveData, entityId, now, worldSeed);
             }
 
             AR.s.Npc.TryReplenishGlobalPopulation(now);
@@ -52,6 +58,8 @@ namespace ARPG.Systems
             {
                 NpcActivityState activity = saveData.Activity;
                 if (activity.Phase == NpcActivityPhase.Dead)
+                    return;
+                if (activity.PartyId >= 0)
                     return;
 
                 UpdateAnalyticPosition(saveData, entityId, now);
@@ -118,6 +126,13 @@ namespace ARPG.Systems
             NpcActivityState activity = saveData.Activity;
             NpcActivityKind kind = NpcActivityResolver.SelectNextActivity(saveData, entityId, startGameTime, worldSeed);
 
+            if (kind == NpcActivityKind.Hunt && AR.s.Npc.TryCreateHuntParty(entityId, out NpcPartyState? party) &&
+                party != null)
+            {
+                StartPartyHunt(party, startGameTime, worldSeed);
+                return;
+            }
+
             activity.Kind = kind;
             // 휴식은 제자리 활동이므로 Idle 표현을 유지하고, Hunt만 Venturing으로 표시한다.
             activity.Phase = kind == NpcActivityKind.Hunt ? NpcActivityPhase.Venturing : NpcActivityPhase.Idle;
@@ -144,6 +159,100 @@ namespace ARPG.Systems
                 AR.s.Npc.PauseMaterializedNpcActivity(entityId);
         }
 
+        private static void StartPartyHunt(NpcPartyState party, float startGameTime, int worldSeed)
+        {
+            NpcSaveData? leader = AR.s.Npc.GetSaveData(party.LeaderId);
+            if (leader == null)
+            {
+                AR.s.Npc.DissolveParty(party.PartyId);
+                return;
+            }
+
+            NpcActivityState activity = party.Activity;
+            float minX = AR.s.Map.minChunkX * AR.s.Map.chunkSize;
+            float maxX = (AR.s.Map.maxChunkX + 1) * AR.s.Map.chunkSize - 1f;
+            float minY = AR.s.Map.minChunkY * AR.s.Map.chunkSize;
+            float maxY = (AR.s.Map.maxChunkY + 1) * AR.s.Map.chunkSize - 1f;
+            activity.PartyId = party.PartyId;
+            activity.Kind = NpcActivityKind.Hunt;
+            activity.Phase = NpcActivityPhase.Venturing;
+            activity.TargetKey = "hunt";
+            activity.PhaseStartedGameTime = startGameTime;
+            activity.PhaseEndGameTime = startGameTime + NpcActivityResolver.HuntDurationHours;
+            activity.HasMovementPath = true;
+            activity.OriginPosition = leader.Position;
+            activity.TargetPosition = NpcActivityResolver.GetHuntTargetPosition(leader.Position, party.PartyId,
+                startGameTime, worldSeed, minX, maxX, minY, maxY);
+            activity.ReturnPosition = leader.Position;
+            activity.OutboundFraction = 0.5f;
+            activity.OutcomeSeedGameTime = startGameTime;
+
+            for (int i = 0; i < party.MemberIds.Count; i++)
+            {
+                int memberId = party.MemberIds[i];
+                NpcSaveData? member = AR.s.Npc.GetSaveData(memberId);
+                if (member == null)
+                    continue;
+
+                member.Activity.PartyId = party.PartyId;
+                member.Activity.Kind = NpcActivityKind.Hunt;
+                member.Activity.Phase = NpcActivityPhase.Venturing;
+                member.Activity.TargetKey = "hunt";
+                member.Activity.HasMovementPath = false;
+                member.LastSimGameTime = startGameTime;
+                AR.s.Npc.PauseMaterializedNpcPartyActivity(memberId);
+            }
+
+            UpdatePartyAnalyticPositions(party, startGameTime);
+        }
+
+        private static void AdvancePartyActivity(NpcPartyState party, float now, int worldSeed)
+        {
+            NpcActivityState activity = party.Activity;
+            if (activity.Kind != NpcActivityKind.Hunt || activity.Phase != NpcActivityPhase.Venturing)
+            {
+                AR.s.Npc.DissolveParty(party.PartyId);
+                return;
+            }
+
+            UpdatePartyAnalyticPositions(party, now);
+            if (activity.PhaseEndGameTime > now)
+                return;
+
+            ResolvePartyHunt(party, activity.PhaseEndGameTime, worldSeed);
+        }
+
+        private static void UpdatePartyAnalyticPositions(NpcPartyState party, float now)
+        {
+            NpcActivityState activity = party.Activity;
+            if (activity.HasMovementPath == false)
+                return;
+
+            float evaluationTime = now < activity.PhaseEndGameTime ? now : activity.PhaseEndGameTime;
+            Vector2 partyPosition = NpcActivityResolver.EvaluateHuntPosition(activity, evaluationTime);
+            for (int i = 0; i < party.MemberIds.Count; i++)
+            {
+                int memberId = party.MemberIds[i];
+                NpcSaveData? member = AR.s.Npc.GetSaveData(memberId);
+                if (member == null)
+                    continue;
+
+                Vector2 formationOffset = GetPartyFormationOffset(i);
+                AR.s.Npc.UpdateOffscreenNpcPosition(memberId, partyPosition + formationOffset);
+            }
+        }
+
+        private static Vector2 GetPartyFormationOffset(int memberIndex)
+        {
+            return memberIndex switch
+            {
+                0 => Vector2.zero,
+                1 => new Vector2(-1.25f, -1f),
+                2 => new Vector2(1.25f, -1f),
+                _ => new Vector2(0f, -2f),
+            };
+        }
+
         private static void UpdateAnalyticPosition(NpcSaveData saveData, int entityId, float now)
         {
             NpcActivityState activity = saveData.Activity;
@@ -153,6 +262,131 @@ namespace ARPG.Systems
             float evaluationTime = now < activity.PhaseEndGameTime ? now : activity.PhaseEndGameTime;
             AR.s.Npc.UpdateOffscreenNpcPosition(entityId,
                 NpcActivityResolver.EvaluateHuntPosition(activity, evaluationTime));
+        }
+
+        private static void ResolvePartyHunt(NpcPartyState party, float outcomeGameTime, int worldSeed)
+        {
+            List<NpcSaveData> members = new List<NpcSaveData>(party.MemberIds.Count);
+            List<int> memberIds = new List<int>(party.MemberIds.Count);
+            for (int i = 0; i < party.MemberIds.Count; i++)
+            {
+                int memberId = party.MemberIds[i];
+                NpcSaveData? member = AR.s.Npc.GetSaveData(memberId);
+                if (member == null || member.Condition == CharacterConditions.Dead)
+                    continue;
+
+                members.Add(member);
+                memberIds.Add(memberId);
+            }
+
+            if (members.Count < 2)
+            {
+                AR.s.Npc.DissolveParty(party.PartyId);
+                return;
+            }
+
+            NpcActivityState partyActivity = party.Activity;
+            float partyPower = NpcActivityResolver.GetPartyHuntPower(members);
+            NpcHuntOutcome[] outcomes = new NpcHuntOutcome[members.Count];
+            int successCount = 0;
+            int survivorCount = 0;
+            for (int i = 0; i < members.Count; i++)
+            {
+                NpcHuntOutcome outcome = NpcActivityResolver.ResolvePartyMemberHunt(members[i], partyPower,
+                    members.Count, party.PartyId, partyActivity.OutcomeSeedGameTime, worldSeed, i);
+                outcomes[i] = outcome;
+                if (outcome == NpcHuntOutcome.Success)
+                    successCount++;
+                if (outcome != NpcHuntOutcome.Dead)
+                    survivorCount++;
+            }
+
+            int foodYield = successCount > 0
+                ? NpcActivityResolver.GetPartyHuntFoodYield(partyPower, party.PartyId,
+                    partyActivity.OutcomeSeedGameTime, worldSeed)
+                : 0;
+            partyActivity.LastHuntOutcome = successCount > 0 ? NpcHuntOutcome.Success : NpcHuntOutcome.Failed;
+            partyActivity.LastHuntFoodYield = foodYield;
+            partyActivity.LastOutcomeGameTime = outcomeGameTime;
+
+            for (int i = 0; i < members.Count; i++)
+            {
+                NpcSaveData member = members[i];
+                NpcActivityState memberActivity = member.Activity;
+                memberActivity.LastHuntOutcome = outcomes[i];
+                memberActivity.LastHuntFoodYield = memberIds[i] == party.LeaderId &&
+                    outcomes[i] == NpcHuntOutcome.Success ? foodYield : 0;
+                memberActivity.LastOutcomeGameTime = outcomeGameTime;
+                memberActivity.HasMovementPath = false;
+                memberActivity.TargetKey = string.Empty;
+                memberActivity.PhaseStartedGameTime = outcomeGameTime;
+                member.LastSimGameTime = outcomeGameTime;
+
+                if (outcomes[i] == NpcHuntOutcome.Wounded)
+                {
+                    memberActivity.Phase = NpcActivityPhase.Wounded;
+                    memberActivity.Kind = NpcActivityKind.None;
+                    memberActivity.PhaseEndGameTime = outcomeGameTime + NpcActivityResolver.WoundedRecoveryHours;
+                }
+                else if (outcomes[i] != NpcHuntOutcome.Dead)
+                {
+                    memberActivity.Phase = NpcActivityPhase.Idle;
+                    memberActivity.Kind = NpcActivityKind.None;
+                    memberActivity.PhaseEndGameTime = 0f;
+                }
+            }
+
+            AR.s.Npc.DissolveParty(party.PartyId);
+
+            if (foodYield > 0 && members[0].VillageId >= 0)
+                AR.s.Village.ProduceResource(members[0].VillageId, GlobalEnum.ItemType.Food, foodYield, false);
+
+            ApplyPartyRelationshipOutcome(memberIds, outcomes, successCount > 0);
+            for (int i = 0; i < members.Count; i++)
+            {
+                int memberId = memberIds[i];
+                if (outcomes[i] == NpcHuntOutcome.Dead)
+                    AR.s.Npc.MarkNpcDead(memberId, outcomeGameTime);
+                else
+                    AR.s.Npc.ResumeMaterializedNpcActivity(memberId);
+            }
+
+            NotifyPartyHuntOutcome(party, successCount, survivorCount, foodYield);
+        }
+
+        private static void ApplyPartyRelationshipOutcome(IReadOnlyList<int> memberIds,
+            IReadOnlyList<NpcHuntOutcome> outcomes, bool hasSuccess)
+        {
+            int affinityDelta = hasSuccess ? 4 : 1;
+            for (int i = 0; i < memberIds.Count; i++)
+            {
+                if (outcomes[i] == NpcHuntOutcome.Dead)
+                    continue;
+
+                for (int j = i + 1; j < memberIds.Count; j++)
+                {
+                    if (outcomes[j] == NpcHuntOutcome.Dead)
+                        continue;
+                    AR.s.Npc.ModifyAffinity(memberIds[i], memberIds[j], affinityDelta);
+                }
+            }
+        }
+
+        private static void NotifyPartyHuntOutcome(NpcPartyState party, int successCount, int survivorCount,
+            int foodYield)
+        {
+            NpcSaveData? leader = AR.s.Npc.GetSaveData(party.LeaderId);
+            if (leader == null || leader.IsActive == false)
+                return;
+
+            string leaderName = AR.s.Data.GetNpc(leader.NpcTableId)?.Name ?? $"NPC #{party.LeaderId}";
+            string message = successCount > 0
+                ? $"{leaderName} 원정대: 사냥 성공, 식량 +{foodYield}"
+                : $"{leaderName} 원정대: 사냥에 실패했습니다.";
+            if (survivorCount < party.MemberIds.Count)
+                message += " 전사자가 발생했습니다.";
+
+            AR.s.UI.SetNotify(message);
         }
 
         private static void ResolveHunt(NpcSaveData saveData, int entityId, float outcomeGameTime, int worldSeed)

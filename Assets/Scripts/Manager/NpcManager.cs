@@ -22,6 +22,10 @@ namespace ARPG.Npc
         // 결정론적 오프스크린 시뮬레이션 순서. Dictionary 열거 순서에 의존하지 않는다.
         private List<int> _simulationNpcIds = new();
         private int _simulationCursor;
+        private Dictionary<int, NpcPartyState> _npcPartyDict = new();
+        private List<int> _simulationPartyIds = new();
+        private int _simulationWorkCursor;
+        private int _nextPartyId = 1;
         // NPC 간 호감도 (양방향 대칭, sparse — 만난 적 있는 페어만 등록)
         private Dictionary<NpcPairKey, int> _npcAffinity = new();
         // 플레이어↔NPC 관계. NPC ID가 키이며, 청크 unload와 무관하게 유지한다.
@@ -56,6 +60,7 @@ namespace ARPG.Npc
             LoadAffinity(AR.s.Data.NpcAffinityList);
             LoadPlayerRelations(AR.s.Data.PlayerNpcRelationList);
             LoadRelations(AR.s.Data.NpcRelationList);
+            LoadParties(AR.s.Data.NpcPartyStates);
         }
 
         public void Reset()
@@ -78,6 +83,10 @@ namespace ARPG.Npc
             _chunkNpcs.Clear();
             _simulationNpcIds.Clear();
             _simulationCursor = 0;
+            _npcPartyDict.Clear();
+            _simulationPartyIds.Clear();
+            _simulationWorkCursor = 0;
+            _nextPartyId = 1;
             _npcAffinity.Clear();
             _playerRelations.Clear();
             _npcRelations.Clear();
@@ -631,6 +640,12 @@ namespace ARPG.Npc
         private static void PauseMaterializedActivity(int entityId, NpcSaveData saveData)
         {
             NpcActivityState activity = saveData.Activity;
+            if (activity.PartyId >= 0)
+            {
+                AR.s.Component.AddComponent(entityId, new NpcActivityPausedTag());
+                AIStateHelper.StopMovement(entityId);
+                return;
+            }
             if (activity.Kind != NpcActivityKind.Hunt || activity.HasMovementPath == false)
                 return;
             if (activity.PhaseEndGameTime <= AR.s.Time.CurrentGameTime)
@@ -763,12 +778,25 @@ namespace ARPG.Npc
             return new Dictionary<int, NpcSaveData>(_npcSaveDict);
         }
 
+        public List<NpcPartyState> SaveParties()
+        {
+            List<NpcPartyState> result = new List<NpcPartyState>(_simulationPartyIds.Count);
+            for (int i = 0; i < _simulationPartyIds.Count; i++)
+            {
+                int partyId = _simulationPartyIds[i];
+                if (_npcPartyDict.TryGetValue(partyId, out NpcPartyState? party))
+                    result.Add(party);
+            }
+            return result;
+        }
+
         public void Load(Dictionary<int, NpcSaveData> npcSaveDatas, int chunkSize)
         {
             _npcSaveDict.Clear();
             _chunkNpcs.Clear();
             _simulationNpcIds.Clear();
             _simulationCursor = 0;
+            _simulationWorkCursor = 0;
 
             if (npcSaveDatas == null || npcSaveDatas.Count == 0)
                 return;
@@ -809,6 +837,70 @@ namespace ARPG.Npc
 
             _isInitialLoaded = true;
             Debug.Log($"[NpcManager] Loaded {_npcSaveDict.Count} NPCs from save data");
+        }
+
+        public void LoadParties(List<NpcPartyState>? partyStates)
+        {
+            _npcPartyDict.Clear();
+            _simulationPartyIds.Clear();
+            _simulationWorkCursor = 0;
+            _nextPartyId = 1;
+
+            for (int i = 0; i < _simulationNpcIds.Count; i++)
+            {
+                int entityId = _simulationNpcIds[i];
+                if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
+                    continue;
+
+                saveData.Activity.PartyId = -1;
+            }
+
+            if (partyStates == null)
+                return;
+
+            for (int i = 0; i < partyStates.Count; i++)
+            {
+                NpcPartyState party = partyStates[i];
+                party.EnsureInitialized();
+                if (party.PartyId <= 0 || _npcPartyDict.ContainsKey(party.PartyId))
+                    continue;
+
+                List<int> validMembers = new List<int>(party.MemberIds.Count);
+                for (int memberIndex = 0; memberIndex < party.MemberIds.Count; memberIndex++)
+                {
+                    int memberId = party.MemberIds[memberIndex];
+                    if (_npcSaveDict.TryGetValue(memberId, out NpcSaveData? member) == false)
+                        continue;
+                    if (member.Condition == CharacterConditions.Dead ||
+                        member.Activity.Phase == NpcActivityPhase.Dead || validMembers.Contains(memberId))
+                        continue;
+
+                    validMembers.Add(memberId);
+                }
+
+                if (validMembers.Count < 2)
+                    continue;
+
+                validMembers.Sort();
+                party.MemberIds = validMembers;
+                if (validMembers.Contains(party.LeaderId) == false)
+                    party.LeaderId = validMembers[0];
+
+                party.Activity.PartyId = party.PartyId;
+                _npcPartyDict.Add(party.PartyId, party);
+                AddPartyToSimulation(party.PartyId);
+                if (party.PartyId >= _nextPartyId)
+                    _nextPartyId = party.PartyId + 1;
+
+                for (int memberIndex = 0; memberIndex < validMembers.Count; memberIndex++)
+                {
+                    int memberId = validMembers[memberIndex];
+                    NpcSaveData member = _npcSaveDict[memberId];
+                    member.Activity.PartyId = party.PartyId;
+                    member.Activity.Kind = NpcActivityKind.Hunt;
+                    member.Activity.Phase = NpcActivityPhase.Venturing;
+                }
+            }
         }
 
         #region NPC 호감도 (양방향 대칭, sparse)
@@ -1150,6 +1242,140 @@ namespace ARPG.Npc
             return _npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) ? saveData : null;
         }
 
+        public bool TryCreateHuntParty(int leaderId, out NpcPartyState? party)
+        {
+            party = null;
+            if (_npcSaveDict.TryGetValue(leaderId, out NpcSaveData? leader) == false ||
+                IsEligibleHuntPartyMember(leader) == false)
+                return false;
+
+            const float recruitmentRangeSqr = 400f;
+            List<int> candidates = new List<int>();
+            for (int i = 0; i < _simulationNpcIds.Count; i++)
+            {
+                int candidateId = _simulationNpcIds[i];
+                if (candidateId == leaderId || _npcSaveDict.TryGetValue(candidateId, out NpcSaveData? candidate) == false)
+                    continue;
+                if (candidate.VillageId != leader.VillageId || IsEligibleHuntPartyMember(candidate) == false)
+                    continue;
+
+                Vector2 offset = candidate.Position - leader.Position;
+                if (offset.sqrMagnitude > recruitmentRangeSqr || IsHostilePartyRelation(leaderId, candidateId))
+                    continue;
+
+                candidates.Add(candidateId);
+            }
+
+            candidates.Sort((leftId, rightId) =>
+            {
+                int leftScore = GetPartyRecruitmentScore(leaderId, leftId);
+                int rightScore = GetPartyRecruitmentScore(leaderId, rightId);
+                if (leftScore != rightScore)
+                    return rightScore.CompareTo(leftScore);
+                return leftId.CompareTo(rightId);
+            });
+
+            if (candidates.Count == 0)
+                return false;
+
+            int partyId = _nextPartyId++;
+            NpcPartyState created = new NpcPartyState
+            {
+                PartyId = partyId,
+                LeaderId = leaderId,
+            };
+            created.MemberIds.Add(leaderId);
+            for (int i = 0; i < candidates.Count && created.MemberIds.Count < 4; i++)
+                created.MemberIds.Add(candidates[i]);
+            created.MemberIds.Sort();
+            created.Activity.PartyId = partyId;
+
+            _npcPartyDict.Add(partyId, created);
+            AddPartyToSimulation(partyId);
+            for (int i = 0; i < created.MemberIds.Count; i++)
+            {
+                int memberId = created.MemberIds[i];
+                NpcSaveData member = _npcSaveDict[memberId];
+                member.Activity.PartyId = partyId;
+                member.Activity.Kind = NpcActivityKind.Hunt;
+                member.Activity.Phase = NpcActivityPhase.Venturing;
+                member.Activity.TargetKey = "hunt";
+                member.Activity.HasMovementPath = false;
+            }
+
+            party = created;
+            return true;
+        }
+
+        public void DissolveParty(int partyId)
+        {
+            if (_npcPartyDict.TryGetValue(partyId, out NpcPartyState? party) == false)
+                return;
+
+            for (int i = 0; i < party.MemberIds.Count; i++)
+            {
+                int memberId = party.MemberIds[i];
+                if (_npcSaveDict.TryGetValue(memberId, out NpcSaveData? member) &&
+                    member.Activity.PartyId == partyId)
+                    member.Activity.PartyId = -1;
+            }
+
+            _npcPartyDict.Remove(partyId);
+            RemovePartyFromSimulation(partyId);
+        }
+
+        public bool TryGetNextSimulationWork(out int entityId, out NpcSaveData? saveData,
+            out NpcPartyState? party)
+        {
+            entityId = -1;
+            saveData = null;
+            party = null;
+
+            int partyCount = _simulationPartyIds.Count;
+            int totalCount = partyCount + _simulationNpcIds.Count;
+            for (int i = 0; i < totalCount; i++)
+            {
+                if (_simulationWorkCursor >= totalCount)
+                    _simulationWorkCursor = 0;
+
+                int workIndex = _simulationWorkCursor;
+                _simulationWorkCursor++;
+                if (workIndex < partyCount)
+                {
+                    int partyId = _simulationPartyIds[workIndex];
+                    if (_npcPartyDict.TryGetValue(partyId, out NpcPartyState? candidateParty))
+                    {
+                        party = candidateParty;
+                        return true;
+                    }
+                    continue;
+                }
+
+                int npcIndex = workIndex - partyCount;
+                int candidateId = _simulationNpcIds[npcIndex];
+                if (_npcSaveDict.TryGetValue(candidateId, out NpcSaveData? candidate) == false ||
+                    candidate.Condition == CharacterConditions.Dead ||
+                    candidate.Activity.Phase == NpcActivityPhase.Dead || candidate.Activity.PartyId >= 0)
+                    continue;
+
+                entityId = candidateId;
+                saveData = candidate;
+                return true;
+            }
+
+            return false;
+        }
+
+        public void PauseMaterializedNpcPartyActivity(int entityId)
+        {
+            if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false ||
+                saveData.IsActive == false)
+                return;
+
+            AR.s.Component.AddComponent(entityId, new NpcActivityPausedTag());
+            AIStateHelper.StopMovement(entityId);
+        }
+
         /// <summary>
         /// 시간분할 NPC 시뮬레이션용 다음 NPC를 결정론적 순서로 반환한다.
         /// 활성 NPC도 같은 활동 시계로 처리하되, 위치 표현만 ECS 조우 상태에 맡긴다.
@@ -1460,6 +1686,56 @@ namespace ARPG.Npc
                 _simulationCursor--;
             if (_simulationCursor < 0 || _simulationCursor >= _simulationNpcIds.Count)
                 _simulationCursor = 0;
+        }
+
+        private static bool IsEligibleHuntPartyMember(NpcSaveData saveData)
+        {
+            return saveData.Condition != CharacterConditions.Dead &&
+                   saveData.Activity.Phase == NpcActivityPhase.Idle &&
+                   saveData.Activity.Kind == NpcActivityKind.None &&
+                   saveData.Activity.PartyId < 0;
+        }
+
+        private bool IsHostilePartyRelation(int leaderId, int candidateId)
+        {
+            return GetRelation(leaderId, candidateId, NpcRelationType.Rival) != null ||
+                   GetRelation(leaderId, candidateId, NpcRelationType.GrudgeAgainst) != null;
+        }
+
+        private int GetPartyRecruitmentScore(int leaderId, int candidateId)
+        {
+            int score = GetAffinity(leaderId, candidateId);
+            if (GetRelation(leaderId, candidateId, NpcRelationType.Spouse) != null)
+                score += 160;
+            else if (GetRelation(leaderId, candidateId, NpcRelationType.Sibling) != null)
+                score += 120;
+            else if (GetRelation(leaderId, candidateId, NpcRelationType.Friend) != null)
+                score += 80;
+
+            if (_npcSaveDict.TryGetValue(candidateId, out NpcSaveData? candidate))
+                score += candidate.NpcStat.Courage / 10 + candidate.SkillLevel * 2;
+            return score;
+        }
+
+        private void AddPartyToSimulation(int partyId)
+        {
+            int index = _simulationPartyIds.BinarySearch(partyId);
+            if (index >= 0)
+                return;
+
+            _simulationPartyIds.Insert(~index, partyId);
+            if (_simulationWorkCursor > 0)
+                _simulationWorkCursor = 0;
+        }
+
+        private void RemovePartyFromSimulation(int partyId)
+        {
+            int index = _simulationPartyIds.BinarySearch(partyId);
+            if (index < 0)
+                return;
+
+            _simulationPartyIds.RemoveAt(index);
+            _simulationWorkCursor = 0;
         }
 
         private static void TrimDeeds(List<NpcDeedEntry> deeds)

@@ -1,4 +1,5 @@
 #nullable enable
+using System.Collections.Generic;
 using ARPG.History;
 using UnityEngine;
 
@@ -59,6 +60,53 @@ namespace ARPG.Npc
             float capability = Mathf.Clamp01(saveData.NpcStat.Courage / 100f + saveData.SkillLevel / 20f);
             int baseYield = capability >= 0.70f ? 3 : capability >= 0.35f ? 2 : 1;
             return baseYield + (rng.Chance(0.20d) ? 1 : 0);
+        }
+
+        public static float GetPartyHuntPower(IReadOnlyList<NpcSaveData> members)
+        {
+            float power = 0f;
+            for (int i = 0; i < members.Count; i++)
+            {
+                NpcSaveData member = members[i];
+                float courage = Mathf.Clamp01(member.NpcStat.Courage / 100f);
+                float skill = Mathf.Clamp01(member.SkillLevel / 10f);
+                power += 0.20f + courage * 0.55f + skill * 0.25f;
+            }
+            return power;
+        }
+
+        public static NpcHuntOutcome ResolvePartyMemberHunt(NpcSaveData member, float partyPower,
+            int partySize, int partyId, float startGameTime, int worldSeed, int memberIndex)
+        {
+            HistoryRng rng = CreateRng(partyId, startGameTime, worldSeed, 10 + memberIndex);
+            float courage = Mathf.Clamp01(member.NpcStat.Courage / 100f);
+            float skill = Mathf.Clamp01(member.SkillLevel / 10f);
+            float personalPower = 0.20f + courage * 0.55f + skill * 0.25f;
+            float supportPower = partySize > 1
+                ? Mathf.Clamp01((partyPower - personalPower) / (partySize - 1))
+                : 0f;
+            float capability = Mathf.Clamp01(personalPower * 0.70f + supportPower * 0.30f);
+
+            float deathChance = Mathf.Lerp(0.045f, 0.004f, capability);
+            float woundedChance = Mathf.Lerp(0.24f, 0.035f, capability);
+            float successChance = Mathf.Lerp(0.48f, 0.92f, capability);
+            float roll = (float)rng.NextDouble();
+
+            if (roll < deathChance)
+                return NpcHuntOutcome.Dead;
+            if (roll < deathChance + woundedChance)
+                return NpcHuntOutcome.Wounded;
+            if (roll < deathChance + woundedChance + successChance)
+                return NpcHuntOutcome.Success;
+            return NpcHuntOutcome.Failed;
+        }
+
+        public static int GetPartyHuntFoodYield(float partyPower, int partyId, float startGameTime,
+            int worldSeed)
+        {
+            HistoryRng rng = CreateRng(partyId, startGameTime, worldSeed, 20);
+            int baseYield = Mathf.Clamp(Mathf.RoundToInt(partyPower * 2f), 2, 6);
+            return baseYield + (rng.Chance(0.25d) ? 1 : 0);
         }
 
         /// <summary>

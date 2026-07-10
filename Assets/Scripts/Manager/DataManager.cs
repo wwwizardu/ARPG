@@ -13,7 +13,7 @@ namespace ARPG.Data
 {
     public partial class DataManager : MonoBehaviour
     {
-        private const ushort CURRENT_WORLD_DATA_VERSION = 11;
+        private const ushort CURRENT_WORLD_DATA_VERSION = 12;
         private const ushort CURRENT_PLAYER_DATA_VERSION = 2;
         private WorldData _worldData = new();
         private List<PlayerData> _playerDataList = new();
@@ -51,6 +51,7 @@ namespace ARPG.Data
         public List<NpcAffinityEntry> NpcAffinityList => _worldData.NpcAffinityList;
         public List<PlayerNpcRelationEntry> PlayerNpcRelationList => _worldData.PlayerNpcRelationList;
         public List<NpcRelationEntry> NpcRelationList => _worldData.NpcRelationList;
+        public List<NpcPartyState> NpcPartyStates => _worldData.NpcPartyStates;
         public NpcPopulationState NpcPopulation => _worldData.NpcPopulation;
         public Dictionary<int, BuildingSaveData> BuildingSaveDatas => _worldData.BuildingSaveDatas;
         // R1: 정착지 연대기 (New Game 1회 생성 후 저장이 정본)
@@ -342,6 +343,7 @@ namespace ARPG.Data
                     _worldData.NpcAffinityList = AR.s.Npc.SaveAffinity();
                     _worldData.PlayerNpcRelationList = AR.s.Npc.SavePlayerRelations();
                     _worldData.NpcRelationList = AR.s.Npc.SaveRelations();
+                    _worldData.NpcPartyStates = AR.s.Npc.SaveParties();
 
                     // BuildingData 저장
                     _worldData.BuildingSaveDatas = AR.s.Building.Save();
@@ -606,6 +608,13 @@ namespace ARPG.Data
             // 버전 10 -> 11: 플레이어↔NPC 관계(PlayerNpcRelationList) 추가.
             // 구 세이브는 WorldData.LoadCompleted에서 빈 목록으로 보정된다.
             if (fromVersion < 11 && toVersion >= 11)
+            {
+                // no-op (WorldData.LoadCompleted에서 처리).
+            }
+
+            // 버전 11 -> 12: Hunt 파티의 공통 활동 상태 추가.
+            // 구 세이브는 빈 목록으로 로드되어 기존 개인 시뮬레이션을 그대로 유지한다.
+            if (fromVersion < 12 && toVersion >= 12)
             {
                 // no-op (WorldData.LoadCompleted에서 처리).
             }
