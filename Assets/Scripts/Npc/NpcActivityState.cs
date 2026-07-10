@@ -48,6 +48,12 @@ namespace ARPG.Npc
         public NpcActivityKind Kind = NpcActivityKind.None;
         // v1은 "rest"/"hunt"만 사용한다. Travel·Dungeon 단계에서 Zone/목적지 키로 확장한다.
         public string TargetKey = string.Empty;
+        // 활동 중 이동 경로의 양 끝점. Hunt v1은 Origin→Target→Origin의 단일 왕복 경로를 사용한다.
+        public float OriginPositionX;
+        public float OriginPositionY;
+        public float TargetPositionX;
+        public float TargetPositionY;
+        public bool HasMovementPath;
         // 게임시간 단위(hour). 실제 중간 시뮬레이션 없이 이 종료 시각에서만 상태를 전이한다.
         public float PhaseStartedGameTime;
         public float PhaseEndGameTime;
@@ -55,6 +61,22 @@ namespace ARPG.Npc
         public NpcHuntOutcome LastHuntOutcome = NpcHuntOutcome.None;
         public int LastHuntFoodYield;
         public float LastOutcomeGameTime;
+
+        [System.Xml.Serialization.XmlIgnore]
+        [Newtonsoft.Json.JsonIgnore]
+        public UnityEngine.Vector2 OriginPosition
+        {
+            get => new UnityEngine.Vector2(OriginPositionX, OriginPositionY);
+            set { OriginPositionX = value.x; OriginPositionY = value.y; }
+        }
+
+        [System.Xml.Serialization.XmlIgnore]
+        [Newtonsoft.Json.JsonIgnore]
+        public UnityEngine.Vector2 TargetPosition
+        {
+            get => new UnityEngine.Vector2(TargetPositionX, TargetPositionY);
+            set { TargetPositionX = value.x; TargetPositionY = value.y; }
+        }
 
         public void EnsureInitialized()
         {

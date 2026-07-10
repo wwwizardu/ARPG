@@ -61,12 +61,42 @@ namespace ARPG.Npc
             return baseYield + (rng.Chance(0.20d) ? 1 : 0);
         }
 
+        /// <summary>
+        /// Hunt 대상 좌표를 결정론적으로 고른다. 실제 경로 탐색은 하지 않고 오프스크린 보간용 종점만 만든다.
+        /// </summary>
+        public static Vector2 GetHuntTargetPosition(Vector2 origin, int entityId, float startGameTime,
+            int worldSeed, float minX, float maxX, float minY, float maxY)
+        {
+            HistoryRng rng = CreateRng(entityId, startGameTime, worldSeed, 3);
+            float angle = (float)(rng.NextDouble() * Mathf.PI * 2f);
+            float distance = Mathf.Lerp(8f, 16f, (float)rng.NextDouble());
+            Vector2 target = origin + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * distance;
+            target.x = Mathf.Clamp(target.x, minX, maxX);
+            target.y = Mathf.Clamp(target.y, minY, maxY);
+            return target;
+        }
+
+        /// <summary>
+        /// Hunt 단일 구간의 analytic 좌표. 전반은 사냥 지점으로, 후반은 출발지로 돌아온다.
+        /// </summary>
+        public static Vector2 EvaluateHuntPosition(NpcActivityState activity, float gameTime)
+        {
+            if (activity.HasMovementPath == false || activity.PhaseEndGameTime <= activity.PhaseStartedGameTime)
+                return activity.OriginPosition;
+
+            float progress = Mathf.Clamp01((gameTime - activity.PhaseStartedGameTime) /
+                (activity.PhaseEndGameTime - activity.PhaseStartedGameTime));
+            if (progress <= 0.5f)
+                return Vector2.Lerp(activity.OriginPosition, activity.TargetPosition, progress * 2f);
+            return Vector2.Lerp(activity.TargetPosition, activity.OriginPosition, (progress - 0.5f) * 2f);
+        }
+
         private static HistoryRng CreateRng(int entityId, float startGameTime, int worldSeed, int salt)
         {
             // 활동 시작시각을 1/100 게임시간 단위로 양자화한다.
             // 같은 월드·NPC·활동 시작시각·판정 종류는 세이브/로드 뒤에도 같은 난수열을 얻는다.
             int startTick = Mathf.FloorToInt(startGameTime * 100f);
-            // salt=0은 활동 선택, salt=1은 Hunt 결과, salt=2는 보상에 사용해 난수열을 분리한다.
+            // salt=0은 활동 선택, salt=1은 Hunt 결과, salt=2는 보상, salt=3은 목표 좌표에 사용한다.
             int key = unchecked(worldSeed ^ (entityId * 486187739) ^ (startTick * 16777619) ^ salt);
             return new HistoryRng(DerivedSeed.Derive(key, DerivedSeed.ChannelNpcActivity));
         }

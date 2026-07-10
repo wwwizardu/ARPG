@@ -13,7 +13,7 @@ namespace ARPG.Data
 {
     public partial class DataManager : MonoBehaviour
     {
-        private const ushort CURRENT_WORLD_DATA_VERSION = 6;
+        private const ushort CURRENT_WORLD_DATA_VERSION = 7;
         private const ushort CURRENT_PLAYER_DATA_VERSION = 2;
         private WorldData _worldData = new();
         private List<PlayerData> _playerDataList = new();
@@ -577,6 +577,13 @@ namespace ARPG.Data
             if (fromVersion < 6 && toVersion >= 6)
             {
                 // no-op (NpcSaveData.OnLoadCompleted에서 처리).
+            }
+
+            // 버전 6 -> 7: NPC 활동의 출발/목적지 좌표와 analytic 이동 경로 추가.
+            // 기존 활동은 이동 경로 없음(기본 false)으로 안전하게 로드한다.
+            if (fromVersion < 7 && toVersion >= 7)
+            {
+                // no-op (NpcActivityState 기본값으로 처리).
             }
         }
 

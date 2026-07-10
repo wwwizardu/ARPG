@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
+using ARPG.AI;
 using ARPG.Component;
 using ARPG.Creature;
 using ARPG.Factory;
@@ -415,6 +416,8 @@ namespace ARPG.Npc
                 // NpcTag는 EntityFactory.CreateNpc가 AI 컴포넌트 부착 전에 추가함 (isNpc 판정용)
                 EntityFactory.AddActivationComponent(createdId, _activationDistance, _deactivationDistance);
 
+                PauseMaterializedActivity(createdId, saveData);
+
                 // 마을 데이터 복원
                 if (AR.s.Component.TryGetComponent<NpcVillageComponent>(createdId, out var village))
                 {
@@ -475,6 +478,19 @@ namespace ARPG.Npc
             }
 
             saveData.IsActive = false;
+        }
+
+        private static void PauseMaterializedActivity(int entityId, NpcSaveData saveData)
+        {
+            NpcActivityState activity = saveData.Activity;
+            if (activity.Kind != NpcActivityKind.Hunt || activity.HasMovementPath == false)
+                return;
+            if (activity.PhaseEndGameTime <= AR.s.Time.CurrentGameTime)
+                return;
+
+            // Patrol이 새 스폰 직후 위치를 떠나지 않도록 AI/경로 이동을 중지한다.
+            AR.s.Component.AddComponent(entityId, new NpcActivityPausedTag());
+            AIStateHelper.StopMovement(entityId);
         }
 
         /// <summary>
@@ -859,6 +875,27 @@ namespace ARPG.Npc
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// 오프스크린 활동의 analytic 좌표를 저장하고 청크 인덱스를 함께 갱신한다.
+        /// 다음 청크 활성화는 이 인덱스로 NPC를 현재 위치에 승격한다.
+        /// </summary>
+        public void UpdateOffscreenNpcPosition(int entityId, Vector2 position)
+        {
+            if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
+                return;
+            if (saveData.IsActive)
+                return;
+
+            Vector2Int oldChunk = PositionToChunk(saveData.Position);
+            saveData.Position = position;
+            Vector2Int newChunk = PositionToChunk(position);
+            if (oldChunk == newChunk)
+                return;
+
+            RemoveNpcFromChunk(oldChunk, entityId);
+            AddNpcToChunk(newChunk, entityId);
         }
 
         /// <summary>

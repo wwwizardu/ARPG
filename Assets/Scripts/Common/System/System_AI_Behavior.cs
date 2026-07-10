@@ -24,6 +24,11 @@ namespace ARPG.Systems
             {
                 int entityId = behaviorPool.GetEntityId(i);
 
+                // 오프스크린 이동 중 승격된 NPC는 해당 위치에서 멈춰 조우를 기다린다.
+                // 청크 비활성화 시 엔티티와 태그가 함께 제거되어 오프스크린 경로가 다시 진행된다.
+                if (componentManager.HasComponent<NpcActivityPausedTag>(entityId))
+                    continue;
+
                 // AI 상태 컴포넌트 확인
                 if (statePool.TryGet(entityId, out var stateComponent) == false)
                     continue;

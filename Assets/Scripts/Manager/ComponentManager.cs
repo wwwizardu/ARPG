@@ -93,6 +93,7 @@ namespace ARPG.Component
 
             // 마을 시스템 컴포넌트
             { typeof(NpcVillageComponent), 200 },
+            { typeof(NpcActivityPausedTag), 200 }, // 이동 중 materialize된 NPC의 조우 대기 태그
             { typeof(VillageStorageComponent), 32 },   // 마을 1개당 1개, 현재 <10, 여유 32
             { typeof(VillageComponent), 32 },          // 마을 1개당 1개 (Phase C: Stage/Bounds/Threat)
             { typeof(WallPlanRequestTag), 32 },        // Stage 3 도달 시 부착, 처리 후 제거

@@ -52,6 +52,8 @@ namespace ARPG.Systems
                 if (activity.Phase == NpcActivityPhase.Dead)
                     return;
 
+                UpdateAnalyticPosition(saveData, entityId, now);
+
                 if (activity.Kind == NpcActivityKind.None && activity.Phase == NpcActivityPhase.Idle)
                 {
                     StartNextActivity(saveData, entityId, decisionTime, worldSeed);
@@ -120,7 +122,29 @@ namespace ARPG.Systems
             activity.PhaseStartedGameTime = startGameTime;
             activity.PhaseEndGameTime = startGameTime +
                 (kind == NpcActivityKind.Hunt ? NpcActivityResolver.HuntDurationHours : NpcActivityResolver.RestDurationHours);
+            activity.HasMovementPath = kind == NpcActivityKind.Hunt;
+            if (activity.HasMovementPath)
+            {
+                float minX = AR.s.Map.minChunkX * AR.s.Map.chunkSize;
+                float maxX = (AR.s.Map.maxChunkX + 1) * AR.s.Map.chunkSize - 1f;
+                float minY = AR.s.Map.minChunkY * AR.s.Map.chunkSize;
+                float maxY = (AR.s.Map.maxChunkY + 1) * AR.s.Map.chunkSize - 1f;
+                activity.OriginPosition = saveData.Position;
+                activity.TargetPosition = NpcActivityResolver.GetHuntTargetPosition(saveData.Position, entityId,
+                    startGameTime, worldSeed, minX, maxX, minY, maxY);
+            }
             saveData.LastSimGameTime = startGameTime;
+        }
+
+        private static void UpdateAnalyticPosition(NpcSaveData saveData, int entityId, float now)
+        {
+            NpcActivityState activity = saveData.Activity;
+            if (activity.Kind != NpcActivityKind.Hunt || activity.HasMovementPath == false)
+                return;
+
+            float evaluationTime = now < activity.PhaseEndGameTime ? now : activity.PhaseEndGameTime;
+            AR.s.Npc.UpdateOffscreenNpcPosition(entityId,
+                NpcActivityResolver.EvaluateHuntPosition(activity, evaluationTime));
         }
 
         private static void ResolveHunt(NpcSaveData saveData, int entityId, float outcomeGameTime, int worldSeed)
@@ -136,6 +160,7 @@ namespace ARPG.Systems
             activity.LastOutcomeGameTime = outcomeGameTime;
             activity.Kind = NpcActivityKind.None;
             activity.TargetKey = string.Empty;
+            activity.HasMovementPath = false;
             activity.PhaseStartedGameTime = outcomeGameTime;
             saveData.LastSimGameTime = outcomeGameTime;
 
