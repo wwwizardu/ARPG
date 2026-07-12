@@ -29,16 +29,20 @@ namespace ARPG.Village
                     mapFileData.StartPosition.x + mapFileData.Width * 0.5f,
                     mapFileData.StartPosition.y + mapFileData.Height * 0.5f
                 );
-                // 마을 인덱스 + 1 을 VillageTableId로 사용 (관례). 없으면 기본 스폰은 no-op.
-                int tableId = i + 1;
+                // 마을 인덱스 + 1 을 선호 VillageTableId로 삼되, 존재하지 않으면 유효 행으로 폴백.
+                // 마을 수 > 테이블 행 수라서 대부분 마을이 단일 기존 테이블로 라우팅된다.
+                int tableId = AR.s.Data.ResolveVillageTableId(i + 1);
                 RegisterVillage(i, villageCenter, tableId);
 
                 // R1: 절차 정착지 청사진이면 연대기 SettlementId 연결 (손으로 만든 BaseTown 등은 -1 유지)
                 int settlementId = AR.s.Map.GetSettlementIdByOrigin(mapFileData.StartPosition);
                 if (settlementId >= 0)
                     LinkSettlement(i, settlementId);
+                else
+                    MaterializeVillage(i);   // 손제작 마을(연대기 미연결) → 항상 활성 (실체화 유지)
 
-                Debug.Log($"[VillageManager] Initial village {i} created at {villageCenter} (TableId={tableId}, SettlementId={settlementId})");
+                // 연대기 연결 마을은 추상 상태로 남는다 — 근처가 되면 UpdateMaterialization이 실체화.
+                Debug.Log($"[VillageManager] Initial village {i} registered at {villageCenter} (TableId={tableId}, SettlementId={settlementId})");
             }
         }
 
@@ -71,7 +75,9 @@ namespace ARPG.Village
             };
             _villages[villageId] = data;
 
-            CreateStorageEntity(data);
+            // 엔티티는 여기서 만들지 않는다 (런타임 LOD). VillageData만 등록하고,
+            // 실체화는 근처가 될 때 MaterializeVillage(HistoryManager.UpdateMaterialization 경유)가 담당.
+            // 손제작 마을(연대기 미연결)의 항상-활성 처리는 Initialize/Load에서 별도 수행.
         }
 
         // ── 정착지 연대기(SettlementId) ↔ 마을(VillageId) 매핑 (R1, PROCEDURAL §3.4) ──
@@ -304,9 +310,11 @@ namespace ARPG.Village
             {
                 VillageData data = villageDatas[i];
 
-                // 하위 호환: TableId 필드 없이 저장된 구 세이브 → VillageId+1 관례로 자동 부여
+                // 하위 호환: TableId 필드 없이 저장된 구 세이브 → VillageId+1 관례로 자동 부여.
+                // 이후 항상 유효 행으로 라우팅 — 구 세이브가 저장한 빈 tableId(i+1)도 기존 테이블로 폴백.
                 if (data.TableId <= 0)
                     data.TableId = data.VillageId + 1;
+                data.TableId = AR.s.Data.ResolveVillageTableId(data.TableId);
 
                 if (data.ResourceCaps == null)
                     data.ResourceCaps = new Dictionary<GlobalEnum.ItemType, int>();
@@ -363,10 +371,13 @@ namespace ARPG.Village
 
                 MigratePlacedObjectsFromTypeIds(data);
 
+                data.EntityId = -1;   // 런타임 LOD: 로드 직후엔 모두 추상 상태 (JsonIgnore라 이미 -1이지만 명시)
                 _villages[data.VillageId] = data;
-                CreateStorageEntity(data);
-                RestoreTaskFromData(data);
-                RestorePlacedObjectsFromData(data);
+
+                // 손제작 마을(연대기 미연결)만 즉시 실체화 (항상 활성).
+                // 연대기 연결 마을은 추상 상태로 로드 — 근처가 되면 UpdateMaterialization이 실체화한다.
+                if (data.SettlementId < 0)
+                    MaterializeVillage(data.VillageId);
             }
 
             Debug.Log($"[VillageManager] Loaded {_villages.Count} villages");
@@ -445,8 +456,154 @@ namespace ARPG.Village
             }
         }
 
+        // ========== 런타임 LOD: 마을 ECS 실체화/추상화 (materialize / fold-back) ==========
+        // 정착지 연대기 층(HistoryManager.UpdateMaterialization)이 마을 중심 청크의 활성 여부로
+        // 상승/하강 에지를 감지해 아래 두 메서드를 호출한다. 정본 상태는 VillageData가 항상 보유하며,
+        // ECS 엔티티(스토리지/컴포넌트 + 진행중 task + 배치 오브젝트)만 근처일 때 생성되고 멀어지면 파괴된다.
+
+        /// <summary>
+        /// 마을을 ECS로 실체화 (추상→구체). 플레이어 근처가 될 때 호출.
+        /// 스토리지/컴포넌트 엔티티 + 진행중 task + 배치 오브젝트를 VillageData 정본에서 복원한다.
+        /// 멱등: 이미 실체화(EntityId>=0)면 no-op.
+        /// </summary>
+        public void MaterializeVillage(int villageId)
+        {
+            if (_villages.TryGetValue(villageId, out VillageData? data) == false)
+                return;
+            if (data.EntityId >= 0)
+                return;   // 이미 실체화됨
+
+            CreateStorageEntity(data);
+            RestoreTaskFromData(data);
+            RestorePlacedObjectsFromData(data);
+        }
+
+        /// <summary>
+        /// 마을을 추상으로 되돌림 (구체→추상). 플레이어에게서 멀어질 때 호출.
+        /// ECS 상태(진행중 task / 배치 오브젝트 / 컴포넌트)를 VillageData 정본으로 flush한 뒤
+        /// 관련 엔티티를 모두 파괴한다. 복원은 MaterializeVillage가 담당(정본 왕복).
+        /// 멱등: 이미 추상(EntityId<0)면 no-op.
+        /// </summary>
+        public void DematerializeVillage(int villageId)
+        {
+            if (_villages.TryGetValue(villageId, out VillageData? data) == false)
+                return;
+            if (data.EntityId < 0)
+                return;   // 이미 추상
+
+            FlushAndDestroyTasks(data);
+            FlushAndDestroyPlacedObjects(data);
+            FlushVillageEntityState(data);
+
+            AR.s.Entity.DestroyEntity(data.EntityId);
+            data.EntityId = -1;
+        }
+
+        /// <summary>
+        /// 진행중 build task 컴포넌트 → VillageData.ActiveBuildTasks 미러 후 task 엔티티 파괴.
+        /// 복원은 RestoreTaskFromData가 담당. 건설중 빌딩 엔티티(BuildingEntityId)는 청크 층(BuildingManager)이
+        /// 별도로 관리하므로 여기서 건드리지 않고 스냅샷에만 보존한다.
+        /// </summary>
+        private void FlushAndDestroyTasks(VillageData data)
+        {
+            var taskPool = AR.s.Component.GetComponentPool<ObjectPlacementTaskComponent>();
+
+            List<BuildTaskSnapshot> snapshots = new List<BuildTaskSnapshot>();
+            List<int> toDestroy = new List<int>();
+            for (int i = 0; i < taskPool.Count; i++)
+            {
+                ObjectPlacementTaskComponent t = taskPool.GetByIndex(i);
+                if (t.VillageId != data.VillageId)
+                    continue;
+
+                snapshots.Add(new BuildTaskSnapshot
+                {
+                    TableId = t.TargetTableId,
+                    StartedAt = t.StartedAt,
+                    AccumulatedHours = t.AccumulatedHours,
+                    TileX = t.TileX,
+                    TileY = t.TileY,
+                    ReservedWood = t.ReservedWoodCost,
+                    ReservedStone = t.ReservedStoneCost,
+                    BuildingEntityId = t.BuildingEntityId,
+                });
+                toDestroy.Add(taskPool.GetEntityId(i));
+            }
+
+            data.ActiveBuildTasks = snapshots;
+            data.CurrentBuildTableId = 0;      // Legacy 단일 필드는 항상 비움
+            data.CurrentBuildStartedAt = -1f;
+
+            for (int i = 0; i < toDestroy.Count; i++)
+            {
+                AR.s.Component.RemoveComponent<ObjectPlacementTaskComponent>(toDestroy[i]);
+                AR.s.Entity.DestroyEntity(toDestroy[i]);
+            }
+        }
+
+        /// <summary>
+        /// 배치 오브젝트 컴포넌트 상태(HP/사용시각) → VillageData.PlacedObjects 정본 미러 후
+        /// 엔티티 파괴 + 조회 인덱스(PlacedObjectRegistry) 정리. 복원은 RestorePlacedObjectsFromData가 담당.
+        /// </summary>
+        private void FlushAndDestroyPlacedObjects(VillageData data)
+        {
+            List<int> entities = _placedObjects.GetAllEntitiesInVillage(data.VillageId);
+            for (int i = 0; i < entities.Count; i++)
+            {
+                int entityId = entities[i];
+                if (AR.s.Component.TryGetComponent<PlacedObjectComponent>(entityId, out var po))
+                {
+                    // 좌표로 정본 엔트리를 찾아 HP/사용시각 갱신 (PlacedObjectSaveData는 class → 참조 변경)
+                    for (int j = 0; j < data.PlacedObjects.Count; j++)
+                    {
+                        PlacedObjectSaveData saved = data.PlacedObjects[j];
+                        if (saved.TileX == po.TileX && saved.TileY == po.TileY)
+                        {
+                            saved.Hp = po.HP;
+                            saved.MaxHp = po.MaxHP;
+                            saved.LastUseGameTime = po.LastUseGameTime;
+                            break;
+                        }
+                    }
+                }
+                AR.s.Entity.DestroyEntity(entityId);
+            }
+            _placedObjects.Clear(data.VillageId);
+        }
+
+        /// <summary>
+        /// VillageComponent / VillageStorageComponent → VillageData 정본 미러 (SyncTaskToData의 per-village 발췌).
+        /// 자원은 생산/소비 경로가 이미 VillageData에 상시 동기화하지만, 파괴 직전 최종 flush로 안전 보장.
+        /// </summary>
+        private void FlushVillageEntityState(VillageData data)
+        {
+            if (AR.s.Component.TryGetComponent<VillageComponent>(data.EntityId, out var vc))
+            {
+                data.Stage = vc.Stage;
+                data.BoundsX = vc.Bounds.x;
+                data.BoundsY = vc.Bounds.y;
+                data.BoundsW = vc.Bounds.width;
+                data.BoundsH = vc.Bounds.height;
+                data.ThreatLevel = vc.ThreatLevel;
+                data.WallSegmentCount = vc.WallSegmentCount;
+                data.CompletedWallSegments = vc.CompletedWallSegments;
+            }
+            data.WallPlanRequested = AR.s.Component.HasComponent<WallPlanRequestTag>(data.EntityId);
+
+            if (AR.s.Component.TryGetComponent<VillageStorageComponent>(data.EntityId, out var s))
+            {
+                data.Resources[GlobalEnum.ItemType.Food] = s.FoodAmount;
+                data.Resources[GlobalEnum.ItemType.Wood] = s.WoodAmount;
+                data.Resources[GlobalEnum.ItemType.Stone] = s.StoneAmount;
+                data.HungerHoursAccumulated = s.HungerHoursAccumulated;
+            }
+        }
+
         private void CreateStorageEntity(VillageData data)
         {
+            if (data.EntityId >= 0)
+                return;   // 이미 실체화됨 (멱등) — materialize 중복 호출 방어
+
             int entityId = AR.s.Entity.CreateEntity();
             data.EntityId = entityId;
 
@@ -459,7 +616,6 @@ namespace ARPG.Village
                 FoodCap = GetCap(data, GlobalEnum.ItemType.Food),
                 WoodCap = GetCap(data, GlobalEnum.ItemType.Wood),
                 StoneCap = GetCap(data, GlobalEnum.ItemType.Stone),
-                StoneTimer = data.StoneTimer,
                 HungerHoursAccumulated = data.HungerHoursAccumulated,
                 SurplusFlags = 0,
             };
@@ -650,15 +806,15 @@ namespace ARPG.Village
 
             foreach (VillageData v in _villages.Values)
             {
+                // 추상(비실체화) 마을은 VillageData가 이미 정본 — 건드리지 않는다.
+                //   ActiveBuildTasks: DematerializeVillage가 flush한 진행중 task 스냅샷(보존 필수)
+                //   Legacy CurrentBuild* / VillageComponent 미러도 마지막 실체화 시점 값 유지.
+                if (v.EntityId < 0)
+                    continue;
+
                 // Legacy 단일 필드는 신규 세이브에선 항상 비움 (구 세이브 호환만 위해 필드 유지)
                 v.CurrentBuildTableId = 0;
                 v.CurrentBuildStartedAt = -1f;
-
-                if (v.EntityId < 0)
-                {
-                    v.ActiveBuildTasks.Clear();
-                    continue;
-                }
 
                 if (tasksByVillage.TryGetValue(v.VillageId, out var list))
                     v.ActiveBuildTasks = list;

@@ -191,6 +191,12 @@ namespace ARPG.Map
             if (localX < 0) { chunkX--; localX += chunkSize; }
             if (localY < 0) { chunkY--; localY += chunkSize; }
 
+            if (IsWorldTileInBounds(worldX, worldY) == false)
+            {
+                Debug.LogWarning($"[MapManager] GetTileAt - Chunk ({chunkX}, {chunkY}) is out of bounds.");
+                return 0;
+            }
+
             MapChunkData chunk = GetOrCreateChunk(chunkX, chunkY);
             if (chunk == null)
             {
@@ -199,6 +205,31 @@ namespace ARPG.Map
             }
 
             return chunk.tiles[localX, localY];
+        }
+
+        public bool IsWorldTileInBounds(int worldX, int worldY)
+        {
+            if (chunkSize <= 0)
+                return false;
+
+            int chunkX = Mathf.FloorToInt((float)worldX / chunkSize);
+            int chunkY = Mathf.FloorToInt((float)worldY / chunkSize);
+            return chunkX >= minChunkX && chunkX <= maxChunkX &&
+                   chunkY >= minChunkY && chunkY <= maxChunkY;
+        }
+
+        public bool IsWorldTileFootprintInBounds(int worldX, int worldY, int width, int height)
+        {
+            if (width <= 0 || height <= 0)
+                return false;
+
+            long maxX = (long)worldX + width - 1;
+            long maxY = (long)worldY + height - 1;
+            if (maxX > int.MaxValue || maxY > int.MaxValue)
+                return false;
+
+            return IsWorldTileInBounds(worldX, worldY) &&
+                   IsWorldTileInBounds((int)maxX, (int)maxY);
         }
 
         /// <summary>
@@ -284,6 +315,9 @@ namespace ARPG.Map
         /// </summary>
         public bool IsTileBlocked(int worldTileX, int worldTileY)
         {
+            if (IsWorldTileInBounds(worldTileX, worldTileY) == false)
+                return true;
+
             ulong tile = GetTileAt(worldTileX, worldTileY);
             if ((tile & (ulong)GlobalEnum.TileFlag.Blocked) != 0)
                 return true;
@@ -297,6 +331,8 @@ namespace ARPG.Map
         public bool IsWalkable(Vector3 worldPosition)
         {
             Vector3Int cellPos = _tileMap.WorldToCell(worldPosition);
+            if (IsWorldTileInBounds(cellPos.x, cellPos.y) == false)
+                return false;
 
             // 1. Object 레이어 체크 (벽, 나무 등 장애물)
             TileBase objectTile = _tileMap_Object.GetTile(cellPos);
@@ -348,9 +384,19 @@ namespace ARPG.Map
             buildingEntityId = -1;
             if (objectId <= 0)
                 return false;
+            if (IsWorldTileInBounds(worldX, worldY) == false)
+            {
+                Debug.LogWarning($"[MapManager] PlaceObject - Tile ({worldX}, {worldY}) is out of bounds.");
+                return false;
+            }
 
             // SpawnType=Entity면 타일 비트 무변경, BuildingManager에 위임
             Tables.BuildableItemTable table = AR.s.Data.GetBuildableItem(objectId);
+            if (table != null && IsWorldTileFootprintInBounds(worldX, worldY, table.Size_Width, table.Size_Height) == false)
+            {
+                Debug.LogWarning($"[MapManager] PlaceObject - Footprint ({worldX}, {worldY}, {table.Size_Width}, {table.Size_Height}) is out of bounds.");
+                return false;
+            }
             if (table != null && table.SpawnType == GlobalEnum.BuildableSpawnType.Entity)
             {
                 // AR 프리팹에 BuildingManager 컴포넌트 연결이 누락되면 NullReference 방지
@@ -402,6 +448,12 @@ namespace ARPG.Map
         /// </summary>
         public bool RemoveObject(int worldX, int worldY)
         {
+            if (IsWorldTileInBounds(worldX, worldY) == false)
+            {
+                Debug.LogWarning($"[MapManager] RemoveObject - Tile ({worldX}, {worldY}) is out of bounds.");
+                return false;
+            }
+
             int chunkX = Mathf.FloorToInt((float)worldX / chunkSize);
             int chunkY = Mathf.FloorToInt((float)worldY / chunkSize);
             int localX = worldX - (chunkX * chunkSize);

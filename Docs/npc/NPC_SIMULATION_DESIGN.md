@@ -237,6 +237,7 @@ phase 결과가 세계에 실제로 남는다 — 전부 기존 훅 재사용:
 
 - `NpcPopulationState`가 전역 목표 수·다음 보충 시각·정착지 순회 커서를 저장한다. 최초 배분은 정착지 연대기 인구 비율을 사용한다.
 - 현재 목표 수는 맵의 긴 변 청크 수가 64 이하이면 100명, 128 이하이면 150명, 그보다 크면 200명이다. 생존 수가 목표보다 낮으면 6 게임시간마다 한 명씩, 목표 비율 대비 부족한 정착지에 기본 NPC 로스터로 보충한다.
+- **인구 비례 배분은 모든 마을이 스폰 후보일 때만 의미가 있다.** 마을은 `VillageId`에 매핑된 `VillageTable` 행(+`DefaultNpcIds`)이 있어야 후보가 된다. 마을 인스턴스 수 > `VillageTable` 행 수라, `VillageManager`가 각 마을의 선호 tableId(등록 인덱스+1)를 존재하는 행으로 라우팅한다 — `DataManager.ResolveVillageTableId`(없으면 가장 작은 Id로 폴백), 세이브 로드 경로도 동일. 이 라우팅이 없으면 선호 tableId가 유일 행(현재 Id=1)과 맞는 시작 마을 **하나만** 후보가 되어, 전역 목표 수 전체가 시작 지점에 쏠린다(초기 대량 스폰 버그). [src: Assets/Scripts/Village/VillageManager.cs, Assets/Scripts/Data/DataManager_Table.cs]
 - `WorldData`는 버전 10이다. v5는 활동 상태, v6은 `Deeds`와 Hunt Food 결과, v7~v8은 Hunt 이동 경로·결과 시드, v9는 전역 보충 상태, v10은 `DeceasedRelationMemory` 저장을 추가했다. 기존 세이브의 null 컬렉션은 로드 시 보정한다.
 
 ---

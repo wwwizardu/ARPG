@@ -374,7 +374,8 @@ namespace ARPG.Npc
         private const float ReplenishIntervalHours = 6f;
 
         /// <summary>
-        /// 맵의 청크 폭을 기준으로 목표 모험가 수를 정한다.
+        /// 맵의 청크 폭을 기준으로 전역 목표 모험가 수(총량 상한)를 정한다.
+        /// 이 총량을 AllocateInitialNpcCounts가 마을 인구 비례로 분배한다 — 마을이 많으면 같은 총량을 더 잘게 나눈다.
         /// 맵 생성 UI의 규모 선택이 생기면 이 값을 저장된 preset으로 대체한다.
         /// </summary>
         private int DetermineGlobalNpcTarget()

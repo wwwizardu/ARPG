@@ -4,7 +4,7 @@ namespace ARPG.Component
 {
     /// <summary>
     /// 마을의 현재 진행 중인 오브젝트 배치 작업.
-    /// 별도 task entity에 부착됨 (마을당 최대 Population 개 동시 진행).
+    /// 별도 task entity에 부착됨 (마을당 한 번에 1개씩 착공 — System_VillageBuildQueue Phase 2).
     /// 세이브는 VillageData.ActiveBuildTasks(List&lt;BuildTaskSnapshot&gt;)로 미러링.
     ///
     /// 자가 건설 (NPC_SIMPLIFICATION_PLAN D4): NPC 배정 없이 게임시간 경과만큼 AccumulatedHours가 누적된다.

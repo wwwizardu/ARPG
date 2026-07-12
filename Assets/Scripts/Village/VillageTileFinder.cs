@@ -183,6 +183,8 @@ namespace ARPG.Village
         /// </summary>
         private static bool IsValidPlacement(Vector2Int tile, Vector2Int center, int boundsRadius, BuildableCategory category)
         {
+            if (AR.s.Map.IsWorldTileInBounds(tile.x, tile.y) == false)
+                return false;
             if (boundsRadius <= 0) return true;
             int distFromCenter = Mathf.Max(Mathf.Abs(tile.x - center.x), Mathf.Abs(tile.y - center.y));
             int distFromBoundary = boundsRadius - distFromCenter;
@@ -292,6 +294,9 @@ namespace ARPG.Village
 
         private static bool IsOccupiedTile(Vector2Int n)
         {
+            if (AR.s.Map.IsWorldTileInBounds(n.x, n.y) == false)
+                return true;
+
             Vector3 world = new Vector3(n.x + 0.5f, n.y + 0.5f, 0f);
             if (AR.s.Map.IsWalkable(world) == false) return true;
             if (AR.s.Map.GetObjectIdAt(n.x, n.y) != 0) return true;

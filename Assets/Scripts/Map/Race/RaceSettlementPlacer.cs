@@ -42,7 +42,7 @@ namespace ARPG.Map
                 for (int ry = minRegionY; ry <= maxRegionY; ry++)
                 {
                     Vector2Int regionCoord = new(rx, ry);
-                    if (TryPlace(regionCoord, mapSeed, chunkSize, out SettlementPlacement placement))
+                    if (TryPlace(regionCoord, mapSeed, chunkSize, minChunkX, maxChunkX, minChunkY, maxChunkY, out SettlementPlacement placement))
                         results.Add(placement);
                 }
             }
@@ -54,7 +54,10 @@ namespace ARPG.Map
         /// 단일 region에 대한 settlement 배치 결정.
         /// chunk-grain: region 16 chunk 중 race 호환 chunk만 후보 → hash로 1개 선택.
         /// </summary>
-        public static bool TryPlace(Vector2Int regionCoord, int mapSeed, int chunkSize, out SettlementPlacement placement)
+        public static bool TryPlace(
+            Vector2Int regionCoord, int mapSeed, int chunkSize,
+            int minChunkX, int maxChunkX, int minChunkY, int maxChunkY,
+            out SettlementPlacement placement)
         {
             placement = default;
 
@@ -81,6 +84,10 @@ namespace ARPG.Map
                 for (int cy = 0; cy < RegionCoord.CHUNKS_PER_REGION; cy++)
                 {
                     Vector2Int chunkCoord = new(regionChunkOrigin.x + cx, regionChunkOrigin.y + cy);
+                    if (chunkCoord.x < minChunkX || chunkCoord.x > maxChunkX ||
+                        chunkCoord.y < minChunkY || chunkCoord.y > maxChunkY)
+                        continue;
+
                     GlobalEnum.BiomeType chunkBiome = AR.s.Map.GetChunkBiome(chunkCoord);
                     if (RaceBiomeTable.IsCompatible(chunkBiome, race))
                         chunkCandidates.Add(chunkCoord);

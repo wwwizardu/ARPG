@@ -49,7 +49,9 @@ namespace ARPG.Systems
                 TryFinishAsync(task, taskEntityId).Forget();
             }
 
-            // Phase 2: 마을마다 동시 task 한도(=Pop, 추상 인구 정량화)까지 신규 task 시도 (Step B).
+            // Phase 2: 마을마다 한 번에 건물 하나씩만 건설 (선택 A 간이 밸런스).
+            // 과거엔 동시 한도 = Population(1~25)이라 실체화 시 한 틱에 우르르 착공됐다.
+            // v.Population이 물리 NPC 수와 분리되어 커지므로, 착공은 1개로 고정한다.
             var villages = AR.s.Village.GetAllVillages();
             foreach (VillageData v in villages)
             {
@@ -57,15 +59,10 @@ namespace ARPG.Systems
                 if (v.EntityId < 0) continue;
 
                 int activeCount = CountActiveTasksForVillage(v.VillageId);
-                int maxConcurrent = v.Population;
+                const int maxConcurrent = 1;
 
-                // 안전 cap: 한 틱에 최대 Pop개까지만. 무한 루프 방지.
-                int safetyCap = maxConcurrent;
-                while (activeCount < maxConcurrent && safetyCap-- > 0)
-                {
-                    if (TryStartNextTask(v, now) == false) break;
-                    activeCount++;
-                }
+                if (activeCount < maxConcurrent)
+                    TryStartNextTask(v, now);
             }
         }
 

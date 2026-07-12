@@ -50,6 +50,7 @@ namespace ARPG.Map
             int appliedCount = 0;
             int skippedNoBlueprint = 0;
             int skippedOverlap = 0;
+            int skippedOutOfBounds = 0;
             for (int i = 0; i < placements.Count; i++)
             {
                 var p = placements[i];
@@ -67,6 +68,13 @@ namespace ARPG.Map
                     p.WorldCoord.x - blueprint.Width / 2,
                     p.WorldCoord.y - blueprint.Height / 2);
                 blueprint.SetStartPosition(newOrigin);
+
+                if (IsWorldTileFootprintInBounds(newOrigin.x, newOrigin.y, blueprint.Width, blueprint.Height) == false)
+                {
+                    skippedOutOfBounds++;
+                    Debug.LogWarning($"[MapManager] Settlement skip (out of bounds): region=({p.RegionCoord.x},{p.RegionCoord.y}) race={p.Race} origin=({newOrigin.x},{newOrigin.y}) size={blueprint.Width}x{blueprint.Height}");
+                    continue;
+                }
 
                 // 3) 충돌 검사 — 기존 _mapFileDataDic 엔트리들과 bounding box 비교
                 if (HasMapFileOverlap(blueprint))
@@ -86,7 +94,7 @@ namespace ARPG.Map
                           $"chunk=({p.ChunkCoord.x},{p.ChunkCoord.y}) origin=({newOrigin.x},{newOrigin.y}) {blueprint.Width}x{blueprint.Height}");
             }
 
-            Debug.Log($"[MapManager] Settlement 배치 결과: 적용={appliedCount} / 청사진없음={skippedNoBlueprint} / 충돌스킵={skippedOverlap}");
+            Debug.Log($"[MapManager] Settlement 배치 결과: 적용={appliedCount} / 청사진없음={skippedNoBlueprint} / 경계스킵={skippedOutOfBounds} / 충돌스킵={skippedOverlap}");
         }
 
         /// <summary>

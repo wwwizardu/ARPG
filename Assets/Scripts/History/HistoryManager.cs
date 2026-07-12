@@ -299,6 +299,9 @@ namespace ARPG.History
             sim.Settlements[idx].IsMaterialized = true;
             sim.Settlements[idx].VillageId = villageId;
 
+            // 런타임 LOD: 마을 ECS 엔티티(스토리지/컴포넌트 + 진행중 task + 배치 오브젝트) 실체화.
+            AR.s.Village.MaterializeVillage(villageId);
+
             Debug.Log($"[HistoryManager] Materialize settlement {settlementId} → village {villageId} " +
                       $"(pop={(int)sim.Settlements[idx].Pop}, +{days}d catch-up)");
         }
@@ -322,6 +325,11 @@ namespace ARPG.History
 
             WorldSimState sim = AR.s.Data.WorldSim;
             float now = AR.s.Time.CurrentGameTime;
+
+            // 런타임 LOD: VillageId가 유효한 동안 마을 ECS 엔티티를 추상화(상태 flush + 엔티티 파괴).
+            int villageId = sim.Settlements[idx].VillageId;
+            if (villageId >= 0)
+                AR.s.Village.DematerializeVillage(villageId);
 
             sim.Settlements[idx].IsMaterialized = false;
             sim.Settlements[idx].VillageId = -1;

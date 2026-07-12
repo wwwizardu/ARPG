@@ -90,6 +90,12 @@ namespace ARPG.Building
                 Debug.LogError($"[BuildingManager] PlaceBuilding - BuildableItemTable not found: {tableId}");
                 return -1;
             }
+            if (AR.s.Map == null ||
+                AR.s.Map.IsWorldTileFootprintInBounds(worldTileX, worldTileY, table.Size_Width, table.Size_Height) == false)
+            {
+                Debug.LogWarning($"[BuildingManager] PlaceBuilding - Footprint ({worldTileX}, {worldTileY}, {table.Size_Width}, {table.Size_Height}) is out of bounds.");
+                return -1;
+            }
 
             int entityId = AR.s.Entity.CreateEntity();
             BuildingSaveData saveData = new BuildingSaveData(tableId, worldTileX, worldTileY)

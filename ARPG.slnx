@@ -1,8 +1,8 @@
 ﻿<Solution>
   <Project Path="Assembly-CSharp.csproj" />
+  <Project Path="Assembly-CSharp-Editor.csproj" />
   <Project Path="AllIn1VfxAssmebly.csproj" />
   <Project Path="Assembly-CSharp-firstpass.csproj" />
   <Project Path="AllIn1VfxDemoScriptAssemblies.csproj" />
   <Project Path="AllIn1VfxTexDemoAssembly.csproj" />
-  <Project Path="Assembly-CSharp-Editor.csproj" />
 </Solution>

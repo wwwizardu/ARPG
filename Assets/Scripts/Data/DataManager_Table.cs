@@ -386,6 +386,25 @@ namespace ARPG.Data
         }
 
         /// <summary>
+        /// preferredId에 해당하는 VillageTable 행이 있으면 그대로, 없으면 존재하는 가장 작은 Id로 폴백한다.
+        /// 마을 인스턴스 수 > 테이블 행 수일 때, 위치 관례(i+1)가 가리키는 빈 행을 유효 행으로 라우팅하기 위한 것.
+        /// 행이 하나도 없으면 -1 (호출자는 후보에서 제외됨).
+        /// </summary>
+        public int ResolveVillageTableId(int preferredId)
+        {
+            if (_villageTable.ContainsKey(preferredId))
+                return preferredId;
+
+            int fallback = -1;
+            foreach (int id in _villageTable.Keys)
+            {
+                if (fallback < 0 || id < fallback)
+                    fallback = id;
+            }
+            return fallback;
+        }
+
+        /// <summary>
         /// 마을 단계 파라미터 조회. 미로딩/누락 시 null — 호출자는 명시적 에러 처리 필요.
         /// </summary>
         public Tables.VillageStageTable? GetVillageStage(VillageStage stage)
