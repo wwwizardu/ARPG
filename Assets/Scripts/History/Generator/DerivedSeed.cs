@@ -22,6 +22,7 @@ namespace ARPG.History
 
         // MAP_DESIGN.md §7 Race Settlement 배치용
         public const ulong ChannelSettlement   = 0x53_45_54_54_4C_45_4D_4EUL; // "SETTLEMN"
+        public const ulong ChannelSettlementBlock = 0x53_45_54_4C_42_4C_43_4BUL; // "SETLBLCK"
 
         // MAP_DESIGN.md §6 LoreFragment 배치용
         public const ulong ChannelLoreCount    = 0x4C_4F_52_45_43_4E_54_5FUL; // "LORECNT_"

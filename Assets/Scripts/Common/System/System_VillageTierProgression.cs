@@ -37,7 +37,7 @@ namespace ARPG.Systems
             if (now - _lastCheckGameTime < CHECK_INTERVAL_HOURS) return;
             _lastCheckGameTime = now;
 
-            List<VillageData> villages = new List<VillageData>(AR.s.Village.GetAllVillages());
+            IReadOnlyList<VillageData> villages = AR.s.Village.GetAllVillages();
             for (int i = 0; i < villages.Count; i++)
             {
                 VillageData v = villages[i];

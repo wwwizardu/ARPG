@@ -21,6 +21,7 @@ namespace ARPG.Data
         
         private bool _isSaving = false;
         private bool _needsAnotherSave = false;
+        private bool _needsInitialWorldSave = false;
 
         // 하위 호환성을 위한 속성 - 현재 활성 플레이어 반환
         public PlayerData Player
@@ -85,6 +86,16 @@ namespace ARPG.Data
             string playerDataPath = Path.Combine(savePath, "PlayerData.json");
             string worldDataBackupPath = Path.Combine(savePath, "WorldData.json.backup");
             string playerDataBackupPath = Path.Combine(savePath, "PlayerData.json.backup");
+
+            bool hasWorldData = File.Exists(worldDataPath);
+            bool hasWorldDataBackup = File.Exists(worldDataBackupPath);
+            _needsInitialWorldSave = hasWorldData == false && hasWorldDataBackup == false;
+
+            if (hasWorldData == false && hasWorldDataBackup == true)
+            {
+                Debug.LogWarning("[DataManager] WorldData backup exists without the primary file. " +
+                    "Initial world auto-save is disabled to avoid overwriting recoverable data.");
+            }
 
             // 저장 폴더가 없으면 생성
             if (!Directory.Exists(savePath))
@@ -290,6 +301,28 @@ namespace ARPG.Data
         public async void Save()
         {
             await SaveAsync();
+        }
+
+        public async Task<bool> SaveInitialWorldIfNeededAsync()
+        {
+            if (_needsInitialWorldSave == false)
+                return true;
+
+            Debug.Log("[DataManager] Initial world auto-save started.");
+            bool succeeded = await SaveAsync();
+            if (succeeded == false)
+            {
+                Debug.LogWarning("[DataManager] Initial world auto-save failed. " +
+                    "The world remains eligible for a later save attempt.");
+                return false;
+            }
+
+            _needsInitialWorldSave = false;
+            int villageCount = _worldData.VillageDatas != null ? _worldData.VillageDatas.Count : 0;
+            int npcCount = _worldData.NpcSaveDatas != null ? _worldData.NpcSaveDatas.Count : 0;
+            Debug.Log($"[DataManager] Initial world auto-save completed. " +
+                $"Villages: {villageCount}, NPCs: {npcCount}");
+            return true;
         }
 
         public async Task<bool> SaveAsync()

@@ -99,14 +99,39 @@ namespace ARPG.EditorTools
             int maxRegionY = maxChunkY >> 2;
 
             int id = 0;
-            for (int rx = minRegionX; rx <= maxRegionX; rx++)
+            for (int blockX = minRegionX; blockX <= maxRegionX;
+                blockX += RaceSettlementPlacer.REGIONS_PER_SETTLEMENT_BLOCK)
             {
-                for (int ry = minRegionY; ry <= maxRegionY; ry++)
+                for (int blockY = minRegionY; blockY <= maxRegionY;
+                    blockY += RaceSettlementPlacer.REGIONS_PER_SETTLEMENT_BLOCK)
                 {
-                    if (TryPlaceMirror(new Vector2Int(rx, ry), mapSeed, chunkSize, out ExportSettlement s))
+                    int width = Mathf.Min(RaceSettlementPlacer.REGIONS_PER_SETTLEMENT_BLOCK,
+                        maxRegionX - blockX + 1);
+                    int height = Mathf.Min(RaceSettlementPlacer.REGIONS_PER_SETTLEMENT_BLOCK,
+                        maxRegionY - blockY + 1);
+                    int regionCount = width * height;
+                    int startSlot = RaceSettlementPlacer.GetSettlementBlockStartSlot(
+                        blockX, blockY, mapSeed, regionCount);
+                    int targetCount = Mathf.Min(RaceSettlementPlacer.SETTLEMENTS_PER_BLOCK,
+                        regionCount);
+                    int addedCount = 0;
+
+                    for (int attempt = 0; attempt < regionCount; attempt++)
                     {
+                        int slot = RaceSettlementPlacer.GetSettlementBlockSlot(
+                            startSlot, attempt, regionCount);
+                        Vector2Int regionCoord = new Vector2Int(
+                            blockX + slot / height,
+                            blockY + slot % height);
+                        if (TryPlaceMirror(regionCoord, mapSeed, chunkSize,
+                                out ExportSettlement s) == false)
+                            continue;
+
                         s.Id = id++;
                         results.Add(s);
+                        addedCount++;
+                        if (addedCount >= targetCount)
+                            break;
                     }
                 }
             }

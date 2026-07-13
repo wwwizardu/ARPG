@@ -50,8 +50,7 @@ namespace ARPG.Systems
             AR.s.History.AdvanceAbstractSlice(TICK_BUDGET);
 
             // 2) 멀리 있는 마을의 자원/건설/Tier/벽 tick — 별도 cursor와 이벤트 예산으로 분산.
-            List<VillageData> villages = new List<VillageData>(
-                AR.s.Village.GetAllVillages());
+            IReadOnlyList<VillageData> villages = AR.s.Village.GetAllVillages();
             float now = AR.s.Time.CurrentGameTime;
             VillageAbstractSliceResult construction =
                 VillageAbstractConstructionScheduler.AdvanceSlice(villages,

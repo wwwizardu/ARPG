@@ -27,7 +27,7 @@ namespace ARPG.Systems
 
         public void OnFixedUpdate(float inFixedDeltaTime)
         {
-            List<VillageData> villages = new List<VillageData>(AR.s.Village.GetAllVillages());
+            IReadOnlyList<VillageData> villages = AR.s.Village.GetAllVillages();
             for (int i = 0; i < villages.Count; i++)
             {
                 VillageData v = villages[i];

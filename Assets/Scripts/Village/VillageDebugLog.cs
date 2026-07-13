@@ -1,4 +1,5 @@
 #nullable enable
+using System.Collections.Generic;
 using ARPG.Component;
 using UnityEngine;
 
@@ -14,8 +15,9 @@ namespace ARPG.Village
     {
         public static void SnapshotAll()
         {
-            foreach (VillageData v in AR.s.Village.GetAllVillages())
-                Snapshot(v);
+            IReadOnlyList<VillageData> villages = AR.s.Village.GetAllVillages();
+            for (int i = 0; i < villages.Count; i++)
+                Snapshot(villages[i]);
         }
 
         public static void Snapshot(int villageId)

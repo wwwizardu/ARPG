@@ -385,15 +385,13 @@ namespace ARPG.Npc
             int longestSide = Mathf.Max(width, height);
             if (longestSide <= 64)
                 return 100;
-            if (longestSide <= 128)
-                return 150;
-            return 200;
+            return 400;
         }
 
         private List<VillageData> CollectPopulationCandidates()
         {
             List<VillageData> result = new();
-            List<VillageData> allVillages = new(AR.s.Village.GetAllVillages());
+            IReadOnlyList<VillageData> allVillages = AR.s.Village.GetAllVillages();
             for (int i = 0; i < allVillages.Count; i++)
             {
                 VillageData village = allVillages[i];

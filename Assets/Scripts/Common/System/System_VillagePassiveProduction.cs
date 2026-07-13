@@ -35,7 +35,7 @@ namespace ARPG.Systems
             if (deltaHours > MAX_DELTA_HOURS_PER_TICK)
                 deltaHours = MAX_DELTA_HOURS_PER_TICK;
 
-            List<VillageData> villages = new List<VillageData>(AR.s.Village.GetAllVillages());
+            IReadOnlyList<VillageData> villages = AR.s.Village.GetAllVillages();
             for (int i = 0; i < villages.Count; i++)
             {
                 VillageData village = villages[i];

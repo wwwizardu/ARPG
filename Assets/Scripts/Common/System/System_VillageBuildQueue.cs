@@ -53,8 +53,9 @@ namespace ARPG.Systems
             // 과거엔 동시 한도 = Population(1~25)이라 실체화 시 한 틱에 우르르 착공됐다.
             // v.Population이 물리 NPC 수와 분리되어 커지므로, 착공은 1개로 고정한다.
             var villages = AR.s.Village.GetAllVillages();
-            foreach (VillageData v in villages)
+            for (int i = 0; i < villages.Count; i++)
             {
+                VillageData v = villages[i];
                 if (v.Population < 1) continue;
                 if (v.EntityId < 0) continue;
 

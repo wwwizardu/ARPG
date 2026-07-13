@@ -38,7 +38,8 @@ namespace ARPG.Map
 
         /// <summary>
         /// Phase 2 Race Settlement 절차 배치 — MAP_DESIGN.md §7. 결정론 (같은 mapSeed → 같은 결과).
-        /// 알고리즘: chunk-grain (region dominant biome → race → 호환 chunk 후보 풀 → hash 선택 → chunk 중심)
+        /// 알고리즘: 2×2 region 블록당 최대 2개 + chunk-grain
+        /// (region dominant biome → race → 호환 chunk 후보 풀 → hash 선택 → chunk 중심)
         /// 청사진: 명명 규칙 `BaseTown_<Race>.bytes` (e.g., BaseTown_Dwarf.bytes). 파일 없으면 LogError + skip.
         /// </summary>
         private void PlaceRaceSettlements()

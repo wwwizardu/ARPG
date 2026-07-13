@@ -340,8 +340,10 @@ namespace ARPG.History
             if (chunkSize <= 0)
                 return;
 
-            foreach (VillageData v in AR.s.Village.GetAllVillages())
+            IReadOnlyList<VillageData> villages = AR.s.Village.GetAllVillages();
+            for (int i = 0; i < villages.Count; i++)
             {
+                VillageData v = villages[i];
                 if (v.SettlementId < 0)
                     continue;   // 수제작 마을(연대기 미연결) — 추상 층 미참여
                 if (TryGetLiveIndex(v.SettlementId, out int idx) == false)

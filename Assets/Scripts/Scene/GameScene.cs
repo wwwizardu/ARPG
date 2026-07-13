@@ -54,6 +54,9 @@ namespace ARPG.Scene
                 chunkLoader.IsInitialized = true;
                 AR.s.Component.SetComponent(playerEntityId, chunkLoader);
             }
+
+            // CreateMap이 초기 NPC SaveData 배치까지 동기적으로 마친 뒤 새 월드를 한 번 영속화한다.
+            await AR.s.Data.SaveInitialWorldIfNeededAsync();
         }
     }
 }

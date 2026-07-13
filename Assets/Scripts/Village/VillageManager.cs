@@ -9,7 +9,10 @@ namespace ARPG.Village
 {
     public class VillageManager : MonoBehaviour
     {
-        private Dictionary<int, VillageData> _villages = new();
+        private readonly Dictionary<int, VillageData> _villages = new();
+        // Dictionary는 VillageId 조회, List는 시스템의 인덱스 기반 시간분할 순회에 사용한다.
+        // 등록/초기화는 AddVillage/ClearVillages에서 함께 처리해 두 컬렉션을 동기화한다.
+        private readonly List<VillageData> _villageList = new();
         // PlacedObject 조회 인덱스 — 휘발성(세이브 아님). static 대신 매니저 소유, Reset/Load에서 수명 관리.
         private readonly PlacedObjectRegistry _placedObjects = new();
         private readonly HashSet<string> _placementWarnings = new();
@@ -18,7 +21,7 @@ namespace ARPG.Village
 
         public void Initialize()
         {
-            if (_villages.Count > 0)
+            if (_villageList.Count > 0)
                 return;
 
             List<MapFileData> villageMaps = AR.s.Map.GetMapFileDataByType(MapType.Village);
@@ -48,15 +51,16 @@ namespace ARPG.Village
 
         public void Reset()
         {
-            foreach (VillageData data in _villages.Values)
+            for (int i = 0; i < _villageList.Count; i++)
             {
+                VillageData data = _villageList[i];
                 if (data.EntityId >= 0)
                 {
                     AR.s.Entity.DestroyEntity(data.EntityId, false);
                     data.EntityId = -1;
                 }
             }
-            _villages.Clear();
+            ClearVillages();
             _placedObjects.ClearAll();
             _placementWarnings.Clear();
         }
@@ -74,7 +78,7 @@ namespace ARPG.Village
                 TableId = tableId,
                 RegisteredAt = AR.s.Time.CurrentGameTime,
             };
-            _villages[villageId] = data;
+            AddVillage(data);
 
             // 엔티티는 여기서 만들지 않는다 (런타임 LOD). VillageData만 등록하고,
             // 실체화는 근처가 될 때 MaterializeVillage(HistoryManager.UpdateMaterialization 경유)가 담당.
@@ -96,8 +100,9 @@ namespace ARPG.Village
         {
             if (settlementId < 0)
                 return null;
-            foreach (VillageData v in _villages.Values)
+            for (int i = 0; i < _villageList.Count; i++)
             {
+                VillageData v = _villageList[i];
                 if (v.SettlementId == settlementId)
                     return v;
             }
@@ -178,14 +183,14 @@ namespace ARPG.Village
             return VillageResourceSimulation.GetCap(data, type);
         }
 
-        public Dictionary<int, VillageData>.ValueCollection GetAllVillages()
+        public IReadOnlyList<VillageData> GetAllVillages()
         {
-            return _villages.Values;
+            return _villageList;
         }
 
         public int GetVillageCount()
         {
-            return _villages.Count;
+            return _villageList.Count;
         }
 
         /// <summary>
@@ -197,8 +202,9 @@ namespace ARPG.Village
             float bestSqrDist = float.MaxValue;
             int bestId = -1;
 
-            foreach (VillageData data in _villages.Values)
+            for (int i = 0; i < _villageList.Count; i++)
             {
+                VillageData data = _villageList[i];
                 Tables.VillageTable? table = AR.s.Data.GetVillageTable(data.TableId);
                 float radius = table != null ? table.SpawnRadius : 0f;
                 if (radius <= 0f)
@@ -269,8 +275,8 @@ namespace ARPG.Village
         /// </summary>
         public void RefreshAllPopulationsFromAbstract()
         {
-            foreach (VillageData v in _villages.Values)
-                RefreshPopulationFromAbstract(v);
+            for (int i = 0; i < _villageList.Count; i++)
+                RefreshPopulationFromAbstract(_villageList[i]);
         }
 
         private static void RefreshPopulationFromAbstract(VillageData v)
@@ -289,17 +295,12 @@ namespace ARPG.Village
 
         public List<VillageData> Save()
         {
-            List<VillageData> list = new List<VillageData>(_villages.Count);
-            foreach (VillageData village in _villages.Values)
-            {
-                list.Add(village);
-            }
-            return list;
+            return new List<VillageData>(_villageList);
         }
 
         public void Load(List<VillageData> villageDatas)
         {
-            _villages.Clear();
+            ClearVillages();
             _placementWarnings.Clear();
 
             if (villageDatas == null)
@@ -373,7 +374,7 @@ namespace ARPG.Village
                 MigratePlacedObjectsFromTypeIds(data);
 
                 data.EntityId = -1;   // 런타임 LOD: 로드 직후엔 모두 추상 상태 (JsonIgnore라 이미 -1이지만 명시)
-                _villages[data.VillageId] = data;
+                AddVillage(data);
 
                 // 손제작 마을(연대기 미연결)만 즉시 실체화 (항상 활성).
                 // 연대기 연결 마을은 추상 상태로 로드 — 근처가 되면 UpdateMaterialization이 실체화한다.
@@ -381,7 +382,7 @@ namespace ARPG.Village
                     MaterializeVillage(data.VillageId);
             }
 
-            Debug.Log($"[VillageManager] Loaded {_villages.Count} villages");
+            Debug.Log($"[VillageManager] Loaded {_villageList.Count} villages");
         }
 
         /// <summary>
@@ -922,8 +923,9 @@ namespace ARPG.Village
                 });
             }
 
-            foreach (VillageData v in _villages.Values)
+            for (int villageIndex = 0; villageIndex < _villageList.Count; villageIndex++)
             {
+                VillageData v = _villageList[villageIndex];
                 // 추상(비실체화) 마을은 VillageData가 이미 정본 — 건드리지 않는다.
                 //   ActiveBuildTasks: DematerializeVillage가 flush한 진행중 task 스냅샷(보존 필수)
                 //   Legacy CurrentBuild* / VillageComponent 미러도 마지막 실체화 시점 값 유지.
@@ -1246,6 +1248,24 @@ namespace ARPG.Village
 
             RollMerchantStock(v);
             v.LastMerchantRollGameTime = now;
+        }
+
+        private void AddVillage(VillageData data)
+        {
+            // 중복 VillageId(손상/중복 세이브)는 예외 대신 skip — 두 컬렉션의 동기화를 유지한다.
+            if (_villages.TryAdd(data.VillageId, data) == false)
+            {
+                Debug.LogWarning($"[VillageManager] Duplicate VillageId {data.VillageId} ignored. " +
+                    "Existing entry is kept.");
+                return;
+            }
+            _villageList.Add(data);
+        }
+
+        private void ClearVillages()
+        {
+            _villages.Clear();
+            _villageList.Clear();
         }
 
         private static void RollMerchantStock(VillageData v)
