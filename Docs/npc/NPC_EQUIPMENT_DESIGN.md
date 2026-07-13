@@ -1,6 +1,6 @@
 # NPC 장비/인벤토리 시스템 설계
 
-> ⚠️ **2026-07-09 갱신 — NPC 단순화 반영** ([NPC_SIMPLIFICATION_PLAN](NPC_SIMPLIFICATION_PLAN.md) SP5, 2026-07-08 구현):
+> ⚠️ **마을–NPC 경계 반영** ([VILLAGE_NPC_BOUNDARY_DESIGN](VILLAGE_NPC_BOUNDARY_DESIGN.md)):
 > 여관 고용/방문자 시스템 제거로 본 문서의 **방문자 관련 서술은 구식**이 됐다 —
 > §4.1의 `SpawnVisitorNpc` 시드 경로(현행 장비 시드는 2경로), §8.4의 진입 경로 2(Inn 방문자 카드 "장비" 버튼 · `UINpcInspect.BindSaveData`)는 **삭제된 코드**다. 해당 지점에 취소선으로 표시했다.
 

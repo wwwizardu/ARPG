@@ -68,6 +68,36 @@ namespace ARPG.Building
             return _buildingSaveDict.TryGetValue(entityId, out BuildingSaveData? saveData) ? saveData : null;
         }
 
+        public bool RestoreUnderConstructionProgress(int entityId, int villageId,
+            int currentHp, Tables.BuildableItemTable table)
+        {
+            if (_buildingSaveDict.TryGetValue(entityId, out BuildingSaveData? saveData) == false)
+                return false;
+
+            saveData.VillageId = villageId;
+            saveData.CurrentHp = Mathf.Clamp(currentHp, 0, Mathf.Max(1, table.HP));
+            saveData.IsUnderConstruction = true;
+            if (saveData.IsActive == true)
+                BuildingFactory.ApplyConstructionProgress(entityId, saveData.CurrentHp,
+                    table.HP);
+            return true;
+        }
+
+        public bool CompleteBuilding(int entityId, Tables.BuildableItemTable table)
+        {
+            if (_buildingSaveDict.TryGetValue(entityId, out BuildingSaveData? saveData) == false)
+                return false;
+
+            bool needsVisualUpdate = saveData.IsUnderConstruction;
+            saveData.CurrentHp = table.HP;
+            saveData.IsUnderConstruction = false;
+            if (needsVisualUpdate == true && saveData.IsActive == true
+                && AR.s.Message.TryGetEntity(entityId, out var entity) == true
+                && entity != null)
+                BuildingFactory.ApplyCompletedState(entityId, entity, table).Forget();
+            return true;
+        }
+
         /// <summary>
         /// 타일 위치가 이미 다른 Entity 건물로 점유되어 있는지 확인.
         /// VillageTileFinder 등이 빈 칸을 찾을 때 호출.
@@ -77,12 +107,32 @@ namespace ARPG.Building
             return _occupiedTiles.Contains(new Vector2Int(worldX, worldY));
         }
 
+        public int FindBuildingAt(int worldX, int worldY, int tableId)
+        {
+            Vector2Int chunkCoord = TileToChunk(worldX, worldY);
+            if (_chunkBuildings.TryGetValue(chunkCoord, out List<int>? entityIds) == false)
+                return -1;
+            for (int i = 0; i < entityIds.Count; i++)
+            {
+                int entityId = entityIds[i];
+                if (_buildingSaveDict.TryGetValue(entityId,
+                        out BuildingSaveData? saved) == false)
+                    continue;
+                if (saved.WorldTileX == worldX && saved.WorldTileY == worldY
+                    && saved.TableId == tableId)
+                    return entityId;
+            }
+            return -1;
+        }
+
         /// <summary>
         /// 새 건물을 배치한다. SaveData 등록 + 점유 칸 기록 + 청크 매핑 추가 + 활성 청크면 즉시 스폰.
         /// MapManager.PlaceObject에서 SpawnType=Entity 분기로 호출됨.
         /// isUnderConstruction=true면 건설 중 상태(진행도 0, 건설중 스프라이트)로 시작.
         /// </summary>
-        public int PlaceBuilding(int worldTileX, int worldTileY, int tableId, int villageId = -1, bool isUnderConstruction = false)
+        public int PlaceBuilding(int worldTileX, int worldTileY, int tableId,
+            int villageId = -1, bool isUnderConstruction = false,
+            int restoredCurrentHp = -1)
         {
             Tables.BuildableItemTable? table = AR.s.Data.GetBuildableItem(tableId);
             if (table == null)
@@ -102,7 +152,10 @@ namespace ARPG.Building
             {
                 EntityId = entityId,
                 VillageId = villageId,
-                CurrentHp = isUnderConstruction ? 0 : table.HP,
+                CurrentHp = isUnderConstruction
+                    ? Mathf.Clamp(restoredCurrentHp >= 0 ? restoredCurrentHp : 0,
+                        0, Mathf.Max(1, table.HP))
+                    : table.HP,
                 IsUnderConstruction = isUnderConstruction,
             };
 
@@ -207,6 +260,8 @@ namespace ARPG.Building
             if (saveData.IsActive || saveData.IsSpawning)
                 return;
             saveData.IsSpawning = true;
+            bool spawnedAsUnderConstruction = saveData.IsUnderConstruction;
+            int spawnedHp = saveData.CurrentHp;
 
             try
             {
@@ -239,6 +294,20 @@ namespace ARPG.Building
 
                 saveData.EntityId = createdId;
                 saveData.IsActive = true;
+
+                Tables.BuildableItemTable? latestTable = AR.s.Data.GetBuildableItem(
+                    saveData.TableId);
+                if (latestTable != null)
+                {
+                    if (spawnedAsUnderConstruction == true
+                        && saveData.IsUnderConstruction == false)
+                        await BuildingFactory.ApplyCompletedState(createdId, entity,
+                            latestTable);
+                    else if (saveData.IsUnderConstruction == true
+                        && spawnedHp != saveData.CurrentHp)
+                        BuildingFactory.ApplyConstructionProgress(createdId,
+                            saveData.CurrentHp, latestTable.HP);
+                }
             }
             finally
             {

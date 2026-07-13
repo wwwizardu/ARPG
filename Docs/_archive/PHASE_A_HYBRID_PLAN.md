@@ -2,7 +2,7 @@
 
 > Phase A의 Campfire를 **EntityBase 기반 엔티티**로 구현하면서, 기존 Tile 경로는 **범용 경량 건물용으로 유지**한다. `BuildableItemTable.SpawnType` 컬럼으로 분기하고, `AnimationId` 컬럼으로 정적/애니메이션을 구분한다.
 >
-> 관련 문서: [../VILLAGE_PHASES.md](../village/VILLAGE_PHASES.md) (Phase A 섹션) · [PHASE_A_IMPLEMENTATION.md](PHASE_A_IMPLEMENTATION.md) · [PHASE_A_UNITY_CHECKLIST.md](PHASE_A_UNITY_CHECKLIST.md)
+> 현행 문서: [VILLAGE_RUNTIME_DESIGN.md](../village/VILLAGE_RUNTIME_DESIGN.md) · 관련 기록: [PHASE_A_IMPLEMENTATION.md](PHASE_A_IMPLEMENTATION.md) · [PHASE_A_UNITY_CHECKLIST.md](PHASE_A_UNITY_CHECKLIST.md)
 
 ---
 

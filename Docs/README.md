@@ -4,7 +4,7 @@
 >
 > **현재 진행도**: ████████████████████░░░░░░░░░░ **60%**
 
-**마지막 업데이트**: 2026-07-09
+**마지막 업데이트**: 2026-07-13
 
 ---
 
@@ -15,8 +15,8 @@
 | **전투 시스템** | ✅ 95% | VFX / 사운드 / 넉백 (후순위) |
 | **AI 시스템** | ✅ 90% | 몬스터별 세부 패턴, 길찾기 (보스급 다페이즈) |
 | **스킬 시스템** | ✅ 95% | 스킬북 장착 운용, 룬/이펙트 |
-| **마을 자가성장 Phase A~D** | ✅ 완료 | Phase E (배후 시뮬, 출생/분가) |
-| ~~여관(Inn) 고용 시스템~~ | ❌ 제거됨 (2026-07-08, NPC 단순화 D6) | UIInn은 휴식(+6h)/세이브 전용으로 축소 유지 |
+| **마을 자가성장 런타임** | ✅ 구현 | Unity LOD·세이브 왕복 검증, 폐허 전환 |
+| **여관(Inn)** | ✅ 휴식(+6h)·세이브 건물 서비스 | 콘텐츠 확장 |
 | **상점 / 강화 / 제단 서비스** | ✅ 코드 완료 | 콘텐츠 확장 |
 | **NPC 관계 시스템** | 🚧 25% | 관계 변동 로직, N:N 관계 |
 | **관계·선물 루프** | ❌ 0% | 대화·유추·선물·보답(interactionSystem §4) + NPC 소망 추적(QUEST_SYSTEM). 옛 "퀘스트 시스템" 대체 |
@@ -78,10 +78,11 @@
 ### 🏘️ 마을 / NPC 자가성장 ⭐
 | 문서 | 단계 | 상태 |
 |------|------|------|
-| **[VILLAGE_GROWTH_STAGES.md](village/VILLAGE_GROWTH_STAGES.md)** | 마을 성장 전체 기획 (Stage 0~4) | 본 문서 |
-| **[VILLAGE_PHASES.md](village/VILLAGE_PHASES.md)** | Phase A~D 통합 요약 (MVP → BuildQueue → Tier 승격 + 외벽 → 서비스). ⚠ 직무/작업자·NPC 건설은 2026-07-08 단순화로 추상 인구·자가 건설로 대체 | ✅ 코드 완료 |
-| **[BUILD_PRIORITY_DESIGN.md](village/BUILD_PRIORITY_DESIGN.md)** | 자가 건설 4계층 가중치 점수 |
-| ~~[INN_HIRING_DESIGN.md](village/INN_HIRING_DESIGN.md)~~ | ⛔ **폐기** (2026-07-08 단순화 D6 — 여관 고용/이민 제거) |
+| **[VILLAGE_RUNTIME_DESIGN.md](village/VILLAGE_RUNTIME_DESIGN.md)** | 마을 전체 책임·데이터 흐름 | 현행 정본 |
+| **[ABSTRACT_CONSTRUCTION_DESIGN.md](village/ABSTRACT_CONSTRUCTION_DESIGN.md)** | 실시간/추상 건설·materialize·초기 발전 | 현행 정본 |
+| **[BUILD_PRIORITY_DESIGN.md](village/BUILD_PRIORITY_DESIGN.md)** | 자가 건설 후보 점수·대기 정책 | 현행 정본 |
+| **[VILLAGE_NPC_BOUNDARY_DESIGN.md](npc/VILLAGE_NPC_BOUNDARY_DESIGN.md)** | 경제 인구와 물리 NPC의 경계 | 현행 정본 |
+| **[VILLAGE_GROWTH_STAGES.md](village/VILLAGE_GROWTH_STAGES.md)** | Stage 0~4 장기 콘텐츠 목표 | 장기 기획 |
 
 ### 🗺️ 맵 / 분위기
 | 문서 | 내용 |
@@ -109,14 +110,13 @@
 | 문서 | 내용 |
 |------|------|
 | **[ECS_PERFORMANCE_OPTIMIZATION_PLAN.md](tech/ECS_PERFORMANCE_OPTIMIZATION_PLAN.md)** | SparseSet 조회 비용 감소 단계별 계획 |
-| **[resourceSystem.md](village/resourceSystem.md)** | 자원 시스템 개요 |
 
 ### 📂 아카이브
-- **[archive/](archive)** — Phase A 초기 계획 / 체크리스트 등 (역사 참고용)
+- **[_archive/](_archive)** — 과거 계획과 체크리스트 보관
 
 ---
 
-## ✅ 구현 완료 시스템 (핵심 12개 + 마을 Phase A~D)
+## ✅ 구현 완료 시스템
 
 ### 기반 시스템
 | 시스템 | 비고 |
@@ -141,10 +141,10 @@
 | **AI 행동** | Melee / Ranged + AiTable 다중 스킬 가중치 |
 | **데미지 텍스트** | FloatingTextManager + DOTween, 타입별 색상 |
 
-### 마을 자가성장 (Phase A~D 완료)
+### 마을 자가성장
 | 시스템 | 비고 |
 |--------|------|
-| **자원 패시브 생산** | **추상 인구** 비례 Food/Wood/Stone/Iron/Gold, Stage별 배수 (2026-07-08 단순화 D2/D3 — 물리 NPC 수·직업보너스 아님) |
+| **자원 생산** | 추상 경제 인구를 제한된 생산 인구로 압축해 Food/Wood/Stone/Iron/Gold 생산. 실시간/추상 경로가 `VillageResourceSimulation` 공유 |
 | **자원 Cap** | Woodpile +100, Stockpile +80 등 데이터 주도 |
 | **범용 배치 큐 (자가 건설)** | ObjectPlacementTaskComponent + System_VillageBuildQueue — 타이머로 자가 완성, 자원 소모 유지 (2026-07-08 단순화 D4 — NPC 배정 제거) |
 | **Tier 승격** | Settlement→Hamlet→Village→Town (4h 인터벌) |
@@ -154,9 +154,8 @@
 | **ProvidedService 비트마스크** | Shop/Forge/Inn/Shrine |
 | **서비스 근접 집계** | System_VillageServiceProximity (0.3s) + F키 라우팅 |
 | **상점 양방향 거래** | 매물 풀 + 매각 + 자원 50% 환원 |
-| **필요도 스코어** | System_VillageNeedsEvaluation (2h) + 4계층 가중치 |
-| ~~NPC 직무 할당~~ | **제거됨** (2026-07-08 단순화 SP4 — System_VillageJobAssignment 삭제. 자원은 인구 기반) |
-| ~~여관 고용~~ | **제거됨** (2026-07-08 단순화 SP5 — Visitor/고용 경로 삭제, 이민도 제거) |
+| **필요도 스코어** | `VillageNeedsEvaluator`를 착공 시점에 inline 호출. 존재·주거·Food Cap·Tier 게이트·세트·잉여 점수 |
+| **원거리 성장** | `VillageAbstractConstruction`이 자원·건설·Tier·벽을 시간 분할 진행하고 materialize 전에 catch-up |
 
 ### 기타
 | 시스템 | 비고 |
@@ -174,10 +173,10 @@
 - ✅ NpcManager 호감도/관계 데이터 + 초기 backfill (구 RelationshipComponent/System_Relationship 폐기)
 - ⬜ 런타임 호감도 변동 = **활동 기반**(설계 [NPC_ACTIVITY §8.3](npc/NPC_ACTIVITY_DESIGN.md), 패시브 drift 폐기) / N:N / 이벤트
 
-### NPC 일과 / 자율 의사결정 (Phase E 대기)
-- ✅ NpcStatComponent (8가지 성격) — 물리 NPC = 모험가 단일 (2026-07-08 단순화)
-- ⚠ NpcJobComponent·System_VillageJobAssignment는 **삭제됨** (직무 기계 시스템 폐기, JobType은 flavor·장비 시드용으로만 잔존)
-- ⬜ 모험가 자율 행동·원정·의사결정 → **Phase E** ([NPC_ACTIVITY_DESIGN](npc/NPC_ACTIVITY_DESIGN.md))
+### NPC 일과 / 자율 의사결정
+- ✅ 물리 NPC는 모험가이며 마을 경제 인구와 분리 ([VILLAGE_NPC_BOUNDARY_DESIGN](npc/VILLAGE_NPC_BOUNDARY_DESIGN.md))
+- ✅ `System_NpcSim` 기반 Rest·솔로 Hunt MVP와 오프스크린 LOD
+- ⬜ 파티 원정·이주·WORLD_EVENT 연동 ([NPC_ACTIVITY_DESIGN](npc/NPC_ACTIVITY_DESIGN.md))
 
 ### UI 시스템 (50%)
 - ✅ Inventory / Character / Shop / Forge / Inn / Shrine / MainMenu / HpBar / FloatingText
@@ -194,15 +193,15 @@
 
 | 우선순위 | 시스템 | 의존성 |
 |---------|--------|--------|
-| 🔥 **High** | NPC 일과 시뮬 (Phase E) | 이동, 길찾기 |
-| 🔥 **High** | 출생 / 분가 / 이탈 (Phase E) | Population 확장 |
+| 🔥 **High** | NPC 파티 활동·이주 확장 | NPC 시뮬레이션 |
+| 🔥 **High** | 정착지 분가 / 이탈 | Population 확장 |
 | 🔥 **High** | NPC 상호작용 (30가지 행동) | 관계 시스템 |
 | 🔥 **High** | 관계·선물 루프 (대화·선호·선물·보답, interactionSystem §4) | NPC 시스템 |
 | 🔥 **High** | 퀘스트 — NPC 소망 (떠오름·추적·보상) | 관계·선물 루프 |
 | 📝 **Medium** | 대화 시스템 (LLM 통합 옵션) | NPC 시스템 |
-| 📝 **Medium** | 이벤트 / 침공 (Phase F) | 위협도, 벽 파괴 |
+| 📝 **Medium** | 이벤트 / 침공 | 위협도, 벽 파괴 |
 | 📝 **Medium** | 동료 영입 / 명령 | 관계 시스템 |
-| 📝 **Medium** | 크래프팅 (장비 제작 Phase F+) | 아이템 시스템 |
+| 📝 **Medium** | 장비 제작 | 아이템 시스템 |
 | 🎨 **Low** | 세이브/로드 보강 | 모든 시스템 |
 | 🎨 **Low** | 사운드 / VFX 통합 | — |
 | 🎨 **Low** | 카메라 개선 / 튜토리얼 / 로컬라이제이션 | — |
@@ -210,17 +209,13 @@
 
 ---
 
-## 🗓️ Phase 로드맵 (마을 자가성장 트랙)
+## 🗓️ 마을 다음 기능
 
-```
-✅ Phase A: 자가 생성 최소 루프 (MVP)         완료 2026-04-24
-✅ Phase B: 오브젝트 배치 핵심 (범용 큐)      완료 2026-04-24
-✅ Phase C: Tier 승격 + Stage 1·2 + 외벽     완료 2026-04-26
-✅ Phase D: 서비스 + 상점 + 필요도 + 직무     완료 2026-04-28
-⬜ Phase E: 배후 시뮬레이션 + 출생/분가       다음
-⬜ Phase F: 위협도 / 몬스터 침공 / 벽 파괴
-⬜ Phase G: City Stage + StoneWall + WatchTower
-```
+- Unity 플레이 모드에서 추상↔실체화와 세이브 왕복 검증
+- 런타임 폐허 전환의 원자적 진입점
+- 정착지 분가·이탈
+- 위협도·몬스터 침공·벽 파괴와 복구
+- City 콘텐츠, StoneWall, WatchTower
 
 ---
 
@@ -295,7 +290,7 @@
 ### 2. 시스템 이해 (관심 영역별)
 ```
 전투/스킬     → combatSystem.md → SKILL_DESIGN.md → BALANCE_DESIGN.md
-마을 시뮬     → VILLAGE_GROWTH_STAGES.md → PHASE_A~D_DESIGN.md
+마을 시뮬     → VILLAGE_RUNTIME_DESIGN.md → ABSTRACT_CONSTRUCTION_DESIGN.md / BUILD_PRIORITY_DESIGN.md
 맵/탐험       → MAP_DESIGN.md → MONSTER_SPAWN_DESIGN.md
 AI            → AI_SKILL_SELECTION_IMPLEMENTATION.md → monsterAIPattern.md
 충돌/길찾기   → COLLISION_PATHFINDING_DESIGN.md
@@ -341,14 +336,14 @@ Assets/Scripts/
 
 > **"플레이어가 직접 싸우는 액션 RPG에서, 마을은 시간이 흐르면 추상 인구를 바탕으로 알아서 자라고, 플레이어는 그 마을의 상점·강화·여관을 통해 진짜 이득을 얻으며, NPC들은 모험가로서 세계를 누비고 그들이 겪은 일이 관계와 역사로 쌓인다."**
 
-**현재 위치**: 마을 자가성장 Phase A~D 완료, 전투/AI 핵심 로직 완성 (60%)
-**다음 목표**: Phase E (배후 시뮬레이션 + 출생/분가/이탈) + NPC 관계 시스템
+**현재 위치**: 마을 실시간/추상 자가성장과 전투/AI 핵심 로직 구현 (60%)
+**다음 목표**: 마을 LOD 통합 검증·폐허 전환·분가와 NPC 관계 시스템
 
 ---
 
 **문서 관리 원칙**:
 - 매주 진행도 업데이트는 [implementationStatus.md](overview/implementationStatus.md)
-- Phase 완료 시 본 문서의 Phase 로드맵 + 빠른 참조 업데이트
+- 주요 기능의 정본이나 구현 상태가 바뀌면 빠른 참조와 관련 Wiki를 함께 업데이트
 - 새 설계 문서 추가 시 본 문서의 "기획 문서" 섹션에 링크 등록
 
 **마지막 업데이트**: 2026-07-09

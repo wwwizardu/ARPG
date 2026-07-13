@@ -31,6 +31,7 @@ namespace ARPG.History
         public const ulong ChannelChronicle    = 0x43_48_52_4F_4E_49_43_4CUL; // "CHRONICL"
         public const ulong ChannelRelationBackfill = 0x52_45_4C_42_4B_46_49_4CUL; // "RELBKFIL"
         public const ulong ChannelNpcActivity = 0x4E_50_43_41_43_54_49_56UL; // "NPCACTIV"
+        public const ulong ChannelVillageBootstrap = 0x56_49_4C_4C_42_4F_4F_54UL; // "VILLBOOT"
 
         public static ulong Derive(int worldSeed, ulong channel)
         {

@@ -7,7 +7,7 @@ namespace ARPG.Component
     /// 별도 task entity에 부착됨 (마을당 한 번에 1개씩 착공 — System_VillageBuildQueue Phase 2).
     /// 세이브는 VillageData.ActiveBuildTasks(List&lt;BuildTaskSnapshot&gt;)로 미러링.
     ///
-    /// 자가 건설 (NPC_SIMPLIFICATION_PLAN D4): NPC 배정 없이 게임시간 경과만큼 AccumulatedHours가 누적된다.
+    /// 자가 건설 (VILLAGE_NPC_BOUNDARY_DESIGN §4): NPC 배정 없이 게임시간 경과만큼 AccumulatedHours가 누적된다.
     /// 단 건설중 빌딩이 데미지를 받으면 진행도가 후퇴한다 (System_VillageBuildQueue HP↔진행도 동기화).
     /// 완료 판정: AccumulatedHours &gt;= BuildDurationHours.
     /// </summary>

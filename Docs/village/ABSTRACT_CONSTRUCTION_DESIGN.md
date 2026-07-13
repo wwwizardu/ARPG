@@ -1,224 +1,285 @@
-# 마을 추상 건설 시뮬레이션 (B-lite) — 설계 문서
+# 마을 추상 건설 시뮬레이션 설계
 
-> 상위 문서: [VILLAGE_PHASES.md](VILLAGE_PHASES.md) · 관련: [BUILD_PRIORITY_DESIGN.md](BUILD_PRIORITY_DESIGN.md), [NPC_SIMPLIFICATION_PLAN.md](../npc/NPC_SIMPLIFICATION_PLAN.md)
+> **상태**: 현행 정본
 >
-> **상태**: 설계 초안 (2026-07-12). 미구현.
+> 상위 문서: [VILLAGE_RUNTIME_DESIGN.md](VILLAGE_RUNTIME_DESIGN.md)
 >
-> **한 줄 요약**: 멀리 있는 마을이 "인구만" 추상 시뮬되고 건설은 멈춰 있다가, 플레이어가 다가오면 한꺼번에 우르르 착공되는 문제를 해결한다. 추상 층에서 **자원·건설 결정·건설 진행도까지** 시간에 따라 진짜로 굴리고(개수·진행만, 좌표는 미할당), 실체화 시점에 **이미 완공된 상태**로 배치한다.
+> 관련 문서: [BUILD_PRIORITY_DESIGN.md](BUILD_PRIORITY_DESIGN.md) · [VILLAGE_NPC_BOUNDARY_DESIGN.md](../npc/VILLAGE_NPC_BOUNDARY_DESIGN.md)
+>
+> **책임**: 원거리 마을의 자원·건설·Tier·벽을 시간에 따라 전진시키고, 실체화 전후에 같은 원장을 유지하는 계약을 정의한다.
 
 ---
 
-## 1. 배경 / 문제
+## 1. 해결하려는 문제
 
-### 1.1 현재 동작
+인구만 원거리에서 성장하고 자원과 건설이 멈추면, 오래 방치한 마을도 첫 방문 때 빈 상태로 나타난다. 실체화 직후 큰 경제 인구를 본 BuildQueue가 그때부터 건설을 시작해 플레이어 앞에서 성장 과정이 몰린다.
 
-마을은 2단계 LOD로 돈다:
+건물 수를 인구에서 역산해 방문 순간 생성하는 방식도 사용하지 않는다. 그 방식은 자원 부족, 건설 순서, 남은 진행도 같은 마을별 이력을 잃는다.
 
-- **추상(abstract)**: 플레이어가 멀 때. [SettlementLiveState](../../Assets/Scripts/History/Chronicle/WorldSimState.cs)가 **인구(`Pop`)만** 로지스틱으로 성장. 건설·자원은 정지.
-- **실체화(materialized)**: 플레이어가 가까워 청크가 뜰 때. ECS 엔티티 생성, [System_VillageBuildQueue](../../Assets/Scripts/Common/System/System_VillageBuildQueue.cs)·[System_VillagePassiveProduction](../../Assets/Scripts/Common/System/System_VillagePassiveProduction.cs)가 실제로 돎.
+따라서 원거리에서도 다음 상태를 실제 게임시간에 따라 전진시킨다.
 
-### 1.2 버그
+- 자원과 carry
+- 일반 건물의 선택·착공·진행·완료
+- Tier 승격
+- 벽 계획·진행·완료
 
-[HistoryManager.MaterializeSettlement](../../Assets/Scripts/History/HistoryManager.cs)가 실체화 시 **인구만 현재 시각으로 catch-up**하고 건설은 catch-up하지 않는다. 그 직후 빌드 큐가 "인구는 큰데 진행 중 공사는 0"인 상태를 보고 한 틱에 착공을 몰아친다 → 플레이어 눈앞에서 건물이 우르르 지어짐.
-
-> 임시 완화: 착공 동시 한도를 `Population`에서 **1**로 낮춤 (2026-07-12, [System_VillageBuildQueue Phase 2](../../Assets/Scripts/Common/System/System_VillageBuildQueue.cs)). 우르르는 줄었으나, 여전히 도착 후 "지금부터" 하나씩 짓기 시작한다 — 오래 방치된 마을이 빈 채로 보이는 근본 문제는 남음.
-
-### 1.3 근본 원인
-
-**추상 층이 인구만 굴리고 건설·자원은 안 굴린다.** 인구는 "세계가 계속 돈다"는 철학으로 시뮬되는데 건물만 예외라, 인구/건물의 취급이 어긋난다.
+목표는 방문할 때 “지금부터 건설하는 마을”이 아니라 “부재 중에도 성장해 온 마을”을 보여주는 것이다.
 
 ---
 
-## 2. 목표 / 비목표
+## 2. B-lite 결정
 
-### 목표
-- 오래 방치된 마을은 방문 시 **인구에 걸맞게 이미 성장·건설된** 모습이어야 한다.
-- 실체화 순간의 **건설 버스트(우르르 착공) 제거**.
-- 인구와 동일한 철학: 건설·자원도 시간에 따라 추상적으로 진행 → **원장(source of truth)은 하나**.
+추상 층은 **무엇을 얼마나 지었는지**는 결정하지만, 일반 건물의 **타일 좌표**는 결정하지 않는다.
 
-### 비목표
-- **타일 좌표의 추상 결정(B-full)은 하지 않는다.** 좌표는 실체화 시 배정한다 (§4.3, §7).
-- 추상 층에서 GameObject/비주얼 인스턴스화는 하지 않는다 (청크 없이는 불가).
-- NPC 물리 시뮬(전투·행동)은 범위 밖 — 기존대로 실체화 마을에서만.
-- 마을 밸런스 상수 재보정은 별도 작업(선택 A). 본 문서는 **시점(when) 문제**만 다룬다.
+건물 배치는 두 문제로 나뉜다.
 
----
+1. 종류·개수·진행도
+2. 실제 타일 좌표
 
-## 3. 방식 결정: B-lite
+두 번째 문제는 로드된 청크의 walkable·occupied 격자를 읽어야 한다. 원거리 마을에는 이 격자가 없으므로 별도 추상 점유 모델을 만들지 않는 한 정확히 판정할 수 없다.
 
-### 3.1 왜 B (추상 시뮬)인가 — vs A (materialize catch-up)
+추상 점유 모델을 추가하지 않는 이유:
 
-- **A**: 추상 층은 인구만 유지, 실체화 순간 "인구 N·경과 M시간 → 건물 X개"를 역산해 즉시 완공 배치. 싸지만 건물이 인구의 **결정적 파생값**이라, 자원 부족으로 인한 건설 지연 등 개별 마을 이력을 표현 못 함. 인구/건물 취급이 어긋남.
-- **B**: 건설도 시간에 따라 진짜로 진행. 인구와 철학적으로 일관. → **채택.**
+- 실제 Map과 별도 점유 상태를 동기화해야 한다.
+- 플레이어·월드 변경으로 실체화 시 다시 충돌할 수 있다.
+- GameObject와 Tilemap은 어차피 청크 로드 시 생성된다.
+- 좌표를 미리 정해도 플레이어가 체감하는 이득이 작다.
 
-### 3.2 왜 B-lite (좌표 미할당) 인가 — vs B-full (좌표까지 추상)
-
-건물 배치는 두 결정으로 나뉜다: **①무엇을/얼마나** (개수·종류·진행도) vs **②어디에** (타일 좌표).
-
-②는 [VillageTileFinder.FindEmptyTileNearest](../../Assets/Scripts/Village/VillageTileFinder.cs)가 담당하는데, **지도 격자(walkable/occupied)를 읽어야 하고 이 격자는 로드된 청크에만 존재**한다. 원거리 마을은 격자가 없어 좌표를 정할 수 없다.
-
-- **B-full**: `VillageData`만으로 도는 별도 점유 모델을 만들어 좌표까지 추상 결정. **비용 큼.**
-- **B-lite**: ①만 추상으로 굴리고 좌표는 미할당으로 저장, 실체화 때 배정. **비용 낮음.**
-
-**핵심 근거**: GameObject는 청크 로드 시에만 생성 가능 → 시각 인스턴스화는 어느 방식이든 **도착 순간에 몰린다**. 따라서 좌표를 미리 정하는 B-full의 추가 비용은 플레이어 체감 이득이 거의 없다. **B-lite 채택.**
-
-B-lite에서도 "우르르 건설"은 사라진다 — 도착 시 건물은 **건설중이 아니라 완공 상태**로 배치되므로, 기존에 존재하던 건물이 청크와 함께 뜨는 것과 동일하게 보인다.
+따라서 일반 건물은 미할당 좌표로 저장하고 실체화할 때 `VillageTileFinder`로 배치한다. 벽은 Bounds에서 좌표를 결정할 수 있으므로 추상 층에서도 세그먼트 좌표를 유지한다.
 
 ---
 
-## 4. 아키텍처
+## 3. 단일 원장과 공통 코어
 
-### 4.1 대원칙: 공통 데이터 전용 코어 (정합성의 열쇠)
+`VillageData`가 실시간·추상·세이브가 공유하는 영속 원장이다.
 
-> ⚠️ **최대 리스크**: 추상 경제와 실시간 경제가 **다른 결과**를 내면, 실체화 순간 상태가 튀어 고치려던 버그가 재발한다.
-
-이를 막는 유일한 방법은 **추상 경로와 실시간 경로가 하나의 코어 로직을 공유**하는 것이다. 즉 이 작업의 절반은 "새 기능"이 아니라 **기존 로직을 ECS 비의존 코어로 리팩터**하는 것.
-
-```
-                 ┌─────────────────────────────┐
-                 │   공통 데이터 전용 코어        │
-                 │   (VillageData만 입력)        │
-                 │  · 자원 생산 (prodPop/carry)  │
-                 │  · 건설 결정 점수 (Needs)     │
-                 │  · 건설 진행/완공 판정        │
-                 └───────────┬─────────────────┘
-                             │
-          ┌──────────────────┴───────────────────┐
-     추상 경로                               실시간 경로
-  (원거리, tick당 slice)                (실체화, 매 FixedUpdate)
-  좌표=미할당,비주얼X                    좌표 배정+PlaceObject+ECS
-```
-
-### 4.2 기존 자산 (이미 준비됨)
-
-| 자산 | 위치 | 상태 |
-|---|---|---|
-| `VillageData` (모든 마을에 존재) | [VillageManager.Initialize](../../Assets/Scripts/Village/VillageManager.cs) | ✅ 게임 시작 시 모든 마을 맵에 대해 등록. ECS(`EntityId`)만 지연 |
-| 자원 저장 `VillageData.Resources` | VillageData | ✅ 데이터 전용 API (`GetResourceAmount`/`ConsumeResource`/`ProduceResource`) |
-| 완성 건물 `List<PlacedObjectSaveData>` (`TableId,TileX,TileY,Hp…`) | VillageData | ✅ 위치·HP 포함 원장 |
-| 진행중 공사 `List<BuildTaskSnapshot>` (`TableId,AccumulatedHours,TileX,TileY…`) | VillageData | ✅ 진행도·위치 포함 원장 |
-| 실체화 복원 `Restore*FromData` | [VillageManager](../../Assets/Scripts/Village/VillageManager.cs) | ✅ 저장 좌표로 ECS 재생성 (round-trip 무손실) |
-| 인구 closed-form advance | [SettlementPopulationModel.Advance](../../Assets/Scripts/History/Chronicle/SettlementPopulationModel.cs) | ✅ 복사할 템플릿 |
-| 생산 prodPop/carry 로직 | [System_VillagePassiveProduction](../../Assets/Scripts/Common/System/System_VillagePassiveProduction.cs) | ⚠️ 계산은 데이터 전용이나 carry가 ECS 컴포넌트에 상주 (§5) |
-
-### 4.3 좌표 미할당 표현
-
-추상 층에서 완공/착공된 건물은 좌표를 모른다. `PlacedObjectSaveData`/`BuildTaskSnapshot`의 `TileX/TileY`에 **sentinel(예: `int.MinValue`)**을 넣어 "미할당"을 표시한다. 실체화 복원 시:
-
-- 좌표가 유효하면 → 기존대로 그 좌표에 복원.
-- 좌표가 미할당이면 → **그 시점에** [VillageTileFinder.FindEmptyTileNearest](../../Assets/Scripts/Village/VillageTileFinder.cs)로 자리를 찾아 배정 후 배치.
-
-착공 상태(`BuildTaskSnapshot`)로 추상 중 시작된 건물은 `BuildingEntityId = -1` (비주얼 엔티티 없음) — 실체화 시 생성.
-
----
-
-## 5. 상태 저장 (VillageData 확장)
-
-추상 생산은 소수 누적이 필요한데, 현재 carry 버퍼는 ECS `VillageStorageComponent`에 있다(실체화 중에만 존재). 추상 층에서도 굴리려면 **carry를 `VillageData`로 이동**한다.
-
-```csharp
-// VillageData 신규 필드 (세이브, 추가만 하므로 하위호환)
-public float FoodCarry, WoodCarry, StoneCarry, IronCarry, GoldCarry;   // 생산 소수 이월
-public float LastConstructionSimGameTime;   // 건설 추상 clock (인구의 LastSimGameTime과 대칭)
-```
-
-- 실시간 경로도 이 `VillageData` carry를 읽고 쓰도록 통일 → 컴포넌트의 `*Carry`는 제거 또는 미러링만. **carry의 원장을 `VillageData` 단일화** (정합성).
-- 기존 dead 필드 `StoneTimer/IronTimer/GoldTimer`(§선택 A 리팩터로 사용 중단)는 이번에 정리 가능.
-
-> 세이브 마이그레이션: 필드 추가라 구 세이브 로드 시 0으로 초기화되어 안전. `LastConstructionSimGameTime=0`이면 첫 tick에서 현재 시각으로 초기화(인구 패턴과 동일).
-
----
-
-## 6. 추상 건설 advance 알고리즘
-
-인구는 closed-form(로지스틱)이지만, **건설은 자원 게이팅 때문에 closed-form 불가** (자원이 모여야 착공, 착공 후 시간 경과로 완공). 따라서 **stepped fast-forward**로 경과 시간을 진행한다.
-
-### 6.1 시간 스텝
-
-경과 `elapsedHours = now - LastConstructionSimGameTime`를 **스텝 단위**(예: 1일=24h, 또는 "다음 이벤트까지")로 끊어 반복. 스텝 수는 건물 수(마을당 `MaxPerVillage`/Stage 상한)와 자원 속도로 상한이 걸려 유한.
-
-```
-while (LastConstructionSimGameTime < now):
-    step = min(STEP_HOURS, now - LastConstructionSimGameTime)
-
-    1) 자원 생산:  공통 코어로 step 시간분 자원 누적 (prodPop/carry, §4.1)
-    2) 건설 진행:  진행중 task들의 AccumulatedHours += step; 완공(>=Duration) 시
-                   → PlacedObjects/PlacedObjectTypeIds로 이동 (좌표 미할당)
-    3) 착공 결정:  동시 한도(현재 1) 미만이고 자원 충분하면
-                   → VillageNeedsEvaluator(데이터 전용)로 다음 건물 선정
-                   → 자원 차감, BuildTaskSnapshot 추가 (좌표 미할당, EntityId=-1)
-    LastConstructionSimGameTime += step
-```
-
-> STEP_HOURS는 정확도 vs 비용 트레이드오프. 건설 시간(수 시간~) 대비 하루 스텝이면 충분히 근사. **결정 필요 (§9).**
-
-### 6.2 데이터 전용화가 필요한 기존 로직
-
-[VillageNeedsEvaluator](../../Assets/Scripts/Village/VillageNeedsEvaluator.cs)는 ~70% 데이터 전용이나 ECS를 읽는 3곳이 있다. 각각 `VillageData` 기반 변형 필요:
-
-| ECS 의존 | 대체 소스 |
+| 상태 | 원장 |
 |---|---|
-| `CountInProgressTasksByTableId` (task 풀 스캔) | `v.ActiveBuildTasks` 카운트 |
-| `CountByService(Housing 등)` (PlacedObjectComponent) | `v.PlacedObjects` + `BuildableItemTable.ProvidedService` 룩업 |
-| `AggregateSetMembers` (세트 커버리지) | `v.PlacedObjects` + `BuildableItemTable.SetMembership` 룩업 |
+| 자원 수량·Cap | `VillageData.Resources`, `ResourceCaps` |
+| 생산 소수 이월 | `FoodCarry`, `WoodCarry`, `StoneCarry`, `IronCarry`, `GoldCarry` |
+| 완공 일반 건물 | `PlacedObjects`, `PlacedObjectTypeIds` |
+| 진행 중 일반/벽 task | `ActiveBuildTasks` |
+| 벽 계획·완료 | `WallSegments`, `CompletedWallSegments` |
+| Tier와 Bounds | `Stage`, Bounds 필드 |
+| 추상 진행 시각 | `LastConstructionSimGameTime`, `LastConstructionTierCheckGameTime` |
 
-착공의 나머지(자원 체크/차감, `BuildHours` 선정, task 레코드 추가)와 벽 세그먼트 조회(`WallSegmentRegistry`)는 이미 데이터 전용.
+ECS 컴포넌트와 Building Entity는 실체화된 상태의 미러다. 추상 경로가 ECS 컴포넌트를 생성하거나 원장으로 사용하지 않는다.
 
-### 6.3 라운드로빈 예산
+실시간과 추상 경로는 다음 데이터 전용 코어를 공유한다.
 
-인구의 [AdvanceAbstractSlice](../../Assets/Scripts/History/HistoryManager.cs)처럼, 건설도 tick당 일부 마을만 처리하는 **라운드로빈 slice**로 부하를 분산 (`IsMaterialized` 마을은 skip — 실시간 경로가 담당).
+| 책임 | 공통 진입점 |
+|---|---|
+| 생산·Cap·carry | `VillageResourceSimulation` |
+| 후보 점수 | `VillageNeedsEvaluator` |
+| 비용·시간·진행 HP | `VillageConstructionRules` |
+| task·완료 부작용·서비스·세트 | `VillageConstructionLedger` |
+| Tier 판정·영속 변경 | `VillageProgressionRules` |
+| 벽 계획·완료 | `VillageWallRules` |
 
----
-
-## 7. 실체화 (materialize) 경로
-
-### 7.1 catch-up 훅
-
-[MaterializeSettlement](../../Assets/Scripts/History/HistoryManager.cs)에서 인구 flush 직후, `MaterializeVillage` **호출 전에** 건설 catch-up을 실행 (인구 flush와 대칭). 커서가 못 들른 경과분을 §6 알고리즘으로 현재 시각까지 진행 → `VillageData`가 최신 건설 상태를 반영한 뒤 ECS 복원.
-
-### 7.2 타일 배정 + 배치
-
-[RestorePlacedObjectsFromData](../../Assets/Scripts/Village/VillageManager.cs) / [RestoreTaskFromData](../../Assets/Scripts/Village/VillageManager.cs) 수정:
-
-- 좌표 유효 → 기존대로.
-- 좌표 미할당(§4.3) → `VillageTileFinder`로 자리 배정 후 배치. 완공 건물은 `isUnderConstruction=false`로 배치(비주얼 완성). 진행중 task는 `AccumulatedHours` 보존한 채 건설중 엔티티 생성.
-
-> 배치 실패(자리 없음) 처리: 미할당 건물이 들어갈 자리가 없으면 건너뛰거나 경계 확장 로직에 맡김 — **정책 결정 필요 (§9)**.
-
-### 7.3 fold-back
-
-[FoldBackSettlement](../../Assets/Scripts/History/HistoryManager.cs)는 이미 `DematerializeVillage`로 ECS→`VillageData` flush 후 추상 재개. 추가 작업 없음 — 다음 추상 tick이 flush된 `ActiveBuildTasks`/`PlacedObjects`에서 이어감. `LastConstructionSimGameTime=now`로 재설정 (인구 패턴과 동일).
+두 경로가 같은 로직을 공유하는 이유는 materialize 순간 상태가 튀는 것을 막고, 동일 초기 상태의 결과를 직접 비교할 수 있게 하기 위해서다.
 
 ---
 
-## 8. 작업 분해
+## 4. 완료 적용 계약
 
-| # | 작업 | 크기 | 산출물 |
-|---|---|---|---|
-| 1 | 공통 데이터 전용 코어 추출: 생산(prodPop/carry)을 `VillageData` 기반으로, carry 원장 이동 | 중 | `VillageData` carry 필드, 생산 코어 함수 |
-| 2 | `VillageNeedsEvaluator` 데이터 전용 변형 (§6.2 3함수) | 중 | ECS 비의존 점수 경로 |
-| 3 | 추상 건설 advance stepped 함수 (§6) | 중~대 | `AdvanceAbstractConstruction(VillageData, now)` |
-| 4 | 좌표 미할당 sentinel + 실체화 타일 배정 (§4.3, §7.2) | 중 | `Restore*FromData` 수정 |
-| 5 | catch-up 훅 + tick slice (§6.3, §7.1) | 소 | `MaterializeSettlement`/`System_SettlementSim` 훅 |
-| 6 | 세이브 마이그레이션 + dead 필드 정리 (§5) | 소 | 하위호환 로드 |
-| 7 | 검증/튜닝: 무-버스트, **추상↔실시간 정합성**, 세이브 왕복 | 중 | 테스트 시나리오 |
+건물 완료는 다음 상태를 함께 변경한다.
 
-**규모: 중~대 기능.** 집중 세션 5~7회 예상.
+- `PlacedObjectTypeIds`
+- `PlacedObjects`
+- `ResourceCaps`
+- Campfire 호환 플래그 등 완료 부작용
 
----
+이 처리는 `VillageConstructionLedger.ApplyCompletedBuild` 한 곳에서 수행한다.
 
-## 9. 열린 질문 (구현 전 확정 필요)
+호출 규칙:
 
-1. **STEP_HOURS** (§6.1): 하루(24h) 단위 vs 이벤트 단위? 하루 단위를 기본 제안 (근사 충분·단순).
-2. **미할당 건물 배치 실패 정책** (§7.2): 자리 없으면 skip? 경계 확장? 재시도?
-3. **동시 착공 한도**: 현재 임시로 1. 추상에서도 1 유지? 아니면 인구 기반 소수로 복원?
-4. **자원 Cap 상호작용**: 추상 생산도 Cap(FoodCap 등) 적용? 적용 시 오래 방치된 마을은 Cap에서 포화 → 건설 자원이 항상 충분. (선택 A 밸런스와 연동)
-5. **carry 원장**: 실시간 경로도 `VillageData` carry로 완전 통일할지(권장), 컴포넌트 미러링 유지할지.
+- 실시간 건설이 실제 배치와 완성에 성공했을 때 한 번 호출한다.
+- 추상 건설이 완료됐을 때 미할당 좌표로 한 번 호출한다.
+- 이미 완공된 레코드를 materialize하며 월드에 복원할 때는 호출하지 않는다.
+
+복원 중 다시 호출하면 건물 수와 Cap이 중복 증가하므로 금지한다.
 
 ---
 
-## 10. 참고
+## 5. 미할당과 PlacementPending
 
-- 임시 완화(착공 한도 1) 및 자원 prodPop 압축은 2026-07-12 선행 적용됨 (본 문서와 별개, [System_VillageBuildQueue](../../Assets/Scripts/Common/System/System_VillageBuildQueue.cs) · [System_VillagePassiveProduction](../../Assets/Scripts/Common/System/System_VillagePassiveProduction.cs)).
-- 추상 인구 계층: [SettlementPopulationModel](../../Assets/Scripts/History/Chronicle/SettlementPopulationModel.cs), [HistoryManager](../../Assets/Scripts/History/HistoryManager.cs), [System_SettlementSim](../../Assets/Scripts/Common/System/System_SettlementSim.cs).
-- 마을 경제 인구 소싱: [NPC_SIMPLIFICATION_PLAN.md](../npc/NPC_SIMPLIFICATION_PLAN.md).
+`VillageConstructionPosition.UnassignedTile`이 일반 건물의 미할당 좌표를 표현한다. 직접 `int.MinValue`를 비교하는 코드를 복제하지 않는다.
+
+추상 착공 task:
+
+- 좌표 미할당
+- `BuildingEntityId = -1`
+- `PlacementPending = true`
+
+추상 완공 건물도 같은 방식으로 좌표를 미할당 상태로 보존한다.
+
+실체화 시 빈 타일을 찾지 못하면 레코드를 삭제하거나 완료를 취소하지 않는다. `PlacementPending`으로 남겨 다음 materialize 또는 Tier Bounds 확장 뒤 다시 시도한다.
+
+이유는 논리적 완료 상태와 월드 배치 상태를 구분하기 위해서다. 배치 실패만으로 완료 레코드를 버리면 건물 수·서비스·Cap과 실제 월드가 서로 다른 진실을 갖게 된다.
+
+---
+
+## 6. 시간 전진
+
+건설은 자원이 모여야 착공하므로 인구처럼 단일 closed-form 식으로 계산할 수 없다. 고정 24시간 step도 사용하지 않는다. 2시간짜리 건물의 다음 착공이 하루씩 지연되고, 긴 방치 시간에는 불필요한 반복이 커지기 때문이다.
+
+대신 다음 의미 있는 이벤트까지 전진한다.
+
+- 진행 task 완료
+- 1위 후보의 Wood/Stone 충족
+- 정수 시간 생산 경계
+- Tier 판정 경계
+- 목표 시각 `now`
+
+```text
+while simulationClock < now and budget remains:
+    next = earliest relevant event
+    crossed whole-hour boundaries → shared resource production
+    active task → advance progress and apply completion
+    tier/wall state → evaluate with shared rules
+    no active task → choose and reserve next build
+    simulationClock = next
+```
+
+자원 충족 시각을 정확히 계산할 수 없으면 최대 다음 정수 시간 경계를 사용한다. task는 소수 시간만큼 진행할 수 있지만 생산은 실시간 규칙과 동일하게 통과한 정수 시간 경계에서만 적용한다.
+
+전체 동시 task는 실시간과 추상 경로 모두 현재 1개다.
+
+---
+
+## 7. 시간 분할과 예산
+
+`System_SettlementSim`은 원거리 마을을 라운드로빈으로 방문한다. 다음 예산을 분리한다.
+
+- 한 tick에 방문할 마을 수
+- 마을별 일반 건설 이벤트 수
+- 마을별 벽 이벤트 수
+
+마을 수 예산은 전체 정착지 수에 따른 프레임 비용을 제한한다. 일반/벽 이벤트 예산은 오래 방치한 단일 마을이나 많은 벽 세그먼트가 tick을 독점하지 않게 한다.
+
+예산을 소진하면 마지막으로 확정한 clock과 task 진행도를 `VillageData`에 남긴다. 다음 slice는 같은 상태에서 이어서 처리한다.
+
+materialize 직전 catch-up 결과가 `IsCaughtUp=false`이면 마을을 실체화하지 않는다. 다음 tick에서 이어서 완료한 후에만 `IsMaterialized`를 변경한다.
+
+---
+
+## 8. Tier와 벽
+
+원거리에서 건물만 늘리고 Tier가 멈추면 충분히 성장한 마을도 첫 방문 전까지 Settlement로 남는다. 벽도 실체화 후에야 계획돼 오래된 마을이 빈 상태로 보인다.
+
+따라서 Tier와 벽을 추상 시뮬레이션에 포함한다.
+
+- `VillageProgressionRules`가 `VillageStageTable` 조건을 `VillageData`만으로 판정한다.
+- 승격 시 Stage와 Bounds를 변경하고 필요한 벽 계획 플래그를 남긴다.
+- `VillageWallRules`가 Bounds 기반 세그먼트를 만든다.
+- 벽 task는 좌표를 유지하고 자원·시간·완료를 추상에서 진행한다.
+- 실체화 시 실제 타일이 점유돼 있으면 현행 벽 정책에 따라 해당 세그먼트를 건너뛴다.
+
+벽은 일반 건물과 같은 자원을 소비하지만 이벤트 예산은 분리한다.
+
+---
+
+## 9. materialize 순서
+
+`HistoryManager.MaterializeSettlement`은 다음 순서를 지킨다.
+
+1. 최신 `SettlementLiveState.Pop`을 경제 인구로 정량화한다.
+2. 추상 자원·건설·Tier·벽을 현재 시각까지 catch-up한다.
+3. catch-up이 끝났을 때만 materialized 상태로 전환한다.
+4. `VillageData`에서 ECS와 월드 오브젝트를 복원한다.
+
+인구를 먼저 갱신하는 이유는 이전 인구로 건설 후보와 Tier를 평가하지 않게 하기 위해서다.
+
+### 완공 Entity 건물
+
+1. `VillageTileFinder`로 좌표를 찾는다.
+2. `MapManager.PlaceObject`로 월드에 배치한다.
+3. `BuildingManager` 저장 레코드와 연결한다.
+4. 기존 `PlacedObjectSaveData`에 좌표와 EntityId를 기록한다.
+5. 완료 부작용은 다시 적용하지 않는다.
+
+### 진행 중 Entity 건물
+
+같은 snapshot에 좌표와 EntityId를 기록하고, `VillageConstructionRules.GetProgressHp`로 누적 시간과 HP를 맞춘다. 기존 좌표나 Building 레코드가 있으면 재사용해 중복 생성하지 않는다.
+
+### Tile 건물과 벽
+
+필요한 타일 리소스를 준비한 뒤 Map 수정 경로로 배치한다. Entity 복원 경로에 동기적으로 섞지 않는다.
+
+---
+
+## 10. fold-back 순서
+
+`HistoryManager.FoldBackSettlement`은 ECS 상태를 `VillageData`에 flush한 뒤 실체화를 해제한다.
+
+- task와 완공 건물을 원장에 반영한다.
+- carry는 이미 `VillageData`에 있으므로 복사 원장을 만들지 않는다.
+- `LastConstructionSimGameTime`과 `LastConstructionTierCheckGameTime`을 현재 시각에 맞춘다.
+
+clock을 맞추는 이유는 실시간에서 이미 처리한 시간을 추상 경로가 다시 계산하지 않게 하기 위해서다.
+
+---
+
+## 11. New Game 초기 발전
+
+절차적 역사는 New Game 전에 오랜 기간을 시뮬레이션하지만, 그 전체 시간을 건설 시간으로 재생하면 모든 마을이 비슷한 최고 단계에 수렴한다.
+
+`VillageDevelopmentBootstrap`은 최종 인구·생태 수용력·생존 정착지 내 인구 순위를 제한된 발전 예산으로 압축한다. Stage를 직접 대입하지 않고 공통 자원·건설·완료·Tier 규칙을 실행한다.
+
+원칙:
+
+- 이번 실행에서 New Game 연대기를 생성한 경우에만 실행한다.
+- `Alive`와 `Conquered`만 대상으로 한다.
+- `Ruined`와 `Merged`는 제외한다.
+- 같은 map seed에서 같은 결과가 나도록 `DerivedSeed` 채널을 사용한다.
+- plan이 모든 slice를 완주했을 때만 `InitialDevelopmentApplied=true`로 확정한다.
+- 세이브 로드에서는 재실행하지 않는다.
+
+초기 발전과 일반 런타임 advance는 시간 예산만 다르고 생산·건설·완료·Tier 코어는 공유한다.
+
+---
+
+## 12. Fate와 폐허 전환
+
+운영 가능 Fate는 `Alive`와 `Conquered`다. `Ruined`와 `Merged`는 정상 생산·건설·Tier 진행과 materialize 대상에서 제외한다.
+
+현재 `IsOperational=false`인 추상 경로는 clock을 현재 시각에 맞춰 backlog만 막는다. 런타임에서 살아 있는 마을을 폐허로 바꾸는 완전한 원자적 진입점은 후속 작업이다.
+
+그 진입점은 최소한 다음 상태를 함께 변경해야 한다.
+
+1. `SettlementLiveState.Fate`와 Pop
+2. Ruin 연대기 이벤트
+3. 진행 task 제거
+4. 건설 중 Building 제거
+5. 정상 materialize 차단
+6. 추상 clock 정렬
+
+예약 자원은 마을 붕괴로 유실된 것으로 취급해 환불하지 않는다. 연대기 이벤트만 추가하거나 Pop만 0으로 만드는 부분 전환은 허용하지 않는다.
+
+---
+
+## 13. 검증 계약
+
+`VillageSimulationParity`는 다음을 비교한다.
+
+- 시간 경계 참조 실행과 이벤트 fast-forward
+- 무제한 실행과 낮은 예산 slice 재개
+- 자원·Cap·carry
+- 완공 순서와 진행 task
+- 벽과 Stage
+- 두 construction clock
+
+materialize 검증은 다음 불변식을 확인한다.
+
+- 기존 완공 레코드 복원 전후 완료 개수와 Cap이 변하지 않는다.
+- 성공한 배치에는 미할당 좌표가 남지 않는다.
+- 실패한 배치는 `PlacementPending`으로 보존된다.
+- 기존 좌표와 BuildingEntityId를 가진 레코드를 중복 생성하지 않는다.
+
+남은 수동 통합 검증:
+
+- 실제 청크 활성화와 Addressables 스폰
+- PlacementPending 강제 실패 후 재시도
+- materialize/fold-back 반복
+- 진행 task와 완공 레코드의 세이브 왕복
+- 런타임 폐허 전환 진입점 구현 후 Fate별 경로

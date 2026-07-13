@@ -96,7 +96,7 @@ public interface ILateUpdateSystem : ISystem      // Camera, final sync
 | 100-500 | Gameplay (movement, skills, buffs) | FixedUpdate/Update |
 | 500-1000 | Animation, rendering | Update |
 
-**Village domain sub-bands** (introduced in Phase C, see [VILLAGE_PHASES.md §4.1](Docs/village/VILLAGE_PHASES.md)):
+**Village domain sub-bands** (see [VILLAGE_RUNTIME_DESIGN.md](Docs/village/VILLAGE_RUNTIME_DESIGN.md)):
 - 50-54: Resource (PassiveProduction)
 - 55-59: Population (respawn, immigration, birth, household split)
 - 60-64: Lifecycle (Tier promotion, reputation, threat level)

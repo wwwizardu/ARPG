@@ -1,6 +1,6 @@
 # 충돌 처리 & NPC 길찾기 — 설계 문서
 
-> 관련 문서: [VILLAGE_PHASES.md](../village/VILLAGE_PHASES.md) (Phase C·D 섹션) · [monsterAIPattern.md](../ai_monster/monsterAIPattern.md)
+> 관련 문서: [VILLAGE_RUNTIME_DESIGN.md](../village/VILLAGE_RUNTIME_DESIGN.md) · [monsterAIPattern.md](../ai_monster/monsterAIPattern.md)
 >
 > **목표**: 현재 플레이어/NPC/몬스터가 지형·건물·오브젝트를 모두 통과하는 문제를 해결한다. 플레이어는 **축 분리 슬라이딩(Axis-separated sliding)** 으로 자연스럽게 벽을 따라 미끄러지고, NPC는 **타일 기반 A\* 경로 탐색**으로 장애물을 우회한다. Unity Physics2D를 도입하지 않고 커스텀 ECS 위에서 해결한다.
 

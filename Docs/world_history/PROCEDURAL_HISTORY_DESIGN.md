@@ -7,7 +7,7 @@
 > - **깊은 과거 백본(창세기/고대/암흑기 — 템플릿 조합 4시대 생성)** 은 보류·미고려로 결정(2026-06-26) → [Docs/archive/PROCEDURAL_HISTORY_BACKBONE.md](../_archive/PROCEDURAL_HISTORY_BACKBONE.md)로 이관. 본 문서는 그 중 "현존 정착지(현대 시대)" 층만 떼어 런타임 LOD 모델로 구체화한 것이다.
 
 > 상위 컨셉: 오픈월드 + NPC 자율 행동 (코어 키퍼 + 림월드 하이브리드)
-> 관련 문서: [gameOverview.md](../overview/gameOverview.md) · [MAP_DESIGN.md](../map/MAP_DESIGN.md) · [VILLAGE_GROWTH_STAGES.md](../village/VILLAGE_GROWTH_STAGES.md) · [VILLAGE_PHASES.md](../village/VILLAGE_PHASES.md)
+> 관련 문서: [gameOverview.md](../overview/gameOverview.md) · [MAP_DESIGN.md](../map/MAP_DESIGN.md) · [VILLAGE_RUNTIME_DESIGN.md](../village/VILLAGE_RUNTIME_DESIGN.md) · [VILLAGE_GROWTH_STAGES.md](../village/VILLAGE_GROWTH_STAGES.md)
 >
 > **목표**: 절차 배치된 정착지들이 합병/정복/왕국 형성 같은 **통폐합 히스토리**를 갖고, 그 결과가 NPC 관계·맵 표현·퀘스트의 소재가 되게 한다. 풀 시뮬 없이 정착지 granularity의 coarse 시뮬로 "역사처럼 보이는" 결과를 만든다.
 >

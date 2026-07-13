@@ -18,6 +18,8 @@ namespace ARPG.History
         // PROCEDURAL §0 런타임 LOD — 추상 인구 tick 시간 분할용 커서 (런타임 전용, 세이브 아님)
         private int _abstractCursor = 0;
         private const float DAY_HOURS = 24f;   // 게임 1일 = 24 게임-시간 (AR.s.Time.CurrentGameTime 단위)
+        private const int MATERIALIZE_GENERAL_EVENT_BUDGET = 128;
+        private const int MATERIALIZE_WALL_EVENT_BUDGET = 64;
 
         public bool IsGenerated => _generated;
         public int WorldSeed => _worldSeed;
@@ -25,8 +27,10 @@ namespace ARPG.History
         public void Initialize()
         {
             Debug.Log("HistoryManager Initialized");
-            GenerateSettlementChronicleIfNeeded();
+            bool generatedNewGameHistory = GenerateSettlementChronicleIfNeeded();
             EnsureWorldSimInitialized();
+            if (generatedNewGameHistory == true)
+                BootstrapNewGameVillageDevelopment();
         }
 
         /// <summary>
@@ -34,7 +38,7 @@ namespace ARPG.History
         /// AR.Initialize 마지막 단계에서 호출되므로 Map/WorldData가 준비된 상태다.
         /// 비용은 New Game 1회뿐(로드 시 가드로 skip).
         /// </summary>
-        private void GenerateSettlementChronicleIfNeeded()
+        private bool GenerateSettlementChronicleIfNeeded()
         {
             ChronicleSaveData existing = AR.s.Data.Chronicle;
             if (existing != null && existing.Events != null && existing.Events.Count > 0)
@@ -42,7 +46,7 @@ namespace ARPG.History
                 _worldSeed = AR.s.Map.mapSeed;
                 _generated = true;
                 Debug.Log($"[HistoryManager] Chronicle already present ({existing.Events.Count} events) — skip generation.");
-                return;
+                return false;
             }
 
             int mapSeed = AR.s.Map.mapSeed;
@@ -57,6 +61,7 @@ namespace ARPG.History
 
             Debug.Log($"[HistoryManager] Settlement chronicle generated: seed={mapSeed}, " +
                       $"{placements.Count} settlements, {chronicle.Events.Count} events, {chronicle.Kingdoms.Count} kingdoms.");
+            return true;
         }
 
         public void Reset()
@@ -157,6 +162,18 @@ namespace ARPG.History
             return false;
         }
 
+        public bool TryGetLiveSettlement(int settlementId,
+            out SettlementLiveState settlement)
+        {
+            if (TryGetLiveIndex(settlementId, out int index) == true)
+            {
+                settlement = AR.s.Data.WorldSim.Settlements[index];
+                return true;
+            }
+            settlement = default;
+            return false;
+        }
+
         /// <summary>
         /// PROCEDURAL §0: WorldSim(라이브 추상 층)을 Chronicle 스냅샷에서 초기화한다.
         /// New Game 직후(방금 생성) 또는 구세이브(Chronicle은 있으나 WorldSim 없음)에서 1회 채운다.
@@ -197,6 +214,73 @@ namespace ARPG.History
             }
             sim.Settlements = arr;
             Debug.Log($"[HistoryManager] WorldSim initialized from chronicle: {arr.Length} settlements @ t={now:F1}h");
+        }
+
+        private void BootstrapNewGameVillageDevelopment()
+        {
+            WorldSimState sim = AR.s.Data.WorldSim;
+            if (sim == null || sim.Settlements == null || sim.Settlements.Length == 0)
+                return;
+
+            #if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (VillageDevelopmentBootstrap.ValidatePlanReproducibility(
+                    sim.Settlements, AR.s.Map.mapSeed, out string planDifferences) == false)
+                Debug.LogError($"[VillageBootstrap] plan validation failed: {planDifferences}");
+            #endif
+
+            VillageBootstrapPlan[] plans = VillageDevelopmentBootstrap.CreatePlans(
+                sim.Settlements, AR.s.Map.mapSeed);
+            float runtimeGameTime = AR.s.Time.CurrentGameTime;
+            int finalized = 0;
+            int failed = 0;
+            for (int i = 0; i < plans.Length; i++)
+            {
+                VillageBootstrapPlan plan = plans[i];
+                if (plan.IsEligible == false)
+                    continue;
+
+                VillageData village = AR.s.Village.GetVillageBySettlement(
+                    plan.SettlementId);
+                if (village == null || village.InitialDevelopmentApplied == true)
+                    continue;
+
+                // New Game 전용 synthetic 시간축. 세이브 로드에서는 이 메서드 자체를 호출하지 않는다.
+                village.LastConstructionSimGameTime = 0f;
+                village.LastConstructionTierCheckGameTime = 0f;
+
+                VillageBootstrapAdvanceResult advance =
+                    VillageDevelopmentBootstrap.AdvanceBootstrapSlice(village, plan,
+                        VillageAbstractConstruction.DefaultGeneralEventBudget,
+                        VillageAbstractConstruction.DefaultWallEventBudget);
+                int slices = 1;
+                while (advance.IsComplete == false && advance.AdvanceResult != null
+                    && (advance.AdvanceResult.Status
+                            == VillageAbstractAdvanceStatus.GeneralBudgetExhausted
+                        || advance.AdvanceResult.Status
+                            == VillageAbstractAdvanceStatus.WallBudgetExhausted)
+                    && slices < 4096)
+                {
+                    advance = VillageDevelopmentBootstrap.AdvanceBootstrapSlice(village,
+                        plan, VillageAbstractConstruction.DefaultGeneralEventBudget,
+                        VillageAbstractConstruction.DefaultWallEventBudget);
+                    slices++;
+                }
+
+                if (advance.IsComplete == true
+                    && VillageDevelopmentBootstrap.FinalizeBootstrap(village, plan,
+                        runtimeGameTime) == true)
+                {
+                    finalized++;
+                }
+                else
+                {
+                    failed++;
+                    Debug.LogWarning($"[VillageBootstrap] settlement {plan.SettlementId} " +
+                        $"미완료 — status={advance.AdvanceResult?.Status}, slices={slices}");
+                }
+            }
+
+            Debug.Log($"[VillageBootstrap] New Game 초기 발전 완료: finalized={finalized}, failed={failed}, plans={plans.Length}");
         }
 
         /// <summary>
@@ -282,10 +366,12 @@ namespace ARPG.History
         /// 이후 인구는 VillageData/ECS가 상세 시뮬하며(NPC 스폰 수는 flush된 최신 Pop 기준),
         /// 이탈 시 FoldBack(Phase 3)이 라이브 상태로 되돌린다.
         /// </summary>
-        public void MaterializeSettlement(int settlementId, int villageId)
+        public bool MaterializeSettlement(int settlementId, int villageId,
+            int generalEventBudget = MATERIALIZE_GENERAL_EVENT_BUDGET,
+            int wallEventBudget = MATERIALIZE_WALL_EVENT_BUDGET)
         {
             if (TryGetLiveIndex(settlementId, out int idx) == false)
-                return;
+                return false;
 
             WorldSimState sim = AR.s.Data.WorldSim;
             float now = AR.s.Time.CurrentGameTime;
@@ -296,6 +382,28 @@ namespace ARPG.History
                 SettlementPopulationModel.Advance(ref sim.Settlements[idx], days);
 
             sim.Settlements[idx].LastSimGameTime = now;
+            VillageData village = AR.s.Village.GetVillage(villageId);
+            if (village == null)
+                return false;
+
+            // 전역 population refresh보다 먼저 catch-up하므로 여기서 최신 추상 인구를 직접 반영한다.
+            village.Population = VillageManager.QuantizeAbstractPopulation(
+                (int)sim.Settlements[idx].Pop);
+            bool isOperational = VillageDevelopmentBootstrap.IsOperationalFate(
+                sim.Settlements[idx].Fate);
+            VillageAbstractAdvanceResult construction =
+                VillageAbstractConstruction.AdvanceAbstractConstruction(village, now,
+                    new VillageAbstractAdvanceOptions
+                    {
+                        GeneralEventBudget = generalEventBudget,
+                        WallEventBudget = wallEventBudget,
+                        IsOperational = isOperational,
+                    });
+
+            // 예산 소진/비운영/blocked 상태에서는 clock과 task 진행을 그대로 두고 다음 tick에 재개한다.
+            if (construction.IsCaughtUp == false)
+                return false;
+
             sim.Settlements[idx].IsMaterialized = true;
             sim.Settlements[idx].VillageId = villageId;
 
@@ -304,6 +412,7 @@ namespace ARPG.History
 
             Debug.Log($"[HistoryManager] Materialize settlement {settlementId} → village {villageId} " +
                       $"(pop={(int)sim.Settlements[idx].Pop}, +{days}d catch-up)");
+            return true;
         }
 
         /// <summary>
@@ -329,7 +438,15 @@ namespace ARPG.History
             // 런타임 LOD: VillageId가 유효한 동안 마을 ECS 엔티티를 추상화(상태 flush + 엔티티 파괴).
             int villageId = sim.Settlements[idx].VillageId;
             if (villageId >= 0)
+            {
                 AR.s.Village.DematerializeVillage(villageId);
+                VillageData village = AR.s.Village.GetVillage(villageId);
+                if (village != null)
+                {
+                    village.LastConstructionSimGameTime = now;
+                    village.LastConstructionTierCheckGameTime = now;
+                }
+            }
 
             sim.Settlements[idx].IsMaterialized = false;
             sim.Settlements[idx].VillageId = -1;

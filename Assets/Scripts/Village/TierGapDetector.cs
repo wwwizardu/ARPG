@@ -9,7 +9,8 @@ namespace ARPG.Village
     /// 이중 진실 소스 없이 같은 게이트를 빌드 점수 평가기에서 조회.
     /// BUILD_PRIORITY_DESIGN.md §2.3 Tier Gate Bonus.
     ///
-    /// 자원/시간 조건(Food, age, Pop)은 빌드 행위로 채울 수 없으므로 여기서 다루지 않는다.
+    /// Food 현재량/시간/Pop은 빌드 행위로 직접 채울 수 없으므로 다루지 않는다.
+    /// 단 Food 저장 상한은 StorageCap_Food 건물로 확장할 수 있으므로 Tier gap으로 평가한다.
     /// </summary>
     public static class TierGapDetector
     {
@@ -27,9 +28,15 @@ namespace ARPG.Village
             ProvidedService service = (ProvidedService)t.ProvidedService;
             SetMemberTag member = (SetMemberTag)t.SetMembership;
 
+            // Food 저장 상한 부족 — 현재량은 생산으로 채우되, 상한은 건물로 먼저 확보해야 함
+            if (stageTable.PromoMinFood > 0
+                && VillageResourceSimulation.GetCap(v, GlobalEnum.ItemType.Food) < stageTable.PromoMinFood
+                && t.StorageCap_Food > 0)
+                return true;
+
             // Housing 부족
             if (stageTable.PromoMinHousing > 0
-                && AR.s.Village.CountByService(v.VillageId, ProvidedService.Housing) < stageTable.PromoMinHousing
+                && VillageConstructionLedger.CountByService(v, ProvidedService.Housing) < stageTable.PromoMinHousing
                 && (service & ProvidedService.Housing) != 0)
                 return true;
 
@@ -37,7 +44,7 @@ namespace ARPG.Village
             if (stageTable.PromoRequiredSet >= 0)
             {
                 var setType = (ObjectSetType)stageTable.PromoRequiredSet;
-                if (AR.s.Village.HasObjectSet(v.VillageId, setType) == false
+                if (VillageConstructionLedger.HasObjectSet(v, setType) == false
                     && ObjectSetCatalog.All.TryGetValue(setType, out var def)
                     && (member & def.RequiredMask) != 0)
                     return true;
@@ -45,13 +52,13 @@ namespace ARPG.Village
 
             // Civic 부족
             if (stageTable.PromoRequiredCivic > 0
-                && AR.s.Village.CountByService(v.VillageId, ProvidedService.Civic) < stageTable.PromoRequiredCivic
+                && VillageConstructionLedger.CountByService(v, ProvidedService.Civic) < stageTable.PromoRequiredCivic
                 && (service & ProvidedService.Civic) != 0)
                 return true;
 
             // Shop 부족
             if (stageTable.PromoRequiredShop > 0
-                && AR.s.Village.CountByService(v.VillageId, ProvidedService.Shop) < stageTable.PromoRequiredShop
+                && VillageConstructionLedger.CountByService(v, ProvidedService.Shop) < stageTable.PromoRequiredShop
                 && (service & ProvidedService.Shop) != 0)
                 return true;
 

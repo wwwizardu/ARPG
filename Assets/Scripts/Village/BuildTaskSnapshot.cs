@@ -23,5 +23,6 @@ namespace ARPG.Village
         public int ReservedWood;
         public int ReservedStone;
         public int BuildingEntityId = -1;    // 시작 시 생성된 건설중 빌딩 엔티티 — 로드 시 진행도 동기화에 사용
+        public bool PlacementPending;        // 실제 타일/빌딩 생성 전에는 ECS task로 복원하지 않음
     }
 }

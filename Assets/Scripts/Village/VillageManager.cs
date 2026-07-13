@@ -9,11 +9,11 @@ namespace ARPG.Village
 {
     public class VillageManager : MonoBehaviour
     {
-        private const int DEFAULT_RESOURCE_CAP = 50;
-
         private Dictionary<int, VillageData> _villages = new();
         // PlacedObject 조회 인덱스 — 휘발성(세이브 아님). static 대신 매니저 소유, Reset/Load에서 수명 관리.
         private readonly PlacedObjectRegistry _placedObjects = new();
+        private readonly HashSet<string> _placementWarnings = new();
+        private const int DEFAULT_PLACEMENT_RADIUS = 3;
         public PlacedObjectRegistry PlacedObjects => _placedObjects;
 
         public void Initialize()
@@ -58,6 +58,7 @@ namespace ARPG.Village
             }
             _villages.Clear();
             _placedObjects.ClearAll();
+            _placementWarnings.Clear();
         }
 
         public void RegisterVillage(int villageId, Vector2 position, int tableId = 0)
@@ -129,13 +130,8 @@ namespace ARPG.Village
             if (_villages.TryGetValue(villageId, out VillageData? data) == false)
                 return;
 
-            int cap = GetCap(data, type);
-            int current = data.Resources.TryGetValue(type, out int c) ? c : 0;
-            int newAmount = Mathf.Min(current + amount, cap);
-
-            data.Resources[type] = newAmount;
-
-            SyncStorageComponent(data);
+            VillageResourceSimulation.Produce(data, type, amount);
+            SyncStorageFromData(data);
 
             if (showNotify)
                 AR.s.UI.SetNotify(BuildResourceStatusNotify(data));
@@ -146,13 +142,10 @@ namespace ARPG.Village
             if (_villages.TryGetValue(villageId, out VillageData? data) == false)
                 return false;
 
-            int current = data.Resources.TryGetValue(type, out int c) ? c : 0;
-            if (current < amount)
+            if (VillageResourceSimulation.Consume(data, type, amount) == false)
                 return false;
 
-            data.Resources[type] = current - amount;
-
-            SyncStorageComponent(data);
+            SyncStorageFromData(data);
 
             AR.s.UI.SetNotify(BuildResourceStatusNotify(data));
             return true;
@@ -160,12 +153,12 @@ namespace ARPG.Village
 
         private static string BuildResourceStatusNotify(VillageData data)
         {
-            int food = GetInt(data, GlobalEnum.ItemType.Food);
-            int wood = GetInt(data, GlobalEnum.ItemType.Wood);
-            int stone = GetInt(data, GlobalEnum.ItemType.Stone);
-            int foodCap = GetCap(data, GlobalEnum.ItemType.Food);
-            int woodCap = GetCap(data, GlobalEnum.ItemType.Wood);
-            int stoneCap = GetCap(data, GlobalEnum.ItemType.Stone);
+            int food = VillageResourceSimulation.GetAmount(data, GlobalEnum.ItemType.Food);
+            int wood = VillageResourceSimulation.GetAmount(data, GlobalEnum.ItemType.Wood);
+            int stone = VillageResourceSimulation.GetAmount(data, GlobalEnum.ItemType.Stone);
+            int foodCap = VillageResourceSimulation.GetCap(data, GlobalEnum.ItemType.Food);
+            int woodCap = VillageResourceSimulation.GetCap(data, GlobalEnum.ItemType.Wood);
+            int stoneCap = VillageResourceSimulation.GetCap(data, GlobalEnum.ItemType.Stone);
             return $"마을 {data.VillageId} [{data.Stage}]: Food {food}/{foodCap}  Wood {wood}/{woodCap}  Stone {stone}/{stoneCap}";
         }
 
@@ -174,10 +167,15 @@ namespace ARPG.Village
             if (_villages.TryGetValue(villageId, out VillageData? data) == false)
                 return 0;
 
-            if (data.Resources.TryGetValue(type, out int amount))
-                return amount;
+            return VillageResourceSimulation.GetAmount(data, type);
+        }
 
-            return 0;
+        public int GetResourceCap(int villageId, GlobalEnum.ItemType type)
+        {
+            if (_villages.TryGetValue(villageId, out VillageData? data) == false)
+                return 0;
+
+            return VillageResourceSimulation.GetCap(data, type);
         }
 
         public Dictionary<int, VillageData>.ValueCollection GetAllVillages()
@@ -248,7 +246,7 @@ namespace ARPG.Village
             data.NpcEntityIds.Remove(npcEntityId);
         }
 
-        // ── §0 추상 인구 → 마을 경제 인구(v.Population) 소싱 (NPC_SIMPLIFICATION_PLAN §3.2) ──
+        // ── §0 추상 인구 → 마을 경제 인구(v.Population) 소싱 (VILLAGE_NPC_BOUNDARY_DESIGN §2) ──
         // 정량화(pop/50·cap25)는 기존 NPC 스폰 수 캘리브레이션 재사용 — 생산/Tier 임계값 재튜닝 회피.
         public const int ABSTRACT_POP_DIVISOR = 50;  // 추상 인구 K명당 경제 인구 1
         public const int ABSTRACT_POP_CAP = 25;      // 경제 인구 상한 (pop≈1250에서 도달)
@@ -302,6 +300,7 @@ namespace ARPG.Village
         public void Load(List<VillageData> villageDatas)
         {
             _villages.Clear();
+            _placementWarnings.Clear();
 
             if (villageDatas == null)
                 return;
@@ -318,6 +317,8 @@ namespace ARPG.Village
 
                 if (data.ResourceCaps == null)
                     data.ResourceCaps = new Dictionary<GlobalEnum.ItemType, int>();
+                if (data.ActiveBuildTasks == null)
+                    data.ActiveBuildTasks = new List<BuildTaskSnapshot>();
                 if (data.RegisteredAt <= 0f)
                     data.RegisteredAt = AR.s.Time.CurrentGameTime;
 
@@ -427,33 +428,145 @@ namespace ARPG.Village
         /// <summary>
         /// 로드 후 호출. VillageData.PlacedObjects → ECS 엔티티 + PlacedObjectComponent 재구성 + Registry 등록.
         /// </summary>
-        private void RestorePlacedObjectsFromData(VillageData data)
+        private void RestorePlacedObjectsFromData(VillageData data,
+            bool pendingOnly = false)
         {
             if (data.PlacedObjects == null) return;
 
             for (int i = 0; i < data.PlacedObjects.Count; i++)
             {
                 PlacedObjectSaveData saved = data.PlacedObjects[i];
+                if (pendingOnly == true && saved.PlacementPending == false
+                    && VillageConstructionPosition.IsAssigned(saved) == true)
+                    continue;
+
                 Tables.BuildableItemTable? t = AR.s.Data.GetBuildableItem(saved.TableId);
                 if (t == null) continue;
 
-                int entityId = AR.s.Entity.CreateEntity();
-                AR.s.Component.AddComponent(entityId, new PlacedObjectComponent
+                if (t.SpawnType == GlobalEnum.BuildableSpawnType.Entity)
                 {
-                    VillageId = data.VillageId,
-                    TableId = saved.TableId,
-                    TileX = saved.TileX,
-                    TileY = saved.TileY,
-                    HP = saved.Hp > 0 ? saved.Hp : t.HP,
-                    MaxHP = saved.MaxHp > 0 ? saved.MaxHp : t.HP,
-                    Service = (ProvidedService)t.ProvidedService,
-                    SetMember = (SetMemberTag)t.SetMembership,
-                    UsingNpcEntityId = -1,
-                    LastUseGameTime = saved.LastUseGameTime,
-                });
-                _placedObjects.Register(data.VillageId, entityId, saved.TableId,
-                    new Vector2Int(saved.TileX, saved.TileY));
+                    if (TryRestoreCompletedBuilding(data, saved, t, i) == false)
+                        continue;
+                }
+                else if (VillageConstructionPosition.IsAssigned(saved) == false)
+                {
+                    saved.PlacementPending = true;
+                    WarnPlacementOnce(data.VillageId, "completed", i,
+                        $"Tile 오브젝트 {saved.TableId}의 미할당 복원은 지원되지 않아 보존");
+                    continue;
+                }
+
+                saved.PlacementPending = false;
+                CreatePlacedObjectRuntime(data, saved, t);
             }
+        }
+
+        private bool TryRestoreCompletedBuilding(VillageData data,
+            PlacedObjectSaveData saved, Tables.BuildableItemTable table, int index)
+        {
+            if (VillageConstructionPosition.IsAssigned(saved) == false)
+            {
+                Vector2Int? tile = FindMaterializationTile(data, table);
+                if (tile.HasValue == false)
+                {
+                    saved.PlacementPending = true;
+                    WarnPlacementOnce(data.VillageId, "completed", index,
+                        $"완공 건물 {saved.TableId} 배치 타일 없음");
+                    return false;
+                }
+
+                if (AR.s.Map.PlaceObject(tile.Value.x, tile.Value.y, saved.TableId,
+                        isUnderConstruction: false, villageId: data.VillageId,
+                        currentHp: table.HP, out int buildingId) == false)
+                {
+                    saved.PlacementPending = true;
+                    WarnPlacementOnce(data.VillageId, "completed", index,
+                        $"완공 건물 {saved.TableId} Map/Building 배치 실패");
+                    return false;
+                }
+
+                saved.TileX = tile.Value.x;
+                saved.TileY = tile.Value.y;
+                saved.BuildingEntityId = buildingId;
+                return true;
+            }
+
+            int existingId = saved.BuildingEntityId;
+            if (existingId < 0 || AR.s.Building.GetSaveData(existingId) == null)
+                existingId = AR.s.Building.FindBuildingAt(saved.TileX, saved.TileY,
+                    saved.TableId);
+
+            if (existingId >= 0)
+            {
+                saved.BuildingEntityId = existingId;
+                BuildingSaveData? building = AR.s.Building.GetSaveData(existingId);
+                if (building != null && building.IsUnderConstruction == true)
+                    AR.s.Building.CompleteBuilding(existingId, table);
+                return true;
+            }
+
+            if (AR.s.Building.IsTileOccupied(saved.TileX, saved.TileY)
+                || AR.s.Map.PlaceObject(saved.TileX, saved.TileY, saved.TableId,
+                    isUnderConstruction: false, villageId: data.VillageId,
+                    currentHp: table.HP, out int restoredId) == false)
+            {
+                saved.PlacementPending = true;
+                WarnPlacementOnce(data.VillageId, "completed", index,
+                    $"완공 건물 {saved.TableId}의 저장 위치 복원 실패");
+                return false;
+            }
+
+            saved.BuildingEntityId = restoredId;
+            return true;
+        }
+
+        private void CreatePlacedObjectRuntime(VillageData data,
+            PlacedObjectSaveData saved, Tables.BuildableItemTable table)
+        {
+            int entityId = AR.s.Entity.CreateEntity();
+            AR.s.Component.AddComponent(entityId, new PlacedObjectComponent
+            {
+                VillageId = data.VillageId,
+                TableId = saved.TableId,
+                TileX = saved.TileX,
+                TileY = saved.TileY,
+                HP = saved.Hp > 0 ? saved.Hp : table.HP,
+                MaxHP = saved.MaxHp > 0 ? saved.MaxHp : table.HP,
+                Service = (ProvidedService)table.ProvidedService,
+                SetMember = (SetMemberTag)table.SetMembership,
+                UsingNpcEntityId = -1,
+                LastUseGameTime = saved.LastUseGameTime,
+            });
+            _placedObjects.Register(data.VillageId, entityId, saved.TableId,
+                new Vector2Int(saved.TileX, saved.TileY));
+        }
+
+        private static Vector2Int? FindMaterializationTile(VillageData data,
+            Tables.BuildableItemTable table)
+        {
+            Vector2Int center = new Vector2Int(Mathf.FloorToInt(data.PositionX),
+                Mathf.FloorToInt(data.PositionY));
+            int boundsRadius = data.BoundsW > 0
+                ? data.BoundsW / 2
+                : GetBoundsRadius(data.Stage);
+            int maxRadius = boundsRadius > 0
+                ? Mathf.Max(DEFAULT_PLACEMENT_RADIUS,
+                    boundsRadius - VillageTileFinder.OUTSKIRT_MARGIN_TILES)
+                : DEFAULT_PLACEMENT_RADIUS;
+            Tables.VillageStageTable? stage = AR.s.Data.GetVillageStage(data.Stage);
+            VillageTileFinder.SetRoadReserve(stage != null ? stage.RoadReserveRadius : 0,
+                stage != null ? stage.RoadReserveHalfWidth : 0);
+            VillageTileFinder.SetPlazaRadius(stage != null ? stage.PlazaRadius : 0);
+            return VillageTileFinder.FindEmptyTileNearest(center, maxRadius,
+                data.VillageId, table.Category, boundsRadius, table.MinSeparation);
+        }
+
+        private void WarnPlacementOnce(int villageId, string kind, int index,
+            string message)
+        {
+            string key = $"{villageId}:{kind}:{index}";
+            if (_placementWarnings.Add(key) == true)
+                Debug.LogWarning($"[VillageMaterialize] v{villageId} {message}; PlacementPending 재시도 예정");
         }
 
         // ========== 런타임 LOD: 마을 ECS 실체화/추상화 (materialize / fold-back) ==========
@@ -471,11 +584,44 @@ namespace ARPG.Village
             if (_villages.TryGetValue(villageId, out VillageData? data) == false)
                 return;
             if (data.EntityId >= 0)
-                return;   // 이미 실체화됨
+            {
+                RetryPendingPlacements(villageId);
+                return;
+            }
+
+            int completedCountBefore = data.PlacedObjectTypeIds.Count;
+            int placedRecordCountBefore = data.PlacedObjects.Count;
+            int foodCapBefore = VillageResourceSimulation.GetCap(data,
+                GlobalEnum.ItemType.Food);
+            int woodCapBefore = VillageResourceSimulation.GetCap(data,
+                GlobalEnum.ItemType.Wood);
+            int stoneCapBefore = VillageResourceSimulation.GetCap(data,
+                GlobalEnum.ItemType.Stone);
+            bool campfireBefore = data.HasCampfire;
 
             CreateStorageEntity(data);
-            RestoreTaskFromData(data);
             RestorePlacedObjectsFromData(data);
+            RestoreTaskFromData(data);
+
+            if (data.PlacedObjectTypeIds.Count != completedCountBefore
+                || data.PlacedObjects.Count != placedRecordCountBefore
+                || VillageResourceSimulation.GetCap(data, GlobalEnum.ItemType.Food)
+                    != foodCapBefore
+                || VillageResourceSimulation.GetCap(data, GlobalEnum.ItemType.Wood)
+                    != woodCapBefore
+                || VillageResourceSimulation.GetCap(data, GlobalEnum.ItemType.Stone)
+                    != stoneCapBefore
+                || data.HasCampfire != campfireBefore)
+                Debug.LogError($"[VillageMaterialize] v{villageId} 복원 중 완료 부작용이 중복 적용됨");
+        }
+
+        public void RetryPendingPlacements(int villageId)
+        {
+            if (_villages.TryGetValue(villageId, out VillageData? data) == false
+                || data.EntityId < 0)
+                return;
+            RestorePlacedObjectsFromData(data, pendingOnly: true);
+            RestoreTaskFromData(data, pendingOnly: true);
         }
 
         /// <summary>
@@ -509,6 +655,11 @@ namespace ARPG.Village
             var taskPool = AR.s.Component.GetComponentPool<ObjectPlacementTaskComponent>();
 
             List<BuildTaskSnapshot> snapshots = new List<BuildTaskSnapshot>();
+            for (int i = 0; i < data.ActiveBuildTasks.Count; i++)
+            {
+                if (data.ActiveBuildTasks[i].PlacementPending == true)
+                    snapshots.Add(data.ActiveBuildTasks[i]);
+            }
             List<int> toDestroy = new List<int>();
             for (int i = 0; i < taskPool.Count; i++)
             {
@@ -526,6 +677,7 @@ namespace ARPG.Village
                     ReservedWood = t.ReservedWoodCost,
                     ReservedStone = t.ReservedStoneCost,
                     BuildingEntityId = t.BuildingEntityId,
+                    PlacementPending = false,
                 });
                 toDestroy.Add(taskPool.GetEntityId(i));
             }
@@ -610,12 +762,12 @@ namespace ARPG.Village
             VillageStorageComponent storage = new VillageStorageComponent
             {
                 VillageId = data.VillageId,
-                FoodAmount = GetInt(data, GlobalEnum.ItemType.Food),
-                WoodAmount = GetInt(data, GlobalEnum.ItemType.Wood),
-                StoneAmount = GetInt(data, GlobalEnum.ItemType.Stone),
-                FoodCap = GetCap(data, GlobalEnum.ItemType.Food),
-                WoodCap = GetCap(data, GlobalEnum.ItemType.Wood),
-                StoneCap = GetCap(data, GlobalEnum.ItemType.Stone),
+                FoodAmount = VillageResourceSimulation.GetAmount(data, GlobalEnum.ItemType.Food),
+                WoodAmount = VillageResourceSimulation.GetAmount(data, GlobalEnum.ItemType.Wood),
+                StoneAmount = VillageResourceSimulation.GetAmount(data, GlobalEnum.ItemType.Stone),
+                FoodCap = VillageResourceSimulation.GetCap(data, GlobalEnum.ItemType.Food),
+                WoodCap = VillageResourceSimulation.GetCap(data, GlobalEnum.ItemType.Wood),
+                StoneCap = VillageResourceSimulation.GetCap(data, GlobalEnum.ItemType.Stone),
                 HungerHoursAccumulated = data.HungerHoursAccumulated,
                 SurplusFlags = 0,
             };
@@ -675,7 +827,7 @@ namespace ARPG.Village
             return t.BoundsRadius;
         }
 
-        private void SyncStorageComponent(VillageData data)
+        public void SyncStorageFromData(VillageData data)
         {
             if (data.EntityId < 0)
                 return;
@@ -683,22 +835,21 @@ namespace ARPG.Village
             if (AR.s.Component.TryGetComponent<VillageStorageComponent>(data.EntityId, out var storage) == false)
                 return;
 
-            storage.FoodAmount = GetInt(data, GlobalEnum.ItemType.Food);
-            storage.WoodAmount = GetInt(data, GlobalEnum.ItemType.Wood);
-            storage.StoneAmount = GetInt(data, GlobalEnum.ItemType.Stone);
+            storage.FoodAmount = VillageResourceSimulation.GetAmount(data, GlobalEnum.ItemType.Food);
+            storage.WoodAmount = VillageResourceSimulation.GetAmount(data, GlobalEnum.ItemType.Wood);
+            storage.StoneAmount = VillageResourceSimulation.GetAmount(data, GlobalEnum.ItemType.Stone);
+            storage.FoodCap = VillageResourceSimulation.GetCap(data, GlobalEnum.ItemType.Food);
+            storage.WoodCap = VillageResourceSimulation.GetCap(data, GlobalEnum.ItemType.Wood);
+            storage.StoneCap = VillageResourceSimulation.GetCap(data, GlobalEnum.ItemType.Stone);
+            storage.HungerHoursAccumulated = data.HungerHoursAccumulated;
+            storage.SurplusFlags = 0;
+            if (storage.FoodAmount >= storage.FoodCap)
+                storage.SurplusFlags |= VillageSurplusFlags.Food;
+            if (storage.WoodAmount >= storage.WoodCap)
+                storage.SurplusFlags |= VillageSurplusFlags.Wood;
+            if (storage.StoneAmount >= storage.StoneCap)
+                storage.SurplusFlags |= VillageSurplusFlags.Stone;
             AR.s.Component.SetComponent(data.EntityId, storage);
-        }
-
-        private static int GetInt(VillageData data, GlobalEnum.ItemType type)
-        {
-            return data.Resources.TryGetValue(type, out int v) ? v : 0;
-        }
-
-        private static int GetCap(VillageData data, GlobalEnum.ItemType type)
-        {
-            if (data.ResourceCaps.TryGetValue(type, out int cap))
-                return cap;
-            return DEFAULT_RESOURCE_CAP;
         }
 
         // ========== Phase B: 오브젝트 배치 콜백 ==========
@@ -706,7 +857,8 @@ namespace ARPG.Village
         /// <summary>
         /// 오브젝트 배치 완료 시 호출. 데이터 주도 Cap 확장 + Phase D PlacedObject 정본 추가 + ECS 엔티티 발급.
         /// </summary>
-        public void OnObjectPlaced(int villageId, int tableId, int tileX, int tileY)
+        public void OnObjectPlaced(int villageId, int tableId, int tileX, int tileY,
+            int buildingEntityId = -1)
         {
             if (_villages.TryGetValue(villageId, out VillageData? v) == false)
                 return;
@@ -715,25 +867,9 @@ namespace ARPG.Village
             if (t == null)
                 return;
 
-            // Cap 확장: 테이블 컬럼 그대로 가산
-            if (t.StorageCap_Food > 0)
-                AddCap(v, GlobalEnum.ItemType.Food, t.StorageCap_Food);
-            if (t.StorageCap_Wood > 0)
-                AddCap(v, GlobalEnum.ItemType.Wood, t.StorageCap_Wood);
-            if (t.StorageCap_Stone > 0)
-                AddCap(v, GlobalEnum.ItemType.Stone, t.StorageCap_Stone);
-
-            // Phase D: PlacedObject 정본 추가 + ECS 엔티티 발급 + Registry 등록
-            PlacedObjectSaveData saved = new PlacedObjectSaveData
-            {
-                TableId = tableId,
-                TileX = tileX,
-                TileY = tileY,
-                Hp = t.HP,
-                MaxHp = t.HP,
-                LastUseGameTime = 0f,
-            };
-            v.PlacedObjects.Add(saved);
+            VillageConstructionLedger.ApplyCompletedBuild(v, t, tileX, tileY,
+                buildingEntityId);
+            SyncStorageFromData(v);
 
             int entityId = AR.s.Entity.CreateEntity();
             AR.s.Component.AddComponent(entityId, new PlacedObjectComponent
@@ -750,25 +886,6 @@ namespace ARPG.Village
                 LastUseGameTime = 0f,
             });
             _placedObjects.Register(villageId, entityId, tableId, new Vector2Int(tileX, tileY));
-        }
-
-        private void AddCap(VillageData v, GlobalEnum.ItemType type, int delta)
-        {
-            int cur = v.ResourceCaps.TryGetValue(type, out int c) ? c : DEFAULT_RESOURCE_CAP;
-            int next = cur + delta;
-            v.ResourceCaps[type] = next;
-
-            // VillageStorageComponent 동기화
-            if (v.EntityId >= 0 &&
-                AR.s.Component.TryGetComponent<VillageStorageComponent>(v.EntityId, out var s))
-            {
-                if (type == GlobalEnum.ItemType.Wood) s.WoodCap = next;
-                else if (type == GlobalEnum.ItemType.Stone) s.StoneCap = next;
-                else if (type == GlobalEnum.ItemType.Food) s.FoodCap = next;
-                AR.s.Component.SetComponent(v.EntityId, s);
-            }
-
-            Debug.Log($"[Cap] v{v.VillageId} {type} +{delta} → {next}");
         }
 
         // ========== Phase B: 진행 중 태스크 세이브 동기화 ==========
@@ -801,6 +918,7 @@ namespace ARPG.Village
                     ReservedWood = t.ReservedWoodCost,
                     ReservedStone = t.ReservedStoneCost,
                     BuildingEntityId = t.BuildingEntityId,
+                    PlacementPending = false,
                 });
             }
 
@@ -816,10 +934,18 @@ namespace ARPG.Village
                 v.CurrentBuildTableId = 0;
                 v.CurrentBuildStartedAt = -1f;
 
+                List<BuildTaskSnapshot> synchronized = new List<BuildTaskSnapshot>();
+                for (int i = 0; i < v.ActiveBuildTasks.Count; i++)
+                {
+                    if (v.ActiveBuildTasks[i].PlacementPending == true)
+                        synchronized.Add(v.ActiveBuildTasks[i]);
+                }
                 if (tasksByVillage.TryGetValue(v.VillageId, out var list))
-                    v.ActiveBuildTasks = list;
-                else
-                    v.ActiveBuildTasks.Clear();
+                {
+                    for (int i = 0; i < list.Count; i++)
+                        synchronized.Add(list[i]);
+                }
+                v.ActiveBuildTasks = synchronized;
 
                 // Phase C: VillageComponent 미러
                 if (AR.s.Component.TryGetComponent<VillageComponent>(v.EntityId, out var vc))
@@ -843,7 +969,7 @@ namespace ARPG.Village
         /// 로드 후 호출. VillageData.ActiveBuildTasks → 각 task entity로 재구성.
         /// 구 세이브 호환: ActiveBuildTasks 비어있고 CurrentBuildTableId>0이면 단일 task로 마이그레이션.
         /// </summary>
-        public void RestoreTaskFromData(VillageData v)
+        public void RestoreTaskFromData(VillageData v, bool pendingOnly = false)
         {
             if (v.EntityId < 0) return;
 
@@ -867,8 +993,33 @@ namespace ARPG.Village
             for (int i = 0; i < v.ActiveBuildTasks.Count; i++)
             {
                 BuildTaskSnapshot snap = v.ActiveBuildTasks[i];
+                if (pendingOnly == true && snap.PlacementPending == false
+                    && VillageConstructionPosition.IsAssigned(snap) == true)
+                    continue;
+
                 Tables.BuildableItemTable? buildTable = AR.s.Data.GetBuildableItem(snap.TableId);
-                float buildHours = (buildTable != null && buildTable.BuildHours > 0f) ? buildTable.BuildHours : 2f;
+                if (buildTable == null)
+                {
+                    snap.PlacementPending = true;
+                    WarnPlacementOnce(v.VillageId, "task", i,
+                        $"진행 task {snap.TableId} 테이블 누락");
+                    continue;
+                }
+                float buildHours = VillageConstructionRules.GetBuildHours(buildTable);
+
+                if (buildTable.SpawnType == GlobalEnum.BuildableSpawnType.Entity
+                    && TryRestoreTaskBuilding(v, snap, buildTable, i) == false)
+                    continue;
+                if (buildTable.SpawnType == GlobalEnum.BuildableSpawnType.Tile
+                    && VillageConstructionPosition.IsAssigned(snap) == false)
+                {
+                    snap.PlacementPending = true;
+                    WarnPlacementOnce(v.VillageId, "task", i,
+                        $"Tile task {snap.TableId} 좌표 미할당");
+                    continue;
+                }
+
+                snap.PlacementPending = false;
 
                 // AR.s.Entity.RegisterExistingEntity 덕분에 BuildingManager.Load가 저장 EntityId를 그대로
                 // 재사용 → 저장된 BuildingEntityId가 그대로 유효 (진행도↔HP 동기화 복원).
@@ -893,6 +1044,65 @@ namespace ARPG.Village
             }
         }
 
+        private bool TryRestoreTaskBuilding(VillageData village, BuildTaskSnapshot snap,
+            Tables.BuildableItemTable table, int index)
+        {
+            int progressHp = VillageConstructionRules.GetProgressHp(table,
+                snap.AccumulatedHours);
+            if (VillageConstructionPosition.IsAssigned(snap) == false)
+            {
+                Vector2Int? tile = FindMaterializationTile(village, table);
+                if (tile.HasValue == false)
+                {
+                    snap.PlacementPending = true;
+                    WarnPlacementOnce(village.VillageId, "task", index,
+                        $"진행 task {snap.TableId} 배치 타일 없음");
+                    return false;
+                }
+
+                if (AR.s.Map.PlaceObject(tile.Value.x, tile.Value.y, snap.TableId,
+                        isUnderConstruction: true, villageId: village.VillageId,
+                        currentHp: progressHp, out int buildingId) == false)
+                {
+                    snap.PlacementPending = true;
+                    WarnPlacementOnce(village.VillageId, "task", index,
+                        $"진행 task {snap.TableId} Map/Building 배치 실패");
+                    return false;
+                }
+
+                snap.TileX = tile.Value.x;
+                snap.TileY = tile.Value.y;
+                snap.BuildingEntityId = buildingId;
+                return true;
+            }
+
+            int existingId = snap.BuildingEntityId;
+            if (existingId < 0 || AR.s.Building.GetSaveData(existingId) == null)
+                existingId = AR.s.Building.FindBuildingAt(snap.TileX, snap.TileY,
+                    snap.TableId);
+            if (existingId >= 0
+                && AR.s.Building.RestoreUnderConstructionProgress(existingId,
+                    village.VillageId, progressHp, table))
+            {
+                snap.BuildingEntityId = existingId;
+                return true;
+            }
+
+            if (AR.s.Building.IsTileOccupied(snap.TileX, snap.TileY)
+                || AR.s.Map.PlaceObject(snap.TileX, snap.TileY, snap.TableId,
+                    isUnderConstruction: true, villageId: village.VillageId,
+                    currentHp: progressHp, out int restoredId) == false)
+            {
+                snap.PlacementPending = true;
+                WarnPlacementOnce(village.VillageId, "task", index,
+                    $"진행 task {snap.TableId}의 저장 위치 복원 실패");
+                return false;
+            }
+
+            snap.BuildingEntityId = restoredId;
+            return true;
+        }
+
         // ========== Phase D: 세트 판정 API ==========
 
         /// <summary>
@@ -900,29 +1110,18 @@ namespace ARPG.Village
         /// ObjectSetCatalog의 정의(요구 비트 + Range)에 따라 자동 분기.
         /// Range == 0 → 마을 전체. Range > 0 → anchor 기준 N×N (체비셰프).
         /// </summary>
-        public bool HasObjectSet(int villageId, ObjectSetType setType, Vector2Int anchor = default)
+        public bool HasObjectSet(int villageId, ObjectSetType setType)
         {
-            if (ObjectSetCatalog.All.TryGetValue(setType, out var def) == false) return false;
+            if (_villages.TryGetValue(villageId, out VillageData? village) == false)
+                return false;
+            return VillageConstructionLedger.HasObjectSet(village, setType);
+        }
 
-            List<int> entities;
-            if (def.Range == 0)
-            {
-                entities = _placedObjects.GetAllEntitiesInVillage(villageId);
-            }
-            else
-            {
-                int half = def.Range / 2;
-                RectInt rect = new RectInt(anchor.x - half, anchor.y - half, def.Range, def.Range);
-                entities = _placedObjects.GetAllEntitiesInBounds(villageId, rect);
-            }
-
-            SetMemberTag covered = SetMemberTag.None;
-            for (int i = 0; i < entities.Count; i++)
-            {
-                if (AR.s.Component.TryGetComponent<PlacedObjectComponent>(entities[i], out var po))
-                    covered |= po.SetMember;
-            }
-            return (covered & def.RequiredMask) == def.RequiredMask;
+        public bool HasObjectSet(int villageId, ObjectSetType setType, Vector2Int anchor)
+        {
+            if (_villages.TryGetValue(villageId, out VillageData? village) == false)
+                return false;
+            return VillageConstructionLedger.HasObjectSet(village, setType, anchor);
         }
 
         /// <summary>
@@ -931,16 +1130,9 @@ namespace ARPG.Village
         /// </summary>
         public int CountByService(int villageId, ProvidedService service)
         {
-            var entities = _placedObjects.GetAllEntitiesInVillage(villageId);
-            int count = 0;
-            for (int i = 0; i < entities.Count; i++)
-            {
-                if (AR.s.Component.TryGetComponent<PlacedObjectComponent>(entities[i], out var po))
-                {
-                    if ((po.Service & service) != 0) count++;
-                }
-            }
-            return count;
+            if (_villages.TryGetValue(villageId, out VillageData? village) == false)
+                return 0;
+            return VillageConstructionLedger.CountByService(village, service);
         }
 
         // ========== Phase D: 상점 거래 API ==========

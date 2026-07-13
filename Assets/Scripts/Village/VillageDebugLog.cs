@@ -57,7 +57,7 @@ namespace ARPG.Village
             // Phase D: 활성 서비스
             string services = FormatServices(v);
 
-            Debug.Log($"[VillageSnapshot] v{v.VillageId} Stage={v.Stage} Pop={v.Population}/{targetPop} {food} {wood} {stone} Hunger={s.HungerHoursAccumulated}h Carry(F{s.FoodCarry:F2}/W{s.WoodCarry:F2}/S{s.StoneCarry:F2}) {bounds}{wall}{threat} {services} Build={build} Placed=[{placed}] {tier}");
+            Debug.Log($"[VillageSnapshot] v{v.VillageId} Stage={v.Stage} Pop={v.Population}/{targetPop} {food} {wood} {stone} Hunger={s.HungerHoursAccumulated}h Carry(F{v.FoodCarry:F2}/W{v.WoodCarry:F2}/S{v.StoneCarry:F2}) {bounds}{wall}{threat} {services} Build={build} Placed=[{placed}] {tier}");
         }
 
         // 모든 임계값은 VillageStageTable에서 조회 — System_VillageTierProgression.CanPromoteTo와 동일 정본

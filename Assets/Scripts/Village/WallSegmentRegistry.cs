@@ -34,6 +34,8 @@ namespace ARPG.Village
             {
                 if (v.WallSegments[i].SegmentId == segmentId)
                 {
+                    if (v.WallSegments[i].IsBuilt)
+                        return;
                     v.WallSegments[i].IsBuilt = true;
                     v.CompletedWallSegments++;
                     return;

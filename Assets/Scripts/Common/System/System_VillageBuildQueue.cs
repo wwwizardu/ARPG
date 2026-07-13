@@ -9,7 +9,7 @@ using UnityEngine;
 namespace ARPG.Systems
 {
     /// <summary>
-    /// 마을의 범용 오브젝트 배치 큐 — 자가 건설 (NPC_SIMPLIFICATION_PLAN D4).
+    /// 마을의 범용 오브젝트 배치 큐 — 자가 건설 (VILLAGE_NPC_BOUNDARY_DESIGN §4).
     /// Step A (BUILD_PRIORITY_DESIGN.md): ObjectPlacementTaskComponent를 별도 task entity에 부착.
     ///  - 동시 task 한도는 마을당 Population (§0 추상 인구 정량화 값).
     ///  - VillageNeedsEvaluator가 점수 정렬한 후보 리스트를 받아 affordable + placeable한 첫 후보 채택.
@@ -58,7 +58,7 @@ namespace ARPG.Systems
                 if (v.Population < 1) continue;
                 if (v.EntityId < 0) continue;
 
-                int activeCount = CountActiveTasksForVillage(v.VillageId);
+                int activeCount = v.ActiveBuildTasks.Count;
                 const int maxConcurrent = 1;
 
                 if (activeCount < maxConcurrent)
@@ -165,22 +165,13 @@ namespace ARPG.Systems
                 }
 
                 if (dirty)
+                {
                     cm.SetComponent(taskEntityId, task);
+                    VillageData? village = AR.s.Village.GetVillage(task.VillageId);
+                    if (village != null)
+                        VillageConstructionLedger.UpsertTask(village, CreateSnapshot(task));
+                }
             }
-        }
-
-        /// <summary>
-        /// 해당 마을 소속 진행 중 task 수 카운트. Step B: Pop과 비교해 동시성 제한에 사용.
-        /// </summary>
-        private static int CountActiveTasksForVillage(int villageId)
-        {
-            SparseSet<ObjectPlacementTaskComponent> pool = AR.s.Component.GetComponentPool<ObjectPlacementTaskComponent>();
-            int count = 0;
-            for (int i = 0; i < pool.Count; i++)
-            {
-                if (pool.GetByIndex(i).VillageId == villageId) count++;
-            }
-            return count;
         }
 
         /// <summary>
@@ -266,7 +257,7 @@ namespace ARPG.Systems
                 return BuildAttemptResult.WaitForResources;
             }
 
-            float buildHours = table.BuildHours > 0f ? table.BuildHours : 2f;
+            float buildHours = VillageConstructionRules.GetBuildHours(table);
 
             // 즉시 건설중 빌딩 엔티티 생성 (SpawnType=Entity 한정).
             //  - 진행도 = CurrentHp(0 → table.HP), 데미지 받으면 진행 후퇴.
@@ -303,6 +294,7 @@ namespace ARPG.Systems
                 BuildingEntityId = buildingEntityId,
             };
             AR.s.Component.AddComponent(taskEntityId, task);
+            VillageConstructionLedger.UpsertTask(v, CreateSnapshot(task));
 
             string buildingNote = buildingEntityId >= 0 ? $", building={buildingEntityId}" : "";
             Debug.Log($"[BuildQueue] v{v.VillageId} 착수 '{table.Name}' (taskEntity={taskEntityId}{buildingNote}): Wood -{table.Cost_Wood}, Stone -{table.Cost_Stone}, tile=({tile.Value.x},{tile.Value.y}), 필요={buildHours:F1}h");
@@ -318,6 +310,8 @@ namespace ARPG.Systems
             // task에는 VillageId만 있으므로 VillageData를 다시 조회
             VillageData? v = AR.s.Village.GetVillage(task.VillageId);
             if (v == null) return;
+            VillageConstructionLedger.RemoveTask(v, task.TargetTableId, task.TileX, task.TileY,
+                task.BuildingEntityId);
 
             Tables.BuildableItemTable? table = AR.s.Data.GetBuildableItem(task.TargetTableId);
             if (table == null)
@@ -345,7 +339,6 @@ namespace ARPG.Systems
                     return;
                 }
 
-                v.PlacedObjectTypeIds.Add(task.TargetTableId);
                 AR.s.Village.OnObjectPlaced(v.VillageId, task.TargetTableId, task.TileX, task.TileY);
                 Debug.Log($"[BuildQueue] v{v.VillageId} '{table.Name}' 완성 at ({task.TileX},{task.TileY}) [tile]");
                 return;
@@ -369,12 +362,8 @@ namespace ARPG.Systems
                 FinalizeUnderConstructionBuilding(buildingId, table);
             }
 
-            v.PlacedObjectTypeIds.Add(task.TargetTableId);
-            AR.s.Village.OnObjectPlaced(v.VillageId, task.TargetTableId, task.TileX, task.TileY);
-
-            // Phase A 호환 플래그 (UI/타 시스템이 아직 참조할 수 있어 유지)
-            if (task.TargetTableId == VillageNeedsEvaluator.CAMPFIRE_TABLE_ID)
-                v.HasCampfire = true;
+            AR.s.Village.OnObjectPlaced(v.VillageId, task.TargetTableId, task.TileX,
+                task.TileY, buildingId);
 
             Debug.Log($"[BuildQueue] v{v.VillageId} '{table.Name}' 완성 at ({task.TileX},{task.TileY}) [entity={buildingId}]");
         }
@@ -386,97 +375,9 @@ namespace ARPG.Systems
         /// </summary>
         private static void FinalizeUnderConstructionBuilding(int buildingId, Tables.BuildableItemTable table)
         {
-            ComponentManager cm = AR.s.Component;
-
-            // BuildingComponent: IsUnderConstruction=false, CurrentHp=table.HP
-            if (cm.TryGetComponent<BuildingComponent>(buildingId, out var bc))
-            {
-                bc.IsUnderConstruction = false;
-                bc.CurrentHp = table.HP;
-                cm.SetComponent(buildingId, bc);
-            }
-
-            // StatComponent: CurrentHp = MaxHp (만피 → HP바 자동 숨김)
-            if (cm.TryGetComponent<StatComponent>(buildingId, out var stat))
-            {
-                stat.SetCurrentHpDirect(table.HP);
-                cm.SetComponent(buildingId, stat);
-            }
-
-            // BuildingSaveData도 동기화 (청크 비활성화 시 제대로 저장되도록)
-            if (AR.s.Building != null)
-            {
-                BuildingSaveData? saveData = AR.s.Building.GetSaveData(buildingId);
-                if (saveData != null)
-                {
-                    saveData.IsUnderConstruction = false;
-                    saveData.CurrentHp = table.HP;
-                }
-            }
-
-            // 스프라이트 교체 — placeholder → 최종
-            if (AR.s.Message.TryGetEntity(buildingId, out var entity) && entity != null)
-            {
-                if (table.AnimationId == 0)
-                {
-                    SwapToFinalSprite(entity, table.ResourceName).Forget();
-                }
-                else
-                {
-                    SwapToFinalAnimation(buildingId, entity, table.AnimationId);
-                }
-            }
-
-            // HpBarView 갱신 → fillAmount=1.0 → 만피 숨김 로직 적용
-            AR.s.Message.SendToEntity(new ARPG.Message.DamageMessage
-            {
-                TargetEntityId = buildingId,
-                DamageAmount = 0,
-                AttackerEntityId = -1,
-                DamageType = GlobalEnum.DamageType.Physics,
-                CurrentHp = table.HP,
-                MaxHp = table.HP,
-            });
-        }
-
-        private static async UniTask SwapToFinalSprite(ARPG.Base.EntityBase entity, string resourceName)
-        {
-            if (string.IsNullOrEmpty(resourceName)) return;
-            try
-            {
-                Sprite sprite = await UnityEngine.AddressableAssets.Addressables
-                    .LoadAssetAsync<Sprite>(resourceName).ToUniTask();
-                if (sprite != null && entity != null && entity.SpriteRenderer != null)
-                    entity.SpriteRenderer.sprite = sprite;
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogError($"[BuildQueue] 최종 스프라이트 로드 실패 '{resourceName}': {e.Message}");
-            }
-        }
-
-        private static void SwapToFinalAnimation(int buildingId, ARPG.Base.EntityBase entity, int animationId)
-        {
-            // BuildingFactory의 SetupAnimatedSprite와 동등 — 진행중에는 정적 스프라이트만 썼으므로 새로 부착.
-            // 동일 함수가 internal이라 호출 불가 → SpriteAnimationComponent 추가만 직접 수행, System_Animation이 처리.
-            ARPG.Tables.AnimationTable? animTable = AR.s.Data.GetAnimation(animationId);
-            if (animTable == null) return;
-
-            AR.s.Component.AddComponent(buildingId, new SpriteAnimationComponent
-            {
-                AnimationTableId = animationId,
-                LoadState = AnimationLoadState.None,
-                PlaybackSpeed = 1f,
-                CurrentCategory = GlobalEnum.AnimCategory.Idle,
-                CurrentFrame = 0,
-                FrameTimer = 0f,
-                FrameDuration = 0.1f,
-                IsLooping = true,
-                IsPlaying = true
-            });
-            AR.s.Component.AddComponent(buildingId, new AnimatorComponent());
-            // SpriteLibrary 로드는 System_Animation이 LoadState=None 보고 처리하길 기대.
-            // 만약 그렇지 않다면 BuildingFactory의 비공개 헬퍼를 internal로 노출하거나 동일 로직을 여기 복제 필요.
+            if (AR.s.Building == null
+                || AR.s.Building.CompleteBuilding(buildingId, table) == false)
+                Debug.LogWarning($"[BuildQueue] building {buildingId} 완성 상태 저장 복원 실패");
         }
 
         private static void RefundReserved(VillageData v, ObjectPlacementTaskComponent task)
@@ -489,11 +390,7 @@ namespace ARPG.Systems
 
         // ========== Phase C: 벽 세그먼트 처리 ==========
 
-        // VILLAGE_PHASES.md (Phase C 벽 인프라): 벽 1칸 건설 시간 0.5h (실시간 ~15초)
-        private const float PALISADE_BUILD_HOURS = 0.5f;
-        private const int PALISADE_TABLE_ID = 180;
-        private const int PALISADE_GATE_TABLE_ID = 181;
-
+        // 벽 건설 시간은 VillageWallRules.PalisadeBuildHours가 정본이다.
         /// <summary>
         /// 미완성 벽 세그먼트를 ObjectPlacementTaskComponent로 큐잉.
         /// 자원/타일 체크 — Cost_Wood만 사용 (Palisade=8, Gate=40).
@@ -501,7 +398,7 @@ namespace ARPG.Systems
         /// </summary>
         private bool TryStartWallTask(VillageData v, WallSegmentSaveData seg, float now)
         {
-            int tableId = (seg.Orient == (int)WallOrientation.Gate) ? PALISADE_GATE_TABLE_ID : PALISADE_TABLE_ID;
+            int tableId = VillageWallRules.GetTableId(seg);
             Tables.BuildableItemTable? table = AR.s.Data.GetBuildableItem(tableId);
             if (table == null) return false;
 
@@ -532,12 +429,13 @@ namespace ARPG.Systems
                 TileY = seg.TileY,
                 StartedAt = now,
                 AccumulatedHours = 0f,
-                BuildDurationHours = PALISADE_BUILD_HOURS,
+                BuildDurationHours = VillageWallRules.PalisadeBuildHours,
                 ReservedWoodCost = table.Cost_Wood,
                 ReservedStoneCost = 0,
                 BuildingEntityId = -1,
             };
             AR.s.Component.AddComponent(taskEntityId, task);
+            VillageConstructionLedger.UpsertTask(v, CreateSnapshot(task));
 
             Debug.Log($"[BuildQueue] v{v.VillageId} 벽 착수 seg{seg.SegmentId} '{table.Name}' (taskEntity={taskEntityId}) tile=({seg.TileX},{seg.TileY})");
             return true;
@@ -546,24 +444,15 @@ namespace ARPG.Systems
         /// <summary>현재 task가 벽 세그먼트인지 판정 — TableId로 분기.</summary>
         private static bool IsWallTask(int tableId)
         {
-            return tableId == PALISADE_TABLE_ID || tableId == PALISADE_GATE_TABLE_ID;
+            return VillageWallRules.IsWallTable(tableId);
         }
 
         /// <summary>벽 완성 시 처리 — PlacedObjectTypeIds에 추가하지 않고 WallSegments 마킹.</summary>
         private static void OnWallSegmentCompleted(VillageData v, ObjectPlacementTaskComponent task)
         {
-            // 좌표로 세그먼트 찾기 (SegmentId를 task에 안 박았으므로 좌표 매칭)
-            if (v.WallSegments == null) return;
-            for (int i = 0; i < v.WallSegments.Count; i++)
-            {
-                var seg = v.WallSegments[i];
-                if (seg.IsBuilt == false && seg.TileX == task.TileX && seg.TileY == task.TileY)
-                {
-                    WallSegmentRegistry.MarkSegmentBuilt(v, seg.SegmentId);
-                    UpdateVillageWallStats(v);
-                    return;
-                }
-            }
+            if (VillageWallRules.MarkSegmentBuiltAt(v, task.TileX, task.TileY) == false)
+                return;
+            UpdateVillageWallStats(v);
         }
 
         private static void UpdateVillageWallStats(VillageData v)
@@ -603,6 +492,22 @@ namespace ARPG.Systems
         {
             Tables.VillageStageTable? t = AR.s.Data.GetVillageStage(stage);
             return t != null ? t.PlazaRadius : 0;
+        }
+
+        private static BuildTaskSnapshot CreateSnapshot(ObjectPlacementTaskComponent task)
+        {
+            return new BuildTaskSnapshot
+            {
+                TableId = task.TargetTableId,
+                StartedAt = task.StartedAt,
+                AccumulatedHours = task.AccumulatedHours,
+                TileX = task.TileX,
+                TileY = task.TileY,
+                ReservedWood = task.ReservedWoodCost,
+                ReservedStone = task.ReservedStoneCost,
+                BuildingEntityId = task.BuildingEntityId,
+                PlacementPending = false,
+            };
         }
 
         public void OnReset()

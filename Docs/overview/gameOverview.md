@@ -91,7 +91,7 @@ NPC 관계(가족·원한·파벌·Sentiment) ├─▶ LLM 컨텍스트 ─▶ 
 핵심 재미 검증 후 얹을 확장 — 지금은 의도적으로 미룬다:
 
 - **마을 자가성장** — 정착민이 게임 시간·자원으로 마을을 Seed→City로 키움 ([VILLAGE_GROWTH_STAGES.md](../village/VILLAGE_GROWTH_STAGES.md))
-- **몬스터 침공 / 방어** — 위협도 상승, 외곽 벽·경비 ([VILLAGE_PHASES.md](../village/VILLAGE_PHASES.md) Phase F)
+- **몬스터 침공 / 방어** — 위협도 상승, 외곽 벽·경비 ([VILLAGE_GROWTH_STAGES.md](../village/VILLAGE_GROWTH_STAGES.md) Town/City 목표)
 
 > **엔드게임**: 샌드박스 무한 운영(잠정) — 명확한 승리 조건 없이 더 깊은 영역 도전 + 세계 운영. 핵심 재미 검증 결과에 따라 구체화.
 

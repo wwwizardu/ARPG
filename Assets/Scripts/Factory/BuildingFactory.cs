@@ -143,6 +143,47 @@ namespace ARPG.Factory
             return (entityId, entity);
         }
 
+        public static void ApplyConstructionProgress(int entityId, int currentHp,
+            int maxHp)
+        {
+            int clampedHp = Mathf.Clamp(currentHp, 0, Mathf.Max(1, maxHp));
+            if (AR.s.Component.TryGetComponent<BuildingComponent>(entityId, out var building))
+            {
+                building.CurrentHp = clampedHp;
+                building.IsUnderConstruction = true;
+                AR.s.Component.SetComponent(entityId, building);
+            }
+            if (AR.s.Component.TryGetComponent<StatComponent>(entityId, out var stat))
+            {
+                stat.SetCurrentHpDirect(clampedHp);
+                AR.s.Component.SetComponent(entityId, stat);
+            }
+            SendHpChanged(entityId, clampedHp, maxHp);
+        }
+
+        public static async UniTask ApplyCompletedState(int entityId, EntityBase entity,
+            BuildableItemTable table)
+        {
+            if (AR.s.Component.TryGetComponent<BuildingComponent>(entityId, out var building))
+            {
+                building.CurrentHp = table.HP;
+                building.IsUnderConstruction = false;
+                AR.s.Component.SetComponent(entityId, building);
+            }
+            if (AR.s.Component.TryGetComponent<StatComponent>(entityId, out var stat))
+            {
+                stat.SetCurrentHpDirect(table.HP);
+                AR.s.Component.SetComponent(entityId, stat);
+            }
+
+            if (table.AnimationId == 0)
+                await LoadStaticSprite(entity, table.ResourceName);
+            else
+                SetupAnimatedSprite(entityId, entity, table.AnimationId);
+
+            SendHpChanged(entityId, table.HP, table.HP);
+        }
+
         /// <summary>
         /// 빌딩에 StatComponent + HP바 프리팹 부착.
         /// 진행도/HP를 단일 표현으로 통합 — fillAmount = CurrentHp / MaxHp.
@@ -167,6 +208,19 @@ namespace ARPG.Factory
             {
                 Debug.LogWarning($"[BuildingFactory] Failed to load HP bar prefab: {e.Message}");
             }
+        }
+
+        private static void SendHpChanged(int entityId, int currentHp, int maxHp)
+        {
+            AR.s.Message.SendToEntity(new ARPG.Message.DamageMessage
+            {
+                TargetEntityId = entityId,
+                DamageAmount = 0,
+                AttackerEntityId = -1,
+                DamageType = GlobalEnum.DamageType.Physics,
+                CurrentHp = currentHp,
+                MaxHp = maxHp,
+            });
         }
 
         /// <summary>

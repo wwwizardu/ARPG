@@ -22,15 +22,6 @@ namespace ARPG.Component
         public int WoodCap;
         public int StoneCap;
 
-        // 생산 소수 누적 버퍼 (런타임 전용 — 실체화 중에만 유효, 세이브 안 함).
-        // prodPop 압축으로 시간당 생산이 소수가 되므로, 정수부만 Amount에 반영하고 나머지를 여기 이월한다.
-        // 마을이탈(Dematerialize) 시 <1 손실은 무시 (재실체화 시 0에서 재개).
-        public float FoodCarry;
-        public float WoodCarry;
-        public float StoneCarry;
-        public float IronCarry;
-        public float GoldCarry;
-
         // Food 0 유지된 게임시간 누적 (24h 넘으면 경고 1회)
         public int HungerHoursAccumulated;
 

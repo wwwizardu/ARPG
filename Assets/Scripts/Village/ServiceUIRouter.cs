@@ -35,7 +35,7 @@ namespace ARPG.Village
                 bestEntityId = nearby.NearestForgeEntityId;
                 bestSqr = nearby.NearestForgeDistanceSqr;
             }
-            // Inn — 고용 경로는 제거됐고(NPC_SIMPLIFICATION_PLAN D6) 휴식/세이브 전용 UI만 연다.
+            // Inn — VILLAGE_NPC_BOUNDARY_DESIGN에 따라 휴식/세이브 전용 건물 서비스 UI만 연다.
             if ((nearby.AvailableServices & ProvidedService.Inn) != 0 && nearby.NearestInnEntityId >= 0
                 && nearby.NearestInnDistanceSqr < bestSqr)
             {

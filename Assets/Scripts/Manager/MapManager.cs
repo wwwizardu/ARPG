@@ -368,7 +368,8 @@ namespace ARPG.Map
         /// </summary>
         public bool PlaceObject(int worldX, int worldY, int objectId, bool isUnderConstruction = false)
         {
-            return PlaceObjectInternal(worldX, worldY, objectId, isUnderConstruction, out _);
+            return PlaceObjectInternal(worldX, worldY, objectId, isUnderConstruction,
+                out _, -1, -1);
         }
 
         /// <summary>
@@ -376,10 +377,25 @@ namespace ARPG.Map
         /// </summary>
         public bool PlaceObject(int worldX, int worldY, int objectId, bool isUnderConstruction, out int buildingEntityId)
         {
-            return PlaceObjectInternal(worldX, worldY, objectId, isUnderConstruction, out buildingEntityId);
+            return PlaceObjectInternal(worldX, worldY, objectId, isUnderConstruction,
+                out buildingEntityId, -1, -1);
         }
 
-        private bool PlaceObjectInternal(int worldX, int worldY, int objectId, bool isUnderConstruction, out int buildingEntityId)
+        /// <summary>
+        /// VillageData 복원용 Entity 배치. 소속 마을과 건설 진행 HP를 BuildingSaveData 생성 전에 전달한다.
+        /// Tile 경로에서는 villageId/currentHp가 무시된다.
+        /// </summary>
+        public bool PlaceObject(int worldX, int worldY, int objectId,
+            bool isUnderConstruction, int villageId, int currentHp,
+            out int buildingEntityId)
+        {
+            return PlaceObjectInternal(worldX, worldY, objectId, isUnderConstruction,
+                out buildingEntityId, villageId, currentHp);
+        }
+
+        private bool PlaceObjectInternal(int worldX, int worldY, int objectId,
+            bool isUnderConstruction, out int buildingEntityId, int villageId,
+            int currentHp)
         {
             buildingEntityId = -1;
             if (objectId <= 0)
@@ -405,8 +421,13 @@ namespace ARPG.Map
                     Debug.LogError($"[MapManager] PlaceObject - AR.s.Building is null. AR 프리팹에 BuildingManager 컴포넌트 연결 확인 필요. objectId={objectId}");
                     return false;
                 }
-                int villageId = AR.s.Village != null ? AR.s.Village.FindVillageContaining(worldX, worldY) : -1;
-                int entityId = AR.s.Building.PlaceBuilding(worldX, worldY, objectId, villageId, isUnderConstruction);
+                int resolvedVillageId = villageId >= 0
+                    ? villageId
+                    : (AR.s.Village != null
+                        ? AR.s.Village.FindVillageContaining(worldX, worldY)
+                        : -1);
+                int entityId = AR.s.Building.PlaceBuilding(worldX, worldY, objectId,
+                    resolvedVillageId, isUnderConstruction, currentHp);
                 buildingEntityId = entityId;
                 return entityId >= 0;
             }

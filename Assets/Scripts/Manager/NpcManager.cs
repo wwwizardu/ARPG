@@ -744,7 +744,7 @@ namespace ARPG.Npc
 
             saveData.IsActive = false;
 
-            // (제거) 물리-사망 기반 마을 전멸(DepletedAt/Ruin) 트리거 — NPC_SIMPLIFICATION_PLAN D7.
+            // 물리 NPC 사망은 마을 Fate를 직접 바꾸지 않는다 — VILLAGE_NPC_BOUNDARY_DESIGN §8.
             // 마을 폐허는 "추상 인구 0 → Ruin" 규칙으로 재정의하되 구현은 보류. 모험가 사망은 경제와 무관.
         }
 
@@ -1231,8 +1231,8 @@ namespace ARPG.Npc
 
         #region NPC 메타데이터 조회 / flavor
 
-        // (제거) Inn 고용/방문자 시스템 — NPC_SIMPLIFICATION_PLAN §4.1 (D6).
-        // INN_HIRING_DESIGN.md는 deprecated. 여관 건물/서비스 근접은 유지되나 고용 경로는 없다.
+        // Inn 고용/방문자 시스템은 사용하지 않는다 — VILLAGE_NPC_BOUNDARY_DESIGN §5.
+        // 여관 건물/서비스 근접은 유지되나 고용 경로는 없다.
 
         /// <summary>
         /// EntityId에 매핑된 NpcSaveData를 반환. 없으면 null.

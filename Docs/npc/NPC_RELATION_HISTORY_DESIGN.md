@@ -10,8 +10,8 @@
 > **선행/관련 문서**:
 > - [PROCEDURAL_HISTORY_DESIGN.md](../world_history/PROCEDURAL_HISTORY_DESIGN.md) — 정착지 통폐합/연대기 시뮬 (본 문서 관계 생성의 *입력*: Chronicle/Kingdom/Fate)
 > - [MAP_DESIGN.md](../map/MAP_DESIGN.md) — Region/biome/settlement 배치
-> - [VILLAGE_PHASES.md](../village/VILLAGE_PHASES.md) — 마을 도메인 런타임 시스템 (Priority 50-69, §4.1)
-> - [INN_HIRING_DESIGN.md](../village/INN_HIRING_DESIGN.md) — InnVisitor → Resident 흐름
+> - [VILLAGE_RUNTIME_DESIGN.md](../village/VILLAGE_RUNTIME_DESIGN.md) — 마을 도메인 런타임 시스템
+> - [VILLAGE_NPC_BOUNDARY_DESIGN.md](VILLAGE_NPC_BOUNDARY_DESIGN.md) — 경제 인구와 물리 NPC의 분리
 
 ---
 

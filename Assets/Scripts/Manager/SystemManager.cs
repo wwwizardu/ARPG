@@ -62,7 +62,7 @@ namespace ARPG.Systems
             System_VillagePassiveProduction villagePassiveProductionSystem = new();
             RegisterSystems(villagePassiveProductionSystem);
 
-            // (제거) Priority 56 System_VillagePopulation — NPC 단순화(NPC_SIMPLIFICATION_PLAN D5/D6):
+            // (제거) Priority 56 System_VillagePopulation — VILLAGE_NPC_BOUNDARY_DESIGN:
             // 이민/여관 고용 제거 + 재스폰 보류. 초기 코호트 스폰은 MapManager.CreateMap의 EnsureAllVillagesPopulated가 담당.
 
             // (제거) Priority 58 System_NpcRelationship — 패시브 근접 호감도 drift 폐기.
@@ -91,7 +91,7 @@ namespace ARPG.Systems
             System_VillageWallPlanner villageWallPlannerSystem = new();
             RegisterSystems(villageWallPlannerSystem);
 
-            // (제거) Priority 68 System_VillageJobAssignment — NPC 단순화(NPC_SIMPLIFICATION_PLAN D1/D3):
+            // (제거) Priority 68 System_VillageJobAssignment — VILLAGE_NPC_BOUNDARY_DESIGN:
             // 직업↔작업오브젝트 매칭 폐기. 자원 생산은 인구(v.Population) 기반으로 통일.
 
             // Priority 70: Lifetime System (FixedUpdate) - LifetimeComponent 만료 시 DestroyTag 부착 (토템·지뢰·장판)

@@ -29,7 +29,7 @@ namespace ARPG.Npc
         public bool IsSpawning;
 
         // 마을 시스템 데이터. JobType/SkillLevel은 flavor·장비 시드 용도로만 잔존 —
-        // 기계적 직업 시스템은 제거됨 (NPC_SIMPLIFICATION_PLAN D1).
+        // JobType은 모험가 특성이며 마을 생산 직업이 아니다 (VILLAGE_NPC_BOUNDARY_DESIGN §6).
         public int VillageId;
         public GlobalEnum.JobType JobType;
         public int SkillLevel;

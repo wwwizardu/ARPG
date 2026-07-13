@@ -29,6 +29,18 @@ namespace ARPG.Village
         public int HungerHoursAccumulated;   // Food 0 유지 누적 시간 (24h 넘으면 경고 1회)
         public float RegisteredAt;           // 마을 등록 게임 시각
 
+        // 추상/실시간 생산 공통 원장. 정수 자원으로 반영되지 않은 소수 생산량을 보존한다.
+        public float FoodCarry;
+        public float WoodCarry;
+        public float StoneCarry;
+        public float IronCarry;
+        public float GoldCarry;
+
+        // 추상 건설 clock 및 절차적 역사 초기 발전 1회 적용 플래그.
+        public float LastConstructionSimGameTime;
+        public float LastConstructionTierCheckGameTime;
+        public bool InitialDevelopmentApplied;
+
         // Phase A: 첫 Campfire 제작 상태 (Phase B에서 PlacedObjectTypeIds + CurrentBuild*로 일반화)
         // 구 세이브 호환 위해 필드 유지. VillageManager.Load에서 마이그레이션 후 새 필드만 사용.
         public bool HasCampfire;
@@ -104,6 +116,9 @@ namespace ARPG.Village
             StoneTimer = 0;
             HungerHoursAccumulated = 0;
             RegisteredAt = 0f;
+            LastConstructionSimGameTime = 0f;
+            LastConstructionTierCheckGameTime = 0f;
+            InitialDevelopmentApplied = false;
             HasCampfire = false;
             FirstBuildStartedAt = -1f;
             CurrentBuildTableId = 0;

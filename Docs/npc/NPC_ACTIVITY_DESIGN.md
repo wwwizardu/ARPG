@@ -1,11 +1,8 @@
 # NPC 자율 행동 & 원정 설계 (Activity / Venture System)
 
-> ⚠️ **2026-07-08 갱신 — NPC 단순화 반영** ([NPC_SIMPLIFICATION_PLAN](NPC_SIMPLIFICATION_PLAN.md) D1):
-> **모든 물리 NPC = 모험가(Adventurer) 단일**로 확정. 본 문서의 **Anchored(정주)/Worker(생산) 분류와 관련 절(§2 D1, §3.1 행동 클래스 등)은 폐기**됐다 —
-> 상인·대장장이 등 마을 종속 NPC는 존재하지 않으며 서비스는 무인 건물이 제공하고, 자원 생산은 §0 추상 인구가 구동한다.
-> 이 문서의 유효 범위는 **모험가의 활동/원정(Venture) 축**으로 축소된다. 아래 한 줄 요약·본문 중 정주/생산 NPC 서술은 기록용.
+> **전제**: [VILLAGE_NPC_BOUNDARY_DESIGN](VILLAGE_NPC_BOUNDARY_DESIGN.md)에 따라 모든 물리 NPC는 모험가다. 서비스와 마을 경제는 물리 NPC와 분리되며, 이 문서는 모험가의 활동/원정만 다룬다.
 
-> **한 줄 요약**: 마을에 꼭 필요한 NPC(상인·대장장이 등)는 스케줄 없이 마을에 상주하며 서비스를 제공하고, 나머지 NPC는 **자기 직업/성향에 맞는 활동(몬스터 처치·던전 탐험 등)** 을 **혼자 또는 파티로** 수행한다. 활동 도중 NPC는 **부상·죽음**을 당할 수 있고 **월드 이벤트를 트리거**할 수 있다. 활동은 대부분 **LOD 기반 추상 시뮬레이션**으로 해결되어 관측 가능한 드라마(떠남 → 귀환/전사)를 만든다.
+> **한 줄 요약**: 모험가는 **자기 특성·성향에 맞는 활동(몬스터 처치·던전 탐험 등)** 을 혼자 또는 파티로 수행한다. 활동 도중 부상·죽음과 월드 이벤트가 발생할 수 있으며, 대부분을 LOD 기반 추상 시뮬레이션으로 해결해 관측 가능한 드라마를 만든다.
 
 > **이 문서의 위치**: [README](../README.md)가 말하는 "NPC 일과 / 자율 의사결정 (Phase E)" 중 **자율 의사결정·활동 축**의 정본이다. 시계 기반 하루 일과(수면/식사 사이클)는 본 문서 범위가 아니다(§1.3 참조). 플레이어→NPC 상호작용은 [interactionSystem.md](interactionSystem.md), NPC↔NPC 관계 데이터는 [NPC_RELATION_HISTORY_DESIGN.md](NPC_RELATION_HISTORY_DESIGN.md), NPC가 트리거하는 도전 이벤트는 [WORLD_EVENT_DESIGN.md](../world_history/WORLD_EVENT_DESIGN.md), 활동의 무대가 되는 오프라인/근거리 시뮬 규약은 [PROCEDURAL_HISTORY_DESIGN.md](../world_history/PROCEDURAL_HISTORY_DESIGN.md)가 담당한다.
 
@@ -17,20 +14,20 @@
 
 ### 1.1 문제 정의
 
-Phase A~D로 마을은 스스로 자라지만, NPC는 아직 "직무 보너스를 더하는 정적 인구수"에 가깝다([VILLAGE_PHASES §3](../village/VILLAGE_PHASES.md) — *"NPC 직무: 1:1 매칭, 보너스 가산만, 실제 이동/일과는 Phase E"*). 이 문서는 그 다음 단계로, **NPC가 스스로 무엇을 할지 정하고 실행하며 그 결과로 세계가 바뀌는** 행동 레이어를 설계한다.
+마을 경제는 추상 인구로 진행되지만 물리 모험가에게는 별도의 행동과 결과가 필요하다. 이 문서는 **모험가가 스스로 무엇을 할지 정하고 실행하며 그 결과로 세계가 바뀌는** 행동 레이어를 설계한다.
 
 ### 1.2 설계 철학
 
 - **관측 가능한 드라마 > 정밀 시뮬**: 플레이어가 "아침에 사냥꾼 셋이 북쪽 폐허로 떠났고, 저녁에 둘만 부상 입고 돌아왔다"를 **체감**하는 것이 목표. 매 프레임 실제 전투를 렌더링하는 것이 아니라, **추상 판정 + 서사 피드백**으로 만든다.
 - **성향·관계가 행동을 만든다**: 누가 떠나는지, 누구와 파티를 맺는지, 무엇을 하는지가 `NpcStatComponent`(8성향)와 NPC↔NPC 관계에서 자연 도출된다. 임의 스크립트가 아니다.
-- **기존 자산 재사용**: 정주 NPC는 이미 있는 서비스/직무 시스템 그대로, 파티는 [companionSystem](companionSystem.md) 개념 재사용, 죽음은 [NPC_RELATION_HISTORY §5.1](NPC_RELATION_HISTORY_DESIGN.md) 죽음 훅 재사용, 결과 기록은 연대기(Chronicle) append 재사용.
+- **기존 자산 재사용**: 파티는 [companionSystem](companionSystem.md) 개념을, 죽음은 [NPC_RELATION_HISTORY §5.1](NPC_RELATION_HISTORY_DESIGN.md) 훅을, 결과 기록은 연대기 append를 재사용한다.
 - **LOD 정합**: 원정 나간 NPC는 마을(활성 청크)을 떠난다 → [PROCEDURAL_HISTORY](../world_history/PROCEDURAL_HISTORY_DESIGN.md)의 "근거리 실체화 / 원거리 추상" 모델과 그대로 맞물린다.
 
 ### 1.3 범위 (In / Out)
 
 | 포함 (v1~v3) | 제외 / 후순위 |
 |--------------|--------------|
-| NPC 행동 분류(정주/생산/모험) | **스케줄** — 정해진 스케줄로 움직이지 않음. 행동은 아래 "행동 모델"(필요 + 소요 시간)로 결정 |
+| 모험가 활동 선택 | **스케줄** — 정해진 스케줄로 움직이지 않음. 행동은 아래 "행동 모델"(필요 + 소요 시간)로 결정 |
 | 활동 카탈로그(몬스터 처치·던전 탐험 …) | 실시간 파티 전투 렌더링(→ v4 실체화 조우) |
 | 솔로/파티 활동, 파티 편성 | 플레이어의 원정 실시간 합류(→ v4) |
 | 추상 원정 판정(성공/부상/전사/이벤트) | 오프라인(추상) 마을의 원정 세부(→ 정착지 시뮬로 흡수, v4) |
@@ -38,7 +35,7 @@ Phase A~D로 마을은 스스로 자라지만, NPC는 아직 "직무 보너스�
 | 월드 이벤트 트리거 핸드오프 | 이벤트 자체의 발화/페이싱(→ [WORLD_EVENT §8](../world_history/WORLD_EVENT_DESIGN.md)) |
 | 결과의 관계·연대기·자원 되먹임 | |
 
-> **행동 모델**: NPC는 정해진 스케줄이 아니라 *필요*에 따라 행동을 시작하고, 그 *행동의 소요 시간*만큼 경과하면 행동을 마치거나 복귀한다. 정주 NPC는 이 루프조차 없이 항상 마을에 상주한다.
+> **행동 모델**: NPC는 정해진 스케줄이 아니라 *필요*에 따라 행동을 시작하고, 그 *행동의 소요 시간*만큼 경과하면 행동을 마치거나 복귀한다.
 
 ---
 
@@ -46,8 +43,8 @@ Phase A~D로 마을은 스스로 자라지만, NPC는 아직 "직무 보너스�
 
 | # | 결정 | 이유 |
 |---|------|------|
-| **D1** | NPC를 **행동 클래스** 3종(Anchored/Worker/Adventurer)으로 나눈다 | 사용자 요구: "상인·대장장이는 상주, 나머지는 활동". 데이터 주도(§3.1) |
-| **D2** | 원정은 **추상 시뮬**(게임시간 경과 + 가중 판정)로 해결한다 | 성능·일관성. Phase A "추상 타이머, NPC 실제 이동 없음"([VILLAGE_PHASES §? MVP](../village/VILLAGE_PHASES.md)) 계보 |
+| **D1** | 모든 물리 NPC를 **모험가**로 다룬다 | 마을 서비스·경제와 물리 NPC를 분리해 활동 결과가 경제를 우연히 흔들지 않게 한다. [VILLAGE_NPC_BOUNDARY_DESIGN](VILLAGE_NPC_BOUNDARY_DESIGN.md) |
+| **D2** | 원정은 **추상 시뮬**(게임시간 경과 + 가중 판정)로 해결한다 | 원정이 청크 활성 창보다 오래 지속되며 모든 전투를 프레임 단위로 재생할 필요가 없기 때문이다. |
 | **D3** | 원정 상태는 **`NpcManager`(매니저)가 소유**한다. ECS 컴포넌트로 만들지 않는다 | 파티에 **오프라인 NPC**가 낄 수 있고 원정이 청크 활성 창을 넘어 지속됨. [NPC_RELATION_HISTORY §4.4](NPC_RELATION_HISTORY_DESIGN.md) 선례("의도적으로 ECS 컴포넌트를 만들지 않는다") |
 | **D4** | **론칭은 LOD-gated**(실체화 마을만), **결과 판정은 LOD-무관**(매니저 타이머 이벤트) | 편성은 살아있는 NPC·마을 맥락 필요 / 판정은 정수 타이머라 어디서든 발화. PROCEDURAL fold-back 논리와 동형 |
 | **D5** | 로직은 **`System_NpcActivity`(무상태 시스템) + `VentureHelper`(static 서비스)**, 상태만 매니저 | CLAUDE.md "시스템은 무상태, 모든 상태는 컴포넌트/매니저". [interactionSystem §1](interactionSystem.md)의 서비스+매니저 패턴과 동일 |
@@ -56,39 +53,11 @@ Phase A~D로 마을은 스스로 자라지만, NPC는 아직 "직무 보너스�
 
 ---
 
-## 3. NPC 행동 분류
+## 3. 활동 자격
 
-### 3.1 행동 클래스 (데이터 주도)
+모든 물리 NPC가 모험가이므로 Anchored/Worker/Adventurer 행동 클래스를 두지 않는다. `JobType`은 활동 적합도·장비·설명에 사용할 수 있지만 마을 생산자나 상주 서비스 제공자를 뜻하지 않는다.
 
-`JobType`(현행: `None, Gatherer, Woodcutter, Farmer, Hunter, Miner, Builder, Guard, Merchant, Blacksmith, Scholar, Chief`)에 **`BehaviorClass` 컬럼**을 매핑한다. 코드에 `if (job == Merchant)` 식 분기를 두지 않는다(CLAUDE.md "TableId 분기 금지, 의미는 컬럼에").
-
-```csharp
-public enum NpcBehaviorClass
-{
-    Anchored,    // 마을 상주. 활동 루프 없음(=항상 대기). 서비스 제공.
-    Worker,      // 마을 내/근교 생산 작업. 원정 없음(선택적 저위험 근교 채집만).
-    Adventurer   // 원정 주체. 몬스터 처치·던전 탐험을 솔로/파티로.
-}
-```
-
-| BehaviorClass | 해당 JobType(초기 매핑) | 행동 |
-|---------------|------------------------|------|
-| **Anchored** | Merchant, Blacksmith, Scholar, Chief, (Innkeeper) | 상주. 기존 서비스/직무 시스템 그대로. **본 시스템 대상 아님** |
-| **Worker** | Farmer, Woodcutter, Miner, Gatherer, Builder | 작업 오브젝트 옆에서 생산(Phase D 직무 배치). 원정 미참여. (v3+: 저위험 근교 `GatherTrip` 옵션) |
-| **Adventurer** | Hunter, Guard | 원정 주체. §4 활동 수행 |
-
-> **동적 승격**: 성향이 강한 NPC는 클래스 규칙을 넘어설 수 있다(선택). 예) `Courage`·`Curiosity`가 매우 높은 `Worker`는 가끔 파티에 자원 참가. v1은 **JobType 매핑 고정**으로 시작하고, 성향 기반 예외는 v3에서 튜닝(§16).
-
-### 3.2 정주(Anchored) NPC — "그냥 서 있으면 된다"
-
-사용자 요구를 그대로: **상인·대장장이류는 스케줄이 없다.** 이들은 이미 Phase D의 서비스 근접 집계·직무 배치로 자기 작업 오브젝트 옆에 상주한다. 본 시스템은 이들을 **활동 후보에서 제외**하기만 한다. 별도 신규 로직 없음.
-
-### 3.3 인구 안전판 (마을 공동화 방지)
-
-원정으로 마을이 텅 비면 [NpcManager](../../Assets/Scripts/Manager/NpcManager.cs)의 마을 고갈(`DepletedAt`) 로직이 오발화한다. 따라서:
-
-- 마을별 **최소 상주 인원**(Anchored + 최소 Worker)은 원정 차출 대상에서 제외.
-- 동시 원정 파티 수 상한(마을 규모 비례). 자세한 캡은 §16 미결정.
+활동 후보는 부상, 이미 진행 중인 활동, 파티 조건, 목표 접근성 같은 현재 상태로 필터링한다. 마을 공동화를 막아야 한다면 경제 인구와 연결하지 않고 동시 원정 수 또는 가용 모험가 비율로 제한한다.
 
 ---
 
@@ -103,7 +72,7 @@ public enum ActivityType
     DungeonDelve,    // 던전 탐험 — 근처 던전 1개 공략
     // v2+
     Patrol,          // 마을/도로 경계 순찰(저위험, Guard)
-    GatherTrip,      // 근교 자원 원정(저위험, Worker)
+    GatherTrip,      // 근교 자원 원정(저위험)
     Escort,          // 카라반/주민 호위(v3)
     Pilgrimage       // 타 정착지 방문 — 관계/무역 씨앗(v4, PROCEDURAL 연계)
 }
@@ -384,12 +353,12 @@ RegisterSystems(new System_NpcActivity());   // UpdateInterval = 게임시간 �
 
 | Priority | 시스템 | 비고 |
 |----------|--------|------|
-| 56 | System_VillagePopulation | 인구 |
+| 50 | System_SettlementSim | 추상 인구와 마을 LOD |
 | ~~58~~ | ~~System_NpcRelationship~~ | **미사용/폐기** — 패시브 근접 호감도 drift 폐기. NPC↔NPC 호감도는 §8.3 활동 기반이 담당 |
 | **59** | **System_NpcActivity** | **본 문서(신규)** — 활동 결정·원정 수명주기 + **활동 결과로 호감도 기록(§8.3)** |
 | 60~64 | Lifecycle(Tier·서비스) | |
 
-> Village 도메인 대역(50-69) 정책 준수([CLAUDE.md](../../CLAUDE.md) · [VILLAGE_PHASES §4.1](../village/VILLAGE_PHASES.md)).
+> Village 도메인 대역(50-69) 정책 준수([CLAUDE.md](../../CLAUDE.md) · [VILLAGE_RUNTIME_DESIGN](../village/VILLAGE_RUNTIME_DESIGN.md)).
 > `System_NpcRelationship` 폐기로 Population 밴드 58 슬롯은 비게 되며, 기존 코드/설계([NPC_RELATION_HISTORY §5.2](NPC_RELATION_HISTORY_DESIGN.md))는 정리 대상.
 
 ---
@@ -397,7 +366,7 @@ RegisterSystems(new System_NpcActivity());   // UpdateInterval = 게임시간 �
 ## 13. 구현 우선순위 (Phase)
 
 ### Phase 1 — MVP (솔로 Hunt, 추상 판정)
-- [ ] `NpcBehaviorClass` + JobTable 매핑 (Anchored 제외 로직)
+- [ ] 모험가 활동 자격 검사
 - [ ] `NpcManager` 원정 region: `_ventures` + Create/Get/Resolve/Cancel + Save/Load
 - [ ] `NpcSaveData` 3필드 + WorldData.VentureList (Version 증가)
 - [ ] `System_NpcActivity`: 자격 검사 → 솔로 `Hunt` 출발/귀환, Away despawn/respawn
@@ -449,7 +418,7 @@ RegisterSystems(new System_NpcActivity());   // UpdateInterval = 게임시간 �
 | [interactionSystem.md](interactionSystem.md) | 원정 결과가 플레이어→NPC 관계·선물 루프와 교차 |
 | [MONSTER_SPAWN_DESIGN.md](../ai_monster/MONSTER_SPAWN_DESIGN.md) | Hunt 대상(Zone×Grade), 난이도 소스 |
 | [dungeonSystem.md (보류)](../_archive/dungeonSystem.md) | DungeonDelve 대상(Tier), v4 실체화 조우 |
-| [VILLAGE_PHASES.md](../village/VILLAGE_PHASES.md) | Priority 대역(50-69), Phase E 자리매김 |
+| [VILLAGE_RUNTIME_DESIGN.md](../village/VILLAGE_RUNTIME_DESIGN.md) | 마을과 NPC 활동의 책임 경계 |
 | [CLAUDE.md](../../CLAUDE.md) | ECS/무상태·데이터주도·성능 규약 |
 
 ---

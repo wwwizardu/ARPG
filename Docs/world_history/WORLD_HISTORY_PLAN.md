@@ -8,13 +8,13 @@
 >   - **R4 회고 대사** (Sentiment + `OriginEventId` → 연대기 1줄 회고, NpcInspect에 Sentiment 표시) — *미착수*
 >   - R3 보류분: 출생/분가 관계 훅(해당 시스템 미존재 — Phase E), resident 영구-사망 관계 정리(개별 영구제거 경로 부재), `EntityIdHelper` 구 관계 인프라 제거(dead no-op라 보류)
 >   - 정착지 이름 표기 방식 결정(회고 대사용 — Settlement에 표시명 없음)
->   - ~~**NPC 소속 분리 (Anchored/Free)**~~ — **폐기** (2026-07-08, [NPC_SIMPLIFICATION_PLAN](../npc/NPC_SIMPLIFICATION_PLAN.md) D1: 모든 물리 NPC = 모험가 단일, 마을-NPC 분리는 그 계획으로 구현 완료 — §11.8 참조). 모험가 자율 이동/탐험은 [NPC_ACTIVITY_DESIGN](../npc/NPC_ACTIVITY_DESIGN.md) 후속 레이어
+>   - 물리 NPC는 모두 모험가이며 마을 경제와 분리한다([VILLAGE_NPC_BOUNDARY_DESIGN](../npc/VILLAGE_NPC_BOUNDARY_DESIGN.md)). 모험가 자율 이동/탐험은 [NPC_ACTIVITY_DESIGN](../npc/NPC_ACTIVITY_DESIGN.md) 후속 레이어
 > - ⚠ **Unity 컴파일/플레이 검증 전** — 리컴파일 후 각 Phase 검증 기준 실행 필요.
 > **(2026-06-26 갱신 — 런타임 LOD)**: 정착지 시뮬은 "New Game 1회"가 아니라 **게임 중 지속(근처=상세/멀리=추상)**. 런타임 모델·3층 저장 구조의 정본은 [PROCEDURAL_HISTORY_DESIGN.md §0](PROCEDURAL_HISTORY_DESIGN.md). 이로 인해 **R0-B 저장 구조가 1회 스냅샷 → 라이브 상태(WorldSimState)로 바뀌고**, R1~R4 외에 "런타임 추상 틱 + 실체화/fold-back" 작업이 추가됐다. **이 작업(RL1-3)은 2026-07-08 구현 완료 — 상세는 §11.** (멀리 정치 사건 지속 ④만 보류)
 > 본 문서는 설계 2종을 실제 코드 현황에 맞춰 실행 가능한 작업 단위로 분해한 것이다. **설계는 2026-06-26 토픽별로 분리됨**: 정착지 통폐합/연대기 = [PROCEDURAL_HISTORY_DESIGN.md](PROCEDURAL_HISTORY_DESIGN.md)(주로 R1·R0-B 저장), NPC 개인 관계 = [NPC_RELATION_HISTORY_DESIGN.md](../npc/NPC_RELATION_HISTORY_DESIGN.md)(주로 R0-A·R2·R3·R4). 본 계획의 "설계 §X" 표기는 분리 전 기준이라 해당 내용이 둘 중 어느 문서로 갔는지 토픽으로 판단할 것.
 > 설계 문서가 "구현됨"으로 가정한 일부 자산이 실제로는 미구현임을 §0에서 먼저 정정하고, 그에 맞춰 Phase 범위를 조정했다.
 >
-> **선행 문서**: [PROCEDURAL_HISTORY_DESIGN.md](PROCEDURAL_HISTORY_DESIGN.md)(정착지 통폐합/연대기 설계) · [NPC_RELATION_HISTORY_DESIGN.md](../npc/NPC_RELATION_HISTORY_DESIGN.md)(NPC 관계 설계) · [VILLAGE_PHASES.md](../village/VILLAGE_PHASES.md)(런타임 도메인) · [MAP_DESIGN.md](../map/MAP_DESIGN.md)(정착지 배치)
+> **선행 문서**: [PROCEDURAL_HISTORY_DESIGN.md](PROCEDURAL_HISTORY_DESIGN.md)(정착지 통폐합/연대기 설계) · [NPC_RELATION_HISTORY_DESIGN.md](../npc/NPC_RELATION_HISTORY_DESIGN.md)(NPC 관계 설계) · [VILLAGE_RUNTIME_DESIGN.md](../village/VILLAGE_RUNTIME_DESIGN.md)(런타임 도메인) · [MAP_DESIGN.md](../map/MAP_DESIGN.md)(정착지 배치)
 
 ---
 
@@ -396,7 +396,7 @@ RaceRelationTable { Id, RaceA, RaceB, BaseAffinity, WarWeight, TradeWeight, Merg
 
 ### 11.7 §0 추상 인구의 소비처 — 마을 경제 (2026-07-08, NPC 단순화)
 
-[NPC_SIMPLIFICATION_PLAN](../npc/NPC_SIMPLIFICATION_PLAN.md) D2로 **§0 추상 인구가 마을 경제(`v.Population`)의 유일한 입력원**이 됐다:
+[VILLAGE_NPC_BOUNDARY_DESIGN](../npc/VILLAGE_NPC_BOUNDARY_DESIGN.md)에 따라 **§0 추상 인구가 마을 경제(`v.Population`)의 유일한 인구 입력원**이다:
 
 - `System_SettlementSim`이 매 tick `VillageManager.RefreshAllPopulationsFromAbstract()` 호출 → 연대기 연결 마을의 `v.Population = Quantize(GetSettlementPopulation(SettlementId))` (pop/50·cap25 — `VillageManager.ABSTRACT_POP_DIVISOR/CAP`, NPC 스폰 정량화와 공유).
 - 자원 생산(Food/Wood/Stone/Iron/Gold)·Tier 승격·건설 동시성이 모두 이 값을 읽는다. **물리 NPC 수(`NpcEntityIds.Count`)는 경제를 구동하지 않는다** (명단/UI 전용).
@@ -405,5 +405,5 @@ RaceRelationTable { Id, RaceA, RaceB, BaseAffinity, WarWeight, TradeWeight, Merg
 ### 11.8 후속
 
 - 플레이어발 인구 변화의 fold-back 반영 메커니즘(위 11.4).
-- ~~NPC 소속 분리(Anchored/Free)~~ → **폐기** ([NPC_SIMPLIFICATION_PLAN](../npc/NPC_SIMPLIFICATION_PLAN.md) D1 — 모든 물리 NPC = 모험가 단일). 모험가 자율 이동/이주/탐험은 [NPC_ACTIVITY_DESIGN](../npc/NPC_ACTIVITY_DESIGN.md)의 후속 레이어.
+- 물리 NPC는 모두 모험가이며 마을 경제와 분리한다([VILLAGE_NPC_BOUNDARY_DESIGN](../npc/VILLAGE_NPC_BOUNDARY_DESIGN.md)). 모험가 자율 이동/이주/탐험은 [NPC_ACTIVITY_DESIGN](../npc/NPC_ACTIVITY_DESIGN.md)의 후속 레이어.
 - ④ 멀리 정치 사건 지속(§0.4-나).

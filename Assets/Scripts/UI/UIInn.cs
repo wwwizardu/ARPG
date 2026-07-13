@@ -12,8 +12,8 @@ namespace ARPG.UI
 {
     /// <summary>
     /// 여관 UI — 휴식(+6h)/세이브 전용.
-    /// NPC 단순화(NPC_SIMPLIFICATION_PLAN D6)로 방문자/고용 경로는 제거됨 — 여관은 무인 서비스 건물.
-    /// INN_HIRING_DESIGN.md의 고용 레이아웃(§4.3)은 deprecated, 보조 영역(Rest/Save)만 유지.
+    /// VILLAGE_NPC_BOUNDARY_DESIGN §5에 따라 여관은 방문자 고용이 없는 무인 서비스 건물.
+    /// Rest/Save 기능만 유지한다.
     ///
     /// Inn 세트 미완성 시 안내문 표시, Rest 비활성.
     /// </summary>

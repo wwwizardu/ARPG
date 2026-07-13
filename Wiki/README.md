@@ -4,9 +4,13 @@
 name: wiki-map
 description: Docs/ 전체 주제를 얕고 넓게 조망하는 지도 페이지. 주제별 상세 위키 페이지의 진입점.
 type: map
-last_updated: 2026-07-09
+last_updated: 2026-07-13
 sources:
   - Docs/README.md
+  - Docs/village/VILLAGE_RUNTIME_DESIGN.md
+  - Docs/village/ABSTRACT_CONSTRUCTION_DESIGN.md
+  - Docs/village/BUILD_PRIORITY_DESIGN.md
+  - Docs/npc/VILLAGE_NPC_BOUNDARY_DESIGN.md
   - Docs/ 하위 전 폴더 (파일 목록·분량·상호 링크 수준의 얕은 스캔)
   - Assets/Scripts/ (폴더·파일명·주요 심볼 수준의 얕은 스캔)
 ---
@@ -23,8 +27,8 @@ sources:
 | **combat** | 실시간 전투·데미지 공식·스킬/스킬북/룬·밸런스·AI 스킬 선택 | `Docs/combat/` 9장 (combatSystem, combatSystemCompletion, BALANCE_DESIGN, SKILL_DESIGN, SKILLBOOK_DESIGN, SKILL_RUNE_DESIGN, SKILL_EFFECT_IDEAS, AI_SKILL_SELECTION_IMPLEMENTATION, ModSystem_Changelog) | 상 | 상 |
 | **ai_monster** | 몬스터 AI 상태머신 패턴과 데이터 주도 스폰 풀 | `Docs/ai_monster/` 2장 (monsterAIPattern, MONSTER_SPAWN_DESIGN) | 하 | 중 |
 | **map** | 청크 기반 오픈월드 맵 생성·바이옴 타일셋·충돌/길찾기 | `Docs/map/` 3장 (MAP_DESIGN, COLLISION_PATHFINDING_DESIGN, THEME_TILESET_REFACTOR) | 중 | 중 |
-| **village** | 마을 자가성장 — 자원 생산, 자가 건설 큐, Tier 승격, 외벽, 서비스/고용 | `Docs/village/` 5장 (VILLAGE_GROWTH_STAGES, VILLAGE_PHASES, BUILD_PRIORITY_DESIGN, INN_HIRING_DESIGN, resourceSystem) | 중 | 상 |
-| **npc** → [npc.md](npc.md) | NPC 관계·상호작용·소망(퀘스트)·자율 활동·동료·장비 | `Docs/npc/` 7장 (interactionSystem, QUEST_SYSTEM_DESIGN, NPC_ACTIVITY_DESIGN, NPC_RELATION_HISTORY_DESIGN, companionSystem, NPC_EQUIPMENT_DESIGN, NPC_SIMPLIFICATION_PLAN) | 상 | 중 |
+| **village** → [village.md](village.md) | 마을 자가성장 — 자원·건설·Tier·벽의 실시간/추상 LOD와 서비스 [src: Docs/village/VILLAGE_RUNTIME_DESIGN.md] | `Docs/village/` 4장 (런타임·추상 건설·우선순위·성장 목표) | 중 | 상 |
+| **npc** → [npc.md](npc.md) | NPC 관계·상호작용·소망(퀘스트)·자율 활동·동료·장비 | `Docs/npc/` (VILLAGE_NPC_BOUNDARY_DESIGN 포함) | 상 | 중 |
 | **world_history** → [world_history.md](world_history.md) | 절차적 역사 생성(정착지 연대기)과 LLM 내러티브 엔진(대화·소망 생성) | `Docs/world_history/` 5장 (PROCEDURAL_HISTORY_DESIGN, WORLD_HISTORY_PLAN, WORLD_EVENT_DESIGN, NARRATIVE_ENGINE_DESIGN, NARRATIVE_ENGINE_SPIKE) | 상 | 중 |
 | **tech** | ECS SparseSet 조회 비용 최적화 단계별 계획 | `Docs/tech/` 1장 (ECS_PERFORMANCE_OPTIMIZATION_PLAN) | 하 | 중 |
 | **_archive** | 보류·폐기된 과거 계획 (던전, Phase A 초기안, 역사 백본) | `Docs/_archive/` 5장 | — | — |
@@ -36,7 +40,7 @@ sources:
   combat은 링크는 적지만 9장으로 문서 수 최다이며, 스킬 관련 내용이 4~5개 문서(SKILL_DESIGN/SKILLBOOK/RUNE/EFFECT_IDEAS/AI_SKILL_SELECTION)에 나뉘어 있다. [추론: 파일명·README 설명 기준, 본문 중복 여부는 미검증]
 - **코드 연결도**: `Assets/Scripts/` 폴더·파일명 수준 확인.
   - combat: `Common/System/`의 System_Skill·System_SkillAttackProfileCalculation·System_StatCalculation·System_BuffUpdate·System_Projectile·System_AreaEffect + `Skill/`(DamageCalculator) + `AI/` 공격 핸들러 등 광범위. [src: Assets/Scripts/Common/System/, Assets/Scripts/Skill/]
-  - village: `Village/` 16개 파일(VillageManager, PlacedObjectRegistry, WallSegmentRegistry 등) + System_Village* 5종. [src: Assets/Scripts/Village/, Assets/Scripts/Common/System/]
+  - village: `Village/`의 공통 시뮬레이션 코어·원장·배치 코드와 `System_Village*` 런타임 시스템이 연결된다. [src: Assets/Scripts/Village/, Assets/Scripts/Common/System/]
   - npc: `Npc/` 10개 파일(NpcRelationEntry, DialogueTopicSelector, NpcNarrative* 등) — 구현 진행률 25~35%로 코드가 아직 성장 중. [src: Assets/Scripts/Npc/, Docs/README.md]
   - world_history: 문서상 "보류"이지만 `History/` 15개 파일(HistoryManager, SettlementChronicleSimulator 등)과 System_SettlementSim이 이미 존재. [src: Assets/Scripts/History/]
 
@@ -46,7 +50,7 @@ sources:
 2. **world_history** — 상호 링크 밀도가 가장 높고(문서당 14~29개), 설계(PROCEDURAL_HISTORY)·계획(WORLD_HISTORY_PLAN)·파생 설계(NARRATIVE_ENGINE)·검증(SPIKE)이 층층이 얽혀 있다. 문서상 "보류"인데 코드(`History/` 15파일, NpcNarrative*)는 이미 존재해 문서-코드 간 현황 대조 가치도 높다.
 3. **combat** — 문서 수 최다(9장)에 combatSystem vs combatSystemCompletion, SKILL 계열 4~5장의 내용 분산이 있고, 관련 코드가 System/Skill/Buff/AI 여러 폴더에 걸쳐 가장 넓게 퍼져 있다. [추론: 문서 간 실제 중복 정도는 본문 대조 전이므로 추정]
 
-**차순위**: village — 문서·코드 모두 크지만 VILLAGE_PHASES.md가 이미 Phase A~D를 통합 요약하고 있어 흩어짐이 부분적으로 해소된 상태. [src: Docs/README.md]
+**village 종합 페이지 추가 완료**: 전체 책임은 `VILLAGE_RUNTIME_DESIGN.md`, 추상 LOD와 초기 발전은 `ABSTRACT_CONSTRUCTION_DESIGN.md`, 후보 선택은 `BUILD_PRIORITY_DESIGN.md`가 정본이다. [src: Docs/village/VILLAGE_RUNTIME_DESIGN.md, Docs/village/ABSTRACT_CONSTRUCTION_DESIGN.md, Docs/village/BUILD_PRIORITY_DESIGN.md]
 
 ## 위키 종합 필요성이 낮은 주제
 

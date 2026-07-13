@@ -1,4 +1,5 @@
 #nullable enable
+using System.Collections.Generic;
 using ARPG.Component;
 using ARPG.Village;
 using UnityEngine;
@@ -36,8 +37,10 @@ namespace ARPG.Systems
             if (now - _lastCheckGameTime < CHECK_INTERVAL_HOURS) return;
             _lastCheckGameTime = now;
 
-            foreach (VillageData v in AR.s.Village.GetAllVillages())
+            List<VillageData> villages = new List<VillageData>(AR.s.Village.GetAllVillages());
+            for (int i = 0; i < villages.Count; i++)
             {
+                VillageData v = villages[i];
                 if (v.EntityId < 0) continue;
 
                 VillageStage next = EvaluateNextStage(v, now);
@@ -76,32 +79,7 @@ namespace ARPG.Systems
                 Debug.LogError($"[VillageTierProgression] VillageStageTable not loaded — stage={next}");
                 return false;
             }
-            if (t.PromoMinPopulation < 0) return false;  // 진입 불가 표식
-
-            if (AR.s.Component.TryGetComponent<VillageStorageComponent>(v.EntityId, out var s) == false)
-                return false;
-
-            int housingCount = AR.s.Village.CountByService(v.VillageId, ProvidedService.Housing);
-            float ageHours = now - v.RegisteredAt;
-
-            if (v.Population < t.PromoMinPopulation) return false;
-            if (housingCount < t.PromoMinHousing) return false;
-            if (s.FoodAmount < t.PromoMinFood) return false;
-            if (ageHours < t.PromoMinAgeHours) return false;
-
-            if (t.PromoRequiredSet >= 0
-                && AR.s.Village.HasObjectSet(v.VillageId, (ObjectSetType)t.PromoRequiredSet) == false)
-                return false;
-
-            if (t.PromoRequiredCivic > 0
-                && AR.s.Village.CountByService(v.VillageId, ProvidedService.Civic) < t.PromoRequiredCivic)
-                return false;
-
-            if (t.PromoRequiredShop > 0
-                && AR.s.Village.CountByService(v.VillageId, ProvidedService.Shop) < t.PromoRequiredShop)
-                return false;
-
-            return true;
+            return VillageProgressionRules.CanPromoteTo(v, t, now);
         }
 
         // ========== 승격 적용 ==========
@@ -109,19 +87,9 @@ namespace ARPG.Systems
         private static void Promote(VillageData v, VillageStage next)
         {
             VillageStage prev = v.Stage;
-            v.Stage = next;
-
-            // 1. Bounds 확장 + VillageComponent 동기화
             int radius = VillageManager.GetBoundsRadius(next);
-            RectInt newBounds = new RectInt(
-                Mathf.FloorToInt(v.PositionX) - radius,
-                Mathf.FloorToInt(v.PositionY) - radius,
-                radius * 2, radius * 2
-            );
-            v.BoundsX = newBounds.x;
-            v.BoundsY = newBounds.y;
-            v.BoundsW = newBounds.width;
-            v.BoundsH = newBounds.height;
+            bool requestWallPlan = VillageProgressionRules.ApplyPromotion(v, next, radius);
+            RectInt newBounds = new RectInt(v.BoundsX, v.BoundsY, v.BoundsW, v.BoundsH);
 
             if (AR.s.Component.TryGetComponent<VillageComponent>(v.EntityId, out var vc))
             {
@@ -133,11 +101,13 @@ namespace ARPG.Systems
             // 2. Hamlet 진입 시 벽 빌더 활성화 (이전엔 Town이었음 — 너무 늦어서 앞당김)
             //    Hamlet Bounds(20×20) 기준 외곽 벽 큐잉. 이후 Stage 승격은 Bounds만 확장하고
             //    벽은 그대로 유지 (성벽 안쪽이 마을 코어, 바깥은 농지/외곽 영역으로 자라남).
-            if (next == VillageStage.Hamlet && prev < VillageStage.Hamlet)
+            if (requestWallPlan)
             {
                 AR.s.Component.AddComponent(v.EntityId, new WallPlanRequestTag());
-                v.WallPlanRequested = true;
             }
+
+            // 경계 확장으로 이전 PlacementPending 건물이 들어갈 자리가 생겼을 수 있다.
+            AR.s.Village.RetryPendingPlacements(v.VillageId);
 
             AR.s.UI.SetNotify($"마을 {v.VillageId} 승격: {prev} → {next}");
 

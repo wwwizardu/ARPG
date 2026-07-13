@@ -4,9 +4,10 @@
 name: world-history
 description: world_history 도메인 종합 — 문서 5장의 정본 매핑, 설계 vs 구현 현황, LLM 생성 통제 장치 목록, 인접 도메인 경계.
 type: topic
-last_updated: 2026-07-09
+last_updated: 2026-07-13
 sources:
   - Docs/world_history/ 전체 5장 (본문 정독)
+  - Docs/village/ABSTRACT_CONSTRUCTION_DESIGN.md
   - Assets/Scripts/History/, Assets/Scripts/Npc/Narrative/, Assets/Scripts/Manager/LLM* (심볼 수준)
 ---
 
@@ -18,14 +19,14 @@ sources:
 2. **내러티브 엔진** (NARRATIVE_ENGINE + SPIKE) — 백본이 만든 역사·관계를 컨텍스트로, LLM이 대화·선호·소망을 생성. **게임의 핵심 재미 검증 1순위.**
 3. **도전 이벤트** (WORLD_EVENT) — 역사를 씨앗으로 플레이어가 맞서는 위협을 발화. 몰입(관계) 축과 구분되는 도전(전투/탐험) 축.
 
-**현재 상태**: 절차적 역사 백본은 **R0~R4 대부분 + 런타임 LOD(RL1-3)가 2026-07-08 구현 완료**(Unity 플레이 검증 전, §4), 추상 인구는 NPC 단순화 이후 **마을 경제의 유일한 입력원**으로 승격됐다. 내러티브 엔진은 검증 스파이크 1차 구현(실측 전), 도전 이벤트는 미구현(콘텐츠 카탈로그 단계). [src: WORLD_HISTORY_PLAN §상태·§11, PROCEDURAL §0 구현 상태 배너, NARRATIVE_ENGINE_SPIKE §상태]
+**현재 상태**: 절차적 역사 백본과 런타임 LOD가 구현됐고, 추상 인구는 마을 경제의 입력이 된다. 원거리 마을은 자원·건설·Tier·벽도 추상 진행하며, New Game 역사 생성 직후 생존 정착지에 초기 발전 bootstrap을 1회 적용한다. 내러티브 엔진은 검증 스파이크 1차 구현, 도전 이벤트는 미구현이다. [src: Docs/world_history/WORLD_HISTORY_PLAN.md, Docs/world_history/NARRATIVE_ENGINE_SPIKE.md, Docs/world_history/WORLD_EVENT_DESIGN.md, Docs/village/ABSTRACT_CONSTRUCTION_DESIGN.md §6–8, Assets/Scripts/Common/System/System_SettlementSim.cs, Assets/Scripts/History/HistoryManager.cs]
 
 ## 2. 정본 매핑 — "이걸 물으면 이 문서의 이 절"
 
 | 주제 | 정본 | 비고 |
 |------|------|------|
 | 정착지 시뮬·연대기·왕국·정복 모델 | [PROCEDURAL_HISTORY_DESIGN §3–4](../Docs/world_history/PROCEDURAL_HISTORY_DESIGN.md) | 사건 카탈로그 9종은 §3.3, append-only |
-| 런타임 LOD(추상 틱·materialize·fold-back)·3층 저장 구조 | [PROCEDURAL §0](../Docs/world_history/PROCEDURAL_HISTORY_DESIGN.md) | 구현 이탈(fold-back Pop 미역산 등)은 §0 배너·[PLAN §11.4](../Docs/world_history/WORLD_HISTORY_PLAN.md) |
+| 런타임 LOD(인구·마을 건설·materialize·fold-back) | [PROCEDURAL §0](../Docs/world_history/PROCEDURAL_HISTORY_DESIGN.md) + [ABSTRACT_CONSTRUCTION](../Docs/village/ABSTRACT_CONSTRUCTION_DESIGN.md) | 역사/인구 층은 PROCEDURAL, 자원·건설·Tier·벽과 초기 발전은 ABSTRACT_CONSTRUCTION이 정본 [src: Docs/world_history/PROCEDURAL_HISTORY_DESIGN.md §0, Docs/village/ABSTRACT_CONSTRUCTION_DESIGN.md §6–8] |
 | 구현 이력·잔여 작업(R0~R4, RL1-3) | [WORLD_HISTORY_PLAN](../Docs/world_history/WORLD_HISTORY_PLAN.md) | 문서-코드 현황 대조는 §0이 선례 |
 | LLM 생성 파이프라인(컨텍스트→프롬프트→검증) | [NARRATIVE_ENGINE_DESIGN §4](../Docs/world_history/NARRATIVE_ENGINE_DESIGN.md) | C 방식 생성 계약은 §4.4 ⭐ |
 | **교차 일관성** (사건 정본화·지식 거리·NPC 전기 로그) | [NARRATIVE_ENGINE_DESIGN §4.8](../Docs/world_history/NARRATIVE_ENGINE_DESIGN.md) | 2026-07-09 추가, 미구현. 사실=사건 앵커 / 관점=NPC. 데이터: PROCEDURAL §3.4 · RELATION_HISTORY §4.2 |
@@ -49,7 +50,8 @@ sources:
 | 축 | 설계 | 코드 | 상태 |
 |----|------|------|------|
 | 연대기 시뮬(New Game, Tier 2 정복-병합) | PROCEDURAL §3–4 | [SettlementChronicleSimulator.cs](../Assets/Scripts/History/Chronicle/), ChronicleEvent/Snapshot/KingdomData | ✅ (Unity 플레이 검증 전) |
-| 런타임 LOD — 추상 인구 틱·materialize·fold-back | PROCEDURAL §0 | [HistoryManager.cs](../Assets/Scripts/History/HistoryManager.cs) (AdvanceAbstractSlice/Materialize/FoldBack), WorldSimState, SettlementPopulationModel, System_SettlementSim(Priority 50) | ✅ RL1-3 |
+| 런타임 LOD — 추상 인구·마을 발전·materialize·fold-back | PROCEDURAL §0 + ABSTRACT_CONSTRUCTION §6–8 | HistoryManager, WorldSimState, SettlementPopulationModel, System_SettlementSim, VillageAbstractConstruction | ✅ (Unity 플레이 왕복 검증 후속) [src: Assets/Scripts/History/HistoryManager.cs, Assets/Scripts/Common/System/System_SettlementSim.cs] |
+| New Game 역사 기반 마을 초기 발전 | ABSTRACT_CONSTRUCTION §6.5·§8 | HistoryManager → VillageDevelopmentBootstrap | ✅ Alive/Conquered 1회, Ruined/Merged 제외 [src: Assets/Scripts/Village/VillageDevelopmentBootstrap.cs] |
 | 추상 인구 → 마을 경제 소싱 | PLAN §11.7 | System_SettlementSim tick → `v.Population` | ✅ (NPC 단순화 SP1) |
 | 관계 backfill(L2)·호감도 채널 | RELATION_HISTORY §3–4 | NpcRelationBackfill, NpcManager 관계 region | ✅ |
 | 대화 생성 스파이크(토픽 셔플백·문맥 빌더·캐시) | SPIKE §4 | [Scripts/Npc/Narrative/](../Assets/Scripts/Npc/Narrative/) — DialogueTopicSelector, NpcDialogueContextBuilder, NpcNarrativeService, NpcNarrativeRuntime | 🟨 1차 구현 (실측 전) |
@@ -88,7 +90,7 @@ sources:
 ## 6. 인접 도메인 경계
 
 - **npc와 양방향으로 가장 깊다**: 연대기(L1, 본 도메인)가 관계 backfill(L2, npc)의 입력이고, 내러티브 엔진의 산출물(대화·소망)은 interactionSystem/QUEST_SYSTEM(npc)이 소비·판정한다. **스파이크 코드가 `Scripts/Npc/Narrative/`에 있는 이유.** → [npc.md](npc.md) §5
-- **village**: 추상 인구(§0)가 `v.Population`의 유일한 입력원(NPC 단순화 이후). System_SettlementSim이 Priority 50으로 Village 도메인 대역 선두에서 tick. [src: PLAN §11.7]
+- **village**: 추상 인구가 `v.Population`의 입력이며, 같은 Priority 50 tick에서 원거리 자원·건설·Tier·벽을 slice 처리한다. materialize 전 catch-up하고 fold-back 시 두 건설 clock을 현재 시각에 맞춘다. → [village.md](village.md) [src: Assets/Scripts/Common/System/System_SettlementSim.cs, Assets/Scripts/History/HistoryManager.cs, Docs/village/ABSTRACT_CONSTRUCTION_DESIGN.md §7]
 - **map**: 정착지 배치(`RaceSettlementPlacer`)가 시뮬 입력, `Fate`가 폐허/점령 variant로 맵에 표현, LoreFragment가 이벤트·소망(Recover)의 씨앗. [src: PROCEDURAL §3.1·§3.5]
 - **아키텍처 관례**: ECS 컴포넌트를 만들지 않는다 — 정본은 매니저(HistoryManager/NpcManager) + WorldData. 난수는 `DerivedSeed` 채널만(UnityEngine.Random 금지). [src: PROCEDURAL §6, PLAN §4.2]
 
@@ -98,6 +100,6 @@ sources:
 |------------|-------------------|
 | LLM 생성 일관성 기준 설계 | 본 페이지 §5 → NARRATIVE_ENGINE §4.4–4.6 → SPIKE §4.5 |
 | 내러티브 엔진 본 구현 | SPIKE(현행 코드 기준) → NARRATIVE_ENGINE §4·§6 → QUEST_SYSTEM §2·§8 |
-| 연대기 시뮬·LOD 수정 | PROCEDURAL §0(구현 이탈 배너 포함) → PLAN §11 → HistoryManager 코드 |
+| 연대기 시뮬·LOD 수정 | PROCEDURAL §0 → ABSTRACT_CONSTRUCTION §6–8 → HistoryManager/System_SettlementSim 코드 [src: Docs/world_history/PROCEDURAL_HISTORY_DESIGN.md, Docs/village/ABSTRACT_CONSTRUCTION_DESIGN.md] |
 | R4 회고 대사 (잔여 작업) | PLAN §7 → NARRATIVE_ENGINE §4.3(1줄 평문화) |
 | 도전 이벤트 착수 | WORLD_EVENT 전체 → §8 미결정 확인 → NPC_ACTIVITY §9(원정 트리거) |
