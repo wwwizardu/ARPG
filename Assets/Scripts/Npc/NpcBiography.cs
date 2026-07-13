@@ -9,6 +9,9 @@ namespace ARPG.Npc
     {
         VentureFailed = 0,
         Fell = 1,
+        PartyAffinityChanged = 2,
+        Wounded = 3,
+        NotableItemAcquired = 4,
     }
 
     /// <summary>NPC가 사건을 알게 된 직접성 등급. 내러티브 지식 거리의 입력이다.</summary>
@@ -29,8 +32,13 @@ namespace ARPG.Npc
         public NpcDeedKind Kind;
         public int RefEventId = -1;
         public List<int> Participants = new();
+        public List<NpcDeedParticipant> ParticipantSnapshots = new();
         public NpcKnowledgeLevel HowKnown;
         public float When;
+        public int AffinityDelta;
+        public float RecoveryEndGameTime;
+        public int ItemId = -1;
+        public string ItemDisplayName = string.Empty;
 
         public NpcDeedEntry() { }
 
@@ -40,6 +48,31 @@ namespace ARPG.Npc
             RefEventId = refEventId;
             HowKnown = howKnown;
             When = when;
+        }
+
+        public void EnsureInitialized()
+        {
+            if (Participants == null)
+                Participants = new List<int>();
+            if (ParticipantSnapshots == null)
+                ParticipantSnapshots = new List<NpcDeedParticipant>();
+            if (ItemDisplayName == null)
+                ItemDisplayName = string.Empty;
+        }
+    }
+
+    [Serializable]
+    public class NpcDeedParticipant
+    {
+        public int EntityId = -1;
+        public string DisplayName = string.Empty;
+
+        public NpcDeedParticipant() { }
+
+        public NpcDeedParticipant(int entityId, string displayName)
+        {
+            EntityId = entityId;
+            DisplayName = displayName;
         }
     }
 }

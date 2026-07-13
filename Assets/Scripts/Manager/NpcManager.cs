@@ -1529,7 +1529,7 @@ namespace ARPG.Npc
         }
 
         /// <summary>
-        /// NPC 전기에 사건을 추가한다. 중요도가 낮은 기록부터 제거해 세이브 크기를 제한한다.
+        /// NPC 주요 사건 이력에 항목을 추가한다. 이력은 NPC별로 영속하며 삭제하지 않는다.
         /// </summary>
         public void AddDeed(int entityId, NpcDeedKind kind, int refEventId,
             NpcKnowledgeLevel howKnown, float when, int participantId)
@@ -1538,9 +1538,69 @@ namespace ARPG.Npc
                 return;
 
             NpcDeedEntry entry = new NpcDeedEntry(kind, refEventId, howKnown, when);
-            entry.Participants.Add(participantId);
+            AddDeedParticipant(entry, participantId);
             saveData.Deeds.Add(entry);
-            TrimDeeds(saveData.Deeds);
+        }
+
+        public void AddPartyAffinityDeed(int entityId, int otherEntityId, int affinityDelta, float when)
+        {
+            if (affinityDelta == 0 || _npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
+                return;
+
+            NpcDeedEntry entry = new NpcDeedEntry(NpcDeedKind.PartyAffinityChanged, -1,
+                NpcKnowledgeLevel.Did, when)
+            {
+                AffinityDelta = affinityDelta,
+            };
+            AddDeedParticipant(entry, entityId);
+            AddDeedParticipant(entry, otherEntityId);
+            saveData.Deeds.Add(entry);
+        }
+
+        public void AddWoundedDeed(int entityId, float when, float recoveryEndGameTime)
+        {
+            if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
+                return;
+
+            NpcDeedEntry entry = new NpcDeedEntry(NpcDeedKind.Wounded, -1,
+                NpcKnowledgeLevel.Did, when)
+            {
+                RecoveryEndGameTime = recoveryEndGameTime,
+            };
+            AddDeedParticipant(entry, entityId);
+            saveData.Deeds.Add(entry);
+        }
+
+        public void AddNotableItemDeed(int entityId, int itemId, string itemDisplayName, float when)
+        {
+            if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
+                return;
+
+            NpcDeedEntry entry = new NpcDeedEntry(NpcDeedKind.NotableItemAcquired, -1,
+                NpcKnowledgeLevel.Did, when)
+            {
+                ItemId = itemId,
+                ItemDisplayName = itemDisplayName ?? string.Empty,
+            };
+            AddDeedParticipant(entry, entityId);
+            saveData.Deeds.Add(entry);
+        }
+
+        private void AddDeedParticipant(NpcDeedEntry entry, int participantId)
+        {
+            if (participantId < 0)
+                return;
+
+            entry.Participants.Add(participantId);
+            entry.ParticipantSnapshots.Add(new NpcDeedParticipant(participantId,
+                ResolveNpcDisplayName(participantId)));
+        }
+
+        private string ResolveNpcDisplayName(int entityId)
+        {
+            if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData))
+                return ResolveNpcDisplayName(saveData);
+            return $"NPC #{entityId}";
         }
 
         private GlobalEnum.JobType GetPreferredJobType(int npcTableId)
@@ -1735,34 +1795,6 @@ namespace ARPG.Npc
 
             _simulationPartyIds.RemoveAt(index);
             _simulationWorkCursor = 0;
-        }
-
-        private static void TrimDeeds(List<NpcDeedEntry> deeds)
-        {
-            const int maxDeedCount = 16;
-            while (deeds.Count > maxDeedCount)
-            {
-                int leastImportantIndex = 0;
-                int leastImportance = GetDeedImportance(deeds[0].Kind);
-
-                for (int i = 1; i < deeds.Count; i++)
-                {
-                    int importance = GetDeedImportance(deeds[i].Kind);
-                    if (importance < leastImportance ||
-                        (importance == leastImportance && deeds[i].When < deeds[leastImportantIndex].When))
-                    {
-                        leastImportantIndex = i;
-                        leastImportance = importance;
-                    }
-                }
-
-                deeds.RemoveAt(leastImportantIndex);
-            }
-        }
-
-        private static int GetDeedImportance(NpcDeedKind kind)
-        {
-            return kind == NpcDeedKind.Fell ? 100 : 10;
         }
 
         private void RemoveNpcFromChunk(Vector2Int chunkCoord, int entityId)

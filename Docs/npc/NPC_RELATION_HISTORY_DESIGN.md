@@ -62,7 +62,7 @@ backfill·drift가 의존하는 기반 채널. 정본 저장소는 `NpcManager` 
 - 영속: `WorldData.NpcAffinityList : List<NpcAffinityEntry>` ([WorldData.cs:18](../../Assets/Scripts/Data/WorldData.cs#L18)) — 평면 리스트. `SaveAffinity`/`LoadAffinity`로 Dictionary ↔ List 변환.
 - API ([NpcManager.cs:626~](../../Assets/Scripts/Manager/NpcManager.cs#L626)): `GetAffinity`(없으면 0), `HasMet`, `SetAffinity`, `ModifyAffinity`(delta), `RemoveAllAffinityInvolving`(영구 사망 정리).
 
-> ⚠ 현황: API·저장은 있으나 **호출처가 아직 없다** — backfill 시드(§4)도 drift(§5)도 미구현이라 실질 호감도는 전부 0. clamp 범위(예 −100~+100)도 미적용. ([PLAN R0-A](../world_history/WORLD_HISTORY_PLAN.md))
+> **현황 (2026-07-13)**: `System_NpcSim`의 Hunt 파티 결과가 생존 멤버 쌍에 `ModifyAffinity`를 호출한다. 성공 파티는 +4, 그 외 생존 귀환 파티는 +1이며, 같은 결과를 각 NPC의 `Deeds`에 기록한다. backfill 시드는 아직 미구현이다. clamp 범위는 `NpcManager`의 `AFFINITY_MIN/MAX`를 사용한다.
 
 ---
 

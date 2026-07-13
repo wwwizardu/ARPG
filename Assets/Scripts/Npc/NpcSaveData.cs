@@ -125,6 +125,8 @@ namespace ARPG.Npc
             Activity.EnsureInitialized();
             if (Deeds == null)
                 Deeds = new List<NpcDeedEntry>();
+            for (int i = 0; i < Deeds.Count; i++)
+                Deeds[i].EnsureInitialized();
             if (DeceasedRelations == null)
                 DeceasedRelations = new List<DeceasedRelationMemory>();
         }

@@ -298,7 +298,7 @@ NPC↔NPC 호감도는 **"같은 마을에 있으면 자동 상승"하는 패시
 | Repelled (부상 위주 후퇴) | 소폭↑ 또는 무변화 (고생을 함께함) |
 | Casualty (파티원 전사) | 생존자에 상실감. 사인·관계에 따라 **원한(`GrudgeAgainst`)/`Sentiment` 후보**(§8.2 죽음 훅과 연동) |
 
-- **저장**: `NpcManager` 호감도/관계 데이터에 `ModifyAffinity`/`AddRelation`로 반영(기존 API, ±100 clamp).
+- **저장**: `NpcManager` 호감도/관계 데이터에 `ModifyAffinity`/`AddRelation`로 반영(기존 API, ±100 clamp). 현재 Hunt 파티 구현은 성공 시 +4, 그 외 생존 귀환 시 +1을 적용하고 각 NPC의 `Deeds`에 관계 변화 이력을 남긴다.
 - **초기 관계 유지**: 가족·형제·라이벌 등 초기 backfill([NPC_RELATION_HISTORY §4](NPC_RELATION_HISTORY_DESIGN.md))은 그대로. 본 절은 그 위에서의 **런타임 변동**만 담당하며, [NPC_RELATION_HISTORY §5.2](NPC_RELATION_HISTORY_DESIGN.md)의 패시브 drift 시스템을 **대체**한다.
 - **솔로 활동**은 파티 관계 변동 없음(개인 `SkillLevel`·평판 등만 변동).
 

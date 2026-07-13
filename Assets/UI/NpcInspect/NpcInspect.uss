@@ -85,9 +85,40 @@
 
 .npc-col-mid {
     width: 320px;
-    max-height: 520px;
+    height: 520px;
     border-right-width: 1px;
     border-right-color: rgba(120, 100, 70, 0.25);
+}
+
+.npc-mid-summary-scroll {
+    flex-shrink: 1;
+    min-height: 120px;
+    max-height: 250px;
+}
+
+.npc-history-list {
+    flex-grow: 1;
+    min-height: 180px;
+    margin-bottom: 4px;
+}
+
+.npc-history-row {
+    flex-direction: column;
+    justify-content: center;
+    min-height: 42px;
+    padding: 3px 6px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(120, 100, 70, 0.16);
+}
+
+.npc-history-description {
+    color: rgb(230, 220, 200);
+    white-space: normal;
+}
+
+.npc-history-time {
+    color: rgb(150, 150, 165);
+    font-size: 11px;
 }
 
 .npc-col-right {

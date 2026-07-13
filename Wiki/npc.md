@@ -18,7 +18,7 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 
 **핵심 경계**: 모든 물리 NPC는 모험가이며, 마을 경제는 물리 NPC가 아닌 추상 인구가 구동하고 건물은 자가 건설된다. 서비스도 특정 NPC가 아니라 배치 건물이 제공한다. [src: Docs/npc/VILLAGE_NPC_BOUNDARY_DESIGN.md §1–5]
 
-**현재 MVP**: 모든 생존 NPC는 `System_NpcSim`의 시간분할 처리 대상이며, 활동 범위는 Rest와 솔로 Hunt다. Hunt는 Food·부상·사망·`Fell` 연대기·전기에 결과를 남기고, 활동 중 LOD 전환도 이어진다. [src: Docs/npc/NPC_SIMULATION_DESIGN.md §11.1, Assets/Scripts/Common/System/System_NpcSim.cs]
+**현재 MVP**: 모든 생존 NPC는 `System_NpcSim`의 시간분할 처리 대상이며, 활동 범위는 Rest와 솔로/파티 Hunt다. Hunt는 Food·부상·사망·`Fell` 연대기·주요 사건 이력에 결과를 남기고, 활동 중 LOD 전환도 이어진다. [src: Docs/npc/NPC_SIMULATION_DESIGN.md §11.1, Assets/Scripts/Common/System/System_NpcSim.cs, Assets/Scripts/Manager/NpcManager.cs]
 
 ## 2. 정본 매핑 — "이걸 물으면 이 문서의 이 절"
 
@@ -30,10 +30,10 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 | 소망(Wish) 데이터 모델·상태머신·추적·완료·보상·영속화 | [QUEST_SYSTEM_DESIGN §2–6](../Docs/npc/QUEST_SYSTEM_DESIGN.md) | 소망 *떠오름*은 interactionSystem §4.7 |
 | 소망·대화·선호의 **LLM 생성** | [NARRATIVE_ENGINE_DESIGN](../Docs/world_history/NARRATIVE_ENGINE_DESIGN.md) (world_history 소속) | 후보 어휘는 QUEST_SYSTEM §8과 공유 |
 | NPC↔NPC 관계(가족/원한/Sentiment)·backfill | [NPC_RELATION_HISTORY_DESIGN §4](../Docs/npc/NPC_RELATION_HISTORY_DESIGN.md) | 연대기(L1)는 PROCEDURAL_HISTORY 소관 |
-| NPC 전기 로그(거주 이력·겪은 일)·지식 거리 | **상세 스키마 = [NPC_SIMULATION §5.1](../Docs/npc/NPC_SIMULATION_DESIGN.md)** / 개념·지식거리 = [NARRATIVE_ENGINE §4.8](../Docs/world_history/NARRATIVE_ENGINE_DESIGN.md) / 채널 = [RELATION_HISTORY §4.2](../Docs/npc/NPC_RELATION_HISTORY_DESIGN.md) | `Deeds` 중 사망(`Fell`) 기록은 구현됨. 거주 이력·다른 사건 카탈로그는 후속. [src: Assets/Scripts/Manager/NpcManager.cs, Docs/npc/NPC_SIMULATION_DESIGN.md §11.1] |
+| NPC 전기 로그(거주 이력·겪은 일)·지식 거리 | **상세 스키마 = [NPC_SIMULATION §5.1](../Docs/npc/NPC_SIMULATION_DESIGN.md)** / 개념·지식거리 = [NARRATIVE_ENGINE §4.8](../Docs/world_history/NARRATIVE_ENGINE_DESIGN.md) / 채널 = [RELATION_HISTORY §4.2](../Docs/npc/NPC_RELATION_HISTORY_DESIGN.md) | `Deeds`는 무제한 누적 주요 사건 이력이다. 사망(`Fell`)·Hunt 부상·파티 Hunt 후 호감도 변화를 기록하며, 주요 아이템 획득은 보상 경로 추가 때 연결한다. [src: Assets/Scripts/Npc/NpcBiography.cs, Assets/Scripts/Manager/NpcManager.cs, Assets/Scripts/Common/System/System_NpcSim.cs] |
 | NPC↔NPC 호감도 **런타임 변동** | [NPC_ACTIVITY_DESIGN §8.3](../Docs/npc/NPC_ACTIVITY_DESIGN.md) | **활동 기반**. 패시브 근접 drift(구 System_NpcRelationship)는 폐기 [src: NPC_RELATION_HISTORY §5.2] |
 | 모험가 자율 활동/원정(Venture)·부상·죽음 — 활동 *내용* | [NPC_ACTIVITY_DESIGN §4–10](../Docs/npc/NPC_ACTIVITY_DESIGN.md) | 활동 내용 설계. 시뮬 프레임은 아래 문서가 소유 |
-| NPC 시뮬 *기반*(개별 LOD·오프스크린 상태·로밍·월드영향) | [NPC_SIMULATION_DESIGN](../Docs/npc/NPC_SIMULATION_DESIGN.md) | MVP 구현 완료: Rest/솔로 Hunt, 개인 LOD 전환, 결과 반영, 전역 총량/점진 보충. 파티·이주·WORLD_EVENT 유발은 후속. [src: Docs/npc/NPC_SIMULATION_DESIGN.md §11, Assets/Scripts/Common/System/System_NpcSim.cs] |
+| NPC 시뮬 *기반*(개별 LOD·오프스크린 상태·로밍·월드영향) | [NPC_SIMULATION_DESIGN](../Docs/npc/NPC_SIMULATION_DESIGN.md) | MVP 구현 완료: Rest/솔로·파티 Hunt, 개인 LOD 전환, 결과 반영, 전역 총량/점진 보충. 이주·WORLD_EVENT 유발은 후속. [src: Docs/npc/NPC_SIMULATION_DESIGN.md §11, Assets/Scripts/Common/System/System_NpcSim.cs] |
 | NPC=모험가·경제 분리·자가 건설 | [VILLAGE_NPC_BOUNDARY_DESIGN](../Docs/npc/VILLAGE_NPC_BOUNDARY_DESIGN.md) | 현행 정본 |
 | 동료(파티 영입·명령·성장) | [companionSystem](../Docs/npc/companionSystem.md) | 최구식 문서 — §3 주의 필수 |
 | NPC 장비 12슬롯·검사 UI(UINpcInspect) | [NPC_EQUIPMENT_DESIGN](../Docs/npc/NPC_EQUIPMENT_DESIGN.md) | 구현 완료 |
@@ -43,7 +43,7 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 갱신 날짜가 아니라 질문의 책임으로 정본을 선택한다.
 
 1. 마을 경제와 물리 NPC의 경계는 **VILLAGE_NPC_BOUNDARY_DESIGN**이 우선한다. [src: Docs/npc/VILLAGE_NPC_BOUNDARY_DESIGN.md]
-2. 현재 개인 LOD·Rest·솔로 Hunt·전역 총량 보충은 **NPC_SIMULATION_DESIGN**이 소유한다. [src: Docs/npc/NPC_SIMULATION_DESIGN.md §11.1]
+2. 현재 개인 LOD·Rest·솔로/파티 Hunt·전역 총량 보충은 **NPC_SIMULATION_DESIGN**이 소유한다. [src: Docs/npc/NPC_SIMULATION_DESIGN.md §11.1]
 3. 파티와 추가 활동의 내용은 **NPC_ACTIVITY_DESIGN**이 소유하되 실행 프레임은 NPC_SIMULATION 계약을 따른다. [src: Docs/npc/NPC_ACTIVITY_DESIGN.md §1, Docs/npc/NPC_SIMULATION_DESIGN.md §10]
 4. 플레이어 관계·선물은 **interactionSystem**, 소망 데이터는 **QUEST_SYSTEM_DESIGN**, NPC 간 관계와 backfill은 **NPC_RELATION_HISTORY_DESIGN**이 소유한다. [src: Docs/npc/interactionSystem.md, Docs/npc/QUEST_SYSTEM_DESIGN.md, Docs/npc/NPC_RELATION_HISTORY_DESIGN.md]
 5. 장비는 **NPC_EQUIPMENT_DESIGN**이 소유하지만 Inn 방문자 경로는 사용하지 않는다. [src: Docs/npc/NPC_EQUIPMENT_DESIGN.md, Docs/npc/VILLAGE_NPC_BOUNDARY_DESIGN.md §5]
@@ -58,10 +58,10 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 | 대화 토픽 선택·내러티브 런타임 | NARRATIVE_ENGINE(+SPIKE) | [Scripts/Npc/Narrative/](../Assets/Scripts/Npc/Narrative/) — DialogueTopicSelector, NpcNarrativeService(`Llm/Cache/Fallback`), `AffinityTier`, `NpcWish`/`WishState` 타입 | 🚧 부분 구현 — 타입·선택 로직 존재 |
 | 플레이어↔NPC 관계 4축(`PlayerRelation`) | interactionSystem §3 | NpcManager에 해당 API 없음 (GetPlayerRelation/ModifyPlayerRelation 부재) | ❌ 미구현 |
 | 선물·선호 판정(`GiftReaction`) / 소망 추적·보상 | interactionSystem §4 / QUEST_SYSTEM | 타입 골격(`NpcWish`, `WishKind`)만 Narrative에 존재 | ❌ 미구현 (문서상 0%) |
-| 개인 활동 시뮬(MVP) | NPC_SIMULATION §11.1 | `System_NpcSim`, `NpcActivityState`, `NpcActivityResolver` — Rest/솔로 Hunt, 결정론 결과, analytic Hunt 경로 | ✅ 구현 [src: Assets/Scripts/Common/System/System_NpcSim.cs, Assets/Scripts/Npc/NpcActivityResolver.cs] |
+| 개인 활동 시뮬(MVP) | NPC_SIMULATION §11.1 | `System_NpcSim`, `NpcActivityState`, `NpcActivityResolver` — Rest/솔로·파티 Hunt, 결정론 결과, analytic Hunt 경로 | ✅ 구현 [src: Assets/Scripts/Common/System/System_NpcSim.cs, Assets/Scripts/Npc/NpcActivityResolver.cs] |
 | 전역 NPC 총량·점진 보충 | NPC_SIMULATION D9 | `NpcPopulationState`, `NpcManager.EnsureAllVillagesPopulated`/`TryReplenishGlobalPopulation` | ✅ 구현 [src: Assets/Scripts/Npc/NpcPopulationState.cs, Assets/Scripts/Manager/NpcManager.cs] |
 | 사망 관계 기억 | NPC_SIMULATION §9-10 | `DeceasedRelationMemory`, `NpcManager.MarkNpcDead`, `UINpcInspect` | ✅ 구현 [src: Assets/Scripts/Npc/NpcRelationEntry.cs, Assets/Scripts/Manager/NpcManager.cs, Assets/Scripts/UI/UINpcInspect.cs] |
-| 파티 원정·이주·WORLD_EVENT 유발 | NPC_SIMULATION NS4 | MVP 범위 밖 | ❌ 미구현 [src: Docs/npc/NPC_SIMULATION_DESIGN.md §11] |
+| 파티 원정·이주·WORLD_EVENT 유발 | NPC_SIMULATION NS4 | Hunt 파티는 구현. 이주·WORLD_EVENT 유발은 MVP 범위 밖 | 🟡 부분 구현 [src: Docs/npc/NPC_SIMULATION_DESIGN.md §11, Assets/Scripts/Common/System/System_NpcSim.cs] |
 | 동료 시스템 | companionSystem | 없음 | ❌ 미구현 |
 | NPC 장비·검사 UI | NPC_EQUIPMENT | NpcEquipHelper, UINpcInspect | ✅ 구현 |
 

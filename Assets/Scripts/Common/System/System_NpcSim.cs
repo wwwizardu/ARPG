@@ -327,6 +327,7 @@ namespace ARPG.Systems
                     memberActivity.Phase = NpcActivityPhase.Wounded;
                     memberActivity.Kind = NpcActivityKind.None;
                     memberActivity.PhaseEndGameTime = outcomeGameTime + NpcActivityResolver.WoundedRecoveryHours;
+                    AR.s.Npc.AddWoundedDeed(memberIds[i], outcomeGameTime, memberActivity.PhaseEndGameTime);
                 }
                 else if (outcomes[i] != NpcHuntOutcome.Dead)
                 {
@@ -341,7 +342,7 @@ namespace ARPG.Systems
             if (foodYield > 0 && members[0].VillageId >= 0)
                 AR.s.Village.ProduceResource(members[0].VillageId, GlobalEnum.ItemType.Food, foodYield, false);
 
-            ApplyPartyRelationshipOutcome(memberIds, outcomes, successCount > 0);
+            ApplyPartyRelationshipOutcome(memberIds, outcomes, successCount > 0, outcomeGameTime);
             for (int i = 0; i < members.Count; i++)
             {
                 int memberId = memberIds[i];
@@ -355,7 +356,7 @@ namespace ARPG.Systems
         }
 
         private static void ApplyPartyRelationshipOutcome(IReadOnlyList<int> memberIds,
-            IReadOnlyList<NpcHuntOutcome> outcomes, bool hasSuccess)
+            IReadOnlyList<NpcHuntOutcome> outcomes, bool hasSuccess, float outcomeGameTime)
         {
             int affinityDelta = hasSuccess ? 4 : 1;
             for (int i = 0; i < memberIds.Count; i++)
@@ -368,6 +369,8 @@ namespace ARPG.Systems
                     if (outcomes[j] == NpcHuntOutcome.Dead)
                         continue;
                     AR.s.Npc.ModifyAffinity(memberIds[i], memberIds[j], affinityDelta);
+                    AR.s.Npc.AddPartyAffinityDeed(memberIds[i], memberIds[j], affinityDelta, outcomeGameTime);
+                    AR.s.Npc.AddPartyAffinityDeed(memberIds[j], memberIds[i], affinityDelta, outcomeGameTime);
                 }
             }
         }
@@ -423,6 +426,7 @@ namespace ARPG.Systems
                 NotifyHuntOutcome(saveData, entityId, outcome, 0);
                 activity.Phase = NpcActivityPhase.Wounded;
                 activity.PhaseEndGameTime = outcomeGameTime + NpcActivityResolver.WoundedRecoveryHours;
+                AR.s.Npc.AddWoundedDeed(entityId, outcomeGameTime, activity.PhaseEndGameTime);
                 return;
             }
 

@@ -32,17 +32,22 @@
                     <ui:VisualElement name="inv-grid" class="npc-inv-grid"/>
                 </ui:VisualElement>
 
-                <!-- 중간 컬럼: 성향 + 관계 -->
-                <ui:ScrollView class="npc-col npc-col-mid" mode="Vertical">
-                    <appui:Text text="성향" class="npc-section-title"/>
-                    <ui:VisualElement name="personality-list" class="npc-stat-list"/>
+                <!-- 중간 컬럼: 성향 + 활동 + 관계 + 주요 이력 -->
+                <ui:VisualElement class="npc-col npc-col-mid">
+                    <ui:ScrollView class="npc-mid-summary-scroll" mode="Vertical">
+                        <appui:Text text="성향" class="npc-section-title"/>
+                        <ui:VisualElement name="personality-list" class="npc-stat-list"/>
 
-                    <appui:Text text="활동" class="npc-section-title"/>
-                    <ui:VisualElement name="activity-list" class="npc-stat-list"/>
+                        <appui:Text text="활동" class="npc-section-title"/>
+                        <ui:VisualElement name="activity-list" class="npc-stat-list"/>
 
-                    <appui:Text text="관계" class="npc-section-title"/>
-                    <ui:VisualElement name="relation-list" class="npc-stat-list"/>
-                </ui:ScrollView>
+                        <appui:Text text="관계" class="npc-section-title"/>
+                        <ui:VisualElement name="relation-list" class="npc-stat-list"/>
+                    </ui:ScrollView>
+
+                    <appui:Text text="주요 이력" class="npc-section-title"/>
+                    <ui:ListView name="history-list" class="npc-history-list"/>
+                </ui:VisualElement>
 
                 <!-- 우측 컬럼: 전투 스탯 -->
                 <ui:ScrollView class="npc-col npc-col-right" mode="Vertical">

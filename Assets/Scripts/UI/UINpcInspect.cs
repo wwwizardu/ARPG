@@ -35,6 +35,8 @@ namespace ARPG.UI
         private VisualElement? _personalityList;
         private VisualElement? _relationList;
         private VisualElement? _activityList;
+        private ListView? _historyList;
+        private readonly List<NpcDeedEntry> _displayedDeeds = new();
 
         private int _entityId = -1;
         private NpcSaveData? _saveData;
@@ -78,6 +80,16 @@ namespace ARPG.UI
             _personalityList = root.Q<VisualElement>("personality-list");
             _relationList = root.Q<VisualElement>("relation-list");
             _activityList = root.Q<VisualElement>("activity-list");
+            _historyList = root.Q<ListView>("history-list");
+
+            if (_historyList != null)
+            {
+                _historyList.makeItem = MakeHistoryRow;
+                _historyList.bindItem = BindHistoryRow;
+                _historyList.fixedItemHeight = 48;
+                _historyList.selectionType = SelectionType.None;
+                _historyList.itemsSource = _displayedDeeds;
+            }
 
             if (_closeBtn != null) _closeBtn.clicked += () => Close();
 
@@ -126,7 +138,100 @@ namespace ARPG.UI
             RebuildPersonality();
             RebuildRelations();
             RebuildActivity();
+            RebuildHistory();
             RebuildStats();
+        }
+
+        private void RebuildHistory()
+        {
+            if (_historyList == null || _saveData == null)
+                return;
+
+            _displayedDeeds.Clear();
+            for (int i = _saveData.Deeds.Count - 1; i >= 0; i--)
+            {
+                NpcDeedEntry entry = _saveData.Deeds[i];
+                if (entry == null)
+                    continue;
+                _displayedDeeds.Add(entry);
+            }
+
+            _historyList.Rebuild();
+        }
+
+        private static VisualElement MakeHistoryRow()
+        {
+            VisualElement row = new();
+            row.AddToClassList("npc-history-row");
+            Text description = new();
+            description.name = "history-description";
+            description.AddToClassList("npc-history-description");
+            Text time = new();
+            time.name = "history-time";
+            time.AddToClassList("npc-history-time");
+            row.Add(description);
+            row.Add(time);
+            return row;
+        }
+
+        private void BindHistoryRow(VisualElement row, int index)
+        {
+            if (index < 0 || index >= _displayedDeeds.Count)
+                return;
+
+            NpcDeedEntry entry = _displayedDeeds[index];
+            Text? description = row.Q<Text>("history-description");
+            Text? time = row.Q<Text>("history-time");
+            if (description != null)
+                description.text = GetHistoryDescription(entry);
+            if (time != null)
+                time.text = $"게임 시간 {entry.When:F1}";
+        }
+
+        private string GetHistoryDescription(NpcDeedEntry entry)
+        {
+            return entry.Kind switch
+            {
+                NpcDeedKind.PartyAffinityChanged =>
+                    $"{GetOtherParticipantName(entry)}와 함께 사냥 후 호감도 {FormatSignedValue(entry.AffinityDelta)}",
+                NpcDeedKind.Wounded => $"사냥 중 부상 · {entry.RecoveryEndGameTime:F1}시간까지 회복",
+                NpcDeedKind.NotableItemAcquired => string.IsNullOrEmpty(entry.ItemDisplayName)
+                    ? "주요 아이템 획득"
+                    : $"{entry.ItemDisplayName} 획득",
+                NpcDeedKind.Fell => "사망",
+                NpcDeedKind.VentureFailed => "원정 실패",
+                _ => "알 수 없는 사건",
+            };
+        }
+
+        private string GetOtherParticipantName(NpcDeedEntry entry)
+        {
+            for (int i = 0; i < entry.ParticipantSnapshots.Count; i++)
+            {
+                NpcDeedParticipant participant = entry.ParticipantSnapshots[i];
+                if (participant.EntityId == _entityId)
+                    continue;
+                if (string.IsNullOrEmpty(participant.DisplayName) == false)
+                    return participant.DisplayName;
+            }
+
+            for (int i = 0; i < entry.Participants.Count; i++)
+            {
+                int participantId = entry.Participants[i];
+                if (participantId == _entityId)
+                    continue;
+
+                NpcSaveData? other = AR.s.Npc?.GetSaveData(participantId);
+                if (other != null)
+                    return AR.s.Data?.GetNpc(other.NpcTableId)?.Name ?? $"NPC #{participantId}";
+            }
+
+            return "동료";
+        }
+
+        private static string FormatSignedValue(int value)
+        {
+            return value >= 0 ? $"+{value}" : value.ToString();
         }
 
         private void RebuildActivity()

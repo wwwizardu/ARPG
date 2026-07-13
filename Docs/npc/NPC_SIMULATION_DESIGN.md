@@ -2,7 +2,7 @@
 
 > **목표**: 개별 NPC(모험가)가 **각자 행동하고, 월드를 돌아다니며, 월드에 영향을 주는 이벤트를 일으킨다.** 그 행적이 illusion(도착 시 생성)이 아니라 **실제로 축적·영속**되게 한다.
 >
-> **상태 (2026-07-10)**: 🟩 **MVP 구현 완료** — NS1~NS3의 개인 LOD 시뮬·결과 반영·LOD 전환과 D9 전역 총량/점진 보충이 코드에 반영되었다. 현재 활동 범위는 **Rest와 솔로 Hunt**이며, 파티·이주·WORLD_EVENT 유발은 후속 단계다. 잔여 = 실측 기반 튜닝과 §9의 후속/범위 밖 항목.
+> **상태 (2026-07-13)**: 🟩 **MVP 구현 완료** — NS1~NS3의 개인 LOD 시뮬·결과 반영·LOD 전환과 D9 전역 총량/점진 보충이 코드에 반영되었다. 현재 활동 범위는 **Rest, 솔로 Hunt, Hunt 파티**이며, 이주·WORLD_EVENT 유발은 후속 단계다. Hunt 결과의 주요 사건 이력과 NPC Inspect 표시까지 구현되었다. 잔여 = 실측 기반 튜닝과 §9의 후속/범위 밖 항목.
 >
 > **이 문서의 위치**: NPC "시뮬레이션 **기반(substrate)**" — 개별 NPC를 어느 LOD 층위에서·어떻게 시뮬할지. 그 위에서 돌아가는 **활동 내용(원정 종류·파티·결과 롤)** 은 [NPC_ACTIVITY_DESIGN.md](NPC_ACTIVITY_DESIGN.md)가 담당한다. 본 문서는 NPC_ACTIVITY의 부품(`VentureState`/`RollOutcome`/`ScoreActivity`)을 **"개인·LOD무관"으로 승격**해 재사용한다(§10 supersession).
 >
@@ -105,7 +105,7 @@ public NpcActivityState Activity;      // §4.1 상태머신 (enum + LocationRef
 public float LastSimGameTime;          // 개인 catch-up 시계
 // 전기 로그 (biography) — 상세 §5.1. 지식 거리(§8)의 입력.
 public List<ResidenceEntry> Residences;   // {SettlementId, from, to(§5.1-⑤ 시간창)}
-public List<DeedEntry> Deeds;             // 겪은 일 — DeedEntry{ DeedKind Kind; int RefEventId=-1; List<int> Participants; HowKnown How; float When; }
+public List<DeedEntry> Deeds;             // 주요 사건 이력 — Kind/참가자 스냅샷/관계 변화·회복·아이템 정보/HowKnown/When
 ```
 
 - 원정 진행 상태는 NPC_ACTIVITY `VentureState`를 **개인 단위로 흡수**하거나 참조(파티는 멤버 id 목록).
@@ -117,10 +117,10 @@ NPC가 *어디 살았고 무엇을 겪었나*의 개인 기록. **지식 거리(
 
 - **무엇을 기록 (①)** — 두 granularity:
   - **정착지 매크로**: 관련 `ChronicleEvent`(War/Conquer/Ruin 등) → `RefEventId`로 **참조**.
-  - **NPC 레벨 (다양·열린 카탈로그)**: 원정 결과를 중심으로 한 **`DeedKind` enum** — 예) `VentureSuccess`/`VentureFailed`/`CompanionDied`(전우 사망)/`Rescued`(구출)/`Betrayed`(배신)/`NotableFind`(발견)/`Delved`(던전 공략)/`TriggeredEvent`(월드이벤트 유발) … **죽음만이 아니라 계속 확장 가능**. 참가자 있으면 `Participants`에 NPC ids.
+  - **NPC 레벨 (다양·열린 카탈로그)**: 원정 결과를 중심으로 한 **`DeedKind` enum** — 예) `VentureSuccess`/`VentureFailed`/`PartyAffinityChanged`/`Wounded`/`CompanionDied`(전우 사망)/`Rescued`(구출)/`Betrayed`(배신)/`NotableItemAcquired`(주요 아이템 획득)/`Delved`(던전 공략)/`TriggeredEvent`(월드이벤트 유발) … **죽음만이 아니라 계속 확장 가능**. 참가자는 EntityId와 표시명 스냅샷을 함께 남겨 이후 사망·이름 변경에도 이력 문구가 유지된다.
   - 평범·무탈한 활동(그냥 사냥 성공)은 로그 안 함.
 - **누가 기록 (③ — 로컬 복사)**: NPC 레벨 이벤트는 **원정 리졸버가 결과를 1회 계산해 참가자 전원 전기에 같은 내용 기록**. 단일 출처라 사본이어도 **모순 없음**(§8 일관성 원칙은 *LLM 독립 생성*에만 적용 — 시뮬 계산값은 해당 없음). 정착지 매크로는 EventId 참조.
-- **보존 (② — NPC당 캡)**: deed 로그는 NPC당 상한 K. 넘치면 **중요도 가중**으로 밀어냄(가족 죽음·이벤트 유발 같은 정의적 사건은 오래 유지, 사소한 건 먼저 폐기). K·가중치는 tunable. 거주 이력은 작아 캡 불필요.
+- **보존 (② — 무제한 누적)**: deed 로그는 현재 NPC별로 모두 보존한다. 저장 크기 또는 UI 성능 문제가 실측되면 그때 보존 정책을 별도로 결정한다. 거주 이력은 작아 캡 불필요.
 - **HowKnown (④)**: `Lived / Did / Witnessed / Heard` — 지식 거리 등급(§4.8 그대로). Heard(소문)는 전파 시스템 연결 후(§9-9/WORLD_EVENT §8).
 - **거주 시간창 (⑤ — 나중)**: MVP는 `{SettlementId}`만(살았음→앎), `{from,to}` 시간창은 후속.
 - **시딩 (⑥)**: 거주 = 출생 정착지 시드. deed = 거의 빈 상태로 시작 → 시뮬로 축적(관계 `OriginEventId` 몇 개는 씨앗).
@@ -183,7 +183,7 @@ phase 결과가 세계에 실제로 남는다 — 전부 기존 훅 재사용:
 | 5 | ~~보충 여부~~ → **구현: 보충함**(총량 목표 유지, D9). 현재는 기본 NPC 로스터에서 6 게임시간마다 1명씩 보충하고, 정착지 인구 비율 대비 부족한 정착지에 배정한다. | 장기 소스(출생/외부 유입)와 지역 위험도 적합성은 후속 결정. 보충은 물리 모험가 수만 다루며 [마을–NPC 경계](VILLAGE_NPC_BOUNDARY_DESIGN.md)의 경제 인구는 변경하지 않는다. |
 | 6 | ~~승격 좌표~~ → **결정(기본값)**: 정착지에 있으면 **반경 내 랜덤**(현행 `GetRandomSpawnPositionInVillage`), 이동 중이면 **analytic 좌표 그 지점**(D11) | — |
 | 7 | ~~결정론~~ → **결정(기본값)**: 모든 롤은 **`DerivedSeed` 계열 시드(NPC id + 출발 시각)**, `UnityEngine.Random` 금지(프로젝트 규약). 세이브/로드·리플레이 일관 | — |
-| 8 | ~~전기 로그 스키마~~ → **결정(§5.1)**: 정착지 매크로(EventId 참조) + NPC 레벨 **열린 이벤트 카탈로그**(원정 성공/실패·전우사망·구출·배신·발견·던전공략·이벤트유발…). 원정 리졸버가 참가자에 1회 기록(로컬 복사·단일출처). NPC당 캡(중요도 가중). 영구 유대는 관계 채널 | 시간창(⑤)·캡 K·가중치는 tunable/나중 |
+| 8 | ~~전기 로그 스키마~~ → **결정(§5.1)**: 정착지 매크로(EventId 참조) + NPC 레벨 **열린 이벤트 카탈로그**(파티 관계 변화·부상·전우사망·주요 아이템 획득·원정 사건…). 원정 리졸버가 참가자에 1회 기록(로컬 복사·단일출처). 영구 유대는 관계 채널 | 현재는 무제한 누적. 보존 정책은 실측 후 결정 |
 | 9 | **노변 조우 이벤트 내용** → **범위 밖(보류)**: 이동 NPC 대화가 낳는 이벤트 카탈로그·발화는 **WORLD_EVENT/narrative 소관**, 본 문서 밖. D11이 진입점만 열어둠 | 나중 |
 | 10 | ~~사망 관계 기억~~ → **구현 완료**: 관계 그래프에서는 사망 NPC를 제거하되, 생존 NPC에는 `DeceasedRelationMemory`(사망 NPC id·표시명 스냅샷·사망 전 관계 유형·방향·`Fell` EventId·사망 시각)를 남긴다 | `MarkNpcDead`가 `Fell` 연대기 이벤트를 먼저 만든 뒤 활성 관계 제거 전에 생존 NPC에 기억을 기록한다. Inspect 관계 목록은 “고인 배우자 ○○”처럼 표시한다. 호감도/활성 관계 엔트리는 제거해 현재 관계 판정에는 참여하지 않음 |
 | 11 | **보충 NPC의 지역 난이도 적합성** → 전역 총량 보충 시 단순 정착지 부족 비율만으로 배정하지 않는다. 신규/저레벨 모험가의 시작 레벨·장비·전투력과 정착지 주변 Zone 위험도를 비교해 안전한 정착지에 우선 배치한다 | 이후 구현. 고난이도 지역에는 해당 위험도에 맞는 숙련 모험가만 보충하거나, 저레벨 NPC는 저위험 지역에서 성장·이동한 뒤 진입하게 한다. 지역 위험도·NPC 성장·이주/호위 규칙이 함께 필요 |
@@ -213,7 +213,7 @@ phase 결과가 세계에 실제로 남는다 — 전부 기존 훅 재사용:
 | **NS1** | 오프스크린 상태 모델 + `System_NpcSim` 시간분할 틱 (솔로) | M | **완료** — Rest/Hunt만 구현 |
 | **NS2** | 결과 되먹임 배선 (죽음·전리품·연대기 append) + 전기 로그 `Deeds` | M | **완료** |
 | **NS3** | LOD 승격/강등 (오프스크린 ↔ ECS) + 좌표 실체화 | M | **완료** |
-| **NS4** | 이주(거주 이력) + 이벤트 유발(WORLD_EVENT) + 파티 | L | 미착수 |
+| **NS4** | 이주(거주 이력) + 이벤트 유발(WORLD_EVENT) + 파티 | L | Hunt 파티와 파티 결과 이력은 구현됨. 이주·WORLD_EVENT 유발은 미착수 |
 | **NS5** | 스케일 튜닝(밀도·틱 예산·시간 점프 검증) + 결정론 검증 | M | 부분 완료 — 전역 총량/보충 구현, 실측·튜닝 대기 |
 
 > **선행 검증**: NS1 전, 스케일 예산(§9-1)을 잡아 "전부 개별 tick"이 목표 규모에서 프레임 비용 상수인지 프로토타입으로 확인 권장.
@@ -223,15 +223,15 @@ phase 결과가 세계에 실제로 남는다 — 전부 기존 훅 재사용:
 #### MVP 활동과 결과
 
 - `System_NpcSim`은 `Priority = 59`, 0.25초 간격, 한 번에 최대 8 NPC를 라운드로빈 처리한다. 시간 점프 시 NPC당 phase 전환은 최대 4회로 제한한다.
-- 구현된 활동은 **Rest(4 게임시간)** 와 **솔로 Hunt(8 게임시간)** 다. 다음 활동은 `Patience`·`Courage`·`Curiosity` 기반 가중 선택으로 결정한다.
-- Hunt 결과는 `Success / Failed / Wounded / Dead`다. 성공하면 마을 Food를 1~4만큼 추가하고, 부상은 24 게임시간 회복 후 다시 활동 가능해진다. 사망은 시뮬레이션 목록·활성 관계·호감도·마을 명단에서 제거되며 `Fell` 연대기와 `Deeds`를 남긴다.
+- 구현된 활동은 **Rest(4 게임시간)** 와 **Hunt(8 게임시간, 솔로 또는 파티)** 다. 다음 활동은 `Patience`·`Courage`·`Curiosity` 기반 가중 선택으로 결정한다.
+- Hunt 결과는 `Success / Failed / Wounded / Dead`다. 성공하면 마을 Food를 1~4만큼 추가하고, 부상은 24 게임시간 회복 후 다시 활동 가능해진다. 부상은 `Deeds`에 기록되며, 파티 Hunt 결과는 생존 멤버 쌍의 호감도 변화도 각자 `Deeds`에 기록한다. 사망은 시뮬레이션 목록·활성 관계·호감도·마을 명단에서 제거되며 `Fell` 연대기와 `Deeds`를 남긴다.
 - 활동 선택·Hunt 결과·Food 보상·목표 좌표는 `DerivedSeed.ChannelNpcActivity` 기반으로 결정된다. Hunt는 출발지→목표지→귀환지의 analytic 좌표를 사용한다.
 
 #### LOD와 관측
 
 - 실체화된 Hunt NPC는 기본 AI 이동을 일시 정지하고, 오프스크린 전환 시 현재 좌표에서 목적지까지의 경로와 ETA를 다시 계산해 이어서 이동한다.
 - 활성 NPC의 Hunt 결과는 모두 단일 토스트 알림으로 표시한다. 오프스크린 NPC는 토스트 덮어쓰기를 피하기 위해 현재 부상·사망만 알린다. 플레이어-NPC 친분도 게이트는 §9-12의 후속 작업이다.
-- `UINpcInspect`는 현재 활동, 남은 시간, 마지막 Hunt 결과와 성공 시 Food 획득량을 표시한다. 사망 NPC의 관계는 생존 NPC Inspect에 “고인 배우자 ○○”처럼 표시한다.
+- `UINpcInspect`는 현재 활동, 남은 시간, 마지막 Hunt 결과와 성공 시 Food 획득량을 표시한다. 또한 `Deeds`를 최신순으로 가상화 목록에 표시한다. 이력은 무제한 누적하며, 현재 표시 대상은 파티 Hunt 후 호감도 변화·Hunt 부상·사망이고 주요 아이템 획득은 보상 경로가 추가될 때 연결한다. 사망 NPC의 관계는 생존 NPC Inspect에 “고인 배우자 ○○”처럼 표시한다.
 
 #### 전역 총량과 저장
 
