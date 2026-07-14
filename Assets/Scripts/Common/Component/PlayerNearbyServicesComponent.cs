@@ -27,6 +27,18 @@ namespace ARPG.Component
         public int NearestNpcEntityId;
         public float NearestNpcDistanceSqr;
 
+        // V4: VillageHub(TableId 100) — ProvidedService 비트가 아니라 TableId로 식별 (테이블 비변경).
+        public int NearestHubEntityId;              // -1 = 임계 거리 안에 없음
+        public float NearestHubDistanceSqr;
+
+        // V4: 기능성 Gate(벽 세그먼트) — Entity가 아니라 VillageData.WallSegments 정본 참조.
+        public int NearestGateVillageId;            // -1 = 임계 거리 안에 없음
+        public int NearestGateSegmentId;
+        public int NearestGateTileX;
+        public int NearestGateTileY;
+        public bool NearestGateIsOpen;
+        public float NearestGateDistanceSqr;
+
         public int NearestVillageId;                // 어느 마을에 속한 서비스인지 (-1 = 마을 밖)
     }
 }

@@ -103,8 +103,17 @@ namespace ARPG.UI
             _villageId = po.VillageId;
             Vector2Int anchor = new Vector2Int(po.TileX, po.TileY);
 
-            // 세트 단계 평가 (가장 높은 단계 기준)
-            if (AR.s.Village.HasObjectSet(_villageId, ObjectSetType.ForgePremium, anchor))
+            // V4 (VILLAGE_REWORK_PLAN §3.6): 단일 제련소의 FacilityTier(1/2/3)가 기능 단계 정본.
+            //  Tier 1 = Basic(분해), Tier 2 = Standard(+Mod 재롤), Tier 3 = Premium(+Mod 추가, 비용 -20%)
+            // FacilityTier가 0인 구 세이브 배치(Furnace+Anvil+QuenchVat 세트)만 기존 세트 평가를 유지한다.
+            if (po.FacilityTier >= 3)
+                _tier = ForgeTier.Premium;
+            else if (po.FacilityTier == 2)
+                _tier = ForgeTier.Standard;
+            else if (po.FacilityTier == 1)
+                _tier = ForgeTier.Basic;
+            // 세트 단계 평가 (구 세이브 fallback — 가장 높은 단계 기준)
+            else if (AR.s.Village.HasObjectSet(_villageId, ObjectSetType.ForgePremium, anchor))
                 _tier = ForgeTier.Premium;
             else if (AR.s.Village.HasObjectSet(_villageId, ObjectSetType.ForgeStandard, anchor))
                 _tier = ForgeTier.Standard;
@@ -113,7 +122,7 @@ namespace ARPG.UI
             else
                 _tier = ForgeTier.None;
 
-            Debug.Log($"[Forge] v{_villageId} 강화 단계 {_tier}");
+            Debug.Log($"[Forge] v{_villageId} 강화 단계 {_tier} (FacilityTier={po.FacilityTier})");
             _selectedSlotIndex = -1;
             RefreshAll();
         }
@@ -282,12 +291,13 @@ namespace ARPG.UI
         {
             if (_tierText != null)
             {
+                // V4: 신규 마을은 단일 제련소의 FacilityTier가 단계 정본 — 세트 구성 표기 제거
                 _tierText.text = _tier switch
                 {
-                    ForgeTier.Premium => "Premium 단계 (Furnace + Anvil + QuenchVat)",
-                    ForgeTier.Standard => "Standard 단계 (Furnace + Anvil)",
-                    ForgeTier.Basic => "Basic 단계 (Furnace)",
-                    _ => "강화 불가 — 화로 세트 없음",
+                    ForgeTier.Premium => "제련소 Tier 3 — 분해·Mod 재롤·Mod 추가 (비용 -20%)",
+                    ForgeTier.Standard => "제련소 Tier 2 — 분해·Mod 재롤",
+                    ForgeTier.Basic => "제련소 Tier 1 — 분해",
+                    _ => "강화 불가 — 제련 시설 없음",
                 };
             }
 

@@ -94,7 +94,33 @@ namespace ARPG.Building
             if (needsVisualUpdate == true && saveData.IsActive == true
                 && AR.s.Message.TryGetEntity(entityId, out var entity) == true
                 && entity != null)
-                BuildingFactory.ApplyCompletedState(entityId, entity, table).Forget();
+                BuildingFactory.ApplyCompletedState(entityId, entity, table,
+                    saveData.FacilityTier).Forget();
+            return true;
+        }
+
+        /// <summary>
+        /// V4: 시설 Tier 설정 (PlacedObjectSaveData.FacilityTier 미러). 같은 Entity·같은 슬롯에서
+        /// Tier 교체 자산만 바꾼다 — 별도 건물·외형 모듈을 만들지 않는다 (§3.6).
+        /// 활성 완성 빌딩이면 스프라이트를 즉시 교체한다 (Tier 자산 없으면 기본 자산 유지).
+        /// </summary>
+        public bool SetFacilityTier(int entityId, int facilityTier)
+        {
+            if (_buildingSaveDict.TryGetValue(entityId, out BuildingSaveData? saveData) == false)
+                return false;
+            if (saveData.FacilityTier == facilityTier)
+                return true;
+
+            saveData.FacilityTier = facilityTier;
+            if (saveData.IsActive == true && saveData.IsUnderConstruction == false
+                && AR.s.Message.TryGetEntity(entityId, out var entity) == true
+                && entity != null)
+            {
+                Tables.BuildableItemTable? table = AR.s.Data.GetBuildableItem(saveData.TableId);
+                if (table != null)
+                    BuildingFactory.ApplyFacilityTierVisual(entity, table, facilityTier)
+                        .Forget();
+            }
             return true;
         }
 
@@ -274,7 +300,8 @@ namespace ARPG.Building
                     saveData.VillageId,
                     entityId,
                     hpToRestore,
-                    saveData.IsUnderConstruction);
+                    saveData.IsUnderConstruction,
+                    saveData.FacilityTier);
 
                 if (createdId < 0 || entity == null)
                     return;
@@ -302,7 +329,7 @@ namespace ARPG.Building
                     if (spawnedAsUnderConstruction == true
                         && saveData.IsUnderConstruction == false)
                         await BuildingFactory.ApplyCompletedState(createdId, entity,
-                            latestTable);
+                            latestTable, saveData.FacilityTier);
                     else if (saveData.IsUnderConstruction == true
                         && spawnedHp != saveData.CurrentHp)
                         BuildingFactory.ApplyConstructionProgress(createdId,

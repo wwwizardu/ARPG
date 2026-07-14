@@ -92,6 +92,8 @@ namespace ARPG.Systems
                 GeneralEventBudget = CONSTRUCTION_GENERAL_EVENT_BUDGET,
                 WallEventBudget = CONSTRUCTION_WALL_EVENT_BUDGET,
                 IsOperational = isOperational,
+                // V2: 일반 런타임 추상 advance는 자원 생산·clock 정렬만 수행한다(런타임 발전 중단).
+                AllowDevelopment = VillageProgressionRules.RuntimeProgressionEnabled,
             };
         }
     }

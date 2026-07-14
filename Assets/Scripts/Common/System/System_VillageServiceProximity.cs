@@ -28,6 +28,9 @@ namespace ARPG.Systems
         private const float FORGE_RANGE_SQR   = 3f * 3f;
         private const float INN_RANGE_SQR     = 4f * 4f;
         private const float SHRINE_RANGE_SQR  = 5f * 5f;
+        // V4: VillageHub(100) 거점 이용 / Gate 개폐 임계
+        private const float HUB_RANGE_SQR     = 3f * 3f;
+        private const float GATE_RANGE_SQR    = 2f * 2f;
 
         // NPC 클릭 임계 (NPC_EQUIPMENT_DESIGN.md UI 패스, Q2=1.5 tile)
         private const float NPC_RANGE        = 1.5f;
@@ -119,12 +122,57 @@ namespace ARPG.Systems
                     nearby.NearestCivicEntityId = entityId;
                     nearby.AvailableServices |= ProvidedService.Civic;
                 }
+                // V4: VillageHub는 테이블 ProvidedService가 0이라 TableId(100)로 식별한다.
+                // 구 세이브의 Campfire도 같은 TableId라 자동으로 거점 상호작용을 얻는다 (V0 Convert 계약).
+                if (po.TableId == VillageInitialFacilityCatalog.VILLAGE_HUB_TABLE_ID
+                    && sqr <= HUB_RANGE_SQR && sqr < nearby.NearestHubDistanceSqr)
+                {
+                    nearby.NearestHubDistanceSqr = sqr;
+                    nearby.NearestHubEntityId = entityId;
+                }
             }
+
+            // V4: 기능성 Gate — 벽 세그먼트 정본(VillageData.WallSegments)에서 근접 Gate 탐색.
+            CollectNearestGate(villageId, playerTr.Position, ref nearby);
 
             AR.s.Component.SetComponent(playerEntityId, nearby);
         }
 
         public void OnReset() { }
+
+        /// <summary>
+        /// 근접 Gate 세그먼트(건설 완료)를 찾아 컴포넌트에 기록한다.
+        /// Gate는 Entity가 아니라 VillageData.WallSegments 정본이라 별도 수집 경로를 쓴다.
+        /// </summary>
+        private static void CollectNearestGate(int villageId, Vector2 playerPosition,
+            ref PlayerNearbyServicesComponent nearby)
+        {
+            VillageData? village = AR.s.Village.GetVillage(villageId);
+            if (village == null || village.EntityId < 0
+                || village.WallSegments == null)
+                return;
+
+            for (int i = 0; i < village.WallSegments.Count; i++)
+            {
+                WallSegmentSaveData segment = village.WallSegments[i];
+                if (segment.IsBuilt == false
+                    || segment.Orient != (int)WallOrientation.Gate)
+                    continue;
+
+                float dx = segment.TileX - playerPosition.x;
+                float dy = segment.TileY - playerPosition.y;
+                float sqr = dx * dx + dy * dy;
+                if (sqr > GATE_RANGE_SQR || sqr >= nearby.NearestGateDistanceSqr)
+                    continue;
+
+                nearby.NearestGateVillageId = villageId;
+                nearby.NearestGateSegmentId = segment.SegmentId;
+                nearby.NearestGateTileX = segment.TileX;
+                nearby.NearestGateTileY = segment.TileY;
+                nearby.NearestGateIsOpen = segment.IsOpen;
+                nearby.NearestGateDistanceSqr = sqr;
+            }
+        }
 
         private static void ResetNearby(ref PlayerNearbyServicesComponent nearby)
         {
@@ -141,6 +189,14 @@ namespace ARPG.Systems
             nearby.NearestCivicDistanceSqr = float.MaxValue;
             nearby.NearestNpcEntityId = -1;
             nearby.NearestNpcDistanceSqr = float.MaxValue;
+            nearby.NearestHubEntityId = -1;
+            nearby.NearestHubDistanceSqr = float.MaxValue;
+            nearby.NearestGateVillageId = -1;
+            nearby.NearestGateSegmentId = -1;
+            nearby.NearestGateTileX = 0;
+            nearby.NearestGateTileY = 0;
+            nearby.NearestGateIsOpen = false;
+            nearby.NearestGateDistanceSqr = float.MaxValue;
             nearby.NearestVillageId = -1;
         }
     }

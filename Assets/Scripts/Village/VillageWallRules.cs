@@ -73,6 +73,100 @@ namespace ARPG.Village
                 : PalisadeTableId;
         }
 
+        /// <summary>
+        /// V4 (VILLAGE_REWORK_PLAN §7.5 1안): Hamlet 이상 초기 Stage의 마을에 완공 벽을 데이터로 생성한다.
+        /// 자원·건설시간·진행 task 없이 Bounds 둘레 세그먼트 전체를 IsBuilt(만HP)로 채운다.
+        /// 이미 세그먼트가 있으면(구 세이브·재적용) 변경하지 않는다 — 중복 생성 방지.
+        /// 타일 배치는 실체화된 호출자(VillageManager.RestoreWallTilesFromData)가 담당한다.
+        /// </summary>
+        public static bool ApplyInitialCompletedWalls(VillageData village, VillageStage stage)
+        {
+            if (stage < VillageStage.Hamlet)
+                return false;
+            if (village.WallSegments != null && village.WallSegments.Count > 0)
+                return false;
+            if (PlanWalls(village) == false || village.WallSegments == null)
+                return false;
+
+            for (int i = 0; i < village.WallSegments.Count; i++)
+            {
+                village.WallSegments[i].IsBuilt = true;
+                village.WallSegments[i].CurrentHp = village.WallSegments[i].MaxHp;
+                village.WallSegments[i].IsOpen = false;
+            }
+            village.CompletedWallSegments = village.WallSegments.Count;
+            return true;
+        }
+
+        /// <summary>건설 완료(IsBuilt) 세그먼트를 타일 좌표로 조회. 없으면 null.</summary>
+        public static WallSegmentSaveData? FindBuiltSegmentAt(VillageData village,
+            int tileX, int tileY)
+        {
+            if (village.WallSegments == null)
+                return null;
+            for (int i = 0; i < village.WallSegments.Count; i++)
+            {
+                WallSegmentSaveData segment = village.WallSegments[i];
+                if (segment.IsBuilt == true
+                    && segment.TileX == tileX && segment.TileY == tileY)
+                    return segment;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// V4 Tile 피해 경로의 데이터 계약: 벽 세그먼트 HP 차감. HP가 0이 되면 파괴 —
+        /// IsBuilt=false로 되돌리고 CompletedWallSegments를 감소시킨다.
+        /// 맵 타일 제거(Blocked 해제·비주얼)는 실체화된 호출자가 destroyed 반환값으로 처리한다.
+        /// </summary>
+        public static bool ApplyWallDamage(VillageData village, int tileX, int tileY,
+            int damage, out bool destroyed)
+        {
+            destroyed = false;
+            if (damage <= 0)
+                return false;
+            WallSegmentSaveData? segment = FindBuiltSegmentAt(village, tileX, tileY);
+            if (segment == null)
+                return false;
+
+            segment.CurrentHp -= damage;
+            if (segment.CurrentHp > 0)
+                return true;
+
+            segment.CurrentHp = 0;
+            segment.IsBuilt = false;
+            segment.IsOpen = false;
+            if (village.CompletedWallSegments > 0)
+                village.CompletedWallSegments--;
+            destroyed = true;
+            return true;
+        }
+
+        /// <summary>
+        /// V4 Gate 개폐의 데이터 계약: IsOpen 토글. Gate가 아닌 세그먼트·미건설 세그먼트는 실패.
+        /// 맵 타일 배치/제거는 실체화된 호출자가 반환된 세그먼트로 처리한다.
+        /// </summary>
+        public static bool TryToggleGate(VillageData village, int segmentId,
+            out WallSegmentSaveData? gate)
+        {
+            gate = null;
+            if (village.WallSegments == null)
+                return false;
+            for (int i = 0; i < village.WallSegments.Count; i++)
+            {
+                WallSegmentSaveData segment = village.WallSegments[i];
+                if (segment.SegmentId != segmentId)
+                    continue;
+                if (segment.IsBuilt == false
+                    || segment.Orient != (int)WallOrientation.Gate)
+                    return false;
+                segment.IsOpen = segment.IsOpen == false;
+                gate = segment;
+                return true;
+            }
+            return false;
+        }
+
         public static bool MarkSegmentBuiltAt(VillageData village, int tileX, int tileY)
         {
             WallSegmentSaveData? segment = FindUnbuiltSegmentAt(village, tileX, tileY);

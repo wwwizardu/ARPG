@@ -53,6 +53,8 @@ This is a Unity 6000.0.42f1 LTS 2D URP ARPG using a custom ECS architecture, not
 
 Run tools sequentially: issue one tool call, wait for its result, then continue. Do not run tool calls in parallel.
 
+Do not create, copy, or junction-link a secondary Unity project for testing. A separate project forces Unity to build a fresh `Library` and reimport project assets, so its time and disk cost grows with the resource set. Use the currently open project/editor, existing project-local test or diagnostic paths, or non-Unity static validation instead. If a required validation cannot run through those paths, stop and report the limitation rather than creating another Unity project.
+
 ## Wiki Reference Rules
 
 `Wiki/` is a knowledge layer that synthesizes the original documentation and code. Follow the operating rules in `Wiki/_SCHEMA.md`.

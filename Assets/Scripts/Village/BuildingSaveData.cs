@@ -34,6 +34,12 @@ namespace ARPG.Village
         /// <summary>런타임 활성화 상태. true = GameObject 존재, false = 저장 상태 (청크 언로드 또는 미스폰).</summary>
         public bool IsActive;
 
+        /// <summary>
+        /// V4 시설 Tier (PlacedObjectSaveData.FacilityTier 미러). 0/1 = 기본 자산,
+        /// 2/3 = 같은 Entity·같은 슬롯에서 Tier 교체 자산 사용 (VillageFacilityTierVisuals).
+        /// </summary>
+        public int FacilityTier;
+
         /// <summary>스폰 진행 중 플래그 (async CreateBuilding 대기 구간). 이중 스폰 차단용. 세이브 대상 아님.</summary>
         [JsonIgnore]
         public bool IsSpawning;

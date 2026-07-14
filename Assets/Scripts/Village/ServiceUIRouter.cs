@@ -7,58 +7,147 @@ namespace ARPG.Village
 {
     /// <summary>
     /// Interact 키 입력 시 PlayerNearbyServicesComponent를 보고 가장 가까운 후보의 UI 라우팅.
-    /// 후보: 마을 시설(Shop/Forge/Inn/Shrine) + 활성 NPC.
+    /// 후보: 마을 시설(Shop/Forge/Inn/Shrine) + V4 VillageHub(100)·Gate(벽 세그먼트) + 활성 NPC.
     /// 정책: 임계 거리(System_VillageServiceProximity 상수) 안에 들어온 후보 중 거리 sqr 최소.
     /// 각 UI 클래스의 Bind(entityId)로 어떤 엔티티 기준인지 전달.
+    /// 후보 선택 로직은 System_VillageInteractionPrompt의 프롬프트 표시와 공유한다 (1건물=1상호작용,
+    /// 프롬프트에 보이는 대상과 F키가 여는 대상이 항상 같도록).
     /// </summary>
     public static class ServiceUIRouter
     {
-        private enum CandidateKind { None, Shop, Forge, Inn, Shrine, Npc }
+        public enum CandidateKind { None, Shop, Forge, Inn, Shrine, Hub, Gate, Npc }
 
-        public static bool Open(in PlayerNearbyServicesComponent nearby)
+        public struct Candidate
         {
-            CandidateKind bestKind = CandidateKind.None;
-            int bestEntityId = -1;
+            public CandidateKind Kind;
+            public int EntityId;          // 시설/NPC 후보의 엔티티. Gate는 -1
+            public int GateVillageId;     // Gate 후보 전용
+            public int GateSegmentId;
+            public bool GateIsOpen;
+            public float DistanceSqr;
+            public int TileX;             // 프롬프트 표시 위치 (시설/Gate 타일)
+            public int TileY;
+            public bool HasTile;          // false = NPC(타일 좌표 없음, Transform 사용)
+        }
+
+        /// <summary>
+        /// 거리 최소 후보 선택 — 프롬프트 표시와 F키 라우팅이 같은 결과를 공유한다.
+        /// </summary>
+        public static bool TryGetBestCandidate(in PlayerNearbyServicesComponent nearby,
+            out Candidate candidate)
+        {
+            candidate = new Candidate { Kind = CandidateKind.None, EntityId = -1 };
             float bestSqr = float.MaxValue;
 
-            if ((nearby.AvailableServices & ProvidedService.Shop) != 0 && nearby.NearestShopEntityId >= 0
+            if ((nearby.AvailableServices & ProvidedService.Shop) != 0
+                && nearby.NearestShopEntityId >= 0
                 && nearby.NearestShopDistanceSqr < bestSqr)
             {
-                bestKind = CandidateKind.Shop;
-                bestEntityId = nearby.NearestShopEntityId;
+                SetFacilityCandidate(ref candidate, CandidateKind.Shop,
+                    nearby.NearestShopEntityId, nearby.NearestShopDistanceSqr);
                 bestSqr = nearby.NearestShopDistanceSqr;
             }
-            if ((nearby.AvailableServices & ProvidedService.Forge) != 0 && nearby.NearestForgeEntityId >= 0
+            if ((nearby.AvailableServices & ProvidedService.Forge) != 0
+                && nearby.NearestForgeEntityId >= 0
                 && nearby.NearestForgeDistanceSqr < bestSqr)
             {
-                bestKind = CandidateKind.Forge;
-                bestEntityId = nearby.NearestForgeEntityId;
+                SetFacilityCandidate(ref candidate, CandidateKind.Forge,
+                    nearby.NearestForgeEntityId, nearby.NearestForgeDistanceSqr);
                 bestSqr = nearby.NearestForgeDistanceSqr;
             }
             // Inn — VILLAGE_NPC_BOUNDARY_DESIGN에 따라 휴식/세이브 전용 건물 서비스 UI만 연다.
-            if ((nearby.AvailableServices & ProvidedService.Inn) != 0 && nearby.NearestInnEntityId >= 0
+            if ((nearby.AvailableServices & ProvidedService.Inn) != 0
+                && nearby.NearestInnEntityId >= 0
                 && nearby.NearestInnDistanceSqr < bestSqr)
             {
-                bestKind = CandidateKind.Inn;
-                bestEntityId = nearby.NearestInnEntityId;
+                SetFacilityCandidate(ref candidate, CandidateKind.Inn,
+                    nearby.NearestInnEntityId, nearby.NearestInnDistanceSqr);
                 bestSqr = nearby.NearestInnDistanceSqr;
             }
-            if ((nearby.AvailableServices & ProvidedService.Shrine) != 0 && nearby.NearestShrineEntityId >= 0
+            if ((nearby.AvailableServices & ProvidedService.Shrine) != 0
+                && nearby.NearestShrineEntityId >= 0
                 && nearby.NearestShrineDistanceSqr < bestSqr)
             {
-                bestKind = CandidateKind.Shrine;
-                bestEntityId = nearby.NearestShrineEntityId;
+                SetFacilityCandidate(ref candidate, CandidateKind.Shrine,
+                    nearby.NearestShrineEntityId, nearby.NearestShrineDistanceSqr);
                 bestSqr = nearby.NearestShrineDistanceSqr;
+            }
+            // V4: VillageHub(100) — 마을 거점 이용 (체크포인트 세이브)
+            if (nearby.NearestHubEntityId >= 0
+                && nearby.NearestHubDistanceSqr < bestSqr)
+            {
+                SetFacilityCandidate(ref candidate, CandidateKind.Hub,
+                    nearby.NearestHubEntityId, nearby.NearestHubDistanceSqr);
+                bestSqr = nearby.NearestHubDistanceSqr;
+            }
+            // V4: 기능성 Gate — 개폐 상호작용
+            if (nearby.NearestGateVillageId >= 0
+                && nearby.NearestGateDistanceSqr < bestSqr)
+            {
+                candidate = new Candidate
+                {
+                    Kind = CandidateKind.Gate,
+                    EntityId = -1,
+                    GateVillageId = nearby.NearestGateVillageId,
+                    GateSegmentId = nearby.NearestGateSegmentId,
+                    GateIsOpen = nearby.NearestGateIsOpen,
+                    DistanceSqr = nearby.NearestGateDistanceSqr,
+                    TileX = nearby.NearestGateTileX,
+                    TileY = nearby.NearestGateTileY,
+                    HasTile = true,
+                };
+                bestSqr = nearby.NearestGateDistanceSqr;
             }
             if (nearby.NearestNpcEntityId >= 0 && nearby.NearestNpcDistanceSqr < bestSqr)
             {
-                bestKind = CandidateKind.Npc;
-                bestEntityId = nearby.NearestNpcEntityId;
-                bestSqr = nearby.NearestNpcDistanceSqr;
+                candidate = new Candidate
+                {
+                    Kind = CandidateKind.Npc,
+                    EntityId = nearby.NearestNpcEntityId,
+                    DistanceSqr = nearby.NearestNpcDistanceSqr,
+                    HasTile = false,
+                };
             }
             // Civic은 현재 UI 라우팅 대상 아님 (Phase E 이상)
 
-            switch (bestKind)
+            return candidate.Kind != CandidateKind.None;
+        }
+
+        /// <summary>
+        /// 후보의 상호작용 프롬프트 텍스트 (V0 InteractiveFacility 계약 문자열).
+        /// System_VillageInteractionPrompt가 "[F] {prompt}"로 표시한다.
+        /// </summary>
+        public static string GetPrompt(in Candidate candidate)
+        {
+            switch (candidate.Kind)
+            {
+                case CandidateKind.Shop:
+                    return GetFacilityPrompt(VillageInitialFacilityCatalog.MERCHANT_STALL_TABLE_ID, "거래");
+                case CandidateKind.Forge:
+                    return GetFacilityPrompt(VillageInitialFacilityCatalog.FORGE_TABLE_ID, "제련·수리");
+                case CandidateKind.Inn:
+                    return GetFacilityPrompt(VillageInitialFacilityCatalog.INN_TABLE_ID, "휴식");
+                case CandidateKind.Shrine:
+                    return GetFacilityPrompt(VillageInitialFacilityCatalog.SHRINE_TABLE_ID, "기도");
+                case CandidateKind.Hub:
+                    return GetFacilityPrompt(VillageInitialFacilityCatalog.VILLAGE_HUB_TABLE_ID, "마을 거점 이용");
+                case CandidateKind.Gate:
+                    return candidate.GateIsOpen ? "문 닫기" : "문 열기";
+                case CandidateKind.Npc:
+                    return "살펴보기";
+                default:
+                    return string.Empty;
+            }
+        }
+
+        public static bool Open(in PlayerNearbyServicesComponent nearby)
+        {
+            if (TryGetBestCandidate(nearby, out Candidate candidate) == false)
+                return false;
+
+            int bestEntityId = candidate.EntityId;
+            float bestSqr = candidate.DistanceSqr;
+            switch (candidate.Kind)
             {
                 case CandidateKind.Shop:
                 {
@@ -88,6 +177,20 @@ namespace ARPG.Village
                     ui?.Bind(bestEntityId);
                     return true;
                 }
+                case CandidateKind.Hub:
+                {
+                    // V4: VillageHub 확정 기능 = 체크포인트 세이브 (V0 계약: 체크포인트·세이브·귀환 중 확정 기능).
+                    Debug.Log($"[Service] v{nearby.NearestVillageId} 거점 이용: 체크포인트 세이브 (entityId={bestEntityId}, sqr={bestSqr:F2})");
+                    AR.s.Data.Save();
+                    AR.s.UI.SetNotify("마을 거점: 진행 상황을 기록했습니다");
+                    return true;
+                }
+                case CandidateKind.Gate:
+                {
+                    Debug.Log($"[Service] v{candidate.GateVillageId} Gate 개폐: seg{candidate.GateSegmentId} (sqr={bestSqr:F2})");
+                    return AR.s.Village.ToggleGate(candidate.GateVillageId,
+                        candidate.GateSegmentId);
+                }
                 case CandidateKind.Npc:
                 {
                     Debug.Log($"[Service] NPC 열기: entityId={bestEntityId}, sqr={bestSqr:F2}");
@@ -98,6 +201,33 @@ namespace ARPG.Village
                 default:
                     return false;
             }
+        }
+
+        private static void SetFacilityCandidate(ref Candidate candidate,
+            CandidateKind kind, int entityId, float distanceSqr)
+        {
+            candidate = new Candidate
+            {
+                Kind = kind,
+                EntityId = entityId,
+                DistanceSqr = distanceSqr,
+                HasTile = false,
+            };
+            if (AR.s.Component.TryGetComponent<PlacedObjectComponent>(entityId,
+                    out var po) == true)
+            {
+                candidate.TileX = po.TileX;
+                candidate.TileY = po.TileY;
+                candidate.HasTile = true;
+            }
+        }
+
+        private static string GetFacilityPrompt(int tableId, string fallback)
+        {
+            if (VillageInitialFacilityCatalog.TryGet(tableId,
+                    out VillageInitialFacilityDefinition definition) == true)
+                return definition.Prompt;
+            return fallback;
         }
     }
 }

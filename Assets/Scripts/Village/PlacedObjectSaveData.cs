@@ -22,5 +22,6 @@ namespace ARPG.Village
         public float LastUseGameTime;   // Shrine 등 쿨다운 추적. 0 = 미사용
         public int BuildingEntityId = -1; // SpawnType=Entity의 BuildingManager 저장 레코드 연결
         public bool PlacementPending;   // 좌표/월드 배치 실패 시 원장을 보존하고 다음 실체화에 재시도
+        public int FacilityTier;        // V3 시설 Tier. 0 = 구 세이브/일반 오브젝트(1로 간주). Tier 교체 자산·기능 차이는 V4
     }
 }

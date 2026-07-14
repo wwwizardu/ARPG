@@ -117,7 +117,21 @@ namespace ARPG.Map
                 using (FileStream fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read))
                 using (BinaryReader reader = new BinaryReader(fileStream))
                 {
-                    return MapFileData.ReadFromBinary(reader);
+                    MapFileData blueprint = MapFileData.ReadFromBinary(reader);
+
+                    // V4 (VILLAGE_REWORK_PLAN §7.5 1안, V0 선결): Dwarf 수직 슬라이스는
+                    // 기능 없는 청사진 장식 경계(Id 1)를 제거하고 초기 Stage에 맞는 기능성
+                    // Palisade/Gate(180/181)로 대체한다. .bytes 자산(MapFileSaver 산출물)은
+                    // 수정하지 않고 로드 시 결정론적으로 제거한다. 다른 Race는 V6에서 처리.
+                    if (race == GlobalEnum.RaceType.Dwarf && blueprint != null)
+                    {
+                        int stripped = StripBlueprintObjectId(blueprint,
+                            DECORATIVE_BOUNDARY_OBJECT_ID);
+                        if (stripped > 0)
+                            Debug.Log($"[MapManager] {filename} 장식 경계 Id " +
+                                $"{DECORATIVE_BOUNDARY_OBJECT_ID} 제거: {stripped}셀 (V4 벽 정책 1안)");
+                    }
+                    return blueprint;
                 }
             }
             catch (System.Exception e)
@@ -125,6 +139,37 @@ namespace ARPG.Map
                 Debug.LogError($"[MapManager] Race 청사진 로드 실패 — {filename}: {e.Message}");
                 return null;
             }
+        }
+
+        // V0 기준선에서 확인된 청사진 시각 경계 오브젝트 (나무 벽, 기능 없음)
+        private const int DECORATIVE_BOUNDARY_OBJECT_ID = 1;
+
+        /// <summary>
+        /// 청사진 타일 데이터에서 특정 ObjectId의 오브젝트 비트(및 Blocked)를 제거한다.
+        /// ground 등 나머지 비트는 보존. 제거된 셀 수를 반환.
+        /// </summary>
+        private static int StripBlueprintObjectId(MapFileData blueprint, int objectId)
+        {
+            int stripped = 0;
+            for (int x = 0; x < blueprint.Width; x++)
+            {
+                for (int y = 0; y < blueprint.Height; y++)
+                {
+                    ulong tile = blueprint.GetTile(x, y);
+                    if (tile == 0)
+                        continue;
+                    int tileObjectId = (int)((tile
+                        & (ulong)GlobalEnum.TileFlag.ObjectLayerMask) >> 10);
+                    if (tileObjectId != objectId)
+                        continue;
+
+                    tile &= ~(ulong)GlobalEnum.TileFlag.ObjectLayerMask;
+                    tile &= ~(ulong)GlobalEnum.TileFlag.Blocked;
+                    blueprint.SetTile(x, y, tile);
+                    stripped++;
+                }
+            }
+            return stripped;
         }
 
         /// <summary>새 청사진과 기존 _mapFileDataDic 엔트리들 간 bounding box 충돌 검사.</summary>

@@ -1,0 +1,455 @@
+#nullable enable
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+
+namespace ARPG.Village
+{
+    public enum VillageSettlementRole
+    {
+        Standard = 0,
+        Capital = 1,
+        Frontier = 2,
+        TradeHub = 3,
+        Conquered = 4,
+        BaseTown = 100,
+    }
+
+    [Serializable]
+    public struct VillageStageCapModifier
+    {
+        public VillageStage Stage;
+        public int Food;
+        public int Wood;
+        public int Stone;
+
+        public VillageStageCapModifier(VillageStage stage, int food, int wood, int stone)
+        {
+            Stage = stage;
+            Food = food;
+            Wood = wood;
+            Stone = stone;
+        }
+    }
+
+    /// <summary>
+    /// 마을 성장·배치·상권 데이터의 저장 가능한 연결점.
+    /// 프로필 정의는 읽기 전용이며, 마을별 가변 상태는 VillageData가 소유한다.
+    /// </summary>
+    public sealed class VillageProfile
+    {
+        public const int MIN_ECONOMIC_POPULATION = 1;
+        public const int MAX_ECONOMIC_POPULATION = 25;
+
+        public string ProfileId { get; }
+        public GlobalEnum.RaceType Race { get; }
+        public GlobalEnum.BiomeType Biome { get; }
+        public VillageSettlementRole Role { get; }
+        public string HandcraftedVillageKey { get; }
+        public string GrowthPlanId { get; }
+        public string LayoutProfileId { get; }
+        public string TradeProfileId { get; }
+        public int PrimarySpecialFacilityId { get; }
+        public IReadOnlyList<int> SecondaryFacilityIds { get; }
+        public IReadOnlyList<VillageStageCapModifier> StageCapModifiers { get; }
+        public VillageStage MaxStage { get; }
+        public int DefaultEconomicPopulation { get; }
+
+        public VillageProfile(string profileId, GlobalEnum.RaceType race,
+            GlobalEnum.BiomeType biome, VillageSettlementRole role,
+            string handcraftedVillageKey, string growthPlanId,
+            string layoutProfileId, string tradeProfileId,
+            int primarySpecialFacilityId, IReadOnlyList<int> secondaryFacilityIds,
+            IReadOnlyList<VillageStageCapModifier> stageCapModifiers,
+            VillageStage maxStage, int defaultEconomicPopulation)
+        {
+            if (string.IsNullOrWhiteSpace(profileId))
+                throw new ArgumentException("ProfileId is required.", nameof(profileId));
+            if (string.IsNullOrWhiteSpace(growthPlanId))
+                throw new ArgumentException("GrowthPlanId is required.", nameof(growthPlanId));
+            if (string.IsNullOrWhiteSpace(layoutProfileId))
+                throw new ArgumentException("LayoutProfileId is required.", nameof(layoutProfileId));
+            if (string.IsNullOrWhiteSpace(tradeProfileId))
+                throw new ArgumentException("TradeProfileId is required.", nameof(tradeProfileId));
+            if (defaultEconomicPopulation < MIN_ECONOMIC_POPULATION
+                || defaultEconomicPopulation > MAX_ECONOMIC_POPULATION)
+            {
+                throw new ArgumentOutOfRangeException(nameof(defaultEconomicPopulation),
+                    $"Economic population must be {MIN_ECONOMIC_POPULATION}~{MAX_ECONOMIC_POPULATION}.");
+            }
+
+            ProfileId = profileId;
+            Race = race;
+            Biome = biome;
+            Role = role;
+            HandcraftedVillageKey = handcraftedVillageKey ?? string.Empty;
+            GrowthPlanId = growthPlanId;
+            LayoutProfileId = layoutProfileId;
+            TradeProfileId = tradeProfileId;
+            PrimarySpecialFacilityId = primarySpecialFacilityId;
+            SecondaryFacilityIds = CopySecondaryFacilityIds(secondaryFacilityIds);
+            StageCapModifiers = CopyStageCapModifiers(stageCapModifiers);
+            MaxStage = maxStage;
+            DefaultEconomicPopulation = defaultEconomicPopulation;
+        }
+
+        private static IReadOnlyList<int> CopySecondaryFacilityIds(
+            IReadOnlyList<int> source)
+        {
+            List<int> copy = new List<int>();
+            if (source != null)
+            {
+                for (int i = 0; i < source.Count; i++)
+                    copy.Add(source[i]);
+            }
+            return new ReadOnlyCollection<int>(copy);
+        }
+
+        private static IReadOnlyList<VillageStageCapModifier> CopyStageCapModifiers(
+            IReadOnlyList<VillageStageCapModifier> source)
+        {
+            List<VillageStageCapModifier> copy = new List<VillageStageCapModifier>();
+            if (source != null)
+            {
+                for (int i = 0; i < source.Count; i++)
+                    copy.Add(source[i]);
+            }
+            return new ReadOnlyCollection<VillageStageCapModifier>(copy);
+        }
+    }
+
+    public readonly struct VillageProfileContext
+    {
+        public GlobalEnum.RaceType Race { get; }
+        public GlobalEnum.BiomeType Biome { get; }
+        public VillageSettlementRole Role { get; }
+
+        public VillageProfileContext(GlobalEnum.RaceType race,
+            GlobalEnum.BiomeType biome, VillageSettlementRole role)
+        {
+            Race = race;
+            Biome = biome;
+            Role = role;
+        }
+    }
+
+    public readonly struct VillageProfileResolution
+    {
+        public VillageProfile Profile { get; }
+        public bool UsedFallback { get; }
+        public string Warning { get; }
+
+        public VillageProfileResolution(VillageProfile profile, bool usedFallback,
+            string warning)
+        {
+            Profile = profile;
+            UsedFallback = usedFallback;
+            Warning = warning;
+        }
+    }
+
+    /// <summary>
+    /// V1 프로필 정의 카탈로그. 후속 Phase가 실제 성장·배치·상권 데이터를 추가할 때
+    /// 저장된 ID를 바꾸지 않고 각 ID의 정의만 확장한다.
+    /// </summary>
+    public static class VillageProfileCatalog
+    {
+        public const string BASE_TOWN_PROFILE_ID = "base_town.dwarf_mining";
+        public const string DEFAULT_PROCEDURAL_PROFILE_ID = "village.human.plains.standard";
+
+        private readonly struct RaceBiomePair
+        {
+            public GlobalEnum.RaceType Race { get; }
+            public GlobalEnum.BiomeType Biome { get; }
+
+            public RaceBiomePair(GlobalEnum.RaceType race, GlobalEnum.BiomeType biome)
+            {
+                Race = race;
+                Biome = biome;
+            }
+        }
+
+        private sealed class CatalogData
+        {
+            public Dictionary<string, VillageProfile> ById { get; }
+            public IReadOnlyList<VillageProfile> All { get; }
+
+            public CatalogData(Dictionary<string, VillageProfile> byId,
+                List<VillageProfile> all)
+            {
+                ById = byId;
+                All = new ReadOnlyCollection<VillageProfile>(all);
+            }
+        }
+
+        private static readonly CatalogData _catalog = BuildCatalog();
+
+        public static IReadOnlyList<VillageProfile> AllProfiles => _catalog.All;
+
+        public static VillageProfile BaseTownProfile =>
+            _catalog.ById[BASE_TOWN_PROFILE_ID];
+
+        public static VillageProfile DefaultProceduralProfile =>
+            _catalog.ById[DEFAULT_PROCEDURAL_PROFILE_ID];
+
+        public static bool TryGet(string profileId, out VillageProfile profile)
+        {
+            if (string.IsNullOrWhiteSpace(profileId))
+            {
+                profile = null!;
+                return false;
+            }
+            return _catalog.ById.TryGetValue(profileId, out profile!);
+        }
+
+        public static string CreateProceduralProfileId(GlobalEnum.RaceType race,
+            GlobalEnum.BiomeType biome, VillageSettlementRole role)
+        {
+            return $"village.{race.ToString().ToLowerInvariant()}." +
+                $"{biome.ToString().ToLowerInvariant()}." +
+                role.ToString().ToLowerInvariant();
+        }
+
+        public static bool TryGetDefaultBiome(GlobalEnum.RaceType race,
+            out GlobalEnum.BiomeType biome)
+        {
+            switch (race)
+            {
+                case GlobalEnum.RaceType.Human:
+                    biome = GlobalEnum.BiomeType.Plains;
+                    return true;
+                case GlobalEnum.RaceType.Elf:
+                    biome = GlobalEnum.BiomeType.Forest;
+                    return true;
+                case GlobalEnum.RaceType.Dwarf:
+                    biome = GlobalEnum.BiomeType.Mountain;
+                    return true;
+                case GlobalEnum.RaceType.Orc:
+                    biome = GlobalEnum.BiomeType.Steppe;
+                    return true;
+                case GlobalEnum.RaceType.Nomad:
+                    biome = GlobalEnum.BiomeType.Desert;
+                    return true;
+                case GlobalEnum.RaceType.Lizardman:
+                    biome = GlobalEnum.BiomeType.Swamp;
+                    return true;
+                case GlobalEnum.RaceType.Yeti:
+                    biome = GlobalEnum.BiomeType.Tundra;
+                    return true;
+                default:
+                    biome = GlobalEnum.BiomeType.Plains;
+                    return false;
+            }
+        }
+
+        private static CatalogData BuildCatalog()
+        {
+            Dictionary<string, VillageProfile> byId =
+                new Dictionary<string, VillageProfile>(StringComparer.Ordinal);
+            List<VillageProfile> all = new List<VillageProfile>();
+
+            AddProfile(byId, all, new VillageProfile(
+                BASE_TOWN_PROFILE_ID,
+                GlobalEnum.RaceType.Dwarf,
+                GlobalEnum.BiomeType.Mountain,
+                VillageSettlementRole.BaseTown,
+                "BaseTown",
+                "growth.dwarf.mountain.base_town",
+                "layout.base_town.dwarf",
+                "trade.dwarf.mountain.base_town",
+                0,
+                Array.Empty<int>(),
+                CreateZeroCapModifiers(),
+                VillageStage.City,
+                1));
+
+            RaceBiomePair[] pairs =
+            {
+                new RaceBiomePair(GlobalEnum.RaceType.Human, GlobalEnum.BiomeType.Plains),
+                new RaceBiomePair(GlobalEnum.RaceType.Human, GlobalEnum.BiomeType.Forest),
+                new RaceBiomePair(GlobalEnum.RaceType.Human, GlobalEnum.BiomeType.Desert),
+                new RaceBiomePair(GlobalEnum.RaceType.Elf, GlobalEnum.BiomeType.Forest),
+                new RaceBiomePair(GlobalEnum.RaceType.Dwarf, GlobalEnum.BiomeType.Mountain),
+                new RaceBiomePair(GlobalEnum.RaceType.Dwarf, GlobalEnum.BiomeType.Snow),
+                new RaceBiomePair(GlobalEnum.RaceType.Orc, GlobalEnum.BiomeType.Steppe),
+                new RaceBiomePair(GlobalEnum.RaceType.Nomad, GlobalEnum.BiomeType.Desert),
+                new RaceBiomePair(GlobalEnum.RaceType.Nomad, GlobalEnum.BiomeType.Steppe),
+                new RaceBiomePair(GlobalEnum.RaceType.Nomad, GlobalEnum.BiomeType.Tundra),
+                new RaceBiomePair(GlobalEnum.RaceType.Lizardman, GlobalEnum.BiomeType.Swamp),
+                new RaceBiomePair(GlobalEnum.RaceType.Yeti, GlobalEnum.BiomeType.Tundra),
+                new RaceBiomePair(GlobalEnum.RaceType.Yeti, GlobalEnum.BiomeType.Snow),
+            };
+            VillageSettlementRole[] roles =
+            {
+                VillageSettlementRole.Standard,
+                VillageSettlementRole.Capital,
+                VillageSettlementRole.Frontier,
+                VillageSettlementRole.TradeHub,
+                VillageSettlementRole.Conquered,
+            };
+
+            for (int pairIndex = 0; pairIndex < pairs.Length; pairIndex++)
+            {
+                RaceBiomePair pair = pairs[pairIndex];
+                for (int roleIndex = 0; roleIndex < roles.Length; roleIndex++)
+                {
+                    VillageSettlementRole role = roles[roleIndex];
+                    string profileId = CreateProceduralProfileId(pair.Race,
+                        pair.Biome, role);
+                    string dataKey = $"{pair.Race.ToString().ToLowerInvariant()}." +
+                        $"{pair.Biome.ToString().ToLowerInvariant()}." +
+                        role.ToString().ToLowerInvariant();
+                    AddProfile(byId, all, new VillageProfile(
+                        profileId,
+                        pair.Race,
+                        pair.Biome,
+                        role,
+                        string.Empty,
+                        $"growth.{dataKey}",
+                        $"layout.{dataKey}",
+                        $"trade.{dataKey}",
+                        GetPrimarySpecialFacilityId(pair.Race),
+                        Array.Empty<int>(),
+                        CreateZeroCapModifiers(),
+                        VillageStage.City,
+                        1));
+                }
+            }
+
+            return new CatalogData(byId, all);
+        }
+
+        /// <summary>
+        /// V3 (V0 선결 결정): 첫 특수 시설 Profile은 Dwarf 단일 제련소(Id 160).
+        /// 다른 Race의 주 특수 시설은 콘텐츠가 확정되는 V6에서 채운다 — 기능 미확정 시설은
+        /// 외형만 먼저 만들지 않으므로 0(없음)을 유지한다.
+        /// </summary>
+        private static int GetPrimarySpecialFacilityId(GlobalEnum.RaceType race)
+        {
+            return race == GlobalEnum.RaceType.Dwarf
+                ? VillageInitialFacilityCatalog.FORGE_TABLE_ID
+                : 0;
+        }
+
+        private static VillageStageCapModifier[] CreateZeroCapModifiers()
+        {
+            return new[]
+            {
+                new VillageStageCapModifier(VillageStage.Settlement, 0, 0, 0),
+                new VillageStageCapModifier(VillageStage.Hamlet, 0, 0, 0),
+                new VillageStageCapModifier(VillageStage.Village, 0, 0, 0),
+                new VillageStageCapModifier(VillageStage.Town, 0, 0, 0),
+                new VillageStageCapModifier(VillageStage.City, 0, 0, 0),
+            };
+        }
+
+        private static void AddProfile(Dictionary<string, VillageProfile> byId,
+            List<VillageProfile> all, VillageProfile profile)
+        {
+            if (byId.ContainsKey(profile.ProfileId))
+                throw new InvalidOperationException(
+                    $"Duplicate VillageProfileId: {profile.ProfileId}");
+            byId.Add(profile.ProfileId, profile);
+            all.Add(profile);
+        }
+    }
+
+    public static class VillageProfileResolver
+    {
+        public static VillageProfileResolution Resolve(VillageProfileContext context)
+        {
+            if (context.Role == VillageSettlementRole.BaseTown)
+                return new VillageProfileResolution(
+                    VillageProfileCatalog.BaseTownProfile, false, string.Empty);
+
+            VillageSettlementRole role = context.Role;
+            bool invalidRole = Enum.IsDefined(typeof(VillageSettlementRole), role) == false;
+            if (invalidRole == true)
+                role = VillageSettlementRole.Standard;
+
+            string exactId = VillageProfileCatalog.CreateProceduralProfileId(
+                context.Race, context.Biome, role);
+            if (VillageProfileCatalog.TryGet(exactId, out VillageProfile exact))
+            {
+                if (invalidRole == false)
+                    return new VillageProfileResolution(exact, false, string.Empty);
+                return new VillageProfileResolution(exact, true,
+                    $"Unknown settlement role {(int)context.Role}; Standard role was used.");
+            }
+
+            string sameBiomeStandardId =
+                VillageProfileCatalog.CreateProceduralProfileId(context.Race,
+                    context.Biome, VillageSettlementRole.Standard);
+            if (VillageProfileCatalog.TryGet(sameBiomeStandardId,
+                    out VillageProfile sameBiomeStandard))
+            {
+                return new VillageProfileResolution(sameBiomeStandard, true,
+                    $"Profile {exactId} is missing; {sameBiomeStandardId} was used.");
+            }
+
+            if (VillageProfileCatalog.TryGetDefaultBiome(context.Race,
+                    out GlobalEnum.BiomeType defaultBiome))
+            {
+                string raceDefaultId =
+                    VillageProfileCatalog.CreateProceduralProfileId(context.Race,
+                        defaultBiome, role);
+                if (VillageProfileCatalog.TryGet(raceDefaultId,
+                        out VillageProfile raceDefault))
+                {
+                    return new VillageProfileResolution(raceDefault, true,
+                        $"Profile {exactId} is missing; race default {raceDefaultId} was used.");
+                }
+
+                string raceStandardId =
+                    VillageProfileCatalog.CreateProceduralProfileId(context.Race,
+                        defaultBiome, VillageSettlementRole.Standard);
+                if (VillageProfileCatalog.TryGet(raceStandardId,
+                        out VillageProfile raceStandard))
+                {
+                    return new VillageProfileResolution(raceStandard, true,
+                        $"Profile {exactId} is missing; race default {raceStandardId} was used.");
+                }
+            }
+
+            return new VillageProfileResolution(
+                VillageProfileCatalog.DefaultProceduralProfile, true,
+                $"Profile {exactId} and its race defaults are missing; " +
+                $"{VillageProfileCatalog.DEFAULT_PROCEDURAL_PROFILE_ID} was used.");
+        }
+    }
+
+    public enum BaseTownPopulationSource
+    {
+        SavedFixedPopulation = 0,
+        LegacyPopulation = 1,
+        ProfileDefault = 2,
+    }
+
+    public static class VillageProfilePopulationPolicy
+    {
+        public static int ResolveBaseTownFixedPopulation(int savedFixedPopulation,
+            int legacyPopulation, VillageProfile profile,
+            out BaseTownPopulationSource source)
+        {
+            if (IsValidEconomicPopulation(savedFixedPopulation))
+            {
+                source = BaseTownPopulationSource.SavedFixedPopulation;
+                return savedFixedPopulation;
+            }
+            if (IsValidEconomicPopulation(legacyPopulation))
+            {
+                source = BaseTownPopulationSource.LegacyPopulation;
+                return legacyPopulation;
+            }
+
+            source = BaseTownPopulationSource.ProfileDefault;
+            return profile.DefaultEconomicPopulation;
+        }
+
+        private static bool IsValidEconomicPopulation(int population)
+        {
+            return population >= VillageProfile.MIN_ECONOMIC_POPULATION
+                && population <= VillageProfile.MAX_ECONOMIC_POPULATION;
+        }
+    }
+}

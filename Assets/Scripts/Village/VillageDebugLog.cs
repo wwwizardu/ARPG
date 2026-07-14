@@ -65,6 +65,16 @@ namespace ARPG.Village
         // 모든 임계값은 VillageStageTable에서 조회 — System_VillageTierProgression.CanPromoteTo와 동일 정본
         private static string FormatTierCheck(VillageData v, VillageStorageComponent s, float now)
         {
+            // V2: 런타임 승격 중단 — 다음 승격 조건 대신 고정 정본(Profile/원본 역사 인구/경제 인구/Stage) 표시.
+            if (VillageProgressionRules.RuntimeProgressionEnabled == false)
+            {
+                int rawPop = v.SettlementId >= 0
+                    ? AR.s.History.GetSettlementPopulation(v.SettlementId)
+                    : v.FixedPopulation;
+                return $"Fixed(Profile={v.VillageProfileId} RawPop={rawPop} " +
+                    $"EconPop={v.Population} Stage={v.Stage})";
+            }
+
             if (v.Stage >= VillageStage.City) return "";
             VillageStage next = v.Stage + 1;
             Tables.VillageStageTable? t = AR.s.Data.GetVillageStage(next);

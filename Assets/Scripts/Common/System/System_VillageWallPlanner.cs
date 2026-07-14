@@ -27,6 +27,10 @@ namespace ARPG.Systems
 
         public void OnFixedUpdate(float inFixedDeltaTime)
         {
+            // V2 (VILLAGE_REWORK_PLAN §3.4): 런타임 승격이 중단되어 새 벽 계획도 실행하지 않는다.
+            // 구 세이브의 WallPlanRequested/기존 세그먼트는 삭제 없이 보존된다. 기능성 벽 정본은 V4.
+            if (VillageProgressionRules.RuntimeProgressionEnabled == false) return;
+
             IReadOnlyList<VillageData> villages = AR.s.Village.GetAllVillages();
             for (int i = 0; i < villages.Count; i++)
             {

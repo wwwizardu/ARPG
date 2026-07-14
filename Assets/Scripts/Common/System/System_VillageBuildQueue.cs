@@ -30,6 +30,11 @@ namespace ARPG.Systems
 
         public void OnFixedUpdate(float inFixedDeltaTime)
         {
+            // V2 (VILLAGE_REWORK_PLAN §3.4): 일반 런타임 자동 건설(진행·완공·착공·벽 큐잉)을
+            // 후속 발전 Phase(V8) 전까지 실행하지 않는다. 진행 task 스냅샷은 삭제 없이 동결·보존된다.
+            // 파괴 시설 수리·명시적 이벤트 건설은 별도 기능으로 분리 예정(§3.4).
+            if (VillageProgressionRules.RuntimeProgressionEnabled == false) return;
+
             float now = AR.s.Time.CurrentGameTime;
 
             // Phase 1a: 진행시간 누적 (자가 건설 — 게임시간 차분만큼 무조건 진행).

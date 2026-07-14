@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using ARPG.Component;
 using ARPG.Map;
 using ARPG.Utility;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 namespace ARPG.Village
@@ -16,6 +17,7 @@ namespace ARPG.Village
         // PlacedObject 조회 인덱스 — 휘발성(세이브 아님). static 대신 매니저 소유, Reset/Load에서 수명 관리.
         private readonly PlacedObjectRegistry _placedObjects = new();
         private readonly HashSet<string> _placementWarnings = new();
+        private readonly HashSet<string> _profileWarnings = new();
         private const int DEFAULT_PLACEMENT_RADIUS = 3;
         public PlacedObjectRegistry PlacedObjects => _placedObjects;
 
@@ -42,7 +44,12 @@ namespace ARPG.Village
                 if (settlementId >= 0)
                     LinkSettlement(i, settlementId);
                 else
+                {
+                    VillageData? baseTown = GetVillage(i);
+                    if (baseTown != null)
+                        EnsureVillageProfile(baseTown, false);
                     MaterializeVillage(i);   // 손제작 마을(연대기 미연결) → 항상 활성 (실체화 유지)
+                }
 
                 // 연대기 연결 마을은 추상 상태로 남는다 — 근처가 되면 UpdateMaterialization이 실체화.
                 Debug.Log($"[VillageManager] Initial village {i} registered at {villageCenter} (TableId={tableId}, SettlementId={settlementId})");
@@ -63,6 +70,7 @@ namespace ARPG.Village
             ClearVillages();
             _placedObjects.ClearAll();
             _placementWarnings.Clear();
+            _profileWarnings.Clear();
         }
 
         public void RegisterVillage(int villageId, Vector2 position, int tableId = 0)
@@ -120,6 +128,31 @@ namespace ARPG.Village
                 return data;
             }
             return null;
+        }
+
+        /// <summary>
+        /// History 초기화 뒤 Profile이 비어 있는 신규 정착지만 결정론적으로 확정한다.
+        /// 이미 저장된 유효 ProfileId는 Race/Biome/Fate가 달라져도 재계산하지 않는다.
+        /// </summary>
+        public void EnsureVillageProfiles()
+        {
+            int assigned = 0;
+            for (int i = 0; i < _villageList.Count; i++)
+            {
+                if (EnsureVillageProfile(_villageList[i], false) == true)
+                    assigned++;
+            }
+
+            if (assigned > 0)
+                Debug.Log($"[VillageProfile] Assigned {assigned} missing village profiles.");
+        }
+
+        public bool TryGetVillageProfile(int villageId, out VillageProfile profile)
+        {
+            profile = null!;
+            if (_villages.TryGetValue(villageId, out VillageData? data) == false)
+                return false;
+            return VillageProfileCatalog.TryGet(data.VillageProfileId, out profile);
         }
 
         public void ProduceResource(int villageId, GlobalEnum.ItemType type, int amount)
@@ -255,7 +288,7 @@ namespace ARPG.Village
         // ── §0 추상 인구 → 마을 경제 인구(v.Population) 소싱 (VILLAGE_NPC_BOUNDARY_DESIGN §2) ──
         // 정량화(pop/50·cap25)는 기존 NPC 스폰 수 캘리브레이션 재사용 — 생산/Tier 임계값 재튜닝 회피.
         public const int ABSTRACT_POP_DIVISOR = 50;  // 추상 인구 K명당 경제 인구 1
-        public const int ABSTRACT_POP_CAP = 25;      // 경제 인구 상한 (pop≈1250에서 도달)
+        public const int ABSTRACT_POP_CAP = VillageProfile.MAX_ECONOMIC_POPULATION;
 
         /// <summary>
         /// 추상 인구(수백~수천)를 마을 경제 단위로 정량화. pop&lt;=0이면 0 (경제 정지).
@@ -288,8 +321,17 @@ namespace ARPG.Village
             }
             else
             {
-                // 연대기 미연결(수제작 마을, 예: BaseTown) — 추상 인구가 없으므로 물리 코호트 수 유지 (기존 동작)
-                v.Population = v.NpcEntityIds.Count;
+                // 수제작 BaseTown은 물리 NPC 명단과 무관한 저장된 고정 경제 인구를 사용한다.
+                VillageProfile profile = VillageProfileCatalog.BaseTownProfile;
+                if (VillageProfileCatalog.TryGet(v.VillageProfileId,
+                        out VillageProfile storedProfile) == true)
+                {
+                    profile = storedProfile;
+                }
+                v.FixedPopulation = VillageProfilePopulationPolicy
+                    .ResolveBaseTownFixedPopulation(v.FixedPopulation, v.Population,
+                        profile, out _);
+                v.Population = v.FixedPopulation;
             }
         }
 
@@ -302,9 +344,12 @@ namespace ARPG.Village
         {
             ClearVillages();
             _placementWarnings.Clear();
+            _profileWarnings.Clear();
 
             if (villageDatas == null)
                 return;
+
+            int profileBackfills = 0;
 
             for (int i = 0; i < villageDatas.Count; i++)
             {
@@ -320,8 +365,20 @@ namespace ARPG.Village
                     data.ResourceCaps = new Dictionary<GlobalEnum.ItemType, int>();
                 if (data.ActiveBuildTasks == null)
                     data.ActiveBuildTasks = new List<BuildTaskSnapshot>();
+                // V3 마이그레이션: 구 세이브는 마일스톤 원장이 없음 — 빈 목록으로 보정.
+                // 마일스톤 backfill(기존 시설 인정·부족 시설 완공 원장 생성)은 V7 범위.
+                if (data.AppliedGrowthMilestones == null)
+                    data.AppliedGrowthMilestones = new List<string>();
                 if (data.RegisteredAt <= 0f)
                     data.RegisteredAt = AR.s.Time.CurrentGameTime;
+
+                bool profileWasMissing =
+                    string.IsNullOrWhiteSpace(data.VillageProfileId);
+                if (EnsureVillageProfile(data, true) == true
+                    && profileWasMissing == true)
+                {
+                    profileBackfills++;
+                }
 
                 // Phase A: FirstBuildStartedAt 기본 -1 보정 (구 세이브는 0으로 역직렬화될 수 있음)
                 if (data.HasCampfire == false && data.FirstBuildStartedAt == 0f)
@@ -382,6 +439,11 @@ namespace ARPG.Village
                     MaterializeVillage(data.VillageId);
             }
 
+            if (profileBackfills > 0)
+            {
+                Debug.LogWarning($"[VillageProfile] Backfilled {profileBackfills} " +
+                    "villages whose save data had no VillageProfileId.");
+            }
             Debug.Log($"[VillageManager] Loaded {_villageList.Count} villages");
         }
 
@@ -467,7 +529,7 @@ namespace ARPG.Village
         {
             if (VillageConstructionPosition.IsAssigned(saved) == false)
             {
-                Vector2Int? tile = FindMaterializationTile(data, table);
+                Vector2Int? tile = FindInitialPlacementTile(data, saved, table);
                 if (tile.HasValue == false)
                 {
                     saved.PlacementPending = true;
@@ -489,6 +551,8 @@ namespace ARPG.Village
                 saved.TileX = tile.Value.x;
                 saved.TileY = tile.Value.y;
                 saved.BuildingEntityId = buildingId;
+                if (saved.FacilityTier > 1)
+                    AR.s.Building.SetFacilityTier(buildingId, saved.FacilityTier);
                 return true;
             }
 
@@ -537,9 +601,86 @@ namespace ARPG.Village
                 SetMember = (SetMemberTag)table.SetMembership,
                 UsingNpcEntityId = -1,
                 LastUseGameTime = saved.LastUseGameTime,
+                FacilityTier = saved.FacilityTier,
             });
             _placedObjects.Register(data.VillageId, entityId, saved.TableId,
                 new Vector2Int(saved.TileX, saved.TileY));
+        }
+
+        /// <summary>
+        /// V4 (VILLAGE_REWORK_PLAN §7.2): 초기 시설의 기본 배치기.
+        /// 허용 목록 시설(Hub/Market/Inn/특수/Shrine)은 LayoutProfile 지정 슬롯 → 슬롯 주변
+        /// 작은 반경 결정론 fallback 순서로 배치하고, 실패하면 null을 반환해 PlacementPending을
+        /// 유지한다 — VillageTileFinder 전역 점수 탐색으로 우회하지 않는다.
+        /// 카탈로그 밖 TableId(구 세이브 일반 오브젝트)만 기존 최근접 탐색을 계속 사용한다.
+        /// </summary>
+        private Vector2Int? FindInitialPlacementTile(VillageData data,
+            PlacedObjectSaveData saved, Tables.BuildableItemTable table)
+        {
+            VillageLayoutProfile layout = ResolveLayout(data,
+                out int primarySpecialFacilityId);
+            if (VillageLayoutCatalog.TryGetSlotRole(saved.TableId,
+                    primarySpecialFacilityId, out VillageLayoutSlotRole role) == false)
+                return FindMaterializationTile(data, table);
+
+            int centerX = Mathf.FloorToInt(data.PositionX);
+            int centerY = Mathf.FloorToInt(data.PositionY);
+            int boundsRadius = data.BoundsW > 0
+                ? data.BoundsW / 2
+                : GetBoundsRadius(data.Stage);
+
+            bool IsFree(int x, int y)
+            {
+                return IsInitialFacilityTileFree(data, x, y, centerX, centerY,
+                    boundsRadius);
+            }
+
+            if (VillageSlotPlacer.TryFindTile(centerX, centerY, layout, role,
+                    IsFree, out int tileX, out int tileY) == true)
+                return new Vector2Int(tileX, tileY);
+            return null;
+        }
+
+        /// <summary>마을 Profile → Layout 해석. Profile 미확정이면 공통 기본 레이아웃.</summary>
+        private VillageLayoutProfile ResolveLayout(VillageData data,
+            out int primarySpecialFacilityId)
+        {
+            primarySpecialFacilityId = 0;
+            if (VillageProfileCatalog.TryGet(data.VillageProfileId,
+                    out VillageProfile profile) == true)
+            {
+                primarySpecialFacilityId = profile.PrimarySpecialFacilityId;
+                return VillageLayoutCatalog.Resolve(profile.LayoutProfileId);
+            }
+            return VillageLayoutCatalog.DefaultLayout;
+        }
+
+        /// <summary>
+        /// 초기 시설 배치 가능 판정: 맵 경계·통행·타일 오브젝트·Entity 건물 점유에 더해
+        /// 마을 Bounds 내부(벽 링 안쪽)와 벽 세그먼트 타일(열린 Gate 포함)을 제외한다.
+        /// </summary>
+        private static bool IsInitialFacilityTileFree(VillageData data, int x, int y,
+            int centerX, int centerY, int boundsRadius)
+        {
+            if (AR.s.Map.IsWorldTileInBounds(x, y) == false)
+                return false;
+            if (boundsRadius > 0)
+            {
+                int distFromCenter = Mathf.Max(Mathf.Abs(x - centerX),
+                    Mathf.Abs(y - centerY));
+                if (distFromCenter >= boundsRadius)
+                    return false;   // 벽 링(== radius) 및 바깥 제외
+            }
+            if (VillageWallRules.FindBuiltSegmentAt(data, x, y) != null)
+                return false;       // 열린 Gate처럼 타일이 비어 있어도 벽 자리 보존
+            Vector3 world = new Vector3(x + 0.5f, y + 0.5f, 0f);
+            if (AR.s.Map.IsWalkable(world) == false)
+                return false;
+            if (AR.s.Map.GetObjectIdAt(x, y) != 0)
+                return false;
+            if (AR.s.Building != null && AR.s.Building.IsTileOccupied(x, y) == true)
+                return false;
+            return true;
         }
 
         private static Vector2Int? FindMaterializationTile(VillageData data,
@@ -603,6 +744,7 @@ namespace ARPG.Village
             CreateStorageEntity(data);
             RestorePlacedObjectsFromData(data);
             RestoreTaskFromData(data);
+            RestoreWallTilesFromData(data);
 
             if (data.PlacedObjectTypeIds.Count != completedCountBefore
                 || data.PlacedObjects.Count != placedRecordCountBefore
@@ -623,6 +765,161 @@ namespace ARPG.Village
                 return;
             RestorePlacedObjectsFromData(data, pendingOnly: true);
             RestoreTaskFromData(data, pendingOnly: true);
+            RestoreWallTilesFromData(data);
+        }
+
+        // ========== V4: 기능성 벽 실체화·피해·Gate 개폐 (VILLAGE_REWORK_PLAN §7.5 1안) ==========
+
+        /// <summary>
+        /// 완공 벽 세그먼트(VillageData.WallSegments 정본)를 맵 타일로 복원한다.
+        /// 멱등: 이미 같은 벽 타일이 있으면 건너뛰고, 다른 오브젝트가 점유했으면 보존한다.
+        /// 열린 Gate는 타일을 배치하지 않는다(통행 가능 유지).
+        /// </summary>
+        private void RestoreWallTilesFromData(VillageData data)
+        {
+            if (data.WallSegments == null || data.WallSegments.Count == 0)
+                return;
+            RestoreWallTilesAsync(data.VillageId).Forget();
+        }
+
+        private async UniTask RestoreWallTilesAsync(int villageId)
+        {
+            // 타일 비주얼(RuleTile) 로드 후 배치 — BuildQueue의 Tile 완성 경로와 같은 순서.
+            await BuildableTileRegistry.EnsureLoadedAsync(VillageWallRules.PalisadeTableId);
+            await BuildableTileRegistry.EnsureLoadedAsync(VillageWallRules.PalisadeGateTableId);
+
+            if (_villages.TryGetValue(villageId, out VillageData? data) == false
+                || data.EntityId < 0 || data.WallSegments == null)
+                return;   // 로드 중 dematerialize — 다음 실체화에서 재시도
+
+            for (int i = 0; i < data.WallSegments.Count; i++)
+            {
+                WallSegmentSaveData segment = data.WallSegments[i];
+                if (segment.IsBuilt == false)
+                    continue;
+
+                int tableId = VillageWallRules.GetTableId(segment);
+                int existing = AR.s.Map.GetObjectIdAt(segment.TileX, segment.TileY);
+
+                if (segment.IsOpen == true)
+                {
+                    // 열린 Gate: 닫힘 타일이 남아 있으면 제거해 통행 상태를 복원
+                    if (existing == tableId)
+                        AR.s.Map.RemoveObject(segment.TileX, segment.TileY);
+                    continue;
+                }
+
+                if (existing == tableId)
+                    continue;
+                if (existing != 0)
+                    continue;   // 다른 오브젝트 점유 — 기존 배치 보존 (중복 금지)
+                AR.s.Map.PlaceObject(segment.TileX, segment.TileY, tableId);
+            }
+        }
+
+        /// <summary>
+        /// V4 Tile 피해 경로: 벽 세그먼트에 피해 적용. HP 0이면 세그먼트를 파괴 상태로 되돌리고
+        /// 맵 타일(Blocked·비주얼)을 제거한다. 벽이 아닌 타일이면 false.
+        /// </summary>
+        public bool ApplyWallDamage(int villageId, int tileX, int tileY, int damage)
+        {
+            if (_villages.TryGetValue(villageId, out VillageData? data) == false)
+                return false;
+            if (VillageWallRules.ApplyWallDamage(data, tileX, tileY, damage,
+                    out bool destroyed) == false)
+                return false;
+
+            if (destroyed == true)
+            {
+                AR.s.Map.RemoveObject(tileX, tileY);
+                Debug.Log($"[VillageWall] v{villageId} 벽 파괴 at ({tileX},{tileY})");
+            }
+            SyncWallStatsToComponent(data);
+            return true;
+        }
+
+        /// <summary>
+        /// V4 Gate 개폐 상호작용: 열림 = 타일 제거(통행 가능), 닫힘 = Gate 타일 재배치(충돌 복원).
+        /// 닫을 위치에 플레이어가 서 있으면 실패한다.
+        /// </summary>
+        public bool ToggleGate(int villageId, int segmentId)
+        {
+            if (_villages.TryGetValue(villageId, out VillageData? data) == false)
+                return false;
+
+            // 닫기 전 플레이어 위치 확인 (열림 → 닫힘 전환 예정인 세그먼트 조회)
+            WallSegmentSaveData? current = null;
+            if (data.WallSegments != null)
+            {
+                for (int i = 0; i < data.WallSegments.Count; i++)
+                {
+                    if (data.WallSegments[i].SegmentId == segmentId)
+                    {
+                        current = data.WallSegments[i];
+                        break;
+                    }
+                }
+            }
+            if (current == null)
+                return false;
+            if (current.IsOpen == true && IsPlayerOnTile(current.TileX, current.TileY))
+            {
+                AR.s.UI.SetNotify("문 위에 서 있어 닫을 수 없습니다");
+                return false;
+            }
+
+            if (VillageWallRules.TryToggleGate(data, segmentId,
+                    out WallSegmentSaveData? gate) == false || gate == null)
+                return false;
+
+            if (gate.IsOpen == true)
+            {
+                if (AR.s.Map.GetObjectIdAt(gate.TileX, gate.TileY)
+                        == VillageWallRules.PalisadeGateTableId)
+                    AR.s.Map.RemoveObject(gate.TileX, gate.TileY);
+                AR.s.UI.SetNotify("문을 열었습니다");
+            }
+            else
+            {
+                CloseGateTileAsync(gate.TileX, gate.TileY).Forget();
+                AR.s.UI.SetNotify("문을 닫았습니다");
+            }
+            return true;
+        }
+
+        private static async UniTask CloseGateTileAsync(int tileX, int tileY)
+        {
+            await BuildableTileRegistry.EnsureLoadedAsync(VillageWallRules.PalisadeGateTableId);
+            if (AR.s.Map.GetObjectIdAt(tileX, tileY) == 0)
+                AR.s.Map.PlaceObject(tileX, tileY, VillageWallRules.PalisadeGateTableId);
+        }
+
+        private static bool IsPlayerOnTile(int tileX, int tileY)
+        {
+            int playerEntityId = AR.s.Data != null ? AR.s.Data.CurrentPlayerEntityId : -1;
+            if (playerEntityId < 0)
+                return false;
+            if (AR.s.Component.TryGetComponent<TransformComponent>(playerEntityId,
+                    out var tr) == false)
+                return false;
+            return Mathf.FloorToInt(tr.Position.x) == tileX
+                && Mathf.FloorToInt(tr.Position.y) == tileY;
+        }
+
+        /// <summary>
+        /// 벽 통계를 VillageComponent 미러에 동기화 — dematerialize flush가 컴포넌트 값을
+        /// 정본으로 되돌려 쓰므로(FlushVillageEntityState) 피해·파괴 직후 반드시 맞춘다.
+        /// </summary>
+        private void SyncWallStatsToComponent(VillageData data)
+        {
+            if (data.EntityId < 0)
+                return;
+            if (AR.s.Component.TryGetComponent<VillageComponent>(data.EntityId, out var vc))
+            {
+                vc.WallSegmentCount = data.WallSegmentCount;
+                vc.CompletedWallSegments = data.CompletedWallSegments;
+                AR.s.Component.SetComponent(data.EntityId, vc);
+            }
         }
 
         /// <summary>
@@ -1248,6 +1545,82 @@ namespace ARPG.Village
 
             RollMerchantStock(v);
             v.LastMerchantRollGameTime = now;
+        }
+
+        private bool EnsureVillageProfile(VillageData data, bool isSaveLoad)
+        {
+            if (VillageProfileCatalog.TryGet(data.VillageProfileId,
+                    out VillageProfile storedProfile) == true)
+            {
+                if (data.SettlementId < 0)
+                    EnsureBaseTownPopulation(data, storedProfile, isSaveLoad);
+                return false;
+            }
+
+            string previousProfileId = data.VillageProfileId;
+            VillageProfileResolution resolution;
+            if (data.SettlementId < 0)
+            {
+                resolution = new VillageProfileResolution(
+                    VillageProfileCatalog.BaseTownProfile, false, string.Empty);
+            }
+            else if (AR.s.History.TryGetVillageProfileContext(data.SettlementId,
+                    out VillageProfileContext context) == true)
+            {
+                resolution = VillageProfileResolver.Resolve(context);
+            }
+            else
+            {
+                resolution = new VillageProfileResolution(
+                    VillageProfileCatalog.DefaultProceduralProfile, true,
+                    $"Settlement {data.SettlementId} has no saved Race/Biome context; " +
+                    $"{VillageProfileCatalog.DEFAULT_PROCEDURAL_PROFILE_ID} was used.");
+            }
+
+            data.VillageProfileId = resolution.Profile.ProfileId;
+
+            if (string.IsNullOrWhiteSpace(previousProfileId) == false)
+            {
+                WarnProfileOnce($"unknown:{previousProfileId}",
+                    $"Village {data.VillageId} references unknown profile " +
+                    $"'{previousProfileId}'; fallback '{data.VillageProfileId}' was saved.");
+            }
+            if (resolution.UsedFallback == true)
+            {
+                WarnProfileOnce($"fallback:{resolution.Warning}",
+                    $"Village {data.VillageId} profile fallback: {resolution.Warning}");
+            }
+
+            if (data.SettlementId < 0)
+                EnsureBaseTownPopulation(data, resolution.Profile, isSaveLoad);
+            return true;
+        }
+
+        private void EnsureBaseTownPopulation(VillageData data, VillageProfile profile,
+            bool isSaveLoad)
+        {
+            int fixedPopulation = VillageProfilePopulationPolicy
+                .ResolveBaseTownFixedPopulation(data.FixedPopulation, data.Population,
+                    profile, out BaseTownPopulationSource source);
+            data.FixedPopulation = fixedPopulation;
+            data.Population = fixedPopulation;
+
+            if (isSaveLoad == false
+                || source == BaseTownPopulationSource.SavedFixedPopulation)
+            {
+                return;
+            }
+
+            WarnProfileOnce($"base-population:{source}",
+                $"BaseTown village {data.VillageId} had no valid FixedPopulation; " +
+                $"{source} resolved deterministic economic population {fixedPopulation}. " +
+                "Physical NPC count was not used.");
+        }
+
+        private void WarnProfileOnce(string key, string message)
+        {
+            if (_profileWarnings.Add(key) == true)
+                Debug.LogWarning($"[VillageProfile] {message}");
         }
 
         private void AddVillage(VillageData data)

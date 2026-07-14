@@ -17,7 +17,6 @@ namespace ARPG.History
 
         // PROCEDURAL §0 런타임 LOD — 추상 인구 tick 시간 분할용 커서 (런타임 전용, 세이브 아님)
         private int _abstractCursor = 0;
-        private const float DAY_HOURS = 24f;   // 게임 1일 = 24 게임-시간 (AR.s.Time.CurrentGameTime 단위)
         private const int MATERIALIZE_GENERAL_EVENT_BUDGET = 128;
         private const int MATERIALIZE_WALL_EVENT_BUDGET = 64;
 
@@ -29,6 +28,7 @@ namespace ARPG.History
             Debug.Log("HistoryManager Initialized");
             bool generatedNewGameHistory = GenerateSettlementChronicleIfNeeded();
             EnsureWorldSimInitialized();
+            AR.s.Village.EnsureVillageProfiles();
             if (generatedNewGameHistory == true)
                 BootstrapNewGameVillageDevelopment();
         }
@@ -175,6 +175,42 @@ namespace ARPG.History
         }
 
         /// <summary>
+        /// Village Profile resolver 입력을 저장된 History 정본에서 조회한다.
+        /// WorldSim이 있으면 라이브 스냅샷을, 구 세이브처럼 비어 있으면 Chronicle을 사용한다.
+        /// </summary>
+        public bool TryGetVillageProfileContext(int settlementId,
+            out VillageProfileContext context)
+        {
+            if (TryGetLiveSettlement(settlementId,
+                    out SettlementLiveState liveSettlement) == true)
+            {
+                context = new VillageProfileContext(liveSettlement.Race,
+                    liveSettlement.Biome,
+                    ResolveVillageSettlementRole(settlementId, liveSettlement.Fate));
+                return true;
+            }
+
+            ChronicleSaveData chronicle = AR.s.Data.Chronicle;
+            if (chronicle != null && chronicle.Settlements != null)
+            {
+                for (int i = 0; i < chronicle.Settlements.Count; i++)
+                {
+                    SettlementSnapshot snapshot = chronicle.Settlements[i];
+                    if (snapshot.SettlementId != settlementId)
+                        continue;
+
+                    context = new VillageProfileContext(snapshot.Race,
+                        snapshot.Biome,
+                        ResolveVillageSettlementRole(settlementId, snapshot.Fate));
+                    return true;
+                }
+            }
+
+            context = default;
+            return false;
+        }
+
+        /// <summary>
         /// PROCEDURAL §0: WorldSim(라이브 추상 층)을 Chronicle 스냅샷에서 초기화한다.
         /// New Game 직후(방금 생성) 또는 구세이브(Chronicle은 있으나 WorldSim 없음)에서 1회 채운다.
         /// 이미 라이브 상태가 있으면(세이브 복원) 보존하고 skip.
@@ -216,78 +252,140 @@ namespace ARPG.History
             Debug.Log($"[HistoryManager] WorldSim initialized from chronicle: {arr.Length} settlements @ t={now:F1}h");
         }
 
+        private VillageSettlementRole ResolveVillageSettlementRole(int settlementId,
+            SettlementFate fate)
+        {
+            if (fate == SettlementFate.Conquered)
+                return VillageSettlementRole.Conquered;
+
+            ChronicleSaveData chronicle = AR.s.Data.Chronicle;
+            if (chronicle != null && chronicle.Kingdoms != null)
+            {
+                for (int i = 0; i < chronicle.Kingdoms.Count; i++)
+                {
+                    KingdomData kingdom = chronicle.Kingdoms[i];
+                    if (kingdom != null
+                        && kingdom.CapitalSettlementId == settlementId)
+                    {
+                        return VillageSettlementRole.Capital;
+                    }
+                }
+            }
+            return VillageSettlementRole.Standard;
+        }
+
+        /// <summary>
+        /// V2 (VILLAGE_REWORK_PLAN §3.2/§3.3): New Game 1회, 고정 역사 완료 인구로 초기 Stage를
+        /// 직접 확정한다. synthetic 시간 진행·자동 건설을 실행하지 않으므로 진행 task가 남지 않는다.
+        /// 초기 Stage 입력은 원본 역사 인구(raw)이며, 경제 인구(1~25)는 생산량 계산 전용이다.
+        /// Stage별 누적 시설·상점·Cap 생성은 V3에서 이 지점에 이어 붙인다.
+        /// </summary>
         private void BootstrapNewGameVillageDevelopment()
         {
             WorldSimState sim = AR.s.Data.WorldSim;
             if (sim == null || sim.Settlements == null || sim.Settlements.Length == 0)
                 return;
 
-            #if UNITY_EDITOR || DEVELOPMENT_BUILD
-            if (VillageDevelopmentBootstrap.ValidatePlanReproducibility(
-                    sim.Settlements, AR.s.Map.mapSeed, out string planDifferences) == false)
-                Debug.LogError($"[VillageBootstrap] plan validation failed: {planDifferences}");
-            #endif
-
-            VillageBootstrapPlan[] plans = VillageDevelopmentBootstrap.CreatePlans(
-                sim.Settlements, AR.s.Map.mapSeed);
             float runtimeGameTime = AR.s.Time.CurrentGameTime;
-            int finalized = 0;
-            int failed = 0;
-            for (int i = 0; i < plans.Length; i++)
+            int applied = 0;
+            int skippedNotOperational = 0;
+            int milestonesApplied = 0;
+            int facilitiesCreated = 0;
+            int pendingPlacements = 0;
+            int initialWallVillages = 0;
+            for (int i = 0; i < sim.Settlements.Length; i++)
             {
-                VillageBootstrapPlan plan = plans[i];
-                if (plan.IsEligible == false)
+                SettlementLiveState settlement = sim.Settlements[i];
+                if (VillageDevelopmentBootstrap.IsOperationalFate(settlement.Fate)
+                    == false)
+                {
+                    skippedNotOperational++;
                     continue;
+                }
 
                 VillageData village = AR.s.Village.GetVillageBySettlement(
-                    plan.SettlementId);
+                    settlement.SettlementId);
                 if (village == null || village.InitialDevelopmentApplied == true)
                     continue;
 
-                // New Game 전용 synthetic 시간축. 세이브 로드에서는 이 메서드 자체를 호출하지 않는다.
-                village.LastConstructionSimGameTime = 0f;
-                village.LastConstructionTierCheckGameTime = 0f;
+                // 경제 인구는 고정 raw 인구의 정량화 값 — 생산량 계산에만 쓰인다.
+                // GetSettlementPopulation과 같은 (int) 절사를 사용해 이후 tick 동기화와 일치시킨다.
+                village.Population = VillageManager.QuantizeAbstractPopulation(
+                    (int)settlement.Pop);
 
-                VillageBootstrapAdvanceResult advance =
-                    VillageDevelopmentBootstrap.AdvanceBootstrapSlice(village, plan,
-                        VillageAbstractConstruction.DefaultGeneralEventBudget,
-                        VillageAbstractConstruction.DefaultWallEventBudget);
-                int slices = 1;
-                while (advance.IsComplete == false && advance.AdvanceResult != null
-                    && (advance.AdvanceResult.Status
-                            == VillageAbstractAdvanceStatus.GeneralBudgetExhausted
-                        || advance.AdvanceResult.Status
-                            == VillageAbstractAdvanceStatus.WallBudgetExhausted)
-                    && slices < 4096)
+                VillageStage maxStage = VillageStage.City;
+                VillageProfile resolvedProfile = null;
+                if (AR.s.Village.TryGetVillageProfile(village.VillageId,
+                        out VillageProfile profile) == true)
                 {
-                    advance = VillageDevelopmentBootstrap.AdvanceBootstrapSlice(village,
-                        plan, VillageAbstractConstruction.DefaultGeneralEventBudget,
-                        VillageAbstractConstruction.DefaultWallEventBudget);
-                    slices++;
-                }
-
-                if (advance.IsComplete == true
-                    && VillageDevelopmentBootstrap.FinalizeBootstrap(village, plan,
-                        runtimeGameTime) == true)
-                {
-                    finalized++;
+                    resolvedProfile = profile;
+                    maxStage = profile.MaxStage;
                 }
                 else
                 {
-                    failed++;
-                    Debug.LogWarning($"[VillageBootstrap] settlement {plan.SettlementId} " +
-                        $"미완료 — status={advance.AdvanceResult?.Status}, slices={slices}");
+                    Debug.LogWarning($"[VillageBootstrap] v{village.VillageId} profile " +
+                        "미확정 — MaxStage 상한 없이 초기 Stage를 계산합니다.");
                 }
+
+                VillageStage initialStage = VillageProgressionRules.CalculateInitialStage(
+                    Mathf.RoundToInt(settlement.Pop), maxStage);
+
+                // V4 (VILLAGE_REWORK_PLAN §7.3/§7.4): 초기 Bounds는 LayoutProfile의 콤팩트
+                // 기능 구역 반경을 우선 사용하고, 레이아웃이 정의하지 않은 Profile은
+                // 기존 Stage 테이블 반경을 유지한다.
+                VillageLayoutProfile layout = VillageLayoutCatalog.Resolve(
+                    resolvedProfile != null ? resolvedProfile.LayoutProfileId : null);
+                int boundsRadius = layout.GetInitialBoundsRadius(initialStage);
+                if (boundsRadius <= 0)
+                    boundsRadius = VillageManager.GetBoundsRadius(initialStage);
+                VillageDevelopmentBootstrap.ApplyFixedInitialState(village, initialStage,
+                    boundsRadius, runtimeGameTime);
+                applied++;
+
+                // V4 (§7.5 1안): 기능성 벽 레이아웃은 Hamlet 이상 초기 Stage에서 Bounds 둘레
+                // 완공 Palisade/Gate 세그먼트를 자원·task 없이 생성한다. 타일 배치는 첫
+                // materialize(RestoreWallTilesFromData)가 담당한다. Dwarf 청사진의 장식 경계
+                // Id 1은 로드 시 제거되므로 청사진 경계와 런타임 벽이 중복되지 않는다.
+                if (layout.HasFunctionalWalls == true
+                    && VillageWallRules.ApplyInitialCompletedWalls(village,
+                        initialStage) == true)
+                    initialWallVillages++;
+
+                // V3 (VILLAGE_REWORK_PLAN §3.5): Settlement→InitialStage 누적 마일스톤을
+                // 자원·건설시간·진행 task 없이 완공 원장으로 1회 적용한다. 시설은 좌표 미할당
+                // 완공 레코드(PlacementPending)로 저장되고 첫 materialize에서 배치된다.
+                VillageGrowthPlan plan = VillageInitialDevelopment.ResolvePlan(
+                    resolvedProfile, out string planWarning);
+                if (string.IsNullOrEmpty(planWarning) == false)
+                    Debug.LogWarning($"[VillageBootstrap] v{village.VillageId} {planWarning}");
+
+                VillageInitialDevelopmentResult milestones =
+                    VillageInitialDevelopment.ApplyInitialMilestones(village, plan,
+                        initialStage, AR.s.Data.GetBuildableItem);
+                for (int e = 0; e < milestones.Errors.Count; e++)
+                    Debug.LogError($"[VillageBootstrap] v{village.VillageId} 초기 시설 " +
+                        $"데이터 검증 실패: {milestones.Errors[e]}");
+                for (int w = 0; w < milestones.Warnings.Count; w++)
+                    Debug.LogWarning($"[VillageBootstrap] v{village.VillageId} " +
+                        $"{milestones.Warnings[w]}");
+                milestonesApplied += milestones.MilestonesApplied;
+                facilitiesCreated += milestones.FacilitiesCreated;
+                pendingPlacements +=
+                    VillageInitialDevelopment.CountPendingInitialPlacements(village);
             }
 
-            Debug.Log($"[VillageBootstrap] New Game 초기 발전 완료: finalized={finalized}, failed={failed}, plans={plans.Length}");
+            Debug.Log($"[VillageBootstrap] New Game 초기 Stage 확정: applied={applied}, " +
+                $"notOperational={skippedNotOperational}, settlements={sim.Settlements.Length}, " +
+                $"milestones={milestonesApplied}, facilities={facilitiesCreated}, " +
+                $"pendingPlacements={pendingPlacements}, walledVillages={initialWallVillages}");
         }
 
         /// <summary>
-        /// PROCEDURAL §0 런타임 추상 인구 tick — 시간 분할(라운드로빈).
-        /// 매 호출마다 커서에서 budget개만 처리하여 프레임당 비용을 상수로 유지(액션 게임 스파이크 방지).
-        /// 각 정착지는 자기 LastSimGameTime 기준 경과 일수만큼 O(1)로 전진(<see cref="SettlementPopulationModel"/>).
-        /// 실체화(근처)된 정착지는 ECS/VillageData가 처리하므로 제외.
+        /// PROCEDURAL §0 런타임 추상 정착지 tick — 시간 분할(라운드로빈).
+        /// V2 (VILLAGE_REWORK_PLAN §3.1): 절차적 역사 완료 인구가 런타임 정본으로 고정되어
+        /// <see cref="SettlementPopulationModel.Advance"/>를 더 이상 호출하지 않는다(모델은 후속 설계용으로 보존).
+        /// 대신 LastSimGameTime만 현재 시각으로 정렬해, 후속 설계에서 인구 tick을 재활성화할 때
+        /// 고정 기간 전체가 backlog로 소급 적용되지 않게 한다. 구 세이브의 과거 시각도 이 경로로 정렬된다.
         /// </summary>
         public void AdvanceAbstractSlice(int budget)
         {
@@ -311,12 +409,8 @@ namespace ARPG.History
                 if (sim.Settlements[i].IsMaterialized)
                     continue;   // 근처 = ECS가 처리 중
 
-                int days = (int)((now - sim.Settlements[i].LastSimGameTime) / DAY_HOURS);
-                if (days <= 0)
-                    continue;   // 아직 하루 안 지남 → 자동 스로틀(early-out)
-
-                SettlementPopulationModel.Advance(ref sim.Settlements[i], days);
-                sim.Settlements[i].LastSimGameTime += days * DAY_HOURS;
+                if (sim.Settlements[i].LastSimGameTime < now)
+                    sim.Settlements[i].LastSimGameTime = now;   // 인구 고정 — 시계만 정렬
             }
         }
 
@@ -378,11 +472,8 @@ namespace ARPG.History
             WorldSimState sim = AR.s.Data.WorldSim;
             float now = AR.s.Time.CurrentGameTime;
 
-            // 커서가 아직 못 들른 경우 대비 — 사용 직전 현재 시각으로 인구 flush
-            int days = (int)((now - sim.Settlements[idx].LastSimGameTime) / DAY_HOURS);
-            if (days > 0)
-                SettlementPopulationModel.Advance(ref sim.Settlements[idx], days);
-
+            // V2: 인구는 역사 완료 값으로 고정 — materialize 직전 catch-up에서도 전진시키지 않고
+            // 시계만 현재 시각으로 정렬한다(재활성화 시 backlog 방지).
             sim.Settlements[idx].LastSimGameTime = now;
             VillageData village = AR.s.Village.GetVillage(villageId);
             if (village == null)
@@ -400,6 +491,8 @@ namespace ARPG.History
                         GeneralEventBudget = generalEventBudget,
                         WallEventBudget = wallEventBudget,
                         IsOperational = isOperational,
+                        // V2: 원거리 catch-up은 자원 생산·clock 정렬만 수행하고 발전 이벤트는 실행하지 않는다.
+                        AllowDevelopment = VillageProgressionRules.RuntimeProgressionEnabled,
                     });
 
             // 예산 소진/비운영/blocked 상태에서는 clock과 task 진행을 그대로 두고 다음 tick에 재개한다.
@@ -413,7 +506,7 @@ namespace ARPG.History
             AR.s.Village.MaterializeVillage(villageId);
 
             Debug.Log($"[HistoryManager] Materialize settlement {settlementId} → village {villageId} " +
-                      $"(pop={(int)sim.Settlements[idx].Pop}, +{days}d catch-up)");
+                      $"(fixed pop={(int)sim.Settlements[idx].Pop})");
             return true;
         }
 

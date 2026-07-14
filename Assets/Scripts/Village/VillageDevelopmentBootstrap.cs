@@ -27,14 +27,37 @@ namespace ARPG.Village
     }
 
     /// <summary>
-    /// 절차적 역사 최종 상태를 제한된 게임시간/건물 예산으로 압축한다.
-    /// 계획 산정과 명시적 slice 실행을 제공하며 New Game HistoryManager 초기화에서 1회 호출된다.
+    /// New Game 마을 초기 상태 확정.
+    /// V2 (VILLAGE_REWORK_PLAN §3): synthetic 시간 진행(CreatePlans/AdvanceBootstrapSlice) 대신
+    /// <see cref="ApplyFixedInitialState"/>가 고정 역사 인구로 계산한 초기 Stage를 직접 적용한다.
+    /// 기존 plan/slice API는 V0 진단·parity 기준선 재현을 위해 보존하며 런타임에서는 호출하지 않는다.
     /// </summary>
     public static class VillageDevelopmentBootstrap
     {
         public static bool IsOperationalFate(SettlementFate fate)
         {
             return fate == SettlementFate.Alive || fate == SettlementFate.Conquered;
+        }
+
+        /// <summary>
+        /// V2: 시간을 흘리지 않고 초기 Stage를 직접 적용한다. 진행 task·건설·벽을 만들지 않으며
+        /// construction clock을 현재 런타임 시각에 정렬해 로드/실체화 시 과거 catch-up이 없게 한다.
+        /// boundsRadius가 0 이하이면 Bounds는 건드리지 않고 실체화 시 Stage 기준으로 산출된다.
+        /// </summary>
+        public static void ApplyFixedInitialState(VillageData village,
+            VillageStage initialStage, int boundsRadius, float runtimeGameTime)
+        {
+            village.Stage = initialStage;
+            if (boundsRadius > 0)
+            {
+                village.BoundsX = Mathf.FloorToInt(village.PositionX) - boundsRadius;
+                village.BoundsY = Mathf.FloorToInt(village.PositionY) - boundsRadius;
+                village.BoundsW = boundsRadius * 2;
+                village.BoundsH = boundsRadius * 2;
+            }
+            village.LastConstructionSimGameTime = runtimeGameTime;
+            village.LastConstructionTierCheckGameTime = runtimeGameTime;
+            village.InitialDevelopmentApplied = true;
         }
 
         public static VillageBootstrapPlan[] CreatePlans(SettlementLiveState[] settlements,

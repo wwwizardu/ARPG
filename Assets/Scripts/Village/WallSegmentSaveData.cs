@@ -19,5 +19,6 @@ namespace ARPG.Village
         public int CurrentHp;
         public int MaxHp;
         public bool IsBuilt;    // false = 큐에 있지만 아직 미배치 (System_VillageWallPlanner가 큐잉)
+        public bool IsOpen;     // V4: Gate 개폐 상태 (Gate 세그먼트 전용). true = 열림(통행 가능, 타일 제거)
     }
 }

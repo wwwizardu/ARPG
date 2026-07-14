@@ -3,6 +3,7 @@ using System.Threading;
 using ARPG.Base;
 using ARPG.Component;
 using ARPG.Tables;
+using ARPG.Village;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
@@ -40,7 +41,7 @@ namespace ARPG.Factory
         public static async UniTask<(int entityId, EntityBase? entity)> CreateBuilding(
             int tableId, int worldTileX, int worldTileY,
             int villageId, int savedEntityId = -1, int savedHp = -1,
-            bool isUnderConstruction = false)
+            bool isUnderConstruction = false, int facilityTier = 0)
         {
             BuildableItemTable? table = AR.s.Data.GetBuildableItem(tableId);
             if (table == null)
@@ -106,7 +107,7 @@ namespace ARPG.Factory
             }
             else if (table.AnimationId == 0)
             {
-                await LoadStaticSprite(entity, table.ResourceName);
+                await LoadFacilityStaticSprite(entity, table, facilityTier);
             }
             else
             {
@@ -162,7 +163,7 @@ namespace ARPG.Factory
         }
 
         public static async UniTask ApplyCompletedState(int entityId, EntityBase entity,
-            BuildableItemTable table)
+            BuildableItemTable table, int facilityTier = 0)
         {
             if (AR.s.Component.TryGetComponent<BuildingComponent>(entityId, out var building))
             {
@@ -177,11 +178,23 @@ namespace ARPG.Factory
             }
 
             if (table.AnimationId == 0)
-                await LoadStaticSprite(entity, table.ResourceName);
+                await LoadFacilityStaticSprite(entity, table, facilityTier);
             else
                 SetupAnimatedSprite(entityId, entity, table.AnimationId);
 
             SendHpChanged(entityId, table.HP, table.HP);
+        }
+
+        /// <summary>
+        /// V4 시설 Tier 교체 자산 적용 — 같은 Entity에서 스프라이트만 교체 (§3.6 모듈 증식 금지).
+        /// BuildingManager.SetFacilityTier가 활성 빌딩에 호출한다.
+        /// </summary>
+        public static async UniTask ApplyFacilityTierVisual(EntityBase entity,
+            BuildableItemTable table, int facilityTier)
+        {
+            if (table.AnimationId != 0)
+                return;   // 애니메이션 빌딩은 Tier 교체 대상 아님 (현재 시설 전부 정적)
+            await LoadFacilityStaticSprite(entity, table, facilityTier);
         }
 
         /// <summary>
@@ -224,6 +237,24 @@ namespace ARPG.Factory
         }
 
         /// <summary>
+        /// V4: Tier 교체 자산 우선 로드. `{ResourceName}_T{tier}` 키가 Addressables에 없으면
+        /// 기본 자산으로 대체한다 (Tier 아트 도착 전 임시 대체 — 기능 차이는 UI 게이트가 담당).
+        /// </summary>
+        private static async UniTask LoadFacilityStaticSprite(EntityBase entity,
+            BuildableItemTable table, int facilityTier)
+        {
+            if (VillageFacilityTierVisuals.TryGetTierResourceName(table.Id, facilityTier,
+                    table.ResourceName, out string tierResourceName) == true)
+            {
+                if (await TryLoadStaticSprite(entity, tierResourceName) == true)
+                    return;
+                Debug.Log($"[BuildingFactory] Tier {facilityTier} 자산 '{tierResourceName}' 없음 — " +
+                    $"기본 자산 '{table.ResourceName}'으로 대체 (V4 임시)");
+            }
+            await LoadStaticSprite(entity, table.ResourceName);
+        }
+
+        /// <summary>
         /// 정적 스프라이트 로드 → SpriteRenderer에 할당.
         /// SpriteLibrary/SpriteResolver는 건드리지 않음.
         /// </summary>
@@ -247,6 +278,28 @@ namespace ARPG.Factory
             {
                 Debug.LogError($"[BuildingFactory] Failed to load sprite '{resourceName}': {e.Message}");
             }
+        }
+
+        /// <summary>기존 키가 없을 수 있는 스프라이트의 시도 로드 — 실패해도 에러 로그 없이 false.</summary>
+        private static async UniTask<bool> TryLoadStaticSprite(EntityBase entity,
+            string resourceName)
+        {
+            if (string.IsNullOrEmpty(resourceName))
+                return false;
+            try
+            {
+                Sprite sprite = await Addressables.LoadAssetAsync<Sprite>(resourceName).ToUniTask();
+                if (sprite != null && entity != null && entity.SpriteRenderer != null)
+                {
+                    entity.SpriteRenderer.sprite = sprite;
+                    return true;
+                }
+            }
+            catch (System.Exception)
+            {
+                // 키 미등록 — 호출자가 기본 자산으로 대체
+            }
+            return false;
         }
 
         /// <summary>

@@ -25,6 +25,10 @@ namespace ARPG.Village
         public float BootstrapMaturity;
         public float BootstrapWallSeedFactor;
         public bool IsOperational = true;
+        // V2: false면 자원 생산 catch-up과 clock 정렬만 수행하고, task 진행·완공·착공·
+        // Tier 승격·벽 계획 등 모든 발전 이벤트를 실행하지 않는다(런타임 고정 정책).
+        // 기본값 true — bootstrap/parity/진단 등 기존 호출부의 동작을 바꾸지 않는다.
+        public bool AllowDevelopment = true;
     }
 
     public sealed class VillageAbstractAdvanceResult
@@ -107,6 +111,13 @@ namespace ARPG.Village
                 result.Status = VillageAbstractAdvanceStatus.InvalidTargetTime;
                 result.ReachedGameTime = current;
                 return result;
+            }
+
+            if (options.AllowDevelopment == false)
+            {
+                AdvanceFrozen(village, current, now);
+                result.Status = VillageAbstractAdvanceStatus.CaughtUp;
+                return Finish(result, village);
             }
 
             int generalBudget = Mathf.Max(0, options.GeneralEventBudget);
@@ -195,6 +206,20 @@ namespace ARPG.Village
 
                 AdvanceTo(village, current, next);
             }
+        }
+
+        /// <summary>
+        /// V2 런타임 고정 catch-up: 자원 생산만 정수 시간 단위로 전진시키고 두 construction clock을
+        /// 현재 시각으로 정렬한다. 진행 task의 AccumulatedHours는 건드리지 않으므로(동결·보존)
+        /// 시간 경과만으로 시설·Stage·벽이 늘지 않는다. O(1) — 이벤트 예산이 필요 없다.
+        /// </summary>
+        private static void AdvanceFrozen(VillageData village, float current, float now)
+        {
+            int wholeHours = Mathf.FloorToInt(now + EPSILON)
+                - Mathf.FloorToInt(current + EPSILON);
+            VillageResourceSimulation.AdvanceWholeHours(village, wholeHours);
+            village.LastConstructionSimGameTime = now;
+            village.LastConstructionTierCheckGameTime = now;
         }
 
         private static void EnsureCollections(VillageData village)

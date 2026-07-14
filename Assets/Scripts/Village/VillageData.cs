@@ -13,6 +13,10 @@ namespace ARPG.Village
         public Dictionary<GlobalEnum.ItemType, int> ResourceCaps = new();  // 빈 경우 기본 50
         public VillageStage Stage;
         public int Population;
+        // V1: 생성/마이그레이션 시 한 번 확정한 Profile ID. 이후 Race/Biome 변화로 재계산하지 않는다.
+        public string VillageProfileId = string.Empty;
+        // History에 연결되지 않은 수제작 BaseTown의 고정 경제 인구. -1 = 구 세이브 미보정.
+        public int FixedPopulation = -1;
         public float PositionX;
         public float PositionY;
 
@@ -40,6 +44,16 @@ namespace ARPG.Village
         public float LastConstructionSimGameTime;
         public float LastConstructionTierCheckGameTime;
         public bool InitialDevelopmentApplied;
+
+        // V3 (VILLAGE_REWORK_PLAN §3.5/§5.3): 적용된 Stage 누적 보상의 MilestoneKey 목록.
+        // 초기 보상 중복 방지의 정본 — Stage만 보고 부작용을 재적용하지 않는다.
+        public List<string> AppliedGrowthMilestones = new();
+
+        // V3: UnlockShopTier 누적 결과. 0 = 미해금(구 세이브). 슬롯 수·재고 풀 해금은 V5 TradeProfile 범위.
+        public int ShopTier;
+
+        // §5.3 PendingInitialPlacements는 별도 리스트가 아니라 PlacedObjects[].PlacementPending이 정본이다.
+        // 완공 확정 + 좌표 미할당 레코드는 materialize(RestorePlacedObjectsFromData)가 결정론적으로 재시도한다.
 
         // Phase A: 첫 Campfire 제작 상태 (Phase B에서 PlacedObjectTypeIds + CurrentBuild*로 일반화)
         // 구 세이브 호환 위해 필드 유지. VillageManager.Load에서 마이그레이션 후 새 필드만 사용.

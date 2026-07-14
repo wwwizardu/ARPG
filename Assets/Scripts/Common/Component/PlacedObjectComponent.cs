@@ -18,5 +18,6 @@ namespace ARPG.Component
         public SetMemberTag SetMember;  // BuildableItemTable.SetMembership 캐시
         public int UsingNpcEntityId;    // -1 = 미사용. Phase D는 JobAssignment가 갱신
         public float LastUseGameTime;   // 쿨다운 추적 (Shrine 등). 0 = 미사용
+        public int FacilityTier;        // V4: PlacedObjectSaveData.FacilityTier 캐시. 0 = 구 세이브(세트 평가 fallback)
     }
 }

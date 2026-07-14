@@ -33,6 +33,10 @@ namespace ARPG.Systems
 
         public void OnFixedUpdate(float inFixedDeltaTime)
         {
+            // V2 (VILLAGE_REWORK_PLAN §3.4): 초기 Stage는 생성 시 확정되고 런타임 승격은
+            // 후속 발전 Phase(V8) 전까지 실행하지 않는다. 조건 평가·적용 코드는 보존.
+            if (VillageProgressionRules.RuntimeProgressionEnabled == false) return;
+
             float now = AR.s.Time.CurrentGameTime;
             if (now - _lastCheckGameTime < CHECK_INTERVAL_HOURS) return;
             _lastCheckGameTime = now;

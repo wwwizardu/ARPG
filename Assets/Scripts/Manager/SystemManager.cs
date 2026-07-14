@@ -83,6 +83,10 @@ namespace ARPG.Systems
             System_VillageServiceProximity villageServiceProximitySystem = new();
             RegisterSystems(villageServiceProximitySystem);
 
+            // Priority 62: Village Interaction Prompt (Lifecycle, Update) - 최근접 상호작용 대상 "[F] 프롬프트" 표시 (V4, 0.1s)
+            System_VillageInteractionPrompt villageInteractionPromptSystem = new();
+            RegisterSystems(villageInteractionPromptSystem);
+
             // Priority 66: Village Build Queue (Construction) - Roadmap + 벽 세그먼트 큐 실행 (Phase B/C)
             System_VillageBuildQueue villageBuildQueueSystem = new();
             RegisterSystems(villageBuildQueueSystem);
