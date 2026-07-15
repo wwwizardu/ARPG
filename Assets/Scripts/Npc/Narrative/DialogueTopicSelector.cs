@@ -8,10 +8,11 @@ using ARPG.Village;
 namespace ARPG.Npc.Narrative
 {
     /// <summary>
-    /// 상태·백본 → 적용 가능한 대화 토픽(니즈·소문·잡담) 산출 + 선택.
+    /// 상태·백본 → 적용 가능한 대화 토픽(니즈·소문·잡담·사연) 산출 + 선택.
     /// 선택은 셔플백(중복 회피) + 긴급(기아·위협) 새치기 — 대화할 때마다 골고루 돌면서 급한 건 놓치지 않는다.
     /// 니즈는 "표현만"(충족/보상 루프 없음). 소문은 C-method(진짜 사실 → 소문 말투).
-    /// 설계: NARRATIVE_ENGINE_SPIKE §4.5
+    /// 사연(Personal)은 개인 전기 Deeds·사별 기억 접지 — 난수 없이 최신순(결정론).
+    /// 설계: NARRATIVE_ENGINE_SPIKE §4.5 + NARRATIVE_DIALOGUE_VARIETY §5 Phase 1
     /// </summary>
     public static class DialogueTopicSelector
     {
@@ -48,6 +49,7 @@ namespace ARPG.Npc.Narrative
             AddNeeds(topics, save, village, threat);
             AddRumors(topics, npcId, chronicle);
             AddFlavor(topics, save);
+            AddPersonal(topics, npcId, save);
 
             return topics;
         }
@@ -124,12 +126,13 @@ namespace ARPG.Npc.Narrative
             return 3;
         }
 
-        // 우선순위(Need>Rumor>Flavor)*1000 + NPC별 토픽 안정 해시 → NPC마다 다른 화제 선호, 같은 NPC는 일관
+        // 우선순위(Need>Personal>Rumor>Flavor)*1000 + NPC별 토픽 안정 해시 → NPC마다 다른 화제 선호, 같은 NPC는 일관
         private static int SortKey(int npcId, DialogueTopic t)
         {
             int pri = t.Category switch
             {
-                DialogueTopicCategory.Need => 3,
+                DialogueTopicCategory.Need => 4,
+                DialogueTopicCategory.Personal => 3,
                 DialogueTopicCategory.Rumor => 2,
                 DialogueTopicCategory.Flavor => 1,
                 _ => 0,
@@ -342,6 +345,94 @@ namespace ARPG.Npc.Narrative
             }
         }
 
+        // ── 사연 (Personal — 개인 전기 Deeds·사별 기억. 난수 없이 최신순 = 결정론) ──
+        // Fell은 사망자 본인 전기에만 남으므로 화자(생존자)의 상실은 DeceasedRelations가 접지.
+        // NotableItemAcquired(Boast)는 기록 경로 미배선(호출부 없음) — 배선되면 자동 동작.
+        // CacheVariant에 사건 식별자(Deeds 인덱스/사망자 id)를 실어 새 사건이면 캐시가 갈린다.
+        private static void AddPersonal(List<DialogueTopic> topics, int npcId, NpcSaveData? save)
+        {
+            if (save == null)
+                return;
+
+            // Deeds 최신순 스캔 — 토픽 타입당 최신 1건, 합계 최대 2건 (Deeds는 append-only·불삭제라 인덱스가 안정 식별자)
+            bool hasHunt = false;
+            bool hasBond = false;
+            bool hasBoast = false;
+            int added = 0;
+            for (int i = save.Deeds.Count - 1; i >= 0 && added < 2; i--)
+            {
+                NpcDeedEntry deed = save.Deeds[i];
+                if (deed == null)
+                    continue;
+
+                if (deed.Kind == NpcDeedKind.Wounded && hasHunt == false)
+                {
+                    hasHunt = true;
+                    added++;
+                    DialogueTopic t = new()
+                    {
+                        Type = DialogueTopicType.RecentHunt,
+                        Category = DialogueTopicCategory.Personal,
+                        MinTier = AffinityTier.Stranger,
+                        BaseLine = "지난 사냥에서 호되게 당했소. 아직 몸이 뻐근하구려.",
+                        CacheVariant = i,
+                    };
+                    t.Facts.Add($"게임 시간 {deed.When:F1}에 사냥을 나갔다가 부상을 입었다 ({KnowledgeHint(deed.HowKnown)}).");
+                    topics.Add(t);
+                }
+                else if (deed.Kind == NpcDeedKind.PartyAffinityChanged && hasBond == false)
+                {
+                    hasBond = true;
+                    added++;
+                    string other = OtherParticipantName(deed, npcId);
+                    bool closer = deed.AffinityDelta >= 0;
+                    DialogueTopic t = new()
+                    {
+                        Type = DialogueTopicType.PartyBond,
+                        Category = DialogueTopicCategory.Personal,
+                        MinTier = AffinityTier.Acquaintance,
+                        BaseLine = closer ? $"{other}와는 요즘 손발이 잘 맞소." : $"{other}와는 요즘 영 서먹하오.",
+                        CacheVariant = i,
+                    };
+                    t.Facts.Add($"게임 시간 {deed.When:F1}, {other}와 함께 사냥했고 사이가 {(closer ? "가까워졌다" : "서먹해졌다")} ({KnowledgeHint(deed.HowKnown)}).");
+                    topics.Add(t);
+                }
+                else if (deed.Kind == NpcDeedKind.NotableItemAcquired && hasBoast == false)
+                {
+                    hasBoast = true;
+                    added++;
+                    string item = string.IsNullOrEmpty(deed.ItemDisplayName) ? "귀한 물건" : deed.ItemDisplayName;
+                    DialogueTopic t = new()
+                    {
+                        Type = DialogueTopicType.Boast,
+                        Category = DialogueTopicCategory.Personal,
+                        MinTier = AffinityTier.Stranger,
+                        BaseLine = $"{item}을 손에 넣었소. 보는 눈이 있다면 알아보겠지.",
+                        CacheVariant = i,
+                    };
+                    t.Facts.Add($"게임 시간 {deed.When:F1}에 {item}을(를) 손에 넣었다 ({KnowledgeHint(deed.HowKnown)}).");
+                    topics.Add(t);
+                }
+            }
+
+            // 사별 기억 → LostCompanion (최신 1건, 사적인 이야기라 Acquaintance+)
+            if (save.DeceasedRelations != null && save.DeceasedRelations.Count > 0)
+            {
+                DeceasedRelationMemory memory = save.DeceasedRelations[save.DeceasedRelations.Count - 1];
+                string label = NpcDialogueContextBuilder.RelationLabel(memory.RelationType, memory.WasFromEntity);
+                DialogueTopic t = new()
+                {
+                    Type = DialogueTopicType.LostCompanion,
+                    Category = DialogueTopicCategory.Personal,
+                    MinTier = AffinityTier.Acquaintance,
+                    BaseLine = $"{memory.DeceasedNpcName}… 이젠 없는 사람 이야기요.",
+                    CacheVariant = memory.DeceasedNpcEntityId,
+                };
+                t.Facts.Add($"{label}인 {memory.DeceasedNpcName}이(가) 게임 시간 {memory.DeathGameTime:F1}에 세상을 떠났다 (본인이 겪은 상실).");
+                topics.Add(t);
+            }
+        }
+
         // ── 헬퍼 ──
         private static DialogueTopic? PickRandom(List<DialogueTopic> pool, HashSet<DialogueTopicType> recent, bool urgentOnly)
         {
@@ -411,6 +502,37 @@ namespace ARPG.Npc.Narrative
             Tables.NpcTable? t = AR.s.Data?.GetNpc(o.NpcTableId);
             return t != null ? t.Name : $"NPC#{otherId}";
         }
+
+        /// <summary>Deed 참가자 중 화자가 아닌 쪽의 표시명 (스냅샷 우선 → 현재 데이터 → "동료").</summary>
+        private static string OtherParticipantName(NpcDeedEntry deed, int npcId)
+        {
+            for (int i = 0; i < deed.ParticipantSnapshots.Count; i++)
+            {
+                NpcDeedParticipant participant = deed.ParticipantSnapshots[i];
+                if (participant.EntityId == npcId)
+                    continue;
+                if (string.IsNullOrEmpty(participant.DisplayName) == false)
+                    return participant.DisplayName;
+            }
+            for (int i = 0; i < deed.Participants.Count; i++)
+            {
+                int participantId = deed.Participants[i];
+                if (participantId == npcId)
+                    continue;
+                return ResolveNpcName(participantId);
+            }
+            return "동료";
+        }
+
+        /// <summary>지식 거리(NpcKnowledgeLevel) → 프롬프트 어조 힌트. 직접 겪은 일과 전해 들은 일의 말투를 가른다.</summary>
+        private static string KnowledgeHint(NpcKnowledgeLevel level) => level switch
+        {
+            NpcKnowledgeLevel.Lived => "본인이 직접 겪은 일",
+            NpcKnowledgeLevel.Did => "본인이 직접 겪은 일",
+            NpcKnowledgeLevel.Witnessed => "직접 목격한 일",
+            NpcKnowledgeLevel.Heard => "전해 들은 이야기",
+            _ => "본인이 아는 일",
+        };
 
         private static string? CraftMaterialFor(GlobalEnum.JobType job) => job switch
         {

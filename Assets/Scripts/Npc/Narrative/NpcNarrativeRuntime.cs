@@ -12,19 +12,40 @@ namespace ARPG.Npc.Narrative
     /// </summary>
     public class NpcNarrativeRuntime
     {
-        // 대화 캐시: (npcId, tier, topic) → 생성 대사
-        private readonly Dictionary<(int, AffinityTier, DialogueTopicType), string> _dialogueCache = new();
+        // 대화 캐시: npcId → (tier, topic, variant) → 생성 대사.
+        // npcId를 최상위 키로 둬 새 사건(Deed·사별) 발생 시 NPC 단위 무효화가 O(1).
+        // variant는 같은 토픽 타입 안의 내용 구분자(DialogueTopic.CacheVariant) — 새 사건이면 새 대사.
+        private readonly Dictionary<int, Dictionary<(AffinityTier, DialogueTopicType, int), string>> _dialogueCache = new();
         // 소망 캐시: npcId → 소망
         private readonly Dictionary<int, NpcWish> _wishCache = new();
         // 화제 셔플백: npcId → 최근 말한 토픽(중복 회피, 소진 시 리셋)
         private readonly Dictionary<int, HashSet<DialogueTopicType>> _recentTopics = new();
 
         // ── 대화 캐시 ──
-        public bool TryGetDialogue((int, AffinityTier, DialogueTopicType) key, [MaybeNullWhen(false)] out string text) =>
-            _dialogueCache.TryGetValue(key, out text);
+        public bool TryGetDialogue(int npcId, AffinityTier tier, DialogueTopicType topic, int variant,
+            [MaybeNullWhen(false)] out string text)
+        {
+            if (_dialogueCache.TryGetValue(npcId, out Dictionary<(AffinityTier, DialogueTopicType, int), string> perNpc))
+                return perNpc.TryGetValue((tier, topic, variant), out text);
+            text = null!;
+            return false;
+        }
 
-        public void SetDialogue((int, AffinityTier, DialogueTopicType) key, string text) =>
-            _dialogueCache[key] = text;
+        public void SetDialogue(int npcId, AffinityTier tier, DialogueTopicType topic, int variant, string text)
+        {
+            if (_dialogueCache.TryGetValue(npcId, out Dictionary<(AffinityTier, DialogueTopicType, int), string> perNpc) == false)
+            {
+                perNpc = new Dictionary<(AffinityTier, DialogueTopicType, int), string>();
+                _dialogueCache[npcId] = perNpc;
+            }
+            perNpc[(tier, topic, variant)] = text;
+        }
+
+        /// <summary>
+        /// 새 사건(Deed 추가·사별 기록) 발생 시 해당 NPC의 대화 캐시만 폐기 — 다음 대화에서 재생성.
+        /// 셔플백(화제 순환)·소망 캐시는 유지한다. NARRATIVE_DIALOGUE_VARIETY §5 P1-4.
+        /// </summary>
+        public void InvalidateDialogues(int npcId) => _dialogueCache.Remove(npcId);
 
         // ── 소망 캐시 ──
         public bool TryGetWish(int npcId, [MaybeNullWhen(false)] out NpcWish wish) =>

@@ -30,8 +30,7 @@ namespace ARPG.Npc.Narrative
             List<DialogueTopic> topics = DialogueTopicSelector.Collect(npcId, ctx, threat);
             DialogueTopic topic = DialogueTopicSelector.Select(npcId, topics, tier, AR.s.Npc.Narrative.GetRecentTopics(npcId));
 
-            (int, AffinityTier, DialogueTopicType) key = (npcId, tier, topic.Type);
-            if (AR.s.Npc.Narrative.TryGetDialogue(key, out string cached))
+            if (AR.s.Npc.Narrative.TryGetDialogue(npcId, tier, topic.Type, topic.CacheVariant, out string cached))
                 return new DialogueResult { Text = cached, Source = NarrativeSource.Cache, Tier = tier, Topic = topic.Type };
 
             string? text = null;
@@ -50,7 +49,7 @@ namespace ARPG.Npc.Narrative
                 return new DialogueResult { Text = topic.BaseLine, Source = NarrativeSource.Fallback, Tier = tier, Topic = topic.Type };
 
             string clean = text!.Trim();
-            AR.s.Npc.Narrative.SetDialogue(key, clean);
+            AR.s.Npc.Narrative.SetDialogue(npcId, tier, topic.Type, topic.CacheVariant, clean);
             return new DialogueResult { Text = clean, Source = NarrativeSource.Llm, Tier = tier, Topic = topic.Type };
         }
 
@@ -210,6 +209,10 @@ namespace ARPG.Npc.Narrative
             DialogueTopicType.DangerRumor => "위험한 곳 소문",
             DialogueTopicType.SmallTalk => "잡담",
             DialogueTopicType.JobMood => "직업 이야기",
+            DialogueTopicType.RecentHunt => "지난 사냥 이야기",
+            DialogueTopicType.LostCompanion => "잃은 사람 이야기",
+            DialogueTopicType.Boast => "자랑거리",
+            DialogueTopicType.PartyBond => "동료 이야기",
             _ => "잡담",
         };
 

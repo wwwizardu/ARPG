@@ -141,7 +141,8 @@ namespace ARPG.Npc.Narrative
             return t != null ? t.Name : $"NPC#{otherId}";
         }
 
-        private static string RelationLabel(NpcRelationType type, bool isFrom) => type switch
+        /// <summary>상대를 화자 기준으로 부르는 라벨. isFrom = 화자가 관계의 From인가. (DialogueTopicSelector 사별 토픽도 공유)</summary>
+        public static string RelationLabel(NpcRelationType type, bool isFrom) => type switch
         {
             NpcRelationType.Spouse => "배우자",
             NpcRelationType.Sibling => "형제",

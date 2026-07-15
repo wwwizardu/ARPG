@@ -1520,6 +1520,7 @@ namespace ARPG.Npc
                 bool wasFromEntity = relation.FromEntityId == survivorEntityId;
                 survivor.DeceasedRelations.Add(new DeceasedRelationMemory(deceasedEntityId, deceasedName,
                     relation.Type, wasFromEntity, fellEventId, deathGameTime));
+                _narrative.InvalidateDialogues(survivorEntityId);   // 상실 발생 → 생존자 대화 캐시 폐기 (LostCompanion 반영)
             }
         }
 
@@ -1540,6 +1541,7 @@ namespace ARPG.Npc
             NpcDeedEntry entry = new NpcDeedEntry(kind, refEventId, howKnown, when);
             AddDeedParticipant(entry, participantId);
             saveData.Deeds.Add(entry);
+            _narrative.InvalidateDialogues(entityId);   // 새 사건 → 낡은 대화 캐시 폐기 (NARRATIVE_DIALOGUE_VARIETY §5 P1-4)
         }
 
         public void AddPartyAffinityDeed(int entityId, int otherEntityId, int affinityDelta, float when)
@@ -1555,6 +1557,7 @@ namespace ARPG.Npc
             AddDeedParticipant(entry, entityId);
             AddDeedParticipant(entry, otherEntityId);
             saveData.Deeds.Add(entry);
+            _narrative.InvalidateDialogues(entityId);
         }
 
         public void AddWoundedDeed(int entityId, float when, float recoveryEndGameTime)
@@ -1569,6 +1572,7 @@ namespace ARPG.Npc
             };
             AddDeedParticipant(entry, entityId);
             saveData.Deeds.Add(entry);
+            _narrative.InvalidateDialogues(entityId);
         }
 
         public void AddNotableItemDeed(int entityId, int itemId, string itemDisplayName, float when)
@@ -1584,6 +1588,7 @@ namespace ARPG.Npc
             };
             AddDeedParticipant(entry, entityId);
             saveData.Deeds.Add(entry);
+            _narrative.InvalidateDialogues(entityId);
         }
 
         private void AddDeedParticipant(NpcDeedEntry entry, int participantId)

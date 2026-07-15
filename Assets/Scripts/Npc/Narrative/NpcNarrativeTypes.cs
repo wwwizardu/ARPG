@@ -11,10 +11,10 @@ namespace ARPG.Npc.Narrative
     /// <summary>호감도 단계 (interactionSystem §4.2). 스파이크는 디버그로 강제 전환.</summary>
     public enum AffinityTier { Stranger, Acquaintance, Friend, Confidant }
 
-    /// <summary>대화 토픽 갈래. NARRATIVE_ENGINE_SPIKE §4.5.</summary>
-    public enum DialogueTopicCategory { Neutral, Need, Rumor, Flavor }
+    /// <summary>대화 토픽 갈래. NARRATIVE_ENGINE_SPIKE §4.5 + 사연(NARRATIVE_DIALOGUE_VARIETY Phase 1).</summary>
+    public enum DialogueTopicCategory { Neutral, Need, Rumor, Flavor, Personal }
 
-    /// <summary>대화 토픽 (v1: 니즈·소문·잡담). 사연(Personal)은 관계 계층 연결 후 추가.</summary>
+    /// <summary>대화 토픽 (니즈·소문·잡담·사연). 사연(Personal)은 관계 계층(호감도 실반영) 구현으로 게이트 충족(2026-07-15).</summary>
     public enum DialogueTopicType
     {
         Greeting,
@@ -24,6 +24,8 @@ namespace ARPG.Npc.Narrative
         HistoryRumor, SettlementRumor, Gossip, DangerRumor,
         // 잡담 (순수 색감)
         SmallTalk, JobMood,
+        // 사연 (Personal — 개인 전기 Deeds·사별 기억 접지. NARRATIVE_DIALOGUE_VARIETY §5 Phase 1)
+        RecentHunt, LostCompanion, Boast, PartyBond,
     }
 
     /// <summary>대화 토픽 1건 — 시스템이 상태·백본에서 산출. LLM 없으면 BaseLine, 있으면 이 토픽을 풍부하게 서술.</summary>
@@ -35,6 +37,7 @@ namespace ARPG.Npc.Narrative
         public bool Urgent;                  // 긴급(기아·위협) — 셔플백에서 우선 등장
         public List<string> Facts = new();   // LLM에 줄 근거(이 토픽 관련 사실만)
         public string BaseLine = string.Empty; // LLM 없을 때 대사 (슬롯 치환 완료본)
+        public int CacheVariant;             // 같은 토픽 타입 안의 내용 구분자(예: Deed 인덱스) — 대화 캐시 키에 포함, 새 사건이면 새 대사
     }
 
     /// <summary>소망 종류 (닫힌 enum — LLM은 이 밖을 못 쓴다). QUEST §2.1.</summary>
