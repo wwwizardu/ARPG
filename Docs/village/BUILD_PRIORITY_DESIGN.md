@@ -6,6 +6,8 @@
 >
 > **책임**: 마을이 다음에 지을 일반 건물을 고르는 점수와, 자원 부족·배치 실패 시의 처리 정책을 정의한다. 자원·건설 진행·materialize 계약은 [ABSTRACT_CONSTRUCTION_DESIGN.md](ABSTRACT_CONSTRUCTION_DESIGN.md)가 소유한다.
 
+> **적용 범위 (VILLAGE_REWORK_PLAN V2~V7)**: 아래 후보 점수·자원 부족 정책은 **런타임 자동 발전이 실행될 때만** 쓰인다. 현재 정책에서는 `VillageProgressionRules.RuntimeProgressionEnabled=false`로 시간 경과 자동 건설을 중단했고, **초기 마을 시설은 필요도 점수로 고르지 않고 `VillageGrowthPlanCatalog`의 명시적 누적 마일스톤**으로 생성한다([ABSTRACT_CONSTRUCTION_DESIGN.md](ABSTRACT_CONSTRUCTION_DESIGN.md) §11). 이 문서의 평가기는 파괴 시설 수리·명시적 이벤트, 그리고 런타임 발전 재개(후속 Phase) 시의 계약으로 유지된다.
+
 ---
 
 ## 1. 결정

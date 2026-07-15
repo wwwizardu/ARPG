@@ -40,6 +40,8 @@
 
 `VillageData.Population`은 `SettlementLiveState.Pop`을 `VillageManager.QuantizeAbstractPopulation`으로 변환한 경제용 값이다. 물리 NPC 수가 아니다.
 
+`SettlementLiveState.Pop`은 절차적 역사 완료 시점에 **고정**된다. 일반 런타임 시간 경과·실체화 전환·물리 NPC 사망·보충·Food/자원·건물 파괴로 다시 전진하지 않으며(`SettlementPopulationModel.Advance`를 런타임 advance/materialize catch-up에서 호출하지 않는다), 인구 갱신 중단 시각(`LastSimGameTime`)은 현재 시각에 맞춰 후속 재활성화 시 backlog가 쌓이지 않게 한다. 로지스틱 인구 모델·Biome 성장률 데이터는 삭제하지 않고 후속 인구 설계용으로 보존한다. [VILLAGE_REWORK_PLAN.md](VILLAGE_REWORK_PLAN.md) §3.1 참조.
+
 이 분리를 유지하는 이유는 다음과 같다.
 
 - 모험가의 이동·전투·사망이 생산량과 Tier를 우연히 변경하지 않게 한다.
@@ -58,7 +60,9 @@
 
 동시 task를 1개로 제한하는 이유는 추상 인구가 커진 마을이 materialize 직후 대량 착공하는 것을 막고, 자원 소비와 화면 변화를 읽을 수 있는 속도로 유지하기 위해서다.
 
-다음 건물의 선택과 자원 부족 정책은 [BUILD_PRIORITY_DESIGN.md](BUILD_PRIORITY_DESIGN.md)를 따른다.
+단, **초기 발전은 게임시간 건설로 재생하지 않는다.** 생성 시 `InitialStage`까지의 누적 시설·상점·Cap을 자원·건설시간·진행 task 없이 완공 상태로 기록하고(`VillageInitialDevelopment.ApplyInitialMilestones`, `VillageGrowthPlanCatalog`), 시간 경과에 따른 일반 자동 건설 후보 평가는 `RuntimeProgressionEnabled=false`로 중단돼 있다. `VillageData.ActiveBuildTasks`와 자원 소비는 파괴 시설 수리·명시적 이벤트에만 쓰인다. 초기 완공 시설은 좌표 미할당(`PlacementPending`) 레코드로 저장돼 첫 materialize에서 배치된다.
+
+다음 건물의 선택과 자원 부족 정책은 [BUILD_PRIORITY_DESIGN.md](BUILD_PRIORITY_DESIGN.md)를 따르되, 위 후보 평가는 런타임 발전이 재개될 때만 실행된다.
 
 ---
 
@@ -77,9 +81,9 @@
 
 ## 6. Tier와 벽
 
-Tier 조건은 `VillageStageTable`의 인구·주거·식량·최소 나이·필수 세트·Civic·Shop 게이트가 정본이다. `VillageProgressionRules`가 데이터만 판정·변경하고, ECS 태그·UI·연대기 이벤트는 호출 경로가 처리한다.
+Stage는 절차적 역사 완료 인구로 **생성 시 한 번 확정하는 `InitialStage`**다. `VillageProgressionRules.CalculateInitialStage`가 원본 역사 인구와 `VillageProfile.MaxStage`만으로 판정하며, 임계값(597/1,679/2,592/3,419)은 코드 상수다. `VillageStageTable`의 주거·식량·필수 세트·Civic·Shop 승격 게이트는 **런타임 승격 판정에 사용하지 않는다** — `VillageProgressionRules.RuntimeProgressionEnabled=false`로 시간 경과에 따른 Stage 승격·강등을 중단했다. (게이트를 되살리는 런타임 발전은 후속 Phase의 별도 승인 대상이다. [VILLAGE_REWORK_PLAN.md](VILLAGE_REWORK_PLAN.md) §3.2·§3.4 참조.)
 
-Hamlet 최초 진입 시 Bounds 외곽에 벽 계획을 만든다. 게이트는 일반 건물보다 먼저 처리하고, 나머지 Palisade는 일반 후보가 없거나 물리적으로 배치할 수 없을 때 진행한다. 벽도 추상 시뮬레이션에 포함해 오래된 마을이 첫 방문 후에야 벽을 짓기 시작하는 불일치를 막는다.
+벽은 Hamlet 이상 초기 Stage에서 Bounds 둘레 완공 Palisade/Gate 세그먼트로 **생성 시 확정**한다(`VillageWallRules.ApplyInitialCompletedWalls`, 자원·건설시간·task 없음). Gate 개폐·HP 피해 경로는 정본화돼 있고, 타일 배치는 첫 materialize(`RestoreWallTilesFromData`)가 담당한다. 기능 없는 청사진 경계는 로드 시 제거해 초기 완공 벽과 중복되지 않게 한다. 런타임 벽 증축·추상 벽 계획은 위 게이트로 함께 중단돼 있다.
 
 ---
 

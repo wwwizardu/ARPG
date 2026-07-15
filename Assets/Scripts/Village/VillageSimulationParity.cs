@@ -1,4 +1,5 @@
 #nullable enable
+using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
 
@@ -247,6 +248,142 @@ namespace ARPG.Village
 
             differences = builder.ToString();
             return differences.Length == 0;
+        }
+
+        /// <summary>
+        /// V7 (VILLAGE_REWORK_PLAN §12): 고정 인구/Profile/초기 Stage/누적 시설·상점 상태 비교.
+        /// 추상/실시간 <see cref="Compare"/>(자원·carry·task·clock·좌표)와 별개로, New Game·save/load
+        /// 왕복·동결 advance·fold-back 반복 전후에 "완성형 마을"의 정체성이 불변인지 검증한다.
+        /// 시설은 좌표가 아니라 (TableId, FacilityTier) 멀티셋으로, 상점은 결정론 roll 순서대로 비교한다.
+        /// </summary>
+        public static bool CompareFixedState(VillageData a, VillageData b,
+            out string differences, float floatTolerance = 0.0001f)
+        {
+            StringBuilder builder = new StringBuilder();
+
+            if (a.Population != b.Population)
+                builder.Append($"Population {a.Population}!={b.Population}; ");
+            if (a.VillageProfileId != b.VillageProfileId)
+                builder.Append($"Profile {a.VillageProfileId}!={b.VillageProfileId}; ");
+            if (a.Stage != b.Stage)
+                builder.Append($"Stage {a.Stage}!={b.Stage}; ");
+            if (a.ShopTier != b.ShopTier)
+                builder.Append($"ShopTier {a.ShopTier}!={b.ShopTier}; ");
+            if (a.MerchantRestockCycle != b.MerchantRestockCycle)
+                builder.Append($"MerchantRestockCycle {a.MerchantRestockCycle}"
+                    + $"!={b.MerchantRestockCycle}; ");
+            CompareFloat(builder, "LastMerchantRollGameTime",
+                a.LastMerchantRollGameTime, b.LastMerchantRollGameTime, floatTolerance);
+
+            CompareStringMultiset(builder, "milestone",
+                a.AppliedGrowthMilestones, b.AppliedGrowthMilestones);
+            CompareFacilityMultiset(builder, a.PlacedObjects, b.PlacedObjects);
+            CompareMerchantStock(builder, a.MerchantStock, b.MerchantStock);
+
+            differences = builder.ToString();
+            return differences.Length == 0;
+        }
+
+        /// <summary>순서 무관 멀티셋 비교 — 누락·중복(무중복 계약 위반)을 모두 잡는다.</summary>
+        private static void CompareStringMultiset(StringBuilder builder, string label,
+            List<string>? a, List<string>? b)
+        {
+            int countA = a?.Count ?? 0;
+            int countB = b?.Count ?? 0;
+            if (countA != countB)
+            {
+                builder.Append($"{label} count {countA}!={countB}; ");
+                return;
+            }
+            List<string> sortedA = a != null ? new List<string>(a) : new List<string>();
+            List<string> sortedB = b != null ? new List<string>(b) : new List<string>();
+            sortedA.Sort(string.CompareOrdinal);
+            sortedB.Sort(string.CompareOrdinal);
+            for (int i = 0; i < sortedA.Count; i++)
+            {
+                if (sortedA[i] != sortedB[i])
+                {
+                    builder.Append($"{label}[{i}] {sortedA[i]}!={sortedB[i]}; ");
+                    return;
+                }
+            }
+        }
+
+        /// <summary>시설 정체성·Tier 비교 — 좌표/배치 상태와 무관하게 (TableId, FacilityTier) 멀티셋.</summary>
+        private static void CompareFacilityMultiset(StringBuilder builder,
+            List<PlacedObjectSaveData>? a, List<PlacedObjectSaveData>? b)
+        {
+            List<string> keysA = FacilityKeys(a);
+            List<string> keysB = FacilityKeys(b);
+            if (keysA.Count != keysB.Count)
+            {
+                builder.Append($"facility count {keysA.Count}!={keysB.Count}; ");
+                return;
+            }
+            keysA.Sort(string.CompareOrdinal);
+            keysB.Sort(string.CompareOrdinal);
+            for (int i = 0; i < keysA.Count; i++)
+            {
+                if (keysA[i] != keysB[i])
+                {
+                    builder.Append($"facility[{i}] {keysA[i]}!={keysB[i]}; ");
+                    return;
+                }
+            }
+        }
+
+        private static List<string> FacilityKeys(List<PlacedObjectSaveData>? placed)
+        {
+            List<string> keys = new List<string>();
+            if (placed == null)
+                return keys;
+            for (int i = 0; i < placed.Count; i++)
+            {
+                PlacedObjectSaveData p = placed[i];
+                // FacilityTier 0(구 세이브/일반 오브젝트)은 1로 정규화 — PlacedObjectSaveData 계약과 일치.
+                int tier = p.FacilityTier > 0 ? p.FacilityTier : 1;
+                keys.Add($"{p.TableId}:{tier}");
+            }
+            return keys;
+        }
+
+        /// <summary>상점 스냅샷 비교 — 결정론 roll 순서대로 품목·수량·가격·회차·사유·슬롯.</summary>
+        private static void CompareMerchantStock(StringBuilder builder,
+            List<MerchantStockEntry>? a, List<MerchantStockEntry>? b)
+        {
+            int countA = a?.Count ?? 0;
+            int countB = b?.Count ?? 0;
+            if (countA != countB)
+            {
+                builder.Append($"merchant stock count {countA}!={countB}; ");
+                return;
+            }
+            for (int i = 0; i < countA; i++)
+            {
+                MerchantStockEntry ea = a![i];
+                MerchantStockEntry eb = b![i];
+                int idA = ea.Item != null ? ea.Item.Id : -1;
+                int idB = eb.Item != null ? eb.Item.Id : -1;
+                if (idA != idB)
+                    builder.Append($"stock[{i}].Item {idA}!={idB}; ");
+                if (ea.RemainingCount != eb.RemainingCount)
+                    builder.Append($"stock[{i}].Count {ea.RemainingCount}"
+                        + $"!={eb.RemainingCount}; ");
+                if (ea.UnitPrice != eb.UnitPrice)
+                    builder.Append($"stock[{i}].UnitPrice {ea.UnitPrice}"
+                        + $"!={eb.UnitPrice}; ");
+                if (ea.RestockCycle != eb.RestockCycle)
+                    builder.Append($"stock[{i}].RestockCycle {ea.RestockCycle}"
+                        + $"!={eb.RestockCycle}; ");
+                if (ea.TradeProfileId != eb.TradeProfileId)
+                    builder.Append($"stock[{i}].TradeProfileId {ea.TradeProfileId}"
+                        + $"!={eb.TradeProfileId}; ");
+                if (ea.SlotKind != eb.SlotKind)
+                    builder.Append($"stock[{i}].SlotKind {ea.SlotKind}!={eb.SlotKind}; ");
+                if (ea.PriceReason != eb.PriceReason)
+                    builder.Append($"stock[{i}].PriceReason {ea.PriceReason}"
+                        + $"!={eb.PriceReason}; ");
+            }
         }
 
         private static VillageAbstractAdvanceOptions CopyOptions(

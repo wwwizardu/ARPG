@@ -222,20 +222,24 @@ clock을 맞추는 이유는 실시간에서 이미 처리한 시간을 추상 �
 
 ## 11. New Game 초기 발전
 
-절차적 역사는 New Game 전에 오랜 기간을 시뮬레이션하지만, 그 전체 시간을 건설 시간으로 재생하면 모든 마을이 비슷한 최고 단계에 수렴한다.
+절차적 역사는 New Game 전에 오랜 기간을 시뮬레이션하지만, 그 전체 시간을 건설 시간으로 재생하면 모든 마을이 비슷한 최고 단계에 수렴한다. 그래서 시간을 흘려 Stage를 순차 승격시키지 않고, **고정 인구로 `InitialStage`를 한 번 계산한 뒤 그 Stage까지의 누적 상태를 결정론적으로 생성**한다(VILLAGE_REWORK_PLAN.md §3.2·§3.3·§3.5).
 
-`VillageDevelopmentBootstrap`은 최종 인구·생태 수용력·생존 정착지 내 인구 순위를 제한된 발전 예산으로 압축한다. Stage를 직접 대입하지 않고 공통 자원·건설·완료·Tier 규칙을 실행한다.
+`HistoryManager.BootstrapNewGameVillageDevelopment`가 마을마다 다음을 수행한다.
+
+1. `VillageManager.QuantizeAbstractPopulation`으로 고정 경제 인구를 반영한다(생산 계산용, 1~25).
+2. `VillageProgressionRules.CalculateInitialStage(원본 역사 인구, Profile.MaxStage)`로 초기 Stage를 확정한다.
+3. `VillageDevelopmentBootstrap.ApplyFixedInitialState`로 Stage·Bounds·construction clock을 **직접 대입**한다(synthetic 시간 진행 없음 → 진행 task 미생성).
+4. Hamlet 이상 + 기능성 벽 레이아웃이면 `VillageWallRules.ApplyInitialCompletedWalls`로 둘레 벽을 완공 상태로 생성한다.
+5. `VillageInitialDevelopment.ApplyInitialMilestones`로 Settlement→InitialStage 누적 마일스톤(시설·`UpgradeFacility` Tier·`UnlockShopTier`·`ApplyStageCaps`)을 자원·건설시간·task 없이 완공 원장으로 1회 적용한다.
 
 원칙:
 
-- 이번 실행에서 New Game 연대기를 생성한 경우에만 실행한다.
-- `Alive`와 `Conquered`만 대상으로 한다.
-- `Ruined`와 `Merged`는 제외한다.
-- 같은 map seed에서 같은 결과가 나도록 `DerivedSeed` 채널을 사용한다.
-- plan이 모든 slice를 완주했을 때만 `InitialDevelopmentApplied=true`로 확정한다.
-- 세이브 로드에서는 재실행하지 않는다.
+- 이번 실행에서 New Game 연대기를 생성한 경우(`generatedNewGameHistory`)에만 실행한다.
+- `Alive`와 `Conquered`만 대상으로 한다. `Ruined`와 `Merged`는 제외한다.
+- 같은 map seed·Profile·고정 인구에서 같은 결과가 나온다(임계값·명세가 결정론).
+- 마을별 `InitialDevelopmentApplied=true`로 1회 적용을 확정하고, 세이브 로드나 재실체화에서 재적용하지 않는다(중복 방지 정본은 `VillageData.AppliedGrowthMilestones`).
 
-초기 발전과 일반 런타임 advance는 시간 예산만 다르고 생산·건설·완료·Tier 코어는 공유한다.
+완료 부작용은 §4의 `ApplyCompletedBuild` 단일 계약을 그대로 쓴다. 시간 경과에 따른 일반 자동 건설·Tier 승격은 `RuntimeProgressionEnabled=false`로 중단돼 있다(런타임 발전 재개는 후속 Phase). 이전 방식인 시간 압축 bootstrap(`VillageDevelopmentBootstrap.CreatePlans`/`AdvanceBootstrapSlice`, 공통 자원·건설·완료·Tier 코어 실행)은 parity·진단 재현용으로만 보존한다.
 
 ---
 
@@ -260,7 +264,7 @@ clock을 맞추는 이유는 실시간에서 이미 처리한 시간을 추상 �
 
 ## 13. 검증 계약
 
-`VillageSimulationParity`는 다음을 비교한다.
+`VillageSimulationParity.Compare`(실시간/추상 parity)는 다음을 비교한다.
 
 - 시간 경계 참조 실행과 이벤트 fast-forward
 - 무제한 실행과 낮은 예산 slice 재개
@@ -268,6 +272,8 @@ clock을 맞추는 이유는 실시간에서 이미 처리한 시간을 추상 �
 - 완공 순서와 진행 task
 - 벽과 Stage
 - 두 construction clock
+
+`VillageSimulationParity.CompareFixedState`(V7)는 초기 완성형 마을의 정체성이 save/load 왕복·동결(무발전) advance·fold-back 반복 전후에 불변인지 별도로 비교한다: 고정 인구·`VillageProfileId`·Stage·`ShopTier`·`AppliedGrowthMilestones`(순서 무관 멀티셋)·시설 (TableId, FacilityTier) 멀티셋·`MerchantStock` 스냅샷. 좌표·자원 amount는 비교하지 않는다(그건 `Compare`의 몫). 마일스톤 재적용이 신규 0이고 fold-back 반복 후에도 중복이 없음을 함께 확인한다.
 
 materialize 검증은 다음 불변식을 확인한다.
 

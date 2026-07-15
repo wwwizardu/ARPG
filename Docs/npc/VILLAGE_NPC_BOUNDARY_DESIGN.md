@@ -30,6 +30,8 @@
 
 원본 인구는 `HistoryManager`가 소유한 `SettlementLiveState.Pop`이다. `VillageManager.QuantizeAbstractPopulation`이 이를 경제 범위로 변환해 `VillageData.Population`에 기록한다.
 
+현재 정책(VILLAGE_REWORK_PLAN V2~V7)에서 `SettlementLiveState.Pop`은 절차적 역사 완료 시점에 **고정**되며 일반 런타임 시간 경과로 전진하지 않는다. 따라서 물리 NPC 사망·보충뿐 아니라 자연 증감·식량·이주도 현재 경제 인구를 바꾸지 않는다. 자연 인구 변동의 재활성화는 후속 인구 설계의 별도 결정 사항이다.
+
 정량화는 raw 정착지 인구를 그대로 생산식에 넣어 자원이 폭증하는 것을 막고, 기존 Tier·식량·건설 수치를 제한된 범위에서 유지한다. 현재 공통 상수는 다음과 같다.
 
 - `ABSTRACT_POP_DIVISOR = 50`

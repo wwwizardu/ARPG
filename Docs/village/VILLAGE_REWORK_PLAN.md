@@ -1,6 +1,6 @@
 # 마을 성장·지역 차별화 개편 작업 계획
 
-> **상태 (2026-07-15): 기획 합의안 기반 구현 계획 — V0·V1 완료, V2·V3·V4·V5·V6 구현·정적 검증 완료 (고정 인구·초기 Stage 확정 + Stage 누적 시설·상점 Tier·Cap 마일스톤 1회 적용 + Dwarf 슬롯 배치·기능성 벽·상호작용 프롬프트·제련소 Tier + TradeProfile 지역 상권·결정론 재고·가격 분리 + Race별 상권 세분화·Layout variant·역할 결합 초안. 특수 시설은 사용자 결정에 따라 Dwarf만 확정. 시각·상호작용·상점 UI 실측과 비교 스크린샷은 플레이 모드 필요, V7 통합 검증과 연계)**
+> **상태 (2026-07-15): 기획 합의안 기반 구현 계획 — V0·V1 완료, V2·V3·V4·V5·V6 구현·정적 검증 완료 (고정 인구·초기 Stage 확정 + Stage 누적 시설·상점 Tier·Cap 마일스톤 1회 적용 + Dwarf 슬롯 배치·기능성 벽·상호작용 프롬프트·제련소 Tier + TradeProfile 지역 상권·결정론 재고·가격 분리 + Race별 상권 세분화·Layout variant·역할 결합 초안. 특수 시설은 사용자 결정에 따라 Dwarf만 확정. V7 통합 검증(파리티 `CompareFixedState`·New Game 완성형 정적 검증 17/17) 완료 — 구 세이브 마이그레이션은 세이브 신규 시작 결정으로 제외. 시각·상호작용·상점 UI 실측과 비교 스크린샷은 플레이 모드 필요, 현행 정본/Wiki 갱신은 플레이 모드 성공 후 대기)**
 >
 > **핵심 결정**: 절차적 역사 생성이 끝난 시점의 정착지 인구를 고정 스냅샷으로 사용한다. 이 인구로 초기 Stage를 확정하고, 해당 Stage까지의 공통 시설·지역 특수 시설·상점·배치 구조를 누적 적용해 이미 발전한 마을로 등장시킨다. 신규 마을의 모든 일반·특수 건물은 플레이어가 직접 상호작용할 수 있어야 하며, 기능 없는 건물형 장식·외형 모듈은 생성하지 않는다. 런타임에서는 인구 자연 증가·감소, Stage 승격, 자동 시설 추가와 배치 확장을 진행하지 않는다. 런타임 마을 발전은 1차 개편의 재미 검증이 끝난 뒤 별도 후속 Phase에서 설계한다.
 >
@@ -465,7 +465,7 @@ ItemId 직접 나열은 초기 예외 또는 보장 품목에만 사용한다.
 | **V4** | Dwarf 배치 수직 슬라이스 | 상호작용 건물 슬롯, Tier 교체 자산, 기능성 벽, 밀도 검증 | V3 | 높음/콘텐츠 | 🟡 (구현·정적 검증 완료, 시각·상호작용 실측과 비교 스크린샷은 플레이 모드 필요) |
 | **V5** | 지역 상권 | TradeTag/Profile, 결정론 재고, 지역 가격 | V1, V2 | 높음 | 🟡 (구현·정적 검증 완료, 상점 UI 표시·구매/판매 실측은 플레이 모드 필요, V7 연계) |
 | **V6** | Race/Biome Profile 확장 | Race별 상권 세분화, Layout variant, 역할 결합 초안 (특수 시설은 Dwarf만 — 사용자 결정) | V4, V5 | 콘텐츠 큼 | 🟡 (구현·정적 검증 완료, 상점·배치 시각 실측은 플레이 모드 필요, V7 연계) |
-| **V7** | 마이그레이션·통합 검증·정본 갱신 | 세이브 왕복, parity, Unity 검증, 기존 문서 갱신 | V3~V6 | 높음 | ⬜ |
+| **V7** | 통합 검증·정본 갱신 (마이그레이션 제외 — 세이브 신규 시작) | parity `CompareFixedState`, New Game 완성형 정적 검증(하니스 17/17), 플레이 모드 절차, 문서 갱신 | V3~V6 | 높음 | 🟡 (파리티·New Game 완성형 정적 검증 완료. 마이그레이션은 사용자 결정으로 제외. 플레이 모드 실측·현행 정본/Wiki 갱신은 대기) |
 | **V8 (후속)** | 런타임 마을 발전 재미 검증 | 성장 계기·속도·연출 프로토타입과 채택 여부 | V7 이후 별도 승인 | 미정 | 보류 |
 
 **권장 의존 그래프**
@@ -866,29 +866,55 @@ Stage 입력을 경제 인구와 분리한 후보를 검증하기 위해 실제 
 
 ### V7 — 마이그레이션·통합 검증·정본 갱신
 
+> **V7 범위 결정 (2026-07-15)**: 사용자가 세이브 파일을 지우고 New Game으로 새로 시작하기로 결정해
+> **구 세이브 마이그레이션은 이번 범위에서 생략**한다. WorldData 버전 증가(현행 12 유지)와 구조 backfill
+> 코드를 만들지 않으며, 아래 마이그레이션 항목(§11)과 §14 완료 정의 #10은 "구 세이브 없음으로 적용 제외"로
+> 처리한다. V7은 **New Game 완성형 마을의 통합 검증·정본 갱신**에 집중한다. 근거·조사 보고는 이 세션의
+> 세이브 스키마 확인 결과와 §11 주석 참조.
+
 #### 작업
 
-- [ ] WorldData 버전 증가와 구 세이브 마이그레이션
-- [ ] 구 세이브의 정착지별 인구를 1회 고정 스냅샷으로 확정하고 `LastSimGameTime` 정렬
-- [ ] History에 연결되지 않은 BaseTown의 고정 경제 인구 backfill
-- [ ] 기존 `PlacedObjectTypeIds`, `PlacedObjects`, `ActiveBuildTasks` 보존
-- [ ] Retire 건물은 신규 후보에서만 제외하고 기존 배치는 유지
-- [ ] 기존 Stage와 계산된 초기 Stage 중 높은 값을 마이그레이션 Stage로 채택하고 누적 마일스톤 backfill
-- [ ] 기존 MerchantStock을 새 포맷으로 안전하게 재롤
-- [ ] `VillageSimulationParity`에 고정 인구/Profile/초기 Stage/누적 시설·상점 상태 비교 추가
-- [ ] New Game 초기화, 첫 materialize, 장기간 무변화, save/load와 fold-back 반복 검증
-- [ ] Unity 플레이 모드에서 실제 청크·Addressables·UI 검증
-- [ ] 성공 후 현행 정본 문서 갱신
-- [ ] 사용자 확인 후 `Wiki/village.md` 종합 내용 갱신
+- [~] WorldData 버전 증가와 구 세이브 마이그레이션 — **제외**(세이브 신규 시작 결정). 버전 12 유지, 마이그레이션 코드 미작성.
+- [~] 구 세이브의 정착지별 인구를 1회 고정 스냅샷으로 확정하고 `LastSimGameTime` 정렬 — **제외**(구 세이브 없음). New Game은 V2에서 이미 인구 고정·clock 정렬.
+- [~] History에 연결되지 않은 BaseTown의 고정 경제 인구 backfill — **제외**(구 세이브 없음). New Game/`FixedPopulation` 경로는 V1~V2에서 확정.
+- [~] 기존 `PlacedObjectTypeIds`, `PlacedObjects`, `ActiveBuildTasks` 보존 — **제외**(구 세이브 없음). 로드 시점 방어 backfill은 기존 코드에 그대로 유지.
+- [~] Retire 건물은 신규 후보에서만 제외하고 기존 배치는 유지 — **제외**(구 세이브 없음). Retire 제외 정책은 V0~V3에서 이미 신규 생성 경로에 적용.
+- [~] 기존 Stage와 계산된 초기 Stage 중 높은 값을 마이그레이션 Stage로 채택하고 누적 마일스톤 backfill — **제외**(구 세이브 없음). New Game은 `InitialStage`를 그대로 사용.
+- [~] 기존 MerchantStock을 새 포맷으로 안전하게 재롤 — **제외**(구 세이브 없음). V5 `BackfillLegacyStockPriceSnapshots`는 로드 경로에 그대로 유지.
+- [x] `VillageSimulationParity`에 고정 인구/Profile/초기 Stage/누적 시설·상점 상태 비교 추가 (`CompareFixedState` — 추상/실시간 `Compare`와 별개 순수 비교기. 좌표 무관 (TableId,FacilityTier) 멀티셋·상점 스냅샷·마일스톤 멀티셋 비교)
+- [x] New Game 초기화, 첫 materialize, 장기간 무변화, save/load와 fold-back 반복 검증 — 정적: New Game 완성형 재현(부트스트랩 미러) → save/load 왕복·동결 advance 10,000h·fold-back 5회 반복 후 `CompareFixedState` 불변·무중복. 실제 청크 첫 materialize는 플레이 모드(아래 절차).
+- [ ] Unity 플레이 모드에서 실제 청크·Addressables·UI 검증 — 절차 정리 완료(`ARPG/Village/Run V7` 덤프 + 아래 체크리스트), 사용자 실행 대기.
+- [x] 현행 정본 문서 갱신 (2026-07-15) — [VILLAGE_RUNTIME_DESIGN](VILLAGE_RUNTIME_DESIGN.md) §3(고정 인구)·§4(초기 완공·런타임 자동 건설 동결)·§6(런타임 승격 동결·`InitialStage`·초기 완공 벽), [ABSTRACT_CONSTRUCTION_DESIGN](ABSTRACT_CONSTRUCTION_DESIGN.md) §11(New Game 직접 확정+누적 마일스톤)·§13(`CompareFixedState`), [BUILD_PRIORITY_DESIGN](BUILD_PRIORITY_DESIGN.md)(후보 점수는 런타임 발전 시에만·초기 시설은 GrowthPlan), [VILLAGE_NPC_BOUNDARY_DESIGN](../npc/VILLAGE_NPC_BOUNDARY_DESIGN.md) §2(고정 인구)를 현재 구현에 맞게 갱신. 플레이 실측 A~F는 아래 체크리스트로 별도.
+- [x] 사용자 확인 후 `Wiki/village.md` 종합 내용 갱신 (2026-07-15, 사용자 확인 후 간결 반영 — §1 초기 완성형·Profile/상권, §3 마일스톤·`CompareFixedState`, §4 플레이 실측·V8 보류).
 
 #### 검증 기준
 
-- [ ] 구 세이브 로드 시 예외가 없다.
-- [ ] 기존 완공 건물과 자원 Cap이 사라지거나 중복되지 않는다.
-- [ ] New Game과 save load 모두 Profile·고정 인구·초기 Stage를 가진다.
-- [ ] 장기간 경과와 materialize/fold-back 반복 후에도 고정 인구·Stage·시설 구성이 변하지 않는다.
-- [ ] 원거리에서 생성된 마을을 처음 방문했을 때 인구에 맞는 Stage·필수 시설·특수 시설·상점이 이미 완성돼 있다.
-- [ ] materialize/fold-back 반복 후 초기 마일스톤과 재고가 중복되지 않는다.
+- [~] 구 세이브 로드 시 예외가 없다. — **제외**(구 세이브 없음).
+- [~] 기존 완공 건물과 자원 Cap이 사라지거나 중복되지 않는다. — **제외**(구 세이브 없음). New Game 무중복은 아래 정적 통과로 확인.
+- [x] New Game과 save load 모두 Profile·고정 인구·초기 Stage를 가진다. (정적: 완성형 재현 + save/load 왕복 `CompareFixedState` 불변)
+- [x] 장기간 경과와 materialize/fold-back 반복 후에도 고정 인구·Stage·시설 구성이 변하지 않는다. (정적: 동결 advance 10,000h + fold-back 5회 반복 불변. 실제 청크 materialize는 플레이 모드)
+- [ ] 원거리에서 생성된 마을을 처음 방문했을 때 인구에 맞는 Stage·필수 시설·특수 시설·상점이 이미 완성돼 있다. — 정적: 완성형 데이터 재현 통과. 화면 실측은 플레이 모드.
+- [x] materialize/fold-back 반복 후 초기 마일스톤과 재고가 중복되지 않는다. (정적: 마일스톤 재적용 신규 0 + fold-back 5회 무중복. 음성 검증으로 비교기 유효성 확인)
+
+##### V7 구현·검증 결과 (2026-07-15)
+
+- 범위: 사용자 결정으로 **구 세이브 마이그레이션 생략**, New Game 완성형 통합 검증에 집중. 세이브 스키마 조사 결과 — `WorldData.Version=12`([WorldData.cs](../../Assets/Scripts/Data/WorldData.cs)), `MigrateWorldData`는 각 스텝이 `LoadCompleted`/`OnLoadCompleted` 방어 backfill에 위임하는 비파괴 패턴([DataManager.cs](../../Assets/Scripts/Manager/DataManager.cs)), V1 Profile·V5 재고 backfill은 버전 무관·멱등으로 `VillageManager.Load`에 상주. V1~V6이 버전을 올리지 않아 디스크 세이브가 전부 v12라 파괴적 변경 리스크가 컸고, 신규 시작 결정으로 그 리스크를 제거했다.
+- 파리티: [VillageSimulationParity.cs](../../Assets/Scripts/Village/VillageSimulationParity.cs)에 `CompareFixedState`(+헬퍼 3종) 추가. 기존 `Compare`(추상/실시간 자원·carry·task·clock·좌표)는 불변 — V2~V6 하니스 회귀 없음. 새 비교기는 Population·VillageProfileId·Stage·ShopTier·`MerchantRestockCycle`·`LastMerchantRollGameTime`·`AppliedGrowthMilestones`(순서 무관 멀티셋)·시설 (TableId,FacilityTier) 멀티셋·`MerchantStock` 스냅샷을 비교한다.
+- 정적 하니스: `Temp/V7StaticHarness`(net10.0 콘솔, 컴파일된 Assembly-CSharp 참조, 실제 `ItemTable.bytes`/`BuildableItemTable.bytes` 파싱). `HistoryManager.BootstrapNewGameVillageDevelopment`의 마을당 처리(정량화→초기 Stage→Bounds→벽→누적 마일스톤→결정론 상점 롤)를 Unity 밖에서 재현하고 **17개 assertion 통과** — 초기 Stage 임계값·MaxStage 클램프, Dwarf City/Elf City/Dwarf Town 완성형(Stage·시설·마일스톤·ShopTier·매물·진행 task 0), save/load 왕복 불변(Dwarf City/Elf City/BaseTown), 마일스톤 재적용 신규 0·불변, 동결 advance 10,000h 후 불변(Dwarf/Elf), fold-back 5회 반복 불변·무중복, 원장 정합(진행 task 0 + `PlacedObjectTypeIds`==`PlacedObjects`), 음성 검증(비교기가 ShopTier·마일스톤·FacilityTier·상점가 차이 검출). 컴파일: `Assembly-CSharp`/`Assembly-CSharp-Editor` 오류 0건(dotnet msbuild).
+- Editor 진단: `ARPG/Village/Run V7 Integration Diagnostics`(메뉴 427)가 같은 통합 불변식을 Unity 안에서 재실행하고 Dwarf/Elf 완성형 표본 + 아래 플레이 모드 체크리스트를 `Temp/VILLAGE_V7_INTEGRATION_DUMP.md`로 덤프한다(V0~V6 패턴).
+- Editor 진단 실행 결과 (2026-07-15, Unity 6000.4.2f1, 메뉴 실행): **13/13 통과**(하니스 17개와 동일 커버리지 — Editor는 idempotent·freeze를 각 1 Record로 합침). 표본 정합 확인 — Dwarf City: 시설 4(Hub 100·시장 151·여관 153·제련소 160 **FacilityTier 3**), ShopTier 4·매물 8슬롯, 철 8G·구리 4G 지역 특산·스킬품 현지 부족 프리미엄·제련소 T3 `FacilityPool` 슬롯 개방, 진행 task 0. Elf City: 시설 3(특수 시설 없음 — Elf `PrimarySpecialFacilityId=0`, V6 결정), 마일스톤 12 = Dwarf 15 − 3(제련소 Add/Upgrade×2), 비전 특산 할인. Dwarf Town: 제련소 T2·ShopTier 3·매물 7. 전 시설 `PlacementPending=True`(추상 완공, materialize가 배치) — 정상. 실제 청크 materialize·상호작용·벽·상점 UI·Race 배치 시각 실측은 아래 플레이 모드 체크리스트(A~F)로 남는다.
+- 남은 것: 아래 플레이 모드 체크리스트(사용자 실행) → 성공 시 현행 정본 문서(VILLAGE_RUNTIME_DESIGN 등) 갱신(제안→반영) → 사용자 확인 후 Wiki/village.md 갱신.
+
+##### V7 플레이 모드 검증 체크리스트 (사용자 실행 — V2~V6 유예 실측 통합)
+
+New Game으로 새 세이브를 만들고 아래를 확인한다. (`ARPG/Village/Run V7 Integration Diagnostics` 덤프에도 동일 목록 기록)
+
+- **A. 고정 인구 불변**: 1일·30일·1년 경과, 실체화/추상 전환, 물리 NPC 사망·보충, Food 0·건물 파괴에도 `SettlementLiveState.Pop`·`VillageData.Population` 불변.
+- **B. 첫 materialize 완성형**: 원거리 생성 마을 첫 방문 시 인구에 맞는 Stage·필수 시설·특수 시설·상점이 이미 완성(건설 과정 미노출). materialize/fold-back 반복 후 초기 마일스톤·재고 무중복. `PlacementPending` 시설이 다음 materialize/Bounds 확장 후 배치.
+- **C. 상호작용**: 화면의 모든 일반·특수 건물에 프롬프트가 뜨고 F키 대상 일치(허브=체크포인트 세이브, 시장=거래, 여관=휴식, 제련소=제련·수리). Furnace/Anvil/QuenchVat 비상호작용 건물 미생성. 제련소 Tier 1/2/3 UIForge 기능 게이트.
+- **D. 벽·Gate(Dwarf)**: Hamlet 이상 둘레 Palisade + N/S Gate 2개, 벽 충돌·HP 피해·Gate 개폐, 청사진 경계와 벽 미중복.
+- **E. 상점 스냅샷·차익**: 스냅샷 가격·사유(지역 특산/현지 부족/희귀 수입) 표기와 차감액 일치. 재롤 직후 세이브 없이 종료→재로드→같은 회차 재진입 시 같은 진열. Dwarf 광산촌 철/구리→非Dwarf 매각 양수 차익, 일반 장비 왕복 손해. Town/City 첫 방문 상점에 T2/T3 품목·특수 시설 풀 등장.
+- **F. Race별 상권·배치·역할(V6)**: Race별 상점 품목·가격 사유 구분(Elf 비전 할인·Dwarf 비전 프리미엄 등), Race별 시장/여관/허브 슬롯 위치 구분, TradeHub 매각 프리미엄·Capital 자원 Cap 상향 실측.
 
 ---
 
@@ -914,6 +940,15 @@ V8은 현재 구현 범위에 포함하지 않는다. V0~V7에서는 후속 확�
 ---
 
 ## 11. 세이브 마이그레이션 정책
+
+> **V7 결정 (2026-07-15)**: 사용자가 세이브를 지우고 New Game으로 새로 시작하기로 결정해 **이 절의
+> 구 세이브 마이그레이션은 이번 범위에서 실행하지 않는다.** WorldData 버전은 12로 유지하고 구조 backfill
+> 코드를 만들지 않는다. 아래 정책은 향후 구 세이브 보존이 필요해질 때(예: 배포 후 세이브 유지)를 위한
+> 설계 기록으로 남긴다. 참고: V1 Profile 보정·V5 재고 스냅샷 backfill은 이미 버전 무관·멱등으로
+> `VillageManager.Load`에 상주하므로, 마이그레이션을 재개할 경우 남은 작업은 주로 §11.2 인구 스냅샷과
+> §11.3 `Max(기존 Stage, InitialStage)`·누적 마일스톤 backfill이다. `MigrateWorldData`는 `WorldSim`이
+> 채워지기 전(Village.Load 이전)에 실행되므로, 인구 의존 backfill은 `HistoryManager.Initialize`의
+> `EnsureWorldSimInitialized` 직후(New Game 부트스트랩과 대칭 지점)에 두는 것이 코드 흐름상 자연스럽다.
 
 ### 11.1 기존 마을 Profile
 
@@ -1024,3 +1059,12 @@ V8은 현재 구현 범위에 포함하지 않는다. V0~V7에서는 후속 확�
 10. 기존 세이브의 인구·건물·Cap·진행 task가 유실되거나 중복되지 않는다.
 11. 런타임 인구 변화·Stage 승격·자동 시설 추가가 V8 전까지 실행되지 않는다.
 12. 현행 village 정본 문서와 Wiki가 실제 구현에 맞게 갱신된다.
+
+> **V7 완료 정의 상태 (2026-07-15)**:
+> - #10(기존 세이브 유실·중복 없음)은 **세이브 신규 시작 결정으로 적용 제외** — 구 세이브가 없으므로 무손실
+>   대상이 없다. New Game 완성형의 무중복은 정적 하니스(마일스톤 재적용 신규 0·fold-back 5회 무중복)로 확인.
+> - #1~#5·#9·#11: 코드 + 정적 검증(V2~V7 하니스, `CompareFixedState`)으로 충족. 실체화·물리 NPC 결합
+>   부재는 코드 경로로 확인했고 화면 실측만 플레이 모드로 남는다.
+> - #6·#7·#8: 정적으로는 통과(시설·상권·배치 데이터). 시각·상호작용 실측은 V7 플레이 모드 체크리스트.
+> - #12: 현행 정본 문서(VILLAGE_RUNTIME_DESIGN·ABSTRACT_CONSTRUCTION·BUILD_PRIORITY·VILLAGE_NPC_BOUNDARY)와
+>   Wiki/village.md를 현재 구현에 맞게 **갱신 완료(2026-07-15)**.
