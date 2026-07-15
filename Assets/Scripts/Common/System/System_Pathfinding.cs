@@ -49,6 +49,19 @@ namespace ARPG.Systems
                 if (pf.Status == PathfindingStatus.None) continue;
                 if (pf.Status == PathfindingStatus.Failed) continue; // handler가 새 Goal 설정해야 재시도
 
+                // 비활성 청크의 엔티티는 길찾기하지 않는다 — 시작 타일이 비활성 청크면 Pathfinder가 경고만 남기고 실패.
+                // (System_AI_Behavior도 동일 게이트를 두지만, 이미 Following/Computing 상태로 진입한 엔티티까지 여기서 차단)
+                if (cm.TryGetComponent<TransformComponent>(entityId, out var chunkCheckTransform) == true &&
+                    AR.s.Map.IsChunkActiveAtWorld(chunkCheckTransform.Position) == false)
+                {
+                    if (cm.TryGetComponent<VelocityComponent>(entityId, out var idleVelocity) == true)
+                    {
+                        idleVelocity.Direction = Vector2.zero;
+                        cm.SetComponent(entityId, idleVelocity);
+                    }
+                    continue;
+                }
+
                 bool pfDirty = false;
 
                 // 1) 재계산 단계

@@ -9,7 +9,7 @@ namespace ARPG.Systems
     /// <summary>
     /// V4 (VILLAGE_REWORK_PLAN §7.1): 상호작용 가능 대상의 일관된 프롬프트 표시.
     /// System_VillageServiceProximity(0.3s)가 채운 PlayerNearbyServicesComponent에서
-    /// ServiceUIRouter.TryGetBestCandidate로 F키가 실제로 열 대상을 골라 "[F] {프롬프트}"를
+    /// ServiceUIRouter.TryGetBestCandidate로 E키가 실제로 열 대상을 골라 "[E] {프롬프트}"를
     /// 대상 위에 월드 캔버스로 띄운다 — 프롬프트에 보이는 대상과 입력 라우팅 결과가 항상 같다.
     ///
     /// 뷰 오브젝트는 FloatingTextManager와 같은 코드 생성 월드 캔버스 패턴을 사용한다
@@ -23,7 +23,7 @@ namespace ARPG.Systems
 
         private const float CANVAS_SCALE = 0.01f;
         private const float PROMPT_Y_OFFSET = 1.2f;
-        private const string INTERACT_KEY_LABEL = "F";   // InputSystem_Actions "Interact" 기본 바인딩
+        private const string INTERACT_KEY_LABEL = "E";   // InputSystem_Actions "Interact" 기본 바인딩 (<Keyboard>/e)
 
         private GameObject? _root;
         private TextMeshProUGUI? _text;

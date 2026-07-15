@@ -202,3 +202,26 @@
     color: rgb(230, 220, 200);
     -unity-font-style: bold;
 }
+
+/* ========== 상호작용 바 ========== */
+
+.npc-interaction-bar {
+    flex-direction: row;
+    justify-content: center;
+    margin-top: 8px;
+    margin-bottom: 8px;
+}
+
+.npc-dialogue-label {
+    color: rgb(220, 210, 190);
+    white-space: normal;
+    margin-left: 8px;
+    margin-right: 8px;
+}
+
+.npc-gift-list {
+    flex-direction: column;
+    margin-left: 8px;
+    margin-right: 8px;
+    display: none;
+}

@@ -55,6 +55,13 @@
                     <ui:VisualElement name="stat-list" class="npc-stat-list"/>
                 </ui:ScrollView>
             </ui:VisualElement>
+
+            <appui:Divider/>
+
+            <!-- 하단: 상호작용 바 (대화/거래/선물) + 대화 라벨 + 선물 선택 -->
+            <ui:VisualElement name="interaction-bar" class="npc-interaction-bar"/>
+            <appui:Text name="dialogue-label" class="npc-dialogue-label"/>
+            <ui:VisualElement name="gift-list" class="npc-gift-list"/>
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

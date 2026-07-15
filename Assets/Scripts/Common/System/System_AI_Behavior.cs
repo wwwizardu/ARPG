@@ -29,6 +29,12 @@ namespace ARPG.Systems
                 if (componentManager.HasComponent<NpcActivityPausedTag>(entityId))
                     continue;
 
+                // 비활성 청크의 엔티티는 AI를 돌리지 않는다.
+                // (오프스크린 몬스터 수명 잔존·활성 영역 밖으로 이동한 NPC 등 → 비활성 청크 길찾기 경고 원천 차단)
+                if (componentManager.TryGetComponent<TransformComponent>(entityId, out var aiTransform) == true &&
+                    AR.s.Map.IsChunkActiveAtWorld(aiTransform.Position) == false)
+                    continue;
+
                 // AI 상태 컴포넌트 확인
                 if (statePool.TryGet(entityId, out var stateComponent) == false)
                     continue;

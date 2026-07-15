@@ -253,6 +253,17 @@ namespace ARPG.Map
             return _renderedChunks.Contains(chunkCoord);
         }
 
+        /// <summary>
+        /// 월드 좌표가 속한 청크가 현재 활성(렌더링)인지 검사한다.
+        /// AI·길찾기 시스템이 비활성 청크의 엔티티를 건너뛰는 데 사용.
+        /// </summary>
+        public bool IsChunkActiveAtWorld(Vector2 worldPosition)
+        {
+            int chunkX = Mathf.FloorToInt(worldPosition.x / chunkSize);
+            int chunkY = Mathf.FloorToInt(worldPosition.y / chunkSize);
+            return IsChunkActive(new Vector2Int(chunkX, chunkY));
+        }
+
         public bool TryGetChunkSpawnPositions(Vector2Int chunkCoord, out List<Vector2Int> spawnPositions)
         {
             if (_renderedChunks.Contains(chunkCoord) && _activeChunks.TryGetValue(chunkCoord, out MapChunkData chunk))

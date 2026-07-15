@@ -526,13 +526,21 @@ namespace ARPG.UI
         // UINpcInspect가 상호작용 허브 역할. 버튼을 눌러 각 상호작용 함수를 호출하거나
         // 전용 UI(거래·선물)를 연다. 실제 관계 반영/서브 UI는 다음 단계(TODO).
 
+        // 상호작용 바/대화 라벨/선물 리스트는 UXML(panel 내부)에 자리가 정의돼 있다.
+        // 버튼만 코드로 생성해 컨테이너에 넣고, 라벨/리스트는 UXML 요소를 잡아 재사용한다.
         private void BuildInteractionBar(VisualElement root)
         {
-            VisualElement bar = new();
-            bar.style.flexDirection = FlexDirection.Row;
-            bar.style.justifyContent = Justify.Center;
-            bar.style.marginTop = 8f;
-            bar.style.marginBottom = 8f;
+            _dialogueLabel = root.Q<Text>("dialogue-label");
+            if (_dialogueLabel != null) _dialogueLabel.text = string.Empty;
+            _giftList = root.Q<VisualElement>("gift-list");
+
+            VisualElement? bar = root.Q<VisualElement>("interaction-bar");
+            if (bar == null)
+            {
+                Debug.LogError("[UINpcInspect] interaction-bar 컨테이너 없음 — UXML 확인 필요");
+                return;
+            }
+            bar.Clear();
 
             Button talkBtn = new() { title = "대화" };
             talkBtn.variant = ButtonVariant.Accent;
@@ -546,20 +554,6 @@ namespace ARPG.UI
             Button giftBtn = new() { title = "선물" };
             giftBtn.clicked += OnClickGift;
             bar.Add(giftBtn);
-
-            root.Add(bar);
-
-            _dialogueLabel = new Text { text = string.Empty };
-            _dialogueLabel.style.whiteSpace = WhiteSpace.Normal;
-            _dialogueLabel.style.marginLeft = 8f;
-            _dialogueLabel.style.marginRight = 8f;
-            root.Add(_dialogueLabel);
-
-            _giftList = new VisualElement();
-            _giftList.style.marginLeft = 8f;
-            _giftList.style.marginRight = 8f;
-            _giftList.style.display = DisplayStyle.None;
-            root.Add(_giftList);
         }
 
         private void OnClickTalk()
