@@ -1,6 +1,6 @@
 # 마을 성장·지역 차별화 개편 작업 계획
 
-> **상태 (2026-07-15): 기획 합의안 기반 구현 계획 — V0·V1 완료, V2·V3·V4·V5 구현·정적 검증 완료 (고정 인구·초기 Stage 확정 + Stage 누적 시설·상점 Tier·Cap 마일스톤 1회 적용 + Dwarf 슬롯 배치·기능성 벽·상호작용 프롬프트·제련소 Tier + TradeProfile 지역 상권·결정론 재고·가격 분리. 시각·상호작용·상점 UI 실측과 비교 스크린샷은 플레이 모드 필요, V7 통합 검증과 연계)**
+> **상태 (2026-07-15): 기획 합의안 기반 구현 계획 — V0·V1 완료, V2·V3·V4·V5·V6 구현·정적 검증 완료 (고정 인구·초기 Stage 확정 + Stage 누적 시설·상점 Tier·Cap 마일스톤 1회 적용 + Dwarf 슬롯 배치·기능성 벽·상호작용 프롬프트·제련소 Tier + TradeProfile 지역 상권·결정론 재고·가격 분리 + Race별 상권 세분화·Layout variant·역할 결합 초안. 특수 시설은 사용자 결정에 따라 Dwarf만 확정. 시각·상호작용·상점 UI 실측과 비교 스크린샷은 플레이 모드 필요, V7 통합 검증과 연계)**
 >
 > **핵심 결정**: 절차적 역사 생성이 끝난 시점의 정착지 인구를 고정 스냅샷으로 사용한다. 이 인구로 초기 Stage를 확정하고, 해당 Stage까지의 공통 시설·지역 특수 시설·상점·배치 구조를 누적 적용해 이미 발전한 마을로 등장시킨다. 신규 마을의 모든 일반·특수 건물은 플레이어가 직접 상호작용할 수 있어야 하며, 기능 없는 건물형 장식·외형 모듈은 생성하지 않는다. 런타임에서는 인구 자연 증가·감소, Stage 승격, 자동 시설 추가와 배치 확장을 진행하지 않는다. 런타임 마을 발전은 1차 개편의 재미 검증이 끝난 뒤 별도 후속 Phase에서 설계한다.
 >
@@ -464,7 +464,7 @@ ItemId 직접 나열은 초기 예외 또는 보장 품목에만 사용한다.
 | **V3** | 초기 Stage 누적 시설 생성 | 마일스톤 원장, 완공 상태 생성, 명시적 시설 목록 | V2 | 높음 | 🟡 (구현·정적 검증 완료, materialize 배치·상호작용 실측은 V4/V7 연계) |
 | **V4** | Dwarf 배치 수직 슬라이스 | 상호작용 건물 슬롯, Tier 교체 자산, 기능성 벽, 밀도 검증 | V3 | 높음/콘텐츠 | 🟡 (구현·정적 검증 완료, 시각·상호작용 실측과 비교 스크린샷은 플레이 모드 필요) |
 | **V5** | 지역 상권 | TradeTag/Profile, 결정론 재고, 지역 가격 | V1, V2 | 높음 | 🟡 (구현·정적 검증 완료, 상점 UI 표시·구매/판매 실측은 플레이 모드 필요, V7 연계) |
-| **V6** | Race/Biome Profile 확장 | 7종 주 특수 시설과 성장 계획, 청사진 variant | V4, V5 | 콘텐츠 큼 | ⬜ |
+| **V6** | Race/Biome Profile 확장 | Race별 상권 세분화, Layout variant, 역할 결합 초안 (특수 시설은 Dwarf만 — 사용자 결정) | V4, V5 | 콘텐츠 큼 | 🟡 (구현·정적 검증 완료, 상점·배치 시각 실측은 플레이 모드 필요, V7 연계) |
 | **V7** | 마이그레이션·통합 검증·정본 갱신 | 세이브 왕복, parity, Unity 검증, 기존 문서 갱신 | V3~V6 | 높음 | ⬜ |
 | **V8 (후속)** | 런타임 마을 발전 재미 검증 | 성장 계기·속도·연출 프로토타입과 채택 여부 | V7 이후 별도 승인 | 미정 | 보류 |
 
@@ -829,25 +829,38 @@ Stage 입력을 경제 인구와 분리한 후보를 검증하기 위해 실제 
 
 ### V6 — Race/Biome Profile 확장
 
+> **V6 사용자 결정 (2026-07-15)**: 신규 UI/시트 행 없이 재사용 가능한 시설 서비스가 Forge·Shrine뿐이고
+> Shrine 버프는 미배선(TODO)이라, 주 특수 시설은 **Dwarf(제련소 160)만 확정**한다. 나머지 Race는 특수 시설
+> 없음(0)으로 두고 **상권(TradeProfile)과 배치(Layout)로 차별화**하며, 특수 시설은 확장점만 유지한다
+> (신규 UI·시트 행·건물은 이번 범위에서 만들지 않음). 따라서 "모든 Profile이 주 특수 시설 보유" 검증 기준은
+> 의도적으로 미달로 남긴다. Trade 재료는 물약·약초 아이템이 없어 실태그 5종(Ore/HeavyArmor/Arcane/Ranged/
+> RareImport) 순열로만 세분화한다. Layout은 슬롯 오프셋만 Race별 변주(콤팩트/벽 없음). 역할은 가벼운 실제
+> 효과(TradeHub 상권 강화·Capital Cap 상향) + Frontier/Conquered 확장점.
+
 #### 작업
 
-- [ ] Human 주 특수 시설 및 Stage별 누적 구성 확정
-- [ ] Elf 주 특수 시설 및 Stage별 누적 구성 확정
-- [ ] Dwarf 수직 슬라이스 보정·확정
-- [ ] Orc 주 특수 시설 및 Stage별 누적 구성 확정
-- [ ] Nomad 주 특수 시설 및 Stage별 누적 구성 확정
-- [ ] Lizardman 주 특수 시설 및 Stage별 누적 구성 확정
-- [ ] Yeti 주 특수 시설 및 Stage별 누적 구성 확정
-- [ ] Profile별 TradeTag/가격 배율 확정
-- [ ] Profile별 Layout variant 최소 1종, 필요 시 2~3종 제작
-- [ ] Capital/Frontier/TradeHub 역할 결합 규칙 초안
+- [~] Human/Elf/Orc/Nomad/Lizardman/Yeti 주 특수 시설 — **결정: 특수 시설 없음(0) 유지, 확장점만 정리** (위 결정). `GetPrimarySpecialFacilityId` 주석에 신규 시설 추가 절차 명문화. 기능 미확정 시설을 외형만 만들지 않음.
+- [x] Dwarf 수직 슬라이스 보정·확정 — Forge 160 주 특수 시설·layout.dwarf.mining(콤팩트+벽)·제련소 Tier 풀 V4 값 유지 확인, 회귀 없음.
+- [x] Profile별 TradeTag/가격 배율 확정 — `VillageTradeProfileCatalog`를 2 아키타입에서 Race별 7 빌더로 확장. 특산/부족/보장/배율 순열. `ItemTradeTagCatalog`(실태그) 불변.
+- [x] Profile별 Layout variant 최소 1종 — `VillageLayoutCatalog`에 非Dwarf 6 Race variant(슬롯 오프셋 상이, 벽 없음·기존 Bounds) 추가 + `Resolve` race 토큰 분기. `VillageSlotPlacer`·`VillageWallRules` 로직 불변.
+- [x] Capital/Frontier/TradeHub 역할 결합 규칙 초안 — TradeHub=수입품 유입+광물 매입 프리미엄(14000bp), Capital=Village+ 자원 Cap 상향(누적 +50), Frontier/Conquered=주석 확장점.
 
 #### 검증 기준
 
-- [ ] 모든 Profile이 공통 시설 3개 이하 + 주 특수 시설을 가진다.
-- [ ] 특수 시설 없이 바닥 테마만 다른 마을이 없다.
-- [ ] 같은 Race라도 역할 Profile을 추가할 확장 지점이 있다.
-- [ ] 마을별 판매 품목·가격·서비스 중 최소 2개 축이 구분된다.
+- [~] 모든 Profile이 공통 시설 3개 이하 + 주 특수 시설을 가진다. — **의도적 부분 충족**: 공통 시설 ≤3(Hub/시장/여관)은 전 Profile 충족, 주 특수 시설은 Dwarf만(사용자 결정). 非Dwarf는 상권·배치로 대체 차별화.
+- [x] 특수 시설 없이 바닥 테마만 다른 마을이 없다. — 非Dwarf는 상권(품목·가격)+배치(슬롯 오프셋)로 구분되며 바닥 테마만 다르지 않다(정적 하니스 확인).
+- [x] 같은 Race라도 역할 Profile을 추가할 확장 지점이 있다. — 역할별 Profile ID·Capital Cap·TradeHub 상권이 실제 갈리고 Frontier/Conquered 확장점 주석.
+- [x] 마을별 판매 품목·가격·서비스 중 최소 2개 축이 구분된다. — 품목(특산 태그별 진열)+가격(특산/부족 배율) 2축이 Race별로 구분됨(하니스 검증).
+
+##### V6 구현·검증 결과 (2026-07-15)
+
+- 특수 시설: 사용자 결정대로 Dwarf(160)만 확정, 나머지 Race `PrimarySpecialFacilityId=0` 유지. [VillageProfile.cs](../../Assets/Scripts/Village/VillageProfile.cs) `GetPrimarySpecialFacilityId` 주석에 "신규 특수 시설 UI+BuildableItemTable 행 확보 시 여기 Race→ID 분기 + `VillageInitialFacilityCatalog` 계약 등록 → GrowthPlan 자동 마일스톤(V3 로직 불변)" 확장 절차를 명문화. Shrine·신규 UI·시트 행·건물 미추가. Dwarf 수직 슬라이스(V4)는 값 변경 없이 확인.
+- Trade: [VillageTradeProfile.cs](../../Assets/Scripts/Village/VillageTradeProfile.cs) `CreateProfile`을 Race 분기로 확장하고 Dwarf/Elf/Orc/Nomad/Human/Lizardman/Yeti 7 빌더를 추가했다. 실태그 5종 + 무태그 일반 풀의 "특산(할인 8500bp)·부족(프리미엄 11500bp)·보장 품목·가격 배율" 순열로 세분화 — Dwarf(광물·중장구 특산/비전 부족), Elf(비전 특산/중장구 부족), Orc(원거리 특산/비전 부족), Nomad(수입품 특산/중장구 부족), Human(중립·균형), Lizardman(일반품 특산/중장구·비전 부족), Yeti(중장구 특산/비전 부족). V5 밴드(非TradeGood 매입 ≤4500 ≤ 판매 8500, TradeGood Dwarf 8000/3000↔非Dwarf 15000/13000)를 유지해 66프로필 차익 불변식이 성립한다. `ItemTradeTagCatalog`·`VillageTradeStockRoller`·시드 채널·`MerchantStockEntry` 스키마 불변.
+- Layout: [VillageLayoutProfile.cs](../../Assets/Scripts/Village/VillageLayoutProfile.cs) `VillageLayoutCatalog`에 非Dwarf 6 Race variant를 추가하고 `Resolve`를 race 토큰 분기로 바꿨다. 各 variant는 시설 슬롯 상대 오프셋만 상이(7종 시장 슬롯 오프셋 전부 고유)하고 `usesCompactBounds=false`·`hasFunctionalWalls=false`로 기존 Stage 테이블 Bounds·벽 없음을 유지한다. Dwarf(`layout.dwarf.*`)는 콤팩트+벽(V4), BaseTown(`layout.base_town.dwarf`)은 공통 기본을 그대로 유지. `VillageSlotPlacer`·`VillageWallRules` 로직 미수정(데이터만).
+- 역할: TradeHub는 `VillageTradeProfileCatalog`가 특산 풀에 수입품(RareImport)을 더하고 광물 매입을 14000bp로 올린다(판매 15000 미만 유지). Capital은 `VillageProfileCatalog`의 `StageCapModifiers`를 Village+20/Town+35/City+50으로 채워 GrowthPlan이 자동 합성한다(최종 Food Cap = Standard +50). Frontier/Conquered는 주석 확장점.
+- 검증: `Assembly-CSharp`/`Assembly-CSharp-Editor` 컴파일 오류 0건(dotnet msbuild). Unity 외부 정적 하니스(`Temp/V6StaticHarness`, 실제 `ItemTable.bytes` 파싱 + 컴파일된 Assembly-CSharp 참조) **30개 assertion 통과** — 카탈로그 66 해석·66프로필 차익 불변식·非TradeGood 밴드(4500/8500)·Race별 가격 구분(Elf/Orc/Yeti/Nomad)·Race별 분포 구분·非Dwarf 광물 미진열·TradeGood Dwarf→非Dwarf 6종 양수 차익·TradeHub 매입 프리미엄·Capital Cap +50·가격 사유·Layout variant(Dwarf 콤팩트+벽/非Dwarf 벽 없음/7종 오프셋 고유/BaseTown 기본)·Resolve 결정론·슬롯 배치 결정론·결정론 롤 회귀·JSON 왕복·구 포맷 로드. 참고: V5 하니스의 Human 분포/보장 가정은 V6 데이터 세분화로 더 이상 성립하지 않아(설계상 변경) V6 하니스로 대체했다.
+- Editor 진단: `ARPG/Village/Run V6 Profile Diagnostics`(메뉴 426)가 위 검증 + Race별 가격·상위 진열·Layout 오프셋 표본을 `Temp/VILLAGE_V6_PROFILE_DUMP.md`로 덤프한다(V0~V5 패턴). Editor가 프로젝트를 점유 중일 수 있어 이번 세션에서는 batchmode 실행하지 않았다(메뉴에서 실행 가능). 상점·배치 시각 실측은 플레이 모드 전용으로 리포트에 절차 기록.
+- 플레이 모드 검증 절차(V7 통합 검증 연계): ① Race별 마을 첫 방문 시 상점 품목·가격 사유가 갈리는지(Elf 비전 할인·Dwarf 비전 프리미엄·Orc 원거리 할인 등) ② Race별 시장/여관/허브 슬롯 위치가 화면상 구분되는지 ③ TradeHub 마을 광물 매각 프리미엄·Capital 마을 자원 Cap 상향 확인.
 
 ---
 

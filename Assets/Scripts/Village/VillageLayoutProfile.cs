@@ -158,16 +158,119 @@ namespace ARPG.Village
                 settlementRadius: 5, hamletRadius: 6, villageRadius: 7,
                 townRadius: 7, cityRadius: 7);
 
+        // V6 Race별 Layout variant (VILLAGE_REWORK_PLAN V6 체크리스트): 같은 슬롯 배치기·기존
+        // Bounds·벽 없음을 공유하되 시설 상대 오프셋만 Race별로 달라 배치가 시각적으로 구분된다.
+        // 사용자 결정(V6): 특수 시설은 Dwarf만 → 非Dwarf는 Hub/Market/Inn 슬롯만 실제 사용하고
+        // PrimarySpecial/Shrine/Secondary 오프셋은 특수 시설이 추가될 후속 Phase를 위한 확장점이다.
+        // VillageSlotPlacer·VillageWallRules 로직은 수정하지 않는다(데이터만).
+        private static readonly VillageLayoutProfile _humanLayout = CreateRaceVariant(
+            "layout.human", new[]
+            {
+                new VillageLayoutSlot(VillageLayoutSlotRole.Hub, 0, 0),
+                new VillageLayoutSlot(VillageLayoutSlotRole.Market, -3, -1),
+                new VillageLayoutSlot(VillageLayoutSlotRole.Inn, 3, -1),
+                new VillageLayoutSlot(VillageLayoutSlotRole.PrimarySpecial, 0, 3),
+                new VillageLayoutSlot(VillageLayoutSlotRole.Shrine, -3, 2),
+                new VillageLayoutSlot(VillageLayoutSlotRole.Secondary, 3, 2),
+            });
+        private static readonly VillageLayoutProfile _elfLayout = CreateRaceVariant(
+            "layout.elf", new[]
+            {
+                new VillageLayoutSlot(VillageLayoutSlotRole.Hub, 0, 0),
+                new VillageLayoutSlot(VillageLayoutSlotRole.Market, -2, 2),
+                new VillageLayoutSlot(VillageLayoutSlotRole.Inn, 2, 2),
+                new VillageLayoutSlot(VillageLayoutSlotRole.PrimarySpecial, 0, -3),
+                new VillageLayoutSlot(VillageLayoutSlotRole.Shrine, -3, -1),
+                new VillageLayoutSlot(VillageLayoutSlotRole.Secondary, 3, -1),
+            });
+        private static readonly VillageLayoutProfile _orcLayout = CreateRaceVariant(
+            "layout.orc", new[]
+            {
+                new VillageLayoutSlot(VillageLayoutSlotRole.Hub, 0, 0),
+                new VillageLayoutSlot(VillageLayoutSlotRole.Market, -3, 0),
+                new VillageLayoutSlot(VillageLayoutSlotRole.Inn, 0, -3),
+                new VillageLayoutSlot(VillageLayoutSlotRole.PrimarySpecial, 3, 0),
+                new VillageLayoutSlot(VillageLayoutSlotRole.Shrine, 0, 3),
+                new VillageLayoutSlot(VillageLayoutSlotRole.Secondary, 3, 3),
+            });
+        private static readonly VillageLayoutProfile _nomadLayout = CreateRaceVariant(
+            "layout.nomad", new[]
+            {
+                new VillageLayoutSlot(VillageLayoutSlotRole.Hub, 0, 0),
+                new VillageLayoutSlot(VillageLayoutSlotRole.Market, -2, 0),
+                new VillageLayoutSlot(VillageLayoutSlotRole.Inn, 3, 0),
+                new VillageLayoutSlot(VillageLayoutSlotRole.PrimarySpecial, -3, -3),
+                new VillageLayoutSlot(VillageLayoutSlotRole.Shrine, 3, -3),
+                new VillageLayoutSlot(VillageLayoutSlotRole.Secondary, 0, 3),
+            });
+        private static readonly VillageLayoutProfile _lizardmanLayout = CreateRaceVariant(
+            "layout.lizardman", new[]
+            {
+                new VillageLayoutSlot(VillageLayoutSlotRole.Hub, 0, 0),
+                new VillageLayoutSlot(VillageLayoutSlotRole.Market, -3, 1),
+                new VillageLayoutSlot(VillageLayoutSlotRole.Inn, 2, -2),
+                new VillageLayoutSlot(VillageLayoutSlotRole.PrimarySpecial, 3, 2),
+                new VillageLayoutSlot(VillageLayoutSlotRole.Shrine, -2, 3),
+                new VillageLayoutSlot(VillageLayoutSlotRole.Secondary, -3, -2),
+            });
+        private static readonly VillageLayoutProfile _yetiLayout = CreateRaceVariant(
+            "layout.yeti", new[]
+            {
+                new VillageLayoutSlot(VillageLayoutSlotRole.Hub, 0, 0),
+                new VillageLayoutSlot(VillageLayoutSlotRole.Market, -2, -2),
+                new VillageLayoutSlot(VillageLayoutSlotRole.Inn, 2, -2),
+                new VillageLayoutSlot(VillageLayoutSlotRole.PrimarySpecial, 2, 2),
+                new VillageLayoutSlot(VillageLayoutSlotRole.Shrine, -2, 2),
+                new VillageLayoutSlot(VillageLayoutSlotRole.Secondary, 0, 3),
+            });
+
+        /// <summary>Race variant 공통: 콤팩트 Bounds·벽 없음(기존 Stage 테이블 유지), 오프셋만 상이.</summary>
+        private static VillageLayoutProfile CreateRaceVariant(string layoutKey,
+            VillageLayoutSlot[] slots)
+        {
+            return new VillageLayoutProfile(layoutKey, slots,
+                usesCompactBounds: false, hasFunctionalWalls: false,
+                plazaReserveRadius: 0, roadReserveRadius: 0, roadReserveHalfWidth: 0,
+                settlementRadius: 0, hamletRadius: 0, villageRadius: 0,
+                townRadius: 0, cityRadius: 0);
+        }
+
         /// <summary>
-        /// LayoutProfileId → 레이아웃. 절차적 Dwarf 레이아웃 ID만 수직 슬라이스 레이아웃을 받고,
-        /// 나머지(수제작 BaseTown 포함)는 공통 기본 레이아웃이다. 항상 non-null을 반환한다.
+        /// LayoutProfileId → 레이아웃. Dwarf 절차적 레이아웃은 수직 슬라이스(콤팩트+벽)를 받고,
+        /// 그 외 Race는 오프셋만 다른 variant, 수제작 BaseTown·미지원은 공통 기본이다. 항상 non-null.
         /// </summary>
         public static VillageLayoutProfile Resolve(string? layoutProfileId)
         {
-            if (string.IsNullOrEmpty(layoutProfileId) == false
-                && layoutProfileId!.StartsWith(DWARF_LAYOUT_PREFIX, StringComparison.Ordinal))
+            if (string.IsNullOrEmpty(layoutProfileId))
+                return _defaultLayout;
+
+            // Dwarf 절차적 레이아웃(layout.dwarf.*)만 콤팩트+벽. BaseTown(layout.base_town.dwarf)은 제외.
+            if (layoutProfileId!.StartsWith(DWARF_LAYOUT_PREFIX, StringComparison.Ordinal))
                 return _dwarfMiningLayout;
-            return _defaultLayout;
+
+            switch (ExtractRaceToken(layoutProfileId))
+            {
+                case "human": return _humanLayout;
+                case "elf": return _elfLayout;
+                case "orc": return _orcLayout;
+                case "nomad": return _nomadLayout;
+                case "lizardman": return _lizardmanLayout;
+                case "yeti": return _yetiLayout;
+                default: return _defaultLayout;
+            }
+        }
+
+        /// <summary>"layout.&lt;race&gt;.&lt;biome&gt;.&lt;role&gt;"에서 race 토큰 추출. 없으면 빈 문자열.</summary>
+        private static string ExtractRaceToken(string layoutProfileId)
+        {
+            int start = layoutProfileId.IndexOf('.');
+            if (start < 0)
+                return string.Empty;
+            start += 1;
+            int end = layoutProfileId.IndexOf('.', start);
+            return end < 0
+                ? layoutProfileId.Substring(start)
+                : layoutProfileId.Substring(start, end - start);
         }
 
         public static VillageLayoutProfile DefaultLayout => _defaultLayout;

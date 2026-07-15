@@ -318,13 +318,23 @@ namespace ARPG.Village
     /// </summary>
     public static class VillageTradeProfileCatalog
     {
-        // 가격 초안 (bp). 교역 밸런스 불변식 (§8.6, 하니스 검증):
-        // - 非TradeGood: 전체 프로필 최대 BuyFromPlayerBp(4500) < 최소 SellToPlayerBp(8500)
-        //   → 일반 장비 왕복·운송 차익 없음.
-        // - TradeGood: Dwarf 판매 8000 < 비-Dwarf 매입 13000 → 광산촌→부족 지역 양수 차익.
-        //   같은 프로필 안에서는 매입 < 판매 → 같은 상점 왕복 차익 없음.
-        private const int DEFAULT_SELL_BP = 10000;
+        // 가격 밴드 (bp). V6 Race 세분화도 V5 교역 밸런스 불변식을 그대로 유지한다 (§8.6, 하니스 검증):
+        // - 非TradeGood: 특산 8500 / 표준 10000 / 부족 11500, 매입은 최대 4500.
+        //   → 전 프로필 최대 매입가(4500) ≤ 최소 구매가(8500). 일반 장비 왕복·운송 차익 없음.
+        // - TradeGood(광물): Dwarf 판매 8000 / 매입 3000(특산) ↔ 非Dwarf 판매 15000 / 매입 13000(부족).
+        //   Dwarf 판매 8000 < 非Dwarf 매입 13000 → 광산촌→부족 지역 양수 차익. 같은 프로필은 매입 < 판매.
+        // - TradeHub 역할: 광물 매입을 14000으로 올려 운송 목적지 매력을 높이되 여전히 판매(15000) 미만.
+        private const int DEFAULT_SELL_BP = 10000;       // 표준 (특산/부족 규칙에 안 걸리는 품목)
         private const int DEFAULT_BUY_BP = 4000;
+        private const int SPECIALTY_SELL_BP = 8500;      // 지역 특산 — 할인 (< 표준 → GetPriceReason=LocalSpecialty)
+        private const int SPECIALTY_BUY_BP = 4000;
+        private const int SHORTAGE_SELL_BP = 11500;      // 현지 부족 — 프리미엄 (> 표준 → LocalShortage)
+        private const int SHORTAGE_BUY_BP = 4500;        // 부족 품목 매입 프리미엄 (非TradeGood 최대 매입 = 4500)
+        private const int DWARF_TRADEGOOD_SELL_BP = 8000;
+        private const int DWARF_TRADEGOOD_BUY_BP = 3000;
+        private const int IMPORT_TRADEGOOD_SELL_BP = 15000;
+        private const int IMPORT_TRADEGOOD_BUY_BP = 13000;
+        private const int TRADEHUB_TRADEGOOD_BUY_BP = 14000;
 
         private static readonly Dictionary<string, VillageTradeProfile> _byTradeProfileId =
             BuildCatalog();
@@ -363,32 +373,52 @@ namespace ARPG.Village
             return byId;
         }
 
+        /// <summary>
+        /// V6 (VILLAGE_REWORK_PLAN §8, V6 체크리스트): Race별 지역 상권 세분화.
+        /// 물약·약초·식량 아이템이 없어(ItemTable 실측) 실질 태그는 Ore/HeavyArmor/Arcane/Ranged/
+        /// RareImport 5종 + 무태그 일반 풀뿐이다. 따라서 Race 차별화는 "특산 태그(할인·풍부) ×
+        /// 부족 태그(프리미엄) × 보장 품목 × 가격 배율"의 조합 순열로 구성한다. TradeHub 역할은
+        /// 수입품 유입과 광물 매입 프리미엄을 더한다. V5 결정론 롤러·시드·스냅샷 스키마는 불변 —
+        /// 데이터만 세분화한다.
+        /// </summary>
         private static VillageTradeProfile CreateProfile(VillageProfile profile)
         {
-            return profile.Race == GlobalEnum.RaceType.Dwarf
-                ? CreateDwarfMiningProfile(profile.TradeProfileId)
-                : CreateGeneralistProfile(profile.TradeProfileId);
+            bool isTradeHub = profile.Role == VillageSettlementRole.TradeHub;
+            switch (profile.Race)
+            {
+                case GlobalEnum.RaceType.Dwarf:
+                    return CreateDwarfMiningProfile(profile.TradeProfileId, isTradeHub);
+                case GlobalEnum.RaceType.Elf:
+                    return CreateElfProfile(profile.TradeProfileId, isTradeHub);
+                case GlobalEnum.RaceType.Orc:
+                    return CreateOrcProfile(profile.TradeProfileId, isTradeHub);
+                case GlobalEnum.RaceType.Nomad:
+                    return CreateNomadProfile(profile.TradeProfileId, isTradeHub);
+                case GlobalEnum.RaceType.Lizardman:
+                    return CreateLizardmanProfile(profile.TradeProfileId, isTradeHub);
+                case GlobalEnum.RaceType.Yeti:
+                    return CreateYetiProfile(profile.TradeProfileId, isTradeHub);
+                default:
+                    // Human 및 미지원 Race의 결정론 fallback — 중립·균형 상권.
+                    return CreateHumanProfile(profile.TradeProfileId, isTradeHub);
+            }
         }
 
         /// <summary>
         /// Dwarf 광산 상권 — 광물이 보장 품목으로 싸고 풍부하며(지역 특산),
-        /// 중장구 특산 할인, 비전 품목은 현지 부족 프리미엄.
+        /// 중장구 특산 할인, 비전 품목은 현지 부족 프리미엄. 제련소 Tier2+에서 추가 풀.
         /// </summary>
-        private static VillageTradeProfile CreateDwarfMiningProfile(string tradeProfileId)
+        private static VillageTradeProfile CreateDwarfMiningProfile(string tradeProfileId,
+            bool isTradeHub)
         {
-            return new VillageTradeProfile(
-                tradeProfileId,
+            return Build(tradeProfileId,
                 new[] { 2003, 2002, 6001 },                       // 철, 구리, 일반 스킬 페이지
-                new[]
+                WithHubImports(isTradeHub, new[]
                 {
                     new TradeWeightedTagPool(TradeTag.Ore, 3),
                     new TradeWeightedTagPool(TradeTag.HeavyArmor, 2),
-                },
-                new[]
-                {
-                    new TradeWeightedTagPool(TradeTag.RareImport, 2),
-                    new TradeWeightedTagPool(TradeTag.Arcane, 1),
-                },
+                }),
+                DefaultRarePools(),
                 new[]
                 {
                     new TradeWeightedTagPool(TradeTag.HeavyArmor, 3),
@@ -397,11 +427,127 @@ namespace ARPG.Village
                 2,                                                 // 제련소 Tier 2부터 추가 풀
                 new[]
                 {
-                    // TradeGood(광물)이 HeavyArmor보다 먼저 매칭되어야 하므로 순서 고정.
-                    new TradePriceRule(TradeTag.TradeGood, 8000, 3000),
-                    new TradePriceRule(TradeTag.Ore | TradeTag.HeavyArmor, 8500, 4000),
-                    new TradePriceRule(TradeTag.Arcane, 11500, 4500),
+                    // TradeGood(광물)이 Ore|HeavyArmor보다 먼저 매칭되어야 하므로 순서 고정.
+                    new TradePriceRule(TradeTag.TradeGood, DWARF_TRADEGOOD_SELL_BP, DWARF_TRADEGOOD_BUY_BP),
+                    new TradePriceRule(TradeTag.Ore | TradeTag.HeavyArmor, SPECIALTY_SELL_BP, SPECIALTY_BUY_BP),
+                    new TradePriceRule(TradeTag.Arcane, SHORTAGE_SELL_BP, SHORTAGE_BUY_BP),
+                });
+        }
+
+        /// <summary>Elf — 비전 특산 할인, 중장구 현지 부족. 마법 친화 상권.</summary>
+        private static VillageTradeProfile CreateElfProfile(string tradeProfileId,
+            bool isTradeHub)
+        {
+            return BuildGeneralist(tradeProfileId, isTradeHub,
+                new[] { 6001, 24, 25 },                            // 페이지 + T1 지팡이·완드
+                new[]
+                {
+                    new TradeWeightedTagPool(TradeTag.Arcane, 3),
+                    new TradeWeightedTagPool(TradeTag.None, 1),
                 },
+                new[]
+                {
+                    new TradePriceRule(TradeTag.Arcane, SPECIALTY_SELL_BP, SPECIALTY_BUY_BP),
+                    new TradePriceRule(TradeTag.HeavyArmor, SHORTAGE_SELL_BP, SHORTAGE_BUY_BP),
+                });
+        }
+
+        /// <summary>Orc — 원거리·일반 무기 특산 할인, 비전 현지 부족. 전사 상권.</summary>
+        private static VillageTradeProfile CreateOrcProfile(string tradeProfileId,
+            bool isTradeHub)
+        {
+            return BuildGeneralist(tradeProfileId, isTradeHub,
+                new[] { 22, 23, 1 },                               // 목재 단궁, 투창, 단검
+                new[]
+                {
+                    new TradeWeightedTagPool(TradeTag.Ranged, 3),
+                    new TradeWeightedTagPool(TradeTag.None, 1),
+                },
+                new[]
+                {
+                    new TradePriceRule(TradeTag.Ranged, SPECIALTY_SELL_BP, SPECIALTY_BUY_BP),
+                    new TradePriceRule(TradeTag.Arcane, SHORTAGE_SELL_BP, SHORTAGE_BUY_BP),
+                });
+        }
+
+        /// <summary>Nomad — 수입품(RareImport) 특산, 중장구 현지 부족. 교역 거점 상권.</summary>
+        private static VillageTradeProfile CreateNomadProfile(string tradeProfileId,
+            bool isTradeHub)
+        {
+            return BuildGeneralist(tradeProfileId, isTradeHub,
+                new[] { 6001, 5000, 1 },                           // 페이지, 스킬 북, 단검
+                new[]
+                {
+                    new TradeWeightedTagPool(TradeTag.RareImport, 3),
+                    new TradeWeightedTagPool(TradeTag.None, 1),
+                },
+                new[]
+                {
+                    new TradePriceRule(TradeTag.RareImport, SPECIALTY_SELL_BP, SPECIALTY_BUY_BP),
+                    new TradePriceRule(TradeTag.HeavyArmor, SHORTAGE_SELL_BP, SHORTAGE_BUY_BP),
+                });
+        }
+
+        /// <summary>Human — 중립·균형 상권. 특산 할인 없이 폭넓은 품목 구성으로 차별화.</summary>
+        private static VillageTradeProfile CreateHumanProfile(string tradeProfileId,
+            bool isTradeHub)
+        {
+            return BuildGeneralist(tradeProfileId, isTradeHub,
+                new[] { 6001, 1, 12 },                             // 페이지, 단검, 가죽 조끼
+                new[]
+                {
+                    new TradeWeightedTagPool(TradeTag.None, 2),
+                    new TradeWeightedTagPool(TradeTag.Ranged, 1),
+                    new TradeWeightedTagPool(TradeTag.Arcane, 1),
+                },
+                Array.Empty<TradePriceRule>());                    // 표준 가격 (광물 규칙만 공통)
+        }
+
+        /// <summary>Lizardman — 무태그 일반품 특산, 중장구·비전 현지 부족. 원시 상권.</summary>
+        private static VillageTradeProfile CreateLizardmanProfile(string tradeProfileId,
+            bool isTradeHub)
+        {
+            return BuildGeneralist(tradeProfileId, isTradeHub,
+                new[] { 1, 12, 22 },                               // 단검, 가죽 조끼, 목재 단궁
+                new[]
+                {
+                    new TradeWeightedTagPool(TradeTag.None, 3),
+                    new TradeWeightedTagPool(TradeTag.Ranged, 1),
+                },
+                new[]
+                {
+                    new TradePriceRule(TradeTag.HeavyArmor | TradeTag.Arcane,
+                        SHORTAGE_SELL_BP, SHORTAGE_BUY_BP),
+                });
+        }
+
+        /// <summary>Yeti — 중장구 특산 할인, 비전 현지 부족. 냉대 내구 상권.</summary>
+        private static VillageTradeProfile CreateYetiProfile(string tradeProfileId,
+            bool isTradeHub)
+        {
+            return BuildGeneralist(tradeProfileId, isTradeHub,
+                new[] { 11, 14, 1 },                               // 가죽 투구, 가죽 신발, 단검
+                new[]
+                {
+                    new TradeWeightedTagPool(TradeTag.HeavyArmor, 3),
+                    new TradeWeightedTagPool(TradeTag.None, 1),
+                },
+                new[]
+                {
+                    new TradePriceRule(TradeTag.HeavyArmor, SPECIALTY_SELL_BP, SPECIALTY_BUY_BP),
+                    new TradePriceRule(TradeTag.Arcane, SHORTAGE_SELL_BP, SHORTAGE_BUY_BP),
+                });
+        }
+
+        // ===== V6 공통 조립 헬퍼 (수량 범위·재입고·표준 배율은 전 Race 공통) =====
+
+        private static VillageTradeProfile Build(string tradeProfileId, int[] guaranteed,
+            TradeWeightedTagPool[] specialty, TradeWeightedTagPool[] rare,
+            TradeWeightedTagPool[] facility, int facilityMinTier,
+            TradePriceRule[] priceRules)
+        {
+            return new VillageTradeProfile(tradeProfileId, guaranteed, specialty, rare,
+                facility, facilityMinTier, priceRules,
                 DEFAULT_SELL_BP, DEFAULT_BUY_BP,
                 3, 10,
                 4, 8,
@@ -409,37 +555,51 @@ namespace ARPG.Village
         }
 
         /// <summary>
-        /// 비-Dwarf 공통 상권 — 광물이 재고 풀에 없고(현지 부족) TradeGood 매입 프리미엄으로
-        /// 광산촌발 운송 교역 동기를 만든다. Race별 특산 세분화는 V6 범위.
+        /// 비-Dwarf 공통 껍데기 — 광물은 재고 풀에 없고(현지 부족) 광물 매입 프리미엄으로
+        /// 광산촌발 운송 교역 동기를 만든다. specialtyShortageRules 앞에 광물(TradeGood) 규칙을
+        /// 자동으로 붙여 순서를 고정한다. 특수 시설 풀 없음(Dwarf 전용).
         /// </summary>
-        private static VillageTradeProfile CreateGeneralistProfile(string tradeProfileId)
+        private static VillageTradeProfile BuildGeneralist(string tradeProfileId,
+            bool isTradeHub, int[] guaranteed, TradeWeightedTagPool[] baseSpecialty,
+            TradePriceRule[] specialtyShortageRules)
         {
-            return new VillageTradeProfile(
-                tradeProfileId,
-                new[] { 6001, 5000, 6002, 5001, 6003, 5002 },     // 페이지/북 Tier 순
-                new[]
-                {
-                    // None = 태그 없는 일반 품목 풀 (RareImport/TradeGood 제외 — 로러가 처리).
-                    new TradeWeightedTagPool(TradeTag.None, 3),
-                    new TradeWeightedTagPool(TradeTag.Ranged, 1),
-                },
-                new[]
-                {
-                    new TradeWeightedTagPool(TradeTag.RareImport, 2),
-                    new TradeWeightedTagPool(TradeTag.Arcane, 1),
-                },
-                Array.Empty<TradeWeightedTagPool>(),
-                int.MaxValue,                                      // 특수 시설 풀 없음 (V6)
-                new[]
-                {
-                    // 현지 부족 광물 — 매입 프리미엄(13000)이 Dwarf 구매가(8000)보다 높아
-                    // 제한된 양수 차익을 만들고, 판매가(15000) > 매입가로 같은 상점 왕복은 손해.
-                    new TradePriceRule(TradeTag.TradeGood, 15000, 13000),
-                },
-                DEFAULT_SELL_BP, DEFAULT_BUY_BP,
-                3, 10,
-                4, 8,
-                24f);
+            List<TradePriceRule> rules = new List<TradePriceRule>
+            {
+                // 현지 부족 광물 — 매입 프리미엄(13000/허브 14000)이 Dwarf 구매가(8000)보다 높아
+                // 제한된 양수 차익을 만들고, 판매가(15000) > 매입가로 같은 상점 왕복은 손해.
+                new TradePriceRule(TradeTag.TradeGood, IMPORT_TRADEGOOD_SELL_BP,
+                    isTradeHub ? TRADEHUB_TRADEGOOD_BUY_BP : IMPORT_TRADEGOOD_BUY_BP),
+            };
+            rules.AddRange(specialtyShortageRules);
+
+            return Build(tradeProfileId, guaranteed,
+                WithHubImports(isTradeHub, baseSpecialty),
+                DefaultRarePools(),
+                Array.Empty<TradeWeightedTagPool>(), int.MaxValue,
+                rules.ToArray());
+        }
+
+        private static TradeWeightedTagPool[] DefaultRarePools()
+        {
+            return new[]
+            {
+                new TradeWeightedTagPool(TradeTag.RareImport, 2),
+                new TradeWeightedTagPool(TradeTag.Arcane, 1),
+            };
+        }
+
+        /// <summary>TradeHub 역할이면 특산 풀 앞에 수입품 유입을 더한다 (품목 축 강화).</summary>
+        private static TradeWeightedTagPool[] WithHubImports(bool isTradeHub,
+            TradeWeightedTagPool[] baseSpecialty)
+        {
+            if (isTradeHub == false)
+                return baseSpecialty;
+            List<TradeWeightedTagPool> pools = new List<TradeWeightedTagPool>
+            {
+                new TradeWeightedTagPool(TradeTag.RareImport, 2),
+            };
+            pools.AddRange(baseSpecialty);
+            return pools.ToArray();
         }
     }
 }

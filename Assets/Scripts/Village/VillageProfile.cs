@@ -310,7 +310,7 @@ namespace ARPG.Village
                         $"trade.{dataKey}",
                         GetPrimarySpecialFacilityId(pair.Race),
                         Array.Empty<int>(),
-                        CreateZeroCapModifiers(),
+                        CreateCapModifiers(role),
                         VillageStage.City,
                         1));
                 }
@@ -320,15 +320,47 @@ namespace ARPG.Village
         }
 
         /// <summary>
-        /// V3 (V0 선결 결정): 첫 특수 시설 Profile은 Dwarf 단일 제련소(Id 160).
-        /// 다른 Race의 주 특수 시설은 콘텐츠가 확정되는 V6에서 채운다 — 기능 미확정 시설은
-        /// 외형만 먼저 만들지 않으므로 0(없음)을 유지한다.
+        /// 주 특수 시설 ID. V6 사용자 결정: **Dwarf(단일 제련소 160)만 확정**한다.
+        /// 다른 Race는 신규 UI/서비스 없이 재사용 가능한 시설 서비스가 Forge·Shrine뿐이고,
+        /// "기능 미확정 시설은 외형만 먼저 만들지 않는다" 원칙에 따라 0(없음)으로 남긴다 —
+        /// 상권(TradeProfile)과 배치(Layout)로 차별화한다.
+        /// 확장점: 신규 특수 시설 UI+BuildableItemTable 행이 확보되면 여기 Race→ID 분기를 추가하고
+        /// VillageInitialFacilityCatalog에 상호작용 계약을 등록하면 GrowthPlan이 자동으로 마일스톤을
+        /// 생성한다(V3 로직 불변). 신규 UI·시트 행·건물은 이번 범위(V6)에서 만들지 않는다.
         /// </summary>
         private static int GetPrimarySpecialFacilityId(GlobalEnum.RaceType race)
         {
             return race == GlobalEnum.RaceType.Dwarf
                 ? VillageInitialFacilityCatalog.FORGE_TABLE_ID
                 : 0;
+        }
+
+        /// <summary>
+        /// V6 역할 결합 규칙 초안 (VILLAGE_REWORK_PLAN V6 체크리스트, "가벼운 실제 효과 + 확장점"):
+        /// - Capital: 행정 중심 — Village Stage부터 자원 Cap을 상향한다(아래 데이터, GrowthPlan 자동 반영).
+        /// - TradeHub: 상권 강화 — VillageTradeProfileCatalog가 수입품 유입·광물 매입 프리미엄으로 처리.
+        /// - Frontier/Conquered: 이번 범위는 확장점만. 실효과(방어 벽·상점 Tier 강등 등)는 후속 Phase.
+        ///   같은 Race라도 역할 Profile을 추가·조정할 수 있는 지점이다.
+        /// </summary>
+        private static VillageStageCapModifier[] CreateCapModifiers(
+            VillageSettlementRole role)
+        {
+            return role == VillageSettlementRole.Capital
+                ? CreateCapitalCapModifiers()
+                : CreateZeroCapModifiers();
+        }
+
+        private static VillageStageCapModifier[] CreateCapitalCapModifiers()
+        {
+            // Village부터 누적 상향 — GrowthPlan.AddStageCaps가 이전 Stage 대비 차분으로 적용한다.
+            return new[]
+            {
+                new VillageStageCapModifier(VillageStage.Settlement, 0, 0, 0),
+                new VillageStageCapModifier(VillageStage.Hamlet, 0, 0, 0),
+                new VillageStageCapModifier(VillageStage.Village, 20, 20, 20),
+                new VillageStageCapModifier(VillageStage.Town, 35, 35, 35),
+                new VillageStageCapModifier(VillageStage.City, 50, 50, 50),
+            };
         }
 
         private static VillageStageCapModifier[] CreateZeroCapModifiers()
