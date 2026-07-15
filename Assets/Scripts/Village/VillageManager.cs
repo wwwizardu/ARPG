@@ -1,6 +1,7 @@
 #nullable enable
 using System.Collections.Generic;
 using ARPG.Component;
+using ARPG.History;
 using ARPG.Map;
 using ARPG.Utility;
 using Cysharp.Threading.Tasks;
@@ -427,6 +428,11 @@ namespace ARPG.Village
                     }
                     entry.Item.OnLoadCompleted();
                 }
+
+                // V5 (§11.5): 가격 스냅샷이 없는 구 포맷 매물은 진열품을 유지하고 가격만
+                // TradeProfile로 보정한다 — 유실 없음. MerchantRestockCycle == -1(구 세이브)은
+                // 다음 상점 진입 시 기존 24h 게이트로 결정론 재롤된다.
+                BackfillLegacyStockPriceSnapshots(data);
 
                 MigratePlacedObjectsFromTypeIds(data);
 
@@ -1449,13 +1455,14 @@ namespace ARPG.Village
             if (slotItem == null) return -1;
 
             Tables.ItemTable? item = AR.s.Data.GetItem(slotItem.Id);
+            // SellRatioBp(구 퍼센트 컬럼)는 매각 가능 플래그로만 유지 — 가격은 TradeProfile이 정본 (V5 §8.3).
             if (item == null || item.BasePrice <= 0 || item.SellRatioBp <= 0) return -1;
 
             // 1. 인벤토리 차감 (실패 시 atomic abort)
             if (AR.s.Player.Inventory.RemoveItem(slotIndex, amount, out _) == false) return -1;
 
-            // 2. Gold 지급 (PlayerData.Gold 정수)
-            int gold = item.BasePrice * amount * item.SellRatioBp / 100;
+            // 2. Gold 지급 (PlayerData.Gold 정수) — 상인 매입가 = BasePrice × BuyFromPlayerBp / 10000
+            int gold = GetMerchantBuyPrice(villageId, item) * amount;
             if (AR.s.Data?.Player != null) AR.s.Data.Player.Gold += gold;
 
             // 3. 마을 Storage 부분 환원 (자원만)
@@ -1494,7 +1501,9 @@ namespace ARPG.Village
             if (item.Stackable == false)
                 amount = 1;
 
-            int gold = item.BasePrice * amount;
+            // V5 (§8.5): roll 시점 확정 가격 스냅샷이 정본. 0(방어)이면 BasePrice fallback.
+            int unitPrice = entry.UnitPrice > 0 ? entry.UnitPrice : item.BasePrice;
+            int gold = unitPrice * amount;
             if (AR.s.Data.Player.Gold < gold) return -1;
 
             ARPG.Data.ItemData purchase;
@@ -1525,14 +1534,12 @@ namespace ARPG.Village
             return gold;
         }
 
-        // ========== Phase D: 매물 풀 재롤 ==========
-
-        private const float MERCHANT_ROLL_INTERVAL_HOURS = 24f;
-        private const int MERCHANT_STOCK_SLOTS = 5;
+        // ========== Phase D → V5: 매물 풀 재롤 (지역 상권) ==========
 
         /// <summary>
-        /// Phase D: 24h 게임시간 경과 시 매물 풀 재롤.
-        /// 풀 조건: ItemTable.Tier ≤ village.Stage AND BasePrice > 0.
+        /// V5 (§8.5): 재입고 회차 기반 재롤. 같은 마을·같은 회차는 재롤해도 같은 재고가 나온다.
+        /// 구 세이브(MerchantRestockCycle == -1)는 매물이 남아 있는 동안 기존 24h 게이트를 유지해
+        /// 진열품을 잃지 않고, 게이트가 지나면 결정론 롤로 전환된다 (§11.5).
         /// 호출자(UIShopMerchant)는 진입 시 EnsureMerchantStockFresh를 호출.
         /// </summary>
         public void EnsureMerchantStockFresh(int villageId)
@@ -1540,11 +1547,53 @@ namespace ARPG.Village
             if (_villages.TryGetValue(villageId, out VillageData? v) == false) return;
 
             float now = AR.s.Time.CurrentGameTime;
-            if (v.MerchantStock.Count > 0 && now - v.LastMerchantRollGameTime < MERCHANT_ROLL_INTERVAL_HOURS)
+            VillageTradeProfile trade = ResolveTradeProfile(v);
+            int cycle = VillageTradeStockRoller.GetRestockCycle(now, trade);
+
+            if (v.MerchantRestockCycle == cycle && v.MerchantStock.Count > 0)
+                return;
+            if (v.MerchantRestockCycle < 0 && v.MerchantStock.Count > 0
+                && now - v.LastMerchantRollGameTime < trade.RestockIntervalHours)
                 return;
 
-            RollMerchantStock(v);
+            RollMerchantStock(v, trade, cycle);
             v.LastMerchantRollGameTime = now;
+            v.MerchantRestockCycle = cycle;
+        }
+
+        /// <summary>
+        /// V5 (§8.3): 상인 매입가 = BasePrice × BuyFromPlayerBp / 10000.
+        /// 마을·프로필 컨텍스트가 없으면 -1 (UI는 매각 불가로 처리).
+        /// </summary>
+        public int GetMerchantBuyPrice(int villageId, Tables.ItemTable? item)
+        {
+            if (item == null || item.BasePrice <= 0) return -1;
+            if (_villages.TryGetValue(villageId, out VillageData? v) == false) return -1;
+
+            VillageTradeProfile trade = ResolveTradeProfile(v);
+            return VillageTradeStockRoller.GetMerchantBuyPrice(trade,
+                CreateTradeItemInfo(item));
+        }
+
+        /// <summary>
+        /// V5 (§8.5): 매각 UI에 표시할 지역 가격 사유. 매입가 프리미엄이 붙는 태그(TradeGood 등)는
+        /// 현지 부족, 기본 배율보다 낮으면 지역 특산으로 표시한다.
+        /// </summary>
+        public TradePriceReason GetMerchantBuyPriceReason(int villageId,
+            Tables.ItemTable? item)
+        {
+            if (item == null) return TradePriceReason.Standard;
+            if (_villages.TryGetValue(villageId, out VillageData? v) == false)
+                return TradePriceReason.Standard;
+
+            VillageTradeProfile trade = ResolveTradeProfile(v);
+            TradeTag tags = ItemTradeTagCatalog.GetTags(item.Id);
+            int buyBp = trade.GetBuyFromPlayerBp(tags);
+            if (buyBp > trade.DefaultBuyFromPlayerBp)
+                return TradePriceReason.LocalShortage;
+            if (buyBp < trade.DefaultBuyFromPlayerBp)
+                return TradePriceReason.LocalSpecialty;
+            return TradePriceReason.Standard;
         }
 
         private bool EnsureVillageProfile(VillageData data, bool isSaveLoad)
@@ -1641,47 +1690,157 @@ namespace ARPG.Village
             _villageList.Clear();
         }
 
-        private static void RollMerchantStock(VillageData v)
+        /// <summary>
+        /// V5 (§8.4/§8.5): TradeProfile 기반 결정론 재고 롤.
+        /// 슬롯 선택(보장/특산/희귀·특수 시설)·수량·가격·아이템 인스턴스 롤 전부가
+        /// SettlementId + RestockCycle + DerivedSeed 채널에서 파생된 HistoryRng를 사용한다 —
+        /// 재롤 직후 세이브 없이도 같은 (마을, 회차)는 같은 결과를 재현한다.
+        /// </summary>
+        private void RollMerchantStock(VillageData v, VillageTradeProfile trade, int cycle)
         {
             v.MerchantStock.Clear();
 
-            List<Tables.ItemTable> pool = new List<Tables.ItemTable>();
-            int stageInt = (int)v.Stage;
-            foreach (Tables.ItemTable it in AR.s.Data.GetAllItems())
+            int settlementKey = v.SettlementId >= 0 ? v.SettlementId : -1 - v.VillageId;
+            ulong seed = VillageTradeStockRoller.CreateStockSeed(
+                AR.s.Map.mapSeed, settlementKey, cycle);
+            HistoryRng rng = new HistoryRng(seed);
+
+            List<TradeItemInfo> items = BuildTradeItemInfos();
+            int facilityTier = GetPrimarySpecialFacilityTier(v);
+            List<TradeStockPlanEntry> plan = VillageTradeStockRoller.RollStockPlan(
+                trade, v.ShopTier, facilityTier, items, rng);
+
+            for (int i = 0; i < plan.Count; i++)
             {
-                if (it.BasePrice <= 0) continue;
-                if (it.Tier > stageInt + 1) continue;  // Stage 0(Settlement) → Tier 1까지, Stage 3(Town) → Tier 4까지 (관대한 설정)
-                pool.Add(it);
-            }
-
-            if (pool.Count == 0) return;
-
-            int slots = Mathf.Min(MERCHANT_STOCK_SLOTS, pool.Count);
-            for (int i = 0; i < slots; i++)
-            {
-                int idx = Random.Range(0, pool.Count);
-                Tables.ItemTable picked = pool[idx];
-                pool.RemoveAt(idx);
-
-                // 매물 인스턴스를 roll 시점에 완성한다 — SkillBook/SkillPage/Equipment 분기 + 인스턴스 데이터 채움까지
-                // ItemManager.CreateInventoryItemData가 단일 진입점.
-                ARPG.Data.ItemData? rolled = AR.s.Item.CreateInventoryItemData(picked.Id);
+                TradeStockPlanEntry planned = plan[i];
+                // 매물 인스턴스를 roll 시점에 완성한다 — SkillBook/SkillPage/Equipment 분기 +
+                // 인스턴스 데이터 채움까지 ItemManager.CreateInventoryItemData가 단일 진입점.
+                // 같은 rng를 이어 사용해 인스턴스(Mod/Quality/SkillId)도 회차 결정론에 포함된다.
+                ARPG.Data.ItemData? rolled =
+                    AR.s.Item.CreateInventoryItemData(planned.ItemId, 1, rng);
                 if (rolled == null)
                 {
-                    Debug.LogWarning($"[Shop] ItemId({picked.Id}) 매물 생성 실패 — 슬롯 스킵");
-                    i--; // 슬롯 카운트 복구
-                    if (pool.Count == 0) break;
+                    Debug.LogWarning($"[Shop] ItemId({planned.ItemId}) 매물 생성 실패 — 슬롯 스킵");
                     continue;
                 }
 
                 v.MerchantStock.Add(new MerchantStockEntry
                 {
                     Item = rolled,
-                    RemainingCount = picked.Stackable ? Random.Range(3, 11) : 1,
+                    RemainingCount = planned.Count,
+                    UnitPrice = planned.UnitBuyPrice,
+                    RestockCycle = cycle,
+                    TradeProfileId = trade.TradeProfileId,
+                    SlotKind = planned.SlotKind,
+                    PriceReason = planned.Reason,
                 });
             }
 
-            Debug.Log($"[Shop] v{v.VillageId} 매물 재롤: {v.MerchantStock.Count}건");
+            Debug.Log($"[Shop] v{v.VillageId} 매물 재롤: {v.MerchantStock.Count}건 " +
+                $"(trade={trade.TradeProfileId}, cycle={cycle}, shopTier={v.ShopTier}, " +
+                $"facilityTier={facilityTier})");
+        }
+
+        /// <summary>
+        /// V5: VillageProfileId → TradeProfileId 해석. V1 fallback 정책과 같은 결로 —
+        /// 누락 시 명시적 기본 상권으로 폴백하고 1회 경고한다.
+        /// </summary>
+        private VillageTradeProfile ResolveTradeProfile(VillageData v)
+        {
+            if (VillageProfileCatalog.TryGet(v.VillageProfileId,
+                    out VillageProfile profile) == true
+                && VillageTradeProfileCatalog.TryGet(profile.TradeProfileId,
+                    out VillageTradeProfile trade) == true)
+            {
+                return trade;
+            }
+
+            WarnProfileOnce($"trade-fallback:{v.VillageProfileId}",
+                $"Village {v.VillageId} trade profile for '{v.VillageProfileId}' is missing; " +
+                "default trade profile was used.");
+            return VillageTradeProfileCatalog.DefaultProfile;
+        }
+
+        /// <summary>V5: 주 특수 시설(Profile 지정)의 저장 FacilityTier. 없으면 0.</summary>
+        private int GetPrimarySpecialFacilityTier(VillageData v)
+        {
+            if (VillageProfileCatalog.TryGet(v.VillageProfileId,
+                    out VillageProfile profile) == false)
+                return 0;
+            if (profile.PrimarySpecialFacilityId <= 0)
+                return 0;
+
+            int best = 0;
+            for (int i = 0; i < v.PlacedObjects.Count; i++)
+            {
+                PlacedObjectSaveData placed = v.PlacedObjects[i];
+                if (placed.TableId != profile.PrimarySpecialFacilityId)
+                    continue;
+                int tier = placed.FacilityTier > 0 ? placed.FacilityTier : 1;
+                if (tier > best)
+                    best = tier;
+            }
+            return best;
+        }
+
+        /// <summary>V5: ItemTable → 순수 로직 입력(TradeItemInfo) 변환. 태그는 코드 카탈로그.</summary>
+        private static TradeItemInfo CreateTradeItemInfo(Tables.ItemTable item)
+        {
+            return new TradeItemInfo(item.Id, item.Tier, item.BasePrice, item.Stackable,
+                ItemTradeTagCatalog.GetTags(item.Id));
+        }
+
+        private static List<TradeItemInfo> BuildTradeItemInfos()
+        {
+            List<TradeItemInfo> items = new List<TradeItemInfo>();
+            List<Tables.ItemTable> all = AR.s.Data.GetAllItems();
+            for (int i = 0; i < all.Count; i++)
+            {
+                if (all[i].BasePrice <= 0)
+                    continue;
+                items.Add(CreateTradeItemInfo(all[i]));
+            }
+            // 테이블 순서 변동에 흔들리지 않도록 ItemId 오름차순으로 고정 (결정론).
+            items.Sort((a, b) => a.Id.CompareTo(b.Id));
+            return items;
+        }
+
+        /// <summary>
+        /// V5 (§11.5): 가격 스냅샷(UnitPrice == 0)이 없는 구 포맷 매물 보정.
+        /// 진열품(ItemData 인스턴스)은 유지하고 가격·사유만 TradeProfile로 스냅샷한다 — 유실 없음.
+        /// </summary>
+        private void BackfillLegacyStockPriceSnapshots(VillageData data)
+        {
+            if (data.MerchantStock.Count == 0)
+                return;
+
+            VillageTradeProfile? trade = null;
+            int backfilled = 0;
+            for (int i = 0; i < data.MerchantStock.Count; i++)
+            {
+                MerchantStockEntry entry = data.MerchantStock[i];
+                if (entry.UnitPrice > 0)
+                    continue;
+                Tables.ItemTable? table = entry.Item?.Table;
+                if (table == null || table.BasePrice <= 0)
+                    continue;
+
+                if (trade == null)
+                    trade = ResolveTradeProfile(data);
+                TradeItemInfo info = CreateTradeItemInfo(table);
+                entry.UnitPrice = VillageTradeStockRoller.GetPlayerBuyPrice(trade, info);
+                entry.TradeProfileId = trade.TradeProfileId;
+                entry.SlotKind = TradeStockSlotKind.Guaranteed;
+                entry.PriceReason = VillageTradeStockRoller.GetPriceReason(trade, info,
+                    TradeStockSlotKind.Guaranteed);
+                backfilled++;
+            }
+
+            if (backfilled > 0)
+            {
+                Debug.Log($"[Shop] v{data.VillageId} 구 포맷 매물 {backfilled}건 " +
+                    "가격 스냅샷 보정 (§11.5 — 진열품 유지)");
+            }
         }
     }
 }

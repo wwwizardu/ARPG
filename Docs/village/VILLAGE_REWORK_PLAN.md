@@ -1,6 +1,6 @@
 # 마을 성장·지역 차별화 개편 작업 계획
 
-> **상태 (2026-07-14): 기획 합의안 기반 구현 계획 — V0·V1 완료, V2·V3·V4 구현·정적 검증 완료 (고정 인구·초기 Stage 확정 + Stage 누적 시설·상점 Tier·Cap 마일스톤 1회 적용 + Dwarf 슬롯 배치·기능성 벽·상호작용 프롬프트·제련소 Tier. 시각·상호작용 실측과 비교 스크린샷은 플레이 모드 필요, V7 통합 검증과 연계)**
+> **상태 (2026-07-15): 기획 합의안 기반 구현 계획 — V0·V1 완료, V2·V3·V4·V5 구현·정적 검증 완료 (고정 인구·초기 Stage 확정 + Stage 누적 시설·상점 Tier·Cap 마일스톤 1회 적용 + Dwarf 슬롯 배치·기능성 벽·상호작용 프롬프트·제련소 Tier + TradeProfile 지역 상권·결정론 재고·가격 분리. 시각·상호작용·상점 UI 실측과 비교 스크린샷은 플레이 모드 필요, V7 통합 검증과 연계)**
 >
 > **핵심 결정**: 절차적 역사 생성이 끝난 시점의 정착지 인구를 고정 스냅샷으로 사용한다. 이 인구로 초기 Stage를 확정하고, 해당 Stage까지의 공통 시설·지역 특수 시설·상점·배치 구조를 누적 적용해 이미 발전한 마을로 등장시킨다. 신규 마을의 모든 일반·특수 건물은 플레이어가 직접 상호작용할 수 있어야 하며, 기능 없는 건물형 장식·외형 모듈은 생성하지 않는다. 런타임에서는 인구 자연 증가·감소, Stage 승격, 자동 시설 추가와 배치 확장을 진행하지 않는다. 런타임 마을 발전은 1차 개편의 재미 검증이 끝난 뒤 별도 후속 Phase에서 설계한다.
 >
@@ -463,7 +463,7 @@ ItemId 직접 나열은 초기 예외 또는 보장 품목에만 사용한다.
 | **V2** | 고정 인구·초기 Stage 확정 | 역사 종료 인구 고정, 초기 Stage 계산, 런타임 발전 차단 | V1 | 중 | 🟡 (구현·정적 검증 완료, 플레이 모드 실측 2건은 V7 연계) |
 | **V3** | 초기 Stage 누적 시설 생성 | 마일스톤 원장, 완공 상태 생성, 명시적 시설 목록 | V2 | 높음 | 🟡 (구현·정적 검증 완료, materialize 배치·상호작용 실측은 V4/V7 연계) |
 | **V4** | Dwarf 배치 수직 슬라이스 | 상호작용 건물 슬롯, Tier 교체 자산, 기능성 벽, 밀도 검증 | V3 | 높음/콘텐츠 | 🟡 (구현·정적 검증 완료, 시각·상호작용 실측과 비교 스크린샷은 플레이 모드 필요) |
-| **V5** | 지역 상권 | TradeTag/Profile, 결정론 재고, 지역 가격 | V1, V2 | 높음 | ⬜ |
+| **V5** | 지역 상권 | TradeTag/Profile, 결정론 재고, 지역 가격 | V1, V2 | 높음 | 🟡 (구현·정적 검증 완료, 상점 UI 표시·구매/판매 실측은 플레이 모드 필요, V7 연계) |
 | **V6** | Race/Biome Profile 확장 | 7종 주 특수 시설과 성장 계획, 청사진 variant | V4, V5 | 콘텐츠 큼 | ⬜ |
 | **V7** | 마이그레이션·통합 검증·정본 갱신 | 세이브 왕복, parity, Unity 검증, 기존 문서 갱신 | V3~V6 | 높음 | ⬜ |
 | **V8 (후속)** | 런타임 마을 발전 재미 검증 | 성장 계기·속도·연출 프로토타입과 채택 여부 | V7 이후 별도 승인 | 미정 | 보류 |
@@ -795,23 +795,35 @@ Stage 입력을 경제 인구와 분리한 후보를 검증하기 위해 실제 
 
 #### 작업
 
-- [ ] TradeTag 데이터 추가
-- [ ] VillageTradeProfile 데이터 추가
-- [ ] 보장/특산/희귀 슬롯별 재고 생성
-- [ ] `UnityEngine.Random` 재고 롤을 결정론 RNG로 교체
-- [ ] Profile·Stage·특수 시설 Tier를 재고 풀에 반영
-- [ ] 플레이어 구매가와 상인 매입가 분리
-- [ ] `MerchantStockEntry` 가격 스냅샷/회차 저장
-- [ ] UI에 지역 가격과 사유 표시
-- [ ] 기존 MerchantStock 구 포맷 마이그레이션 또는 안전한 재롤
+- [x] TradeTag 데이터 추가 (`TradeTag` Flags + `ItemTradeTagCatalog` — **사용자 결정에 따라 시트 컬럼이 아닌 코드 카탈로그**. §8.2 예시 태그 전부 정의, 현 아이템 83종 중 존재 품목에만 매핑. 시트 컬럼 이전은 V6/V7 검토)
+- [x] VillageTradeProfile 데이터 추가 (`VillageTradeProfileCatalog` — 보장 품목 그룹·특산/희귀 가중 풀·태그별 bp 배율·수량 범위·재입고 시간·ShopTier별 슬롯·특수 시설 추가 풀. V5 범위 제한대로 아키타입은 Dwarf 광산 + 비-Dwarf 공통 2종, 66개 TradeProfileId 전부 해석 — 저장 ID 불변, 정의만 채움(V1 계약))
+- [x] 보장/특산/희귀 슬롯별 재고 생성 (§8.4 — ShopTier1 = 공통 2+특산 2+희귀 1. 특산 풀이 Tier 게이트로 비면 일반 품목 fallback으로 슬롯 수 유지)
+- [x] `UnityEngine.Random` 재고 롤을 결정론 RNG로 교체 (`VillageTradeStockRoller` + `HistoryRng`. `ItemManager.CreateInventoryItemData`에 선택적 `HistoryRng` 주입 — 장비 Mod/Quality·스킬북 SkillId·페이지 EffectId 인스턴스 롤까지 같은 시드 채널. 미주입 호출(드랍 등)은 기존 동작 유지)
+- [x] Profile·Stage·특수 시설 Tier를 재고 풀에 반영 (Stage는 직접 쓰지 않고 V3 `VillageData.ShopTier` 누적 결과를 소비 — 재계산 없음. `PlacedObjects[].FacilityTier`(제련소 160)가 §8.3 추가 풀 게이트)
+- [x] 플레이어 구매가와 상인 매입가 분리 (BasePrice × SellToPlayerBp/10000, × BuyFromPlayerBp/10000. 기존 `SellRatioBp`(÷100 퍼센트)는 매각 가능 플래그로만 유지 — 의미 분리)
+- [x] `MerchantStockEntry` 가격 스냅샷/회차 저장 (`UnitPrice`·`RestockCycle`·`TradeProfileId`·`SlotKind`·`PriceReason` + `VillageData.MerchantRestockCycle` — 재롤 직후 세이브 없이도 같은 회차 재현)
+- [x] UI에 지역 가격과 사유 표시 (UIShopMerchant 구매가 = 스냅샷, `지역 특산`/`현지 부족`/`희귀 수입` 병기, 매각 탭 매입가·사유 — 화면 실측은 플레이 모드)
+- [x] 기존 MerchantStock 구 포맷 마이그레이션 또는 안전한 재롤 (§11.5 — **유실 없음**: 가격 필드 없는 매물은 로드 시 진열품을 유지하고 가격·사유만 Profile로 스냅샷. `MerchantRestockCycle=-1` 구 세이브는 기존 24h 게이트가 지나면 결정론 롤로 자연 전환)
 
 #### 검증 기준
 
-- [ ] 같은 마을·같은 재입고 회차는 save/load 후 같은 재고를 만든다.
-- [ ] 서로 다른 Profile의 품목과 가격 분포가 통계적으로 구분된다.
-- [ ] Dwarf 광산촌→부족 지역 운송에서 제한된 양수 차익이 존재한다.
-- [ ] 일반 장비 왕복 구매·판매로 무한 차익이 생기지 않는다.
-- [ ] 초기 Stage와 특수 시설 Tier가 높은 마을은 첫 재입고부터 해당 풀이 열린다.
+- [x] 같은 마을·같은 재입고 회차는 save/load 후 같은 재고를 만든다. (정적: 같은 (mapSeed, SettlementId, 회차) 100회 반복 동일 계획 + JSON 왕복 스냅샷 보존. ItemData 인스턴스(Mod/Quality) 결정론은 같은 rng 체인으로 설계 — Unity 실측은 플레이 모드)
+- [x] 서로 다른 Profile의 품목과 가격 분포가 통계적으로 구분된다. (정적: 200회차 표본에서 Dwarf 광물+중장구 1,155건 vs 비-Dwarf 0건, 같은 스킬 북 구매가 230G vs 200G)
+- [x] Dwarf 광산촌→부족 지역 운송에서 제한된 양수 차익이 존재한다. (정적: 철 +5G/개·구리 +2G/개, TradeGood 재고 4~8개로 규모 제한, 역방향·비-Dwarf 광물 미진열로 순환 차단 — 실제 왕복 플레이 실측은 플레이 모드)
+- [x] 일반 장비 왕복 구매·판매로 무한 차익이 생기지 않는다. (정적: 전 66 프로필 × 전 품목에서 같은 상점 매입가 ≤ 구매가, 非TradeGood 전 프로필 최대 매입가(4,500bp) ≤ 최소 구매가(8,500bp))
+- [x] 초기 Stage와 특수 시설 Tier가 높은 마을은 첫 재입고부터 해당 풀이 열린다. (정적: 회차 0에서 City(ShopTier4·제련소 T3)가 T3 품목·특수 시설 풀 즉시 개방, 제련소 T1은 닫힘)
+
+##### V5 구현·검증 결과 (2026-07-15)
+
+- TradeTag 저장 방식: 시트 컬럼(§8.2 원안)과 코드 카탈로그를 비교 보고 후 **코드 카탈로그로 사용자 확정**. TableData .bytes는 `DownloadTables`로 재생성되므로 V2~V4 임계값·Cap·GrowthPlan과 같은 정책이다. `ItemTradeTagCatalog`가 ItemId→`TradeTag`(Flags: Ore/HeavyArmor/Arcane/Ranged/Herb/Poison/Cold/TravelSupply/TradeGood/RareImport)를 정의하며, 현 카탈로그에서는 광물(2002·2003)=Ore|TradeGood, 금속 방어구 9종=HeavyArmor, 지팡이·완드·마법서·마법사 방어구 13종=Arcane, 원거리 8종=Ranged, 스킬 북/상위 페이지=Arcane|RareImport다.
+- 상권 프로필: `VillageTradeProfileCatalog`가 `VillageProfileCatalog`의 66개 `TradeProfileId` 전부를 해석한다(저장 ID 불변 — V1 계약). V5 범위 제한대로 아키타입은 2종 — **Dwarf 광산**(보장 철·구리·일반 페이지, 특산 Ore w3+HeavyArmor w2, 희귀 RareImport w2+Arcane w1, 제련소 Tier2+에서 HeavyArmor w3+Ore w2 추가 풀, TradeGood 8000/3000bp·특산 8500/4000bp·Arcane 11500/4500bp)과 **비-Dwarf 공통**(보장 페이지/북, 특산 일반 품목 w3+Ranged w1, 희귀 RareImport w2+Arcane w1, TradeGood 15000/13000bp). 기본 배율 10000/4000bp, 재입고 24h, 슬롯은 ShopTier 1~4 = 5/6/7/8(보장 2~3+특산 2~3+희귀 1~2), 아이템 Tier 해금 = min(ShopTier, 3). Race별 세분화·역할(TradeHub 등) 결합은 V6.
+- 결정론 롤: `VillageTradeStockRoller`(순수 정적 로직)가 `DerivedSeed.ChannelMerchantStock ^ SettlementId ^ RestockCycle` 채널에서 파생된 `HistoryRng`로 계획(품목·수량·확정 가격·슬롯 종류·사유)을 만들고, `VillageManager.RollMerchantStock`이 같은 rng를 이어 `ItemManager.CreateInventoryItemData(id, 1, rng)`로 인스턴스를 완성한다 — `UnityEngine.Random` 재고 경로 제거(§8.5). BaseTown(SettlementId<0)은 `-1 - VillageId`를 정착지 키로 사용한다. 재입고 게이트는 `MerchantRestockCycle`(게임시간/재입고 간격 몫) 비교로, 같은 회차 재진입·재롤은 항상 같은 결과다. 회차 내 구매 잔량 감소는 저장 매물이 정본이라 유지된다.
+- 가격 분리: 플레이어 구매가 = `BasePrice × SellToPlayerBp / 10000`(최소 1G, roll 시 `MerchantStockEntry.UnitPrice`로 확정), 상인 매입가 = `BasePrice × BuyFromPlayerBp / 10000`(`VillageManager.GetMerchantBuyPrice`). 기존 `SellRatioBp`(÷100)는 매각 가능 플래그로만 남겨 의미 혼동을 제거했다. UIShopMerchant는 스냅샷 가격과 사유(지역 특산/현지 부족/희귀 수입)를 병기한다.
+- 구 세이브(§11.5): WorldData 버전 증가 없음(V7 범위 준수). `VillageManager.Load`의 `BackfillLegacyStockPriceSnapshots`가 가격 필드 없는 매물의 진열품을 유지한 채 가격·사유만 Profile로 스냅샷한다 — **유실 없음**. Item=null 구구(V2) 포맷 폐기·24h 경과 재롤은 기존 정책 그대로다.
+- 검증: `Assembly-CSharp`/`Assembly-CSharp-Editor` 컴파일 오류 0건(dotnet msbuild). Unity 외부 정적 하니스(`Temp/V5StaticHarness`, 실제 `ItemTable.bytes` 파싱 + 컴파일된 Assembly-CSharp 참조) **27개 assertion 통과** — 카탈로그 66 해석·보장 품목 유효·회차 계산·100회 결정론·회차/정착지 분리(각 20/20 고유)·보장 슬롯·ShopTier별 슬롯 수와 Tier 게이트·분포 구분·가격 스냅샷 재계산 일치·사유 규칙·왕복/운송 차익 불변식·TradeGood 차익과 규모 제한·특수 시설 풀 게이트(제련소 T2 개방 63/100회차·T1 닫힘)·첫 재입고 개방·BaseTown 아키타입 공유·JSON 신규/구 포맷 왕복. 참고: V2~V4 하니스 폴더는 Unity의 Temp 정리로 소실되어 재실행하지 못했고, 회귀는 전체 컴파일과 기존 `ARPG/Village/Run V2~V4` Editor 진단으로 확인한다.
+- Editor 진단: `ARPG/Village/Run V5 Trade Diagnostics`가 위 검증 전체 + 분포/가격 표본을 `Temp/VILLAGE_V5_TRADE_DUMP.md`로 덤프한다(V0~V4 진단과 같은 패턴, 메뉴 425).
+- Editor 진단 실행 결과 (2026-07-15, Unity 6000.4.2f1, 메뉴 실행): **8/8 통과**. 분포 표본(Town ShopTier3, 200회차)에서 Dwarf는 보장 철·구리 200/200 + 중장구 9종이 상위를 채우고 비-Dwarf는 보장 페이지·북 200/200 + 희귀 풀 상위 페이지·북·마법서로 상위 품목이 완전히 갈렸다(일반 장비는 미태그 풀 ~40종에 분산). 가격 표본 검산 — 철 Dwarf 구매 8G→비-Dwarf 매입 13G(+5G/개), 구리 4G→6G(+2G), 철 갑옷 Dwarf 특산 51G/매입 24G(왕복·운송 손해), 마법사 로브 103G·스킬 북 230G(Dwarf 현지 부족 프리미엄), 가죽 조끼 30/12G(표준) — 전부 bp 규칙과 일치.
+- 플레이 모드 검증 절차(V7 통합 검증 연계, V4 미체크 항목과 별개로 상점 항목만 추가): ① Dwarf 마을 시장에서 상점 UI를 열어 스냅샷 가격·사유 표기(광물 지역 특산 할인, 스킬 북 현지 부족 프리미엄, 희귀 슬롯 표기)와 구매 차감액 일치 확인 ② 재롤 직후 세이브 없이 종료→재로드→같은 회차 재진입 시 같은 진열(품목·수량·가격·장비 Mod) 확인 ③ 구 세이브 로드 시 기존 진열 유지 + 가격 보정 로그 확인 ④ Dwarf 광산촌에서 철/구리 구매 → 비-Dwarf 마을 매각으로 양수 차익, 일반 장비 왕복은 손해 확인 ⑤ Town/City 첫 방문 상점에서 T2/T3 품목·특수 시설 풀 등장 확인.
 
 ---
 
@@ -979,6 +991,7 @@ V8은 현재 구현 범위에 포함하지 않는다. V0~V7에서는 후속 확�
 | 벽 정본 | 기능 없는 청사진 경계 제거, 충돌·HP·Gate 개폐 기능을 가진 방어 구조만 사용 | V4 |
 | 상점 슬롯 | 공통 2 + 특산 2 + 특수/희귀 1 | V5 |
 | 일반 교역 차익 | TradeGood만 의도적으로 허용 | V5 |
+| TradeTag 저장 | 시트 컬럼 대신 코드 카탈로그(`ItemTradeTagCatalog`) — 시트 이전은 V6/V7 재검토 | V5 |
 
 ---
 

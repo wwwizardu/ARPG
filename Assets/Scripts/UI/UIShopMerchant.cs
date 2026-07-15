@@ -208,7 +208,8 @@ namespace ARPG.UI
                 ItemData stockItem = entry.Item;
                 Tables.ItemTable table = stockItem.Table;
 
-                int price = table.BasePrice;
+                // V5 (§8.5): roll 시점 확정 가격 스냅샷 표시. 0(방어)이면 BasePrice fallback.
+                int price = entry.UnitPrice > 0 ? entry.UnitPrice : table.BasePrice;
                 bool canAfford = (AR.s.Data.Player?.Gold ?? 0) >= price;
 
                 VisualElement row = new();
@@ -235,7 +236,14 @@ namespace ARPG.UI
                 info.AddToClassList("shop-buy-info");
                 Text nameText = new() { text = $"{displayName} (재고 {entry.RemainingCount})" };
                 nameText.AddToClassList("shop-buy-name");
-                Text priceText = new() { text = $"{price:N0} G" };
+                // V5 (§8.5): 지역 가격 사유 표기 — 지역 특산/현지 부족/희귀 수입.
+                string reasonLabel = GetPriceReasonLabel(entry.PriceReason);
+                Text priceText = new()
+                {
+                    text = reasonLabel.Length > 0
+                        ? $"{price:N0} G · {reasonLabel}"
+                        : $"{price:N0} G"
+                };
                 priceText.AddToClassList("shop-buy-price");
                 info.Add(nameText);
                 info.Add(priceText);
@@ -374,8 +382,20 @@ namespace ARPG.UI
             {
                 if (item != null && item.Table != null)
                 {
-                    int sellPrice = item.Table.BasePrice * item.Table.SellRatioBp / 100;
-                    _selectedSellText.text = $"선택: {item.Table.Name} — 매각가 {sellPrice:N0} G";
+                    // V5 (§8.3): 상인 매입가 = BasePrice × BuyFromPlayerBp / 10000 (TradeProfile 정본).
+                    // 마을 컨텍스트가 없으면(테스트 모드) 기존 SellRatioBp 표기 유지.
+                    int sellPrice = _villageId >= 0
+                        ? AR.s.Village.GetMerchantBuyPrice(_villageId, item.Table)
+                        : item.Table.BasePrice * item.Table.SellRatioBp / 100;
+                    if (sellPrice < 0)
+                        sellPrice = 0;
+                    string reasonLabel = _villageId >= 0
+                        ? GetPriceReasonLabel(
+                            AR.s.Village.GetMerchantBuyPriceReason(_villageId, item.Table))
+                        : string.Empty;
+                    _selectedSellText.text = reasonLabel.Length > 0
+                        ? $"선택: {item.Table.Name} — 매각가 {sellPrice:N0} G ({reasonLabel})"
+                        : $"선택: {item.Table.Name} — 매각가 {sellPrice:N0} G";
                 }
                 else
                 {
@@ -392,6 +412,18 @@ namespace ARPG.UI
             Text emptyText = new() { text = msg };
             emptyText.AddToClassList("shop-empty-text");
             parent.Add(emptyText);
+        }
+
+        /// <summary>V5 (§8.5): 지역 가격 사유 표기. Standard는 빈 문자열(표기 없음).</summary>
+        private static string GetPriceReasonLabel(TradePriceReason reason)
+        {
+            switch (reason)
+            {
+                case TradePriceReason.LocalSpecialty: return "지역 특산";
+                case TradePriceReason.LocalShortage: return "현지 부족";
+                case TradePriceReason.RareImport: return "희귀 수입";
+                default: return string.Empty;
+            }
         }
     }
 }

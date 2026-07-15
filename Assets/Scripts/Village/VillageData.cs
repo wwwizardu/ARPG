@@ -102,9 +102,12 @@ namespace ARPG.Village
         // PlacedObjectTypeIds(ID-only 카운트)와 양립 — 카운트는 그대로, 위치/상태는 이 리스트.
         public List<PlacedObjectSaveData> PlacedObjects = new();
 
-        // Phase D: 상점 매물 풀 (게임시간 24h마다 재롤). MerchantStall 보유 마을만 의미 있음.
+        // Phase D: 상점 매물 풀. MerchantStall 보유 마을만 의미 있음.
+        // V5: 재입고 회차(MerchantRestockCycle)가 재롤 게이트 정본 — 같은 회차는 같은 재고(§8.5).
         public List<MerchantStockEntry> MerchantStock = new();
         public float LastMerchantRollGameTime;
+        // V5: 마지막 롤의 재입고 회차. -1 = 구 세이브/미롤 (다음 상점 진입 시 결정론 재롤).
+        public int MerchantRestockCycle = -1;
 
         [JsonIgnore]
         public List<int> NpcEntityIds = new();

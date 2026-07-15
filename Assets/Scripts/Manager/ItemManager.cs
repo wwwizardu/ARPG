@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using ARPG.Data;
+using ARPG.History;
 using ARPG.Tables;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
@@ -180,8 +181,9 @@ namespace ARPG.Item
 
         /// <summary>
         /// 등급 책 ItemId + SkillId 조합으로 스킬북 ItemData 생성.
+        /// inRng가 있으면 인스턴스 보너스 롤도 결정론 RNG를 사용한다 (V5 상점 재고 §8.5).
         /// </summary>
-        public ItemData? CreateSkillBook(int itemId, int skillId)
+        public ItemData? CreateSkillBook(int itemId, int skillId, HistoryRng? inRng = null)
         {
             ItemTable? itemTable = AR.s.Data?.GetItem(itemId);
             if (itemTable == null)
@@ -206,7 +208,7 @@ namespace ARPG.Item
             // - PageCapacityBonus: +1~+5 균등 랜덤 — 같은 등급 책 사이에서도 용량 차별화
             // - PageSlotsBonus  : 50% 확률 +1 — 같은 등급 책 사이에서도 가끔 슬롯 1개 추가
             // v1 정책: 모든 등급에 동일 적용. 향후 등급별 차등이 필요하면 RollSkillBookBonuses에 itemTable.Tier 인자 추가.
-            (int capBonus, int slotsBonus) = RollSkillBookBonuses();
+            (int capBonus, int slotsBonus) = RollSkillBookBonuses(inRng);
 
             return new ItemData
             {
@@ -224,11 +226,23 @@ namespace ARPG.Item
             };
         }
 
-        private static (int CapacityBonus, int SlotsBonus) RollSkillBookBonuses()
+        private static (int CapacityBonus, int SlotsBonus) RollSkillBookBonuses(
+            HistoryRng? inRng)
         {
-            int capBonus = Random.Range(1, 6);              // 1~5 inclusive
-            int slotsBonus = Random.Range(0, 2);            // 0 또는 1 (50% 확률 +1)
+            int capBonus = RollRange(inRng, 1, 6);          // 1~5 inclusive
+            int slotsBonus = RollRange(inRng, 0, 2);        // 0 또는 1 (50% 확률 +1)
             return (capBonus, slotsBonus);
+        }
+
+        /// <summary>
+        /// V5 (§8.5): 결정론 RNG가 주어지면 HistoryRng, 없으면 기존 UnityEngine.Random.
+        /// 두 경로 모두 [minInclusive, maxExclusive) 의미가 같다.
+        /// </summary>
+        private static int RollRange(HistoryRng? inRng, int minInclusive, int maxExclusive)
+        {
+            if (inRng == null)
+                return Random.Range(minInclusive, maxExclusive);
+            return inRng.Range(minInclusive, maxExclusive);
         }
 
         /// <summary>
@@ -258,7 +272,7 @@ namespace ARPG.Item
         /// 등급(Tier)에 해당하는 책 ItemId를 찾고, 같은 Tier의 스킬 풀에서 랜덤 SkillId를 뽑아 스킬북 생성.
         /// 드랍/상점 stock 생성 시 사용. 풀이 비어 있으면 null 반환.
         /// </summary>
-        public ItemData? CreateRandomSkillBookOfTier(int tier)
+        public ItemData? CreateRandomSkillBookOfTier(int tier, HistoryRng? inRng = null)
         {
             int itemId = GetSkillBookItemIdByTier(tier);
             if (itemId == 0)
@@ -267,14 +281,14 @@ namespace ARPG.Item
                 return null;
             }
 
-            int skillId = PickRandomSkillByTier(tier);
+            int skillId = PickRandomSkillByTier(tier, inRng);
             if (skillId == 0)
             {
                 Debug.LogWarning($"[ItemManager] CreateRandomSkillBookOfTier - No skills with Tier({tier})");
                 return null;
             }
 
-            return CreateSkillBook(itemId, skillId);
+            return CreateSkillBook(itemId, skillId, inRng);
         }
 
         /// <summary>
@@ -323,7 +337,7 @@ namespace ARPG.Item
         /// <summary>
         /// 등급(Tier)에 해당하는 페이지 ItemId를 찾고, PageCost 범위에 맞는 SkillEffect 중 랜덤으로 페이지 생성.
         /// </summary>
-        public ItemData? CreateRandomSkillPageOfTier(int tier)
+        public ItemData? CreateRandomSkillPageOfTier(int tier, HistoryRng? inRng = null)
         {
             int itemId = GetSkillPageItemIdByTier(tier);
             if (itemId == 0)
@@ -332,7 +346,7 @@ namespace ARPG.Item
                 return null;
             }
 
-            int skillEffectId = PickRandomSkillPageEffectByTier(tier);
+            int skillEffectId = PickRandomSkillPageEffectByTier(tier, inRng);
             if (skillEffectId == 0)
             {
                 Debug.LogWarning($"[ItemManager] CreateRandomSkillPageOfTier - No SkillEffect with PageCost range for Tier({tier})");
@@ -350,7 +364,8 @@ namespace ARPG.Item
         /// 등급 기반 랜덤 헬퍼로 위임한다. CreateItem(월드 드랍)·UICheat·DropHelper 모두 이 함수를 거쳐야
         /// 인스턴스 데이터 누락이 일어나지 않는다.
         /// </summary>
-        public ItemData? CreateInventoryItemData(int itemId, int quantity = 1)
+        public ItemData? CreateInventoryItemData(int itemId, int quantity = 1,
+            HistoryRng? inRng = null)
         {
             ItemTable? itemTable = AR.s.Data?.GetItem(itemId);
             if (itemTable == null)
@@ -362,10 +377,10 @@ namespace ARPG.Item
             switch (itemTable.ItemType)
             {
                 case GlobalEnum.ItemType.SkillBook:
-                    return CreateRandomSkillBookOfTier(itemTable.Tier);
+                    return CreateRandomSkillBookOfTier(itemTable.Tier, inRng);
 
                 case GlobalEnum.ItemType.SkillPage:
-                    return CreateRandomSkillPageOfTier(itemTable.Tier);
+                    return CreateRandomSkillPageOfTier(itemTable.Tier, inRng);
 
                 default:
                     return new ItemData
@@ -374,7 +389,7 @@ namespace ARPG.Item
                         ItemInstanceId = _instanceIdCounter++,
                         Quantity = quantity,
                         Table = itemTable,
-                        Equipment = CreateEquipmentData(itemTable),
+                        Equipment = CreateEquipmentData(itemTable, inRng),
                     };
             }
         }
@@ -422,7 +437,7 @@ namespace ARPG.Item
             return 3;
         }
 
-        private int PickRandomSkillPageEffectByTier(int tier)
+        private int PickRandomSkillPageEffectByTier(int tier, HistoryRng? inRng = null)
         {
             if (AR.s.Data == null)
                 return 0;
@@ -441,13 +456,13 @@ namespace ARPG.Item
             if (matched.Count == 0)
                 return 0;
 
-            return matched[Random.Range(0, matched.Count)];
+            return matched[RollRange(inRng, 0, matched.Count)];
         }
 
         /// <summary>
         /// SkillTable.Tier == tier 인 스킬들 중 균등 랜덤 픽. 없으면 0.
         /// </summary>
-        private int PickRandomSkillByTier(int tier)
+        private int PickRandomSkillByTier(int tier, HistoryRng? inRng = null)
         {
             if (AR.s.Data == null)
                 return 0;
@@ -463,10 +478,10 @@ namespace ARPG.Item
             if (matched.Count == 0)
                 return 0;
 
-            return matched[Random.Range(0, matched.Count)];
+            return matched[RollRange(inRng, 0, matched.Count)];
         }
 
-        private EquipmentData? CreateEquipmentData(ItemTable inTable)
+        private EquipmentData? CreateEquipmentData(ItemTable inTable, HistoryRng? inRng = null)
         {
             if (inTable == null)
                 return null;
@@ -485,7 +500,7 @@ namespace ARPG.Item
 
             // EquipType 설정
             equipmentData.EquipType = Utils.CategoryToEquipmentTypeMask(inTable.Category);
-            equipmentData.Quality = Random.Range(1, 101);
+            equipmentData.Quality = RollRange(inRng, 1, 101);
 
             // 1. Base Mod 생성 (일반 장비의 표준 베이스 스탯)
             equipmentData.InitBaseMods(inTable.Id);
@@ -494,10 +509,10 @@ namespace ARPG.Item
             equipmentData.InitImplicitMods(inTable.Id);
 
             // 3. Prefix Mod 랜덤 생성
-            RollRandomMods(equipmentData, GlobalEnum.ModSlot.Prefix, Random.Range(1, 3), equipmentData.EquipType);
+            RollRandomMods(equipmentData, GlobalEnum.ModSlot.Prefix, RollRange(inRng, 1, 3), equipmentData.EquipType, inRng);
 
             // 4. Postfix Mod 랜덤 생성
-            RollRandomMods(equipmentData, GlobalEnum.ModSlot.Postfix, Random.Range(1, 3), equipmentData.EquipType);
+            RollRandomMods(equipmentData, GlobalEnum.ModSlot.Postfix, RollRange(inRng, 1, 3), equipmentData.EquipType, inRng);
 
             // 5. 생성된 Mod들의 테이블 참조 연결
             for (int i = 0; i < equipmentData.Mods.Count; i++)
@@ -557,7 +572,7 @@ namespace ARPG.Item
         /// <summary>
         /// 지정 슬롯에 랜덤 Mod를 롤링하여 추가
         /// </summary>
-        private void RollRandomMods(EquipmentData equipment, GlobalEnum.ModSlot slot, int count, GlobalEnum.EquipmentTypeMask equipType)
+        private void RollRandomMods(EquipmentData equipment, GlobalEnum.ModSlot slot, int count, GlobalEnum.EquipmentTypeMask equipType, HistoryRng? inRng = null)
         {
             List<ModTable> modPool = AR.s.Data.GetModPool(slot, equipType);
             if (modPool.Count == 0)
@@ -566,18 +581,18 @@ namespace ARPG.Item
             for (int i = 0; i < count; i++)
             {
                 // 랜덤 Mod 선택
-                ModTable selectedMod = modPool[Random.Range(0, modPool.Count)];
+                ModTable selectedMod = modPool[RollRange(inRng, 0, modPool.Count)];
 
                 // 해당 Mod의 티어 목록에서 랜덤 선택
                 List<ModTierTable> tiers = AR.s.Data.GetModTiers(selectedMod.Id);
                 if (tiers.Count == 0)
                     continue;
 
-                ModTierTable selectedTier = tiers[Random.Range(0, tiers.Count)];
+                ModTierTable selectedTier = tiers[RollRange(inRng, 0, tiers.Count)];
 
                 // 값 롤링
-                ushort value1 = (ushort)Random.Range(selectedTier.Min1, selectedTier.Max1 + 1);
-                ushort value2 = (ushort)Random.Range(selectedTier.Min2, selectedTier.Max2 + 1);
+                ushort value1 = (ushort)RollRange(inRng, selectedTier.Min1, selectedTier.Max1 + 1);
+                ushort value2 = (ushort)RollRange(inRng, selectedTier.Min2, selectedTier.Max2 + 1);
 
                 equipment.Mods.Add(new ModInstance
                 {

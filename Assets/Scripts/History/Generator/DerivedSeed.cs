@@ -34,6 +34,9 @@ namespace ARPG.History
         public const ulong ChannelNpcActivity = 0x4E_50_43_41_43_54_49_56UL; // "NPCACTIV"
         public const ulong ChannelVillageBootstrap = 0x56_49_4C_4C_42_4F_4F_54UL; // "VILLBOOT"
 
+        // VILLAGE_REWORK_PLAN V5 §8.5 — 상점 재입고 롤용 (SettlementId + RestockCycle 혼합)
+        public const ulong ChannelMerchantStock = 0x4D_45_52_43_53_54_4F_43UL; // "MERCSTOC"
+
         public static ulong Derive(int worldSeed, ulong channel)
         {
             ulong x = unchecked((ulong)worldSeed * 0x9E3779B97F4A7C15UL) ^ channel;
