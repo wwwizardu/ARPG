@@ -124,7 +124,10 @@ namespace ARPG.UI
             if (_saveData == null) return;
 
             NpcTable? table = AR.s.Data?.GetNpc(_saveData.NpcTableId);
-            string name = table?.Name ?? $"NPC #{_entityId}";
+            // 인스턴스 고유 이름 우선. 구 세이브/미시드 방어로 테이블 이름 → #EntityId 폴백.
+            string name = string.IsNullOrEmpty(_saveData.Name) == false
+                ? _saveData.Name
+                : (table?.Name ?? $"NPC #{_entityId}");
             string job = _saveData.JobType != GE.JobType.None
                 ? _saveData.JobType.ToString()
                 : (table?.JobType.ToString() ?? string.Empty);
@@ -223,7 +226,11 @@ namespace ARPG.UI
 
                 NpcSaveData? other = AR.s.Npc?.GetSaveData(participantId);
                 if (other != null)
+                {
+                    if (string.IsNullOrEmpty(other.Name) == false)
+                        return other.Name;
                     return AR.s.Data?.GetNpc(other.NpcTableId)?.Name ?? $"NPC #{participantId}";
+                }
             }
 
             return "동료";
@@ -448,6 +455,8 @@ namespace ARPG.UI
             NpcSaveData? other = AR.s.Npc?.GetSaveData(otherId);
             if (other == null)
                 return $"NPC #{otherId}";
+            if (string.IsNullOrEmpty(other.Name) == false)
+                return other.Name;
             NpcTable? t = AR.s.Data?.GetNpc(other.NpcTableId);
             return t?.Name ?? $"NPC #{otherId}";
         }

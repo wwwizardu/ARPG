@@ -64,7 +64,7 @@ namespace ARPG.Manager
         }
 
         /// <summary>
-        /// StatComponent에서 현재 HP/MP를 PlayerData에 저장
+        /// StatComponent에서 현재 HP/MP를, TransformComponent에서 현재 위치를 PlayerData에 저장
         /// </summary>
         public void Save(PlayerData inPlayerData)
         {
@@ -79,6 +79,13 @@ namespace ARPG.Manager
 
             inPlayerData.CurrentHp = statComponent.CurrentHp;
             inPlayerData.CurrentMp = statComponent.CurrentMp;
+
+            // 현재 위치 저장 (권위 소스는 TransformComponent — System_Render가 transform과 동기화)
+            if (AR.s.Component.TryGetComponent<TransformComponent>(_myPlayer.EntityId, out var transformComponent) == true)
+            {
+                inPlayerData.PositionX = transformComponent.Position.x;
+                inPlayerData.PositionZ = transformComponent.Position.y;
+            }
         }
     }
 }

@@ -34,6 +34,10 @@ namespace ARPG.Npc
         public GlobalEnum.JobType JobType;
         public int SkillLevel;
 
+        // 인스턴스별 고유 이름 — 생성 시 이름 풀에서 랜덤 선택, 이후 고정.
+        // 같은 NpcTableId(공유 테이블 이름)라도 NPC마다 다른 이름이 보이도록 인스턴스에 둔다.
+        public string Name = string.Empty;
+
         // 인스턴스별 flavor — 생성 시 직업 기반 풀에서 랜덤 선택, 이후 고정.
         // 같은 NpcTableId라도 NPC마다 다른 소개가 보이도록 데이터를 인스턴스에 둔다.
         public string Description = string.Empty;
@@ -79,6 +83,7 @@ namespace ARPG.Npc
             VillageId = 0;
             JobType = GlobalEnum.JobType.None;
             SkillLevel = 0;
+            Name = string.Empty;
             Description = string.Empty;
             NpcStat = new NpcStatComponent
             {

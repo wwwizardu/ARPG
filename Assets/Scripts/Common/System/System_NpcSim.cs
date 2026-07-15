@@ -382,7 +382,7 @@ namespace ARPG.Systems
             if (leader == null || leader.IsActive == false)
                 return;
 
-            string leaderName = AR.s.Data.GetNpc(leader.NpcTableId)?.Name ?? $"NPC #{party.LeaderId}";
+            string leaderName = AR.s.Npc.GetDisplayName(party.LeaderId);
             string message = successCount > 0
                 ? $"{leaderName} 원정대: 사냥 성공, 식량 +{foodYield}"
                 : $"{leaderName} 원정대: 사냥에 실패했습니다.";
@@ -454,7 +454,7 @@ namespace ARPG.Systems
             if (saveData.IsActive == false && outcome != NpcHuntOutcome.Wounded && outcome != NpcHuntOutcome.Dead)
                 return;
 
-            string name = AR.s.Data.GetNpc(saveData.NpcTableId)?.Name ?? $"NPC #{entityId}";
+            string name = AR.s.Npc.GetDisplayName(entityId);
             string message = outcome switch
             {
                 NpcHuntOutcome.Success => $"{name}: 사냥 성공, 식량 +{foodYield}",

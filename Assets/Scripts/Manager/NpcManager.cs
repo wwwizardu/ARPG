@@ -91,6 +91,9 @@ namespace ARPG.Npc
             _playerRelations.Clear();
             _npcRelations.Clear();
             _narrative.Reset();
+            _nameBag.Clear();
+            _nameBagCursor = 0;
+            _usedNames.Clear();
             _isInitialLoaded = false;
         }
 
@@ -192,6 +195,7 @@ namespace ARPG.Npc
                 NpcSaveData saveData = new NpcSaveData(obj.ObjectId, worldPos)
                 {
                     EntityId = entityId,  // 일관성 — 다른 생성 경로(SpawnNewNpc)도 채워줌
+                    Name = PickName(),
                     Description = PickDescription(GetPreferredJobType(obj.ObjectId)),
                 };
 
@@ -273,6 +277,7 @@ namespace ARPG.Npc
             {
                 EntityId = entityId,
                 VillageId = villageId,
+                Name = PickName(),
                 Description = PickDescription(GetPreferredJobType(npcTableId)),
             };
 
@@ -817,6 +822,13 @@ namespace ARPG.Npc
 
                 // 장비/인벤토리 ItemData의 ItemTable 참조 복원 (PlayerData.LoadCompleted와 동일 패턴)
                 saveData.OnLoadCompleted();
+
+                // 이름 순환 상태에 기존 이름을 등록해 신규 스폰이 재사용하지 않도록 한다.
+                // 구 세이브 호환 — Name 필드가 없던 시점의 데이터는 이름 풀에서 채워준다(등록은 PickName 내부에서).
+                if (string.IsNullOrEmpty(saveData.Name))
+                    saveData.Name = PickName();
+                else
+                    _usedNames.Add(saveData.Name);
 
                 // 구 세이브 호환 — Description 필드가 없던 시점의 데이터는 직업 풀에서 채워준다
                 if (string.IsNullOrEmpty(saveData.Description))
@@ -1526,6 +1538,9 @@ namespace ARPG.Npc
 
         private static string ResolveNpcDisplayName(NpcSaveData saveData)
         {
+            // 인스턴스 고유 이름 우선. 구 세이브/미시드 방어로 테이블 이름 → #EntityId 폴백.
+            if (string.IsNullOrEmpty(saveData.Name) == false)
+                return saveData.Name;
             return AR.s.Data.GetNpc(saveData.NpcTableId)?.Name ?? $"NPC #{saveData.EntityId}";
         }
 
@@ -1608,10 +1623,119 @@ namespace ARPG.Npc
             return $"NPC #{entityId}";
         }
 
+        /// <summary>
+        /// NPC의 표시 이름. 인스턴스 고유 이름 → 테이블 이름 → "NPC #id" 폴백.
+        /// 이름 표기 정책 단일 진입점 — UI/피드/시뮬 모두 이 경로로 통일한다.
+        /// </summary>
+        public string GetDisplayName(int entityId) => ResolveNpcDisplayName(entityId);
+
         private GlobalEnum.JobType GetPreferredJobType(int npcTableId)
         {
             Tables.NpcTable? table = AR.s.Data.GetNpc(npcTableId);
             return table != null ? table.JobType : GlobalEnum.JobType.None;
+        }
+
+        // ========== 이름 풀 + 배정(셔플백 순환) ==========
+        // NpcSaveData.Name 생성용. 같은 NpcTableId(공유 테이블 이름)라도 인스턴스마다 다른 이름 → "누가 누군지" 식별.
+        // 서양 판타지 + 순우리말 혼합. 종족/성별 분기는 v1 미적용(인스턴스에 데이터 없음).
+        // 배정 방식: 풀을 셔플해 순차 소비 → 한 바퀴(=풀 크기) 안에서는 중복 0.
+        //   풀이 300보다 크므로 300명 규모 월드도 첫 바퀴에서 동명이인 없음.
+        //   셔플 순서·커서·사용집합은 매니저 인스턴스가 소유(Reset()에서 정리). static 금지(CLAUDE.md Logic Placement).
+        // 새 이름 추가는 이 배열 한 곳만 수정.
+        private static readonly string[] _namePool =
+        {
+            // ── 서양 판타지 (남성 계열) ──
+            "아서", "롤랜드", "가레스", "트리스탄", "세드릭", "에드먼드", "고드릭", "알드릭", "레온하르트", "카시우스",
+            "마르쿠스", "루시안", "발레리안", "아드리안", "도미닉", "세바스찬", "율리안", "라파엘", "가브리엘", "데미안",
+            "다리우스", "케일럼", "가웨인", "코르빈", "로렌", "에이든", "던컨", "말콤", "이완", "핀레이",
+            "알리스터", "브로디", "캘런", "라클런", "브레넌", "데클란", "로넌", "킬리언", "니얼", "오웬",
+            "로건", "데릭", "콜린", "그렉", "알렌", "로한", "테론", "라이너스", "발렌", "드레이크",
+            "가론", "엘드린", "세라스", "라그나", "비요른", "스벤", "군나르", "하콘", "에릭", "올라프",
+            "아이나르", "레이프", "토르발드", "발더", "군터", "지크프리트", "볼프강", "하인리히", "프리드리히", "콘라트",
+            "오토", "루트비히", "빌헬름", "알브레히트", "디트리히", "라이문트", "베른하르트", "게르하르트", "라인홀트", "롤프",
+            "브란", "아론델", "엘론", "카일", "레온", "아모스", "사일러스", "이지키엘", "조슈아", "일라이",
+            "바나비", "토비아스", "재스퍼", "오스카", "펠릭스", "에밀", "클라우스", "게오르크", "하랄트", "카스파",
+            // ── 서양 판타지 (여성 계열) ──
+            "엘라라", "세라핀", "이졸데", "로웬", "리아나", "아리아", "셀레네", "미리엘", "이오나", "브리엔",
+            "카산드라", "로잘린", "이블린", "세라피나", "릴리안", "비비안", "아드리아나", "이자벨", "에일린", "모르가나",
+            "프레야", "시그리드", "아스트리드", "잉그리드", "헬가", "군힐드", "브룬힐드", "다그니", "소냐", "에이라",
+            "리브", "사가", "이둔", "난나", "시프", "게르드", "엘리자", "오필리아", "코델리아", "로자먼드",
+            "위노나", "에스텔", "로렐라이", "셀레스틴", "페넬로페", "아나스타샤", "예카테리나", "로자", "마르그리트", "아델하이트",
+            "힐데가르트", "게르트루트", "크림힐트", "이졸린", "로스비타", "발푸르가", "쿠니군데", "마틸데", "아그네스", "엘프리데",
+            // ── 서양 판타지 (중성/기타) ──
+            "로빈", "모건", "렌", "카이", "로안", "에덴", "노바", "아리스", "세이지", "로엔",
+            "아셀", "카렌", "에런", "셰인", "웬디", "로라", "클레어", "헬렌", "마야", "노라",
+            // ── 순우리말 ──
+            "가온", "노을", "다온", "라온", "마루", "바다", "새론", "아라", "여울", "이든",
+            "하람", "해울", "가람", "누리", "다솜", "미르", "보라", "서리", "아름", "예송",
+            "이레", "하늘", "한별", "가율", "단하", "무결", "벼리", "새벽", "아린", "여름",
+            "하진", "해온", "가빈", "도담", "미강", "봄내", "슬아", "우담", "예린", "하율",
+            "한솔", "늘봄", "다래", "미리내", "샘이", "여리", "나래", "다올", "별하", "초롱",
+            "한울", "보름", "소담", "은하", "파랑", "나린", "미쁨", "가랑", "도래", "마중",
+            "새하", "아토", "하마루", "나비", "다봄", "소리", "여든", "하랑", "해달", "너울",
+            "다흰", "새암", "가온비", "노아", "라희", "마음", "바오", "산들", "아름드리", "온새미",
+            "자미", "초록", "하람비", "가을", "겨울", "이슬", "달래", "슬기", "예솔", "하봄",
+            "나울", "다솔", "미소", "바름", "새미", "하은", "해나", "나봄", "별찌", "다붓",
+            // ── 서양 판타지 (라틴/게르만 확장 — 남성) ──
+            "아길", "브라이스", "코맥", "데스몬드", "로드릭", "오스릭", "레지날드", "험프리", "발타자르", "카를로스",
+            "엔리케", "로드리고", "알바로", "디에고", "마테오", "세자르", "이그나시오", "로렌초", "마르코", "지오반니",
+            "안토니오", "프란체스코", "살바토레", "비토리오", "에밀리오", "파올로", "레오나르도", "라파엘로", "도나토", "마시모",
+            // ── 서양 판타지 (라틴 확장 — 여성) ──
+            "비앙카", "지네브라", "루크레치아", "프란체스카", "이사벨라", "카테리나", "발렌티나", "로사리아", "안젤리카", "에밀리아",
+            "카밀라", "리비아", "옥타비아", "클라우디아", "플라비아", "실비아", "코르넬리아", "아우렐리아", "발레리아", "레티치아",
+            // ── 서양 판타지 (슬라브/프랑스 확장) ──
+            "미하일", "드미트리", "이반", "니콜라이", "알렉세이", "보리스", "유리", "로만", "안톤", "파벨",
+            "나탈리아", "옥사나", "카티야", "이리나", "라리사", "갈리나", "베로니카", "류드밀라", "조야", "타티아나",
+            "앙리", "필리프", "자크", "티에리", "마티외", "뤼시앵", "가스파르", "레미", "티보", "아드리앵",
+            "아멜리", "콜레트", "쥘리에트", "마르고", "델핀", "실비", "오데트", "이본", "잔", "뤼시",
+        };
+
+        // 이름 배정 상태 — 매니저 인스턴스 소유(Reset()에서 정리). 셔플백 순환으로 중복 최소화.
+        private readonly List<int> _nameBag = new();          // _namePool 인덱스의 셔플된 소비 순서
+        private int _nameBagCursor;                            // _nameBag 소비 위치
+        private readonly HashSet<string> _usedNames = new();   // 현재 사용 중 이름(로드 시 기존 NPC로 시드)
+
+        /// <summary>
+        /// 셔플백에서 아직 안 쓰인 이름을 배정한다. 신규 NPC 생성 시 1회 호출하여 NpcSaveData.Name에 박는다.
+        /// 풀 소진 시(사용 중 NPC 수 &gt; 풀 크기)에만 순환 순서대로 중복을 허용한다.
+        /// </summary>
+        private string PickName()
+        {
+            if (_namePool.Length == 0)
+                return string.Empty;
+
+            // 풀 한 바퀴를 훑으며 아직 안 쓰인 이름을 우선 배정 (HashSet.Add == false → 이미 사용 중)
+            for (int tries = 0; tries < _namePool.Length; tries++)
+            {
+                if (_nameBagCursor >= _nameBag.Count)
+                    RebuildNameBag();
+
+                string candidate = _namePool[_nameBag[_nameBagCursor]];
+                _nameBagCursor++;
+                if (_usedNames.Add(candidate))
+                    return candidate;
+            }
+
+            // 풀 소진 — 유일 이름이 없으니 순환 순서대로 중복 허용
+            if (_nameBagCursor >= _nameBag.Count)
+                RebuildNameBag();
+            return _namePool[_nameBag[_nameBagCursor++]];
+        }
+
+        /// <summary>_namePool 인덱스를 Fisher-Yates로 셔플해 소비 순서를 다시 만든다.</summary>
+        private void RebuildNameBag()
+        {
+            _nameBag.Clear();
+            for (int i = 0; i < _namePool.Length; i++)
+                _nameBag.Add(i);
+            for (int i = _nameBag.Count - 1; i > 0; i--)
+            {
+                int j = Random.Range(0, i + 1);
+                int tmp = _nameBag[i];
+                _nameBag[i] = _nameBag[j];
+                _nameBag[j] = tmp;
+            }
+            _nameBagCursor = 0;
         }
 
         // ========== 직업별 flavor 풀 ==========

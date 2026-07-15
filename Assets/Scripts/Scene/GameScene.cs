@@ -36,7 +36,15 @@ namespace ARPG.Scene
 
         private async UniTask CreatePlayerAsync()
         {
-            var (playerEntityId, player) = await EntityFactory.CreatePlayer(1, Vector3.zero);
+            // 저장된 위치에서 스폰 (신규 플레이어는 PositionX/Z = 0 → 원점)
+            Vector3 spawnPos = Vector3.zero;
+            var playerData = AR.s.Data?.Player;
+            if (playerData != null)
+            {
+                spawnPos = new Vector3(playerData.PositionX, playerData.PositionZ, 0f);
+            }
+
+            var (playerEntityId, player) = await EntityFactory.CreatePlayer(1, spawnPos);
             if (playerEntityId < 0 || player == null)
             {
                 Debug.LogError("Failed to create player entity.");

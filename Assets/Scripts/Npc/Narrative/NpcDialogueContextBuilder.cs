@@ -23,8 +23,8 @@ namespace ARPG.Npc.Narrative
             NpcDialogueContext ctx = new() { NpcId = npcId };
 
             // ── NPC 블록 ──
-            Tables.NpcTable? table = AR.s.Data?.GetNpc(save.NpcTableId);
-            ctx.NpcName = table != null ? table.Name : $"NPC#{npcId}";
+            // 인스턴스 고유 이름 우선 (표기 정책 단일 진입점). 대사 프롬프트에 공유 테이블 이름 대신 개인 이름이 들어간다.
+            ctx.NpcName = AR.s.Npc != null ? AR.s.Npc.GetDisplayName(npcId) : $"NPC#{npcId}";
 
             StringBuilder npc = new();
             npc.AppendLine($"이름: {ctx.NpcName}");
@@ -134,11 +134,7 @@ namespace ARPG.Npc.Narrative
 
         private static string ResolveNpcName(int otherId)
         {
-            NpcSaveData? other = AR.s.Npc?.GetSaveData(otherId);
-            if (other == null)
-                return $"NPC#{otherId}";
-            Tables.NpcTable? t = AR.s.Data?.GetNpc(other.NpcTableId);
-            return t != null ? t.Name : $"NPC#{otherId}";
+            return AR.s.Npc != null ? AR.s.Npc.GetDisplayName(otherId) : $"NPC#{otherId}";
         }
 
         /// <summary>상대를 화자 기준으로 부르는 라벨. isFrom = 화자가 관계의 From인가. (DialogueTopicSelector 사별 토픽도 공유)</summary>
