@@ -448,7 +448,39 @@ namespace ARPG.Npc
                 weights[bestIndex] = 0;
             }
 
+            EnsureHandcraftedVillageQuota(villages, allocations);
             return allocations;
+        }
+
+        /// <summary>
+        /// 손제작 마을(SettlementId&lt;0)은 최소 인구 가중치(1) 탓에 인구 비례 배분에서 0명이 되기 쉽다.
+        /// 플레이어가 최초로 만나는 마을이라 1명을 보장한다. 전역 총량 유지를 위해 최다 배분
+        /// 절차 마을에서 1명을 이관한다(이관할 마을이 없으면 총량 +1을 감수하고 플레이어 마을을 우선).
+        /// </summary>
+        private static void EnsureHandcraftedVillageQuota(List<VillageData> villages, int[] allocations)
+        {
+            for (int i = 0; i < villages.Count; i++)
+            {
+                if (villages[i].SettlementId >= 0 || allocations[i] > 0)
+                    continue;
+
+                int donor = -1;
+                int donorMax = 0;
+                for (int j = 0; j < villages.Count; j++)
+                {
+                    if (j == i || villages[j].SettlementId < 0)
+                        continue;
+                    if (allocations[j] > donorMax)
+                    {
+                        donorMax = allocations[j];
+                        donor = j;
+                    }
+                }
+
+                if (donor >= 0)
+                    allocations[donor]--;   // 총량 보존: 최다 절차 마을에서 1명 이관
+                allocations[i] = 1;
+            }
         }
 
         private int SelectReplenishVillage(List<VillageData> villages, NpcPopulationState population)

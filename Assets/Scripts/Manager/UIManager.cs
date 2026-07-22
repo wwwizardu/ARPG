@@ -90,6 +90,10 @@ namespace ARPG
         [SerializeField] private TextMeshProUGUI _loadingText = null!;
         [SerializeField] private TextMeshProUGUI _notifyText = null!;
 
+        [Header("World Feed")]
+        // 좌하단에 NPC 사냥 결과 등 세계 이벤트를 아래에서 위로 쌓아 보여주는 라인 풀.
+        [SerializeField] private TextMeshProUGUI[] _worldFeedLines = null!;
+
         [Header("Layer Root")]
         [SerializeField] private Transform _topRoot = null!;
         [SerializeField] private Transform _popupRoot = null!;
@@ -136,6 +140,13 @@ namespace ARPG
         private Coroutine? _saveCoroutine = null;
 
         private Tween? _notifyTween = null;
+
+        private const float _worldFeedHoldSeconds = 5f;
+        private const float _worldFeedFadeSeconds = 1f;
+
+        // 현재 표시 중인 피드 라인(오래된 것 → 최신 순)과 각 라인의 페이드 트윈.
+        private readonly List<TextMeshProUGUI> _worldFeedActive = new();
+        private readonly Dictionary<TextMeshProUGUI, Tween> _worldFeedTweens = new();
 
         public Camera UICamera { get { return _uiCamera!; } }
 
@@ -581,6 +592,74 @@ namespace ARPG
                 });
         }
 
+        // 좌하단 피드에 한 줄을 추가한다. 빈 슬롯이 없으면 가장 오래된 줄을 재사용한다.
+        public void PushWorldFeed(string inText)
+        {
+            if (_worldFeedLines == null || _worldFeedLines.Length == 0)
+                return;
+
+            TextMeshProUGUI line = GetFreeWorldFeedLine();
+
+            KillWorldFeedTween(line);
+            _worldFeedActive.Remove(line);
+            _worldFeedActive.Add(line);
+
+            line.text = inText;
+            line.color = Color.white;
+            line.gameObject.SetActive(true);
+            line.transform.SetAsLastSibling(); // 최신 줄을 맨 아래에 배치
+
+            Tween tween = line.DOFade(0f, _worldFeedFadeSeconds)
+                .SetDelay(_worldFeedHoldSeconds)
+                .OnComplete(() =>
+                {
+                    line.gameObject.SetActive(false);
+                    _worldFeedActive.Remove(line);
+                    _worldFeedTweens.Remove(line);
+                });
+            _worldFeedTweens[line] = tween;
+        }
+
+        private TextMeshProUGUI GetFreeWorldFeedLine()
+        {
+            for (int i = 0; i < _worldFeedLines.Length; i++)
+            {
+                if (_worldFeedLines[i].gameObject.activeSelf == false)
+                    return _worldFeedLines[i];
+            }
+
+            // 모든 슬롯이 사용 중이면 가장 오래된 줄을 재사용한다.
+            return _worldFeedActive[0];
+        }
+
+        private void KillWorldFeedTween(TextMeshProUGUI line)
+        {
+            if (_worldFeedTweens.TryGetValue(line, out Tween tween))
+            {
+                tween.Kill();
+                _worldFeedTweens.Remove(line);
+            }
+        }
+
+        private void ClearWorldFeed()
+        {
+            if (_worldFeedLines == null)
+                return;
+
+            for (int i = 0; i < _worldFeedLines.Length; i++)
+            {
+                TextMeshProUGUI line = _worldFeedLines[i];
+                if (line == null)
+                    continue;
+
+                KillWorldFeedTween(line);
+                line.gameObject.SetActive(false);
+            }
+
+            _worldFeedActive.Clear();
+            _worldFeedTweens.Clear();
+        }
+
         public async UniTask LoadingTitle(float inSecond)
         {
             AsyncOperationHandle<Sprite> handle = Addressables.LoadAssetAsync<Sprite>("UI/TitleLogo");
@@ -883,6 +962,8 @@ namespace ARPG
                 uiList[i].UI = null;
                 Addressables.ReleaseInstance(uiList[i].Handle);
             }
+
+            ClearWorldFeed();
 
             //RGM.Instance.EffectMgr.ClearAllEffect();
         }

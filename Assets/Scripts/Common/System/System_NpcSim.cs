@@ -389,7 +389,7 @@ namespace ARPG.Systems
             if (survivorCount < party.MemberIds.Count)
                 message += " 전사자가 발생했습니다.";
 
-            AR.s.UI.SetNotify(message);
+            AR.s.UI.PushWorldFeed(message);
         }
 
         private static void ResolveHunt(NpcSaveData saveData, int entityId, float outcomeGameTime, int worldSeed)
@@ -449,7 +449,7 @@ namespace ARPG.Systems
         private static void NotifyHuntOutcome(NpcSaveData saveData, int entityId,
             NpcHuntOutcome outcome, int foodYield)
         {
-            // SetNotify는 단일 표시이므로, 보이지 않는 NPC의 평범한 성공·실패는 피드를 덮어쓰지 않는다.
+            // 보이지 않는 NPC의 평범한 성공·실패는 피드를 채우지 않는다.
             // 부상과 사망은 위치와 관계없이 중요한 세계 변화이므로 항상 알린다.
             if (saveData.IsActive == false && outcome != NpcHuntOutcome.Wounded && outcome != NpcHuntOutcome.Dead)
                 return;
@@ -465,7 +465,7 @@ namespace ARPG.Systems
             };
 
             if (string.IsNullOrEmpty(message) == false)
-                AR.s.UI.SetNotify(message);
+                AR.s.UI.PushWorldFeed(message);
         }
     }
 }

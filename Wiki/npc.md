@@ -4,7 +4,7 @@
 name: npc
 description: NPC 도메인 종합 — 정본 매핑, 코드 구현 현황, 마을 경제와의 경계.
 type: topic
-last_updated: 2026-07-13
+last_updated: 2026-07-22
 sources:
   - Docs/npc/VILLAGE_NPC_BOUNDARY_DESIGN.md
   - Docs/npc/ 관계·활동·장비 문서
@@ -71,6 +71,7 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 
 - **world_history와 가장 깊게 얽힌다** (→ [world_history.md](world_history.md)): 대화·소망의 LLM *생성*은 NARRATIVE_ENGINE(world_history) 소관이지만 **코드는 `Scripts/Npc/Narrative/`에 있다**. 연대기(L1)는 PROCEDURAL_HISTORY가 만들고, npc의 backfill(L2)이 그것을 *입력*으로 쓴다. [src: NPC_RELATION_HISTORY §1]
 - **village**: 마을 경제(`v.Population`)는 물리 NPC와 무관하며 추상 인구에서 소싱한다. NPC 관련 시스템은 Village Priority 대역(50-69)의 Population 밴드(55-59)를 쓴다. [src: Docs/npc/VILLAGE_NPC_BOUNDARY_DESIGN.md §2, Docs/npc/NPC_ACTIVITY_DESIGN.md §12]
+- **손제작 마을(연대기 미연결, `SettlementId<0`)**: 초기 인구 배분에서 최소 가중치(1)로 밀려 0명이 되기 쉬워, `EnsureHandcraftedVillageQuota`가 물리 NPC 1명을 하한 보장한다(전역 총량은 최다 절차 마을에서 1명 이관). 대화 컨텍스트는 연대기 정착지 스냅샷이 없으므로 `VillageProfile.Race`로 홈 종족 정체성·향수 소망 후보를 접지한다(관계·연대기 기반 sentiment는 없음 — solo 배치 결과). [src: Assets/Scripts/Manager/NpcManager.cs (EnsureHandcraftedVillageQuota), Assets/Scripts/Npc/Narrative/NpcDialogueContextBuilder.cs (settlementId<0 폴백)]
 - **WORLD_EVENT**: 원정 결과 `EventTriggered` → 이벤트 디렉터 핸드오프. `Reunion` 소망 × "가족 구출 원정"(§3-E) 교차. [src: NPC_ACTIVITY §9, QUEST_SYSTEM §경계]
 - **아키텍처 관례**: 영속 관계·활동 상태의 정본은 `NpcManager` + `WorldData`/`NpcSaveData`다. 실체화 Hunt의 기본 AI만 멈추기 위해 `NpcActivityPausedTag`를 일시 ECS 태그로 사용한다. [src: Assets/Scripts/Manager/NpcManager.cs, Assets/Scripts/Common/System/System_NpcSim.cs]
 

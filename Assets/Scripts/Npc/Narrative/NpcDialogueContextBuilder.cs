@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 using ARPG.History;
+using ARPG.Village;
 
 namespace ARPG.Npc.Narrative
 {
@@ -68,6 +69,14 @@ namespace ARPG.Npc.Narrative
                         added++;
                     }
                 }
+            }
+            else if (settlementId < 0
+                && AR.s.Village != null
+                && AR.s.Village.TryGetVillageProfile(save.VillageId, out VillageProfile homeProfile))
+            {
+                // 손제작 마을(연대기 미연결): 정착지 스냅샷이 없으므로 마을 Profile 종족으로 홈 정체성만 접지한다.
+                raceHint = homeProfile.Race.ToString();
+                hist.AppendLine($"현재 정착지: {homeProfile.Race} 종족 마을");
             }
 
             // ── 감정 블록 (+ 감정 원인 사건을 연대기에 보강) ──

@@ -4,7 +4,7 @@
 name: village
 description: 마을 경제·건설·Tier·벽·서비스와 실시간/추상 LOD의 정본을 연결한다.
 type: topic
-last_updated: 2026-07-15
+last_updated: 2026-07-22
 sources:
   - Docs/village/VILLAGE_RUNTIME_DESIGN.md
   - Docs/village/ABSTRACT_CONSTRUCTION_DESIGN.md
@@ -22,6 +22,7 @@ sources:
 - 마을 경제 인구는 물리 NPC 수가 아니라 `SettlementLiveState.Pop`을 정량화한 값이다. 물리 NPC는 모험가 활동·전투·관계 계층에 속하며 생산과 건설에 배정되지 않는다. [src: Docs/npc/VILLAGE_NPC_BOUNDARY_DESIGN.md §1–4]
 - 마을은 고정 인구가 정한 `InitialStage`까지의 시설·상점·벽을 완공 상태로 갖춘 **초기 완성형**으로 등장한다. 런타임 시간 경과 자동 건설·Tier 승격은 `RuntimeProgressionEnabled=false`로 중단돼 있고(재개는 후속 Phase), 점수순 자가 건설·동시 task 1개 규칙은 수리·이벤트와 발전 재개 시에만 쓰인다. [src: Docs/village/VILLAGE_RUNTIME_DESIGN.md §4·§6, Docs/village/BUILD_PRIORITY_DESIGN.md]
 - 마을 정체성은 저장 `VillageProfileId`로 고정하고, Growth/Layout/Trade 프로필이 성장 계획·슬롯 배치·지역 상권(결정론 재고·가격)을 연결한다. [src: Docs/village/VILLAGE_RUNTIME_DESIGN.md §5]
+- 손제작 마을(BaseTown 등)은 절차 정착지 연대기에 연결되지 않아 `SettlementId=-1`로 남고 항상 실체화 상태를 유지한다. 이 경우 물리 NPC 배분 1명 하한과 대화 홈 종족 정체성을 `VillageProfile.Race`가 대체한다(상세는 [npc.md](npc.md) §5). [src: Assets/Scripts/Village/VillageManager.cs:43-54, Assets/Scripts/Manager/NpcManager.cs]
 - Shop·Forge·Inn·Shrine은 NPC가 아니라 배치 건물의 `ProvidedService`가 제공한다. [src: Docs/village/VILLAGE_RUNTIME_DESIGN.md §7, Docs/npc/VILLAGE_NPC_BOUNDARY_DESIGN.md §5]
 
 ## 2. 정본 읽기 순서
