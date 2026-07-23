@@ -1,0 +1,4 @@
+interface:
+  display_name: "몬스터 스프라이트 생성"
+  short_description: "ARPG 몬스터 애니메이션 스프라이트 13장 생성"
+  default_prompt: "$generate-monster-sprites를 사용해 버섯 몬스터 애니메이션 스프라이트 세트를 생성해줘."
