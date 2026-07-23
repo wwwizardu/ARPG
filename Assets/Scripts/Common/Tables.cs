@@ -111,6 +111,10 @@ namespace ARPG.Tables
         [JsonProperty("Level")] public int Level;
         [JsonProperty("Archetype")] public GE.MonsterArchetype Archetype = GE.MonsterArchetype.Normal;
 
+        // 트랙 A: 이 몬스터가 서식하는 바이옴 (PLAYER_RECOGNITION_DESIGN.md). monster→biome 역방향 조회 근거.
+        // 바이옴 게이트(IsLocalThreat, 후순위)와 BiomeMonsterMapping 데이터화의 근거 데이터.
+        [JsonProperty("Biome")] public GE.BiomeType Biome = GE.BiomeType.Plains;
+
         [JsonIgnore] public AiTable? AiTable;
 
 
@@ -241,6 +245,10 @@ namespace ARPG.Tables
         [JsonProperty("SellRatioBp")] public int SellRatioBp;                   // 매각 비율 ×100 (50=0.5, 40=0.4). 0이면 매각 불가
         [JsonProperty("ReturnResourceType")] public int ReturnResourceType;     // 마을 상인에 매각 시 마을 Storage로 환원될 자원 종류 (ItemType enum 값). 0=환원 없음. ex) 나무공예품 매각 → Wood 일부 회수
         [JsonProperty("ReturnRatioBp")] public int ReturnRatioBp;               // 환원량 비율 ×100 (basis points). returnAmount = amount × ReturnRatioBp / 100. ex) 50이면 매각 수량의 50%가 ReturnResourceType 자원으로 마을 창고에 적립. 0=환원 없음
+
+        // 트랙 A: 몬스터 전리품 식별 (PLAYER_RECOGNITION_DESIGN.md). 이 아이템이 어느 몬스터에서 나온 전리품인지(MonsterTable.Id).
+        // 0 = 전리품 아님. 위협 등급 등은 소스 몬스터의 Level/Archetype에서 파생. 조회는 MonsterTrophyIdentifier 경유.
+        [JsonProperty("SourceMonsterId")] public int SourceMonsterId;
     }
 
      [Serializable]

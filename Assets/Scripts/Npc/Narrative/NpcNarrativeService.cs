@@ -26,7 +26,7 @@ namespace ARPG.Npc.Narrative
             if (ctx == null)
                 return new DialogueResult { Text = "…", Source = NarrativeSource.Fallback, Tier = tier, Topic = DialogueTopicType.Greeting };
 
-            // 토픽 선택 (상태·백본 → 적용 토픽 추림 → 티어 게이트 + 최고 가중치 1개)
+            // 토픽 선택 (상태·백본 → 적용 토픽 추림 → 티어 게이트 + 레퍼토리 캡 + 긴급 새치기·셔플백 1개)
             List<DialogueTopic> topics = DialogueTopicSelector.Collect(npcId, ctx, threat);
             DialogueTopic topic = DialogueTopicSelector.Select(npcId, topics, tier, AR.s.Npc.Narrative.GetRecentTopics(npcId));
 

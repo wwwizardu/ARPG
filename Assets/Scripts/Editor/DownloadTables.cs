@@ -42,13 +42,13 @@ namespace ARPG.Editor
             var list = new List<TableEntry>();
             Register<CreatureTable>(list, "0&range=A:I");
             Register<AiTable>(list, "947794841&range=A:L");
-            Register<MonsterTable>(list, "483012127&range=A:P");
+            Register<MonsterTable>(list, "483012127&range=A:Q");
             Register<NpcTable>(list, "1460299278&range=A:O");
             // NpcEquipTable — NPC 시작 장비 세트 (NpcTable.EquipTableId 참조). 슬롯별 ItemId 명시.
             Register<NpcEquipTable>(list, "1566085089&range=A:N");
             Register<MonsterArchetypeTable>(list, "1141585255&range=A:E");
             Register<StatTable>(list, "318209064&range=A:AJ");
-            Register<ItemTable>(list, "2064107837&range=A:R");
+            Register<ItemTable>(list, "2064107837&range=A:S");
             Register<BuildableItemTable>(list, "534887250&range=A:Z");
             // Phase D: JobBonusTable (직업별 시간당 가산 자원)
             Register<JobBonusTable>(list, "470575350&range=A:F");
@@ -797,6 +797,8 @@ namespace ARPG.Editor
             table.Level = int.Parse(values[14]);
             // Archetype은 시트에 컬럼 있으면 읽음. 없으면 C# 기본값 Normal 유지.
             table.Archetype = ParseEnumSafe(values, 15, GlobalEnum.MonsterArchetype.Normal);
+            // 트랙 A: Biome은 시트에 컬럼 있으면 읽음. 없으면 C# 기본값 Plains 유지.
+            table.Biome = ParseEnumSafe(values, 16, GlobalEnum.BiomeType.Plains);
         }
 
         /// <summary>
@@ -822,7 +824,7 @@ namespace ARPG.Editor
 
         private static void ParseItemTable(ItemTable table, string[] values)
         {
-            // 전체 범위: A:R = 18개 컬럼 (Phase D에서 4개 추가)
+            // 전체 범위: A:S = 19개 컬럼 (Phase D에서 4개 + 트랙 A SourceMonsterId 1개 추가)
             if (values.Length < 14)
             {
                 Debug.LogError($"[ParseItemTable] Invalid data length. Expected at least 14, got {values.Length}. Id: {table.Id}");
@@ -847,6 +849,9 @@ namespace ARPG.Editor
             table.SellRatioBp = ParseIntSafe(values, 15);
             table.ReturnResourceType = ParseIntSafe(values, 16);
             table.ReturnRatioBp = ParseIntSafe(values, 17);
+
+            // 트랙 A 신규 컬럼 (시트 갱신 전에는 길이 < 19일 수 있어 안전 가드)
+            table.SourceMonsterId = ParseIntSafe(values, 18);
         }
 
         private static void ParseBuildableItemTable(BuildableItemTable table, string[] values)
