@@ -88,8 +88,12 @@
 ```
 SkillEffectTable
 ├─ ... (기존 컬럼: EffectType, Trigger, Param1~3, Probability)
+├─ Tier: int                      // 스킬 페이지 등급. PageCost와 독립
 └─ PageCost: int                  // 신규 컬럼. 0이면 페이지 용량 모델 미사용 (시트 호환)
 ```
+
+`Tier`는 희귀도·드랍·상점·경매 가치의 기준이고, `PageCost`는 스킬북 장착 용량 소비량이다.
+둘은 독립적으로 조정할 수 있으며 Tier를 PageCost 범위에서 파생하지 않는다.
 
 **비용 책정 가이드** (초안):
 
@@ -151,6 +155,7 @@ ItemData.SkillBookData
 ```
 SkillEffectTable
 ├─ ... (기존)
+├─ Tier: int
 ├─ PageCost: int
 └─ Condition: GE.PageCondition    // 신규 enum (None/TargetStunned/HpBelowN/...)
 └─ ConditionParam: float          // 조건 파라미터
@@ -192,7 +197,9 @@ SkillEffectTable
 
 ```
 SkillEffectTable (수정)
-├─ Id, Name, EffectType, Trigger, Param1~3, Probability   (기존)
+├─ Id, Name, Description
+├─ Tier: int                      // 페이지 등급. 0이면 랜덤 페이지 풀에서 제외
+├─ EffectType, Kind, Trigger, Param1~3, Probability
 ├─ PageCost: int                  // 페이지 비용
 ├─ Condition: GE.PageCondition    // 발동 조건 (데이터만 보유, 런타임 처리 보류)
 └─ ConditionParam: float          // 조건 파라미터 (데이터만 보유, 런타임 처리 보류)
@@ -284,13 +291,16 @@ SkillEffectExecutor.Trigger(trigger, ctx, effectiveEffectIds)
 - `DropHelper.CreateDropItem(...)` 가중치 합산에 `SkillPageRate` 포함
 - 페이지 카테고리 당첨 시 `DropHelper.CreateSkillPageDropAsync(tier, position)` → `ItemManager.CreateRandomSkillPageOfTier(tier)` → `CreateSkillPage(...)` 경로로 항상 `SkillPageData` 채워서 드랍
 
-PageCost 범위 매핑(현 단순 cutoff):
+`SkillEffectTable.Tier` 직접 매핑:
 
-| 등급 | 드랍 등장 | PageCost 범위 |
+| 등급 | 드랍 등장 | SkillEffect Tier |
 |---|---|---|
-| Common | 초반 던전 | 1~10 |
-| Rare | 중반 | ~25 |
-| Epic | 후반/보스 | 26~ |
+| Common | 초반 던전 | 1 |
+| Rare | 중반 | 2 |
+| Epic | 후반/보스 | 3 |
+
+`PageCost`는 같은 Tier 안에서도 자유롭게 다를 수 있다. 랜덤 페이지 풀에는
+`Tier == 요청 등급 && PageCost > 0`인 효과만 들어간다.
 
 ### 8.2 상점 (구현됨)
 
@@ -348,7 +358,8 @@ PoE 형태로 "미식별 페이지"를 두고 식별 시 무작위 효과/비용
 
 ### Phase P-1: 페이지 용량 + 비용 + 단순 페이지 슬롯 (v1 본체) ✅ 완료
 - `SkillBookTable` 신규 (Id, PageCapacity, PageSlots) — 등급별 룰
-- `SkillEffectTable.PageCost`/`Condition`/`ConditionParam` 컬럼 추가 (Condition은 데이터만)
+- `SkillEffectTable.Tier`/`PageCost`/`Condition`/`ConditionParam` 컬럼 추가
+  (`Tier`는 2026-07-24 직접 컬럼으로 확정, Condition은 데이터만)
 - `ItemData.SkillBookData.SocketedPages` + `PageCapacityBonus` + `PageSlotsBonus` 추가
 - `ItemData.SkillPage` 신규 (페이지 아이템 인스턴스)
 - 장착 검증: 슬롯 수, 페이지 용량, 동일 페이지 중복 여부 (`PlayerSkillManager.CanSocketSkillPage`)
@@ -406,8 +417,10 @@ PoE 형태로 "미식별 페이지"를 두고 식별 시 무작위 효과/비용
 5. ~~**인스턴스 roll 도입 시점**~~ — **결정됨**. v1에서 도입. `PageCapacityBonus = +1~+5 균등 랜덤`, `PageSlotsBonus = 50% +1` 정책으로 모든 책 생성 시 자동 roll.
 6. **AI 적용 범위**: 몬스터/NPC도 스킬 페이지를 장착하는가? — **v1 미적용**. `EntityFactory.GetPlayerSkillBookForSlot`이 player entity일 때만 책 조회.
 7. **트리거 카테고리(§4) 도입 트리거 조건**: 무엇을 보고 도입을 결정할지? (특정 스킬 페이지 사용률, 메타 빌드의 다양성 지수 등)
-8. **`GetSkillPageTierByCost` 매핑 정책**: 현재 단방향 cutoff(`≤10/≤25/>`). 등급별 PageCost 범위 겹침을 허용할지, 또는 `SkillEffectTable`에 `Tier` 컬럼 직접 추가할지 결정 필요.
-9. **기존 책 마이그레이션**: 인스턴스 roll 활성화 이전에 만들어진 책들은 보너스 0. 기존 책에 일괄 roll을 적용할지, 그대로 둘지 결정 필요.
+8. ~~**`GetSkillPageTierByCost` 매핑 정책**~~ — **결정됨**. `SkillEffectTable`의 Description 다음에
+   `Tier` 컬럼을 직접 추가하고 PageCost 파생 로직은 제거. PageCost 범위 겹침을 허용한다.
+9. ~~**기존 책 마이그레이션**~~ — **결정됨**. 기존 세이브 호환은 지원하지 않고 새 월드 생성
+   기준으로 적용한다.
 
 ---
 

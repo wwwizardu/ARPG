@@ -37,6 +37,7 @@ public class GlobalEnum
 
         // 향후 (Live Backbone — Phase 7 이후)
         Wasteland = 30,
+        Any = 100,
     }
 
     /// <summary>

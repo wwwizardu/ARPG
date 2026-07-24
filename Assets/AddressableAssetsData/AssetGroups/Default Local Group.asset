@@ -30,6 +30,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 15011f6eb55a93ec3055c54c9cc884de
+    m_Address: Animation/FireImp
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 174fc71b52ca4a141ae303fdcf091d59
     m_Address: Sprites/Items/TownPost
     m_ReadOnly: 0
@@ -37,6 +42,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1883f93cec5a4964cb4a098af4de9201
     m_Address: UI/TooltipUIT
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1900f35e9ea4f64ed43b3fda6f3a7279
+    m_Address: Animation/GreenSlime
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -155,6 +165,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 846f62dbeb26f63a1ef8014bb5c5f5e6
+    m_Address: Animation/Wolf
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 866a25d384bd4ad41809716fb6fd09e7
     m_Address: Animation/Npc
     m_ReadOnly: 0
@@ -195,6 +210,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a776958e096edd3551633f4bb05adcec
+    m_Address: Animation/StoneGolem
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ac6768f8e2b34be4285ce2d4c8342f18
     m_Address: Sprites/Items/Anvil
     m_ReadOnly: 0
@@ -227,6 +247,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c7be8e5aec1ed9343b40ecd697f4f5d0
     m_Address: UI/SlotUI_Equip
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cfe20608e63749541049ccd6e5324f8b
+    m_Address: Animation/PoisonMushroom
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

@@ -259,15 +259,15 @@ namespace ARPG.Monster
 
             _placedAnchorsCache.Clear();
 
-            // biome 기반 monster ID 선택 (MAP_DESIGN.md §6.5). 매핑 없으면 인스펙터 폴백.
+            // biome 스폰 풀(공용 ∪ biome전용)에서 그룹마다 종 샘플링. 풀 비면 인스펙터 폴백.
+            // MONSTER_SPAWN_DESIGN.md Phase 1: 그룹 anchor마다 풀에서 1종 → 그룹 내 동종.
             GlobalEnum.BiomeType chunkBiome = AR.s.Map.GetChunkBiome(chunkCoord);
-            int mainId = BiomeMonsterMapping.GetMainMonsterId(chunkBiome, _mainMonsterTableId);
-            int subId  = BiomeMonsterMapping.GetSubMonsterId(chunkBiome, _subMonsterTableId);
 
             int mainCount = Random.Range(mainCountRange.x, mainCountRange.y + 1);
             for (int i = 0; i < mainCount; i++)
             {
                 int size = Random.Range(mainSizeRange.x, mainSizeRange.y + 1);
+                int mainId = BiomeMonsterMapping.SampleMonsterId(chunkBiome, _mainMonsterTableId);
                 SpawnGroup(chunkCoord, spawnPositions, mainId, size);
             }
 
@@ -275,6 +275,7 @@ namespace ARPG.Monster
             for (int i = 0; i < subCount; i++)
             {
                 int size = Random.Range(subSizeRange.x, subSizeRange.y + 1);
+                int subId = BiomeMonsterMapping.SampleMonsterId(chunkBiome, _subMonsterTableId);
                 SpawnGroup(chunkCoord, spawnPositions, subId, size);
             }
 
@@ -402,9 +403,9 @@ namespace ARPG.Monster
 
             // 리스폰 시점에 어떤 종이 죽었는지 추적하지 않으므로 메인 종으로 통일.
             // 종별 추적이 필요해지면 ChunkMonsterData에 TableId 기록 추가.
-            // biome 기반 ID — Spawn 시점과 일관 (MAP_DESIGN.md §6.5).
+            // biome 스폰 풀에서 재샘플 — Spawn 시점과 일관 (MONSTER_SPAWN_DESIGN.md).
             GlobalEnum.BiomeType chunkBiome = AR.s.Map.GetChunkBiome(chunkCoord);
-            int mainId = BiomeMonsterMapping.GetMainMonsterId(chunkBiome, _mainMonsterTableId);
+            int mainId = BiomeMonsterMapping.SampleMonsterId(chunkBiome, _mainMonsterTableId);
             return await SpawnMonsterAtPosition(worldPos, chunkCoord, mainId, false);
         }
 

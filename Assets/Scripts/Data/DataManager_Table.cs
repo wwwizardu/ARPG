@@ -16,6 +16,10 @@ namespace ARPG.Data
         private ImmutableDictionary<int, Tables.MonsterArchetypeTable> _monsterArchetypeTable = null!;
         // Archetype enum → Table 빠른 조회 캐시 (LoadLate에서 구축)
         private Dictionary<GlobalEnum.MonsterArchetype, Tables.MonsterArchetypeTable> _monsterArchetypeByEnum = new();
+        // biome → 그 biome 전용 몬스터 Id 목록 (Any 제외). LoadTableAsync에서 구축. BiomeMonsterMapping이 소비.
+        private Dictionary<GlobalEnum.BiomeType, List<int>> _monsterIdsByBiome = new();
+        // 공용 몬스터(Biome=Any) Id 목록 — 모든 biome 스폰 풀에 포함.
+        private readonly List<int> _commonMonsterIds = new();
         private ImmutableDictionary<int, Tables.NpcTable> _npcTable = null!;
         // NPC 시작 장비 세트 (Option A — 고정 세트). NpcTable.EquipTableId가 참조.
         private ImmutableDictionary<int, Tables.NpcEquipTable> _npcEquipTable = null!;
@@ -98,9 +102,26 @@ namespace ARPG.Data
                 table.LoadLate();
             }
 
+            // MonsterTable LoadLate + biome 스폰 풀 인덱스 구축 (공용/biome전용 분리)
+            _monsterIdsByBiome.Clear();
+            _commonMonsterIds.Clear();
             foreach (var table in _monsterTable.Values)
             {
                 table.LoadLate();
+
+                if (table.Biome == GlobalEnum.BiomeType.Any)
+                {
+                    _commonMonsterIds.Add(table.Id);
+                }
+                else
+                {
+                    if (_monsterIdsByBiome.TryGetValue(table.Biome, out var biomeList) == false)
+                    {
+                        biomeList = new List<int>();
+                        _monsterIdsByBiome.Add(table.Biome, biomeList);
+                    }
+                    biomeList.Add(table.Id);
+                }
             }
 
             foreach (var table in _npcTable.Values)
@@ -243,6 +264,27 @@ namespace ARPG.Data
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// 공용 몬스터(Biome=Any) Id 목록. 모든 biome 스폰 풀에 포함된다. (읽기 전용, 캐시된 참조)
+        /// </summary>
+        public IReadOnlyList<int> GetCommonMonsterIds()
+        {
+            return _commonMonsterIds;
+        }
+
+        /// <summary>
+        /// 특정 biome 전용 몬스터 Id 목록. 해당 biome 몬스터가 없으면 빈 목록. (읽기 전용, 캐시된 참조)
+        /// </summary>
+        public IReadOnlyList<int> GetBiomeSpecificMonsterIds(GlobalEnum.BiomeType biome)
+        {
+            if (_monsterIdsByBiome.TryGetValue(biome, out var list))
+            {
+                return list;
+            }
+
+            return System.Array.Empty<int>();
         }
 
         /// <summary>

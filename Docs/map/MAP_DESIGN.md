@@ -588,6 +588,12 @@ public void OnChunkActivated(Vector2Int chunkCoord)
 
 [MONSTER_SPAWN_DESIGN.md](../ai_monster/MONSTER_SPAWN_DESIGN.md)의 spawn pool 시스템과 본 문서의 per-tile biome을 잇는 부분.
 
+> **구현 현황 (2026-07-24)** — 아래 §6.5.3의 `BiomeMonsterTable`(가중치 포함 별도 테이블)은 **미구현**이다.
+> 대신 **`MonsterTable.Biome`을 풀 키로 직접 쓰는 경량 방식**이 구현되었다: `BiomeType.Any`=공용(모든 biome 풀),
+> 특정 biome=그 biome 전용. 청크 biome의 풀 = `공용 ∪ biome전용`에서 그룹별 균등 샘플, 풀 비면 인스펙터 fallback.
+> 상세·코드 앵커는 [MONSTER_SPAWN_DESIGN.md §7.2.1](../ai_monster/MONSTER_SPAWN_DESIGN.md). §6.5.2 청크 biome 결정(`ComputeChunkBiome`)은
+> 그대로 사용된다. §6.5.3~6.5.4(가중치 테이블·WeightedPick)는 Phase 2~3 확장 목표로 유지.
+
 #### 6.5.1 결정 단위
 
 | 단위 | 선택 이유 |
@@ -1040,7 +1046,7 @@ public class LoreSaveData
 - ✅ [`Map/Region/RegionCoord.cs`](../../Assets/Scripts/Map/Region/RegionCoord.cs) — 청크↔region 좌표 변환 (CHUNKS_PER_REGION = 4)
 - ✅ [`Map/Biome/BiomeNoise.cs`](../../Assets/Scripts/Map/Biome/BiomeNoise.cs) — `ComputeTileBiome` + `ComputeRegionBiome` + `ComputeChunkBiome` (warped Perlin + Whittaker, region 단위 결정)
 - ✅ [`Map/Biome/BiomeTable.cs`](../../Assets/Scripts/Map/Biome/BiomeTable.cs) — biome → TileType/Hill/spawn 보정 매핑
-- ✅ [`Map/Biome/BiomeMonsterMapping.cs`](../../Assets/Scripts/Map/Biome/BiomeMonsterMapping.cs) — biome → main/sub 몬스터 ID (콘텐츠 비어있어 모두 폴백)
+- ✅ [`Map/Biome/BiomeMonsterMapping.cs`](../../Assets/Scripts/Map/Biome/BiomeMonsterMapping.cs) — biome → 몬스터 ID 샘플. **2026-07-24: 데이터 주도로 재작성** (`MonsterTable.Biome` 기반 `공용(Any)∪biome전용` 풀 균등 샘플, 빈 풀이면 fallback). 상세 MONSTER_SPAWN_DESIGN.md §7.2.1
 - ✅ [`MapChunkData.cs`](../../Assets/Scripts/Map/MapChunkData.cs) — `chunkBiome` 필드 (region biome 캐시). ~~`tileBiomes[,]`~~ v1.8에서 제거
 - ✅ `GenerateChunkData` — 청크당 `ComputeChunkBiome` 1회 호출, 모든 64 타일에 동일 biome 적용 (per-tile loop 단순화, Perlin 호출 64배 절감)
 - ✅ `MapManager_Renderer` — `BiomeThemeEntry[]` 인스펙터 + `Dictionary<BiomeType, ThemeTileSet>` 청크당 1회 선택
@@ -1080,7 +1086,7 @@ public class LoreSaveData
 - ✅ 각 ThemeTileSet SO의 `Ground` 필드에 해당 바이옴 바닥 타일 할당
 
 **보류된 작업**:
-- ⏸ `BiomeMonsterMapping.cs`에 case 추가 — **몬스터 종류 부족으로 보류**. 몬스터 콘텐츠 확충 후 진행 예정. 현재는 인스펙터 폴백 단일 ID 사용
+- ✅ ~~`BiomeMonsterMapping.cs`에 case 추가 (몬스터 종류 부족으로 보류)~~ → **2026-07-24 해소**: 하드코딩 case 대신 `MonsterTable.Biome` 데이터 주도 풀로 재작성. 몬스터가 `Any`면 모든 biome, 특정 biome이면 그 biome에만 등장. 콘텐츠(몬스터 종)만 늘리면 시트만으로 확장
 - ⏸ 시각 검증 후 *필요 시* A1(색조 variant) 또는 A2(transition tile) 보강
 - ⏸ Desert/Tundra 임계값 조정 (확률 3% → 10%+) — 필요 시 §4.3.1 조정
 
@@ -1090,7 +1096,7 @@ public class LoreSaveData
 - `Assets/Scripts/Map/Region/RegionCoord.cs` — static 좌표 변환 헬퍼 (`ChunkToRegion`, `ToRegionId`). ECS 아님
 - `Assets/Scripts/Map/Biome/BiomeNoise.cs` — **`ComputeTileBiome(worldX, worldY)`** static 함수. domain warp + 3축 Perlin + Whittaker threshold (§4.3.1)
 - `Assets/Scripts/Map/Biome/BiomeTable.cs` — POCO, 바이옴별 TileType/Hill 임계/스폰 보정 매핑 (`ApplyBiomeTile` 헬퍼용)
-- `Assets/Scripts/Tables/BiomeMonsterTable.cs` — POCO, biome별 main/sub 몬스터 ID 풀 + 가중치 (§6.5.3)
+- ~~`Assets/Scripts/Tables/BiomeMonsterTable.cs` — POCO, biome별 main/sub 몬스터 ID 풀 + 가중치 (§6.5.3)~~ — **생성 안 함**. 별도 테이블 대신 `MonsterTable.Biome`을 풀 키로 직접 쓰는 경량 방식 채택(가중치는 Phase 2~3로 이관). 상세 MONSTER_SPAWN_DESIGN.md §7.2.1
 
 **수정**:
 - `MapManager.cs` — `BiomeThemeEntry[]` 인스펙터 (Dictionary 매핑)

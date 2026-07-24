@@ -8,6 +8,12 @@
 
 본 문서는 **설계 기준**이며 실제 코드/테이블 마이그레이션은 별도 작업 항목으로 진행한다.
 
+> **구현 현황 (2026-07-24)** — 본 문서의 Phase 1~3(`SpawnPool*` 테이블·가중치·엘리트/보스)은 아직 미구현이다.
+> 대신 **바이옴 기반 경량 스폰 풀**이 먼저 구현되었다(상세: §7.2). 별도 테이블 없이 `MonsterTable.Biome`을
+> 풀 키로 직접 쓴다 — `BiomeType.Any`=공용(모든 biome 풀에 포함), 특정 biome=그 biome 전용.
+> 청크 biome의 풀 = **공용 ∪ 해당 biome 전용**에서 **그룹마다 균등 샘플링**하며, 풀이 비면 MonsterManager 인스펙터 fallback을 쓴다.
+> 가중치·MinZone/MaxZone·Archetype 승격·보스 청크는 여전히 미구현(향후 이 문서의 Phase 2~3로 확장).
+
 ---
 
 ## 1. 현재 시스템과 한계
@@ -16,7 +22,7 @@
 
 | 영역 | 현재 처리 | 위치 |
 |---|---|---|
-| 몬스터 종 결정 | 인스펙터 고정 ID 2개 (Main/Sub) | [MonsterManager.cs](../Assets/Scripts/Manager/MonsterManager.cs) `_mainMonsterTableId`, `_subMonsterTableId` |
+| 몬스터 종 결정 | ~~인스펙터 고정 ID 2개~~ → **바이옴 경량 풀**(§7.2.1): `MonsterTable.Biome` 기반 `공용(Any)∪biome전용` 그룹별 샘플. 풀 비면 인스펙터 fallback | [BiomeMonsterMapping.cs](../../Assets/Scripts/Map/Biome/BiomeMonsterMapping.cs), [MonsterManager.cs](../../Assets/Scripts/Manager/MonsterManager.cs) `_mainMonsterTableId`/`_subMonsterTableId`(fallback) |
 | 스폰 밀도 | Zone 기반 (ZoneTable) | [Tables.cs](../Assets/Scripts/Common/Tables.cs) `ZoneTable` |
 | 레벨 | Zone에서 결정 → MonsterTable.Level override | [EntityFactory.cs](../Assets/Scripts/Factory/EntityFactory.cs) `CreateMonster(level)` |
 | 위치 | 그룹 거부 샘플링 (anchors + radius) | [MonsterManager.cs](../Assets/Scripts/Manager/MonsterManager.cs) `SpawnInitialMonstersInChunk` |
@@ -32,7 +38,8 @@
 5. **보스 / 엘리트 스폰 채널 없음**.
 6. **리스폰이 원래 종만 재사용**: 청크가 점진 변화하는 느낌을 못 줌.
 
----
+> **경량 풀(§7.2.1)로 해소됨**: #1(종 다양성 — biome 풀로 다종), #2(Zone과 종류 분리 — 종류가 이제 청크 biome별로 결정), #6(리스폰이 풀에서 재샘플 → 다른 종 가능).
+> **여전히 미해소**: #3(가중치), #4(Archetype 승격), #5(보스/엘리트) — Phase 2~3.
 
 ## 2. 핵심 설계 원칙
 
@@ -286,6 +293,26 @@ public static bool IsBossChunk(Vector2Int chunkCoord, int zone)
 
 - 청크에 BiomeId 부여 (THEME_TILESET_REFACTOR.md 참조) → BiomePoolOverride.
 - ZoneTable이 아니라 ChunkBiome별 PoolId.
+
+#### 7.2.1 구현됨 — 바이옴 경량 풀 (2026-07-24)
+
+Phase 2의 `SpawnPool*` 테이블을 도입하기 전에, **`MonsterTable.Biome`을 풀 키로 직접 쓰는 경량 버전**을 먼저 구현했다.
+"종 다양성 + biome 게이팅"이라는 핵심 이득을 새 테이블 없이 확보하는 것이 목적이다.
+
+**규칙**
+- `MonsterTable.Biome` 기본값 = `BiomeType.Any`(공용). 시트 빈 셀/누락도 `Any`로 파싱한다.
+- **공용(`Any`)** 몬스터 = 모든 biome 스폰 풀에 포함. **특정 biome** 몬스터 = 그 biome 풀에만 포함.
+- 청크 biome의 풀 = `공용 ∪ 그 biome 전용`. 여기서 **그룹 anchor마다 균등 샘플링**(Phase 1의 그룹 단위 동종 규칙과 동일). 리스폰도 같은 풀에서 재샘플.
+- 풀이 비면(그 biome 전용도 없고 공용도 없음) MonsterManager 인스펙터 `_mainMonsterTableId`/`_subMonsterTableId` fallback.
+
+**코드 앵커**
+- 풀 인덱스 구축: [`DataManager_Table.cs`](../../Assets/Scripts/Data/DataManager_Table.cs) — 로드 시 `_commonMonsterIds`(Any) / `_monsterIdsByBiome`(biome전용) 구축, 접근자 `GetCommonMonsterIds()` / `GetBiomeSpecificMonsterIds(biome)`.
+- 샘플링 로직: [`BiomeMonsterMapping.SampleMonsterId(biome, fallback)`](../../Assets/Scripts/Map/Biome/BiomeMonsterMapping.cs) — 무상태, `공용∪전용`에서 균등 1개.
+- 스폰 호출: [`MonsterManager`](../../Assets/Scripts/Manager/MonsterManager.cs) `SpawnInitialMonstersInChunk` / `RespawnMonsterInChunk` — 그룹마다 `SampleMonsterId` 호출.
+- Biome 컬럼 의미는 역방향 위협 게이트(PLAYER_RECOGNITION_DESIGN.md)와 **공유**한다 — `Any`=범용, 특정 biome=국지.
+
+**아직 없음(Phase 2~3로 이관)**: 가중치, `MinZone`/`MaxZone` 필터, Zone×풀 매핑, Archetype 승격, 보스 청크.
+이 경량 버전은 위 확장이 들어올 때 `SamplePool`(가중치 버전)로 자연스럽게 교체 가능하다.
 
 ### 7.3 동적 가중치 조정
 

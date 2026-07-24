@@ -1,41 +1,36 @@
 namespace ARPG.Map
 {
     /// <summary>
-    /// biome → 메인/서브 몬스터 ID 매핑. MAP_DESIGN.md §6.5 참조.
+    /// biome → 스폰 몬스터 ID 선택. MAP_DESIGN.md §6.5 / MONSTER_SPAWN_DESIGN.md 참조.
     ///
-    /// Phase 1b 시작: 모든 biome이 폴백 ID로 매핑 (콘텐츠 작업 전).
-    /// 디자이너가 monster ID 결정 후 case 추가 시 자동으로 biome별 분기.
+    /// 데이터 주도: 풀은 MonsterTable.Biome에서 파생한다(DataManager가 로드 시 인덱싱).
+    /// - 공용 몬스터(Biome=Any) = 모든 biome 풀에 포함.
+    /// - 특정 biome 몬스터 = 그 biome 풀에만 포함.
+    /// 한 청크의 풀 = 공용 ∪ 그 biome 전용. 풀이 비면 호출자가 넘긴 fallback 사용.
     ///
-    /// 단순 ID 1개 형태로 시작 — 가중치 풀(여러 ID + weights)은 §12 #13 후속 결정 시 확장.
+    /// 무상태 순수 로직 — 데이터는 DataManager가 소유(생명주기), 여기선 조회+샘플만.
+    /// 가중치/Zone 필터 등 확장은 SpawnPoolTable 도입(MONSTER_SPAWN_DESIGN §5) 시.
     /// </summary>
     public static class BiomeMonsterMapping
     {
-        /// <summary>biome별 메인 몬스터 ID. 매핑 없으면 폴백 반환.</summary>
-        public static int GetMainMonsterId(GlobalEnum.BiomeType biome, int fallback)
+        /// <summary>
+        /// biome 스폰 풀(공용 ∪ biome전용)에서 몬스터 ID 1개를 균등 샘플링. 풀이 비면 fallback 반환.
+        /// </summary>
+        public static int SampleMonsterId(GlobalEnum.BiomeType biome, int fallback)
         {
-            switch (biome)
-            {
-                // 콘텐츠 추가 시 case 추가:
-                // case GlobalEnum.BiomeType.Forest:    return 2001;   // 늑대
-                // case GlobalEnum.BiomeType.Desert:    return 2010;   // 사막 거미
-                // case GlobalEnum.BiomeType.Mountain:  return 2020;   // 골렘
-                // case GlobalEnum.BiomeType.Swamp:     return 2030;   // 슬라임
-                // case GlobalEnum.BiomeType.Tundra:    return 2040;   // 얼음 트롤
-                // case GlobalEnum.BiomeType.Snow:      return 2040;
-                // case GlobalEnum.BiomeType.Steppe:    return 2050;   // 들개
-                // case GlobalEnum.BiomeType.Plains:    return 2000;   // 일반 몬스터
-                default: return fallback;
-            }
-        }
+            var data = AR.s.Data;
+            if (data == null)
+                return fallback;
 
-        /// <summary>biome별 서브 몬스터 ID. 매핑 없으면 폴백 반환.</summary>
-        public static int GetSubMonsterId(GlobalEnum.BiomeType biome, int fallback)
-        {
-            switch (biome)
-            {
-                // 콘텐츠 추가 시 case 추가
-                default: return fallback;
-            }
+            var common = data.GetCommonMonsterIds();
+            var specific = data.GetBiomeSpecificMonsterIds(biome);
+
+            int total = common.Count + specific.Count;
+            if (total <= 0)
+                return fallback;
+
+            int roll = UnityEngine.Random.Range(0, total);
+            return roll < common.Count ? common[roll] : specific[roll - common.Count];
         }
     }
 }

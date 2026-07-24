@@ -113,7 +113,9 @@ namespace ARPG.Tables
 
         // 트랙 A: 이 몬스터가 서식하는 바이옴 (PLAYER_RECOGNITION_DESIGN.md). monster→biome 역방향 조회 근거.
         // 바이옴 게이트(IsLocalThreat, 후순위)와 BiomeMonsterMapping 데이터화의 근거 데이터.
-        [JsonProperty("Biome")] public GE.BiomeType Biome = GE.BiomeType.Plains;
+        // 기본값 Any = 공용: 스폰 시 모든 biome 풀에 포함(BiomeMonsterMapping), 역방향 위협 게이트에선 범용 위협.
+        // 특정 biome 값이면 그 biome 전용 스폰 + 국지 위협 가중.
+        [JsonProperty("Biome")] public GE.BiomeType Biome = GE.BiomeType.Any;
 
         [JsonIgnore] public AiTable? AiTable;
 
@@ -466,6 +468,7 @@ namespace ARPG.Tables
     {
         [JsonProperty("Name")] public string Name = string.Empty;
         [JsonProperty("Description")] public string Description = string.Empty;
+        [JsonProperty("Tier")] public int Tier;                              // 스킬 페이지 등급. 0이면 랜덤 스킬 페이지 풀에서 제외
         [JsonProperty("EffectType")] public GE.Stat EffectType;              // 효과/Stat 종류. 처리 경로는 Kind가 결정
         [JsonProperty("Kind")] public GE.SkillEffectKind Kind = GE.SkillEffectKind.StatBonus;  // 처리 경로: StatBonus=Helper가 컴포넌트로 흡수, EffectAction=Executor가 트리거 시점에 실행
         [JsonProperty("Trigger")] public GE.SkillTrigger Trigger;             // 발동 시점 (OnHit 등)

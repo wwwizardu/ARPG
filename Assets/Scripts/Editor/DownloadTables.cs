@@ -49,15 +49,15 @@ namespace ARPG.Editor
             Register<MonsterArchetypeTable>(list, "1141585255&range=A:E");
             Register<StatTable>(list, "318209064&range=A:AJ");
             Register<ItemTable>(list, "2064107837&range=A:S");
-            Register<BuildableItemTable>(list, "534887250&range=A:Z");
+            Register<BuildableItemTable>(list, "534887250&range=A:AA");
             // Phase D: JobBonusTable (직업별 시간당 가산 자원)
             Register<JobBonusTable>(list, "470575350&range=A:F");
             Register<DropTable>(list, "1241586373&range=A:K");
             Register<DropCurrencyTable>(list, "2071520432&range=A:V");
             Register<DropEquipmentTable>(list, "1267382287&range=A:V");
             Register<SkillTable>(list, "92727160&range=A:AM");
-            // Phase 1: SkillEffect 합성 시스템용 테이블 (+ 스킬 페이지 비용 메타데이터 + Kind 분류 컬럼)
-            Register<SkillEffectTable>(list, "1681865950&range=A:M");
+            // Phase 1: SkillEffect 합성 시스템용 테이블 (+ 스킬 페이지 Tier/비용 메타데이터 + Kind 분류 컬럼)
+            Register<SkillEffectTable>(list, "1681865950&range=A:N");
             Register<SkillBookTable>(list, "1726438368&range=A:C");
             // 장판(지속 영역 효과) 테이블
             Register<AreaEffectTable>(list, "1891935594&range=A:M");
@@ -797,8 +797,8 @@ namespace ARPG.Editor
             table.Level = int.Parse(values[14]);
             // Archetype은 시트에 컬럼 있으면 읽음. 없으면 C# 기본값 Normal 유지.
             table.Archetype = ParseEnumSafe(values, 15, GlobalEnum.MonsterArchetype.Normal);
-            // 트랙 A: Biome은 시트에 컬럼 있으면 읽음. 없으면 C# 기본값 Plains 유지.
-            table.Biome = ParseEnumSafe(values, 16, GlobalEnum.BiomeType.Plains);
+            // 트랙 A: Biome은 시트에 컬럼 있으면 읽음. 빈 셀/누락이면 Any=공용(모든 biome 스폰).
+            table.Biome = ParseEnumSafe(values, 16, GlobalEnum.BiomeType.Any);
         }
 
         /// <summary>
@@ -856,7 +856,7 @@ namespace ARPG.Editor
 
         private static void ParseBuildableItemTable(BuildableItemTable table, string[] values)
         {
-            // 전체 범위: A:Z = 26개 컬럼 (Z=MinSeparation, 신규)
+            // 전체 범위: A:AA = 27개 컬럼 (Z=MinSeparation, AA=BuildHours)
             // 컬럼 9 (구 Function)는 유지하되 코드에서 읽지 않음 (시트 정리는 별도 작업)
             if (values.Length < 19)
             {
@@ -895,6 +895,7 @@ namespace ARPG.Editor
             table.BaseWeight = ParseIntSafe(values, 23, defaultValue: 10);
             table.MaxPerVillage = ParseIntSafe(values, 24);
             table.MinSeparation = ParseIntSafe(values, 25);
+            table.BuildHours = ParseFloatSafe(values, 26);
         }
 
         private static int ParseIntSafe(string[] values, int index, int defaultValue = 0)
@@ -1153,29 +1154,31 @@ namespace ARPG.Editor
         }
 
         /// <summary>
-        /// Phase 1: SkillEffectTable 파서. 기본 9개 컬럼 + 스킬 페이지 메타데이터(PageCost, Condition, ConditionParam)
+        /// Phase 1: SkillEffectTable 파서.
+        /// 컬럼: Id, Name, Description, Tier, EffectType, Kind, Trigger, Param1~3, Probability, PageCost, Condition, ConditionParam
         /// </summary>
         private static void ParseSkillEffectTable(SkillEffectTable table, string[] values)
         {
-            if (values.Length < 6)
+            if (values.Length < 7)
             {
-                Debug.LogError($"[ParseSkillEffectTable] Invalid data length. Expected at least 6, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseSkillEffectTable] Invalid data length. Expected at least 7, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
             table.Name = values[1];
             table.Description = values[2];
-            table.EffectType = (GlobalEnum.Stat)Enum.Parse(typeof(GlobalEnum.Stat), values[3]);
-            // Kind 컬럼(E, EffectType 바로 뒤). 빈 셀이면 EffectType으로 추론(구 IsEffectAction 화이트리스트와 동일) → 시트 마이그레이션 종료 후 이 fallback 제거 가능.
-            table.Kind = ParseEnumSafe(values, 4, InferSkillEffectKindFromEffectType(table.EffectType));
-            table.Trigger = (GlobalEnum.SkillTrigger)Enum.Parse(typeof(GlobalEnum.SkillTrigger), values[5]);
-            table.Param1 = values.Length > 6 && float.TryParse(values[6], out var p1) ? p1 : 0f;
-            table.Param2 = values.Length > 7 && float.TryParse(values[7], out var p2) ? p2 : 0f;
-            table.Param3 = values.Length > 8 && float.TryParse(values[8], out var p3) ? p3 : 0f;
-            table.Probability = values.Length > 9 && int.TryParse(values[9], out var prob) ? prob : 100;
-            table.PageCost = ParseIntSafe(values, 10);
-            table.Condition = ParseEnumSafe(values, 11, GlobalEnum.PageCondition.None);
-            table.ConditionParam = ParseFloatSafe(values, 12);
+            table.Tier = ParseIntSafe(values, 3);
+            table.EffectType = (GlobalEnum.Stat)Enum.Parse(typeof(GlobalEnum.Stat), values[4]);
+            // Kind 컬럼(F, EffectType 바로 뒤). 빈 셀이면 EffectType으로 추론(구 IsEffectAction 화이트리스트와 동일) → 시트 마이그레이션 종료 후 이 fallback 제거 가능.
+            table.Kind = ParseEnumSafe(values, 5, InferSkillEffectKindFromEffectType(table.EffectType));
+            table.Trigger = (GlobalEnum.SkillTrigger)Enum.Parse(typeof(GlobalEnum.SkillTrigger), values[6]);
+            table.Param1 = values.Length > 7 && float.TryParse(values[7], out var p1) ? p1 : 0f;
+            table.Param2 = values.Length > 8 && float.TryParse(values[8], out var p2) ? p2 : 0f;
+            table.Param3 = values.Length > 9 && float.TryParse(values[9], out var p3) ? p3 : 0f;
+            table.Probability = values.Length > 10 && int.TryParse(values[10], out var prob) ? prob : 100;
+            table.PageCost = ParseIntSafe(values, 11);
+            table.Condition = ParseEnumSafe(values, 12, GlobalEnum.PageCondition.None);
+            table.ConditionParam = ParseFloatSafe(values, 13);
         }
 
         /// <summary>

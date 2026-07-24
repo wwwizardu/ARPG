@@ -335,7 +335,7 @@ namespace ARPG.Item
         }
 
         /// <summary>
-        /// 등급(Tier)에 해당하는 페이지 ItemId를 찾고, PageCost 범위에 맞는 SkillEffect 중 랜덤으로 페이지 생성.
+        /// 등급(Tier)에 해당하는 페이지 ItemId와 SkillEffect 중 하나를 골라 페이지를 생성.
         /// </summary>
         public ItemData? CreateRandomSkillPageOfTier(int tier, HistoryRng? inRng = null)
         {
@@ -349,7 +349,7 @@ namespace ARPG.Item
             int skillEffectId = PickRandomSkillPageEffectByTier(tier, inRng);
             if (skillEffectId == 0)
             {
-                Debug.LogWarning($"[ItemManager] CreateRandomSkillPageOfTier - No SkillEffect with PageCost range for Tier({tier})");
+                Debug.LogWarning($"[ItemManager] CreateRandomSkillPageOfTier - No usable SkillEffect for Tier({tier})");
                 return null;
             }
 
@@ -430,13 +430,6 @@ namespace ARPG.Item
             return 0;
         }
 
-        private static int GetSkillPageTierByCost(int pageCost)
-        {
-            if (pageCost <= 10) return 1;
-            if (pageCost <= 25) return 2;
-            return 3;
-        }
-
         private int PickRandomSkillPageEffectByTier(int tier, HistoryRng? inRng = null)
         {
             if (AR.s.Data == null)
@@ -449,7 +442,7 @@ namespace ARPG.Item
                 SkillEffectTable effect = all[i];
                 if (effect.PageCost <= 0)
                     continue;
-                if (GetSkillPageTierByCost(effect.PageCost) == tier)
+                if (effect.Tier == tier)
                     matched.Add(effect.Id);
             }
 

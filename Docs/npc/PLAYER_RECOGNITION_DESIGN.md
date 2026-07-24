@@ -57,9 +57,16 @@ _디자인 확정: 2026-07-22_
   - 이유: Trust 값만으로는 "이미 이 단계 보상을 줬는지"를 못 가린다 — Trust는 여러 신호·상호작용의 합이라 단조 증가만으로 단계 판정이 안 됨.
   - 데이터 모양(`PlayerRelation` 필드 vs 병렬 구조)은 구현 시 확정 → 열린 질문.
 
+- **위협 신호의 biome 가중 — 공용(Any) vs 국지(biome-specific).** 전리품의 소스 몬스터 `MonsterTable.Biome`으로 위협 반응의 *범용성*과 *강도*를 가른다.
+  - **공용 몬스터(`BiomeType.Any`)** = 모든 침략/위협 대화에 **범용 적용**. 어느 마을·어느 biome 문맥에서든 통하는 "일반 위협을 감당하는 사람" 증거로 취급.
+  - **특정 biome 몬스터** = 그 biome 문맥에서 **더 큰 위협 영향**(국지 위협 인정 가중). 대상 마을/지역의 biome과 일치할 때 신호 강도(→ Trust 상승 폭·대사 톤)를 상향한다. 불일치 biome에서는 공용 이하로 취급하거나 감쇠(구현 시 정책 확정 → 열린 질문).
+  - 이유: 공용 몹은 세계 어디서나 나오므로 "범용 위협 증거", biome 전용 몹은 그 지역 고유 위협이라 해당 지역 NPC에게 더 크게 와닿는다. 스폰 규칙(공용=모든 biome 스폰, biome전용=그 biome만)과 대칭.
+  - **근거 데이터 = `MonsterTable.Biome`** (`Any`=공용). 조회는 [`MonsterTrophyIdentifier.GetSourceMonster(item).Biome`](../../Assets/Scripts/Common/Utility/MonsterTrophyIdentifier.cs). 이 Biome 컬럼은 **스폰 풀(`BiomeMonsterMapping`)과 본 위협 게이트가 공유**하는 근거 데이터다 — `Any`의 의미가 두 시스템에서 동일해야 한다(공용).
+  - **상태**: 🟦 설계만. 트랙 B(관찰 반응) 본체와 함께 구현. 현재 소비처(ClearThreat 위협 시드)가 하드코딩(`NearbyMonsters=true`)이라 아직 이 가중을 읽는 코드가 없음.
+
 ### 제약 · 전제
 
-- **트랙 A 의존 (식별 인터페이스가 아직 없음).** 본 시스템은 "이 `ItemData`가 몬스터 전리품인가 / 어느 위협 범주인가"를 묻는 식별 인터페이스에 의존한다. **현재 이 인터페이스는 없다** — `ItemTable`에 `DropRate`/`DropLevel`이 있으나 이는 드랍 확률·레벨일 뿐 "몬스터가 떨군 것"을 자원 노드·상자 드랍과 구분하지 못한다. 트랙 A가 식별 수단(신규 `ItemTable` 태그/`ItemType` 값 vs 몬스터→드랍 매핑 테이블)과 콘텐츠(몬스터·전리품 확충)를 함께 정한다. 현재 몬스터·아이템 수가 적은 것도 트랙 A에서 해소. 본 문서는 결과 인터페이스에 **의존만** 한다.
+- **트랙 A 의존 (식별 인터페이스 — 이제 존재).** 본 시스템은 "이 `ItemData`가 몬스터 전리품인가 / 어느 위협 범주인가"를 묻는 식별 인터페이스에 의존한다. **이 인터페이스는 이제 구현되어 있다** — 백킹 데이터 `ItemTable.SourceMonsterId`(0=전리품 아님) + 무상태 조회 [`MonsterTrophyIdentifier`](../../Assets/Scripts/Common/Utility/MonsterTrophyIdentifier.cs)(`IsMonsterTrophy`/`GetSourceMonsterId`/`GetSourceMonster`). 위협 범주(Level/Archetype)와 서식 `Biome`은 여기서 얻은 소스 `MonsterTable`에서 파생한다. (구 `DropRate`/`DropLevel`은 드랍 확률·레벨일 뿐 전리품 구분 불가라 별도 필드 `SourceMonsterId`로 해소함.) 남은 트랙 A 작업은 **콘텐츠 확충**(몬스터·전리품 종 수) 쪽이며, 식별 배관 자체는 완료. 본 문서는 이 인터페이스에 **의존만** 한다.
 - **관계 데이터는 ECS가 아니다.** `PlayerRelation`은 `NpcManager` + `WorldData` 소유. 본 시스템도 같은 패턴(ECS 컴포넌트 안 만듦).
 - **`PlayerRelation` 4축은 이미 구현되어 있다**(코드 기준: `NpcManager`의 Get/Set/Modify + 세이브). ⚠️ `Wiki/npc.md`는 이를 "미구현"으로 표기 — 드리프트이므로 위키를 신뢰하지 말고 코드를 기준으로 볼 것.
 - **대사 파이프라인은 신설하지 않는다.** 기존 내러티브 스파이크(대화 토픽 선택 + LLM 서술 + 캐시)의 `ClearThreat` 토픽을 Trust 티어로 게이트해 재사용한다.
@@ -104,7 +111,7 @@ _디자인 확정: 2026-07-22_
 ### 단계
 
 - [ ] **감지 계층** — Talk 시점에 `AR.s.Player.Inventory.Items`를 스냅샷으로 읽어 "몬스터 전리품 신호"를 산출. 트랙 A 식별 인터페이스 사용. 신호를 확장 가능한 추상(감지기 = 플레이어 상태 → 신호 강도)으로 두고 1호(전리품)만 등록.
-- [ ] **인지 평가(무상태) + Trust 상승** — 신호 강도(전리품 종류·수)를 단계 임계값에 매핑. 해당 NPC의 마지막 인지 단계보다 높을 때만 `ModifyPlayerRelation`으로 Trust↑(TrustCap 준수)하고 마지막 인지 단계 갱신. Talk 처리 경로에서 대화 생성 前에 호출.
+- [ ] **인지 평가(무상태) + Trust 상승** — 신호 강도(전리품 종류·수)를 단계 임계값에 매핑. 해당 NPC의 마지막 인지 단계보다 높을 때만 `ModifyPlayerRelation`으로 Trust↑(TrustCap 준수)하고 마지막 인지 단계 갱신. Talk 처리 경로에서 대화 생성 前에 호출. **biome 가중**(결정 사항 참조): 각 전리품의 소스 `Biome`을 읽어 공용(`Any`)은 기본 가중, 대상 NPC/지역 biome과 일치하는 전용 몹은 가중 상향으로 신호 강도에 반영.
 - [ ] **인지 상태 영속화** — (npc, 신호)별 마지막 인지 단계를 관계 세이브(`PlayerNpcRelationEntry`)에 합류. 구 세이브 마이그레이션 가드(없으면 0).
 - [ ] **대사 게이트** — `DialogueTopicSelector`의 `ClearThreat`를 Trust 단계로 분기(하소연 → 안심·인정 BaseLine). `CacheVariant`에 Trust 단계를 실어 단계 변화 시 자동으로 새 대사. Trust를 토픽 선택 입력으로 전달. `ThreatSeed` 하드코딩 제거·인지 결과 연동.
 - [ ] **반응성 보상** — Trust 마일스톤에서 goodwill 보상(소액 골드/아이템). 요구·수락 없이 NPC가 먼저 건네는 형태.
