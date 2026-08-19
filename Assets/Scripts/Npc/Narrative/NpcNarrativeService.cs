@@ -41,7 +41,7 @@ namespace ARPG.Npc.Narrative
                     new ChatMessage("system", DialogueSystemPrompt()),
                     new ChatMessage("user", ctx.ToPromptText() + DialogueUserSuffix(tier, topic)),
                 };
-                text = await AR.s.LLM.RequestWithContextAsync(msgs, LLMClient.MODEL_LLAMA_70B, DialogueTemperature);
+                text = await AR.s.LLM.RequestWithContextAsync(msgs, LLMClient.MODEL_GPT_OSS_120B, DialogueTemperature);
             }
 
             // LLM 없거나 실패 → 선택 토픽의 BaseLine (LLM-optional)
@@ -86,7 +86,7 @@ namespace ARPG.Npc.Narrative
                 new ChatMessage("system", WishSystemPrompt()),
                 new ChatMessage("user", ctx.ToPromptText() + WishUserSuffix(ctx)),
             };
-            string? raw = await AR.s.LLM.RequestWithContextAsync(msgs, LLMClient.MODEL_LLAMA_70B, WishTemperature);
+            string? raw = await AR.s.LLM.RequestWithContextAsync(msgs, LLMClient.MODEL_GPT_OSS_120B, WishTemperature);
             if (string.IsNullOrWhiteSpace(raw))
                 return null;
             return ParseAndValidateWish(raw!, ctx, npcId);

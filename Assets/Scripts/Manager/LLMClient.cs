@@ -29,9 +29,9 @@ namespace ARPG.Manager
     public class LLMClient
     {
         private const string GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-        public const string MODEL_LLAMA_70B = "llama-3.3-70b-versatile";
-        public const string MODEL_LLAMA_8B = "llama-3.1-8b-instant";
-        private const string DEFAULT_MODEL = MODEL_LLAMA_70B;
+        public const string MODEL_GPT_OSS_120B = "openai/gpt-oss-120b";
+        public const string MODEL_GPT_OSS_20B = "openai/gpt-oss-20b";
+        private const string DEFAULT_MODEL = MODEL_GPT_OSS_120B;
         private const string A_FILE_NAME = "llm.txt";
         private const string CONFIG_FOLDER_NAME = "Config";
 
@@ -91,7 +91,15 @@ namespace ARPG.Manager
             request.SetRequestHeader("Content-Type", "application/json");
             request.SetRequestHeader("Authorization", $"Bearer {_apiKey}");
 
-            await request.SendWebRequest().ToUniTask();
+            try
+            {
+                await request.SendWebRequest().ToUniTask();
+            }
+            catch (UnityWebRequestException exception)
+            {
+                Debug.LogError($"[LLMClient] Request failed ({exception.ResponseCode}): {exception.Error}\n{exception.Text}");
+                return null;
+            }
 
             if (request.result != UnityWebRequest.Result.Success)
             {
