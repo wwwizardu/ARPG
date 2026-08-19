@@ -4,9 +4,11 @@
 name: npc
 description: NPC 도메인 종합 — 정본 매핑, 코드 구현 현황, 마을 경제와의 경계.
 type: topic
-last_updated: 2026-07-22
+last_updated: 2026-08-19
 sources:
   - Docs/npc/VILLAGE_NPC_BOUNDARY_DESIGN.md
+  - Docs/npc/PLAYER_RECOGNITION_DESIGN.md
+  - Docs/world_history/NARRATIVE_DIALOGUE_VARIETY_DESIGN.md
   - Docs/npc/ 관계·활동·장비 문서
   - Assets/Scripts/Npc/, Assets/Scripts/Manager/NpcManager.cs (심볼 수준)
   - Assets/Scripts/Common/System/System_NpcSim.cs, Assets/Scripts/Npc/NpcActivityResolver.cs
@@ -18,7 +20,9 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 
 **핵심 경계**: 모든 물리 NPC는 모험가이며, 마을 경제는 물리 NPC가 아닌 추상 인구가 구동하고 건물은 자가 건설된다. 서비스도 특정 NPC가 아니라 배치 건물이 제공한다. [src: Docs/npc/VILLAGE_NPC_BOUNDARY_DESIGN.md §1–5]
 
-**현재 MVP**: 모든 생존 NPC는 `System_NpcSim`의 시간분할 처리 대상이며, 활동 범위는 Rest와 솔로/파티 Hunt다. Hunt는 Food·부상·사망·`Fell` 연대기·주요 사건 이력에 결과를 남기고, 활동 중 LOD 전환도 이어진다. [src: Docs/npc/NPC_SIMULATION_DESIGN.md §11.1, Assets/Scripts/Common/System/System_NpcSim.cs, Assets/Scripts/Manager/NpcManager.cs]
+**현재 MVP**: 모든 생존 NPC는 `System_NpcSim`의 시간분할 처리 대상이며, 활동 범위는 Rest와 솔로/파티 Hunt다. Hunt는 Food·부상·사망·`Fell` 연대기·주요 사건 이력에 결과를 남기고, 활동 중 LOD 전환도 이어진다. 플레이어 관계 4축은 `NpcManager`가 저장하며 Talk/Gift가 Affinity·Intimacy를 실제로 바꾼다. [src: Docs/npc/NPC_SIMULATION_DESIGN.md §11.1, Assets/Scripts/Common/System/System_NpcSim.cs, Assets/Scripts/Manager/NpcManager.cs, Assets/Scripts/Common/Utility/InteractionHelper.cs]
+
+대화 다양성 Phase 1도 구현돼 Deed·사망 기억을 사연 토픽으로 만들고 해당 NPC의 대화 캐시를 무효화한다. 플레이 검증은 아직 남아 있다. [src: Docs/world_history/NARRATIVE_DIALOGUE_VARIETY_DESIGN.md §5 Phase 1, Assets/Scripts/Npc/Narrative/NpcNarrativeRuntime.cs]
 
 ## 2. 정본 매핑 — "이걸 물으면 이 문서의 이 절"
 
@@ -37,6 +41,7 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 | NPC=모험가·경제 분리·자가 건설 | [VILLAGE_NPC_BOUNDARY_DESIGN](../Docs/npc/VILLAGE_NPC_BOUNDARY_DESIGN.md) | 현행 정본 |
 | 동료(파티 영입·명령·성장) | [companionSystem](../Docs/npc/companionSystem.md) | 최구식 문서 — §3 주의 필수 |
 | NPC 장비 12슬롯·검사 UI(UINpcInspect) | [NPC_EQUIPMENT_DESIGN](../Docs/npc/NPC_EQUIPMENT_DESIGN.md) | 구현 완료 |
+| 플레이어 상태 관찰→Trust·대사·보상 | [PLAYER_RECOGNITION_DESIGN](../Docs/npc/PLAYER_RECOGNITION_DESIGN.md) | 전리품 식별 배관만 구현, 반응 본체 미구현 [src: Docs/npc/PLAYER_RECOGNITION_DESIGN.md §제약·전제·§구현 계획, Assets/Scripts/Common/Utility/MonsterTrophyIdentifier.cs] |
 
 ## 3. 정본 우선순위
 
@@ -56,8 +61,9 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 | NPC↔NPC 호감도 채널 | RELATION_HISTORY §3 | `NpcManager` GetAffinity/ModifyAffinity/SaveAffinity ([NpcManager.cs:588-669](../Assets/Scripts/Manager/NpcManager.cs)) | ✅ 구현 |
 | NPC↔NPC 관계(유형) + backfill | RELATION_HISTORY §4 | `NpcRelationEntry`, `NpcSentiment`, [NpcRelationBackfill.cs](../Assets/Scripts/Npc/Relation/NpcRelationBackfill.cs), NpcManager AddRelation/GetRelations | ✅ 구현 |
 | 대화 토픽 선택·내러티브 런타임 | NARRATIVE_ENGINE(+SPIKE) | [Scripts/Npc/Narrative/](../Assets/Scripts/Npc/Narrative/) — DialogueTopicSelector, NpcNarrativeService(`Llm/Cache/Fallback`), `AffinityTier`, `NpcWish`/`WishState` 타입 | 🚧 부분 구현 — 타입·선택 로직 존재 |
-| 플레이어↔NPC 관계 4축(`PlayerRelation`) | interactionSystem §3 | NpcManager에 해당 API 없음 (GetPlayerRelation/ModifyPlayerRelation 부재) | ❌ 미구현 |
+| 플레이어↔NPC 관계 4축(`PlayerRelation`) | interactionSystem §3 | `NpcManager.GetPlayerRelation`/`SetPlayerRelation`/`ModifyPlayerRelation`/Save/Load, `InteractionHelper` Talk/Gift 반영 | ✅ 구현 [src: Assets/Scripts/Manager/NpcManager.cs, Assets/Scripts/Common/Utility/InteractionHelper.cs, Assets/Scripts/Npc/NpcSaveData.cs] |
 | 선물·선호 판정(`GiftReaction`) / 소망 추적·보상 | interactionSystem §4 / QUEST_SYSTEM | 타입 골격(`NpcWish`, `WishKind`)만 Narrative에 존재 | ❌ 미구현 (문서상 0%) |
+| 관찰 반응 — 몬스터 전리품 1호 신호 | PLAYER_RECOGNITION | `ItemTable.SourceMonsterId` + `MonsterTrophyIdentifier` 존재. 현행 ItemTable 데이터에는 연결된 전리품 없음 | 🟡 식별 배관만 구현, 감지·Trust·영속화·대사·보상 미구현 [src: Assets/Scripts/Common/Tables.cs, Assets/Scripts/Common/Utility/MonsterTrophyIdentifier.cs, Assets/_BinaryData/TableData/ItemTable.bytes] |
 | 개인 활동 시뮬(MVP) | NPC_SIMULATION §11.1 | `System_NpcSim`, `NpcActivityState`, `NpcActivityResolver` — Rest/솔로·파티 Hunt, 결정론 결과, analytic Hunt 경로 | ✅ 구현 [src: Assets/Scripts/Common/System/System_NpcSim.cs, Assets/Scripts/Npc/NpcActivityResolver.cs] |
 | 전역 NPC 총량·점진 보충 | NPC_SIMULATION D9 | `NpcPopulationState`, `NpcManager.EnsureAllVillagesPopulated`/`TryReplenishGlobalPopulation` | ✅ 구현 [src: Assets/Scripts/Npc/NpcPopulationState.cs, Assets/Scripts/Manager/NpcManager.cs] |
 | 사망 관계 기억 | NPC_SIMULATION §9-10 | `DeceasedRelationMemory`, `NpcManager.MarkNpcDead`, `UINpcInspect` | ✅ 구현 [src: Assets/Scripts/Npc/NpcRelationEntry.cs, Assets/Scripts/Manager/NpcManager.cs, Assets/Scripts/UI/UINpcInspect.cs] |
@@ -85,4 +91,5 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 | 파티·이주·WORLD_EVENT 확장 | NPC_SIMULATION NS4 → NPC_ACTIVITY(참고 범위) → WORLD_EVENT |
 | NPC 관계 데이터 다루기 | NPC_RELATION_HISTORY → NpcManager 관계 region 코드 |
 | 대화 시스템 | NARRATIVE_ENGINE(+SPIKE) → Scripts/Npc/Narrative/ 현행 코드 |
+| 관찰 반응 구현 | PLAYER_RECOGNITION_DESIGN → interactionSystem §3 → InteractionHelper/UINpcInspect → Narrative 현행 코드 [src: Docs/npc/PLAYER_RECOGNITION_DESIGN.md §코드 앵커] |
 | 동료 시스템 | companionSystem — 단 §3의 충돌 지점 확인 후 착수 |

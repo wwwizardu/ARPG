@@ -4,8 +4,9 @@
 name: wiki-map
 description: Docs/ 전체 주제를 얕고 넓게 조망하는 지도 페이지. 주제별 상세 위키 페이지의 진입점.
 type: map
-last_updated: 2026-07-13
+last_updated: 2026-08-19
 sources:
+  - Wiki/current_status.md
   - Docs/README.md
   - Docs/village/VILLAGE_RUNTIME_DESIGN.md
   - Docs/village/ABSTRACT_CONSTRUCTION_DESIGN.md
@@ -21,8 +22,11 @@ sources:
 
 ## 주제별 지도
 
+> **현재 작업 재개 지점**은 [current_status.md](current_status.md)를 먼저 본다. 이 페이지는 코드·테이블과 최신 주제 문서를 대조해 완료·미검증·미구현을 구분한다. [src: Wiki/current_status.md]
+
 | 주제 | 한 줄 요약 | 문서 위치 | 흩어짐 | 코드 연결도 |
 |------|-----------|----------|:------:|:----------:|
+| **current_status** → [current_status.md](current_status.md) | 2026-08-19 기준 구현 현황·미검증 항목·권장 재개 순서 [src: Wiki/current_status.md] | 최신 관련 Docs + 코드·테이블 대조 | — | 상 |
 | **overview** | 게임 컨셉(3대 축)과 시스템별 구현 현황·로드맵 | `Docs/overview/` 2장 (gameOverview, implementationStatus) + `Docs/README.md`(대시보드) | 하 | 하 |
 | **combat** | 실시간 전투·데미지 공식·스킬/스킬북/룬·밸런스·AI 스킬 선택 | `Docs/combat/` 9장 (combatSystem, combatSystemCompletion, BALANCE_DESIGN, SKILL_DESIGN, SKILLBOOK_DESIGN, SKILL_RUNE_DESIGN, SKILL_EFFECT_IDEAS, AI_SKILL_SELECTION_IMPLEMENTATION, ModSystem_Changelog) | 상 | 상 |
 | **ai_monster** | 몬스터 AI 상태머신 패턴과 데이터 주도 스폰 풀 | `Docs/ai_monster/` 2장 (monsterAIPattern, MONSTER_SPAWN_DESIGN) | 하 | 중 |
@@ -31,6 +35,7 @@ sources:
 | **npc** → [npc.md](npc.md) | NPC 관계·상호작용·소망(퀘스트)·자율 활동·동료·장비 | `Docs/npc/` (VILLAGE_NPC_BOUNDARY_DESIGN 포함) | 상 | 중 |
 | **world_history** → [world_history.md](world_history.md) | 절차적 역사 생성(정착지 연대기)과 LLM 내러티브 엔진(대화·소망 생성) | `Docs/world_history/` 5장 (PROCEDURAL_HISTORY_DESIGN, WORLD_HISTORY_PLAN, WORLD_EVENT_DESIGN, NARRATIVE_ENGINE_DESIGN, NARRATIVE_ENGINE_SPIKE) | 상 | 중 |
 | **tech** | ECS SparseSet 조회 비용 최적화 단계별 계획 | `Docs/tech/` 1장 (ECS_PERFORMANCE_OPTIMIZATION_PLAN) | 하 | 중 |
+| **economy** | 지역 상권·결정론 상점은 구현, 월드 공유 물물교환 경매장은 설계 확정·미착수 [src: Docs/village/VILLAGE_REWORK_PLAN.md §V5–V6, Docs/economy/AUCTION_HOUSE_DESIGN.md] | `Docs/economy/AUCTION_HOUSE_DESIGN.md` + Village Trade 코드 | 하 | 중 |
 | **_archive** | 보류·폐기된 과거 계획 (던전, Phase A 초기안, 역사 백본) | `Docs/_archive/` 5장 | — | — |
 
 **판정 근거 (얕은 스캔 수준):**
@@ -54,8 +59,9 @@ sources:
 
 ## 위키 종합 필요성이 낮은 주제
 
-- **overview** — `Docs/README.md` 자체가 이미 잘 관리되는 단일 대시보드(지도) 역할을 하고 있다.
+- **overview** — 게임 컨셉 지도 역할은 `Docs/README.md`가 유지하지만 구현 현황은 2026-07-13 이후 드리프트됐다. 별도 장기 주제 페이지 대신 [current_status.md](current_status.md)가 최신 코드·테이블 대조를 보완한다. [src: Docs/README.md, Docs/overview/implementationStatus.md, Wiki/current_status.md]
 - **tech** — 단일 문서 1장으로 자기완결적.
+- **economy** — 현행 추가 문서는 경매장 1장이고 구현 전 코드 앵커까지 한 문서에 모여 있다. 지역 상권 구현 현황은 village 위키와 current_status가 연결한다. [src: Docs/economy/AUCTION_HOUSE_DESIGN.md, Wiki/village.md, Wiki/current_status.md]
 - **ai_monster** — 2장뿐이고 상호 의존이 얕다.
 - **map** — 3장이지만 MAP_DESIGN.md(1,031행) 한 장에 대부분이 집중돼 있어 이미 사실상 단일 정본. [추론]
 - **_archive** — 보류/폐기 문서로 위키 종합 대상에서 제외.
