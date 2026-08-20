@@ -572,22 +572,24 @@ namespace ARPG.UI
         }
 
         // 스파이크: 대화 클릭 → 백본 문맥 기반 LLM 대화(+Friend↑ 소망) 생성.
-        // 클릭마다 티어를 한 단계 올려 에스컬레이션(R3)을 관찰한다(관계 데이터 계층 미구현 우회).
         private async UniTask OnClickTalkAsync()
         {
-            InteractionResult interaction = InteractionHelper.Resolve(_entityId, InteractionType.Talk);
+            // 첫 만남·재방문 판정은 이번 Talk가 관계와 만남 횟수를 올리기 전 스냅샷을 사용한다.
             PlayerRelation relation = AR.s.Npc.GetPlayerRelation(_entityId);
-            AffinityTier tier = GetAffinityTier(relation.Affinity);
+            float talkGameTime = AR.s.Time.CurrentGameTime;
+            AffinityTier tier = DialogueTopicSelector.GetAffinityTier(relation.Affinity);
+            InteractionResult interaction = InteractionHelper.Resolve(_entityId, InteractionType.Talk);
 
+            // 야외 몬스터는 세계의 상시 배경이다. 토픽 선택기에서 긴급이 아닌 낮은 우선순위 화제로 취급한다.
             ThreatSeed threat = new()
             {
                 NearbyMonsters = true,
-                Note = "마을 근처에 몬스터가 출몰해 마을 밖으로 나가기가 위험하다.",
+                Note = "마을 밖에는 몬스터가 흔히 돌아다녀 여행자는 주의해야 한다.",
             };
 
             if (_dialogueLabel != null) _dialogueLabel.text = $"[{tier}] 생성 중…";
 
-            DialogueResult r = await NpcNarrativeService.GetDialogueAsync(_entityId, tier, threat);
+            DialogueResult r = await NpcNarrativeService.GetDialogueAsync(_entityId, relation, talkGameTime, threat);
             string line = $"[{tier}/{r.Topic}/{r.Source}] {r.Text}\n호감도 +{interaction.AffinityDelta}, 친밀도 +{interaction.IntimacyDelta}";
 
             if (_enableWishSpike && tier >= AffinityTier.Friend)
@@ -603,14 +605,6 @@ namespace ARPG.UI
             if (_dialogueLabel != null) _dialogueLabel.text = line;
             Debug.Log($"[Narrative] npc={_entityId} {line}");
         }
-
-        private static AffinityTier GetAffinityTier(int affinity) => affinity switch
-        {
-            < 20 => AffinityTier.Stranger,
-            < 50 => AffinityTier.Acquaintance,
-            < 80 => AffinityTier.Friend,
-            _ => AffinityTier.Confidant,
-        };
 
         private void OnClickTrade()
         {

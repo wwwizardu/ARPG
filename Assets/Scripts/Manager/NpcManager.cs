@@ -1079,6 +1079,8 @@ namespace ARPG.Npc
             relation.Trust = Mathf.Clamp(relation.Trust, 0, relation.TrustCap);
             relation.Fear = Mathf.Clamp(relation.Fear, 0, 100);
             relation.Intimacy = Mathf.Clamp(relation.Intimacy, 0, 100);
+            relation.TalkCount = Mathf.Max(0, relation.TalkCount);
+            relation.LastTalkGameTime = Mathf.Max(-1f, relation.LastTalkGameTime);
             _playerRelations[npcId] = relation;
         }
 
@@ -1107,6 +1109,43 @@ namespace ARPG.Npc
             relation.Fear = Mathf.Clamp(relation.Fear + dFear, 0, 100);
             relation.Intimacy = Mathf.Clamp(relation.Intimacy + dIntimacy, 0, 100);
             SetPlayerRelation(npcId, relation);
+        }
+
+        /// <summary>
+        /// 성립한 Talk의 만남 이력을 기록한다. 관계 수치와 함께 저장되어 첫 만남·재방문 대사에 사용된다.
+        /// </summary>
+        public void RecordPlayerTalk(int npcId, float gameTime)
+        {
+            if (npcId < 0)
+                return;
+
+            PlayerRelation relation = GetPlayerRelation(npcId);
+            relation.TalkCount++;
+            relation.LastTalkGameTime = Mathf.Max(0f, gameTime);
+            SetPlayerRelation(npcId, relation);
+        }
+
+        /// <summary>
+        /// 대화 테스트용으로 모든 플레이어↔NPC 관계의 만남 이력만 초기화한다.
+        /// 호감·신뢰·두려움·친밀도는 유지한다.
+        /// </summary>
+        public int ResetPlayerTalkHistory()
+        {
+            List<int> npcIds = new List<int>(_playerRelations.Keys);
+            int resetCount = 0;
+            for (int i = 0; i < npcIds.Count; i++)
+            {
+                int npcId = npcIds[i];
+                PlayerRelation relation = _playerRelations[npcId];
+                if (relation.TalkCount == 0 && relation.LastTalkGameTime < 0f)
+                    continue;
+
+                relation.TalkCount = 0;
+                relation.LastTalkGameTime = -1f;
+                SetPlayerRelation(npcId, relation);
+                resetCount++;
+            }
+            return resetCount;
         }
 
         /// <summary>

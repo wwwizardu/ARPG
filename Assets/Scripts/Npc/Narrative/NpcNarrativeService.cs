@@ -20,18 +20,33 @@ namespace ARPG.Npc.Narrative
         private const float WishTemperature = 0.7f;
 
         // ── 대화 ──────────────────────────────────────────────────────────
-        public static async UniTask<DialogueResult> GetDialogueAsync(int npcId, AffinityTier tier, ThreatSeed threat)
+        public static async UniTask<DialogueResult> GetDialogueAsync(
+            int npcId, PlayerRelation relation, float currentGameTime, ThreatSeed threat)
         {
+            AffinityTier tier = DialogueTopicSelector.GetAffinityTier(relation.Affinity);
+            string greeting = DialogueTopicSelector.SelectGreeting(npcId, relation, currentGameTime);
             NpcDialogueContext? ctx = NpcDialogueContextBuilder.Build(npcId, threat);
             if (ctx == null)
-                return new DialogueResult { Text = "…", Source = NarrativeSource.Fallback, Tier = tier, Topic = DialogueTopicType.Greeting };
+                return new DialogueResult
+                {
+                    Text = ComposeDialogue(greeting, "…"),
+                    Source = NarrativeSource.Fallback,
+                    Tier = tier,
+                    Topic = DialogueTopicType.Greeting,
+                };
 
             // 토픽 선택 (상태·백본 → 적용 토픽 추림 → 티어 게이트 + 레퍼토리 캡 + 긴급 새치기·셔플백 1개)
             List<DialogueTopic> topics = DialogueTopicSelector.Collect(npcId, ctx, threat);
             DialogueTopic topic = DialogueTopicSelector.Select(npcId, topics, tier, AR.s.Npc.Narrative.GetRecentTopics(npcId));
 
-            if (AR.s.Npc.Narrative.TryGetDialogue(npcId, tier, topic.Type, topic.CacheVariant, out string cached))
-                return new DialogueResult { Text = cached, Source = NarrativeSource.Cache, Tier = tier, Topic = topic.Type };
+            if (AR.s.Npc.Narrative.TryGetDialogue(npcId, tier, topic.Type, topic.CacheVariant, out string? cached))
+                return new DialogueResult
+                {
+                    Text = ComposeDialogue(greeting, cached),
+                    Source = NarrativeSource.Cache,
+                    Tier = tier,
+                    Topic = topic.Type,
+                };
 
             string? text = null;
             if (AR.s.LLM != null && AR.s.LLM.IsReady)
@@ -39,18 +54,30 @@ namespace ARPG.Npc.Narrative
                 List<ChatMessage> msgs = new()
                 {
                     new ChatMessage("system", DialogueSystemPrompt()),
-                    new ChatMessage("user", ctx.ToPromptText() + DialogueUserSuffix(tier, topic)),
+                    new ChatMessage("user", ctx.ToPromptText() + DialogueUserSuffix(tier, relation, topic)),
                 };
                 text = await AR.s.LLM.RequestWithContextAsync(msgs, LLMClient.MODEL_GPT_OSS_120B, DialogueTemperature);
             }
 
             // LLM 없거나 실패 → 선택 토픽의 BaseLine (LLM-optional)
             if (string.IsNullOrWhiteSpace(text))
-                return new DialogueResult { Text = topic.BaseLine, Source = NarrativeSource.Fallback, Tier = tier, Topic = topic.Type };
+                return new DialogueResult
+                {
+                    Text = ComposeDialogue(greeting, topic.BaseLine),
+                    Source = NarrativeSource.Fallback,
+                    Tier = tier,
+                    Topic = topic.Type,
+                };
 
             string clean = text!.Trim();
             AR.s.Npc.Narrative.SetDialogue(npcId, tier, topic.Type, topic.CacheVariant, clean);
-            return new DialogueResult { Text = clean, Source = NarrativeSource.Llm, Tier = tier, Topic = topic.Type };
+            return new DialogueResult
+            {
+                Text = ComposeDialogue(greeting, clean),
+                Source = NarrativeSource.Llm,
+                Tier = tier,
+                Topic = topic.Type,
+            };
         }
 
         // ── 소망 ──────────────────────────────────────────────────────────
@@ -178,11 +205,12 @@ namespace ARPG.Npc.Narrative
                 "- 관계 단계가 낮으면 표면적인 이야기만, 높을수록 더 사적인 사연을 드러낸다.";
         }
 
-        private static string DialogueUserSuffix(AffinityTier tier, DialogueTopic topic)
+        private static string DialogueUserSuffix(AffinityTier tier, PlayerRelation relation, DialogueTopic topic)
         {
             StringBuilder sb = new();
             sb.AppendLine();
             sb.AppendLine($"[현재 관계 단계] {TierKorean(tier)}");
+            sb.AppendLine($"[플레이어와 관계 수치] 호감 {relation.Affinity}, 신뢰 {relation.Trust}, 두려움 {relation.Fear}, 친밀 {relation.Intimacy}");
             sb.AppendLine($"[대화 주제] {TopicKorean(topic.Type)}");
             if (topic.Facts.Count > 0)
             {
@@ -191,8 +219,17 @@ namespace ARPG.Npc.Narrative
                     sb.AppendLine($"- {topic.Facts[i]}");
             }
             sb.AppendLine($"[기본 대사(참고)] {topic.BaseLine}");
-            sb.AppendLine("위 주제로, 제공된 사실만 사용해 이 NPC의 대사 1~2문장을 한국어로 생성하라. 기본 대사보다 풍부하게, 성격·관계 단계에 맞게.");
+            sb.AppendLine("관계형 인사말은 별도로 표시된다. 인사를 반복하지 말고, 위 주제로 제공된 사실만 사용해 이 NPC의 본문 대사 1~2문장을 한국어로 생성하라. 기본 대사보다 풍부하게, 성격·관계 단계와 관계 수치에 맞게.");
             return sb.ToString();
+        }
+
+        private static string ComposeDialogue(string greeting, string body)
+        {
+            if (string.IsNullOrWhiteSpace(greeting))
+                return body;
+            if (string.IsNullOrWhiteSpace(body))
+                return greeting;
+            return $"{greeting} {body}";
         }
 
         private static string TopicKorean(DialogueTopicType t) => t switch

@@ -9,7 +9,7 @@ namespace ARPG.Npc.Narrative
 {
     /// <summary>
     /// 상태·백본 → 적용 가능한 대화 토픽(니즈·소문·잡담·사연) 산출 + 선택.
-    /// 선택은 셔플백(중복 회피) + 긴급(기아·위협) 새치기 — 대화할 때마다 골고루 돌면서 급한 건 놓치지 않는다.
+    /// 선택은 관계별 레퍼토리 + 성격 편향 + 셔플백(중복 회피) + 실제 긴급 니즈 새치기다.
     /// 니즈는 "표현만"(충족/보상 루프 없음). 소문은 C-method(진짜 사실 → 소문 말투).
     /// 사연(Personal)은 개인 전기 Deeds·사별 기억 접지 — 난수 없이 최신순(결정론).
     /// 설계: NARRATIVE_ENGINE_SPIKE §4.5 + NARRATIVE_DIALOGUE_VARIETY §5 Phase 1
@@ -18,6 +18,30 @@ namespace ARPG.Npc.Narrative
     {
         private const float ShortageRatio = 0.25f;
         private const int DefaultResourceCap = 50;
+        private const float ImmediateRepeatHours = 1f;
+        private const float LongAbsentHours = 48f;
+
+        private enum GreetingEncounter
+        {
+            FirstMeeting,
+            FamiliarFace,
+            Regular,
+            LongAbsent,
+            ImmediateRepeat,
+        }
+
+        private enum GreetingTone
+        {
+            Friendly,
+            Direct,
+            Greedy,
+            Loyal,
+            Courageous,
+            Curious,
+            Proud,
+            Patient,
+            Guarded,
+        }
 
         // 마을 자원(식량 제외 — Food는 기아 니즈로 별도 처리)
         private static readonly GlobalEnum.ItemType[] ResourceTypes =
@@ -72,8 +96,8 @@ namespace ARPG.Npc.Narrative
                 applicable.Add(topics[i]);
             }
 
-            // NPC별 소수 화제(1~3)로 캡 — 캐릭터가 늘 하는 얘기만 돌게
-            List<DialogueTopic> repertoire = BuildRepertoire(npcId, applicable);
+            // 관계 단계에 따른 NPC별 화제 레퍼토리(2~5) 안에서 순환
+            List<DialogueTopic> repertoire = BuildRepertoire(npcId, applicable, tier);
             if (repertoire.Count == 0)
                 return greeting ?? GreetingFallback();
 
@@ -94,51 +118,293 @@ namespace ARPG.Npc.Narrative
             return pick;
         }
 
-        /// <summary>NPC별 화제 레퍼토리(1~3) — 활성 긴급 니즈 우선 포함, 나머지는 우선순위+NPC별 안정 tiebreak.</summary>
-        private static List<DialogueTopic> BuildRepertoire(int npcId, List<DialogueTopic> applicable)
+        /// <summary>호감도 수치를 대화 공개 단계로 변환한다.</summary>
+        public static AffinityTier GetAffinityTier(int affinity) => affinity switch
         {
-            int cap = RepertoireSize(npcId);
+            < 20 => AffinityTier.Stranger,
+            < 50 => AffinityTier.Acquaintance,
+            < 80 => AffinityTier.Friend,
+            _ => AffinityTier.Confidant,
+        };
+
+        /// <summary>
+        /// 대화 전 관계 스냅샷으로 첫 만남·재방문 상태를 판정하고 NPC 성격에 맞는 인사를 고른다.
+        /// 본문 토픽과 분리해 인사가 실제 화제를 밀어내지 않도록 한다.
+        /// </summary>
+        public static string SelectGreeting(int npcId, PlayerRelation relation, float currentGameTime)
+        {
+            GreetingEncounter encounter = GetGreetingEncounter(relation, currentGameTime);
+            NpcSaveData? save = AR.s.Npc?.GetSaveData(npcId);
+            GreetingTone tone = GetGreetingTone(save, relation);
+            int variant = StableHash(StableHash(npcId, (int)encounter), relation.TalkCount) % 2;
+            return GreetingLine(encounter, tone, GetAffinityTier(relation.Affinity), variant);
+        }
+
+        /// <summary>NPC별 화제 레퍼토리(2~5) — 관계가 깊을수록 넓어지고 성격에 맞는 화제가 선점한다.</summary>
+        private static List<DialogueTopic> BuildRepertoire(int npcId, List<DialogueTopic> applicable, AffinityTier tier)
+        {
+            int cap = RepertoireSize(npcId, tier);
             List<DialogueTopic> result = new();
 
-            // 1) 활성 긴급 니즈(위협·기아)는 급하니 자동 포함
+            // 1) 활성 긴급 니즈(현재는 기아)는 급하니 자동 포함
             for (int i = 0; i < applicable.Count && result.Count < cap; i++)
                 if (applicable[i].Urgent)
                     result.Add(applicable[i]);
 
-            // 2) 나머지: 우선순위(Need>Rumor>Flavor) + npcId 안정 tiebreak로 채움
+            // 2) 나머지: 관계 단계별 카테고리 우선순위 + 성격 편향 + npcId 안정 tiebreak로 채움
             List<DialogueTopic> rest = new();
             for (int i = 0; i < applicable.Count; i++)
                 if (applicable[i].Urgent == false)
                     rest.Add(applicable[i]);
-            rest.Sort((a, b) => SortKey(npcId, b).CompareTo(SortKey(npcId, a)));
+            NpcSaveData? save = AR.s.Npc?.GetSaveData(npcId);
+            rest.Sort((a, b) => SortKey(npcId, tier, save, b).CompareTo(SortKey(npcId, tier, save, a)));
             for (int i = 0; i < rest.Count && result.Count < cap; i++)
                 result.Add(rest[i]);
 
             return result;
         }
 
-        // npcId 시드로 안정적인 1~3 (2에 치우침: 25/50/25)
-        private static int RepertoireSize(int npcId)
+        // 기본 1~3에 관계 단계만큼 확장하되, 최소 2·최대 5로 제한한다.
+        private static int RepertoireSize(int npcId, AffinityTier tier)
         {
             int r = StableHash(npcId, 777) % 100;
-            if (r < 25) return 1;
-            if (r < 75) return 2;
-            return 3;
+            int baseSize = r < 25 ? 1 : r < 75 ? 2 : 3;
+            return Mathf.Clamp(baseSize + (int)tier, 2, 5);
         }
 
-        // 우선순위(Need>Personal>Rumor>Flavor)*1000 + NPC별 토픽 안정 해시 → NPC마다 다른 화제 선호, 같은 NPC는 일관
-        private static int SortKey(int npcId, DialogueTopic t)
+        // 관계 단계 우선순위*10000 + 성격 편향*100 + NPC별 안정 해시.
+        private static int SortKey(int npcId, AffinityTier tier, NpcSaveData? save, DialogueTopic t)
         {
-            int pri = t.Category switch
+            int priority = CategoryPriority(t, tier);
+            int personality = PersonalityBias(save, t.Type);
+            return priority * 10000 + personality * 100 + (StableHash(npcId, (int)t.Type) % 100);
+        }
+
+        private static int CategoryPriority(DialogueTopic topic, AffinityTier tier)
+        {
+            // 상시 존재하는 야외 몬스터는 배경 화제다. 실제 사건이 생기기 전에는 일상·사연보다 앞서지 않는다.
+            if (topic.Type == DialogueTopicType.ClearThreat)
+                return 2;
+
+            return topic.Category switch
             {
-                DialogueTopicCategory.Need => 4,
-                DialogueTopicCategory.Personal => 3,
+                DialogueTopicCategory.Need => 5,
+                DialogueTopicCategory.Personal => tier >= AffinityTier.Friend ? 5 : tier >= AffinityTier.Acquaintance ? 3 : 2,
+                DialogueTopicCategory.Flavor => tier <= AffinityTier.Acquaintance ? 4 : 3,
                 DialogueTopicCategory.Rumor => 2,
-                DialogueTopicCategory.Flavor => 1,
                 _ => 0,
             };
-            return pri * 1000 + (StableHash(npcId, (int)t.Type) % 1000);
         }
+
+        private static int PersonalityBias(NpcSaveData? save, DialogueTopicType type)
+        {
+            if (save == null)
+                return 0;
+
+            return type switch
+            {
+                DialogueTopicType.SmallTalk => save.NpcStat.Friendliness / 5,
+                DialogueTopicType.JobMood => (save.NpcStat.Pride + save.NpcStat.Patience) / 10,
+                DialogueTopicType.HistoryRumor => save.NpcStat.Curiosity / 5,
+                DialogueTopicType.SettlementRumor => save.NpcStat.Curiosity / 5,
+                DialogueTopicType.DangerRumor => (save.NpcStat.Curiosity + save.NpcStat.Courage) / 10,
+                DialogueTopicType.Gossip => (save.NpcStat.Friendliness + save.NpcStat.Curiosity) / 10,
+                DialogueTopicType.ClearThreat => (100 - save.NpcStat.Courage) / 5,
+                DialogueTopicType.ResourceShortage => save.NpcStat.Greed / 5,
+                DialogueTopicType.CraftMaterial => (save.NpcStat.Greed + save.NpcStat.Patience) / 10,
+                DialogueTopicType.RecentHunt => (save.NpcStat.Courage + save.NpcStat.Pride) / 10,
+                DialogueTopicType.LostCompanion => save.NpcStat.Loyalty / 5,
+                DialogueTopicType.Boast => (save.NpcStat.Pride + save.NpcStat.Greed) / 10,
+                DialogueTopicType.PartyBond => (save.NpcStat.Loyalty + save.NpcStat.Friendliness) / 10,
+                _ => 0,
+            };
+        }
+
+        private static GreetingEncounter GetGreetingEncounter(PlayerRelation relation, float currentGameTime)
+        {
+            if (relation.TalkCount <= 0)
+                return GreetingEncounter.FirstMeeting;
+
+            if (relation.LastTalkGameTime >= 0f)
+            {
+                float elapsed = currentGameTime - relation.LastTalkGameTime;
+                if (elapsed >= 0f && elapsed <= ImmediateRepeatHours)
+                    return GreetingEncounter.ImmediateRepeat;
+                if (elapsed >= LongAbsentHours)
+                    return GreetingEncounter.LongAbsent;
+            }
+
+            return relation.TalkCount <= 3
+                ? GreetingEncounter.FamiliarFace
+                : GreetingEncounter.Regular;
+        }
+
+        private static GreetingTone GetGreetingTone(NpcSaveData? save, PlayerRelation relation)
+        {
+            if (relation.Fear >= 50)
+                return GreetingTone.Guarded;
+            if (save == null)
+                return GreetingTone.Direct;
+            if (relation.Intimacy >= 70 && save.NpcStat.Friendliness >= 35)
+                return GreetingTone.Friendly;
+            if (relation.Trust >= 70 && save.NpcStat.Loyalty >= 50)
+                return GreetingTone.Loyal;
+
+            int highest = save.NpcStat.Friendliness;
+            GreetingTone result = GreetingTone.Friendly;
+            if (save.NpcStat.Honesty > highest)
+            {
+                highest = save.NpcStat.Honesty;
+                result = GreetingTone.Direct;
+            }
+            if (save.NpcStat.Greed > highest)
+            {
+                highest = save.NpcStat.Greed;
+                result = GreetingTone.Greedy;
+            }
+            if (save.NpcStat.Loyalty > highest)
+            {
+                highest = save.NpcStat.Loyalty;
+                result = GreetingTone.Loyal;
+            }
+            if (save.NpcStat.Courage > highest)
+            {
+                highest = save.NpcStat.Courage;
+                result = GreetingTone.Courageous;
+            }
+            if (save.NpcStat.Curiosity > highest)
+            {
+                highest = save.NpcStat.Curiosity;
+                result = GreetingTone.Curious;
+            }
+            if (save.NpcStat.Pride > highest)
+            {
+                highest = save.NpcStat.Pride;
+                result = GreetingTone.Proud;
+            }
+            if (save.NpcStat.Patience > highest)
+                result = GreetingTone.Patient;
+            return result;
+        }
+
+        private static string GreetingLine(
+            GreetingEncounter encounter, GreetingTone tone, AffinityTier tier, int variant)
+        {
+            if (encounter == GreetingEncounter.Regular && tier == AffinityTier.Confidant)
+                return ConfidantLine(tone, variant);
+            if (encounter == GreetingEncounter.Regular && tier == AffinityTier.Friend)
+                return FriendLine(tone, variant);
+
+            return encounter switch
+            {
+                GreetingEncounter.FirstMeeting => FirstMeetingLine(tone, variant),
+                GreetingEncounter.FamiliarFace => FamiliarFaceLine(tone, variant),
+                GreetingEncounter.Regular => RegularLine(tone, variant),
+                GreetingEncounter.LongAbsent => LongAbsentLine(tone, variant),
+                GreetingEncounter.ImmediateRepeat => ImmediateRepeatLine(tone, variant),
+                _ => "무슨 일이오?",
+            };
+        }
+
+        private static string FriendLine(GreetingTone tone, int variant) => tone switch
+        {
+            GreetingTone.Friendly => Variant(variant, "왔군! 자네를 보면 마음이 놓여.", "어서 오게. 자네와 이야기하면 늘 즐겁다네."),
+            GreetingTone.Direct => Variant(variant, "왔나. 자네라면 바로 본론을 말해도 되겠군.", "자네로군. 돌려 말할 사이는 아니지."),
+            GreetingTone.Greedy => Variant(variant, "왔군. 자네와는 장사 말고도 나눌 이야기가 있지.", "어서 오게. 좋은 친구에게까지 값을 매기진 않는다네."),
+            GreetingTone.Loyal => Variant(variant, "왔나, 친구. 자네라면 믿을 수 있지.", "잘 왔네. 자네가 곁에 있으면 든든하군."),
+            GreetingTone.Courageous => Variant(variant, "왔군, 친구. 다음엔 함께 길을 나서도 좋겠어.", "자네로군. 믿고 등을 맡길 사람이 와서 반갑네."),
+            GreetingTone.Curious => Variant(variant, "왔군! 자네에게 묻고 싶은 게 많았네.", "잘 왔어. 오늘은 밤새 이야기해도 모자라겠군."),
+            GreetingTone.Proud => Variant(variant, "왔나. 자네 정도라면 내 친구라 불러도 부끄럽지 않지.", "자네로군. 내가 인정한 사람은 흔치 않다네."),
+            GreetingTone.Patient => Variant(variant, "왔나, 친구. 편히 쉬면서 이야기하게.", "잘 왔네. 자네 이야기라면 오래 들어도 좋지."),
+            GreetingTone.Guarded => Variant(variant, "왔군. 아직 조심스럽지만 자네는 믿어 보겠소.", "자네로군. 다른 이보다야 마음을 놓을 수 있지."),
+            _ => "왔나, 친구.",
+        };
+
+        private static string ConfidantLine(GreetingTone tone, int variant) => tone switch
+        {
+            GreetingTone.Friendly => Variant(variant, "왔구나. 자네 앞에서는 굳이 마음을 숨길 필요가 없지.", "기다리고 있었네. 자네에게만 할 수 있는 이야기가 있어."),
+            GreetingTone.Direct => Variant(variant, "왔군. 자네에게는 솔직히 말하지.", "자네로군. 숨김없이 이야기해도 되겠지."),
+            GreetingTone.Greedy => Variant(variant, "왔나. 재물보다 귀한 신뢰를 나눌 사람은 자네뿐이군.", "자네에게만은 손익을 따지고 싶지 않네."),
+            GreetingTone.Loyal => Variant(variant, "왔나. 끝까지 믿을 수 있는 사람은 자네뿐이야.", "잘 왔네. 자네에게 맡기지 못할 이야기는 없지."),
+            GreetingTone.Courageous => Variant(variant, "왔군. 자네와 함께라면 어떤 위험도 두렵지 않네.", "자네로군. 내 등을 맡길 사람은 역시 자네뿐이지."),
+            GreetingTone.Curious => Variant(variant, "왔군! 자네와 나눌 이야기를 계속 생각하고 있었네.", "잘 왔어. 자네라면 내 속마음까지 이해하겠지."),
+            GreetingTone.Proud => Variant(variant, "왔나. 내가 속을 터놓는 사람은 자네뿐이라네.", "자네로군. 내 신뢰를 얻은 걸 자랑스럽게 여겨도 좋아."),
+            GreetingTone.Patient => Variant(variant, "왔구나. 오늘도 마음 놓고 이야기해 보세.", "잘 왔네. 자네 앞에서는 서두를 것도 숨길 것도 없지."),
+            GreetingTone.Guarded => Variant(variant, "자네로군. 다른 이는 몰라도 자네에게는 말할 수 있소.", "왔소? 자네 앞에서만큼은 경계를 내려놓아도 되겠지."),
+            _ => "왔군. 자네에게만 할 이야기가 있네.",
+        };
+
+        private static string FirstMeetingLine(GreetingTone tone, int variant) => tone switch
+        {
+            GreetingTone.Friendly => Variant(variant, "처음 보는 얼굴이네. 이 마을엔 처음인가?", "낯선 얼굴이지만 반갑군. 여행자인가?"),
+            GreetingTone.Direct => Variant(variant, "처음 보는 얼굴인데. 용건이 뭐지?", "마을 사람은 아닌 것 같군. 무슨 일이지?"),
+            GreetingTone.Greedy => Variant(variant, "새 손님인가? 팔 만한 물건은 있나?", "처음 보는 얼굴이군. 돈이 될 만한 이야기는 환영이지."),
+            GreetingTone.Loyal => Variant(variant, "낯선 이로군. 이 마을에는 무슨 일이지?", "처음 보는 얼굴인데, 마을에 해를 끼칠 생각은 없겠지?"),
+            GreetingTone.Courageous => Variant(variant, "낯선 이로군. 험한 길을 지나왔나 보지?", "처음 보는 얼굴인데도 기세가 좋군. 모험가인가?"),
+            GreetingTone.Curious => Variant(variant, "처음 보는 얼굴인데, 어디서 왔지?", "여기선 못 보던 사람이군. 어떤 길로 왔나?"),
+            GreetingTone.Proud => Variant(variant, "처음 보는 자로군. 내 앞에서는 예를 갖추게.", "낯선 얼굴이군. 누구와 이야기하는지는 알고 있겠지?"),
+            GreetingTone.Patient => Variant(variant, "처음 보는 얼굴이군. 천천히 이야기해 보게.", "낯선 사람이로군. 급할 것 없으니 용건을 말해 보게."),
+            GreetingTone.Guarded => Variant(variant, "누구시오? 마을 사람은 아닌 것 같은데.", "거기서 말하시오. 처음 보는 얼굴이라 경계가 되는군."),
+            _ => "처음 보는 얼굴이군.",
+        };
+
+        private static string FamiliarFaceLine(GreetingTone tone, int variant) => tone switch
+        {
+            GreetingTone.Friendly => Variant(variant, "또 왔네. 반가워.", "이제 낯이 익는군. 오늘은 어떤가?"),
+            GreetingTone.Direct => Variant(variant, "또 왔군. 이번 용건은 뭐지?", "전에 본 얼굴이군. 할 말이 있나?"),
+            GreetingTone.Greedy => Variant(variant, "또 왔나? 이번엔 좋은 물건이라도 있나?", "낯이 익군. 돈 될 이야기를 가져왔겠지?"),
+            GreetingTone.Loyal => Variant(variant, "다시 왔군. 마을은 좀 둘러봤나?", "전에 본 사람이군. 별일은 없었겠지?"),
+            GreetingTone.Courageous => Variant(variant, "또 만났군. 밖에서 별일은 없었나?", "낯이 익는군. 이번에도 험한 길을 다녀왔나?"),
+            GreetingTone.Curious => Variant(variant, "다시 왔군. 지난번 이야기가 계속 궁금했는데.", "또 만났네. 이번엔 어디를 다녀왔지?"),
+            GreetingTone.Proud => Variant(variant, "또 찾아왔군. 내 이야기가 꽤 마음에 들었나 보지?", "낯이 익군. 다시 나를 찾아온 이유가 있겠지?"),
+            GreetingTone.Patient => Variant(variant, "다시 왔군. 오늘도 천천히 이야기하지.", "전에 본 얼굴이네. 서두르지 말고 말해 보게."),
+            GreetingTone.Guarded => Variant(variant, "또 왔소? 무슨 일인지 먼저 말하시오.", "전에 본 얼굴이군. 아직은 경계를 풀 수 없소."),
+            _ => "또 왔군.",
+        };
+
+        private static string RegularLine(GreetingTone tone, int variant) => tone switch
+        {
+            GreetingTone.Friendly => Variant(variant, "왔나? 얼굴을 보니 반갑군.", "오늘도 들렀네. 잘 지냈나?"),
+            GreetingTone.Direct => Variant(variant, "왔군. 무슨 이야기지?", "자네로군. 용건을 말해 보게."),
+            GreetingTone.Greedy => Variant(variant, "왔군. 오늘은 어떤 거래가 될까?", "자주 보는 얼굴이니 좋은 이야기를 기대해도 되겠지?"),
+            GreetingTone.Loyal => Variant(variant, "왔나. 자네라면 마을 이야기를 해도 되겠군.", "자주 와 주는군. 마을에 마음을 둔 모양이야."),
+            GreetingTone.Courageous => Variant(variant, "왔군. 오늘도 멀쩡한 걸 보니 잘 싸우고 다니나 보지?", "자네로군. 바깥일은 어떻던가?"),
+            GreetingTone.Curious => Variant(variant, "왔군. 오늘은 무슨 이야기를 들려줄 텐가?", "자네가 오면 늘 새로운 이야기가 생기더군."),
+            GreetingTone.Proud => Variant(variant, "또 나를 찾아왔군. 안목은 여전하구나.", "왔나. 자네 정도면 내 시간을 조금 내주지."),
+            GreetingTone.Patient => Variant(variant, "왔군. 편히 앉아 이야기하게.", "오늘도 왔구나. 천천히 듣고 있겠네."),
+            GreetingTone.Guarded => Variant(variant, "자네로군. 아직 긴장은 놓을 수 없소.", "왔소? 익숙한 얼굴이어도 조심해서 나쁠 건 없지."),
+            _ => "왔군.",
+        };
+
+        private static string LongAbsentLine(GreetingTone tone, int variant) => tone switch
+        {
+            GreetingTone.Friendly => Variant(variant, "오랜만이네! 어디 다친 데는 없나?", "한동안 보이지 않더니 돌아왔군. 반가워."),
+            GreetingTone.Direct => Variant(variant, "오랜만이군. 어디에 있었지?", "한동안 안 보이더니 이제 왔나?"),
+            GreetingTone.Greedy => Variant(variant, "오랜만이군. 먼 곳에서 귀한 것이라도 가져왔나?", "한동안 안 보였는데, 빈손으로 온 건 아니겠지?"),
+            GreetingTone.Loyal => Variant(variant, "돌아왔군. 마을을 잊은 줄 알았네.", "오랜만이네. 다시 와 줘서 다행이군."),
+            GreetingTone.Courageous => Variant(variant, "살아서 돌아왔군. 제법 먼 길이었나?", "오랜만이야. 또 험한 일을 겪고 온 얼굴이군."),
+            GreetingTone.Curious => Variant(variant, "드디어 돌아왔군! 어디를 다녀온 건가?", "오랜만이네. 들려줄 이야기가 잔뜩 있겠지?"),
+            GreetingTone.Proud => Variant(variant, "이제야 다시 왔군. 내 이야기가 그리웠나?", "한동안 뜸하더니 결국 돌아왔구나."),
+            GreetingTone.Patient => Variant(variant, "오랜만이군. 돌아왔으니 천천히 이야기하게.", "한동안 못 봤네. 잘 지냈다면 그걸로 됐지."),
+            GreetingTone.Guarded => Variant(variant, "오랜만이오. 갑자기 돌아온 이유가 뭐요?", "한동안 보이지 않더니 다시 나타났군. 무슨 일이지?"),
+            _ => "오랜만이군.",
+        };
+
+        private static string ImmediateRepeatLine(GreetingTone tone, int variant) => tone switch
+        {
+            GreetingTone.Friendly => Variant(variant, "더 이야기하고 싶은 게 있나?", "그래, 무슨 이야기가 더 남았지?"),
+            GreetingTone.Direct => Variant(variant, "할 말이 더 있나?", "아직 용건이 남았나?"),
+            GreetingTone.Greedy => Variant(variant, "또 무슨 좋은 제안이라도 있나?", "더 볼 일이 있다면 값어치 있는 이야기겠지?"),
+            GreetingTone.Loyal => Variant(variant, "마을에 관해 더 궁금한 게 있나?", "그래, 내가 아는 거라면 더 말해 주지."),
+            GreetingTone.Courageous => Variant(variant, "아직 모험담이 부족한가?", "더 묻고 싶은 게 있다면 말해 보게."),
+            GreetingTone.Curious => Variant(variant, "잠깐, 나도 더 물어볼 게 있었네.", "좋아, 이야기를 조금 더 이어 보지."),
+            GreetingTone.Proud => Variant(variant, "내 이야기를 더 듣고 싶은 모양이군.", "아직도 내게 배울 것이 남았나?"),
+            GreetingTone.Patient => Variant(variant, "괜찮네. 더 이야기해 보게.", "시간은 있으니 천천히 말하게."),
+            GreetingTone.Guarded => Variant(variant, "아직도 할 말이 남았소?", "무슨 일인지 분명히 말하시오."),
+            _ => "할 말이 더 있나?",
+        };
+
+        private static string Variant(int variant, string first, string second) => variant == 0 ? first : second;
 
         private static int StableHash(int a, int b)
         {
@@ -155,17 +421,17 @@ namespace ARPG.Npc.Narrative
         // ── 니즈 ──
         private static void AddNeeds(List<DialogueTopic> topics, NpcSaveData? save, VillageData? village, ThreatSeed threat)
         {
-            // ClearThreat (긴급)
+            // ClearThreat — 야외 몬스터가 상시 존재하는 세계의 배경 화제. 실제 습격 사건 전에는 긴급하지 않다.
             bool threatOn = threat.NearbyMonsters || (village != null && village.ThreatLevel > 0f);
             if (threatOn)
             {
                 DialogueTopic t = new()
                 {
                     Type = DialogueTopicType.ClearThreat,
-                    Category = DialogueTopicCategory.Need,
+                    Category = DialogueTopicCategory.Rumor,
                     MinTier = AffinityTier.Stranger,
-                    Urgent = true,
-                    BaseLine = "요즘 마을 밖이 흉흉하오. 몬스터 탓에 나다니기가 무섭소.",
+                    Urgent = false,
+                    BaseLine = "마을 밖에는 늘 몬스터가 돌아다니니 길을 나설 때는 조심하시오.",
                 };
                 t.Facts.Add(string.IsNullOrEmpty(threat.Note) == false
                     ? threat.Note

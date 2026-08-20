@@ -71,6 +71,7 @@ namespace ARPG.Utility
                 case InteractionType.Talk:
                     // 항상 성공 — Affinity +1, Intimacy +1 (설계 §2 Talk).
                     AR.s.Npc.ModifyPlayerRelation(npcId, 1, 0, 0, 1);
+                    AR.s.Npc.RecordPlayerTalk(npcId, AR.s.Time.CurrentGameTime);
                     return new InteractionResult
                     {
                         Success = true,

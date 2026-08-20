@@ -246,6 +246,8 @@ namespace ARPG.Npc
         public int Fear;
         public int Intimacy;
         public int TrustCap;
+        public int TalkCount;
+        public float LastTalkGameTime;
 
         public static PlayerRelation Default => new PlayerRelation
         {
@@ -254,6 +256,8 @@ namespace ARPG.Npc
             Fear = 0,
             Intimacy = 0,
             TrustCap = 100,
+            TalkCount = 0,
+            LastTalkGameTime = -1f,
         };
     }
 
@@ -269,6 +273,9 @@ namespace ARPG.Npc
         public int Fear;
         public int Intimacy;
         public int TrustCap = 100;
+        // nullable은 구 세이브의 "필드 없음"과 테스트 Reset의 명시적 0/-1을 구분하기 위한 DTO 경계다.
+        public int? TalkCount;
+        public float? LastTalkGameTime;
 
         public PlayerNpcRelationEntry() { }
 
@@ -280,10 +287,24 @@ namespace ARPG.Npc
             Fear = relation.Fear;
             Intimacy = relation.Intimacy;
             TrustCap = relation.TrustCap;
+            TalkCount = relation.TalkCount;
+            LastTalkGameTime = relation.LastTalkGameTime;
         }
 
         public PlayerRelation ToRelation()
         {
+            int restoredTalkCount;
+            if (TalkCount.HasValue)
+            {
+                restoredTalkCount = TalkCount.Value;
+            }
+            else
+            {
+                // 구 세이브에는 만남 이력이 없으므로 이미 관계가 있던 NPC를 첫 만남으로 되돌리지 않는다.
+                restoredTalkCount = Affinity != 0 || Trust != 0 || Fear != 0 || Intimacy != 0 ? 1 : 0;
+            }
+            float restoredLastTalkGameTime = LastTalkGameTime ?? -1f;
+
             return new PlayerRelation
             {
                 Affinity = Affinity,
@@ -291,6 +312,8 @@ namespace ARPG.Npc
                 Fear = Fear,
                 Intimacy = Intimacy,
                 TrustCap = TrustCap,
+                TalkCount = restoredTalkCount,
+                LastTalkGameTime = restoredLastTalkGameTime,
             };
         }
     }
