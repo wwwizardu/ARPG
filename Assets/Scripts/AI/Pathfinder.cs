@@ -13,9 +13,6 @@ namespace ARPG.AI
         public const int MaxPathLength = 64;
         private const int BLOCKED_GOAL_SEARCH_RADIUS = 4;
 
-        // 1 unit = 1 tile, 청크는 8x8
-        private const int CHUNK_SIZE = 8;
-
         // 대각선 비용 (√2)
         private const float DIAG_COST = 1.41421356f;
 
@@ -196,8 +193,9 @@ namespace ARPG.AI
 
         private static bool IsChunkActiveForTile(Vector2Int tile)
         {
-            int chunkX = Mathf.FloorToInt((float)tile.x / CHUNK_SIZE);
-            int chunkY = Mathf.FloorToInt((float)tile.y / CHUNK_SIZE);
+            int chunkSize = AR.s.Map.chunkSize;
+            int chunkX = Mathf.FloorToInt((float)tile.x / chunkSize);
+            int chunkY = Mathf.FloorToInt((float)tile.y / chunkSize);
             return AR.s.Map.IsChunkActive(new Vector2Int(chunkX, chunkY));
         }
 
