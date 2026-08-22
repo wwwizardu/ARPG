@@ -1,4 +1,5 @@
 #nullable enable
+using System;
 using System.Collections.Generic;
 using ARPG.Component;
 using UnityEngine;
@@ -36,16 +37,67 @@ namespace ARPG.Skill.Combat
     {
         private const int STAT_BUCKET_COUNT = (int)GE.Stat.DelegateToTotem + 1;
 
+        /// <summary>
+        /// Resolve()가 실제로 결과 스냅샷에 담아 내보내는 스탯 목록.
+        ///
+        /// 태그(Tags != None)가 붙은 StatModifier는 System_StatCalculation에서 의도적으로 제외된다
+        /// (StatComponent는 엔티티당 하나뿐이라 "어떤 스킬인가"라는 문맥을 담을 수 없다).
+        /// 그래서 태그 붙은 mod가 효과를 내는 유일한 통로가 이 resolver인데, Resolve()는 값을 전부
+        /// 배열에 모으면서도 아래 목록만 꺼내 쓴다. 목록 밖 스탯은 조용히 버려진다.
+        ///
+        /// 확장하려면 이 목록에 추가하는 것만으로는 부족하다 — SkillOffensiveStatSnapshot에 필드를
+        /// 만들고 Resolve()에서 읽어낸 뒤, BuildProfile이 그 값을 소비하도록 배선해야 한다.
+        /// </summary>
+        private static readonly GE.Stat[] TagSupportedStats =
+        {
+            GE.Stat.AttackMin,          GE.Stat.AttackMax,
+            GE.Stat.FireAttackMin,      GE.Stat.FireAttackMax,
+            GE.Stat.IceAttackMin,       GE.Stat.IceAttackMax,
+            GE.Stat.LightningAttackMin, GE.Stat.LightningAttackMax,
+            GE.Stat.PoisonAttackMin,    GE.Stat.PoisonAttackMax,
+            GE.Stat.CriRate,            GE.Stat.CriRateMul,
+            GE.Stat.AttackSpeed,        GE.Stat.AttackSpeedMul,
+        };
+
+        /// <summary>
+        /// 태그가 붙은 StatModifier가 이 스탯에 대해 실제로 효과를 낼 수 있는지 검사한다.
+        /// false면 해당 mod는 StatComponent에도, 스킬 프로필에도 반영되지 않는다.
+        /// </summary>
+        public static bool IsTagSupportedStat(GE.Stat statType)
+        {
+            for (int i = 0; i < TagSupportedStats.Length; i++)
+            {
+                if (TagSupportedStats[i] == statType)
+                    return true;
+            }
+            return false;
+        }
+
+        // 호출 간 상태를 남기지 않는 GC 회피용 스크래치 버퍼 — 진입할 때마다 Array.Clear로 초기화한다.
+        // Resolve는 메인 스레드 전용이고 재귀·중첩 호출이 없으며, 반환형이 struct라 배열 참조가 밖으로 나가지 않는다.
+        // (CLAUDE.md Logic Placement: 매 사용 전 Clear하는 스크래치는 상태를 소유하지 않으므로 static 허용)
+        private static readonly int[] _addedByStat = new int[STAT_BUCKET_COUNT];
+        private static readonly int[] _increasedByStat = new int[STAT_BUCKET_COUNT];
+        private static readonly int[] _overrideByStat = new int[STAT_BUCKET_COUNT];
+        private static readonly int[] _overridePriorityByStat = new int[STAT_BUCKET_COUNT];
+        private static readonly bool[] _hasOverrideByStat = new bool[STAT_BUCKET_COUNT];
+
         public static SkillOffensiveStatSnapshot Resolve(
             StatComponent baseStat,
             List<StatModifier>? modifiers,
             GE.SkillTag skillTags)
         {
-            int[] addedByStat = new int[STAT_BUCKET_COUNT];
-            int[] increasedByStat = new int[STAT_BUCKET_COUNT];
-            int[] overrideByStat = new int[STAT_BUCKET_COUNT];
-            int[] overridePriorityByStat = new int[STAT_BUCKET_COUNT];
-            bool[] hasOverrideByStat = new bool[STAT_BUCKET_COUNT];
+            int[] addedByStat = _addedByStat;
+            int[] increasedByStat = _increasedByStat;
+            int[] overrideByStat = _overrideByStat;
+            int[] overridePriorityByStat = _overridePriorityByStat;
+            bool[] hasOverrideByStat = _hasOverrideByStat;
+
+            Array.Clear(addedByStat, 0, STAT_BUCKET_COUNT);
+            Array.Clear(increasedByStat, 0, STAT_BUCKET_COUNT);
+            Array.Clear(overrideByStat, 0, STAT_BUCKET_COUNT);
+            Array.Clear(overridePriorityByStat, 0, STAT_BUCKET_COUNT);
+            Array.Clear(hasOverrideByStat, 0, STAT_BUCKET_COUNT);
 
             if (modifiers != null)
             {

@@ -11,6 +11,7 @@ using ARPG.Map;
 using ARPG.Npc.Narrative;
 using ARPG.Scene;
 using ARPG.Tables;
+using ARPG.Utility;
 using ARPG.Village;
 
 namespace ARPG.Npc
@@ -45,6 +46,8 @@ namespace ARPG.Npc
         [Header("NPC Activation")]
         [SerializeField] private float _activationDistance = 30f;
         [SerializeField] private float _deactivationDistance = 35f;
+
+        private const float DEFAULT_NPC_MOVE_RADIUS = 0.30f;
 
         public void Initialize()
         {
@@ -100,6 +103,106 @@ namespace ARPG.Npc
         public void SetNpcRoot(Transform inNpcRoot)
         {
             _npcParent = inNpcRoot;
+        }
+
+        /// <summary>
+        /// 비활성 또는 비동기 스폰 중인 생존 NPC 이동 원이 건물 footprint와 겹치는지 검사한다.
+        /// 활성 NPC는 CollisionUtil.IsCreatureOverlappingFootprint에서 검사한다.
+        /// </summary>
+        public bool HasNpcInFootprint(int worldX, int worldY, int width, int height)
+        {
+            if (width <= 0 || height <= 0)
+                return false;
+
+            Vector2 min = new Vector2(worldX, worldY);
+            Vector2 max = new Vector2(worldX + width, worldY + height);
+            for (int i = 0; i < _simulationNpcIds.Count; i++)
+            {
+                int entityId = _simulationNpcIds[i];
+                if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
+                    continue;
+                if (saveData.Condition == CharacterConditions.Dead ||
+                    saveData.Activity.Phase == NpcActivityPhase.Dead)
+                    continue;
+                if (saveData.IsActive == true)
+                    continue;
+
+                Vector2 position = saveData.Position;
+                if (AR.s.Component.TryGetComponent<TransformComponent>(entityId,
+                        out var transform) == true)
+                    position = transform.Position;
+
+                float moveRadius = GetNpcMoveRadius(entityId, saveData);
+                if (CollisionUtil.CircleOverlapsAabb(position, moveRadius, min,
+                        max) == true)
+                    return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// 이미 좌표가 확정된 건물 footprint 안의 NPC를 가장 가까운 정적 빈 타일로 이동한다.
+        /// 저장 위치와 활성 ECS 위치, 청크 인덱스를 함께 갱신한다.
+        /// </summary>
+        public int RelocateNpcsOutsideFootprint(int worldX, int worldY,
+            int width, int height)
+        {
+            if (width <= 0 || height <= 0)
+                return 0;
+
+            int relocated = 0;
+            Vector2 min = new Vector2(worldX, worldY);
+            Vector2 max = new Vector2(worldX + width, worldY + height);
+            for (int i = 0; i < _simulationNpcIds.Count; i++)
+            {
+                int entityId = _simulationNpcIds[i];
+                if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
+                    continue;
+                if (saveData.Condition == CharacterConditions.Dead ||
+                    saveData.Activity.Phase == NpcActivityPhase.Dead)
+                    continue;
+
+                Vector2 position = saveData.Position;
+                bool hasTransform = AR.s.Component.TryGetComponent<TransformComponent>(
+                    entityId, out var transform);
+                if (hasTransform == true)
+                    position = transform.Position;
+
+                float moveRadius = GetNpcMoveRadius(entityId, saveData);
+                if (CollisionUtil.CircleOverlapsAabb(position, moveRadius, min,
+                        max) == false)
+                    continue;
+                if (CollisionUtil.TryFindNearestFree(position, moveRadius,
+                        out Vector2 freePosition, hasTransform) == false)
+                {
+                    Debug.LogError($"[NpcManager] Entity {entityId} cannot escape building footprint " +
+                                   $"({worldX}, {worldY}, {width}, {height})");
+                    continue;
+                }
+
+                SetNpcPosition(entityId, saveData, freePosition);
+                relocated++;
+                Debug.LogWarning($"[NpcManager] Entity {entityId} moved out of building footprint: " +
+                                 $"{position} -> {freePosition}");
+            }
+
+            return relocated;
+        }
+
+        /// <summary>
+        /// 활성 NPC의 강제 위치 보정 시 저장 위치와 청크 인덱스까지 함께 갱신한다.
+        /// 길찾기 등 ECS 시스템이 정적 충돌 내부에서 NPC를 복구할 때 사용한다.
+        /// </summary>
+        public bool TryRelocateMaterializedNpc(int entityId, Vector2 position)
+        {
+            if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
+                return false;
+            if (AR.s.Component.HasComponent<NpcTag>(entityId) == false)
+                return false;
+
+            SetNpcPosition(entityId, saveData, position);
+            return true;
         }
 
         /// <summary>
@@ -318,15 +421,17 @@ namespace ARPG.Npc
 
             NpcPopulationState population = AR.s.Data.NpcPopulation;
             if (population.TargetNpcCount < 0)
-                population.TargetNpcCount = DetermineGlobalNpcTarget();
+                population.TargetNpcCount = DetermineGlobalNpcTarget(candidates.Count);
 
+            bool topUpExistingVillages = population.NeedsImmediateTargetTopUp;
             int[] allocations = AllocateInitialNpcCounts(candidates,
                 Mathf.Max(0, population.TargetNpcCount - GetLivingNpcCount()));
 
             for (int i = 0; i < candidates.Count; i++)
             {
                 VillageData village = candidates[i];
-                if (village.HasBeenPopulated)
+                bool wasPopulated = village.HasBeenPopulated;
+                if (wasPopulated && topUpExistingVillages == false)
                     continue;
 
                 VillageTable? table = AR.s.Data.GetVillageTable(village.TableId);
@@ -334,10 +439,12 @@ namespace ARPG.Npc
                     continue;
 
                 SpawnDefaultNpcsForVillage(village, table, allocations[i]);
-                if (village.NpcEntityIds.Count > 0)
+                if (wasPopulated == false && village.NpcEntityIds.Count > 0)
                     NpcRelationBackfill.Generate(village, village.NpcEntityIds);
                 village.HasBeenPopulated = true;
             }
+
+            population.NeedsImmediateTargetTopUp = false;
 
             if (population.NextReplenishGameTime <= 0f)
                 population.NextReplenishGameTime = AR.s.Time.CurrentGameTime + ReplenishIntervalHours;
@@ -371,26 +478,31 @@ namespace ARPG.Npc
                 return;
 
             int tableIndex = (GetLivingNpcCount() + population.ReplenishVillageCursor) % table.DefaultNpcIds.Count;
-            Vector2 spawnPosition = GetRandomSpawnPositionInVillage(village, table.SpawnRadius);
-            SpawnNewNpc(table.DefaultNpcIds[tableIndex], spawnPosition, village.VillageId);
+            int npcTableId = table.DefaultNpcIds[tableIndex];
+            Vector2 spawnPosition = GetRandomSpawnPositionInVillage(village,
+                table.SpawnRadius, npcTableId);
+            SpawnNewNpc(npcTableId, spawnPosition, village.VillageId);
             population.ReplenishVillageCursor = (villageIndex + 1) % candidates.Count;
         }
 
         private const float ReplenishIntervalHours = 6f;
 
         /// <summary>
-        /// 맵의 청크 폭을 기준으로 전역 목표 모험가 수(총량 상한)를 정한다.
-        /// 이 총량을 AllocateInitialNpcCounts가 마을 인구 비례로 분배한다 — 마을이 많으면 같은 총량을 더 잘게 나눈다.
+        /// 맵 규모별 최소 총량과 마을당 목표 인원을 함께 적용해 전역 목표 모험가 수를 정한다.
+        /// 마을 수가 줄거나 늘어도 마을당 평균 밀도는 TargetNpcsPerVillage 아래로 내려가지 않는다.
         /// 맵 생성 UI의 규모 선택이 생기면 이 값을 저장된 preset으로 대체한다.
         /// </summary>
-        private int DetermineGlobalNpcTarget()
+        private int DetermineGlobalNpcTarget(int villageCount)
         {
             int width = AR.s.Map.maxChunkX - AR.s.Map.minChunkX + 1;
             int height = AR.s.Map.maxChunkY - AR.s.Map.minChunkY + 1;
             int longestSide = Mathf.Max(width, height);
-            if (longestSide <= 64)
-                return 100;
-            return 400;
+            int mapSizeTarget = longestSide <= 64
+                ? NpcPopulationState.SmallMapTarget
+                : NpcPopulationState.LargeMapTarget;
+            int villageDensityTarget = Mathf.Max(0, villageCount)
+                * NpcPopulationState.TargetNpcsPerVillage;
+            return Mathf.Max(mapSizeTarget, villageDensityTarget);
         }
 
         private List<VillageData> CollectPopulationCandidates()
@@ -411,44 +523,19 @@ namespace ARPG.Npc
 
         private int[] AllocateInitialNpcCounts(List<VillageData> villages, int totalToAllocate)
         {
-            int[] allocations = new int[villages.Count];
-            if (totalToAllocate <= 0)
-                return allocations;
-
             int[] weights = new int[villages.Count];
-            int totalWeight = 0;
+            int[] currentCounts = new int[villages.Count];
             for (int i = 0; i < villages.Count; i++)
             {
                 int population = AR.s.History.GetSettlementPopulation(villages[i].SettlementId);
                 weights[i] = population > 0 ? population : 1;
-                totalWeight += weights[i];
+                currentCounts[i] = GetLivingNpcCountForVillage(villages[i].VillageId);
             }
 
-            int assigned = 0;
-            for (int i = 0; i < villages.Count; i++)
-            {
-                allocations[i] = (int)((long)totalToAllocate * weights[i] / totalWeight);
-                assigned += allocations[i];
-            }
-
-            for (int remaining = totalToAllocate - assigned; remaining > 0; remaining--)
-            {
-                int bestIndex = 0;
-                long bestRemainder = -1;
-                for (int i = 0; i < villages.Count; i++)
-                {
-                    long remainder = (long)totalToAllocate * weights[i] % totalWeight;
-                    if (remainder > bestRemainder)
-                    {
-                        bestIndex = i;
-                        bestRemainder = remainder;
-                    }
-                }
-                allocations[bestIndex]++;
-                weights[bestIndex] = 0;
-            }
-
-            EnsureHandcraftedVillageQuota(villages, allocations);
+            int[] allocations = NpcPopulationAllocator.AllocateAdditionalCounts(
+                currentCounts, weights, totalToAllocate,
+                NpcPopulationState.MinimumNpcsPerVillage);
+            EnsureHandcraftedVillageQuota(villages, currentCounts, allocations);
             return allocations;
         }
 
@@ -457,11 +544,13 @@ namespace ARPG.Npc
         /// 플레이어가 최초로 만나는 마을이라 1명을 보장한다. 전역 총량 유지를 위해 최다 배분
         /// 절차 마을에서 1명을 이관한다(이관할 마을이 없으면 총량 +1을 감수하고 플레이어 마을을 우선).
         /// </summary>
-        private static void EnsureHandcraftedVillageQuota(List<VillageData> villages, int[] allocations)
+        private static void EnsureHandcraftedVillageQuota(List<VillageData> villages,
+            int[] currentCounts, int[] allocations)
         {
             for (int i = 0; i < villages.Count; i++)
             {
-                if (villages[i].SettlementId >= 0 || allocations[i] > 0)
+                if (villages[i].SettlementId >= 0 ||
+                    currentCounts[i] + allocations[i] > 0)
                     continue;
 
                 int donor = -1;
@@ -470,7 +559,8 @@ namespace ARPG.Npc
                 {
                     if (j == i || villages[j].SettlementId < 0)
                         continue;
-                    if (allocations[j] > donorMax)
+                    if (allocations[j] > donorMax &&
+                        currentCounts[j] + allocations[j] > 1)
                     {
                         donorMax = allocations[j];
                         donor = j;
@@ -485,23 +575,25 @@ namespace ARPG.Npc
 
         private int SelectReplenishVillage(List<VillageData> villages, NpcPopulationState population)
         {
-            int totalWeight = 0;
             int[] weights = new int[villages.Count];
+            int[] emptyCounts = new int[villages.Count];
             for (int i = 0; i < villages.Count; i++)
             {
                 int settlementPopulation = AR.s.History.GetSettlementPopulation(villages[i].SettlementId);
                 weights[i] = settlementPopulation > 0 ? settlementPopulation : 1;
-                totalWeight += weights[i];
             }
+            int[] desiredCounts = NpcPopulationAllocator.AllocateAdditionalCounts(
+                emptyCounts, weights, population.TargetNpcCount,
+                NpcPopulationState.MinimumNpcsPerVillage);
 
             int bestIndex = -1;
-            float bestDeficit = float.MinValue;
+            int bestDeficit = int.MinValue;
             int start = population.ReplenishVillageCursor % villages.Count;
             for (int offset = 0; offset < villages.Count; offset++)
             {
                 int index = (start + offset) % villages.Count;
-                float desired = population.TargetNpcCount * (weights[index] / (float)totalWeight);
-                float deficit = desired - GetLivingNpcCountForVillage(villages[index].VillageId);
+                int deficit = desiredCounts[index]
+                    - GetLivingNpcCountForVillage(villages[index].VillageId);
                 if (deficit > bestDeficit)
                 {
                     bestIndex = index;
@@ -529,10 +621,15 @@ namespace ARPG.Npc
 
         private int GetLivingNpcCountForVillage(int villageId)
         {
+            VillageData? village = AR.s.Village.GetVillage(villageId);
+            if (village == null)
+                return 0;
+
             int count = 0;
-            for (int i = 0; i < _simulationNpcIds.Count; i++)
+            List<int> villageNpcIds = village.NpcEntityIds;
+            for (int i = 0; i < villageNpcIds.Count; i++)
             {
-                int entityId = _simulationNpcIds[i];
+                int entityId = villageNpcIds[i];
                 if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
                     continue;
                 if (saveData.VillageId != villageId || saveData.Condition == CharacterConditions.Dead ||
@@ -552,28 +649,52 @@ namespace ARPG.Npc
             for (int i = 0; i < target; i++)
             {
                 int npcTableId = table.DefaultNpcIds[i % roster];  // 0..roster-1은 지정 로스터, 초과분은 아키타입 순환
-                Vector2 spawnPos = GetRandomSpawnPositionInVillage(village, table.SpawnRadius);
+                Vector2 spawnPos = GetRandomSpawnPositionInVillage(village,
+                    table.SpawnRadius, npcTableId);
                 SpawnNewNpc(npcTableId, spawnPos, village.VillageId);
             }
 
             Debug.Log($"[NpcManager] Spawned {target} NPCs for village {village.VillageId} (roster={roster}, pop-scaled)");
         }
 
-        private Vector2 GetRandomSpawnPositionInVillage(VillageData village, float radius)
+        private Vector2 GetRandomSpawnPositionInVillage(VillageData village, float radius,
+            int npcTableId)
         {
-            if (radius <= 0f)
-                return village.Position;
+            NpcTable? npcTable = AR.s.Data.GetNpc(npcTableId);
+            float moveRadius = npcTable != null && npcTable.MoveRadius > 0f
+                ? npcTable.MoveRadius
+                : DEFAULT_NPC_MOVE_RADIUS;
 
-            float angle = Random.Range(0f, Mathf.PI * 2f);
-            float r = Random.Range(0f, radius);
-            return village.Position + new Vector2(Mathf.Cos(angle) * r, Mathf.Sin(angle) * r);
+            const int MAX_SPAWN_POSITION_ATTEMPTS = 8;
+            for (int attempt = 0; attempt < MAX_SPAWN_POSITION_ATTEMPTS; attempt++)
+            {
+                Vector2 candidate = village.Position;
+                if (radius > 0f)
+                {
+                    float angle = Random.Range(0f, Mathf.PI * 2f);
+                    float r = Random.Range(0f, radius);
+                    candidate += new Vector2(Mathf.Cos(angle) * r, Mathf.Sin(angle) * r);
+                }
+
+                if (CollisionUtil.IsBlockedAt(candidate, moveRadius) == false)
+                    return candidate;
+            }
+
+            if (CollisionUtil.TryFindNearestFree(village.Position, moveRadius,
+                    out Vector2 fallback) == true)
+                return fallback;
+
+            Debug.LogWarning($"[NpcManager] No free spawn position near village " +
+                             $"{village.VillageId}; using center {village.Position}");
+            return village.Position;
         }
 
         /// <summary>
         /// 비동기 NPC 엔티티 생성.
         /// await 도중 청크가 비활성화되거나 재활성화 레이스가 발생해도 일관성 유지:
-        ///   1) IsSpawning 플래그로 중복 호출 차단 (이중 스폰 방지)
-        ///   2) CreateNpc 완료 후 청크 상태 재확인 → 비활성이면 GameObject 즉시 폐기 (orphan 방지)
+        ///   1) 생성 전에 스폰 위치를 확정 (막힌 자리면 프리팹 인스턴스화 자체를 하지 않음)
+        ///   2) IsSpawning 플래그로 중복 호출 차단 (이중 스폰 방지)
+        ///   3) CreateNpc 완료 후 청크 상태 재확인 → 비활성이면 GameObject 즉시 폐기 (orphan 방지)
         /// </summary>
         private async UniTask SpawnNpc(int entityId, NpcSaveData saveData)
         {
@@ -586,6 +707,13 @@ namespace ARPG.Npc
 
             try
             {
+                // 위치 확정은 엔티티 생성보다 먼저 한다. 생성 후 검증하면 실패할 때마다
+                // 프리팹 인스턴스화와 장비 modifier 적용을 통째로 버리게 된다.
+                // 생성 후 검증과 입력값은 동일하다 — TransformComponent는 EntityBase.SetupEntityId가
+                // spawnPos3D로 만들고, moveRadius는 양쪽 다 NpcTable에서 나온다.
+                if (TryResolveNpcSpawnPosition(entityId, saveData) == false)
+                    return;
+
                 Vector3 spawnPos3D = new Vector3(saveData.Position.x, saveData.Position.y, -0.05f);
 
                 // 발급된 EntityId를 전달하여 동일한 ID로 엔티티 생성. saveData를 같이 넘겨 장비 modifier도 복원.
@@ -623,6 +751,38 @@ namespace ARPG.Npc
             {
                 saveData.IsSpawning = false;
             }
+        }
+
+        /// <summary>
+        /// 엔티티 생성 전에 saveData.Position이 스폰 가능한 자리인지 확인하고, 막혀 있으면
+        /// 활성 청크 안의 가장 가까운 빈 타일로 보정한다. 보정에 성공하면 saveData.Position과
+        /// 청크 인덱스가 갱신된 상태로 true를 반환한다.
+        ///
+        /// false는 오류가 아니라 정상적인 재시도 경로다 — NPC 레코드는 그대로 유지되고,
+        /// 장애물이 치워지거나 추상 시뮬레이션이 NPC를 옮기면 다음 청크 활성화에서 다시 시도된다.
+        /// 생성 전에 판정하므로 실패 비용은 타일 검사뿐이다.
+        /// </summary>
+        private bool TryResolveNpcSpawnPosition(int entityId, NpcSaveData saveData)
+        {
+            Vector2 position = saveData.Position;
+            float moveRadius = GetNpcMoveRadius(entityId, saveData);
+            if (CollisionUtil.IsBlockedAt(position, moveRadius) == false)
+                return true;
+
+            if (CollisionUtil.TryFindNearestFree(position, moveRadius,
+                    out Vector2 freePosition, requireActiveChunk: true) == false)
+            {
+                int tileX = Mathf.FloorToInt(position.x);
+                int tileY = Mathf.FloorToInt(position.y);
+                Debug.LogWarning($"[NpcManager] Entity {entityId} spawn deferred: blocked tile " +
+                                 $"({tileX}, {tileY}) and no active free tile was found");
+                return false;
+            }
+
+            SetNpcPosition(entityId, saveData, freePosition);
+            Debug.LogWarning($"[NpcManager] Entity {entityId} spawn corrected: " +
+                             $"{position} -> {freePosition}");
+            return true;
         }
 
         /// <summary>
@@ -867,6 +1027,13 @@ namespace ARPG.Npc
                     saveData.Description = PickDescription(GetPreferredJobType(saveData.NpcTableId));
 
                 _npcSaveDict[entityId] = saveData;
+
+                // 사망 기록은 전기/연대기 조회를 위해 저장 딕셔너리에만 보존한다.
+                // 런타임 시뮬레이션/청크/마을 명단에 다시 넣으면 로드할 때마다 죽은 NPC가 후보군에 복귀한다.
+                if (saveData.Condition == CharacterConditions.Dead ||
+                    saveData.Activity.Phase == NpcActivityPhase.Dead)
+                    continue;
+
                 AddNpcToSimulation(entityId);
 
                 // 구 세이브의 Inn 방문자(월드 미출현 NPC)는 Status 필드 제거로 일반 NPC와 동일 취급.
@@ -1331,11 +1498,16 @@ namespace ARPG.Npc
                 IsEligibleHuntPartyMember(leader) == false)
                 return false;
 
+            VillageData? village = AR.s.Village.GetVillage(leader.VillageId);
+            if (village == null)
+                return false;
+
             const float recruitmentRangeSqr = 400f;
             List<int> candidates = new List<int>();
-            for (int i = 0; i < _simulationNpcIds.Count; i++)
+            List<int> villageNpcIds = village.NpcEntityIds;
+            for (int i = 0; i < villageNpcIds.Count; i++)
             {
-                int candidateId = _simulationNpcIds[i];
+                int candidateId = villageNpcIds[i];
                 if (candidateId == leaderId || _npcSaveDict.TryGetValue(candidateId, out NpcSaveData? candidate) == false)
                     continue;
                 if (candidate.VillageId != leader.VillageId || IsEligibleHuntPartyMember(candidate) == false)
@@ -1900,6 +2072,54 @@ namespace ARPG.Npc
         #endregion
 
         #region 유틸리티
+
+        private float GetNpcMoveRadius(int entityId, NpcSaveData saveData)
+        {
+            if (AR.s.Component.TryGetComponent<ColliderComponent>(entityId,
+                    out var collider) == true && collider.MoveRadius > 0f)
+                return collider.MoveRadius;
+
+            NpcTable? table = AR.s.Data.GetNpc(saveData.NpcTableId);
+            return table != null && table.MoveRadius > 0f
+                ? table.MoveRadius
+                : DEFAULT_NPC_MOVE_RADIUS;
+        }
+
+        private void SetNpcPosition(int entityId, NpcSaveData saveData, Vector2 position)
+        {
+            Vector2Int oldChunk = PositionToChunk(saveData.Position);
+            saveData.Position = position;
+
+            ComponentManager cm = AR.s.Component;
+            if (cm.TryGetComponent<TransformComponent>(entityId, out var transform) == true)
+            {
+                transform.Position = position;
+                cm.SetComponent(entityId, transform);
+            }
+
+            if (cm.TryGetComponent<VelocityComponent>(entityId, out var velocity) == true)
+            {
+                velocity.Direction = Vector2.zero;
+                cm.SetComponent(entityId, velocity);
+            }
+
+            if (cm.TryGetComponent<PathfindingComponent>(entityId, out var pathfinding) == true &&
+                pathfinding.Status != PathfindingStatus.None)
+            {
+                pathfinding.Status = PathfindingStatus.Computing;
+                pathfinding.CurrentWaypointIndex = 0;
+                pathfinding.LastProgressDistSqr = float.MaxValue;
+                pathfinding.LastProgressTime = Time.time;
+                cm.SetComponent(entityId, pathfinding);
+            }
+
+            Vector2Int newChunk = PositionToChunk(position);
+            if (oldChunk == newChunk)
+                return;
+
+            RemoveNpcFromChunk(oldChunk, entityId);
+            AddNpcToChunk(newChunk, entityId);
+        }
 
         private Vector2Int PositionToChunk(Vector2 position)
         {

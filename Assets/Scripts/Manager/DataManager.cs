@@ -13,14 +13,13 @@ namespace ARPG.Data
 {
     public partial class DataManager : MonoBehaviour
     {
-        private const ushort CURRENT_WORLD_DATA_VERSION = 12;
+        private const ushort CURRENT_WORLD_DATA_VERSION = 14;
         private const ushort CURRENT_PLAYER_DATA_VERSION = 2;
         private WorldData _worldData = new();
         private List<PlayerData> _playerDataList = new();
         private int _currentPlayerEntityId = 0; // 현재 활성화된 플레이어 ID
         
         private bool _isSaving = false;
-        private bool _needsAnotherSave = false;
         private bool _needsInitialWorldSave = false;
 
         // 하위 호환성을 위한 속성 - 현재 활성 플레이어 반환
@@ -76,10 +75,11 @@ namespace ARPG.Data
         {
             // 데이터 리셋 로직
             ResetRuntimeData();   // 런타임(휘발성) 파티션 정리 — DataManager_Runtime
+            ResetPartitionedSaveState();
             Debug.Log("DataManager Reset");
         }
 
-        public Task<bool> Load()
+        public async Task<bool> Load()
         {
             string savePath = Path.Combine(Application.persistentDataPath, "Saved");
             string worldDataPath = Path.Combine(savePath, "WorldData.json");
@@ -87,9 +87,14 @@ namespace ARPG.Data
             string worldDataBackupPath = Path.Combine(savePath, "WorldData.json.backup");
             string playerDataBackupPath = Path.Combine(savePath, "PlayerData.json.backup");
 
+            string slotPath = GetSlotPath(savePath);
+            bool hasPartitionedSave =
+                File.Exists(Path.Combine(slotPath, MANIFEST_FILE)) ||
+                File.Exists(Path.Combine(slotPath, PREVIOUS_MANIFEST_FILE));
             bool hasWorldData = File.Exists(worldDataPath);
             bool hasWorldDataBackup = File.Exists(worldDataBackupPath);
-            _needsInitialWorldSave = hasWorldData == false && hasWorldDataBackup == false;
+            _needsInitialWorldSave = hasPartitionedSave == false &&
+                hasWorldData == false && hasWorldDataBackup == false;
 
             if (hasWorldData == false && hasWorldDataBackup == true)
             {
@@ -98,9 +103,22 @@ namespace ARPG.Data
             }
 
             // 저장 폴더가 없으면 생성
-            if (!Directory.Exists(savePath))
+            if (Directory.Exists(savePath) == false)
             {
                 Directory.CreateDirectory(savePath);
+            }
+
+            if (hasPartitionedSave == true && TryLoadPartitionedSave(savePath) == true)
+            {
+                _needsInitialWorldSave = false;
+                return true;
+            }
+            if (hasPartitionedSave == true && hasWorldData == false &&
+                hasWorldDataBackup == false)
+            {
+                _needsInitialWorldSave = true;
+                Debug.LogError("[DataManager] No valid partition manifest or legacy WorldData was found. " +
+                               "A new world save will be created after map initialization.");
             }
 
             // WorldData 로드
@@ -274,7 +292,16 @@ namespace ARPG.Data
                 Debug.Log("[DataManager] PlayerData file not found, created default player");
             }
 
-            return Task.FromResult(true);
+            _nextItemInstanceId = System.Math.Max(_nextItemInstanceId,
+                FindNextItemInstanceId());
+
+            if (hasWorldData == true || hasWorldDataBackup == true ||
+                File.Exists(playerDataPath) == true || File.Exists(playerDataBackupPath) == true)
+            {
+                await MigrateLegacySaveToPartitionsAsync();
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -288,13 +315,15 @@ namespace ARPG.Data
         {
             if (_worldData.NpcSaveDatas != null)
             {
-                foreach (var kvp in _worldData.NpcSaveDatas)
-                    AR.s.Entity.RegisterExistingEntity(kvp.Key);
+                List<int> npcIds = new List<int>(_worldData.NpcSaveDatas.Keys);
+                for (int i = 0; i < npcIds.Count; i++)
+                    AR.s.Entity.RegisterExistingEntity(npcIds[i]);
             }
             if (_worldData.BuildingSaveDatas != null)
             {
-                foreach (var kvp in _worldData.BuildingSaveDatas)
-                    AR.s.Entity.RegisterExistingEntity(kvp.Key);
+                List<int> buildingIds = new List<int>(_worldData.BuildingSaveDatas.Keys);
+                for (int i = 0; i < buildingIds.Count; i++)
+                    AR.s.Entity.RegisterExistingEntity(buildingIds[i]);
             }
         }
 
@@ -309,7 +338,7 @@ namespace ARPG.Data
                 return true;
 
             Debug.Log("[DataManager] Initial world auto-save started.");
-            bool succeeded = await SaveAsync();
+            bool succeeded = await SaveAsync(SaveScope.All);
             if (succeeded == false)
             {
                 Debug.LogWarning("[DataManager] Initial world auto-save failed. " +
@@ -325,127 +354,9 @@ namespace ARPG.Data
             return true;
         }
 
-        public async Task<bool> SaveAsync()
+        public Task<bool> SaveAsync(SaveScope scope = SaveScope.All)
         {
-            // 저장 중이면 다음 저장 예약
-            if (_isSaving)
-            {
-                _needsAnotherSave = true;
-                Debug.Log("[DataManager] Save already in progress, queued for next save");
-                return true;
-            }
-
-            _isSaving = true;
-            bool finalResult = true;
-
-            do
-            {
-                _needsAnotherSave = false;
-
-                string savePath = Path.Combine(Application.persistentDataPath, "Saved");
-                string worldDataPath = Path.Combine(savePath, "WorldData.json");
-                string playerDataPath = Path.Combine(savePath, "PlayerData.json");
-                string worldDataBackupPath = Path.Combine(savePath, "WorldData.json.backup");
-                string playerDataBackupPath = Path.Combine(savePath, "PlayerData.json.backup");
-
-                // 저장 폴더가 없으면 생성
-                if (!Directory.Exists(savePath))
-                {
-                    Directory.CreateDirectory(savePath);
-                }
-
-                try
-                {
-                    // 기존 파일 백업
-                    if (File.Exists(worldDataPath))
-                    {
-                        File.Copy(worldDataPath, worldDataBackupPath, true);
-                    }
-
-                    if (File.Exists(playerDataPath))
-                    {
-                        File.Copy(playerDataPath, playerDataBackupPath, true);
-                    }
-
-                    // VillageData 저장 (세이브 직전 진행 중 태스크를 정본 필드로 동기화)
-                    AR.s.Village.SyncTaskToData();
-                    _worldData.VillageDatas = AR.s.Village.Save();
-
-                    // NpcData 저장
-                    _worldData.NpcSaveDatas = AR.s.Npc.Save();
-                    _worldData.NpcAffinityList = AR.s.Npc.SaveAffinity();
-                    _worldData.PlayerNpcRelationList = AR.s.Npc.SavePlayerRelations();
-                    _worldData.NpcRelationList = AR.s.Npc.SaveRelations();
-                    _worldData.NpcPartyStates = AR.s.Npc.SaveParties();
-
-                    // BuildingData 저장
-                    _worldData.BuildingSaveDatas = AR.s.Building.Save();
-
-                    // TileModification 저장
-                    _worldData.TileModifications = AR.s.Map.SaveTileModifications();
-
-                    // WorldData 저장
-                    string worldDataJson = JsonConvert.SerializeObject(_worldData, Formatting.Indented, JsonSettings.Default);
-                    await File.WriteAllTextAsync(worldDataPath, worldDataJson);
-
-                    // PlayerData 저장 (여러 플레이어 지원)
-                    // 현재 활성 플레이어 저장
-                    var currentPlayer = GetPlayerData(_currentPlayerEntityId);
-                    if (currentPlayer != null)
-                    {
-                        AR.s.Player.Save(currentPlayer);
-                    }
-
-                    // 전체 플레이어 리스트 저장
-                    string playerDataJson = JsonConvert.SerializeObject(_playerDataList, Formatting.Indented, JsonSettings.Default);
-                    await File.WriteAllTextAsync(playerDataPath, playerDataJson);
-
-                    // 저장 성공 시 백업 파일 삭제
-                    if (File.Exists(worldDataBackupPath))
-                    {
-                        File.Delete(worldDataBackupPath);
-                    }
-
-                    if (File.Exists(playerDataBackupPath))
-                    {
-                        File.Delete(playerDataBackupPath);
-                    }
-
-                    Debug.Log($"[DataManager] Save completed. Path: {savePath}");
-                }
-                catch (System.Exception ex)
-                {
-                    Debug.LogError($"[DataManager] Save failed: {ex.Message}");
-
-                    // 저장 실패 시 백업 파일로 복구
-                    try
-                    {
-                        if (File.Exists(worldDataBackupPath))
-                        {
-                            File.Copy(worldDataBackupPath, worldDataPath, true);
-                            File.Delete(worldDataBackupPath);
-                        }
-
-                        if (File.Exists(playerDataBackupPath))
-                        {
-                            File.Copy(playerDataBackupPath, playerDataPath, true);
-                            File.Delete(playerDataBackupPath);
-                        }
-
-                        Debug.Log($"[DataManager] Restored from backup after save failure");
-                    }
-                    catch (System.Exception restoreEx)
-                    {
-                        Debug.LogError($"[DataManager] Failed to restore backup: {restoreEx.Message}");
-                    }
-
-                    finalResult = false;
-                }
-            }
-            while (_needsAnotherSave);
-
-            _isSaving = false;
-            return finalResult;
+            return SavePartitionedAsync(scope);
         }
 
         public bool DropItem(Vector2 inPosition, ItemData inItem)
@@ -578,6 +489,13 @@ namespace ARPG.Data
         private void MigrateWorldData(ushort fromVersion, ushort toVersion)
         {
             Debug.Log($"[DataManager] Migrating WorldData from version {fromVersion} to {toVersion}");
+
+            // 마이그레이션 대상 데이터(NpcPopulation 등)는 world 파트 밖에 흩어져 있지만
+            // WorldDataVersion은 world 파트에만 있다. SavePlayer() 같은 부분 스코프 저장이
+            // 버전만 최신으로 올려 두면 다음 로드에서 이 마이그레이션이 영구히 건너뛰어지고
+            // 구버전 데이터가 그대로 남는다 — 다음 저장을 전체 스코프로 강제한다.
+            _needsFullSaveAfterMigration = true;
+
             MigrateDeceasedRelationMemories(fromVersion, toVersion);
 
             // 버전 1 -> 2: TileModifications 필드 추가
@@ -650,6 +568,25 @@ namespace ARPG.Data
             if (fromVersion < 12 && toVersion >= 12)
             {
                 // no-op (WorldData.LoadCompleted에서 처리).
+            }
+
+            // 버전 12 -> 13: 대형 맵의 물리 모험가 목표를 400명에서 1,200명으로 상향한다.
+            // 사용자 조정값은 보존하고 기존 기본값 400인 세이브만 한 번에 부족분을 채우도록 표시한다.
+            if (fromVersion < 13 && toVersion >= 13 && _worldData.NpcPopulation != null &&
+                _worldData.NpcPopulation.TargetNpcCount == NpcPopulationState.LegacyLargeMapTarget)
+            {
+                _worldData.NpcPopulation.TargetNpcCount = NpcPopulationState.LargeMapTarget;
+                _worldData.NpcPopulation.NeedsImmediateTargetTopUp = true;
+            }
+
+            // 버전 13 -> 14: 고정 맵 총량 대신 마을당 평균 8명을 보장하는 자동 목표를 사용한다.
+            // 기존 기본 목표값만 재계산 대상으로 되돌리고 명시적으로 조정한 사용자 값은 보존한다.
+            if (fromVersion < 14 && toVersion >= 14 && _worldData.NpcPopulation != null &&
+                (_worldData.NpcPopulation.TargetNpcCount == NpcPopulationState.SmallMapTarget ||
+                 _worldData.NpcPopulation.TargetNpcCount == NpcPopulationState.LargeMapTarget))
+            {
+                _worldData.NpcPopulation.TargetNpcCount = -1;
+                _worldData.NpcPopulation.NeedsImmediateTargetTopUp = true;
             }
         }
 

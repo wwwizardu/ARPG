@@ -180,25 +180,38 @@ namespace ARPG.Tables
     }
 
     /// <summary>
-    /// NPC 시작 장비 세트(Option A — 고정 세트). 슬롯별 ItemId를 명시한다.
-    /// CreateNpc 신규 생성 경로에서 슬롯별로 ItemManager.CreateInventoryItemData(itemId)로 Prefix/Postfix까지 굴려 시드한다.
-    /// 0 = 슬롯 비움.
+    /// NPC 시작 장비 세트. 슬롯별 ItemId와 최초 생성 시 장착 확률(0~100)을 명시한다.
+    /// 확률 판정에 성공한 슬롯만 ItemManager.CreateInventoryItemData(itemId)로 인스턴스를 생성한다.
+    /// ItemId 0 = 슬롯 비움.
     /// </summary>
     [Serializable]
     public class NpcEquipTable : TableBase
     {
+        [JsonProperty("Desc")] public string Desc = string.Empty;
         [JsonProperty("WeaponRight")] public int WeaponRight;
+        [JsonProperty("WeaponRightChance")] public int WeaponRightChance;
         [JsonProperty("WeaponLeft")] public int WeaponLeft;
+        [JsonProperty("WeaponLeftChance")] public int WeaponLeftChance;
         [JsonProperty("Helmet")] public int Helmet;
+        [JsonProperty("HelmetChance")] public int HelmetChance;
         [JsonProperty("Armor")] public int Armor;
+        [JsonProperty("ArmorChance")] public int ArmorChance;
         [JsonProperty("Gloves")] public int Gloves;
+        [JsonProperty("GlovesChance")] public int GlovesChance;
         [JsonProperty("Boots")] public int Boots;
+        [JsonProperty("BootsChance")] public int BootsChance;
         [JsonProperty("Necklace")] public int Necklace;
+        [JsonProperty("NecklaceChance")] public int NecklaceChance;
         [JsonProperty("RingRight")] public int RingRight;
+        [JsonProperty("RingRightChance")] public int RingRightChance;
         [JsonProperty("RingLeft")] public int RingLeft;
+        [JsonProperty("RingLeftChance")] public int RingLeftChance;
         [JsonProperty("Belt")] public int Belt;
+        [JsonProperty("BeltChance")] public int BeltChance;
         [JsonProperty("EarringRight")] public int EarringRight;
+        [JsonProperty("EarringRightChance")] public int EarringRightChance;
         [JsonProperty("EarringLeft")] public int EarringLeft;
+        [JsonProperty("EarringLeftChance")] public int EarringLeftChance;
 
         public int GetItemId(GE.EquipSlotType slot)
         {
@@ -216,6 +229,26 @@ namespace ARPG.Tables
                 GE.EquipSlotType.Belt => Belt,
                 GE.EquipSlotType.EarringRight => EarringRight,
                 GE.EquipSlotType.EarringLeft => EarringLeft,
+                _ => 0,
+            };
+        }
+
+        public int GetEquipChance(GE.EquipSlotType slot)
+        {
+            return slot switch
+            {
+                GE.EquipSlotType.WeaponRight => WeaponRightChance,
+                GE.EquipSlotType.WeaponLeft => WeaponLeftChance,
+                GE.EquipSlotType.Helmet => HelmetChance,
+                GE.EquipSlotType.Armor => ArmorChance,
+                GE.EquipSlotType.Gloves => GlovesChance,
+                GE.EquipSlotType.Boots => BootsChance,
+                GE.EquipSlotType.Necklace => NecklaceChance,
+                GE.EquipSlotType.RingRight => RingRightChance,
+                GE.EquipSlotType.RingLeft => RingLeftChance,
+                GE.EquipSlotType.Belt => BeltChance,
+                GE.EquipSlotType.EarringRight => EarringRightChance,
+                GE.EquipSlotType.EarringLeft => EarringLeftChance,
                 _ => 0,
             };
         }

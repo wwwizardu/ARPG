@@ -25,6 +25,18 @@ namespace ARPG.Data
             GE.Stat statType, StatModifierType modifierType, int value, int priority = 0,
             GE.SkillTag tags = GE.SkillTag.None)
         {
+            // 태그가 붙은 mod는 System_StatCalculation에서 제외되고 SkillOffensiveStatResolver만 처리한다.
+            // resolver가 꺼내 쓰지 않는 스탯이면 양쪽 어디에도 반영되지 않아 효과가 0이 된다 — 데이터 오류다.
+            // 등록 자체는 막지 않는다(기존 동작 유지). 원인이 드러나도록 로그만 남긴다.
+            if (tags != GE.SkillTag.None
+                && Skill.Combat.SkillOffensiveStatResolver.IsTagSupportedStat(statType) == false)
+            {
+                UnityEngine.Debug.LogError($"[DataManager] Tagged StatModifier has no effect - "
+                    + $"statType({statType}) is not consumed by SkillOffensiveStatResolver. "
+                    + $"entityId({targetEntityId}) source({source}) sourceId({sourceId}) "
+                    + $"tags({tags}) type({modifierType}) value({value})");
+            }
+
             StatModifier modifier = new StatModifier(statType, modifierType, source, sourceId, value, priority, tags);
 
             if (_modifiersByOwner.ContainsKey(targetEntityId) == false)

@@ -1,4 +1,5 @@
 #nullable enable
+using System;
 using System.Collections.Generic;
 using ARPG.Component;
 using ARPG.Message;
@@ -23,6 +24,11 @@ namespace ARPG.Systems
     {
         private const int STAT_BUCKET_COUNT = (int)GE.Stat.DelegateToTotem + 1;
 
+        // 호출 간 상태를 남기지 않는 GC 회피용 스크래치 버퍼 — 사용 직전 Array.Clear로 초기화한다.
+        // dirty 엔티티마다 배열을 새로 만들면 장비 교체·광역 버프 때 프레임 쓰레기가 된다.
+        // (CLAUDE.md Logic Placement: 매 사용 전 Clear하는 스크래치는 상태를 소유하지 않으므로 static 허용)
+        private static readonly int[] _increasedByStatScratch = new int[STAT_BUCKET_COUNT];
+
         public int Priority => 50; // 이동/입력 시스템보다 먼저 실행
 
         public void OnCreate()
@@ -42,8 +48,9 @@ namespace ARPG.Systems
             if (dirtyPool == null || dirtyPool.Count == 0)
                 return;
 
-            // Dirty 엔티티 순회
-            for (int i = 0; i < dirtyPool.Count; i++)
+            // Dirty 엔티티 순회 — 처리 도중 RemoveComponent로 풀이 변하므로 역순 순회로 안전 처리.
+            // (SparseSet.Remove는 swap-remove라, 정순회하면 끌어올려진 마지막 원소를 건너뛴다)
+            for (int i = dirtyPool.Count - 1; i >= 0; i--)
             {
                 int entityId = dirtyPool.GetEntityId(i);
 
@@ -87,7 +94,8 @@ namespace ARPG.Systems
                 }
 
                 // 5단계: 같은 Stat의 Increased(%)를 합산한 뒤 한 번만 적용한다.
-                int[] increasedByStat = new int[STAT_BUCKET_COUNT];
+                int[] increasedByStat = _increasedByStatScratch;
+                Array.Clear(increasedByStat, 0, STAT_BUCKET_COUNT);
                 for (int j = 0; j < modifiers.Count; j++)
                 {
                     StatModifier modifier = modifiers[j];

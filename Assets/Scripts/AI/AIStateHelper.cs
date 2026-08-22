@@ -12,6 +12,26 @@ namespace ARPG.AI
     {
         private const float PATH_RETRY_COOLDOWN = 1f;
 
+        /// <summary>
+        /// 생성 시 설정된 최초 AI 상태의 진입 처리를 실행한다.
+        /// AIBehaviorTypeComponent와 AIStateComponent 등록이 끝난 뒤 한 번만 호출한다.
+        /// </summary>
+        public static void EnterInitialState(int entityId)
+        {
+            ComponentManager cm = AR.s.Component;
+            if (cm.TryGetComponent<AIStateComponent>(entityId, out var state) == false) return;
+            if (cm.TryGetComponent<AIBehaviorTypeComponent>(entityId, out var behavior) == false) return;
+
+            state.StateEnterTime = Time.time;
+            cm.SetComponent(entityId, state);
+
+            IAIStateHandler handler = AIBehaviorFactory.GetStateHandler(behavior.BehaviorType, state.CurrentState);
+            if (handler != null)
+            {
+                handler.OnEnter(entityId);
+            }
+        }
+
         public static void TransitionToState(int entityId, AIState newState)
         {
             ComponentManager cm = AR.s.Component;

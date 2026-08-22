@@ -20,6 +20,13 @@ namespace ARPG.Editor
         {
             string worldPath = Path.Combine(SaveDir, "WorldData.json");
             string backupPath = Path.Combine(SaveDir, "WorldData.json.backup");
+            if (HasPartitionedSave() == true)
+            {
+                Debug.LogWarning("[ResetSaveData] 파티션 세이브는 manifest 원자성을 사용하므로 " +
+                                 "World 파티션만 직접 삭제할 수 없습니다. " +
+                                 "새 게임 초기화에는 Delete All Save Data를 사용하세요.");
+                return;
+            }
 
             bool hasWorld = File.Exists(worldPath);
             bool hasBackup = File.Exists(backupPath);
@@ -56,7 +63,7 @@ namespace ARPG.Editor
 
             if (EditorUtility.DisplayDialog(
                 "Delete All Save Data",
-                $"모든 세이브 파일(WorldData + PlayerData)을 삭제합니다.\n되돌릴 수 없습니다.\n\n경로: {SaveDir}",
+                $"모든 세이브 파일(레거시 + Slot_0 파티션)을 삭제합니다.\n되돌릴 수 없습니다.\n\n경로: {SaveDir}",
                 "전부 삭제",
                 "취소") == false)
             {
@@ -90,8 +97,15 @@ namespace ARPG.Editor
                 }
 
                 int resetCount = runtime.Npc.ResetPlayerTalkHistory();
-                runtime.Data.Save();
+                runtime.Data.SavePlayer();
                 Debug.Log($"[ResetSaveData] 런타임 NPC 대화 이력 초기화 완료 ({resetCount}명). 저장을 요청했습니다.");
+                return;
+            }
+
+            if (HasPartitionedSave() == true)
+            {
+                Debug.LogWarning("[ResetSaveData] 파티션 세이브의 체크섬을 오프라인에서 직접 바꾸지 않습니다. " +
+                                 "Play Mode에서 실행하세요.");
                 return;
             }
 
@@ -151,6 +165,13 @@ namespace ARPG.Editor
                 Debug.LogError($"[ResetSaveData] NPC 대화 이력 초기화 실패 ({path}): {ex.Message}");
                 return false;
             }
+        }
+
+        private static bool HasPartitionedSave()
+        {
+            string slotPath = Path.Combine(SaveDir, "Slot_0");
+            return File.Exists(Path.Combine(slotPath, "manifest.json")) == true ||
+                   File.Exists(Path.Combine(slotPath, "manifest.prev.json")) == true;
         }
     }
 }

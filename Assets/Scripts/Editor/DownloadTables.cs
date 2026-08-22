@@ -44,8 +44,8 @@ namespace ARPG.Editor
             Register<AiTable>(list, "947794841&range=A:L");
             Register<MonsterTable>(list, "483012127&range=A:Q");
             Register<NpcTable>(list, "1460299278&range=A:O");
-            // NpcEquipTable — NPC 시작 장비 세트 (NpcTable.EquipTableId 참조). 슬롯별 ItemId 명시.
-            Register<NpcEquipTable>(list, "1566085089&range=A:N");
+            // NpcEquipTable — NPC 시작 장비 세트. Desc + 슬롯별 ItemId/Chance 쌍.
+            Register<NpcEquipTable>(list, "1566085089&range=A:Z");
             Register<MonsterArchetypeTable>(list, "1141585255&range=A:E");
             Register<StatTable>(list, "318209064&range=A:AJ");
             Register<ItemTable>(list, "2064107837&range=A:S");
@@ -680,29 +680,42 @@ namespace ARPG.Editor
         }
 
         /// <summary>
-        /// NpcEquipTable 파싱. 컬럼: A=Id, B=WeaponRight, C=WeaponLeft, D=Helmet, E=Armor,
-        /// F=Gloves, G=Boots, H=Necklace, I=RingRight, J=RingLeft, K=Belt, L=EarringRight, M=EarringLeft, N=Note(설명).
+        /// NpcEquipTable 파싱. A=Id, B=Desc, 이후 C:Z는 슬롯별 ItemId/Chance 쌍이다.
         /// </summary>
         private static void ParseNpcEquipTable(NpcEquipTable table, string[] values)
         {
-            if (values.Length < 13)
+            if (values.Length < 26)
             {
-                Debug.LogError($"[ParseNpcEquipTable] Invalid data length. Expected at least 13, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseNpcEquipTable] Invalid data length. "
+                    + $"Expected at least 26, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
-            table.WeaponRight = ParseIntSafe(values, 1);
-            table.WeaponLeft = ParseIntSafe(values, 2);
-            table.Helmet = ParseIntSafe(values, 3);
-            table.Armor = ParseIntSafe(values, 4);
-            table.Gloves = ParseIntSafe(values, 5);
-            table.Boots = ParseIntSafe(values, 6);
-            table.Necklace = ParseIntSafe(values, 7);
-            table.RingRight = ParseIntSafe(values, 8);
-            table.RingLeft = ParseIntSafe(values, 9);
-            table.Belt = ParseIntSafe(values, 10);
-            table.EarringRight = ParseIntSafe(values, 11);
-            table.EarringLeft = ParseIntSafe(values, 12);
+            table.Desc = values[1];
+            table.WeaponRight = ParseIntSafe(values, 2);
+            table.WeaponRightChance = ParseIntSafe(values, 3);
+            table.WeaponLeft = ParseIntSafe(values, 4);
+            table.WeaponLeftChance = ParseIntSafe(values, 5);
+            table.Helmet = ParseIntSafe(values, 6);
+            table.HelmetChance = ParseIntSafe(values, 7);
+            table.Armor = ParseIntSafe(values, 8);
+            table.ArmorChance = ParseIntSafe(values, 9);
+            table.Gloves = ParseIntSafe(values, 10);
+            table.GlovesChance = ParseIntSafe(values, 11);
+            table.Boots = ParseIntSafe(values, 12);
+            table.BootsChance = ParseIntSafe(values, 13);
+            table.Necklace = ParseIntSafe(values, 14);
+            table.NecklaceChance = ParseIntSafe(values, 15);
+            table.RingRight = ParseIntSafe(values, 16);
+            table.RingRightChance = ParseIntSafe(values, 17);
+            table.RingLeft = ParseIntSafe(values, 18);
+            table.RingLeftChance = ParseIntSafe(values, 19);
+            table.Belt = ParseIntSafe(values, 20);
+            table.BeltChance = ParseIntSafe(values, 21);
+            table.EarringRight = ParseIntSafe(values, 22);
+            table.EarringRightChance = ParseIntSafe(values, 23);
+            table.EarringLeft = ParseIntSafe(values, 24);
+            table.EarringLeftChance = ParseIntSafe(values, 25);
         }
 
         private static void ParseStatTable(StatTable table, string[] values)

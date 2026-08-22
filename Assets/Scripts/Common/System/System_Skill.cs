@@ -697,7 +697,10 @@ namespace ARPG.Systems
                 multiplier = (100 + stat.FinalCastSpeed) / 100f;
             }
 
-            return Mathf.Clamp(multiplier, 0.1f, 5f);
+            // 상한 없음 — 실제 하한은 상태 머신 틱 수가 만든다 (Start/Process/End 각 1틱 이상 = FixedUpdate 3틱).
+            // 하한 0.1은 유지: FinalCastSpeed <= -100이면 multiplier가 0/음수가 되어
+            // duration이 무한대 또는 음수(= 첫 틱에 즉시 종료)가 된다.
+            return Mathf.Max(multiplier, 0.1f);
         }
 
         #region Skill Type Processing Methods

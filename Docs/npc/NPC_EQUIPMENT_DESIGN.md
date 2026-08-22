@@ -3,6 +3,8 @@
 > ⚠️ **마을–NPC 경계 반영** ([VILLAGE_NPC_BOUNDARY_DESIGN](VILLAGE_NPC_BOUNDARY_DESIGN.md)):
 > 여관 고용/방문자 시스템 제거로 본 문서의 **방문자 관련 서술은 구식**이 됐다 —
 > §4.1의 `SpawnVisitorNpc` 시드 경로(현행 장비 시드는 2경로), §8.4의 진입 경로 2(Inn 방문자 카드 "장비" 버튼 · `UINpcInspect.BindSaveData`)는 **삭제된 코드**다. 해당 지점에 취소선으로 표시했다.
+>
+> **후속 계획**: 현행 고정 세트 구조를 유지하면서 NPC 5종의 시작 장비를 다양화하는 작업 순서와 데이터 기준은 [NPC_EQUIPMENT_SET_PLAN.md](NPC_EQUIPMENT_SET_PLAN.md)를 따른다. 해당 계획은 아직 구현 전이며, 구현 완료 전까지 본 문서의 현행 동작 설명이 우선한다.
 
 ## 1. 목표
 
@@ -178,14 +180,15 @@ var (createdId, entity) = await EntityFactory.CreateNpc(
 - **무기 시각 반영**: 플레이어의 무기 SpriteLibrary 갱신 경로를 NPC에도 적용해야 무기가 시각적으로 보임. 1차 패스에선 스탯 적용까지만.
 - **NPC 사망 시 드랍**: 보유 장비를 떨어뜨릴지 여부는 별도 결정 필요 (현재는 `DropComponent` 기반 드랍만).
 - **NPC 장비 변경 UI**: 현재 읽기 전용. 플레이어가 NPC 장비를 갈아입히는 기능은 별도 패스.
-- **세이브 용량**: 200명 평균 ~4KB/명, 총 ~800KB(JSON minified). 실측 후 필요 시 `NullValueHandling.Ignore` 또는 gzip 압축 검토 (이 작업 범위 밖).
+- **세이브 용량**: 과거 200명 기준 추정은 현재 2,400명 목표와 맞지 않는다. NPC 상태는 32개 샤드로 분할 저장하며, 장비 compact DTO/시드 재구성은 실제 분할 저장 결과를 본 뒤 후속으로 판단한다. ([SAVE_PARTITION_DESIGN](../tech/SAVE_PARTITION_DESIGN.md))
 
 ## 9. 저장 공간 추정
 
-| 시나리오 | NPC 1명 | 200명 minified | 200명 gzip(~30%) |
+| 시나리오 | NPC 1명 | 2,400명 minified 단순 환산 | 비고 |
 |---|---|---|---|
-| Worst (전 슬롯/인벤 가득) | ~7.5 KB | ~1.5 MB | ~450 KB |
-| 평균 (무기+방어구 4~5 + 인벤 절반) | ~4 KB | ~800 KB | ~240 KB |
-| 최소 (무기 1개) | ~0.5 KB | ~100 KB | ~30 KB |
+| Worst (전 슬롯/인벤 가득) | ~7.5 KB | ~18 MB | 실제 장비·Mod 분포에 따라 달라짐 |
+| 평균 (무기+방어구 4~5 + 인벤 절반) | ~4 KB | ~9.6 MB | 과거 1명당 추정치의 단순 환산 |
+| 최소 (무기 1개) | ~0.5 KB | ~1.2 MB | 과거 1명당 추정치의 단순 환산 |
 
-세이브 포맷 자체는 변경하지 않음. 필요 시 후속 작업.
+현행 세이브는 NPC 개별 상태를 `EntityId & 31` 기준 32개 파일로 나눈다. 장비 표현 자체는
+변경하지 않았으며, compact DTO/압축은 분할 저장만으로 부족하다고 확인될 때 후속 진행한다.

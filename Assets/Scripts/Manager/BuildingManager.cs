@@ -189,6 +189,8 @@ namespace ARPG.Building
 
             // 점유 타일 등록 (멀티타일 대응)
             AddOccupiedTiles(worldTileX, worldTileY, table.Size_Width, table.Size_Height);
+            AR.s.Npc.RelocateNpcsOutsideFootprint(worldTileX, worldTileY,
+                table.Size_Width, table.Size_Height);
 
             // 청크 매핑
             Vector2Int chunkCoord = TileToChunk(worldTileX, worldTileY);
@@ -395,6 +397,7 @@ namespace ARPG.Building
                 return;
 
             _chunkSize = chunkSize;
+            List<BuildingSaveData> loadedBuildings = new(savedBuildings.Count);
 
             foreach (var kvp in savedBuildings)
             {
@@ -419,9 +422,21 @@ namespace ARPG.Building
                 int w = table != null ? table.Size_Width : 1;
                 int h = table != null ? table.Size_Height : 1;
                 AddOccupiedTiles(saveData.WorldTileX, saveData.WorldTileY, w, h);
+                loadedBuildings.Add(saveData);
 
                 Vector2Int chunkCoord = TileToChunk(saveData.WorldTileX, saveData.WorldTileY);
                 AddBuildingToChunk(chunkCoord, entityId);
+            }
+
+            // 모든 footprint를 먼저 등록한 뒤 NPC를 옮겨 다른 저장 건물 안으로 이동하지 않게 한다.
+            for (int i = 0; i < loadedBuildings.Count; i++)
+            {
+                BuildingSaveData saveData = loadedBuildings[i];
+                Tables.BuildableItemTable? table = AR.s.Data.GetBuildableItem(saveData.TableId);
+                int width = table != null ? table.Size_Width : 1;
+                int height = table != null ? table.Size_Height : 1;
+                AR.s.Npc.RelocateNpcsOutsideFootprint(saveData.WorldTileX,
+                    saveData.WorldTileY, width, height);
             }
 
             Debug.Log($"[BuildingManager] Loaded {_buildingSaveDict.Count} buildings from save data");

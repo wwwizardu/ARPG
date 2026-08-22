@@ -248,7 +248,8 @@ namespace ARPG.Systems
             VillageTileFinder.SetPlazaRadius(GetPlazaRadius(v.Stage));
 
             Vector2Int? tile = VillageTileFinder.FindEmptyTileNearest(
-                center, maxRadius, v.VillageId, category, boundsRadius, table.MinSeparation);
+                center, maxRadius, v.VillageId, category, boundsRadius,
+                table.MinSeparation, table.Size_Width, table.Size_Height);
             if (tile.HasValue == false) return BuildAttemptResult.NoTileOrTableMissing;  // 자리 없음 → 다음 후보 시도
 
             // 자원 차감 (Wood/Stone 둘 중 하나라도 실패 시 환불). 동시성 race 시에만 발생.

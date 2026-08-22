@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using ARPG.Component;
 using ARPG.Data;
-using ARPG.Systems;
 using ARPG.Tables;
 using UnityEngine;
 using GE = GlobalEnum;
@@ -144,11 +143,11 @@ namespace ARPG.Utility
                 }
             }
 
-            // 스탯 재계산 요청
+            // 스탯 재계산 요청.
+            // 프로필(BuildOwnedProfiles)은 여기서 부르지 않는다 — BuildProfile이 CritMultiplier/SkillDamageMul/
+            // LifeStealRatio를 StatComponent에서 읽는데 이 시점의 StatComponent는 아직 재계산 전이라 값이 틀린다.
+            // System_StatCalculation이 재계산 직후 SyncDerivedStatComponents에서 올바른 값으로 갱신한다.
             AR.s.Component.AddComponent(playerEntityId, new StatDirtyTag());
-
-            // 데미지/치명타/공격속도 프로필은 Modifier 원본에서 계산하므로 장착 프레임에 즉시 갱신 가능하다.
-            System_SkillAttackProfileCalculation.BuildOwnedProfiles(playerEntityId);
 
             Debug.Log($"[EquipHelper] Equipment mods applied - Player: {playerEntityId}, ItemInstanceId: {sourceId}, ModCount: {mods.Count}");
         }
@@ -289,11 +288,9 @@ namespace ARPG.Utility
                 removedCount += poolRemoved;
             }
 
-            // 스탯 재계산 요청
+            // 스탯 재계산 요청. 프로필 갱신은 System_StatCalculation의 SyncDerivedStatComponents가 담당한다
+            // (여기서 직접 부르면 재계산 전 StatComponent로 잘못 계산한 뒤 같은 프레임에 덮어쓰게 된다).
             AR.s.Component.AddComponent(playerEntityId, new StatDirtyTag());
-
-            // 해제된 Modifier를 반영해 소유 스킬 프로필을 즉시 갱신한다.
-            System_SkillAttackProfileCalculation.BuildOwnedProfiles(playerEntityId);
 
             Debug.Log($"[EquipHelper] Equipment modifiers removed - Player: {playerEntityId}, ItemInstanceId: {itemInstanceId}, Removed: {removedCount}");
         }

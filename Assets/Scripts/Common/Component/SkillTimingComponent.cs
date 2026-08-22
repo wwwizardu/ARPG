@@ -39,10 +39,11 @@ namespace ARPG.Component
         /// <param name="speedMultiplier">속도 배율 (1.0 = 기본, 2.0 = 2배속)</param>
         public void ApplySpeedMultiplier(float speedMultiplier)
         {
+            // 상한 없음 — 속도를 아무리 쌓아도 상태 머신이 Start/Process/End에 최소 1틱씩 쓰므로
+            // 실제 시전 시간은 FixedUpdate 3틱 밑으로 내려가지 않는다.
+            // 하한만 유지: 0 이하가 들어오면 duration이 무한대 또는 음수가 된다.
             if (speedMultiplier <= 0.1f)
                 speedMultiplier = 0.1f;
-            if (speedMultiplier > 5f)
-                speedMultiplier = 5f;
 
             StartDuration = BaseStartDuration / speedMultiplier;
             ProcessDuration = BaseProcessDuration / speedMultiplier;

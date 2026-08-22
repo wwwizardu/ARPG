@@ -14,7 +14,7 @@ namespace ARPG.Systems
     public class System_NpcSim : IFixedUpdateSystem
     {
         // 총 NPC 수와 무관하게 틱당 비용을 제한한다.
-        private const int TickBudget = 8;
+        private const int TickBudget = 12;
         // 시간 점프 후 한 NPC가 과거 활동을 무한히 결제하지 않도록 하는 안전 상한.
         private const int MaxPhaseTransitionsPerNpc = 4;
 

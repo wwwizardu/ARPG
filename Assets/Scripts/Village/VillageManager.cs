@@ -638,7 +638,7 @@ namespace ARPG.Village
             bool IsFree(int x, int y)
             {
                 return IsInitialFacilityTileFree(data, x, y, centerX, centerY,
-                    boundsRadius);
+                    boundsRadius, table.Size_Width, table.Size_Height);
             }
 
             if (VillageSlotPlacer.TryFindTile(centerX, centerY, layout, role,
@@ -666,25 +666,43 @@ namespace ARPG.Village
         /// 마을 Bounds 내부(벽 링 안쪽)와 벽 세그먼트 타일(열린 Gate 포함)을 제외한다.
         /// </summary>
         private static bool IsInitialFacilityTileFree(VillageData data, int x, int y,
-            int centerX, int centerY, int boundsRadius)
+            int centerX, int centerY, int boundsRadius, int width, int height)
         {
-            if (AR.s.Map.IsWorldTileInBounds(x, y) == false)
-                return false;
-            if (boundsRadius > 0)
+            width = Mathf.Max(1, width);
+            height = Mathf.Max(1, height);
+            for (int dx = 0; dx < width; dx++)
             {
-                int distFromCenter = Mathf.Max(Mathf.Abs(x - centerX),
-                    Mathf.Abs(y - centerY));
-                if (distFromCenter >= boundsRadius)
-                    return false;   // 벽 링(== radius) 및 바깥 제외
+                for (int dy = 0; dy < height; dy++)
+                {
+                    int cellX = x + dx;
+                    int cellY = y + dy;
+                    if (AR.s.Map.IsWorldTileInBounds(cellX, cellY) == false)
+                        return false;
+                    if (boundsRadius > 0)
+                    {
+                        int distFromCenter = Mathf.Max(Mathf.Abs(cellX - centerX),
+                            Mathf.Abs(cellY - centerY));
+                        if (distFromCenter >= boundsRadius)
+                            return false;   // 벽 링(== radius) 및 바깥 제외
+                    }
+                    if (VillageWallRules.FindBuiltSegmentAt(data, cellX, cellY) != null)
+                        return false;       // 열린 Gate처럼 타일이 비어 있어도 벽 자리 보존
+                    Vector3 world = new Vector3(cellX + 0.5f, cellY + 0.5f, 0f);
+                    if (AR.s.Map.IsWalkable(world) == false)
+                        return false;
+                    if (AR.s.Map.GetObjectIdAt(cellX, cellY) != 0)
+                        return false;
+                    if (AR.s.Building != null &&
+                        AR.s.Building.IsTileOccupied(cellX, cellY) == true)
+                        return false;
+                }
             }
-            if (VillageWallRules.FindBuiltSegmentAt(data, x, y) != null)
-                return false;       // 열린 Gate처럼 타일이 비어 있어도 벽 자리 보존
-            Vector3 world = new Vector3(x + 0.5f, y + 0.5f, 0f);
-            if (AR.s.Map.IsWalkable(world) == false)
+
+            if (CollisionUtil.IsCreatureOverlappingFootprint(x, y, width,
+                    height) == true)
                 return false;
-            if (AR.s.Map.GetObjectIdAt(x, y) != 0)
-                return false;
-            if (AR.s.Building != null && AR.s.Building.IsTileOccupied(x, y) == true)
+            if (AR.s.Npc != null &&
+                AR.s.Npc.HasNpcInFootprint(x, y, width, height) == true)
                 return false;
             return true;
         }
@@ -706,7 +724,8 @@ namespace ARPG.Village
                 stage != null ? stage.RoadReserveHalfWidth : 0);
             VillageTileFinder.SetPlazaRadius(stage != null ? stage.PlazaRadius : 0);
             return VillageTileFinder.FindEmptyTileNearest(center, maxRadius,
-                data.VillageId, table.Category, boundsRadius, table.MinSeparation);
+                data.VillageId, table.Category, boundsRadius, table.MinSeparation,
+                table.Size_Width, table.Size_Height);
         }
 
         private void WarnPlacementOnce(int villageId, string kind, int index,
@@ -1475,6 +1494,7 @@ namespace ARPG.Village
 
             Debug.Log($"[Sell] v{villageId} 판매 {item.Name} ×{amount} → +{gold}G");
             AR.s.UI.SetNotify($"판매: {item.Name} ×{amount} → +{gold}G");
+            AR.s.Data?.SavePlayerAndVillages();
             return gold;
         }
 
@@ -1527,7 +1547,7 @@ namespace ARPG.Village
             v.MerchantStock[stockEntryIndex] = entry;
 
             // 매물 / Gold 변경을 즉시 영구화 (드랍 픽업과 동일 정책).
-            AR.s.Data.Save();
+            AR.s.Data.SavePlayerAndVillages();
 
             Debug.Log($"[Shop] v{villageId} 구매 {item.Name} ×{amount} = {gold}G");
             AR.s.UI.SetNotify($"구매: {item.Name} ×{amount} = -{gold}G");

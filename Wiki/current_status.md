@@ -12,6 +12,8 @@ sources:
   - Docs/combat/ModSystem_Changelog.md
   - Docs/combat/SKILL_RUNE_DESIGN.md
   - Docs/npc/PLAYER_RECOGNITION_DESIGN.md
+  - Docs/npc/NPC_SIMULATION_DESIGN.md
+  - Docs/tech/SAVE_PARTITION_DESIGN.md
   - Docs/world_history/NARRATIVE_DIALOGUE_VARIETY_DESIGN.md
   - Docs/economy/AUCTION_HOUSE_DESIGN.md
   - Wiki/combat.md
@@ -26,6 +28,8 @@ sources:
 
 장비 옵션은 무기 로컬/타 장비 글로벌의 이중 경로를 폐기하고, 무기 Base·고유 강화만 무기 캐시에 두며 모든 Implicit/Prefix/Postfix를 글로벌 Modifier로 처리하는 기준선까지 구현됐다. 치명타는 소수 확률을 보존해 UI·예상 피해·실제 판정이 같은 값을 사용하고, 공격속도는 프로필 APS가 실제 스킬 시간을 구동한다. 실제 강화 재료·제련 트랜잭션과 전체 플레이 모드 검증은 후속이다. [src: Docs/combat/combatSystem.md §장비 옵션 책임 경계–§갱신·저장·표시, Docs/combat/ModSystem_Changelog.md §2026-08-22 — 장비 옵션 글로벌화와 무기 고유 강화 분리, Assets/Scripts/Data/ItemData.cs, Assets/Scripts/Common/System/System_SkillAttackProfileCalculation.cs, Assets/Scripts/Skill/Combat/DamageCalculator.cs, Wiki/combat.md]
 
+NPC 총량은 최신 밀도 설계에 따라 `max(맵 최소값, 마을 수×8)`이며 300개 마을 기준 2,400명이다. 이 규모에서 아이템 획득 때 전체 `WorldData`를 다시 저장하던 경로는 Player/World 파티션 저장으로 분리됐고, NPC 개별 상태는 32개 샤드와 manifest 원자 커밋을 사용한다. NPC 장비 compact 표현은 적용하지 않았으며, 레거시 마이그레이션과 플레이 모드 왕복·장애 복구 실측이 남아 있다. [src: Docs/npc/NPC_SIMULATION_DESIGN.md D9, Docs/tech/SAVE_PARTITION_DESIGN.md §2–9, Assets/Scripts/Manager/DataManager_PartitionedSave.cs, Assets/Scripts/Manager/ItemManager.cs]
+
 다음 NPC 기능으로 준비된 것은 **관찰 반응(Reactive Recognition)** 이다. 전리품 식별 배관(`ItemTable.SourceMonsterId` + `MonsterTrophyIdentifier`)은 구현됐지만 현행 `ItemTable.bytes`에는 `SourceMonsterId>0`인 아이템이 없고, Talk 시 감지·Trust 상승·인지 단계 저장·`ClearThreat` 대사 게이트는 미구현이다. [src: Assets/Scripts/Common/Utility/MonsterTrophyIdentifier.cs, Assets/_BinaryData/TableData/ItemTable.bytes, Docs/npc/PLAYER_RECOGNITION_DESIGN.md §구현 계획]
 
 ## 2. 시스템별 상태
@@ -33,7 +37,8 @@ sources:
 | 영역 | 구현된 기준선 | 남은 핵심 |
 |------|---------------|-----------|
 | **마을** | V1~V7: Profile, 고정 인구, 초기 Stage, 누적 시설, Dwarf 벽·제련소, Race별 배치·상권, 결정론 상점, 고정 상태 파리티 [src: Docs/village/VILLAGE_REWORK_PLAN.md §V1–V7] | V7 플레이 모드 A~F 실측. 런타임 성장 V8은 별도 승인 후 검토 [src: Docs/village/VILLAGE_REWORK_PLAN.md §V7 체크리스트·§V8] |
-| **NPC 활동·관계** | Rest·솔로/파티 Hunt, 오프스크린 LOD, 부상·사망·Deed, 플레이어 관계 4축과 저장 [src: Assets/Scripts/Common/System/System_NpcSim.cs, Assets/Scripts/Manager/NpcManager.cs, Assets/Scripts/Npc/NpcSaveData.cs] | 이주·WORLD_EVENT 연동, 관계·선물·소망 본 루프 [src: Docs/npc/NPC_SIMULATION_DESIGN.md §11, Docs/npc/interactionSystem.md §4, Docs/npc/QUEST_SYSTEM_DESIGN.md] |
+| **NPC 활동·관계** | Rest·솔로/파티 Hunt, 오프스크린 LOD, 부상·사망·Deed, 플레이어 관계 4축, 300개 마을 기준 목표 2,400명 [src: Docs/npc/NPC_SIMULATION_DESIGN.md D9·§11, Assets/Scripts/Common/System/System_NpcSim.cs, Assets/Scripts/Manager/NpcManager.cs, Assets/Scripts/Npc/NpcSaveData.cs] | 이주·WORLD_EVENT 연동, 관계·선물·소망 본 루프 [src: Docs/npc/NPC_SIMULATION_DESIGN.md §11, Docs/npc/interactionSystem.md §4, Docs/npc/QUEST_SYSTEM_DESIGN.md] |
+| **세이브** | 소유권별 파티션, NPC 상태 32샤드, manifest/previous 원자 커밋·검증, 레거시 자동 마이그레이션. 아이템·스킬 변경은 Player+World만 저장 [src: Docs/tech/SAVE_PARTITION_DESIGN.md §2–8, Assets/Scripts/Manager/DataManager_PartitionedSave.cs, Assets/Scripts/Manager/ItemManager.cs, Assets/Scripts/Manager/PlayerSkillManager.cs] | Unity 플레이 모드 왕복·손상 복구·Profiler 실측. NPC 장비 compact DTO는 필요 시 후속 [src: Docs/tech/SAVE_PARTITION_DESIGN.md §9] |
 | **NPC 대화** | 사연 토픽 4종, 사건별 cache variant, Deed·사망 기억 발생 시 NPC 단위 캐시 무효화 [src: Docs/world_history/NARRATIVE_DIALOGUE_VARIETY_DESIGN.md §5 Phase 1, Assets/Scripts/Npc/Narrative/NpcNarrativeRuntime.cs] | Phase 1 플레이 검증, 관계·감정·성격 토픽 Phase 2 판단 [src: Docs/world_history/NARRATIVE_DIALOGUE_VARIETY_DESIGN.md §5 Phase 1–2] |
 | **관찰 반응** | 전리품→소스 몬스터 식별 인터페이스와 Biome 근거 데이터 [src: Assets/Scripts/Common/Utility/MonsterTrophyIdentifier.cs, Assets/Scripts/Common/Tables.cs] | 실제 전리품 데이터, 감지·Trust·영속화·대사·보상 전체 [src: Docs/npc/PLAYER_RECOGNITION_DESIGN.md §구현 계획] |
 | **몬스터 스폰** | `Any ∪ biome전용` 균등 풀을 그룹별·리스폰별 샘플 [src: Assets/Scripts/Map/Biome/BiomeMonsterMapping.cs, Assets/Scripts/Manager/MonsterManager.cs] | 실제 biome 분류 데이터, 가중치, Zone×풀, 엘리트·보스 [src: Docs/ai_monster/MONSTER_SPAWN_DESIGN.md §7.2.1] |
@@ -43,7 +48,7 @@ sources:
 
 ## 3. 권장 재개 순서
 
-1. V7 마을 A~F, NPC 대화 Phase 1, 신규 몬스터 Animation·Addressables·스폰과 장비 옵션 글로벌화의 장착/해제·실제 타격·세이브 왕복을 Unity 플레이 모드에서 검증한다. [src: Docs/village/VILLAGE_REWORK_PLAN.md §V7 플레이 모드 검증 체크리스트, Docs/world_history/NARRATIVE_DIALOGUE_VARIETY_DESIGN.md §5 Phase 1 검증 지표, Docs/combat/ModSystem_Changelog.md §UI와 검증 상태]
+1. 파티션 세이브의 레거시 마이그레이션·재로드, 좁은 저장 범위, active 손상 시 previous 폴백을 Unity 플레이 모드와 Profiler에서 먼저 검증한다. 이어서 V7 마을 A~F, NPC 대화 Phase 1, 신규 몬스터 Animation·Addressables·스폰과 장비 옵션 글로벌화의 장착/해제·실제 타격·세이브 왕복을 검증한다. [src: Docs/tech/SAVE_PARTITION_DESIGN.md §9, Docs/village/VILLAGE_REWORK_PLAN.md §V7 플레이 모드 검증 체크리스트, Docs/world_history/NARRATIVE_DIALOGUE_VARIETY_DESIGN.md §5 Phase 1 검증 지표, Docs/combat/ModSystem_Changelog.md §UI와 검증 상태]
 2. 새 몬스터의 `Biome`, AI, Drop과 실제 전리품 `SourceMonsterId` 데이터를 채워 관찰 반응의 입력을 완성한다. [src: Docs/ai_monster/MONSTER_SPAWN_DESIGN.md §7.2.1, Docs/npc/PLAYER_RECOGNITION_DESIGN.md §제약·전제]
 3. 관찰 반응 Track B의 감지→Trust→저장→대사 게이트→보상 순서를 구현한다. [src: Docs/npc/PLAYER_RECOGNITION_DESIGN.md §구현 계획]
 4. 플레이 근거에 따라 스킬 페이지 P-2/P-3, 마을 V8, 경매장 중 다음 세로 슬라이스를 선택한다. 경매장은 현재 설계만 있고 착수 승인은 없다. [src: Docs/combat/SKILL_RUNE_DESIGN.md §10, Docs/village/VILLAGE_REWORK_PLAN.md §V8, Docs/economy/AUCTION_HOUSE_DESIGN.md §구현 계획]

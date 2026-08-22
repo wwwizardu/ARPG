@@ -183,7 +183,7 @@ namespace ARPG.Manager
             RecreatePlayerSkillEntity(slotIndex, newSkillId);
             BroadcastSkillBookChanged(slotIndex, newSkillId);
 
-            AR.s?.Data?.Save();
+            AR.s?.Data?.SavePlayer();
             return true;
         }
 
@@ -231,7 +231,7 @@ namespace ARPG.Manager
 
             RecreatePlayerSkillEntity(skillBookSlotIndex, book.SkillBook.SkillId);
             BroadcastSkillBookChanged(skillBookSlotIndex, book.SkillBook.SkillId);
-            AR.s?.Data?.Save();
+            AR.s?.Data?.SavePlayer();
             return true;
         }
 
@@ -274,7 +274,7 @@ namespace ARPG.Manager
 
             RecreatePlayerSkillEntity(skillBookSlotIndex, book.SkillBook.SkillId);
             BroadcastSkillBookChanged(skillBookSlotIndex, book.SkillBook.SkillId);
-            AR.s?.Data?.Save();
+            AR.s?.Data?.SavePlayer();
             return true;
         }
 
@@ -318,7 +318,7 @@ namespace ARPG.Manager
             BroadcastSkillBookChanged(slotA, bookB?.SkillBook?.SkillId ?? 0);
             BroadcastSkillBookChanged(slotB, bookA?.SkillBook?.SkillId ?? 0);
 
-            AR.s?.Data?.Save();
+            AR.s?.Data?.SavePlayer();
             return true;
         }
 
@@ -355,7 +355,7 @@ namespace ARPG.Manager
             RecreatePlayerSkillEntity(slotIndex, 0);
             BroadcastSkillBookChanged(slotIndex, 0);
 
-            AR.s?.Data?.Save();
+            AR.s?.Data?.SavePlayer();
             return true;
         }
 

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using ARPG.AI;
 using ARPG.Component;
+using ARPG.Utility;
 using UnityEngine;
 
 namespace ARPG.Systems
@@ -73,6 +74,13 @@ namespace ARPG.Systems
                     if (cm.TryGetComponent<TransformComponent>(entityId, out var startTransform) == false)
                         continue;
 
+                    if (TryRecoverBlockedStart(entityId, cm, ref startTransform,
+                            ref pf) == false)
+                    {
+                        cm.SetComponent(entityId, pf);
+                        continue;
+                    }
+
                     Vector2Int startTile = new Vector2Int(
                         Mathf.FloorToInt(startTransform.Position.x),
                         Mathf.FloorToInt(startTransform.Position.y));
@@ -139,7 +147,23 @@ namespace ARPG.Systems
                             else if (Time.time - pf.LastProgressTime >= STUCK_TIMEOUT)
                             {
                                 // STUCK_TIMEOUT 동안 진행 없음 → 재계산 트리거
-                                Debug.LogWarning($"[System_Pathfinding] Entity {entityId} stuck at waypoint {wpTile}, recomputing");
+                                int currentTileX = Mathf.FloorToInt(transform.Position.x);
+                                int currentTileY = Mathf.FloorToInt(transform.Position.y);
+                                bool blockedCenter = AR.s.Map.IsTileBlocked(currentTileX,
+                                    currentTileY);
+                                bool blockedAtRadius = blockedCenter;
+                                float speed = 0f;
+                                if (cm.TryGetComponent<VelocityComponent>(entityId,
+                                        out var stuckVelocity) == true)
+                                    speed = stuckVelocity.Speed;
+                                if (cm.TryGetComponent<ColliderComponent>(entityId,
+                                        out var stuckCollider) == true)
+                                    blockedAtRadius = CollisionUtil.IsBlockedAt(
+                                        transform.Position, stuckCollider.MoveRadius);
+                                Debug.LogWarning($"[System_Pathfinding] Entity {entityId} stuck " +
+                                                 $"at waypoint {wpTile}, pos={transform.Position}, " +
+                                                 $"speed={speed:F2}, blockedCenter={blockedCenter}, " +
+                                                 $"blockedAtRadius={blockedAtRadius}, recomputing");
                                 pf.Status = PathfindingStatus.Computing;
                                 pfDirty = true;
                                 break;
@@ -172,6 +196,55 @@ namespace ARPG.Systems
                 if (pfDirty == true)
                     cm.SetComponent(entityId, pf);
             }
+        }
+
+        private static bool TryRecoverBlockedStart(int entityId, ComponentManager cm,
+            ref TransformComponent transform, ref PathfindingComponent pf)
+        {
+            bool hasCollider = cm.TryGetComponent<ColliderComponent>(entityId,
+                out var collider);
+            bool blocked = hasCollider == true
+                ? CollisionUtil.IsBlockedAt(transform.Position, collider.MoveRadius)
+                : AR.s.Map.IsTileBlocked(Mathf.FloorToInt(transform.Position.x),
+                    Mathf.FloorToInt(transform.Position.y));
+            if (blocked == false)
+                return true;
+
+            int tileX = Mathf.FloorToInt(transform.Position.x);
+            int tileY = Mathf.FloorToInt(transform.Position.y);
+            if (hasCollider == false ||
+                CollisionUtil.TryFindNearestFree(transform.Position, collider.MoveRadius,
+                    out Vector2 freePosition, requireActiveChunk: true) == false)
+            {
+                pf.Status = PathfindingStatus.Failed;
+                pf.LastRecomputedTime = Time.time;
+                pf.CurrentWaypointIndex = 0;
+                pf.LastProgressDistSqr = float.MaxValue;
+                pf.LastProgressTime = Time.time;
+                if (cm.TryGetComponent<VelocityComponent>(entityId,
+                        out var failedVelocity) == true)
+                {
+                    failedVelocity.Direction = Vector2.zero;
+                    cm.SetComponent(entityId, failedVelocity);
+                }
+                Debug.LogError($"[System_Pathfinding] Entity {entityId} is inside blocked tile " +
+                               $"({tileX}, {tileY}) and no active free tile was found");
+                return false;
+            }
+
+            Vector2 previous = transform.Position;
+            transform.Position = freePosition;
+            bool npcRelocated = cm.HasComponent<NpcTag>(entityId) == true &&
+                                AR.s.Npc.TryRelocateMaterializedNpc(entityId,
+                                    freePosition) == true;
+            if (npcRelocated == false)
+                cm.SetComponent(entityId, transform);
+            pf.CurrentWaypointIndex = 0;
+            pf.LastProgressDistSqr = float.MaxValue;
+            pf.LastProgressTime = Time.time;
+            Debug.LogWarning($"[System_Pathfinding] Entity {entityId} escaped blocked start: " +
+                             $"{previous} -> {freePosition}");
+            return true;
         }
     }
 }

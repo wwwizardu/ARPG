@@ -37,7 +37,7 @@ sources:
 | **village** → [village.md](village.md) | 마을 자가성장 — 자원·건설·Tier·벽의 실시간/추상 LOD와 서비스 [src: Docs/village/VILLAGE_RUNTIME_DESIGN.md] | `Docs/village/` 4장 (런타임·추상 건설·우선순위·성장 목표) | 중 | 상 |
 | **npc** → [npc.md](npc.md) | NPC 관계·상호작용·소망(퀘스트)·자율 활동·동료·장비 | `Docs/npc/` (VILLAGE_NPC_BOUNDARY_DESIGN 포함) | 상 | 중 |
 | **world_history** → [world_history.md](world_history.md) | 절차적 역사 생성(정착지 연대기)과 LLM 내러티브 엔진(대화·소망 생성) | `Docs/world_history/` 5장 (PROCEDURAL_HISTORY_DESIGN, WORLD_HISTORY_PLAN, WORLD_EVENT_DESIGN, NARRATIVE_ENGINE_DESIGN, NARRATIVE_ENGINE_SPIKE) | 상 | 중 |
-| **tech** | ECS SparseSet 조회 비용 최적화 단계별 계획 | `Docs/tech/` 1장 (ECS_PERFORMANCE_OPTIMIZATION_PLAN) | 하 | 중 |
+| **tech** | ECS SparseSet 최적화와 2,400 NPC 대응 파티션 세이브·32샤드·원자 커밋 [src: Docs/tech/SAVE_PARTITION_DESIGN.md] | `Docs/tech/` 2장 (ECS_PERFORMANCE_OPTIMIZATION_PLAN, SAVE_PARTITION_DESIGN) | 하 | 중 |
 | **economy** | 지역 상권·결정론 상점은 구현, 월드 공유 물물교환 경매장은 설계 확정·미착수 [src: Docs/village/VILLAGE_REWORK_PLAN.md §V5–V6, Docs/economy/AUCTION_HOUSE_DESIGN.md] | `Docs/economy/AUCTION_HOUSE_DESIGN.md` + Village Trade 코드 | 하 | 중 |
 | **_archive** | 보류·폐기된 과거 계획 (던전, Phase A 초기안, 역사 백본) | `Docs/_archive/` 5장 | — | — |
 
@@ -65,7 +65,7 @@ sources:
 ## 위키 종합 필요성이 낮은 주제
 
 - **overview** — 게임 컨셉 지도 역할은 `Docs/README.md`가 유지하지만 구현 현황은 2026-07-13 이후 드리프트됐다. 별도 장기 주제 페이지 대신 [current_status.md](current_status.md)가 최신 코드·테이블 대조를 보완한다. [src: Docs/README.md, Docs/overview/implementationStatus.md, Wiki/current_status.md]
-- **tech** — 단일 문서 1장으로 자기완결적.
+- **tech** — ECS 성능과 세이브 파티션 문서가 각각 자기완결적이며, 세이브 현황은 current_status와 npc 위키가 연결한다. [src: Docs/tech/ECS_PERFORMANCE_OPTIMIZATION_PLAN.md, Docs/tech/SAVE_PARTITION_DESIGN.md, Wiki/current_status.md, Wiki/npc.md]
 - **economy** — 현행 추가 문서는 경매장 1장이고 구현 전 코드 앵커까지 한 문서에 모여 있다. 지역 상권 구현 현황은 village 위키와 current_status가 연결한다. [src: Docs/economy/AUCTION_HOUSE_DESIGN.md, Wiki/village.md, Wiki/current_status.md]
 - **ai_monster** — 2장뿐이고 상호 의존이 얕다.
 - **map** — 3장이지만 MAP_DESIGN.md(1,031행) 한 장에 대부분이 집중돼 있어 이미 사실상 단일 정본. [추론]

@@ -1,6 +1,7 @@
 #nullable enable
 using System.Collections.Generic;
 using System.Threading;
+using ARPG.AI;
 using ARPG.Base;
 using ARPG.Component;
 using ARPG.Data;
@@ -491,6 +492,8 @@ namespace ARPG.Factory
             {
                 Status = PathfindingStatus.None
             });
+
+            AIStateHelper.EnterInitialState(entityId);
         }
 
         /// <summary>
@@ -533,6 +536,8 @@ namespace ARPG.Factory
             {
                 Status = PathfindingStatus.None
             });
+
+            AIStateHelper.EnterInitialState(entityId);
         }
 
         /// <summary>
@@ -640,6 +645,8 @@ namespace ARPG.Factory
                 CurrentState = AIState.Idle,
                 SpawnPosition = position
             });
+
+            AIStateHelper.EnterInitialState(totemId);
 
             Debug.Log($"[EntityFactory] CreateTotem - TotemId: {totemId}, Caster: {casterEntityId}, SkillId: {skillId}, Position: {position}, Duration: {duration}");
             return totemId;

@@ -1,5 +1,6 @@
 #nullable enable
 using System.Collections.Generic;
+using ARPG.Utility;
 using UnityEngine;
 
 namespace ARPG.Village
@@ -78,13 +79,16 @@ namespace ARPG.Village
         public static Vector2Int? FindEmptyTileNearest(
             Vector2Int center, int maxRadius,
             int villageId, BuildableCategory category, int boundsRadius,
-            int minSeparationOverride)
+            int minSeparationOverride, int footprintWidth = 1,
+            int footprintHeight = 1)
         {
             int minSep = minSeparationOverride > 0
                 ? minSeparationOverride
                 : GetDefaultMinSeparation(category);
 
-            return FindWithFallback(center, maxRadius, villageId, category, boundsRadius, minSep);
+            return FindWithFallback(center, maxRadius, villageId, category,
+                boundsRadius, minSep, Mathf.Max(1, footprintWidth),
+                Mathf.Max(1, footprintHeight));
         }
 
         /// <summary>
@@ -112,19 +116,20 @@ namespace ARPG.Village
         private static Vector2Int? FindWithFallback(
             Vector2Int center, int maxRadius,
             int villageId, BuildableCategory category, int boundsRadius,
-            int minSep)
+            int minSep, int footprintWidth, int footprintHeight)
         {
             // 후보 누적
             _bucket.Clear();
-            if (IsEmpty(center, center))
+            if (IsFootprintEmpty(center, center, footprintWidth, footprintHeight))
                 _bucket.Add(center);
             for (int r = 1; r <= maxRadius; r++)
-                CollectRing(center, r, _bucket);
+                CollectRing(center, r, footprintWidth, footprintHeight, _bucket);
 
             // 외곽 마진 + minSep 하드 필터
             for (int i = _bucket.Count - 1; i >= 0; i--)
             {
-                if (IsValidPlacement(_bucket[i], center, boundsRadius, category) == false
+                if (IsValidPlacement(_bucket[i], center, boundsRadius, category,
+                        footprintWidth, footprintHeight) == false
                     || SatisfiesMinSeparation(_bucket[i], minSep) == false)
                     _bucket.RemoveAt(i);
             }
@@ -133,7 +138,8 @@ namespace ARPG.Village
             {
                 // minSep 1단계 완화 후 재시도 — 마을이 너무 비좁아진 후기에 무한 정체 방지
                 if (minSep > 1)
-                    return FindWithFallback(center, maxRadius, villageId, category, boundsRadius, minSep - 1);
+                    return FindWithFallback(center, maxRadius, villageId, category,
+                        boundsRadius, minSep - 1, footprintWidth, footprintHeight);
                 return null;
             }
 
@@ -181,16 +187,37 @@ namespace ARPG.Village
         /// Defense는 경계 위에만 (BuildQueue 일반 경로는 Defense 처리 안 함 — WallPlanner 전담).
         /// boundsRadius == 0이면 마진 비활성 (Phase B 호환).
         /// </summary>
-        private static bool IsValidPlacement(Vector2Int tile, Vector2Int center, int boundsRadius, BuildableCategory category)
+        private static bool IsValidPlacement(Vector2Int tile, Vector2Int center,
+            int boundsRadius, BuildableCategory category, int footprintWidth,
+            int footprintHeight)
         {
-            if (AR.s.Map.IsWorldTileInBounds(tile.x, tile.y) == false)
-                return false;
-            if (boundsRadius <= 0) return true;
-            int distFromCenter = Mathf.Max(Mathf.Abs(tile.x - center.x), Mathf.Abs(tile.y - center.y));
-            int distFromBoundary = boundsRadius - distFromCenter;
-            if (category == BuildableCategory.Defense)
-                return distFromBoundary <= 0;       // 경계 위
-            return distFromBoundary >= OUTSKIRT_MARGIN_TILES;  // 안쪽 ≥ 2타일
+            for (int dx = 0; dx < footprintWidth; dx++)
+            {
+                for (int dy = 0; dy < footprintHeight; dy++)
+                {
+                    int x = tile.x + dx;
+                    int y = tile.y + dy;
+                    if (AR.s.Map.IsWorldTileInBounds(x, y) == false)
+                        return false;
+                    if (boundsRadius <= 0)
+                        continue;
+
+                    int distFromCenter = Mathf.Max(Mathf.Abs(x - center.x),
+                        Mathf.Abs(y - center.y));
+                    int distFromBoundary = boundsRadius - distFromCenter;
+                    if (category == BuildableCategory.Defense)
+                    {
+                        if (distFromBoundary > 0)
+                            return false;
+                    }
+                    else if (distFromBoundary < OUTSKIRT_MARGIN_TILES)
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
         }
 
         // ========== A3 + B2: 거리 차등 점수 ==========
@@ -264,7 +291,8 @@ namespace ARPG.Village
         // ========== 빈 타일 / 점유 판정 ==========
 
         /// <summary>링 r(체비쇼프)의 가장자리 빈 타일을 모두 모은다. 광장/큰길 예약 셀 제외.</summary>
-        private static void CollectRing(Vector2Int center, int r, List<Vector2Int> output)
+        private static void CollectRing(Vector2Int center, int r,
+            int footprintWidth, int footprintHeight, List<Vector2Int> output)
         {
             for (int dx = -r; dx <= r; dx++)
             {
@@ -274,7 +302,8 @@ namespace ARPG.Village
                     int ay = Mathf.Abs(dy);
                     if (ax != r && ay != r) continue; // 링 가장자리만
                     Vector2Int candidate = new Vector2Int(center.x + dx, center.y + dy);
-                    if (IsEmpty(candidate, center))
+                    if (IsFootprintEmpty(candidate, center, footprintWidth,
+                            footprintHeight))
                         output.Add(candidate);
                 }
             }
@@ -285,11 +314,31 @@ namespace ARPG.Village
         /// </summary>
         public static bool IsEmpty(Vector2Int tile, Vector2Int center)
         {
-            // 광장/큰길 예약 셀이면 즉시 제외
-            if (IsReservedTile(tile, center))
+            return IsFootprintEmpty(tile, center, 1, 1);
+        }
+
+        private static bool IsFootprintEmpty(Vector2Int tile, Vector2Int center,
+            int width, int height)
+        {
+            for (int dx = 0; dx < width; dx++)
+            {
+                for (int dy = 0; dy < height; dy++)
+                {
+                    Vector2Int cell = new Vector2Int(tile.x + dx, tile.y + dy);
+                    if (IsReservedTile(cell, center) == true ||
+                        IsOccupiedTile(cell) == true)
+                        return false;
+                }
+            }
+
+            if (CollisionUtil.IsCreatureOverlappingFootprint(tile.x, tile.y,
+                    width, height) == true)
+                return false;
+            if (AR.s.Npc != null && AR.s.Npc.HasNpcInFootprint(tile.x, tile.y,
+                    width, height) == true)
                 return false;
 
-            return IsOccupiedTile(tile) == false;
+            return true;
         }
 
         private static bool IsOccupiedTile(Vector2Int n)

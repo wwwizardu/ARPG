@@ -110,6 +110,7 @@
 | 문서 | 내용 |
 |------|------|
 | **[ECS_PERFORMANCE_OPTIMIZATION_PLAN.md](tech/ECS_PERFORMANCE_OPTIMIZATION_PLAN.md)** | SparseSet 조회 비용 감소 단계별 계획 |
+| **[SAVE_PARTITION_DESIGN.md](tech/SAVE_PARTITION_DESIGN.md)** | 도메인 파티션·NPC 32샤드·manifest 원자 커밋 세이브 정본 |
 
 ### 📂 아카이브
 - **[_archive/](_archive)** — 과거 계획과 체크리스트 보관

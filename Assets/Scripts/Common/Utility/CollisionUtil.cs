@@ -1,3 +1,4 @@
+using ARPG.Component;
 using UnityEngine;
 
 namespace ARPG.Utility
@@ -15,21 +16,82 @@ namespace ARPG.Utility
         // 경로 step 크기 = radius × 이 비율 (반경보다 작아야 터널링 방지)
         private const float STEP_RATIO = 0.9f;
 
+        // 충돌 내부 탈출 시 부동소수 오차로 같은 침투량 이동을 허용하지 않기 위한 최소 개선량
+        private const float PENETRATION_IMPROVEMENT_EPSILON = 0.0001f;
+
         public static Vector2 ResolveAxisSeparated(Vector2 currentPos, Vector2 intendedDelta, float radius)
         {
+            // 정상 위치에서는 기존 축 분리 충돌을 그대로 사용한다.
+            if (IsBlockedAt(currentPos, radius) == false)
+                return ResolveFromClearPosition(currentPos, intendedDelta, radius);
+
+            // 스폰/동적 건물 배치로 이미 충돌 내부라면 침투량이 줄어드는 축만 허용한다.
+            // 단순 충돌 무시는 멀티타일 건물을 관통할 수 있으므로 사용하지 않는다.
             Vector2 result = currentPos;
+            float penetration = GetStaticPenetration(result, radius);
 
-            // X축 단독 시도
             Vector2 testX = new Vector2(result.x + intendedDelta.x, result.y);
-            if (IsBlockedAt(testX, radius) == false)
+            float penetrationX = GetStaticPenetration(testX, radius);
+            if (penetrationX <= 0f ||
+                penetrationX < penetration - PENETRATION_IMPROVEMENT_EPSILON)
+            {
                 result.x = testX.x;
+                penetration = penetrationX;
+            }
 
-            // Y축 단독 시도 (X 결과 위에 누적)
             Vector2 testY = new Vector2(result.x, result.y + intendedDelta.y);
-            if (IsBlockedAt(testY, radius) == false)
+            float penetrationY = GetStaticPenetration(testY, radius);
+            if (penetrationY <= 0f ||
+                penetrationY < penetration - PENETRATION_IMPROVEMENT_EPSILON)
+            {
                 result.y = testY.y;
+            }
 
             return result;
+        }
+
+        /// <summary>
+        /// 건물 footprint AABB와 현재 활성 캐릭터의 이동 원이 겹치는지 검사한다.
+        /// 건물 배치 시점에만 호출하는 저빈도 O(Collider 수) 질의다.
+        /// </summary>
+        public static bool IsCreatureOverlappingFootprint(int worldX, int worldY,
+            int width, int height)
+        {
+            if (width <= 0 || height <= 0)
+                return false;
+
+            ComponentManager cm = AR.s.Component;
+            SparseSet<ColliderComponent> pool = cm.GetComponentPool<ColliderComponent>();
+            Vector2 min = new Vector2(worldX, worldY);
+            Vector2 max = new Vector2(worldX + width, worldY + height);
+
+            for (int i = 0; i < pool.Count; i++)
+            {
+                int entityId = pool.GetEntityId(i);
+                bool isCreature = cm.HasComponent<InputComponent>(entityId) == true
+                    || cm.HasComponent<NpcTag>(entityId) == true
+                    || cm.HasComponent<MonsterTag>(entityId) == true;
+                if (isCreature == false || cm.HasComponent<DestroyTag>(entityId) == true)
+                    continue;
+                if (cm.TryGetComponent<TransformComponent>(entityId, out var transform) == false)
+                    continue;
+
+                ColliderComponent collider = pool.GetByIndex(i);
+                if (CircleOverlapsAabb(transform.Position, collider.MoveRadius, min, max) == true)
+                    return true;
+            }
+
+            return false;
+        }
+
+        public static bool CircleOverlapsAabb(Vector2 center, float radius,
+            Vector2 min, Vector2 max)
+        {
+            float closestX = Mathf.Clamp(center.x, min.x, max.x);
+            float closestY = Mathf.Clamp(center.y, min.y, max.y);
+            float dx = center.x - closestX;
+            float dy = center.y - closestY;
+            return dx * dx + dy * dy < radius * radius;
         }
 
         /// <summary>
@@ -63,7 +125,8 @@ namespace ARPG.Utility
         /// pos를 중심으로 나선형 외곽 탐색하여 첫 번째 빈 타일 중심을 반환.
         /// 점프 착지 시 freeze된 위치마저 막혀있을 때 (비행 중 건물 생성 등) 탈출 용도.
         /// </summary>
-        public static bool TryFindNearestFree(Vector2 pos, float radius, out Vector2 result)
+        public static bool TryFindNearestFree(Vector2 pos, float radius, out Vector2 result,
+            bool requireActiveChunk = false)
         {
             int centerX = Mathf.FloorToInt(pos.x);
             int centerY = Mathf.FloorToInt(pos.y);
@@ -81,6 +144,9 @@ namespace ARPG.Utility
                         int tx = centerX + dx;
                         int ty = centerY + dy;
                         Vector2 candidate = new Vector2(tx + 0.5f, ty + 0.5f);
+                        if (requireActiveChunk == true &&
+                            AR.s.Map.IsChunkActiveAtWorld(candidate) == false)
+                            continue;
                         if (IsBlockedAt(candidate, radius) == false)
                         {
                             result = candidate;
@@ -124,6 +190,68 @@ namespace ARPG.Utility
             }
 
             return false;
+        }
+
+        private static Vector2 ResolveFromClearPosition(Vector2 currentPos,
+            Vector2 intendedDelta, float radius)
+        {
+            Vector2 result = currentPos;
+
+            Vector2 testX = new Vector2(result.x + intendedDelta.x, result.y);
+            if (IsBlockedAt(testX, radius) == false)
+                result.x = testX.x;
+
+            Vector2 testY = new Vector2(result.x, result.y + intendedDelta.y);
+            if (IsBlockedAt(testY, radius) == false)
+                result.y = testY.y;
+
+            return result;
+        }
+
+        private static float GetStaticPenetration(Vector2 pos, float radius)
+        {
+            int minX = Mathf.FloorToInt(pos.x - radius);
+            int maxX = Mathf.FloorToInt(pos.x + radius);
+            int minY = Mathf.FloorToInt(pos.y - radius);
+            int maxY = Mathf.FloorToInt(pos.y + radius);
+            float maxPenetration = 0f;
+
+            for (int tx = minX; tx <= maxX; tx++)
+            {
+                for (int ty = minY; ty <= maxY; ty++)
+                {
+                    if (AR.s.Map.IsTileBlocked(tx, ty) == false)
+                        continue;
+
+                    float closestX = Mathf.Clamp(pos.x, tx, tx + 1f);
+                    float closestY = Mathf.Clamp(pos.y, ty, ty + 1f);
+                    float dx = pos.x - closestX;
+                    float dy = pos.y - closestY;
+                    float distSqr = dx * dx + dy * dy;
+                    float penetration;
+
+                    if (distSqr > 0f)
+                    {
+                        penetration = radius - Mathf.Sqrt(distSqr);
+                    }
+                    else
+                    {
+                        // 중심이 AABB 내부인 경우 최근접 면까지의 거리 + 반경이 탈출 침투량이다.
+                        float horizontalDistance = Mathf.Min(pos.x - tx,
+                            tx + 1f - pos.x);
+                        float verticalDistance = Mathf.Min(pos.y - ty,
+                            ty + 1f - pos.y);
+                        float edgeDistance = Mathf.Min(horizontalDistance,
+                            verticalDistance);
+                        penetration = radius + Mathf.Max(0f, edgeDistance);
+                    }
+
+                    if (penetration > maxPenetration)
+                        maxPenetration = penetration;
+                }
+            }
+
+            return maxPenetration;
         }
     }
 }
