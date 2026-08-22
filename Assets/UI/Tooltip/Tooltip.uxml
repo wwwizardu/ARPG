@@ -46,22 +46,31 @@
                 <ui:Label name="eq-name" class="tooltip-name"/>
                 <ui:Label name="eq-tier" class="tooltip-tier"/>
                 <ui:VisualElement class="tooltip-divider"/>
-                <!-- 무기 베이스 스탯 (고정 라인 — WeaponStats 캐시 기반) -->
-                <ui:VisualElement class="tooltip-stats">
-                    <ui:Label name="eq-dmg-physics" class="tooltip-statline"/>
-                    <ui:Label name="eq-dmg-fire" class="tooltip-statline"/>
-                    <ui:Label name="eq-dmg-ice" class="tooltip-statline"/>
-                    <ui:Label name="eq-dmg-lightning" class="tooltip-statline"/>
-                    <ui:Label name="eq-dmg-poison" class="tooltip-statline"/>
-                    <ui:Label name="eq-crit" class="tooltip-statline"/>
-                    <ui:Label name="eq-as" class="tooltip-statline"/>
+                <!-- Base: 무기는 WeaponStats, 방어구는 Base Mod -->
+                <ui:VisualElement name="eq-base-section" class="tooltip-section">
+                    <ui:Label name="eq-base-title" text="기본 능력" class="tooltip-section-title"/>
+                    <ui:VisualElement class="tooltip-stats">
+                        <ui:Label name="eq-dmg-physics" class="tooltip-statline"/>
+                        <ui:Label name="eq-dmg-fire" class="tooltip-statline"/>
+                        <ui:Label name="eq-dmg-ice" class="tooltip-statline"/>
+                        <ui:Label name="eq-dmg-lightning" class="tooltip-statline"/>
+                        <ui:Label name="eq-dmg-poison" class="tooltip-statline"/>
+                        <ui:Label name="eq-crit" class="tooltip-statline"/>
+                        <ui:Label name="eq-as" class="tooltip-statline"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement name="eq-base-mods" class="tooltip-stats"/>
                 </ui:VisualElement>
-                <!-- 방어구 베이스 Mod (동적 라인) -->
-                <ui:VisualElement name="eq-base-mods" class="tooltip-stats"/>
-                <!-- Implicit Mod (골드 컬러, 동적 라인) -->
-                <ui:VisualElement name="eq-implicit-mods" class="tooltip-stats"/>
-                <!-- Prefix/Postfix Mod (일반 컬러, 동적 라인) -->
-                <ui:VisualElement name="eq-affix-mods" class="tooltip-stats"/>
+                <!-- 무기 인스턴스 고유 강화 -->
+                <ui:VisualElement name="eq-enhancement-section" class="tooltip-section">
+                    <ui:Label text="무기 고유 강화" class="tooltip-section-title tooltip-section-title-enhancement"/>
+                    <ui:VisualElement name="eq-local-enhancements" class="tooltip-stats"/>
+                </ui:VisualElement>
+                <!-- 일반 글로벌 장비 옵션 -->
+                <ui:VisualElement name="eq-options-section" class="tooltip-section">
+                    <ui:Label text="장비 옵션" class="tooltip-section-title"/>
+                    <ui:VisualElement name="eq-implicit-mods" class="tooltip-stats"/>
+                    <ui:VisualElement name="eq-affix-mods" class="tooltip-stats"/>
+                </ui:VisualElement>
             </ui:VisualElement>
 
             <!-- 일반 아이템: 이름 + Tier + 설명 -->

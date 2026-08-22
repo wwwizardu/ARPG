@@ -21,6 +21,8 @@ namespace ARPG.Systems
     /// </summary>
     public partial struct System_StatCalculation : IUpdateSystem
     {
+        private const int STAT_BUCKET_COUNT = (int)GE.Stat.DelegateToTotem + 1;
+
         public int Priority => 50; // 이동/입력 시스템보다 먼저 실행
 
         public void OnCreate()
@@ -73,31 +75,53 @@ namespace ARPG.Systems
                 // 3단계: 우선순위 순으로 정렬 (낮은 숫자가 먼저)
                 modifiers.Sort((a, b) => a.Priority.CompareTo(b.Priority));
 
-                // 4단계: Add 타입 먼저 적용
+                // 4단계: Add 타입 먼저 적용. 태그가 지정된 modifier는 스킬 프로필에서 별도로 집계한다.
                 for (int j = 0; j < modifiers.Count; j++)
                 {
                     StatModifier modifier = modifiers[j];
-                    if (modifier.ModifierType == StatModifierType.Add)
+                    if (modifier.Tags == GE.SkillTag.None
+                        && modifier.ModifierType == StatModifierType.Add)
                     {
                         ApplyModifier(ref stat, modifier);
                     }
                 }
 
-                // 5단계: Multiply 타입 적용
+                // 5단계: 같은 Stat의 Increased(%)를 합산한 뒤 한 번만 적용한다.
+                int[] increasedByStat = new int[STAT_BUCKET_COUNT];
                 for (int j = 0; j < modifiers.Count; j++)
                 {
                     StatModifier modifier = modifiers[j];
-                    if (modifier.ModifierType == StatModifierType.Multiply)
-                    {
-                        ApplyModifier(ref stat, modifier);
-                    }
+                    if (modifier.Tags != GE.SkillTag.None
+                        || modifier.ModifierType != StatModifierType.Multiply)
+                        continue;
+
+                    int statIndex = (int)modifier.StatType;
+                    if (statIndex < 0 || statIndex >= increasedByStat.Length)
+                        continue;
+
+                    increasedByStat[statIndex] += modifier.Value;
+                }
+
+                for (int statIndex = 0; statIndex < increasedByStat.Length; statIndex++)
+                {
+                    int increased = increasedByStat[statIndex];
+                    if (increased == 0)
+                        continue;
+
+                    ApplyModifier(ref stat, new StatModifier(
+                        (GE.Stat)statIndex,
+                        StatModifierType.Multiply,
+                        StatModifierSource.Equipment,
+                        0,
+                        increased));
                 }
 
                 // 6단계: Override 타입 마지막 적용
                 for (int j = 0; j < modifiers.Count; j++)
                 {
                     StatModifier modifier = modifiers[j];
-                    if (modifier.ModifierType == StatModifierType.Override)
+                    if (modifier.Tags == GE.SkillTag.None
+                        && modifier.ModifierType == StatModifierType.Override)
                     {
                         ApplyModifier(ref stat, modifier);
                     }
@@ -208,7 +232,13 @@ namespace ARPG.Systems
                     stat.FinalAttackMax = ApplyValue(stat.FinalAttackMax, modifier);
                     break;
                 case GE.Stat.CriRate:
-                    stat.FinalCriRate = ApplyValue(stat.FinalCriRate, modifier);
+                    if (modifier.ModifierType == StatModifierType.Multiply)
+                        stat.FinalCriRateIncrease += modifier.Value;
+                    else
+                        stat.FinalCriRate = ApplyValue(stat.FinalCriRate, modifier);
+                    break;
+                case GE.Stat.CriRateMul:
+                    stat.FinalCriRateIncrease = ApplyIncreaseBucket(stat.FinalCriRateIncrease, modifier);
                     break;
                 case GE.Stat.CriDamageMul:
                     stat.FinalCriDamage = ApplyValue(stat.FinalCriDamage, modifier);
@@ -219,11 +249,12 @@ namespace ARPG.Systems
                 case GE.Stat.MoveSpeedMul:
                     stat.FinalMoveSpeedMul = ApplyValue(stat.FinalMoveSpeedMul, modifier);
                     break;
+                case GE.Stat.AttackSpeed:
                 case GE.Stat.AttackSpeedMul:
-                    stat.FinalAttackSpeed = ApplyValue(stat.FinalAttackSpeed, modifier);
+                    stat.FinalAttackSpeed = ApplyIncreaseBucket(stat.FinalAttackSpeed, modifier);
                     break;
                 case GE.Stat.CastSpeedMul:
-                    stat.FinalCastSpeed = ApplyValue(stat.FinalCastSpeed, modifier);
+                    stat.FinalCastSpeed = ApplyIncreaseBucket(stat.FinalCastSpeed, modifier);
                     break;
                 case GE.Stat.Defense:
                     stat.FinalDefense = ApplyValue(stat.FinalDefense, modifier);
@@ -321,6 +352,18 @@ namespace ARPG.Systems
                 default:
                     return currentValue;
             }
+        }
+
+        /// <summary>
+        /// CriRateMul/AttackSpeedMul/CastSpeedMul은 최종 수치에 곱하는 대상이 아니라
+        /// 프로필에서 한 번 소비할 증가율 버킷이다. Add와 Multiply 모두 퍼센트 포인트로 합산한다.
+        /// </summary>
+        private readonly int ApplyIncreaseBucket(int currentValue, StatModifier modifier)
+        {
+            if (modifier.ModifierType == StatModifierType.Override)
+                return modifier.Value;
+
+            return currentValue + modifier.Value;
         }
     }
 }

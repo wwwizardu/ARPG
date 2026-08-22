@@ -122,7 +122,7 @@ namespace ARPG.Skill.Combat
             SkillAttackProfileComponent profile = GetOrBuildProfile(skillEntityId);
 
             // 기대값 배율: BaseDamageMul × SkillDamageMul × (1 + critRate% × (critMul-1))
-            int   clampedCritRate = Mathf.Clamp(profile.TotalCritRate, 0, 100);
+            float clampedCritRate = Mathf.Clamp(profile.TotalCritRate, 0f, 100f);
             float critExpected = 1f + (clampedCritRate / 100f) * (profile.CritMultiplier - 1f);
             float m = profile.BaseDamageMul * profile.SkillDamageMul * critExpected;
 
@@ -144,17 +144,18 @@ namespace ARPG.Skill.Combat
 
         /// <summary>
         /// UI용 예상 치명타 확률 (%, 0~100 클램프).
-        /// profile.TotalCritRate에 (무기/스킬 BaseCriRate + Stat.FinalCriRate + OnHitBonus.CriRateBonus) 가 합산되어 있음.
+        /// profile.TotalCritRate는 스킬 기본 치명타와 캐릭터/글로벌 고정값을 합한 뒤
+        /// 글로벌 증가율 합계를 한 번 적용한 최종값이다.
         /// </summary>
-        public static int EstimateCritRate(int skillEntityId)
+        public static float EstimateCritRate(int skillEntityId)
         {
             SkillAttackProfileComponent profile = GetOrBuildProfile(skillEntityId);
-            return Mathf.Clamp(profile.TotalCritRate, 0, 100);
+            return Mathf.Clamp(profile.TotalCritRate, 0f, 100f);
         }
 
         /// <summary>
         /// UI용 예상 공격 속도 (초당 공격 횟수).
-        /// profile.AttackSpeedPerSecond는 무기 AS × Skill.BaseAttackSpeedMul × (1 + Stat.FinalAttackSpeed%).
+        /// Attack은 profile.AttackSpeedPerSecond를 반환하고 Spell은 0을 반환한다.
         /// </summary>
         public static float EstimateAttackSpeed(int skillEntityId)
         {

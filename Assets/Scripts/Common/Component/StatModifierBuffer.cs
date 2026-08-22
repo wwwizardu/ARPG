@@ -36,8 +36,10 @@ namespace ARPG.Component
         public int SourceId;                    // 출처의 ID (장비 ID, 버프 ID 등)
         public int Value;                       // 보정 값
         public int Priority;                    // 적용 우선순위 (낮을수록 먼저 적용)
+        public GE.SkillTag Tags;                // None이면 전역, 그 외에는 해당 태그를 모두 가진 스킬에만 적용
 
-        public StatModifier(GE.Stat statType, StatModifierType modifierType, StatModifierSource source, int sourceId, int value, int priority = 0)
+        public StatModifier(GE.Stat statType, StatModifierType modifierType, StatModifierSource source,
+            int sourceId, int value, int priority = 0, GE.SkillTag tags = GE.SkillTag.None)
         {
             StatType = statType;
             ModifierType = modifierType;
@@ -45,6 +47,7 @@ namespace ARPG.Component
             SourceId = sourceId;
             Value = value;
             Priority = priority;
+            Tags = tags;
         }
 
         /// <summary>

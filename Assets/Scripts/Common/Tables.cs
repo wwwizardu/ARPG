@@ -376,6 +376,22 @@ namespace ARPG.Tables
         }
     }
 
+    /// <summary>
+    /// 무기 고유 강화 재료의 롤 규칙 스키마.
+    /// 실제 재료 데이터와 다운로드 시트는 재료 추가 시 연결한다.
+    /// 무기 종류 제한은 두지 않으며 ItemId 하나에 여러 후보 행을 둘 수 있다.
+    /// </summary>
+    [Serializable]
+    public class WeaponLocalEnhancementMaterialTable : TableBase
+    {
+        [JsonProperty("ItemId")] public int ItemId;
+        [JsonProperty("StatType")] public GE.WeaponLocalStatType StatType;
+        [JsonProperty("MinValue")] public int MinValue;
+        [JsonProperty("MaxValue")] public int MaxValue;
+        [JsonProperty("MaxTotal")] public int MaxTotal;
+        [JsonProperty("Weight")] public int Weight;
+    }
+
     [Serializable]
     public class DropTable : TableBase
     {

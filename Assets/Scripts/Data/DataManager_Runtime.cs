@@ -21,9 +21,11 @@ namespace ARPG.Data
         private readonly Dictionary<int, List<StatModifier>> _modifiersByOwner = new();
 
         /// <summary>StatModifier를 타겟 엔티티에 추가</summary>
-        public void AddStatModifier(int targetEntityId, StatModifierSource source, int sourceId, GE.Stat statType, StatModifierType modifierType, int value, int priority = 0)
+        public void AddStatModifier(int targetEntityId, StatModifierSource source, int sourceId,
+            GE.Stat statType, StatModifierType modifierType, int value, int priority = 0,
+            GE.SkillTag tags = GE.SkillTag.None)
         {
-            StatModifier modifier = new StatModifier(statType, modifierType, source, sourceId, value, priority);
+            StatModifier modifier = new StatModifier(statType, modifierType, source, sourceId, value, priority, tags);
 
             if (_modifiersByOwner.ContainsKey(targetEntityId) == false)
                 _modifiersByOwner[targetEntityId] = new List<StatModifier>();

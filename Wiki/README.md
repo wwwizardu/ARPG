@@ -4,10 +4,13 @@
 name: wiki-map
 description: Docs/ 전체 주제를 얕고 넓게 조망하는 지도 페이지. 주제별 상세 위키 페이지의 진입점.
 type: map
-last_updated: 2026-08-19
+last_updated: 2026-08-22
 sources:
   - Wiki/current_status.md
+  - Wiki/combat.md
   - Docs/README.md
+  - Docs/combat/combatSystem.md
+  - Docs/combat/ModSystem_Changelog.md
   - Docs/village/VILLAGE_RUNTIME_DESIGN.md
   - Docs/village/ABSTRACT_CONSTRUCTION_DESIGN.md
   - Docs/village/BUILD_PRIORITY_DESIGN.md
@@ -17,7 +20,7 @@ sources:
 ---
 
 > 이 페이지는 프로젝트 전체를 **얕고 넓게** 보여주는 지도다. 각 주제를 깊게 다루지 않으며,
-> 상세 내용은 원본 문서(`Docs/`)와 (앞으로 만들) 주제별 위키 페이지가 담당한다.
+> 상세 내용은 원본 문서(`Docs/`)와 주제별 위키 페이지가 담당한다.
 > 원본 `Docs/`는 source of truth이며 불변이다. [src: Wiki/_SCHEMA.md]
 
 ## 주제별 지도
@@ -26,9 +29,9 @@ sources:
 
 | 주제 | 한 줄 요약 | 문서 위치 | 흩어짐 | 코드 연결도 |
 |------|-----------|----------|:------:|:----------:|
-| **current_status** → [current_status.md](current_status.md) | 2026-08-19 기준 구현 현황·미검증 항목·권장 재개 순서 [src: Wiki/current_status.md] | 최신 관련 Docs + 코드·테이블 대조 | — | 상 |
+| **current_status** → [current_status.md](current_status.md) | 2026-08-22 기준 구현 현황·미검증 항목·권장 재개 순서 [src: Wiki/current_status.md] | 최신 관련 Docs + 코드·테이블 대조 | — | 상 |
 | **overview** | 게임 컨셉(3대 축)과 시스템별 구현 현황·로드맵 | `Docs/overview/` 2장 (gameOverview, implementationStatus) + `Docs/README.md`(대시보드) | 하 | 하 |
-| **combat** | 실시간 전투·데미지 공식·스킬/스킬북/룬·밸런스·AI 스킬 선택 | `Docs/combat/` 9장 (combatSystem, combatSystemCompletion, BALANCE_DESIGN, SKILL_DESIGN, SKILLBOOK_DESIGN, SKILL_RUNE_DESIGN, SKILL_EFFECT_IDEAS, AI_SKILL_SELECTION_IMPLEMENTATION, ModSystem_Changelog) | 상 | 상 |
+| **combat** → [combat.md](combat.md) | 장비 옵션 글로벌화, 무기 Base/고유 강화 경계, 피해·치명타·공격속도 프로필과 전투 소비 경로 [src: Wiki/combat.md] | `Docs/combat/` 9장 + 관련 전투 코드 [src: Docs/combat/] | 상 | 상 |
 | **ai_monster** | 몬스터 AI 상태머신 패턴과 데이터 주도 스폰 풀 | `Docs/ai_monster/` 2장 (monsterAIPattern, MONSTER_SPAWN_DESIGN) | 하 | 중 |
 | **map** | 청크 기반 오픈월드 맵 생성·바이옴 타일셋·충돌/길찾기 | `Docs/map/` 3장 (MAP_DESIGN, COLLISION_PATHFINDING_DESIGN, THEME_TILESET_REFACTOR) | 중 | 중 |
 | **village** → [village.md](village.md) | 마을 자가성장 — 자원·건설·Tier·벽의 실시간/추상 LOD와 서비스 [src: Docs/village/VILLAGE_RUNTIME_DESIGN.md] | `Docs/village/` 4장 (런타임·추상 건설·우선순위·성장 목표) | 중 | 상 |
@@ -42,7 +45,7 @@ sources:
 
 - **흩어짐**: 폴더 내 문서 수 + 문서 간 마크다운 링크 밀도로 판단.
   npc(NPC_ACTIVITY 34개, QUEST 20개, RELATION_HISTORY 20개 링크)와 world_history(NARRATIVE_ENGINE 27개, WORLD_EVENT 29개, PROCEDURAL_HISTORY 25개 링크)가 상호 참조 밀도 최상위. [src: Docs/ 전체 링크 스캔]
-  combat은 링크는 적지만 9장으로 문서 수 최다이며, 스킬 관련 내용이 4~5개 문서(SKILL_DESIGN/SKILLBOOK/RUNE/EFFECT_IDEAS/AI_SKILL_SELECTION)에 나뉘어 있다. [추론: 파일명·README 설명 기준, 본문 중복 여부는 미검증]
+  combat은 링크는 적지만 9장으로 문서 수가 많으며, 스킬 관련 내용이 4~5개 문서(SKILL_DESIGN/SKILLBOOK/RUNE/EFFECT_IDEAS/AI_SKILL_SELECTION)에 나뉘어 있다. [추론: 파일명·README 설명 기준, 본문 중복 여부는 미검증]
 - **코드 연결도**: `Assets/Scripts/` 폴더·파일명 수준 확인.
   - combat: `Common/System/`의 System_Skill·System_SkillAttackProfileCalculation·System_StatCalculation·System_BuffUpdate·System_Projectile·System_AreaEffect + `Skill/`(DamageCalculator) + `AI/` 공격 핸들러 등 광범위. [src: Assets/Scripts/Common/System/, Assets/Scripts/Skill/]
   - village: `Village/`의 공통 시뮬레이션 코어·원장·배치 코드와 `System_Village*` 런타임 시스템이 연결된다. [src: Assets/Scripts/Village/, Assets/Scripts/Common/System/]
@@ -53,9 +56,11 @@ sources:
 
 1. **npc** — 7개 문서가 서로를 "정본"으로 지목하며 역할이 쪼개져 있다(관계·선물 루프는 interactionSystem §4, 소망 데이터 모델은 QUEST_SYSTEM, 호감도 변동은 NPC_ACTIVITY §8.3). 다음 작업(Phase E·관계 시스템)이 전부 이 영역이라, 어느 문서의 어느 절이 권위인지 한 장으로 종합할 이득이 가장 크다. [src: Docs/README.md]
 2. **world_history** — 상호 링크 밀도가 가장 높고(문서당 14~29개), 설계(PROCEDURAL_HISTORY)·계획(WORLD_HISTORY_PLAN)·파생 설계(NARRATIVE_ENGINE)·검증(SPIKE)이 층층이 얽혀 있다. 문서상 "보류"인데 코드(`History/` 15파일, NpcNarrative*)는 이미 존재해 문서-코드 간 현황 대조 가치도 높다.
-3. **combat** — 문서 수 최다(9장)에 combatSystem vs combatSystemCompletion, SKILL 계열 4~5장의 내용 분산이 있고, 관련 코드가 System/Skill/Buff/AI 여러 폴더에 걸쳐 가장 넓게 퍼져 있다. [추론: 문서 간 실제 중복 정도는 본문 대조 전이므로 추정]
+3. **combat** — 9개 문서에 combatSystem vs combatSystemCompletion과 SKILL 계열 4~5장의 내용 분산이 있고, 관련 코드가 System/Skill/Buff/AI 여러 폴더에 걸쳐 가장 넓게 퍼져 있다. [src: Docs/combat/] [추론: 문서 간 실제 중복 정도는 본문 대조 전이므로 추정]
 
 **village 종합 페이지 추가 완료**: 전체 책임은 `VILLAGE_RUNTIME_DESIGN.md`, 추상 LOD와 초기 발전은 `ABSTRACT_CONSTRUCTION_DESIGN.md`, 후보 선택은 `BUILD_PRIORITY_DESIGN.md`가 정본이다. [src: Docs/village/VILLAGE_RUNTIME_DESIGN.md, Docs/village/ABSTRACT_CONSTRUCTION_DESIGN.md, Docs/village/BUILD_PRIORITY_DESIGN.md]
+
+**combat 종합 페이지 추가 완료**: 장비 옵션 글로벌화 이후의 무기 Base·고유 강화·글로벌 옵션 책임과 현행 공격 프로필 공식을 [combat.md](combat.md)에 종합했다. 현행 규칙은 `combatSystem.md`, 마이그레이션과 후속 과제는 `ModSystem_Changelog.md`의 2026-08-22 항목을 정본으로 삼는다. [src: Wiki/combat.md, Docs/combat/combatSystem.md, Docs/combat/ModSystem_Changelog.md]
 
 ## 위키 종합 필요성이 낮은 주제
 

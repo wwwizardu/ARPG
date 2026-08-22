@@ -486,6 +486,21 @@ public class GlobalEnum
     }
 
     /// <summary>
+    /// 개별 무기 인스턴스의 기본 능력을 강화하는 스탯 종류.
+    /// 값은 모두 해당 기본 능력에 적용할 증가율(%)이며 일반 장비 Mod와 분리해 저장한다.
+    /// </summary>
+    public enum WeaponLocalStatType
+    {
+        PhysicsDamage,
+        FireDamage,
+        IceDamage,
+        LightningDamage,
+        PoisonDamage,
+        CriticalRate,
+        AttackSpeed,
+    }
+
+    /// <summary>
     /// 애니메이션 카테고리 (SpriteLibraryAsset 카테고리명과 1:1 매핑)
     /// </summary>
     public enum AnimCategory : byte

@@ -64,13 +64,34 @@ WindUp: 0.5~2.0s (차지 시간) → Active: 0.1s → Recovery: 0.5s
 ## 3. 전투 스탯 (StatComponent)
 
 ### 공격 스탯
-| 스탯 | 설명 | 기본값 |
-|------|------|--------|
-| AttackMin | 최소 공격력 | 10 |
-| AttackMax | 최대 공격력 | 15 |
-| AttackSpeed | 공격 속도 (쿨타임 감소 %) | 100 |
-| CriticalChance | 치명타 확률 (%) | 5 |
-| CriticalDamage | 치명타 데미지 배율 (%) | 150 |
+| 스탯 | 현행 역할 |
+|------|-----------|
+| `Base/Final[Element]AttackMin/Max` | 캐릭터 기본 피해와 태그가 맞는 글로벌 추가 피해. 무기 Base 피해와는 별도다. |
+| `FinalCriRate` | 캐릭터 기본 치명타와 글로벌 고정 치명타의 합계. 스킬 프로필에서 증가율 적용 전 값으로 사용한다. |
+| `FinalCriRateIncrease` | 글로벌 치명타 확률 증가율 합계. |
+| `FinalAttackSpeed` | 무기 APS와 분리된 글로벌 공격속도 증가율 합계. `0`이 기본이다. |
+| `FinalCriDamage` | 기본 1.5배에 더하는 추가 치명타 피해율. |
+
+### 장비 옵션 책임 경계
+
+장착 부위는 일반 옵션의 롤 가능 여부만 제한하며 계산 경로를 바꾸지 않는다.
+
+| 구분 | 저장 데이터 | 적용 규칙 |
+|------|-------------|-----------|
+| 무기 기본 능력 | `EquipmentBaseStatTable`에서 만든 `ModSlot.Base` | 무기 피해·기본 치명타·기본 APS의 원본이다. 무기 캐시에서만 소비하며 글로벌 Modifier로 등록하지 않는다. |
+| 무기 고유 강화 | `EquipmentData.WeaponLocalEnhancements` | 개별 무기의 Base에만 적용하는 증가율이다. 일반 Mod 슬롯 및 글로벌 Modifier 경로를 사용하지 않는다. |
+| 글로벌 장비 옵션 | 모든 Implicit/Prefix/Postfix | 무기·방어구·장신구 구분 없이 `StatModifier` 또는 `ModPoolComponent`에 등록한다. |
+
+`ModTable.Tags=None`인 글로벌 옵션은 모든 스킬에 적용한다. 태그가 있으면 스킬이 요구 태그를 모두 가질 때만 적용한다. `AllowedEquipTypes`는 롤 가능한 장비 종류만 제한한다. `Group`은 데이터에 정의돼 있지만 현재 랜덤 롤 경로는 같은 Group의 중복을 막지 않는다.
+
+무기 캐시는 Base와 고유 강화만 읽는다. 고유 강화 값은 피해 5속성·치명타·공격속도의 증가율이며 종류별 합계를 Base에 한 번 곱한다.
+
+```text
+EnhancedWeaponStat
+    = WeaponBaseStat * (1 + Sum(WeaponLocalIncrease) / 100)
+```
+
+강화 원본은 `WeaponLocalEnhancementInstance(StatType, Value)`로 저장한다. 재료 규칙용 `WeaponLocalEnhancementMaterialTable` 스키마는 `ItemId`, `StatType`, `MinValue`, `MaxValue`, `MaxTotal`, `Weight`를 가지며 무기 종류 제한은 두지 않는다. 실제 재료 데이터·테이블 등록·후보 롤·상한·소비 트랜잭션·제련 UI는 재료 추가 시 구현한다.
 
 ### 방어 스탯
 | 스탯 | 설명 | 기본값 |
@@ -100,42 +121,69 @@ WindUp: 0.5~2.0s (차지 시간) → Active: 0.1s → Recovery: 0.5s
 
 ## 4. 데미지 계산 공식
 
-### 속성별 독립 계산 후 합산 방식
-무기는 물리 + 속성 데미지를 동시에 가질 수 있음. 스킬 데미지는 스킬의 DamageType에 해당하는 속성에만 합산.
+### 스킬 공격 프로필 구성
+
+`System_SkillAttackProfileCalculation`이 무기·캐릭터 글로벌 Modifier·`SkillTable`·스킬 페이지 OnHit 보너스를 한 번 합산한다. 예상 피해, UI와 실제 타격은 같은 `SkillAttackProfileComponent`를 소비한다.
+
+고정값은 먼저 합산하고, 같은 Stat의 증가율은 모두 더한 뒤 한 번만 곱한다. Override가 있으면 우선순위가 가장 높은 값을 마지막에 적용한다.
+
+```text
+FinalStat
+    = (Base + Sum(GlobalFlat)) * (1 + Sum(GlobalIncreased) / 100)
+
+10% 증가 + 20% 증가 = 30% 증가
+```
+
+Attack 스킬만 강화 반영 무기 피해를 더한다. 글로벌 추가 피해는 `ModTable.Tags`가 스킬 태그와 일치할 때 적용하며, 현재 비-Base 추가 피해 Mod는 `Attack` 태그를 사용한다. `SkillTable.DamageMin/Max`는 지정된 `DamageType`에, 스킬 페이지 보너스는 해당 속성에 더한다.
+
+```text
+ProfileElementDamage
+    = EnhancedWeaponElementDamage       // Attack만
+    + TagMatchedGlobalElementDamage
+    + SkillTableElementDamage
+    + SkillPageOnHitElementDamage
+```
+
+치명타 확률은 정수 반올림하지 않고 `float`를 유지한다. Attack은 강화 반영 무기 치명타를, Spell은 `SkillTable.BaseCriRate`를 기본값으로 사용한다.
+
+```text
+FinalCrit = Clamp(
+    (SkillBaseCrit + CharacterBaseCrit + Sum(GlobalFlatCrit) + OnHitCrit)
+    * (1 + Sum(GlobalCritIncrease) / 100),
+    0, 100)
+```
+
+### 속성별 실제 타격 처리
+
+무기는 물리와 여러 속성 피해를 동시에 가질 수 있다. 프로필의 속성별 범위에서 각각 난수를 뽑은 뒤 공통 배율과 치명타를 적용하고, 대상 방어를 적용한 뒤 합산한다.
 
 ```
 예시: 무기(물리 20-30, 화염 10-15), Fire 스킬(데미지 5-10)
 
-1단계: 속성별 기본 데미지
-  물리 = Random(FinalAttackMin, FinalAttackMax)
-  화염 = Random(FinalFireAttackMin, FinalFireAttackMax)
-  냉기/번개/독 = 각각 Random(Final[속성]AttackMin, Max)
+1단계: 프로필 속성별 범위에서 난수 선택
+  물리 = Random(Profile.PhysAddedMin, Profile.PhysAddedMax)
+  화염 = Random(Profile.FireAddedMin, Profile.FireAddedMax)
+  냉기/번개/독도 같은 방식
 
-2단계: 스킬 데미지를 해당 속성에 합산
-  스킬 DamageType = Fire → 화염에만 합산
-  화염 += Random(SkillDamageMin, SkillDamageMax)
+2단계: 공통 배율
+  각 속성 × Profile.BaseDamageMul × Profile.SkillDamageMul
 
-3단계: 스킬 배율 (모든 속성에 동일)
-  각 속성 × (SkillDamage / 100)
+3단계: 치명타 판정 성공 시
+  각 속성 × Profile.CritMultiplier
+  CritMultiplier = 1.5 + FinalCriDamage / 100
 
-4단계: 치명타 (모든 속성에 동일)
-  각 속성 × (CriticalDamage / 100)
+4단계: 속성별 방어 적용
+  물리 감소율 = Armor / (Armor + 10 × 해당 물리 피해)
+  원소 감소율 = Clamp(Resistance, 0, MaxResistance) / 100
 
-5단계: 속성별 저항 감소 (공식: resistance / (resistance + 100))
-  물리 × (1 - Defense / (Defense + 100))
-  화염 × (1 - FireResist / (FireResist + 100))
-  냉기 × (1 - IceResist / (IceResist + 100))
-  번개 × (1 - LightningResist / (LightningResist + 100))
-  독   × (1 - PoisonResist / (PoisonResist + 100))
-
-6단계: 합산
+5단계: 합산
   totalDamage = 물리 + 화염 + 냉기 + 번개 + 독
 
-7단계: 회피/막기 (합산 후 적용)
+6단계: 회피/막기 (합산 후 적용)
   회피 → totalDamage = 0
   막기 → totalDamage × (1 - BlockReduction/100)
 
-8단계: 최소 데미지 보장
+7단계: 최소 데미지 보장
   Max(totalDamage, 1)
 ```
 
@@ -147,13 +195,11 @@ WindUp: 0.5~2.0s (차지 시간) → Active: 0.1s → Recovery: 0.5s
 - 독 > 0 → 중독 자동 적용
 - 한 번의 공격으로 여러 상태이상이 동시에 걸릴 수 있음
 
-### 저항 공식 참고
-| 저항값 | 감소율 |
-|--------|--------|
-| 50 | 33.3% |
-| 100 | 50.0% |
-| 200 | 66.6% |
-| 500 | 83.3% |
+### 방어 공식 참고
+
+- 물리 방어는 들어오는 물리 피해에 따라 감소율이 달라지므로 매 타격 계산한다.
+- 원소 저항은 단순 백분율이며 각 속성의 최대 저항과 하드 캡을 넘지 못한다.
+- 대상의 원소 감소 배율·회피·막기는 `DamageDefenseCacheComponent`에 캐시한다.
 
 ### 특수 효과
 ```csharp
@@ -169,22 +215,39 @@ if (target.Thorns > 0)
 스킬 태그(SkillTag)에 따라 적용되는 속도 스탯이 다름.
 
 #### Attack 태그 스킬
-- 스킬 기본 시간 = `1 / WeaponAttackSpeed` (무기 초당 공격 횟수 기반)
-  - 무기 공속 1.5 → 기본 시간 0.667초
-- 속도 배율 = `(100 + FinalAttackSpeed) / 100` (0이 기본, 50이면 1.5배속)
-- 최종 스킬 시간 = 기본 시간 / 속도 배율
-- 무기의 AttackSpeedMul 옵션: `WeaponAttackSpeed = Table.AttackSpeed × (1 + Mul/100)`
+
+```text
+EnhancedWeaponAPS
+    = WeaponBaseAPS * (1 + Sum(WeaponLocalAttackSpeedIncrease) / 100)
+
+ProfileAPS
+    = EnhancedWeaponAPS
+    * SkillTable.BaseAttackSpeedMul / 100
+    * (1 + Sum(TagMatchedGlobalAttackSpeedIncrease) / 100)
+```
+
+- 무기가 없거나 APS가 0 이하면 계산용 무기 APS는 `1.0`을 사용한다.
+- 최종 프로필 APS는 최소 `0.1`이다.
+- 실제 Start/Process/End 기본 시간은 프로필의 `1 / ProfileAPS` 비율로 함께 조정한다.
+- 일반 Implicit/Prefix/Postfix의 공격속도 증가는 무기에 붙어도 글로벌 증가 버킷에 들어간다.
 
 #### Spell 태그 스킬
-- 스킬 기본 시간 = `SkillTable.Duration` (테이블 고정값)
-- 속도 배율 = `(100 + FinalCastSpeed) / 100`
-- 최종 스킬 시간 = 기본 시간 / 속도 배율
+- 기본 시간 = `SkillTable.StartTime / ProcessTime / EndTime`
+- 시전 속도 배율 = `(100 + FinalCastSpeed) / 100`을 `0.1~5.0`으로 제한
+- 최종 Start/Process/End 시간 = 각 기본 시간 / 시전 속도 배율
+- 공격 프로필의 `AttackSpeedPerSecond`는 `0`이며 무기 치명타·APS를 사용하지 않는다.
 
 #### 공통
 - 배율이 적용되면 Start/Process/End Duration이 모두 비율 유지하며 조절
 - 애니메이션 속도도 동일 배율로 조절 (PlaybackSpeed)
-- 배율 범위: 최소 0.1x ~ 최대 5.0x (클램프)
 - 쿨타임 감소: `실제 쿨타임 = Table.Cooltime × (1 - CooldownReduction / 100)` (최대 90%)
+
+### 갱신·저장·표시
+
+- 장착·해제 직후 소유 스킬 공격 프로필을 다시 만들고, 스탯 재계산 뒤에도 파생 프로필을 동기화한다.
+- 구 세이브에서 `WeaponLocalEnhancements`가 없으면 빈 목록으로 복구하고 무기 캐시를 무효화한다. 플레이어·NPC 인벤토리/장비와 월드 드랍이 같은 `ItemData.OnLoadCompleted()` 경로를 사용한다.
+- 장비 툴팁은 `기본 능력`, `무기 고유 강화`, `장비 옵션` 영역을 분리하고 고정 치명타와 증가 치명타 문구를 구분한다.
+- CharacterUI는 기본 스킬(슬롯 0) 프로필의 치명타를 소수 둘째 자리까지 표시한다. 주문의 공격속도 행 숨김은 후속 UI 작업이며 현재는 프로필 값 `0`을 표시한다.
 
 #### 스킬 태그 (SkillTag)
 `[Flags]` enum으로 비트 플래그 조합. 테이블에서 콤마 구분 문자열로 입력, 저장 시 int로 변환.
@@ -514,5 +577,5 @@ void OnHit(Vector2 hitPosition)
 
 ---
 
-**Last Updated**: 2026-04-01
-**Status**: 설계 완료, 구현 진행 중 (Phase 1 일부 완료)
+**Last Updated**: 2026-08-22
+**Status**: 장비 옵션 글로벌화·공격 프로필 통합 구현, 무기 고유 강화 서비스와 플레이 모드 검증은 후속

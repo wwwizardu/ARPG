@@ -11,7 +11,7 @@ namespace ARPG.Component
     /// </summary>
     public struct SkillAttackProfileComponent
     {
-        // === 5속성 Added 데미지 범위 (Weapon + Stat.FinalX + SkillTable.DamageX(DamageType일치) + OnHitBonus) ===
+        // === 5속성 데미지 범위 (Weapon Base/강화 + 태그 일치 Global + SkillTable + OnHitBonus) ===
         public int PhysAddedMin, PhysAddedMax;
         public int FireAddedMin, FireAddedMax;
         public int IceAddedMin,  IceAddedMax;
@@ -19,7 +19,7 @@ namespace ARPG.Component
         public int PoisonAddedMin, PoisonAddedMax;
 
         // === 치명타 ===
-        public int   TotalCritRate;          // (Weapon CriRate or SkillTable.BaseCriRate) + Stat.FinalCriRate + OnHitBonus.CriRateBonus
+        public float TotalCritRate;          // (SkillBase + CharacterBase + GlobalFlat) × (1 + GlobalIncreased%)
         public float CritMultiplier;         // 1.5 + Stat.FinalCriDamage/100
 
         // === 배율 ===
@@ -30,7 +30,7 @@ namespace ARPG.Component
         public float LifeStealRatio;         // Stat.FinalLifeSteal/100
 
         // === UI/타이밍용 ===
-        public float AttackSpeedPerSecond;   // WeaponAS × SkillTable.BaseAttackSpeedMul/100 × (1 + Stat.FinalAttackSpeed/100)
+        public float AttackSpeedPerSecond;   // Attack 전용. WeaponAS × Skill.BaseAttackSpeedMul × (1 + GlobalIncreased%), Spell은 0
 
         // === 메타 ===
         public bool          IsAttackSkill;  // (SkillTable.Tags & Attack) != 0

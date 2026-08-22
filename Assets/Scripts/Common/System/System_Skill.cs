@@ -243,29 +243,32 @@ namespace ARPG.Systems
             // 타겟 설정
             AR.s.Component.SetComponent(skillEntityId, target);
 
-            // 속도 배율 적용 (Attack → 무기 공속 기반 + 공격 속도%, Spell → 시전 속도%)
+            // 속도 배율 적용 (Attack → 공격 프로필 최종 APS, Spell → 기존 시전 속도%)
             if (pools.SkillTiming.TryGet(skillEntityId, out var timing))
             {
                 GlobalEnum.SkillTag tags = inSkill.Table != null ? inSkill.Table.Tags : GlobalEnum.SkillTag.None;
                 bool isAttack = (tags & GlobalEnum.SkillTag.Attack) != 0;
+                float speedMultiplier = 1f;
 
-                // Attack 태그: 무기 공속으로 Base Duration 균등 스케일
-                // StartTime/ProcessTime/EndTime을 무기 공속 배율로 모두 스케일 (DamageTime은 비율이라 불변)
-                if (isAttack && inSkill.Table != null)
+                // Attack 태그: 프로필의 최종 초당 공격 횟수로 원본 Duration을 균등 스케일한다.
+                // 프로필이 Weapon Base/강화, Skill 배율, 글로벌 증가율을 이미 모두 포함하므로 추가 배율을 곱하지 않는다.
+                if (isAttack == true && inSkill.Table != null)
                 {
-                    float weaponAttackSpeed = GetWeaponAttackSpeed(inSkill.OwnerEntityId);
-                    // 스킬 고유 공속 배율 (예: Cleave 80%)을 무기 공속에 먼저 곱함
-                    weaponAttackSpeed *= inSkill.Table.BaseAttackSpeedMul / 100f;
-                    if (weaponAttackSpeed > 0f)
-                    {
-                        float weaponMultiplier = 1f / weaponAttackSpeed;
-                        timing.BaseStartDuration = inSkill.Table.StartTime * weaponMultiplier;
-                        timing.BaseProcessDuration = inSkill.Table.ProcessTime * weaponMultiplier;
-                        timing.BaseEndDuration = inSkill.Table.EndTime * weaponMultiplier;
-                    }
+                    float attacksPerSecond = DamageCalculator.EstimateAttackSpeed(skillEntityId);
+                    float durationMultiplier = 1f / Mathf.Max(0.1f, attacksPerSecond);
+                    timing.BaseStartDuration = inSkill.Table.StartTime * durationMultiplier;
+                    timing.BaseProcessDuration = inSkill.Table.ProcessTime * durationMultiplier;
+                    timing.BaseEndDuration = inSkill.Table.EndTime * durationMultiplier;
+                }
+                else if (inSkill.Table != null)
+                {
+                    // 주문은 무기 공격속도를 사용하지 않는다. 테이블 원본 시간에 시전 속도만 적용한다.
+                    timing.BaseStartDuration = inSkill.Table.StartTime;
+                    timing.BaseProcessDuration = inSkill.Table.ProcessTime;
+                    timing.BaseEndDuration = inSkill.Table.EndTime;
+                    speedMultiplier = GetSkillSpeedMultiplier(inSkill, pools.Stat);
                 }
 
-                float speedMultiplier = GetSkillSpeedMultiplier(inSkill, pools.Stat);
                 timing.ApplySpeedMultiplier(speedMultiplier);
                 AR.s.Component.SetComponent(skillEntityId, timing);
 
@@ -674,24 +677,7 @@ namespace ARPG.Systems
         }
 
         /// <summary>
-        /// 엔티티의 장착 무기 공격 속도 (초당 공격 횟수) 반환
-        /// WeaponHelper가 캐시된 Local 파이프라인 결과를 반환
-        /// 무기 없으면 1.0 (맨손 기본값)
-        /// </summary>
-        private float GetWeaponAttackSpeed(int ownerEntityId)
-        {
-            float weaponAS = Utility.WeaponHelper.GetWeaponAttackSpeed(ownerEntityId);
-            return weaponAS > 0f ? weaponAS : 1f;
-        }
-
-        /// <summary>
-        /// 스킬 태그에 따라 속도 배율 결정
-        /// Attack → (100 + FinalAttackSpeed) / 100, Spell → (100 + FinalCastSpeed) / 100
-        /// </summary>
-        /// <summary>
-        /// 스킬 태그에 따라 속도 배율 결정
-        /// Attack → (100 + FinalAttackSpeed) / 100, Spell → (100 + FinalCastSpeed) / 100
-        /// FinalAttackSpeed 0 = 기본 1배속, 50 = 1.5배속, 100 = 2배속, -20 = 0.8배속
+        /// 주문의 시전 속도 배율을 반환한다. 공격은 SkillAttackProfileComponent의 최종 APS를 사용한다.
         /// </summary>
         private float GetSkillSpeedMultiplier(SkillComponent skill, SparseSet<StatComponent> statPool)
         {
@@ -702,16 +688,11 @@ namespace ARPG.Systems
                 return 1f;
 
             GlobalEnum.SkillTag tags = skill.Table.Tags;
-            bool isAttack = (tags & GlobalEnum.SkillTag.Attack) != 0;
             bool isSpell = (tags & GlobalEnum.SkillTag.Spell) != 0;
 
             float multiplier = 1f;
 
-            if (isAttack && isSpell == false)
-            {
-                multiplier = (100 + stat.FinalAttackSpeed) / 100f;
-            }
-            else if (isSpell && isAttack == false)
+            if (isSpell == true)
             {
                 multiplier = (100 + stat.FinalCastSpeed) / 100f;
             }

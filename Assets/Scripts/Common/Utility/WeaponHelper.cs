@@ -5,22 +5,30 @@ using GE = GlobalEnum;
 namespace ARPG.Utility
 {
     /// <summary>
-    /// 무기 Local 스탯 조회 유틸리티
-    /// 무기의 데미지/치명타/공속은 StatModifier를 거치지 않고 EquipmentData.WeaponStats 캐시에서 직접 조회
-    /// → Attack 태그가 있는 스킬에만 무기 스탯 적용
+    /// 장착 무기의 기본 능력 조회 유틸리티.
+    /// Base + 무기 고유 강화 결과만 EquipmentData.WeaponStats에서 읽으며 일반 장비 옵션은 포함하지 않는다.
     /// </summary>
     public static class WeaponHelper
     {
         /// <summary>
-        /// 엔티티의 장착 무기 반환. 플레이어 외에는 null.
+        /// 엔티티의 장착 무기 반환. 플레이어와 저장 데이터가 있는 NPC를 지원한다.
         /// WeaponRight(메인) 우선 → WeaponLeft(쌍수 보조). 슬롯에 방패가 들어있으면 무기로 인식하지 않는다.
         /// </summary>
         public static ItemData? GetEquippedWeapon(int entityId)
         {
-            if (entityId != AR.s.Data.CurrentPlayerEntityId)
+            ItemData?[]? equip = null;
+            if (entityId == AR.s.Data.CurrentPlayerEntityId)
+            {
+                equip = AR.s.Data.Player._inventoryEquip;
+            }
+            else
+            {
+                equip = AR.s.Npc?.GetSaveData(entityId)?.InventoryEquip;
+            }
+
+            if (equip == null || equip.Length <= (int)GE.EquipSlotType.WeaponLeft)
                 return null;
 
-            ItemData?[] equip = AR.s.Data.Player._inventoryEquip;
             ItemData? rightWeapon = equip[(int)GE.EquipSlotType.WeaponRight];
             if (rightWeapon?.Equipment != null && rightWeapon.Equipment.EquipType == GE.EquipmentTypeMask.Weapon)
                 return rightWeapon;
@@ -33,7 +41,7 @@ namespace ARPG.Utility
         }
 
         /// <summary>
-        /// 특정 속성의 무기 데미지 범위 (Local 파이프라인 완료 값).
+        /// 특정 속성의 강화 반영 무기 기본 데미지 범위.
         /// 무기 없으면 (0, 0).
         /// </summary>
         public static void GetWeaponDamage(int entityId, GE.DamageType type, out int min, out int max)
@@ -61,7 +69,7 @@ namespace ARPG.Utility
         }
 
         /// <summary>
-        /// 무기 치명타 확률 (%, Local 파이프라인 완료). 무기 없으면 0.
+        /// 강화가 반영된 무기 기본 치명타 확률(%). 무기 없으면 0.
         /// </summary>
         public static int GetWeaponCriRate(int entityId)
         {
@@ -73,7 +81,7 @@ namespace ARPG.Utility
         }
 
         /// <summary>
-        /// 무기 공격 속도 (초당 공격 횟수, Local 파이프라인 완료). 무기 없으면 0.
+        /// 강화가 반영된 무기 기본 공격 속도(초당 공격 횟수). 무기 없으면 0.
         /// </summary>
         public static float GetWeaponAttackSpeed(int entityId)
         {
@@ -84,47 +92,5 @@ namespace ARPG.Utility
             return weapon.Equipment.WeaponStats.AttackSpeed;
         }
 
-        /// <summary>
-        /// 주어진 Mod가 무기 전용 스탯인지 판별.
-        /// EquipHelper에서 StatModifier 등록 스킵 여부 결정에 사용.
-        /// </summary>
-        public static bool IsWeaponExclusiveMod(GE.ModEffectType effectType, GE.Stat targetStat)
-        {
-            // Added 데미지 계열은 모두 무기 전용
-            if (effectType == GE.ModEffectType.AddedPhysDamage
-                || effectType == GE.ModEffectType.AddedFireDamage
-                || effectType == GE.ModEffectType.AddedIceDamage
-                || effectType == GE.ModEffectType.AddedLightningDamage
-                || effectType == GE.ModEffectType.AddedPoisonDamage)
-            {
-                return true;
-            }
-
-            // FlatStat/IncreasedStat 중 데미지/치명타/공속 관련 TargetStat
-            if (effectType == GE.ModEffectType.FlatStat
-                || effectType == GE.ModEffectType.IncreasedStat)
-            {
-                return IsWeaponExclusiveStat(targetStat);
-            }
-
-            return false;
-        }
-
-        private static bool IsWeaponExclusiveStat(GE.Stat stat)
-        {
-            return stat == GE.Stat.AttackMin
-                || stat == GE.Stat.AttackMax
-                || stat == GE.Stat.FireAttackMin
-                || stat == GE.Stat.FireAttackMax
-                || stat == GE.Stat.IceAttackMin
-                || stat == GE.Stat.IceAttackMax
-                || stat == GE.Stat.LightningAttackMin
-                || stat == GE.Stat.LightningAttackMax
-                || stat == GE.Stat.PoisonAttackMin
-                || stat == GE.Stat.PoisonAttackMax
-                || stat == GE.Stat.CriRate
-                || stat == GE.Stat.AttackSpeed
-                || stat == GE.Stat.AttackSpeedMul;
-        }
     }
 }

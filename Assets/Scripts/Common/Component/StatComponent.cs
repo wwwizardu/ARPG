@@ -32,7 +32,7 @@ namespace ARPG.Component
         public int BaseCriDamage;       // 기본 치명타 피해
         public int BaseMoveSpeed;       // 기본 이동 속도
         public int BaseMoveSpeedMul;    // 기본 이동 속도 배율 (100 = 100%)
-        public int BaseAttackSpeed;     // 기본 공격 속도
+        public int BaseAttackSpeed;     // 레거시 테이블 값. 실제 공격 기본 속도는 장착 무기 EquipmentData가 정본
         public int BaseCastSpeed;       // 기본 시전 속도
         public int BaseDefense;         // 기본 방어력
         public int BaseFireResist;      // 기본 화염 저항
@@ -79,7 +79,8 @@ namespace ARPG.Component
         public int FinalLightningAttackMax;
         public int FinalPoisonAttackMin;
         public int FinalPoisonAttackMax;
-        public int FinalCriRate;
+        public int FinalCriRate;          // 캐릭터 기본 치명타 + 글로벌 고정 치명타(%p), 증가율 적용 전
+        public int FinalCriRateIncrease;  // 글로벌 치명타 확률 증가율 합계(%)
         public int FinalCriDamage;
         public int FinalMoveSpeed;
         public int FinalMoveSpeedMul;   // 최종 이동 속도 배율 (100 = 100%)
@@ -205,10 +206,12 @@ namespace ARPG.Component
             FinalAttackMin = BaseAttackMin;
             FinalAttackMax = BaseAttackMax;
             FinalCriRate = BaseCriRate;
+            FinalCriRateIncrease = 0;
             FinalCriDamage = BaseCriDamage;
             FinalMoveSpeed = BaseMoveSpeed;
             FinalMoveSpeedMul = BaseMoveSpeedMul;
-            FinalAttackSpeed = BaseAttackSpeed;
+            // 공격속도는 무기 기본 APS와 분리된 글로벌 증가율 버킷으로 사용한다.
+            FinalAttackSpeed = 0;
             FinalCastSpeed = BaseCastSpeed;
             FinalDefense = BaseDefense;
             FinalFireResist = BaseFireResist;

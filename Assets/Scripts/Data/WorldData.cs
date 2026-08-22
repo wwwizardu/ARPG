@@ -40,6 +40,14 @@ namespace ARPG.Data
 
         public void LoadCompleted()
         {
+            if (WorldDropItemDatas == null)
+                WorldDropItemDatas = new();
+            for (int i = 0; i < WorldDropItemDatas.Count; i++)
+            {
+                WorldDropItemData drop = WorldDropItemDatas[i];
+                drop?.ItemData?.OnLoadCompleted();
+            }
+
             // 구버전 세이브(신규 필드 없는 JSON) 로드 시 null 방어 — 기본값 채우기 (R0-B 마이그레이션)
             if (NpcAffinityList == null)
                 NpcAffinityList = new();

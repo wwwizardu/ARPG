@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using ARPG.Component;
 using ARPG.Data;
+using ARPG.Systems;
 using ARPG.Tables;
 using UnityEngine;
 using GE = GlobalEnum;
@@ -126,10 +127,14 @@ namespace ARPG.Utility
                         continue;
                 }
 
+                // 무기 Base는 무기 기본 능력 캐시에서만 소비한다.
+                if (isWeapon == true && mod.Slot == GE.ModSlot.Base)
+                    continue;
+
                 switch (mod.Table.ApplyType)
                 {
                     case GE.ModApplyType.Passive:
-                        ApplyPassiveMod(playerEntityId, sourceId, mod, isWeapon);
+                        ApplyPassiveMod(playerEntityId, sourceId, mod);
                         break;
 
                     case GE.ModApplyType.OnCalculate:
@@ -142,26 +147,22 @@ namespace ARPG.Utility
             // 스탯 재계산 요청
             AR.s.Component.AddComponent(playerEntityId, new StatDirtyTag());
 
+            // 데미지/치명타/공격속도 프로필은 Modifier 원본에서 계산하므로 장착 프레임에 즉시 갱신 가능하다.
+            System_SkillAttackProfileCalculation.BuildOwnedProfiles(playerEntityId);
+
             Debug.Log($"[EquipHelper] Equipment mods applied - Player: {playerEntityId}, ItemInstanceId: {sourceId}, ModCount: {mods.Count}");
         }
 
         /// <summary>
-        /// Passive Mod → StatModifier 변환 등록
-        /// 단, 무기 아이템의 무기 전용 Mod는 StatModifier 등록 스킵 (WeaponHelper가 EquipmentData.WeaponStats 캐시에서 직접 조회)
+        /// Passive Mod → StatModifier 변환 등록.
+        /// 무기 Base는 호출 전에 제외되며 Implicit/Prefix/Postfix는 장비 부위와 무관하게 이 경로를 사용한다.
         /// </summary>
-        private static void ApplyPassiveMod(int playerEntityId, int sourceId, ModInstance mod, bool isWeapon)
+        private static void ApplyPassiveMod(int playerEntityId, int sourceId, ModInstance mod)
         {
             if (mod.Table == null)
                 return;
 
-            Debug.Log($"[EquipHelper] ApplyPassiveMod - isWeapon={isWeapon}, Mod={mod.Table.Name}, EffectType={mod.Table.EffectType}, TargetStat={mod.Table.TargetStat}, Slot={mod.Slot}, V1={mod.Value1}, V2={mod.Value2}");
-
-            // 무기 아이템의 무기 전용 Mod는 스킵 (WeaponHelper 경로로 적용됨)
-            if (isWeapon && WeaponHelper.IsWeaponExclusiveMod(mod.Table.EffectType, mod.Table.TargetStat))
-            {
-                Debug.Log($"[EquipHelper]   → skipped (weapon-exclusive, handled by WeaponStats cache)");
-                return;
-            }
+            Debug.Log($"[EquipHelper] ApplyPassiveMod - Mod={mod.Table.Name}, EffectType={mod.Table.EffectType}, TargetStat={mod.Table.TargetStat}, Slot={mod.Slot}, Tags={mod.Table.Tags}, V1={mod.Value1}, V2={mod.Value2}");
 
             switch (mod.Table.EffectType)
             {
@@ -169,8 +170,18 @@ namespace ARPG.Utility
                     // 단일 스탯 추가 (+50 HP, +20 방어력 등)
                     if (mod.Value1 > 0)
                     {
-                        AR.s.Data.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
-                            mod.Table.TargetStat, StatModifierType.Add, mod.Value1);
+                        // 기존 데이터의 비-Base AttackSpeed는 이름/값 모두 증가율 의미이므로 글로벌 증가 버킷으로 정규화한다.
+                        if (mod.Table.TargetStat == GE.Stat.AttackSpeed
+                            && mod.Slot != GE.ModSlot.Base)
+                        {
+                            AR.s.Data.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
+                                GE.Stat.AttackSpeedMul, StatModifierType.Multiply, mod.Value1, tags: mod.Table.Tags);
+                        }
+                        else
+                        {
+                            AR.s.Data.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
+                                mod.Table.TargetStat, StatModifierType.Add, mod.Value1, tags: mod.Table.Tags);
+                        }
                     }
                     break;
 
@@ -178,46 +189,46 @@ namespace ARPG.Utility
                     // 물리 데미지 추가 (Value1=Min, Value2=Max)
                     if (mod.Value1 > 0)
                         AR.s.Data.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
-                            GE.Stat.AttackMin, StatModifierType.Add, mod.Value1);
+                            GE.Stat.AttackMin, StatModifierType.Add, mod.Value1, tags: mod.Table.Tags);
                     if (mod.Value2 > 0)
                         AR.s.Data.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
-                            GE.Stat.AttackMax, StatModifierType.Add, mod.Value2);
+                            GE.Stat.AttackMax, StatModifierType.Add, mod.Value2, tags: mod.Table.Tags);
                     break;
 
                 case GE.ModEffectType.AddedFireDamage:
                     if (mod.Value1 > 0)
                         AR.s.Data.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
-                            GE.Stat.FireAttackMin, StatModifierType.Add, mod.Value1);
+                            GE.Stat.FireAttackMin, StatModifierType.Add, mod.Value1, tags: mod.Table.Tags);
                     if (mod.Value2 > 0)
                         AR.s.Data.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
-                            GE.Stat.FireAttackMax, StatModifierType.Add, mod.Value2);
+                            GE.Stat.FireAttackMax, StatModifierType.Add, mod.Value2, tags: mod.Table.Tags);
                     break;
 
                 case GE.ModEffectType.AddedIceDamage:
                     if (mod.Value1 > 0)
                         AR.s.Data.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
-                            GE.Stat.IceAttackMin, StatModifierType.Add, mod.Value1);
+                            GE.Stat.IceAttackMin, StatModifierType.Add, mod.Value1, tags: mod.Table.Tags);
                     if (mod.Value2 > 0)
                         AR.s.Data.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
-                            GE.Stat.IceAttackMax, StatModifierType.Add, mod.Value2);
+                            GE.Stat.IceAttackMax, StatModifierType.Add, mod.Value2, tags: mod.Table.Tags);
                     break;
 
                 case GE.ModEffectType.AddedLightningDamage:
                     if (mod.Value1 > 0)
                         AR.s.Data.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
-                            GE.Stat.LightningAttackMin, StatModifierType.Add, mod.Value1);
+                            GE.Stat.LightningAttackMin, StatModifierType.Add, mod.Value1, tags: mod.Table.Tags);
                     if (mod.Value2 > 0)
                         AR.s.Data.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
-                            GE.Stat.LightningAttackMax, StatModifierType.Add, mod.Value2);
+                            GE.Stat.LightningAttackMax, StatModifierType.Add, mod.Value2, tags: mod.Table.Tags);
                     break;
 
                 case GE.ModEffectType.AddedPoisonDamage:
                     if (mod.Value1 > 0)
                         AR.s.Data.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
-                            GE.Stat.PoisonAttackMin, StatModifierType.Add, mod.Value1);
+                            GE.Stat.PoisonAttackMin, StatModifierType.Add, mod.Value1, tags: mod.Table.Tags);
                     if (mod.Value2 > 0)
                         AR.s.Data.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
-                            GE.Stat.PoisonAttackMax, StatModifierType.Add, mod.Value2);
+                            GE.Stat.PoisonAttackMax, StatModifierType.Add, mod.Value2, tags: mod.Table.Tags);
                     break;
 
                 case GE.ModEffectType.IncreasedStat:
@@ -225,7 +236,7 @@ namespace ARPG.Utility
                     if (mod.Value1 > 0)
                     {
                         AR.s.Data.AddStatModifier(playerEntityId, StatModifierSource.Equipment, sourceId,
-                            mod.Table.TargetStat, StatModifierType.Multiply, mod.Value1);
+                            mod.Table.TargetStat, StatModifierType.Multiply, mod.Value1, tags: mod.Table.Tags);
                     }
                     break;
             }
@@ -280,6 +291,9 @@ namespace ARPG.Utility
 
             // 스탯 재계산 요청
             AR.s.Component.AddComponent(playerEntityId, new StatDirtyTag());
+
+            // 해제된 Modifier를 반영해 소유 스킬 프로필을 즉시 갱신한다.
+            System_SkillAttackProfileCalculation.BuildOwnedProfiles(playerEntityId);
 
             Debug.Log($"[EquipHelper] Equipment modifiers removed - Player: {playerEntityId}, ItemInstanceId: {itemInstanceId}, Removed: {removedCount}");
         }

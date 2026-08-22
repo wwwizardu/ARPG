@@ -1,6 +1,66 @@
 # Mod 시스템 리팩토링 변경사항
 
-## 개요
+> 이 문서는 누적 변경 이력이다. 아래 2026-08-22 항목이 장비 옵션과 무기 스탯의 현행 규칙이며, 그 뒤의 초기 Mod 리팩터링 설명은 당시 구조를 기록한 역사로 읽는다.
+
+## 2026-08-22 — 장비 옵션 글로벌화와 무기 고유 강화 분리
+
+### 변경 목적
+
+동일한 Implicit/Prefix/Postfix가 무기에 붙었을 때는 무기 로컬, 다른 부위에 붙었을 때는 캐릭터 글로벌로 계산되던 이중 경로를 제거했다. 무기 자체의 고정 능력과 인스턴스별 고유 강화만 무기 캐시가 소유하고, 일반 장비 옵션은 장착 부위와 무관하게 글로벌 경로를 사용한다.
+
+### 현행 책임
+
+| 구분 | 현행 처리 |
+|------|-----------|
+| 무기 `ModSlot.Base` | `EquipmentBaseStatTable`에서 생성한다. 무기 피해·기본 치명타·기본 APS의 원본이며 글로벌 Modifier로 등록하지 않는다. |
+| `WeaponLocalEnhancements` | 일반 `ModInstance`와 분리 저장한다. 피해 5속성·치명타·공격속도 증가율을 종류별로 합산해 해당 무기 Base에 한 번 적용한다. |
+| Implicit/Prefix/Postfix | 무기·방어구·장신구 구분 없이 `StatModifier` 또는 `ModPoolComponent`에 등록한다. |
+| `AllowedEquipTypes` | Mod가 롤 가능한 장비 종류만 제한하고 계산 경로는 바꾸지 않는다. |
+| `ModTable.Tags` | `None`이면 모든 스킬, 값이 있으면 해당 태그를 모두 가진 스킬에만 글로벌 옵션을 적용한다. |
+| `Group` | 테이블 정의는 유지하지만 현행 랜덤 롤은 Group 중복을 검사하지 않는다. |
+
+### 계산 및 전투 소비 경로
+
+- `EquipmentData.WeaponStats`는 Base와 `WeaponLocalEnhancements`만 읽는다. 일반 옵션은 무기 캐시에 들어가지 않는다.
+- 고정값은 먼저 합산하고 같은 Stat의 Increased 합계를 한 번 곱하며, Override는 우선순위가 가장 높은 값을 마지막에 적용한다.
+- `CriRateMul`을 글로벌 치명타 증가 버킷에, `AttackSpeed`/`AttackSpeedMul`을 글로벌 공격속도 증가 버킷에 연결했다.
+- `SkillOffensiveStatResolver`가 스킬 태그에 맞는 글로벌 피해·치명타·공격속도 Modifier를 집계한다.
+- `System_SkillAttackProfileCalculation`이 무기·글로벌 Modifier·`SkillTable`·스킬 페이지 보너스를 하나의 프로필로 만든다.
+- 치명타 확률은 반올림하지 않고 `float`로 보존한다. Attack은 강화 반영 무기 치명타를, Spell은 `SkillTable.BaseCriRate`를 사용한다.
+- Attack의 최종 APS는 `강화 반영 무기 APS × BaseAttackSpeedMul × 글로벌 공격속도 증가`이며 `System_Skill`의 실제 Start/Process/End 시간을 구동한다.
+- Spell 프로필의 공격속도는 `0`이고 실제 주문 시간은 기존 시전속도 경로만 사용한다.
+- 예상 피해·예상 치명타·예상 공격속도와 실제 타격은 같은 `SkillAttackProfileComponent`를 소비한다.
+
+### 데이터 마이그레이션과 호환
+
+- `EquipmentBaseStatTable`을 무기/방어구 고정 Base의 정본으로 사용한다. Base Mod는 기존 아이템에서도 그대로 유지한다.
+- 기존 무기 Implicit/Prefix/Postfix는 별도 저장 변환 없이 로드 후 글로벌 옵션으로 동작한다.
+- 구 세이브의 `WeaponLocalEnhancements=null`은 빈 목록으로 복구하며 무기 캐시를 다시 계산한다.
+- 플레이어 인벤토리·장비, NPC 인벤토리·장비와 월드 드랍의 `ItemData.OnLoadCompleted()` 경로를 연결했다.
+- `ModTable` 5002는 `IncreasedStat / AttackSpeedMul / Group=AttackSpeed`, 1003은 `IncreasedStat / CriRateMul`로 증가 버킷에 연결한다.
+- 비-Base 추가 물리·화염·냉기·번개·독 피해 Mod는 현재 모두 `Tags=Attack`으로 제한한다.
+
+### 무기 고유 강화 준비 상태
+
+다음 저장·계산 기반은 구현했다.
+
+- `WeaponLocalStatType`: 물리·화염·냉기·번개·독 피해, 치명타, 공격속도
+- `WeaponLocalEnhancementInstance(StatType, Value)` 목록과 추가/합계 API
+- `WeaponLocalEnhancementMaterialTable`: `ItemId`, `StatType`, `MinValue`, `MaxValue`, `MaxTotal`, `Weight`
+- 무기 종류 제한 없음
+
+아직 실제 강화 재료는 없다. 따라서 재료 테이블 등록·다운로드·데이터, 후보/가중치 롤, 누적 상한, 성공 시 소비 트랜잭션과 제련 UI는 후속 작업이다.
+
+### UI와 검증 상태
+
+- 장비 툴팁을 `기본 능력`, `무기 고유 강화`, `장비 옵션`으로 분리하고 고정 치명타와 증가 치명타 문구를 구분했다.
+- CharacterUI는 기본 스킬(슬롯 0) 프로필의 소수 치명타와 APS를 표시한다. Spell의 공격속도 행 숨김은 후속 작업이다.
+- C# 컴파일과 테이블 참조 정적 검증은 완료했다.
+- 장착/해제/교체, 세이브 왕복, Attack/Spell 태그, 실제 타격과 툴팁 일치, 강화 서비스 추가 후 성공/실패 소비는 Unity 플레이 모드에서 별도 검증해야 한다.
+
+---
+
+## 초기 Mod 리팩터링 개요 (역사)
 
 장비 스탯 시스템을 기존 고정 테이블 기반(`EquipmentBaseStatTable`, `EquipmentStatTable`, `Stat`, `EquipmentStatData`)에서
 **Mod 기반 시스템**(`ModTable`, `ModTierTable`, `ItemImplicitTable`, `ModInstance`)으로 전면 교체.

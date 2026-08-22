@@ -139,8 +139,8 @@ namespace ARPG.Data
     }
 
     /// <summary>
-    /// 무기 Local 파이프라인 계산 결과 캐시
-    /// Flat Mod + Increased% Mod 모두 반영된 최종 무기 스탯
+    /// 무기 기본 능력 계산 결과 캐시.
+    /// ModSlot.Base와 WeaponLocalEnhancements만 반영하며 일반 장비 옵션은 포함하지 않는다.
     /// </summary>
     public struct WeaponStatCache
     {
@@ -153,6 +153,17 @@ namespace ARPG.Data
         public float AttackSpeed;      // 초당 공격 횟수 (예: 1.2)
     }
 
+    /// <summary>
+    /// 개별 무기의 기본 능력에만 적용되는 고유 강화 원본 데이터.
+    /// Value는 증가율(%)이며 일반 Mod 슬롯과 글로벌 StatModifier 경로를 사용하지 않는다.
+    /// </summary>
+    [Serializable]
+    public class WeaponLocalEnhancementInstance
+    {
+        public GE.WeaponLocalStatType StatType;
+        public int Value;
+    }
+
     [Serializable]
     public class EquipmentData
     {
@@ -161,9 +172,15 @@ namespace ARPG.Data
         public int Quality;
 
         /// <summary>
-        /// 모든 Mod (Implicit + Prefix + Postfix) - 저장 대상
+        /// 모든 Mod (Base + Implicit + Prefix + Postfix) - 저장 대상
         /// </summary>
         public List<ModInstance> Mods = new();
+
+        /// <summary>
+        /// 개별 무기의 기본 능력에만 적용되는 고유 강화 목록 - 저장 대상.
+        /// 일반 Mod와 달리 슬롯/테이블 참조가 없고 글로벌 스탯으로 등록되지 않는다.
+        /// </summary>
+        public List<WeaponLocalEnhancementInstance> WeaponLocalEnhancements = new();
 
         public GE.EquipmentTypeMask EquipType { get; set; }
 
@@ -172,8 +189,8 @@ namespace ARPG.Data
         [NonSerialized] private bool _weaponStatsDirty = true;
 
         /// <summary>
-        /// 무기 Local 파이프라인 완료 스탯 (최초 접근 시 lazy 계산, 이후 캐시 사용)
-        /// Mod 변경 시 InvalidateWeaponStats() 호출 필요
+        /// Base와 무기 고유 강화가 반영된 최종 무기 기본 능력.
+        /// 관련 데이터 변경 시 InvalidateWeaponStats() 호출 필요.
         /// </summary>
         public WeaponStatCache WeaponStats
         {
@@ -196,8 +213,45 @@ namespace ARPG.Data
             _weaponStatsDirty = true;
         }
 
+        /// <summary>
+        /// 재료 서비스가 준비되기 전에도 안전하게 고유 강화 원본을 기록할 수 있는 데이터 진입점.
+        /// 상한/가중치/재료 소비는 향후 전용 서비스가 검증하며 여기서는 무기 여부와 양수 값만 보장한다.
+        /// </summary>
+        public bool AddWeaponLocalEnhancement(GE.WeaponLocalStatType statType, int value)
+        {
+            if (EquipType != GE.EquipmentTypeMask.Weapon || value <= 0)
+                return false;
+
+            WeaponLocalEnhancements ??= new List<WeaponLocalEnhancementInstance>();
+            WeaponLocalEnhancements.Add(new WeaponLocalEnhancementInstance
+            {
+                StatType = statType,
+                Value = value,
+            });
+            InvalidateWeaponStats();
+            return true;
+        }
+
+        public int GetWeaponLocalEnhancementTotal(GE.WeaponLocalStatType statType)
+        {
+            if (WeaponLocalEnhancements == null)
+                return 0;
+
+            int total = 0;
+            for (int i = 0; i < WeaponLocalEnhancements.Count; i++)
+            {
+                WeaponLocalEnhancementInstance enhancement = WeaponLocalEnhancements[i];
+                if (enhancement != null && enhancement.StatType == statType)
+                    total += enhancement.Value;
+            }
+            return total;
+        }
+
         public void OnLoadCompleted(ItemTable? inItemTable)
         {
+            Mods ??= new List<ModInstance>();
+            WeaponLocalEnhancements ??= new List<WeaponLocalEnhancementInstance>();
+
             if (inItemTable == null)
             {
                 Debug.LogError("[EquipmentData] OnLoadCompleted() - ItemTable is null");
@@ -245,24 +299,20 @@ namespace ARPG.Data
         }
 
         /// <summary>
-        /// 무기 Local 파이프라인 계산:
-        /// 1. Flat Mod 누적 (Added*, FlatStat TargetStat=무기전용)
-        /// 2. Increased% Mod 누적
-        /// 3. Flat × (1 + Increased%/100)
+        /// 무기 기본 능력 계산:
+        /// 1. ModSlot.Base만 읽어 고정 기본 능력 구성
+        /// 2. WeaponLocalEnhancements의 증가율을 종류별로 합산
+        /// 3. 각 기본 능력에 증가율 합계를 한 번 적용
+        /// Implicit/Prefix/Postfix는 장착자의 글로벌 옵션이므로 이 캐시에서 제외한다.
         /// </summary>
         private void RecomputeWeaponStats()
         {
             WeaponStatCache cache = new WeaponStatCache();
 
-            // 속성별 Increased% 누적용 (FlatStat Target=AttackMin/Max 와 IncreasedStat Target=AttackMin/Max 모두 합산)
-            int physIncPct = 0, fireIncPct = 0, iceIncPct = 0, lightIncPct = 0, poisonIncPct = 0;
-            int critIncPct = 0;
-            int asIncPct = 0;
-
             for (int i = 0; i < Mods.Count; i++)
             {
                 ModInstance mod = Mods[i];
-                if (mod.Table == null)
+                if (mod.Slot != GE.ModSlot.Base || mod.Table == null)
                     continue;
 
                 switch (mod.Table.EffectType)
@@ -288,17 +338,49 @@ namespace ARPG.Data
                     case GE.ModEffectType.FlatStat:
                         AccumulateFlatStat(ref cache, mod);
                         break;
+                }
+            }
 
-                    // Increased% Stat: 단일 스탯 비율 증가
-                    case GE.ModEffectType.IncreasedStat:
-                        AccumulateIncreasedStat(mod,
-                            ref physIncPct, ref fireIncPct, ref iceIncPct, ref lightIncPct, ref poisonIncPct,
-                            ref critIncPct, ref asIncPct);
+            int physIncPct = 0;
+            int fireIncPct = 0;
+            int iceIncPct = 0;
+            int lightIncPct = 0;
+            int poisonIncPct = 0;
+            int critIncPct = 0;
+            int asIncPct = 0;
+
+            for (int i = 0; i < WeaponLocalEnhancements.Count; i++)
+            {
+                WeaponLocalEnhancementInstance enhancement = WeaponLocalEnhancements[i];
+                if (enhancement == null || enhancement.Value == 0)
+                    continue;
+
+                switch (enhancement.StatType)
+                {
+                    case GE.WeaponLocalStatType.PhysicsDamage:
+                        physIncPct += enhancement.Value;
+                        break;
+                    case GE.WeaponLocalStatType.FireDamage:
+                        fireIncPct += enhancement.Value;
+                        break;
+                    case GE.WeaponLocalStatType.IceDamage:
+                        iceIncPct += enhancement.Value;
+                        break;
+                    case GE.WeaponLocalStatType.LightningDamage:
+                        lightIncPct += enhancement.Value;
+                        break;
+                    case GE.WeaponLocalStatType.PoisonDamage:
+                        poisonIncPct += enhancement.Value;
+                        break;
+                    case GE.WeaponLocalStatType.CriticalRate:
+                        critIncPct += enhancement.Value;
+                        break;
+                    case GE.WeaponLocalStatType.AttackSpeed:
+                        asIncPct += enhancement.Value;
                         break;
                 }
             }
 
-            // Increased% 적용 (Local 파이프라인의 마지막 단계)
             cache.Physics.ApplyIncrease(physIncPct);
             cache.Fire.ApplyIncrease(fireIncPct);
             cache.Ice.ApplyIncrease(iceIncPct);
@@ -360,44 +442,6 @@ namespace ARPG.Data
                 case GE.Stat.AttackSpeed:
                     // 100배 정수 저장 → 초당 횟수로 변환 (1.2 공속 = 120)
                     cache.AttackSpeed += mod.Value1 * 0.01f;
-                    break;
-            }
-        }
-
-        private static void AccumulateIncreasedStat(ModInstance mod,
-            ref int physIncPct, ref int fireIncPct, ref int iceIncPct, ref int lightIncPct, ref int poisonIncPct,
-            ref int critIncPct, ref int asIncPct)
-        {
-            if (mod.Table == null) return;
-
-            switch (mod.Table.TargetStat)
-            {
-                case GE.Stat.AttackMin:
-                case GE.Stat.AttackMax:
-                    physIncPct += mod.Value1;
-                    break;
-                case GE.Stat.FireAttackMin:
-                case GE.Stat.FireAttackMax:
-                    fireIncPct += mod.Value1;
-                    break;
-                case GE.Stat.IceAttackMin:
-                case GE.Stat.IceAttackMax:
-                    iceIncPct += mod.Value1;
-                    break;
-                case GE.Stat.LightningAttackMin:
-                case GE.Stat.LightningAttackMax:
-                    lightIncPct += mod.Value1;
-                    break;
-                case GE.Stat.PoisonAttackMin:
-                case GE.Stat.PoisonAttackMax:
-                    poisonIncPct += mod.Value1;
-                    break;
-                case GE.Stat.CriRate:
-                    critIncPct += mod.Value1;
-                    break;
-                case GE.Stat.AttackSpeed:
-                case GE.Stat.AttackSpeedMul:
-                    asIncPct += mod.Value1;
                     break;
             }
         }
@@ -495,69 +539,48 @@ namespace ARPG.Data
 
         public (int, int) GetPhysicsDamage()
         {
-            return GetDamageRange(GE.ModEffectType.AddedPhysDamage);
+            DamageRange range = WeaponStats.Physics;
+            return (range.Min, range.Max);
         }
 
         public bool IsPhysicsDamage()
         {
-            var (min, max) = GetPhysicsDamage();
-            return min > 0 || max > 0;
+            DamageRange range = WeaponStats.Physics;
+            return range.Min > 0 || range.Max > 0;
         }
 
         public bool IsFireDamage()
         {
-            var (min, max) = GetDamageRange(GE.ModEffectType.AddedFireDamage);
-            return min > 0 || max > 0;
+            DamageRange range = WeaponStats.Fire;
+            return range.Min > 0 || range.Max > 0;
         }
 
         public bool IsIceDamage()
         {
-            var (min, max) = GetDamageRange(GE.ModEffectType.AddedIceDamage);
-            return min > 0 || max > 0;
+            DamageRange range = WeaponStats.Ice;
+            return range.Min > 0 || range.Max > 0;
         }
 
         public bool IsLightningDamage()
         {
-            var (min, max) = GetDamageRange(GE.ModEffectType.AddedLightningDamage);
-            return min > 0 || max > 0;
+            DamageRange range = WeaponStats.Lightning;
+            return range.Min > 0 || range.Max > 0;
         }
 
         public bool IsPoisonDamage()
         {
-            var (min, max) = GetDamageRange(GE.ModEffectType.AddedPoisonDamage);
-            return min > 0 || max > 0;
+            DamageRange range = WeaponStats.Poison;
+            return range.Min > 0 || range.Max > 0;
         }
 
         public int GetCriticalRate()
         {
-            int val = 0;
-            for (int i = 0; i < Mods.Count; i++)
-            {
-                var table = Mods[i].Table;
-                if (table != null
-                    && table.EffectType == GE.ModEffectType.FlatStat
-                    && table.TargetStat == GE.Stat.CriRate)
-                {
-                    val += Mods[i].Value1;
-                }
-            }
-            return val;
+            return WeaponStats.CriRate;
         }
 
         public float GetAttackSpeed()
         {
-            ushort val = 0;
-            for (int i = 0; i < Mods.Count; i++)
-            {
-                var table = Mods[i].Table;
-                if (table != null
-                    && table.EffectType == GE.ModEffectType.FlatStat
-                    && table.TargetStat == GE.Stat.AttackSpeed)
-                {
-                    val += Mods[i].Value1;
-                }
-            }
-            return val * 0.01f;
+            return WeaponStats.AttackSpeed;
         }
     }
 }

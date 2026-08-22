@@ -69,7 +69,12 @@ namespace ARPG.Manager
         private Label? _eqDmgPoison;
         private Label? _eqCrit;
         private Label? _eqAs;
+        private Label? _eqBaseTitle;
+        private VisualElement? _eqBaseSection;
         private VisualElement? _eqBaseMods;
+        private VisualElement? _eqEnhancementSection;
+        private VisualElement? _eqLocalEnhancements;
+        private VisualElement? _eqOptionsSection;
         private VisualElement? _eqImplicitMods;
         private VisualElement? _eqAffixMods;
 
@@ -379,7 +384,7 @@ namespace ARPG.Manager
         }
 
         /// <summary>
-        /// Equipment(무기/방어구) 컨텐츠 빌더. WeaponStats 캐시(Local 파이프라인 완료치) + Implicit/Affix Mod 라인 구성.
+        /// Equipment 컨텐츠를 기본 능력 / 무기 고유 강화 / 글로벌 장비 옵션으로 분리해 구성한다.
         /// </summary>
         private void BuildEquipmentContent(ItemData equipItem)
         {
@@ -391,8 +396,19 @@ namespace ARPG.Manager
             ApplyTierLabel(_eqTier, tier);
 
             bool isWeapon = equip != null && equip.EquipType == GlobalEnum.EquipmentTypeMask.Weapon;
+            if (_eqBaseTitle != null)
+                _eqBaseTitle.text = isWeapon == true ? "무기 기본 능력" : "기본 능력";
 
-            if (isWeapon && equip != null)
+            ClearChildren(_eqBaseMods);
+            ClearChildren(_eqLocalEnhancements);
+            ClearChildren(_eqImplicitMods);
+            ClearChildren(_eqAffixMods);
+
+            bool hasBaseContent = false;
+            bool hasEnhancementContent = false;
+            bool hasOptionContent = false;
+
+            if (isWeapon == true && equip != null)
             {
                 WeaponStatCache stats = equip.WeaponStats;
                 SetStatLine(_eqDmgPhysics, FormatDamageLine("물리 피해", stats.Physics));
@@ -402,6 +418,13 @@ namespace ARPG.Manager
                 SetStatLine(_eqDmgPoison, FormatDamageLine("독 피해", stats.Poison));
                 SetStatLine(_eqCrit, stats.CriRate > 0 ? $"치명타 확률: {stats.CriRate}%" : null);
                 SetStatLine(_eqAs, stats.AttackSpeed > 0f ? $"초당 공격 횟수: {stats.AttackSpeed:F2}" : null);
+                hasBaseContent = stats.Physics.Max > 0
+                    || stats.Fire.Max > 0
+                    || stats.Ice.Max > 0
+                    || stats.Lightning.Max > 0
+                    || stats.Poison.Max > 0
+                    || stats.CriRate > 0
+                    || stats.AttackSpeed > 0f;
             }
             else
             {
@@ -414,15 +437,15 @@ namespace ARPG.Manager
                 SetStatLine(_eqAs, null);
             }
 
-            // 동적 Mod 라인 — 컨테이너 초기화 후 재구성
-            ClearChildren(_eqBaseMods);
-            ClearChildren(_eqImplicitMods);
-            ClearChildren(_eqAffixMods);
-
             if (equip == null)
+            {
+                SetSectionVisible(_eqBaseSection, false);
+                SetSectionVisible(_eqEnhancementSection, false);
+                SetSectionVisible(_eqOptionsSection, false);
                 return;
+            }
 
-            // 방어구는 Base mod를 베이스 스탯 패널 대신 표시. 무기는 WeaponStats가 이미 통합 표시했으므로 Base 라인은 생략.
+            // 방어구는 Base Mod를 표시한다. 무기는 WeaponStats가 Base/강화 결과를 이미 표시하므로 Base 라인을 반복하지 않는다.
             if (isWeapon == false)
             {
                 for (int i = 0; i < equip.Mods.Count; i++)
@@ -431,6 +454,18 @@ namespace ARPG.Manager
                     if (mod.Table == null) continue;
                     if (mod.Slot != GlobalEnum.ModSlot.Base) continue;
                     AppendModLine(_eqBaseMods, mod, isImplicit: false);
+                    hasBaseContent = true;
+                }
+            }
+
+            if (isWeapon == true)
+            {
+                for (int i = 0; i < equip.WeaponLocalEnhancements.Count; i++)
+                {
+                    WeaponLocalEnhancementInstance enhancement = equip.WeaponLocalEnhancements[i];
+                    if (enhancement == null || enhancement.Value == 0) continue;
+                    AppendEnhancementLine(_eqLocalEnhancements, enhancement);
+                    hasEnhancementContent = true;
                 }
             }
 
@@ -440,6 +475,7 @@ namespace ARPG.Manager
                 if (mod.Table == null) continue;
                 if (mod.Slot != GlobalEnum.ModSlot.Implicit) continue;
                 AppendModLine(_eqImplicitMods, mod, isImplicit: true);
+                hasOptionContent = true;
             }
 
             for (int i = 0; i < equip.Mods.Count; i++)
@@ -448,7 +484,12 @@ namespace ARPG.Manager
                 if (mod.Table == null) continue;
                 if (mod.Slot != GlobalEnum.ModSlot.Prefix && mod.Slot != GlobalEnum.ModSlot.Postfix) continue;
                 AppendModLine(_eqAffixMods, mod, isImplicit: false);
+                hasOptionContent = true;
             }
+
+            SetSectionVisible(_eqBaseSection, hasBaseContent);
+            SetSectionVisible(_eqEnhancementSection, hasEnhancementContent);
+            SetSectionVisible(_eqOptionsSection, hasOptionContent);
         }
 
         /// <summary>
@@ -486,13 +527,76 @@ namespace ARPG.Manager
         {
             if (container == null || mod.Table == null) return;
 
-            string body = mod.Value2 > 0
-                ? $"{mod.Table.Name}: {mod.Value1}~{mod.Value2}"
-                : $"{mod.Table.Name}: {mod.Value1}";
+            string body = FormatModLine(mod);
 
             Label line = new Label(body);
             line.AddToClassList(isImplicit ? "tooltip-statline-implicit" : "tooltip-modline");
             container.Add(line);
+        }
+
+        private static string FormatModLine(ModInstance mod)
+        {
+            if (mod.Table == null)
+                return string.Empty;
+
+            if (mod.Table.EffectType == GlobalEnum.ModEffectType.FlatStat
+                && mod.Table.TargetStat == GlobalEnum.Stat.CriRate)
+            {
+                return $"치명타 확률 +{mod.Value1}%";
+            }
+
+            if (mod.Table.EffectType == GlobalEnum.ModEffectType.FlatStat
+                && mod.Table.TargetStat == GlobalEnum.Stat.AttackSpeed
+                && mod.Slot != GlobalEnum.ModSlot.Base)
+            {
+                return $"공격속도 {mod.Value1}% 증가";
+            }
+
+            if (mod.Table.EffectType == GlobalEnum.ModEffectType.IncreasedStat)
+            {
+                if (mod.Table.TargetStat == GlobalEnum.Stat.CriRate
+                    || mod.Table.TargetStat == GlobalEnum.Stat.CriRateMul)
+                    return $"치명타 확률 {mod.Value1}% 증가";
+
+                if (mod.Table.TargetStat == GlobalEnum.Stat.AttackSpeed
+                    || mod.Table.TargetStat == GlobalEnum.Stat.AttackSpeedMul)
+                    return $"공격속도 {mod.Value1}% 증가";
+
+                return $"{mod.Table.Name}: {mod.Value1}% 증가";
+            }
+
+            return mod.Value2 > 0
+                ? $"{mod.Table.Name}: +{mod.Value1}~{mod.Value2}"
+                : $"{mod.Table.Name}: +{mod.Value1}";
+        }
+
+        private static void AppendEnhancementLine(
+            VisualElement? container,
+            WeaponLocalEnhancementInstance enhancement)
+        {
+            if (container == null) return;
+
+            string label = enhancement.StatType switch
+            {
+                GlobalEnum.WeaponLocalStatType.PhysicsDamage => "물리 피해 강화",
+                GlobalEnum.WeaponLocalStatType.FireDamage => "화염 피해 강화",
+                GlobalEnum.WeaponLocalStatType.IceDamage => "냉기 피해 강화",
+                GlobalEnum.WeaponLocalStatType.LightningDamage => "번개 피해 강화",
+                GlobalEnum.WeaponLocalStatType.PoisonDamage => "독 피해 강화",
+                GlobalEnum.WeaponLocalStatType.CriticalRate => "치명타 확률 강화",
+                GlobalEnum.WeaponLocalStatType.AttackSpeed => "공격속도 강화",
+                _ => enhancement.StatType.ToString(),
+            };
+
+            Label line = new Label($"{label}: +{enhancement.Value}%");
+            line.AddToClassList("tooltip-enhancement-line");
+            container.Add(line);
+        }
+
+        private static void SetSectionVisible(VisualElement? section, bool visible)
+        {
+            if (section == null) return;
+            section.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
         private static void ApplyTierName(Label? label, string text, int tier)
@@ -730,7 +834,12 @@ namespace ARPG.Manager
             _eqDmgPoison = root.Q<Label>("eq-dmg-poison");
             _eqCrit = root.Q<Label>("eq-crit");
             _eqAs = root.Q<Label>("eq-as");
+            _eqBaseTitle = root.Q<Label>("eq-base-title");
+            _eqBaseSection = root.Q<VisualElement>("eq-base-section");
             _eqBaseMods = root.Q<VisualElement>("eq-base-mods");
+            _eqEnhancementSection = root.Q<VisualElement>("eq-enhancement-section");
+            _eqLocalEnhancements = root.Q<VisualElement>("eq-local-enhancements");
+            _eqOptionsSection = root.Q<VisualElement>("eq-options-section");
             _eqImplicitMods = root.Q<VisualElement>("eq-implicit-mods");
             _eqAffixMods = root.Q<VisualElement>("eq-affix-mods");
 

@@ -60,6 +60,28 @@
     flex-direction: column;
 }
 
+.tooltip-section {
+    flex-direction: column;
+    margin-top: 5px;
+}
+
+.tooltip-section-title {
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: rgb(190, 190, 190);
+    margin-bottom: 2px;
+}
+
+.tooltip-section-title-enhancement {
+    color: rgb(120, 220, 180);
+}
+
+.tooltip-enhancement-line {
+    font-size: 13px;
+    color: rgb(120, 220, 180);
+    margin-top: 1px;
+}
+
 .tooltip-statline {
     font-size: 13px;
     color: rgb(170, 200, 230);

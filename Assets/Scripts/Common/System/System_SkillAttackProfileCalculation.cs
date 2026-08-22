@@ -1,4 +1,5 @@
 using ARPG.Component;
+using ARPG.Skill.Combat;
 using ARPG.Tables;
 using ARPG.Utility;
 using UnityEngine;
@@ -74,6 +75,13 @@ namespace ARPG.Systems
 
             bool isAttackSkill = (table.Tags & GE.SkillTag.Attack) != 0;
 
+            // 캐릭터 기본값 + 현재 스킬 태그에 맞는 글로벌 장비/버프 Modifier.
+            // 무기 Base와 고유 강화는 아래 WeaponHelper 경로에서 별도로 더한다.
+            SkillOffensiveStatSnapshot offensive = SkillOffensiveStatResolver.Resolve(
+                ownerStat,
+                AR.s.Data.GetModifiers(ownerEntityId),
+                table.Tags);
+
             // 무기 스탯 (Attack 태그일 때만)
             int wPhysMin = 0, wPhysMax = 0;
             int wFireMin = 0, wFireMax = 0;
@@ -113,30 +121,43 @@ namespace ARPG.Systems
 
             SkillAttackProfileComponent profile;
 
-            profile.PhysAddedMin   = wPhysMin  + ownerStat.FinalAttackMin          + tPhysMin  + onHit.PhysDamageAddBonusMin;
-            profile.PhysAddedMax   = wPhysMax  + ownerStat.FinalAttackMax          + tPhysMax  + onHit.PhysDamageAddBonusMax;
-            profile.FireAddedMin   = wFireMin  + ownerStat.FinalFireAttackMin      + tFireMin  + onHit.FireDamageAddBonusMin;
-            profile.FireAddedMax   = wFireMax  + ownerStat.FinalFireAttackMax      + tFireMax  + onHit.FireDamageAddBonusMax;
-            profile.IceAddedMin    = wIceMin   + ownerStat.FinalIceAttackMin       + tIceMin   + onHit.IceDamageAddBonusMin;
-            profile.IceAddedMax    = wIceMax   + ownerStat.FinalIceAttackMax       + tIceMax   + onHit.IceDamageAddBonusMax;
-            profile.LightAddedMin  = wLightMin + ownerStat.FinalLightningAttackMin + tLightMin + onHit.LightningDamageAddBonusMin;
-            profile.LightAddedMax  = wLightMax + ownerStat.FinalLightningAttackMax + tLightMax + onHit.LightningDamageAddBonusMax;
-            profile.PoisonAddedMin = wPoisMin  + ownerStat.FinalPoisonAttackMin    + tPoisMin  + onHit.PoisonDamageAddBonusMin;
-            profile.PoisonAddedMax = wPoisMax  + ownerStat.FinalPoisonAttackMax    + tPoisMax  + onHit.PoisonDamageAddBonusMax;
+            profile.PhysAddedMin   = wPhysMin  + offensive.PhysMin      + tPhysMin  + onHit.PhysDamageAddBonusMin;
+            profile.PhysAddedMax   = wPhysMax  + offensive.PhysMax      + tPhysMax  + onHit.PhysDamageAddBonusMax;
+            profile.FireAddedMin   = wFireMin  + offensive.FireMin      + tFireMin  + onHit.FireDamageAddBonusMin;
+            profile.FireAddedMax   = wFireMax  + offensive.FireMax      + tFireMax  + onHit.FireDamageAddBonusMax;
+            profile.IceAddedMin    = wIceMin   + offensive.IceMin       + tIceMin   + onHit.IceDamageAddBonusMin;
+            profile.IceAddedMax    = wIceMax   + offensive.IceMax       + tIceMax   + onHit.IceDamageAddBonusMax;
+            profile.LightAddedMin  = wLightMin + offensive.LightningMin + tLightMin + onHit.LightningDamageAddBonusMin;
+            profile.LightAddedMax  = wLightMax + offensive.LightningMax + tLightMax + onHit.LightningDamageAddBonusMax;
+            profile.PoisonAddedMin = wPoisMin  + offensive.PoisonMin    + tPoisMin  + onHit.PoisonDamageAddBonusMin;
+            profile.PoisonAddedMax = wPoisMax  + offensive.PoisonMax    + tPoisMax  + onHit.PoisonDamageAddBonusMax;
 
-            int baseCritRate = isAttackSkill ? weaponCriRate : table.BaseCriRate;
-            profile.TotalCritRate  = baseCritRate + ownerStat.FinalCriRate + onHit.CriRateBonus;
+            int baseCritRate = isAttackSkill == true ? weaponCriRate : table.BaseCriRate;
+            profile.TotalCritRate = Mathf.Clamp(
+                (baseCritRate + offensive.CharacterCritFlat + onHit.CriRateBonus)
+                * (1f + offensive.CritIncrease / 100f),
+                0f,
+                100f);
             profile.CritMultiplier = 1.5f + ownerStat.FinalCriDamage / 100f;
 
             profile.SkillDamageMul = ownerStat.FinalSkillDamage > 0 ? ownerStat.FinalSkillDamage / 100f : 1f;
             profile.BaseDamageMul  = table.BaseDamageMul / 100f;
             profile.LifeStealRatio = (ownerStat.FinalLifeSteal + onHit.LifeStealBonus) / 100f;
 
-            // UI/타이밍용 공격속도: 무기 AS × Skill.BaseAttackSpeedMul × (1 + Stat.FinalAttackSpeed%)
-            float weaponAS = WeaponHelper.GetWeaponAttackSpeed(ownerEntityId);
-            if (weaponAS <= 0f) weaponAS = 1f;
-            float skillSpeedMul = table.BaseAttackSpeedMul > 0 ? table.BaseAttackSpeedMul / 100f : 1f;
-            profile.AttackSpeedPerSecond = weaponAS * skillSpeedMul * (1f + ownerStat.FinalAttackSpeed / 100f);
+            // 주문에는 무기 공격속도를 적용하거나 공격속도 값을 만들지 않는다.
+            profile.AttackSpeedPerSecond = 0f;
+            if (isAttackSkill == true)
+            {
+                float weaponAS = WeaponHelper.GetWeaponAttackSpeed(ownerEntityId);
+                if (weaponAS <= 0f)
+                    weaponAS = 1f;
+
+                float skillSpeedMul = table.BaseAttackSpeedMul > 0
+                    ? table.BaseAttackSpeedMul / 100f
+                    : 1f;
+                float globalSpeedMul = 1f + offensive.AttackSpeedIncrease / 100f;
+                profile.AttackSpeedPerSecond = Mathf.Max(0.1f, weaponAS * skillSpeedMul * globalSpeedMul);
+            }
 
             profile.IsAttackSkill  = isAttackSkill;
             profile.DamageType     = table.DamageType;

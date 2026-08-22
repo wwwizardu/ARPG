@@ -160,7 +160,7 @@ namespace ARPG.UI
             bool hasBasicSkill = AR.s.Component.HasComponent<Component.SkillComponent>(basicSkillEntityId);
 
             EstimatedDamage est;
-            int estimatedCritRate;
+            float estimatedCritRate;
             float estAttackSpeed;
             if (hasBasicSkill)
             {
@@ -184,7 +184,7 @@ namespace ARPG.UI
             _textStat[10].text = $"예상 번개 데미지 {est.LightningMin} - {est.LightningMax}";
             _textStat[11].text = $"예상 독 데미지 {est.PoisonMin} - {est.PoisonMax}";
 
-            _textStat[12].text = $"치명타 확률 {estimatedCritRate}%";
+            _textStat[12].text = $"치명타 확률 {estimatedCritRate:F2}%";
             _textStat[13].text = $"치명타 피해 {_statComponent.FinalCriDamage}%";
             _textStat[14].text = $"이동 속도 {_statComponent.FinalMoveSpeed * _statComponent.FinalMoveSpeedMul / 100f:F2}";
             _textStat[15].text = $"공격 속도 {estAttackSpeed:F2}";
