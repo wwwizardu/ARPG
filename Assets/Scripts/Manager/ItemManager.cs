@@ -506,10 +506,10 @@ namespace ARPG.Item
             equipmentData.InitImplicitMods(inTable.Id);
 
             // 3. Prefix Mod 랜덤 생성
-            RollRandomMods(equipmentData, GlobalEnum.ModSlot.Prefix, RollRange(inRng, 1, 3), equipmentData.EquipType, inRng);
+            RollRandomMods(equipmentData, GlobalEnum.ModSlot.Prefix, RollRange(inRng, 1, 4), equipmentData.EquipType, inRng);
 
             // 4. Postfix Mod 랜덤 생성
-            RollRandomMods(equipmentData, GlobalEnum.ModSlot.Postfix, RollRange(inRng, 1, 3), equipmentData.EquipType, inRng);
+            RollRandomMods(equipmentData, GlobalEnum.ModSlot.Postfix, RollRange(inRng, 1, 4), equipmentData.EquipType, inRng);
 
             // 5. 생성된 Mod들의 테이블 참조 연결
             for (int i = 0; i < equipmentData.Mods.Count; i++)
@@ -572,18 +572,23 @@ namespace ARPG.Item
         private void RollRandomMods(EquipmentData equipment, GlobalEnum.ModSlot slot, int count, GlobalEnum.EquipmentTypeMask equipType, HistoryRng? inRng = null)
         {
             List<ModTable> modPool = AR.s.Data.GetModPool(slot, equipType);
-            if (modPool.Count == 0)
-                return;
-
-            for (int i = 0; i < count; i++)
+            for (int i = modPool.Count - 1; i >= 0; i--)
             {
-                // 랜덤 Mod 선택
-                ModTable selectedMod = modPool[RollRange(inRng, 0, modPool.Count)];
+                if (equipment.HasModGroupInSlot(slot, modPool[i].Group) == true)
+                    modPool.RemoveAt(i);
+            }
 
-                // 해당 Mod의 티어 목록에서 랜덤 선택
+            int addedCount = 0;
+            while (addedCount < count && modPool.Count > 0)
+            {
+                int selectedIndex = RollRange(inRng, 0, modPool.Count);
+                ModTable selectedMod = modPool[selectedIndex];
                 List<ModTierTable> tiers = AR.s.Data.GetModTiers(selectedMod.Id);
                 if (tiers.Count == 0)
+                {
+                    modPool.RemoveAt(selectedIndex);
                     continue;
+                }
 
                 ModTierTable selectedTier = tiers[RollRange(inRng, 0, tiers.Count)];
 
@@ -599,6 +604,16 @@ namespace ARPG.Item
                     Value1 = value1,
                     Value2 = value2,
                 });
+                addedCount++;
+
+                if (string.IsNullOrEmpty(selectedMod.Group) == false)
+                {
+                    for (int i = modPool.Count - 1; i >= 0; i--)
+                    {
+                        if (string.Equals(modPool[i].Group, selectedMod.Group, System.StringComparison.Ordinal) == true)
+                            modPool.RemoveAt(i);
+                    }
+                }
             }
         }
 

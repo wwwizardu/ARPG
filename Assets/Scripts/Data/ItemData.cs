@@ -214,6 +214,29 @@ namespace ARPG.Data
         }
 
         /// <summary>
+        /// 같은 ModSlot 안에 동일한 Group의 Mod가 이미 있는지 확인한다.
+        /// 서로 다른 슬롯(Base/Implicit/Prefix/Postfix) 사이의 Group 중복은 허용한다.
+        /// </summary>
+        public bool HasModGroupInSlot(GE.ModSlot slot, string group)
+        {
+            if (string.IsNullOrEmpty(group) == true)
+                return false;
+
+            for (int i = 0; i < Mods.Count; i++)
+            {
+                ModInstance existing = Mods[i];
+                if (existing.Slot != slot)
+                    continue;
+
+                ModTable? table = existing.Table ?? AR.s.Data.GetMod(existing.ModTableId);
+                if (table != null && string.Equals(table.Group, group, StringComparison.Ordinal) == true)
+                    return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
         /// 재료 서비스가 준비되기 전에도 안전하게 고유 강화 원본을 기록할 수 있는 데이터 진입점.
         /// 상한/가중치/재료 소비는 향후 전용 서비스가 검증하며 여기서는 무기 여부와 양수 값만 보장한다.
         /// </summary>
@@ -466,6 +489,12 @@ namespace ARPG.Data
                 int modId = baseStat.GetModId(slot);
                 (int value1, int value2) = baseStat.GetValues(slot);
 
+                if (HasModGroupInSlot(GE.ModSlot.Base, mod.Group) == true)
+                {
+                    Debug.LogWarning($"[EquipmentData] Skipped duplicate Base Mod group - ItemId: {itemId}, Group: {mod.Group}, ModId: {modId}");
+                    continue;
+                }
+
                 Mods.Add(new ModInstance
                 {
                     ModTableId = modId,
@@ -487,8 +516,14 @@ namespace ARPG.Data
             for (int i = 0; i < implicits.Count; i++)
             {
                 var imp = implicits[i];
-                if (imp.TierData == null)
+                if (imp.Mod == null || imp.TierData == null)
                     continue;
+
+                if (HasModGroupInSlot(GE.ModSlot.Implicit, imp.Mod.Group) == true)
+                {
+                    Debug.LogWarning($"[EquipmentData] Skipped duplicate Implicit Mod group - ItemId: {itemId}, Group: {imp.Mod.Group}, ModId: {imp.ModId}");
+                    continue;
+                }
 
                 ushort value1 = (ushort)UnityEngine.Random.Range(imp.TierData.Min1, imp.TierData.Max1 + 1);
                 ushort value2 = (ushort)UnityEngine.Random.Range(imp.TierData.Min2, imp.TierData.Max2 + 1);

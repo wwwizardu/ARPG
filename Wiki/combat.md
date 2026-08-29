@@ -49,7 +49,7 @@ status: verified
 | 무기 고유 강화 | `WeaponLocalEnhancementInstance` 목록. 피해 5속성·치명타·공격속도 증가율을 일반 `ModInstance`와 분리 저장 | 종류별 증가율을 합산한 뒤 해당 무기 Base에 한 번 적용한다. [src: Assets/Scripts/Common/GlobalEnum.cs:L487-506, Assets/Scripts/Data/ItemData.cs:L156-184, Assets/Scripts/Data/ItemData.cs:L299-400] |
 | 글로벌 장비 옵션 | 모든 Implicit/Prefix/Postfix | 장착 부위와 무관하게 `StatModifier` 또는 `ModPoolComponent`로 등록한다. `Tags=None`은 모든 스킬, 태그가 있으면 그 태그를 모두 가진 스킬에만 적용한다. [src: Docs/combat/combatSystem.md §장비 옵션 책임 경계, Assets/Scripts/Common/Utility/EquipHelper.cs:L127-241, Assets/Scripts/Skill/Combat/SkillOffensiveStatResolver.cs:L42-128] |
 
-`AllowedEquipTypes`는 옵션이 롤 가능한 장비 종류만 제한하며 계산 경로를 바꾸지 않는다. `Group`은 테이블상 “같은 그룹 중복 불가” 의미지만, 현행 `GetModPool`과 `RollRandomMods`는 아직 Group 중복을 검사하지 않는다. [src: Docs/combat/combatSystem.md §장비 옵션 책임 경계, Assets/Scripts/Common/Tables.cs:L678-688, Assets/Scripts/Data/DataManager_Table.cs:L701-719, Assets/Scripts/Manager/ItemManager.cs:L566-600]
+`AllowedEquipTypes`는 옵션이 롤 가능한 장비 종류만 제한하며 계산 경로를 바꾸지 않는다. `Group` 중복은 같은 `ModSlot` 안에서만 금지한다. Base·Implicit 초기화와 Prefix·Postfix 랜덤 롤 모두 자기 슬롯의 기존 Group만 검사하므로 서로 다른 슬롯 사이의 같은 Group은 허용된다. [src: Docs/combat/combatSystem.md §장비 옵션 책임 경계, Assets/Scripts/Data/ItemData.cs, Assets/Scripts/Manager/ItemManager.cs]
 
 ## 계산 규칙
 

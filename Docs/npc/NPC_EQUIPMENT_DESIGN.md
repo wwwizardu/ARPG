@@ -54,7 +54,7 @@ Id | WeaponRight | WeaponLeft | Helmet | Armor | Gloves | Boots | Necklace | Rin
 
 ### 3.3 인스턴스 생성 정책
 
-NPC 신규 생성 시 슬롯별 ItemId로 `ItemManager.CreateInventoryItemData(itemId)`를 호출 — **Base + Implicit + Prefix(1~2) + Postfix(1~2)** 가 모두 굴려진 인스턴스가 만들어진다. NPC마다 같은 EquipTableId라도 옵션이 다르게 굴려진다.
+NPC 신규 생성 시 슬롯별 ItemId로 `ItemManager.CreateInventoryItemData(itemId)`를 호출 — **Base + Implicit + Prefix(최대 3) + Postfix(최대 3)** 가 모두 굴려진 인스턴스가 만들어진다. 같은 슬롯 안에서는 동일 Group을 중복 선택하지 않으므로 후보 Group이 부족하면 실제 옵션 수는 더 적을 수 있다. NPC마다 같은 EquipTableId라도 옵션이 다르게 굴려진다.
 
 `CreateBaseEquipment`(=Prefix/Postfix 없는 깔끔한 장비) 아니라 `CreateInventoryItemData` 쪽을 쓰는 이유: 일반 드랍/상점과 동일한 톤을 유지하고, NpcStatComponent의 인스턴스 다양성 철학과 일관.
 

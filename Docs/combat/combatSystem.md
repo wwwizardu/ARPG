@@ -82,7 +82,7 @@ WindUp: 0.5~2.0s (차지 시간) → Active: 0.1s → Recovery: 0.5s
 | 무기 고유 강화 | `EquipmentData.WeaponLocalEnhancements` | 개별 무기의 Base에만 적용하는 증가율이다. 일반 Mod 슬롯 및 글로벌 Modifier 경로를 사용하지 않는다. |
 | 글로벌 장비 옵션 | 모든 Implicit/Prefix/Postfix | 무기·방어구·장신구 구분 없이 `StatModifier` 또는 `ModPoolComponent`에 등록한다. |
 
-`ModTable.Tags=None`인 글로벌 옵션은 모든 스킬에 적용한다. 태그가 있으면 스킬이 요구 태그를 모두 가질 때만 적용한다. `AllowedEquipTypes`는 롤 가능한 장비 종류만 제한한다. `Group`은 데이터에 정의돼 있지만 현재 랜덤 롤 경로는 같은 Group의 중복을 막지 않는다.
+`ModTable.Tags=None`인 글로벌 옵션은 모든 스킬에 적용한다. 태그가 있으면 스킬이 요구 태그를 모두 가질 때만 적용한다. `AllowedEquipTypes`는 롤 가능한 장비 종류만 제한한다. `Group` 중복은 같은 `ModSlot` 안에서만 금지한다. 즉 Base는 Base끼리, Implicit은 Implicit끼리, Prefix는 Prefix끼리, Postfix는 Postfix끼리 검사하며 서로 다른 슬롯 사이의 같은 Group은 허용한다.
 
 무기 캐시는 Base와 고유 강화만 읽는다. 고유 강화 값은 피해 5속성·치명타·공격속도의 증가율이며 종류별 합계를 Base에 한 번 곱한다.
 

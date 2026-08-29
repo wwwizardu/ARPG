@@ -68,8 +68,8 @@ NpcManager.RegisterNpcsFromMapFile 또는 SpawnNewNpc
 
 - `ItemInstanceId`
 - 품질 1~100
-- Prefix 1~2개와 각 수치
-- Postfix 1~2개와 각 수치
+- Prefix 최대 3개와 각 수치(동일 Group 제외 후 후보 부족 시 더 적음)
+- Postfix 최대 3개와 각 수치(동일 Group 제외 후 후보 부족 시 더 적음)
 
 따라서 같은 세트를 쓰는 NPC라도 최종 장비 옵션과 전투 수치는 완전히 같지 않다.
 
