@@ -105,6 +105,11 @@ namespace ARPG
 
         public void Reset()
         {
+            // 시스템을 가장 먼저 리셋한다. 각 System.OnReset()이 아직 살아 있는 컴포넌트 풀을 보고
+            // 런타임 컴포넌트(JumpComponent, SkillMovementPenaltyComponent 등)를 정리하므로,
+            // 엔티티를 파괴하는 매니저들보다 앞서야 한다.
+            _systemManager.Reset();
+
             _dataManager.Reset();
             _uiManager.Reset();
             _mapManager.Reset();
@@ -118,6 +123,14 @@ namespace ARPG
             _tooltipManager.Reset();
             _effectManager.Reset();
             _historyManager.Reset();
+
+            // 엔티티를 소유한 매니저들이 각자 엔티티를 파괴한 뒤, 남은 컴포넌트를 일괄 정리한다.
+            // 풀 인스턴스는 유지되므로 시스템이 캐시한 SparseSet 참조는 그대로 유효하다.
+            _componentManager.Reset();
+
+            // 마지막: EntityId 발급기. 살아 있는 엔티티가 모두 정리된 뒤에 되돌려야 ID가 중복 발급되지 않는다.
+            // (Initialize()가 EntityManager를 가장 먼저 초기화하는 것과 대칭)
+            _entityManager.Reset();
         }
         
         public void OnSceneLoadStart(Base.SceneBase inScene)

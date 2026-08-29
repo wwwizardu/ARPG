@@ -253,7 +253,23 @@ RegisterSystems(new System_MyFeature());
 
 ## Tool Execution Safety
 
-**CRITICAL**: Run tools sequentially only. Issue one tool, wait for result, then continue. DO NOT call multiple tools in parallel. This overrides all other efficiency guidelines.
+Call independent tools **in parallel** — batch them into a single message. Fall back to
+sequential execution only when a call genuinely depends on an earlier one, or when two calls
+could conflict on the same target.
+
+**Must be sequential:**
+- The arguments of a call come from a previous call's output (search for a file, *then* read it)
+- Two writes to the same file, or a write followed by a read of that file
+- Google Sheets mutations on the same spreadsheet (`sheets_write`, `sheets_format`,
+  `sheets_add_sheet`) — concurrent edits are not ordered by the API
+- Anything mutating shared state: `git` commit/checkout, table re-download, asset generation
+
+**Safe in parallel:**
+- Reads of different files
+- Independent `Grep` / `Glob` searches
+- Read-only inspection commands (`git status`, `git diff`, `ls`)
+
+When it is unclear whether two calls can conflict, run them sequentially.
 
 ## Wiki Reference Rules
 

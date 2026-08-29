@@ -1,6 +1,8 @@
-#nullable enable
+﻿#nullable enable
 using ARPG.Component;
 using ARPG.Factory;
+using ARPG.Skill;
+using ARPG.Skill.Aim;
 using ARPG.Skill.Combat;
 using ARPG.Utility;
 using Cysharp.Threading.Tasks;
@@ -35,6 +37,7 @@ namespace ARPG.Systems
             public readonly SparseSet<FactionComponent> Faction;
             public readonly SparseSet<SkillStatBonusOnSkillStartComponent> SkillBonus;
             public readonly SparseSet<AnimatorComponent> Animator;
+            public readonly SparseSet<SkillAimIndicatorComponent> SkillAimIndicator;
 
             public SkillRuntimePools(ComponentManager cm)
             {
@@ -51,6 +54,7 @@ namespace ARPG.Systems
                 Faction = cm.GetComponentPool<FactionComponent>();
                 SkillBonus = cm.GetComponentPool<SkillStatBonusOnSkillStartComponent>();
                 Animator = cm.GetComponentPool<AnimatorComponent>();
+                SkillAimIndicator = cm.GetComponentPool<SkillAimIndicatorComponent>();
             }
         }
 
@@ -61,6 +65,31 @@ namespace ARPG.Systems
 
         public void OnReset()
         {
+            ComponentManager cm = AR.s.Component;
+            SparseSet<SkillComponent> skillPool = cm.GetComponentPool<SkillComponent>();
+            SparseSet<SkillStateComponent> skillStatePool = cm.GetComponentPool<SkillStateComponent>();
+            SparseSet<SkillTargetComponent> skillTargetPool = cm.GetComponentPool<SkillTargetComponent>();
+
+            for (int i = 0; i < skillPool.Count; i++)
+            {
+                int skillEntityId = skillPool.GetEntityId(i);
+                SkillComponent skill = skillPool.GetByIndex(i);
+                skill.ResetAimRuntimeData();
+                cm.SetComponent(skillEntityId, skill);
+
+                if (skillStatePool.TryGet(skillEntityId, out SkillStateComponent skillState) == true)
+                {
+                    skillState.Reset();
+                    cm.SetComponent(skillEntityId, skillState);
+                }
+
+                if (skillTargetPool.TryGet(skillEntityId, out SkillTargetComponent skillTarget) == true)
+                {
+                    skillTarget.Reset();
+                    cm.SetComponent(skillEntityId, skillTarget);
+                }
+            }
+
             Debug.Log("System_Skill Reset called");
         }
 
@@ -158,6 +187,9 @@ namespace ARPG.Systems
                 return;
             }
 
+            target.Reset();
+            inSkill.ResetAimRuntimeData();
+
             // 마나 가드 — 플레이어 전용. OnSkillCommand 효과 발화 전에 차단하여 효과 누수 방지
             int manaCost = inSkill.Table != null ? inSkill.Table.Mana : 0;
             bool isPlayerCaster = AR.s.Data != null && inSkill.OwnerEntityId == AR.s.Data.CurrentPlayerEntityId;
@@ -191,27 +223,14 @@ namespace ARPG.Systems
             // 커맨드 타입에 따라 처리
             switch (inCommand.TargetType)
             {
-                case GlobalEnum.SkillTargetType.SingleEntity:
-                    // 마우스 포지션과 가장 가까운 엔티티를 찾아 타겟으로 설정
-                    int closestEntityId = FindClosestEntity(inCommand.TargetPosition, inSkill.OwnerEntityId, in pools);
-                    if (closestEntityId != 0)
-                    {
-                        target.SetEntityTarget(0, closestEntityId); // targetType은 나중에 확장 가능
-                        target.TargetPosition = inCommand.TargetPosition;
-                    }
-                    else
-                    {
-                        Debug.LogWarning($"[System_Skill] No target entity found near position: {inCommand.TargetPosition}");
-                        AR.s.Component.RemoveComponent<SkillCommandComponent>(inSkill.OwnerEntityId);
-                        return;
-                    }
-                    break;
-
                 case GlobalEnum.SkillTargetType.Direction:
                     // 오너 엔티티의 위치와 마우스 위치로 방향 계산
                     if (pools.Transform.TryGet(inSkill.OwnerEntityId, out var ownerTransform))
                     {
-                        Vector2 direction = (inCommand.TargetPosition - ownerTransform.Position).normalized;
+                        Vector2 direction = SkillAimResolver.ResolveDirection(
+                            ownerTransform.Position,
+                            inCommand.TargetPosition,
+                            Vector2.right);
                         target.SetPositionTarget(inCommand.TargetPosition);
                         target.SetDirectionTarget(direction);
                     }
@@ -227,7 +246,10 @@ namespace ARPG.Systems
                     // 지점 지정 - 마우스 위치를 타겟으로 (점프 스킬의 Leap Slam 등)
                     if (pools.Transform.TryGet(inSkill.OwnerEntityId, out var ownerTransformPos))
                     {
-                        Vector2 dirToTarget = (inCommand.TargetPosition - ownerTransformPos.Position).normalized;
+                        Vector2 dirToTarget = SkillAimResolver.ResolveDirection(
+                            ownerTransformPos.Position,
+                            inCommand.TargetPosition,
+                            Vector2.right);
                         target.SetPositionTarget(inCommand.TargetPosition);
                         target.SetDirectionTarget(dirToTarget);
                     }
@@ -278,6 +300,9 @@ namespace ARPG.Systems
             // 스킬 시작
             OnChangeState(skillEntityId, ref skillState, ref inSkill, SkillState.Start, in pools);
             AR.s.Component.SetComponent(skillEntityId, skillState);
+            AR.s.Component.SetComponent(skillEntityId, inSkill);
+            ActivateSkillRuntime(skillEntityId, inSkill, in pools);
+            TraceAim("Command", skillEntityId, inSkill.OwnerEntityId, target.TargetDirection, target.TargetPosition);
 
             // 마나 차감 — 플레이어 전용, 시전 확정 후 1회. 차감 후 UI 갱신용 메시지 발화
             if (isPlayerCaster && manaCost > 0 && pools.Stat.TryGet(inSkill.OwnerEntityId, out var spendStat))
@@ -447,7 +472,7 @@ namespace ARPG.Systems
                     break;
 
                 case SkillState.None:
-                    OnSkillComplete(skillEntityId, ref skill, ref state, in pools);
+                    OnSkillComplete(skillEntityId, ref skill, ref state, false, in pools);
                     break;
             }
         }
@@ -459,19 +484,13 @@ namespace ARPG.Systems
         /// </summary>
         private void OnEnterStartState(int skillEntityId, ref SkillComponent inSkill, in SkillRuntimePools pools)
         {
-            // 점프 스킬이면 JumpComponent 생성
-            if (inSkill.Table != null && inSkill.Table.SkillType == GlobalEnum.SkillType.Jump && inSkill.Table.ArcHeight > 0f)
-            {
-                StartJump(skillEntityId, ref inSkill, in pools);
-            }
-
             // TODO: 나중에 준비 애니메이션이 생기면 여기서 재생 (StartDuration 기준)
             // TODO: 시작 이펙트, 사운드 등
         }
 
         /// <summary>
         /// 점프 스킬 시작 - JumpComponent 생성 및 파라미터 세팅
-        /// 체공 시간은 SkillTiming의 TotalDuration, 착지 위치는 SkillTargetType에 따라 결정
+        /// 체공 시간은 SkillTiming의 ProcessDuration, 착지 위치는 SkillTargetType에 따라 결정
         /// </summary>
         private void StartJump(int skillEntityId, ref SkillComponent inSkill, in SkillRuntimePools pools)
         {
@@ -523,12 +542,21 @@ namespace ARPG.Systems
                             endPos = target.TargetPosition;
                         }
                         break;
-
-                    case GlobalEnum.SkillTargetType.SingleEntity:
-                        // 제자리 점프
-                        endPos = startPos;
-                        break;
                 }
+            }
+
+            // 체공 시간 = Process 단계 시간. 점프 이동 구간은 Process에서만 실행되기 때문.
+            // 0이면 System_Jump의 t = Elapsed / Duration이 무한대가 되므로 하한을 두되,
+            // 조용히 넘어가면 "포물선 없이 순간이동"으로만 드러나 원인 추적이 어려우므로 반드시 기록한다.
+            const float MIN_JUMP_DURATION = 0.01f;
+            float jumpDuration = timing.ProcessDuration;
+            if (jumpDuration <= 0f)
+            {
+                Debug.LogError($"[System_Skill] StartJump - SkillId({inSkill.SkillId}) ProcessTime이 0입니다. " +
+                               $"점프 이동은 Process 단계에서 실행되므로 ProcessTime > 0 이어야 합니다. " +
+                               $"체공 시간을 {MIN_JUMP_DURATION}초로 대체하며, 포물선 없이 착지 지점으로 즉시 이동합니다. " +
+                               $"(Start/Process/End = {timing.StartDuration:F3}/{timing.ProcessDuration:F3}/{timing.EndDuration:F3})");
+                jumpDuration = MIN_JUMP_DURATION;
             }
 
             // JumpComponent 생성
@@ -536,7 +564,7 @@ namespace ARPG.Systems
             {
                 Height = 0f,
                 Elapsed = 0f,
-                Duration = timing.TotalDuration,
+                Duration = jumpDuration,
                 MaxHeight = inSkill.Table.ArcHeight,
                 StartPosition = startPos,
                 EndPosition = endPos,
@@ -569,12 +597,28 @@ namespace ARPG.Systems
             SkillEffectExecutor.Trigger(GE.SkillTrigger.OnSkillStart, ref startCtx, inSkill.EffectiveSkillEffectIds);
 
             // SkillTarget 컴포넌트에서 타겟 정보 가져오기
-            if (!pools.SkillTarget.TryGet(skillEntityId, out var target))
+            if (pools.SkillTarget.TryGet(skillEntityId, out var target) == false)
                 return;
+
+            bool isJumpLaunch = inSkill.Table != null
+                && inSkill.Table.SkillType == GlobalEnum.SkillType.Jump
+                && inSkill.Table.ArcHeight > 0f;
+            bool createsAreaEffect = inSkill.Table != null && inSkill.Table.AreaEffectId > 0;
+            if (isJumpLaunch == true || createsAreaEffect == true)
+            {
+                string commitPhase = isJumpLaunch == true ? "LaunchCommit" : "AreaCommit";
+                target = CommitAim(skillEntityId, ref inSkill, target, commitPhase, in pools);
+            }
+
+            // 점프·이동 스킬은 선딜이 끝난 LaunchCommit에서 경로를 확정한 뒤 이동을 시작합니다.
+            if (isJumpLaunch == true)
+            {
+                StartJump(skillEntityId, ref inSkill, in pools);
+            }
 
             // [AreaEffect] SkillTable.AreaEffectId > 0이면 장판 스폰
             // Position 타겟은 마우스/지정 위치, 그 외는 caster 위치 기준.
-            if (inSkill.Table != null && inSkill.Table.AreaEffectId > 0)
+            if (createsAreaEffect == true && inSkill.Table != null)
             {
                 Vector2 spawnPos;
                 if (inSkill.Table.SkillTargetType == GE.SkillTargetType.Position)
@@ -640,11 +684,36 @@ namespace ARPG.Systems
         /// <summary>
         /// 스킬 완료 시 호출
         /// </summary>
-        private void OnSkillComplete(int skillEntityId, ref SkillComponent inSkill, ref SkillStateComponent inSkillState, in SkillRuntimePools pools)
+        private void OnSkillComplete(
+            int skillEntityId,
+            ref SkillComponent inSkill,
+            ref SkillStateComponent inSkillState,
+            bool wasCancelled,
+            in SkillRuntimePools pools)
         {
             // 스킬 런타임 데이터 초기화
             inSkill.ResetRuntimeData();
             AR.s.Component.SetComponent(skillEntityId, inSkill);
+
+            if (pools.SkillTarget.TryGet(skillEntityId, out SkillTargetComponent target) == true)
+            {
+                target.Reset();
+                AR.s.Component.SetComponent(skillEntityId, target);
+            }
+
+            AR.s.Component.RemoveComponent<SkillMovementPenaltyComponent>(inSkill.OwnerEntityId);
+            if (pools.SkillAimIndicator.TryGet(inSkill.OwnerEntityId, out SkillAimIndicatorComponent indicator) == true)
+            {
+                indicator.Reset();
+                AR.s.Component.SetComponent(inSkill.OwnerEntityId, indicator);
+            }
+
+            if (wasCancelled == true
+                && inSkill.Table != null
+                && inSkill.Table.SkillType == GlobalEnum.SkillType.Jump)
+            {
+                AR.s.Component.RemoveComponent<JumpComponent>(inSkill.OwnerEntityId);
+            }
 
             // 스킬 상태 초기화
             inSkillState.Reset();
@@ -670,10 +739,92 @@ namespace ARPG.Systems
                 return;
             }
 
-            charState.Condition = Creature.CharacterConditions.Normal;
+            if (wasCancelled == false || charState.Condition == Creature.CharacterConditions.UseSkill)
+            {
+                charState.Condition = Creature.CharacterConditions.Normal;
+            }
+            if (wasCancelled == true)
+            {
+                charState.TryEndJumpMovement();
+            }
             AR.s.Component.SetComponent(inSkill.OwnerEntityId, charState);
 
             Debug.Log($"[System_Skill] Skill Complete - SkillEntityId: {skillEntityId}");
+        }
+
+        private void ActivateSkillRuntime(int skillEntityId, SkillComponent skill, in SkillRuntimePools pools)
+        {
+            if (skill.Table == null)
+                return;
+
+            bool hasPlayerInput = pools.Input.Contains(skill.OwnerEntityId);
+            GlobalEnum.SkillMovementMode movementMode = SkillUsePolicyResolver.ResolveMovementMode(skill, hasPlayerInput);
+            float baseMultiplier = SkillUsePolicyResolver.ResolveMovementMultiplier(skill.Table, movementMode);
+            AR.s.Component.SetComponent(skill.OwnerEntityId, new SkillMovementPenaltyComponent
+            {
+                SkillEntityId = skillEntityId,
+                MovementMode = movementMode,
+                BaseMultiplier = baseMultiplier,
+                CurrentMultiplier = 1f,
+                EndRecoveryProgress = 0f,
+            });
+
+            if (pools.SkillAimIndicator.TryGet(skill.OwnerEntityId, out SkillAimIndicatorComponent indicator) == true)
+            {
+                indicator.ActiveSkillEntityId = skillEntityId;
+                indicator.IsVisible = false;
+                indicator.LastAppliedAngle = 0f;
+                AR.s.Component.SetComponent(skill.OwnerEntityId, indicator);
+            }
+        }
+
+        private SkillTargetComponent CommitAim(
+            int skillEntityId,
+            ref SkillComponent skill,
+            SkillTargetComponent target,
+            string tracePhase,
+            in SkillRuntimePools pools)
+        {
+            if (skill.Table == null)
+            {
+                return target;
+            }
+
+            bool hasPlayerInput = pools.Input.Contains(skill.OwnerEntityId);
+            GlobalEnum.SkillAimTrackingMode trackingMode = SkillUsePolicyResolver.ResolveAimTrackingMode(skill, hasPlayerInput);
+            bool keepsSingleCommit = trackingMode == GlobalEnum.SkillAimTrackingMode.SnapshotOnCommand
+                || trackingMode == GlobalEnum.SkillAimTrackingMode.TrackUntilCommit;
+            if (keepsSingleCommit == true && skill.IsAimCommitted == true)
+            {
+                return target;
+            }
+
+            target.TargetDirection = SkillAimResolver.NormalizeOrFallback(target.TargetDirection, Vector2.right);
+            if (skill.Table != null
+                && skill.Table.SkillTargetType == GlobalEnum.SkillTargetType.Position
+                && pools.Transform.TryGet(skill.OwnerEntityId, out TransformComponent ownerTransform) == true
+                && pools.Input.TryGet(skill.OwnerEntityId, out InputComponent input) == true)
+            {
+                target.TargetPosition = SkillAimResolver.ResolveTargetPosition(
+                    ownerTransform.Position,
+                    input.MouseWorldPosition,
+                    target.TargetDirection,
+                    skill.Table.SkillRangeMin,
+                    skill.Table.SkillRangeMax);
+            }
+
+            skill.IsAimCommitted = keepsSingleCommit;
+            AR.s.Component.SetComponent(skillEntityId, target);
+            AR.s.Component.SetComponent(skillEntityId, skill);
+            TraceAim(tracePhase, skillEntityId, skill.OwnerEntityId, target.TargetDirection, target.TargetPosition);
+            return target;
+        }
+
+        private static void TraceAim(string phase, int skillEntityId, int ownerEntityId, Vector2 direction, Vector2 position)
+        {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            Debug.Log($"[SkillAim] {phase} SkillEntityId={skillEntityId}, OwnerEntityId={ownerEntityId}, Direction={direction}, Position={position}");
+#endif
         }
 
         /// <summary>
@@ -726,7 +877,7 @@ namespace ARPG.Systems
             // 다음 히트 시간이 되었으면 효과 적용
             if (state.ElapsedTime >= nextHitTime)
             {
-                ProcessSkillHit(skillEntityId, skill, in pools);
+                ProcessSkillHit(skillEntityId, ref skill, in pools);
                 skill.CurrentHitIndex++;
 
                 Debug.Log($"[System_Skill] MultiHit {skill.CurrentHitIndex}/{skill.HitCount} at {state.ElapsedTime:F3}s - SkillEntityId: {skillEntityId}");
@@ -762,7 +913,7 @@ namespace ARPG.Systems
             // 채널링 간격마다 효과 적용
             if (state.ElapsedTime - skill.LastChannelingTime >= skill.ChannelingInterval)
             {
-                ProcessSkillHit(skillEntityId, skill, in pools);
+                ProcessSkillHit(skillEntityId, ref skill, in pools);
                 skill.LastChannelingTime = state.ElapsedTime;
 
                 Debug.Log($"[System_Skill] Channeling tick at {state.ElapsedTime:F2}s - SkillEntityId: {skillEntityId}");
@@ -802,7 +953,7 @@ namespace ARPG.Systems
                 if (skill.IsToggleActive)
                 {
                     // 토글 ON - 버프 적용 등
-                    ProcessSkillHit(skillEntityId, skill, in pools);
+                    ProcessSkillHit(skillEntityId, ref skill, in pools);
                     Debug.Log($"[System_Skill] Toggle ON - SkillEntityId: {skillEntityId}");
                 }
                 else
@@ -820,7 +971,7 @@ namespace ARPG.Systems
         /// <summary>
         /// 스킬 히트 처리 - 충돌 판정 후 타겟에 스킬 효과 적용
         /// </summary>
-        private void ProcessSkillHit(int skillEntityId, SkillComponent skill, in SkillRuntimePools pools)
+        private void ProcessSkillHit(int skillEntityId, ref SkillComponent skill, in SkillRuntimePools pools)
         {
             // SkillTarget 컴포넌트에서 타겟 정보 가져오기
             if (pools.SkillTarget.TryGet(skillEntityId, out var target) == false)
@@ -834,9 +985,13 @@ namespace ARPG.Systems
                 Debug.LogError($"[System_Skill] SkillTable is null - SkillId({skill.SkillId}) SkillEntityId({skillEntityId})");
                 return;
             }
+            ARPG.Tables.SkillTable skillTable = skill.Table;
+
+            string commitPhase = skillTable.ProjectileId > 0 ? "ProjectileCommit" : "HitCommit";
+            target = CommitAim(skillEntityId, ref skill, target, commitPhase, in pools);
 
             // 발사체 스킬인 경우 발사체 생성 (BaseProjectileCount + Stat.ProjectileCountAdd만큼 부채꼴 발사)
-            if (skill.Table.ProjectileId > 0)
+            if (skillTable.ProjectileId > 0)
             {
                 if (pools.Transform.TryGet(skill.OwnerEntityId, out var ownerTransform))
                 {
@@ -849,14 +1004,10 @@ namespace ARPG.Systems
                         spawnOrigin += ownerCollider.HitOffset;
                     }
 
-                    Vector2 baseDir = target.TargetPosition - spawnOrigin;
-                    if (baseDir.sqrMagnitude < 0.0001f)
-                        baseDir = Vector2.right;
-                    else
-                        baseDir.Normalize();
+                    Vector2 baseDir = SkillAimResolver.NormalizeOrFallback(target.TargetDirection, Vector2.right);
                     float baseAngle = Mathf.Atan2(baseDir.y, baseDir.x) * Mathf.Rad2Deg;
 
-                    int baseCount = Mathf.Max(1, skill.Table.BaseProjectileCount);
+                    int baseCount = Mathf.Max(1, skillTable.BaseProjectileCount);
                     int extraCount = 0;
                     if (pools.Stat.TryGet(skill.OwnerEntityId, out var ownerStat))
                         extraCount = ownerStat.FinalProjectileCountAdd;
@@ -875,7 +1026,7 @@ namespace ARPG.Systems
                         Utility.ProjectileHelper.SpawnProjectile(
                             skill.OwnerEntityId,
                             skillEntityId,
-                            skill.Table.ProjectileId,
+                            skillTable.ProjectileId,
                             spawnOrigin,
                             dir
                         );
@@ -898,58 +1049,6 @@ namespace ARPG.Systems
         }
 
         /// <summary>
-        /// 특정 위치에서 가장 가까운 적 엔티티를 찾습니다 (진영 필터 적용).
-        /// 타겟의 ColliderComponent.HitOffset을 적용한 몸통 중심 기준으로 비교 — 마우스 hover와 시각이 일치
-        /// caster가 faction을 가지면 적 faction 인덱스만 순회, 없으면 transform 풀 폴백.
-        /// </summary>
-        /// <param name="position">기준 위치(마우스 월드 좌표 등)</param>
-        /// <param name="casterEntityId">시전자 엔티티 ID (자기 자신 + 같은 진영 제외)</param>
-        /// <returns>가장 가까운 적 엔티티 ID (없으면 0)</returns>
-        private int FindClosestEntity(Vector2 position, int casterEntityId, in SkillRuntimePools pools)
-        {
-            int closestEntityId = 0;
-            float closestSqrDistance = float.MaxValue;
-
-            SparseSet<TransformComponent> transformPool = pools.Transform;
-            SparseSet<ColliderComponent> colliderPool = pools.Collider;
-            SparseSet<FactionComponent> factionPool = pools.Faction;
-
-            // 역방향 인덱스 없이 transform 풀을 순회하며 진영으로 적만 거른다.
-            // caster에 faction이 있으면 적대 대상만, 없으면 전부(마이그레이션 안전 동작 보존).
-            bool casterHasFaction = factionPool.TryGet(casterEntityId, out var casterFaction);
-            for (int i = 0; i < transformPool.Count; i++)
-            {
-                int entityId = transformPool.GetEntityId(i);
-                if (entityId == casterEntityId)
-                    continue;
-
-                if (casterHasFaction)
-                {
-                    if (factionPool.TryGet(entityId, out var targetFaction) == false)
-                        continue;
-                    if (FactionHelper.IsFactionHostile(casterFaction.FactionId, targetFaction.FactionId) == false)
-                        continue;
-                }
-
-                TransformComponent entityTransform = transformPool.GetByIndex(i);
-                Vector2 entityCenter = entityTransform.Position;
-                if (colliderPool.TryGet(entityId, out var entityCollider))
-                {
-                    entityCenter += entityCollider.HitOffset;
-                }
-
-                float sqrDistance = HitboxMath.SqrDistance(entityCenter, position);
-                if (sqrDistance < closestSqrDistance)
-                {
-                    closestSqrDistance = sqrDistance;
-                    closestEntityId = entityId;
-                }
-            }
-
-            return closestEntityId;
-        }
-
-        /// <summary>
         /// 스킬 범위 내에 있는 엔티티들을 가져옵니다.
         /// 반환 List는 _hitEntitiesCache를 재사용하므로, 다음 호출 전에 소비해야 함.
         /// </summary>
@@ -963,14 +1062,6 @@ namespace ARPG.Systems
             // 스킬 타겟 타입에 따라 분기
             switch (skill.Table.SkillTargetType)
             {
-                case GlobalEnum.SkillTargetType.SingleEntity:
-                    // 단일 타겟 - TargetId만 체크
-                    if (target.TargetId != 0)
-                    {
-                        _hitEntitiesCache.Add((int)target.TargetId);
-                    }
-                    break;
-
                 case GlobalEnum.SkillTargetType.Direction:
                     // 범위 원형 - TargetPosition 중심으로 범위 내 엔티티 체크
                     CheckCircleRangeEntities(skill, target, _hitEntitiesCache, in pools);
@@ -1183,74 +1274,6 @@ namespace ARPG.Systems
         }
 
         /// <summary>
-        /// 위치 타겟으로 스킬 시작 (내부 사용)
-        /// </summary>
-        private bool StartSkillAtPositionInternal(int skillEntityId, Vector2 position)
-        {
-            // 스킬 컴포넌트 확인
-            if (!AR.s.Component.TryGetComponent<SkillComponent>(skillEntityId, out var skill))
-                return false;
-
-            if (!skill.IsInitialized)
-                return false;
-
-            // 상태 확인
-            if (!AR.s.Component.TryGetComponent<SkillStateComponent>(skillEntityId, out var state))
-                return false;
-
-            if (state.IsRunning)
-                return false;
-
-            // 타겟 설정
-            if (AR.s.Component.TryGetComponent<SkillTargetComponent>(skillEntityId, out var target))
-            {
-                target.SetPositionTarget(position);
-                AR.s.Component.SetComponent(skillEntityId, target);
-            }
-
-            // 스킬 시작
-            OnChangeState(skillEntityId, ref state, ref skill, SkillState.Start);
-            AR.s.Component.SetComponent(skillEntityId, state);
-
-            Debug.Log($"[System_Skill] Skill started at position - SkillEntityId: {skillEntityId}, Position: {position}");
-            return true;
-        }
-
-        /// <summary>
-        /// 방향 타겟으로 스킬 시작 (내부 사용)
-        /// </summary>
-        private bool StartSkillInDirectionInternal(int skillEntityId, Vector2 direction)
-        {
-            // 스킬 컴포넌트 확인
-            if (AR.s.Component.TryGetComponent<SkillComponent>(skillEntityId, out var skill) == false)
-                return false;
-
-            if (skill.IsInitialized == false)
-                return false;
-
-            // 상태 확인
-            if (AR.s.Component.TryGetComponent<SkillStateComponent>(skillEntityId, out var state) == false)
-                return false;
-
-            if (state.IsRunning)
-                return false;
-
-            // 타겟 설정
-            if (AR.s.Component.TryGetComponent<SkillTargetComponent>(skillEntityId, out var target) == true)
-            {
-                target.SetDirectionTarget(direction);
-                AR.s.Component.SetComponent(skillEntityId, target);
-            }
-
-            // 스킬 시작
-            OnChangeState(skillEntityId, ref state, ref skill, SkillState.Start);
-            AR.s.Component.SetComponent(skillEntityId, state);
-
-            Debug.Log($"[System_Skill] Skill started in direction - SkillEntityId: {skillEntityId}, Direction: {direction}");
-            return true;
-        }
-
-        /// <summary>
         /// 스킬 강제 중단 (내부 사용)
         /// </summary>
         private void StopSkillInternal(int skillEntityId, ref SkillComponent inSkill, ref SkillStateComponent inState)
@@ -1262,7 +1285,7 @@ namespace ARPG.Systems
 
         private void StopSkillInternal(int skillEntityId, ref SkillComponent inSkill, ref SkillStateComponent inState, in SkillRuntimePools pools)
         {
-            OnSkillComplete(skillEntityId, ref inSkill, ref inState, in pools);
+            OnSkillComplete(skillEntityId, ref inSkill, ref inState, true, in pools);
             Debug.Log($"[System_Skill] Skill stopped - SkillEntityId: {skillEntityId}");
         }
 

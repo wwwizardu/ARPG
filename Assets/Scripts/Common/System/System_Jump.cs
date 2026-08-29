@@ -25,6 +25,20 @@ namespace ARPG.Systems
 
         public void OnReset()
         {
+            ComponentManager cm = AR.s.Component;
+            SparseSet<JumpComponent> jumpPool = cm.GetComponentPool<JumpComponent>();
+            for (int i = jumpPool.Count - 1; i >= 0; i--)
+            {
+                int entityId = jumpPool.GetEntityId(i);
+                if (cm.TryGetComponent<StateComponent>(entityId, out StateComponent state) == true)
+                {
+                    if (state.TryEndJumpMovement() == true)
+                        cm.SetComponent(entityId, state);
+                }
+
+                cm.RemoveComponent<JumpComponent>(entityId);
+            }
+
             Debug.Log("System_Jump Reset called");
         }
 
@@ -118,12 +132,8 @@ namespace ARPG.Systems
             // 이동 상태 복귀
             if (cm.TryGetComponent<StateComponent>(entityId, out var state) == true)
             {
-                if (state.MoveState == Creature.MovementStates.Jumping)
-                {
-                    state.MovementStatePrev = state.MoveState;
-                    state.MoveState = Creature.MovementStates.Idle;
+                if (state.TryEndJumpMovement() == true)
                     cm.SetComponent(entityId, state);
-                }
             }
 
             // JumpComponent 제거

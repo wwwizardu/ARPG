@@ -82,6 +82,7 @@ namespace ARPG.Component
         public int FinalCriRate;          // 캐릭터 기본 치명타 + 글로벌 고정 치명타(%p), 증가율 적용 전
         public int FinalCriRateIncrease;  // 글로벌 치명타 확률 증가율 합계(%)
         public int FinalCriDamage;
+        // 이동 속도는 두 필드를 직접 곱하지 말고 아래 FinalMoveSpeedValue를 사용한다 (공식 단일 출처).
         public int FinalMoveSpeed;
         public int FinalMoveSpeedMul;   // 최종 이동 속도 배율 (100 = 100%)
         public int FinalAttackSpeed;
@@ -120,6 +121,12 @@ namespace ARPG.Component
         /// 현재 체력 (읽기 전용, 변경은 SetCurrentHp 사용)
         /// </summary>
         public readonly int CurrentHp => _currentHp;
+
+        /// <summary>
+        /// 배율이 적용된 최종 이동 속도. 이동 속도를 쓰는 모든 곳은 이 값을 사용한다.
+        /// 스킬 사용 중 감속은 별도 정책이므로 여기 포함되지 않는다 — SkillHelper.GetSkillMovementMultiplier를 곱해야 한다.
+        /// </summary>
+        public readonly float FinalMoveSpeedValue => FinalMoveSpeed * FinalMoveSpeedMul / 100f;
 
         /// <summary>
         /// 현재 체력 설정 및 HpDirtyTag 추가

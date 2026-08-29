@@ -9,9 +9,11 @@ using ARPG.Manager;
 using ARPG.Npc;
 using ARPG.Tables;
 using ARPG.Utility;
+using ARPG.View;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
 using UnityEngine.U2D.Animation;
 
 namespace ARPG.Factory
@@ -23,6 +25,7 @@ namespace ARPG.Factory
     public static class EntityFactory
     {
         private const string ENTITY_PREFAB_KEY = "Prefabs/Entity";
+        private const string SKILL_AIM_INDICATOR_PREFAB_KEY = "Prefabs/Player/SkillAimIndicator";
 
         // 충돌 반경 fallback — CreatureTable.MoveRadius/HitRadius/HitOffsetY가 0일 때 사용
         // 1 unit = 1 tile, 캐릭터 휴머노이드 기본값
@@ -234,7 +237,10 @@ namespace ARPG.Factory
                 return (-1, null);
             }
 
-            // 3. 저장된 PlayerId로 EntityId 설정
+            // 3. 플레이어 전용 조준 화살표 로드. 실패해도 전투 로직은 계속 초기화한다.
+            await AttachPlayerSkillAimIndicatorAsync(entity);
+
+            // 4. 저장된 PlayerId로 EntityId 설정
             int savedPlayerId = AR.s.Player.GetSavedPlayerId();
             if (savedPlayerId >= 0)
             {
@@ -244,19 +250,27 @@ namespace ARPG.Factory
             entity.SetupEntityId();
             int entityId = entity.EntityId;
 
-            // 4. PlayerData/인벤토리 초기화
+            // 5. PlayerData/인벤토리 초기화
             AR.s.Player.InitializePlayerData();
 
-            // 5. ECS 컴포넌트 추가
+            // 6. ECS 컴포넌트 추가
             await AddCreatureComponents(entityId, table, entity);
 
             AR.s.Component.AddComponent(entityId, new InputComponent
             {
                 MoveDirection = Vector2.zero,
                 MousePosition = Vector2.zero,
+                MouseWorldPosition = position,
                 IsAttacking = false,
                 IsInteracting = false,
                 IsSprinting = false
+            });
+
+            AR.s.Component.AddComponent(entityId, new SkillAimIndicatorComponent
+            {
+                ActiveSkillEntityId = -1,
+                IsVisible = false,
+                LastAppliedAngle = 0f,
             });
 
             AR.s.Component.AddComponent(entityId, new MapChunkLoaderComponent
@@ -946,6 +960,58 @@ namespace ARPG.Factory
                 });
 
                 AR.s.Component.AddComponent(entityId, new AnimatorComponent());
+            }
+        }
+
+        private static async UniTask AttachPlayerSkillAimIndicatorAsync(EntityBase entity)
+        {
+            AsyncOperationHandle<GameObject> handle = Addressables.InstantiateAsync(
+                SKILL_AIM_INDICATOR_PREFAB_KEY,
+                entity.transform,
+                false);
+
+            try
+            {
+                GameObject indicatorObject = await handle.ToUniTask();
+                if (indicatorObject == null || entity == null)
+                {
+                    if (handle.IsValid() == true)
+                    {
+                        Addressables.ReleaseInstance(handle);
+                    }
+                    return;
+                }
+
+                SkillAimIndicatorView? view = indicatorObject.GetComponent<SkillAimIndicatorView>();
+                if (view == null)
+                {
+                    Debug.LogWarning(
+                        $"[EntityFactory] SkillAimIndicatorView not found on '{SKILL_AIM_INDICATOR_PREFAB_KEY}'.");
+                    Addressables.ReleaseInstance(handle);
+                    return;
+                }
+
+                indicatorObject.transform.localPosition = Vector3.zero;
+                indicatorObject.transform.localRotation = Quaternion.identity;
+                indicatorObject.transform.localScale = Vector3.one;
+                entity.AttachSkillAimIndicator(view, handle);
+            }
+            catch (System.Exception e)
+            {
+                if (handle.IsValid() == true)
+                {
+                    if (handle.Status == AsyncOperationStatus.Succeeded)
+                    {
+                        Addressables.ReleaseInstance(handle);
+                    }
+                    else
+                    {
+                        Addressables.Release(handle);
+                    }
+                }
+
+                Debug.LogWarning(
+                    $"[EntityFactory] Failed to load player skill aim indicator: {e.Message}");
             }
         }
 

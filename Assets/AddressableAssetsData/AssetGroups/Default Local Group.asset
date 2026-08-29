@@ -130,6 +130,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4d238e5944774c04b7d1f593109a89df
+    m_Address: Prefabs/Player/SkillAimIndicator
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4befc4a636c75fc4ba1a872701c1237a
     m_Address: Sprites/Items/MiningCart
     m_ReadOnly: 0

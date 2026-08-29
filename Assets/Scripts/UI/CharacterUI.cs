@@ -186,7 +186,7 @@ namespace ARPG.UI
 
             _textStat[12].text = $"치명타 확률 {estimatedCritRate:F2}%";
             _textStat[13].text = $"치명타 피해 {_statComponent.FinalCriDamage}%";
-            _textStat[14].text = $"이동 속도 {_statComponent.FinalMoveSpeed * _statComponent.FinalMoveSpeedMul / 100f:F2}";
+            _textStat[14].text = $"이동 속도 {_statComponent.FinalMoveSpeedValue:F2}";
             _textStat[15].text = $"공격 속도 {estAttackSpeed:F2}";
             _textStat[16].text = $"시전 속도 {_statComponent.FinalCastSpeed}";
             _textStat[17].text = $"방어력 {_statComponent.FinalDefense}";

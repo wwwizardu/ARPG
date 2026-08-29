@@ -166,7 +166,7 @@ AI와 플레이어가 **동일한 `GetSkillCommandComponent`**로 발동 조건(
 - `SkillRangeMin`: 너무 가까우면 발사 안 함. 중심거리 기준 (몸 반경 보정 없음). `0` = 제한 없음.
 - `SkillTargetRange1`: 실제 hit 검정 사거리 (System_Skill.CheckCircleRangeEntities). 동일하게 `attacker.HitRadius`가 더해져 적용됨. 대개 `SkillRangeMax`와 같은 값으로 두면 됨.
 - `Cooltime`: 초 단위. `CooldownReduction` 스탯(0~90% 클램프) 적용됨
-- `SkillTargetType`: `SingleEntity`/`Direction`/`Position` — `GetSkillCommandComponent`가 스킬 테이블에서 읽어 command에 세팅
+- `SkillTargetType`: `Direction`/`Position` — `GetSkillCommandComponent`가 스킬 테이블에서 읽어 command에 세팅
 
 ---
 

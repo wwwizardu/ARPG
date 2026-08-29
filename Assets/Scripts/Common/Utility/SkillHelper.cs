@@ -73,6 +73,19 @@ namespace ARPG.Utility
         }
 
         /// <summary>
+        /// 실행 중인 스킬이 이 엔티티의 일반 이동에 적용하는 배율. 페널티가 없으면 1.
+        /// 시전자 종류(플레이어/AI)를 구분하지 않으므로 이동 속도를 계산하는 모든 경로가 그대로 호출한다.
+        /// 배율은 스킬 단계에 따라 매 틱 변하므로(End에서 1로 선형 복구) 스탯에 캐시하지 않고 그때그때 조회한다.
+        /// </summary>
+        public static float GetSkillMovementMultiplier(int entityId)
+        {
+            if (AR.s.Component.TryGetComponent<SkillMovementPenaltyComponent>(entityId, out var penalty) == false)
+                return 1f;
+
+            return penalty.CurrentMultiplier;
+        }
+
+        /// <summary>
         /// AI 엔티티가 발동할 스킬을 가중치 기반 랜덤으로 선택.
         /// AiTable.SkillWeight1/2/3 가중치와 쿨타임/사거리 조건을 모두 만족하는 슬롯 중 하나를 가중치 비율로 뽑는다.
         /// 사거리 비교 시 `attacker.HitRadius + SkillRangeMax + target.HitRadius`를 유효 사거리로 사용 (몸 가장자리 기준).

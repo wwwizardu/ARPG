@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using ARPG.Component;
 using ARPG.Systems;
+using ARPG.Utility;
 using UnityEngine;
 
 namespace ARPG.Systems
@@ -23,9 +24,6 @@ namespace ARPG.Systems
         // FixedUpdate로 변경: 일정한 시간 간격으로 이동 처리
         public void OnFixedUpdate(float inFixedDeltaTime)
         {
-            if(AR.s.Component.TryGetComponent<StatComponent>(AR.s.Data.Player.PlayerId, out var stat) == false)
-                return;
-
             // ComponentManager에서 필요한 컴포넌트 풀 가져오기
             SparseSet<InputComponent> inputPool = AR.s.Component.GetComponentPool<InputComponent>();
 
@@ -38,6 +36,9 @@ namespace ARPG.Systems
                 if (AR.s.Component.TryGetComponent<VelocityComponent>(entityId, out var velocity) == false)
                     continue;
 
+                if (AR.s.Component.TryGetComponent<StatComponent>(entityId, out var stat) == false)
+                    continue;
+
                 InputComponent input = inputPool.GetByIndex(i);
 
                 // 점프(공중) 중에는 System_Jump가 위치를 직접 제어하므로 velocity 이동 정지
@@ -48,7 +49,7 @@ namespace ARPG.Systems
                 {
                     // 방향 설정 (정규화된 입력)
                     velocity.Direction = input.MoveDirection;
-                    velocity.Speed = stat.FinalMoveSpeed * stat.FinalMoveSpeedMul / 100f;
+                    velocity.Speed = stat.FinalMoveSpeedValue * SkillHelper.GetSkillMovementMultiplier(entityId);
 
                     // TODO: 여기서 물리 충돌 검사 후 Direction 조정
                     // velocity.Direction = ApplyCollision(velocity.Direction, transform.Position);
@@ -62,7 +63,8 @@ namespace ARPG.Systems
                 // Velocity만 저장 (Position은 System_Render에서 업데이트)
                 AR.s.Component.SetComponent(entityId, velocity);
 
-                if (AR.s.Component.TryGetComponent<StateComponent>(entityId, out var state) == true)
+                if (isAirborne == false
+                    && AR.s.Component.TryGetComponent<StateComponent>(entityId, out var state) == true)
                 {
                     CheckStateChanges(entityId, ref velocity, ref state);
                 }
@@ -96,5 +98,3 @@ namespace ARPG.Systems
 
     }
 }
-
-

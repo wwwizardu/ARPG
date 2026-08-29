@@ -3,7 +3,10 @@ using System.Collections.Generic;
 using ARPG.Component;
 using ARPG.Message;
 using ARPG.Utility;
+using ARPG.View;
 using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
 
 namespace ARPG.Base
 {
@@ -12,6 +15,7 @@ namespace ARPG.Base
         [SerializeField] protected GameObject _visual;
         [SerializeField] protected Sprite _entitySprite;
         [SerializeField] protected SpriteRenderer _sr;
+        protected SkillAimIndicatorView _skillAimIndicatorView;
         // [SerializeField] protected Image _hpBar;
         // [SerializeField] protected TMPro.TextMeshPro _textName;
         // [SerializeField] protected Transform _buffImageRoot;
@@ -20,10 +24,14 @@ namespace ARPG.Base
 
         protected int _entityId = -1; // ECS Entity ID
 
+        private AsyncOperationHandle<GameObject> _skillAimIndicatorHandle;
+        private bool _hasSkillAimIndicatorHandle;
+
         public int EntityId { get { return _entityId; } }
         public GameObject Visual => _visual;
         public SpriteRenderer SpriteRenderer => _sr;
         public GameObject Shadow => _shadow;
+        public SkillAimIndicatorView SkillAimIndicatorView => _skillAimIndicatorView;
 
         /// <summary>
         /// 그림자 GameObject 등록 (EntityFactory가 Shadow 프리팹 로드 후 호출)
@@ -31,6 +39,21 @@ namespace ARPG.Base
         public void SetShadow(GameObject shadow)
         {
             _shadow = shadow;
+        }
+
+        /// <summary>
+        /// 플레이어 전용 Addressable 조준 화살표 인스턴스를 등록합니다.
+        /// </summary>
+        public void AttachSkillAimIndicator(
+            SkillAimIndicatorView view,
+            AsyncOperationHandle<GameObject> handle)
+        {
+            ReleaseSkillAimIndicator();
+
+            _skillAimIndicatorView = view;
+            _skillAimIndicatorHandle = handle;
+            _hasSkillAimIndicatorHandle = handle.IsValid();
+            _skillAimIndicatorView.ResetView();
         }
 
         // SetSpriteLibrary는 제거됨.
@@ -63,15 +86,20 @@ namespace ARPG.Base
         /// </summary>
         public virtual void OnEntityDestroy()
         {
+            ReleaseSkillAimIndicator();
         }
 
         public virtual void Reset()
         {
-
+            if (_skillAimIndicatorView != null)
+            {
+                _skillAimIndicatorView.ResetView();
+            }
         }
 
         protected virtual void OnDestroy()
         {
+            ReleaseSkillAimIndicator();
             // MessageManager에서 등록 해제 (앱 종료 시 AR이 먼저 파괴될 수 있음)
             if (_entityId >= 0 && AR.s != null && AR.s.Message != null)
             {
@@ -88,6 +116,8 @@ namespace ARPG.Base
         /// </summary>
         public void SetupEntityId()
         {
+            CacheSkillAimIndicatorView();
+
             if (_entityId < 0)
             {
                 _entityId = AR.s.Entity.CreateEntity();
@@ -108,6 +138,8 @@ namespace ARPG.Base
 
         public virtual void InitializeECSComponents()
         {
+            CacheSkillAimIndicatorView();
+
             // EntityId가 할당되어 있지 않다면 생성
             if(_entityId < 0)
             {
@@ -201,5 +233,49 @@ namespace ARPG.Base
         }
 
         #endregion
+
+        /// <summary>
+        /// 조준 화살표 View를 캐시하고 초기 상태(숨김)로 되돌린다.
+        /// 프리팹 인스턴스화 직후와 엔티티 재사용 시점 모두에서 호출된다.
+        /// </summary>
+        private void CacheSkillAimIndicatorView()
+        {
+            if (_skillAimIndicatorView == null)
+            {
+                _skillAimIndicatorView = GetComponentInChildren<SkillAimIndicatorView>(true);
+            }
+
+            if (_skillAimIndicatorView != null)
+            {
+                _skillAimIndicatorView.ResetView();
+            }
+        }
+
+        /// <summary>
+        /// 조준 화살표 인스턴스와 Addressables 참조를 한 번만 해제합니다.
+        /// </summary>
+        private void ReleaseSkillAimIndicator()
+        {
+            if (_skillAimIndicatorView != null)
+            {
+                _skillAimIndicatorView.ResetView();
+            }
+
+            _skillAimIndicatorView = null;
+
+            if (_hasSkillAimIndicatorHandle == false)
+            {
+                return;
+            }
+
+            AsyncOperationHandle<GameObject> handle = _skillAimIndicatorHandle;
+            _skillAimIndicatorHandle = default;
+            _hasSkillAimIndicatorHandle = false;
+
+            if (handle.IsValid() == true)
+            {
+                Addressables.ReleaseInstance(handle);
+            }
+        }
     }
 }

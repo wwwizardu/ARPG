@@ -11,6 +11,11 @@ namespace ARPG
     {
         void Remove(int entityId);
         bool Contains(int entityId);
+
+        /// <summary>
+        /// 저장된 모든 엔트리를 제거한다. 풀 인스턴스 자체는 유지되므로 캐시된 참조가 계속 유효하다.
+        /// </summary>
+        void Clear();
     }
 
     public class SparseSet<T> : IComponentPool
@@ -219,6 +224,23 @@ namespace ARPG
             _dense[lastIndex] = 0;
             _data[lastIndex] = default;
             _count--;
+        }
+
+        /// <summary>
+        /// 모든 엔트리를 제거한다. 배열/Dictionary 인스턴스와 확보된 용량은 유지하므로
+        /// 이 SparseSet 참조를 캐시한 쪽은 Clear 이후에도 계속 같은 인스턴스를 본다.
+        /// </summary>
+        public void Clear()
+        {
+            for (int i = 0; i < _count; i++)
+            {
+                RemoveSparseIndex(_dense[i]);
+                _dense[i] = 0;
+                _data[i] = default;
+            }
+
+            _fallbackSparse.Clear();
+            _count = 0;
         }
 
         public void ForEach(Action<T> action)

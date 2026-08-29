@@ -495,6 +495,10 @@ namespace ARPG.Tables
         [JsonProperty("ProjectileId")] public int ProjectileId;                          // 발사체 테이블 ID (0이면 즉발)
         [JsonProperty("AreaEffectId")] public int AreaEffectId;                          // 장판 테이블 ID (0이면 장판 없음)
         [JsonProperty("BaseProjectileCount")] public int BaseProjectileCount = 1;        // 기본 발사 개수. 최종 = BaseProjectileCount + Stat.ProjectileCountAdd
+        [JsonProperty("AimTrackingMode")] public GE.SkillAimTrackingMode AimTrackingMode = GE.SkillAimTrackingMode.Default;
+        [JsonProperty("AimTurnSpeedDegPerSec")] public float AimTurnSpeedDegPerSec;
+        [JsonProperty("MovementMode")] public GE.SkillMovementMode MovementMode = GE.SkillMovementMode.Default;
+        [JsonProperty("MoveSpeedWhileUsingMul")] public float MoveSpeedWhileUsingMul;
         [JsonProperty("ArcHeight")] public float ArcHeight;                              // 포물선 최대 높이 (점프, Arc 투사체 등에 사용. 0이면 지면 유지)
         [JsonProperty("BaseDamageMul")] public int BaseDamageMul = 100;                  // 스킬 베이스 데미지 배율 (100=1.0x). 플랫 데미지(베이스+Added) 합산 후 스킬 배율/치명타보다 먼저 적용
         [JsonProperty("BaseAttackSpeedMul")] public int BaseAttackSpeedMul = 100;        // 스킬 베이스 공속 배율 (100=1.0x). 무기 공속에 곱한 뒤 FinalAttackSpeed% 적용

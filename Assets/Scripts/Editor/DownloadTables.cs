@@ -55,7 +55,7 @@ namespace ARPG.Editor
             Register<DropTable>(list, "1241586373&range=A:K");
             Register<DropCurrencyTable>(list, "2071520432&range=A:V");
             Register<DropEquipmentTable>(list, "1267382287&range=A:V");
-            Register<SkillTable>(list, "92727160&range=A:AM");
+            Register<SkillTable>(list, "92727160&range=A:AQ");
             // Phase 1: SkillEffect 합성 시스템용 테이블 (+ 스킬 페이지 Tier/비용 메타데이터 + Kind 분류 컬럼)
             Register<SkillEffectTable>(list, "1681865950&range=A:N");
             Register<SkillBookTable>(list, "1726438368&range=A:C");
@@ -983,13 +983,17 @@ namespace ARPG.Editor
         /// enum 컬럼 파서. 문자열("Housing") 또는 정수("1") 모두 허용.
         /// 빈 칸/누락/파싱 실패 시 defaultValue 반환.
         /// </summary>
-        private static T ParseEnumSafe<T>(string[] values, int index, T defaultValue) where T : struct, Enum
+        /// <param name="rowId">진단 메시지에 표시할 테이블 행 Id. 넘기지 않으면 생략된다.</param>
+        private static T ParseEnumSafe<T>(string[] values, int index, T defaultValue, int rowId = -1) where T : struct, Enum
         {
             if (index >= values.Length) return defaultValue;
             string s = values[index]?.Trim();
             if (string.IsNullOrEmpty(s)) return defaultValue;
             if (Enum.TryParse<T>(s, ignoreCase: true, out T v) && Enum.IsDefined(typeof(T), v)) return v;
-            Debug.LogWarning($"[ParseEnumSafe] '{s}' not a valid {typeof(T).Name} — defaulting to {defaultValue}");
+
+            // 해석 불가한 enum 문자열은 언제나 시트 저작 오류이므로 오류로 기록한다.
+            string rowInfo = rowId >= 0 ? $" Id={rowId}:" : "";
+            Debug.LogError($"[ParseEnumSafe]{rowInfo} '{s}' is not a valid {typeof(T).Name}. Defaulting to {defaultValue}.");
             return defaultValue;
         }
 
@@ -1164,6 +1168,51 @@ namespace ARPG.Editor
             table.MinChargeRatio     = values.Length > 37 && float.TryParse(values[37], out var mcr) ? mcr : 0f;
             // Phase 3: BaseProjectileCount (빈 셀이면 1로 기본값. 발사 0개 방지)
             table.BaseProjectileCount = values.Length > 38 && int.TryParse(values[38], out var bpc) ? Mathf.Max(1, bpc) : 1;
+
+            table.AimTrackingMode = ParseEnumSafe(values, 39, GlobalEnum.SkillAimTrackingMode.Default, table.Id);
+            table.AimTurnSpeedDegPerSec = ParseFloatSafe(values, 40);
+            table.MovementMode = ParseEnumSafe(values, 41, GlobalEnum.SkillMovementMode.Default, table.Id);
+            table.MoveSpeedWhileUsingMul = ParseFloatSafe(values, 42);
+
+            // 두 수치 컬럼은 0이 "미설정 → 런타임 기본값 사용"을 뜻한다(POE2_CURSOR_TRACKING_PLAN §4.1 빈 셀 기본값 표).
+            // 따라서 범위를 벗어난 값을 0으로 되돌리면 로그가 말하는 값과 실제 적용값이 달라진다.
+            // 여기서는 (1) 실제로 적용될 값을 메시지에 그대로 밝히고, (2) 의도에 가장 가까운 유효값으로 보정한다.
+            // 참고: "회전 금지"는 AimTrackingMode=SnapshotOnCommand, "완전 정지"는 MovementMode=Locked로 표현하므로
+            //       0을 미설정 센티널로 쓰는 데서 오는 표현력 손실은 없다.
+            if (table.AimTurnSpeedDegPerSec < 0f)
+            {
+                Debug.LogError($"[ParseSkillTable] Skill Id={table.Id}({table.Name}): AimTurnSpeedDegPerSec({table.AimTurnSpeedDegPerSec})는 0 이상이어야 합니다. " +
+                               $"0(미설정)으로 되돌리므로 런타임 기본값 {ARPG.Skill.SkillUsePolicyResolver.DefaultAimTurnSpeedDegPerSec}도/초가 적용됩니다. " +
+                               $"회전을 막으려면 AimTrackingMode=SnapshotOnCommand를 사용하세요.");
+                table.AimTurnSpeedDegPerSec = 0f;
+            }
+
+            if (table.MoveSpeedWhileUsingMul > 100f)
+            {
+                // 0으로 되돌리면 런타임 기본값 30%가 적용되어 "빠르게 하려다 오히려 느려지는" 정반대 결과가 된다.
+                Debug.LogError($"[ParseSkillTable] Skill Id={table.Id}({table.Name}): MoveSpeedWhileUsingMul({table.MoveSpeedWhileUsingMul})는 0~100 범위여야 합니다. " +
+                               $"의도에 가장 가까운 100(감속 없음)으로 보정합니다.");
+                table.MoveSpeedWhileUsingMul = 100f;
+            }
+            else if (table.MoveSpeedWhileUsingMul < 0f)
+            {
+                float defaultPercent = ARPG.Skill.SkillUsePolicyResolver.DefaultMoveSpeedWhileUsingMultiplier * 100f;
+                Debug.LogError($"[ParseSkillTable] Skill Id={table.Id}({table.Name}): MoveSpeedWhileUsingMul({table.MoveSpeedWhileUsingMul})는 0~100 범위여야 합니다. " +
+                               $"0(미설정)으로 되돌리므로 런타임 기본값 {defaultPercent}%가 적용됩니다. " +
+                               $"완전히 멈추려면 MovementMode=Locked를 사용하세요.");
+                table.MoveSpeedWhileUsingMul = 0f;
+            }
+
+            // 점프 이동 구간은 Process 단계에서만 실행되므로 ProcessTime이 체공 시간이 된다.
+            // 조건은 런타임의 StartJump 발동 조건(SkillType=Jump && ArcHeight>0)과 동일하게 맞춘다.
+            // 값은 고치지 않는다 — 런타임이 하한으로 대체하며 로그를 남기고, 여기서는 저작 시점에 드러내는 역할만 한다.
+            if (table.SkillType == GlobalEnum.SkillType.Jump && table.ArcHeight > 0f && table.ProcessTime <= 0f)
+            {
+                Debug.LogError($"[ParseSkillTable] Skill Id={table.Id}({table.Name}): SkillType=Jump, ArcHeight={table.ArcHeight}인데 ProcessTime={table.ProcessTime}입니다. " +
+                               $"점프 체공 시간은 ProcessTime에서 오므로 ProcessTime > 0 이어야 합니다. " +
+                               $"현재 값이면 포물선 없이 착지 지점으로 즉시 이동합니다. " +
+                               $"(StartTime={table.StartTime}, ProcessTime={table.ProcessTime}, EndTime={table.EndTime})");
+            }
         }
 
         /// <summary>

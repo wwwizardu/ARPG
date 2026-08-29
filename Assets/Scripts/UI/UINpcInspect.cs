@@ -499,7 +499,7 @@ namespace ARPG.UI
             AddStatRow("치명타 피해", $"{sc.FinalCriDamage}%");
             AddStatRow("공격 속도", $"{sc.FinalAttackSpeed}");
             AddStatRow("시전 속도", $"{sc.FinalCastSpeed}");
-            AddStatRow("이동 속도", $"{sc.FinalMoveSpeed * sc.FinalMoveSpeedMul / 100f:F2}");
+            AddStatRow("이동 속도", $"{sc.FinalMoveSpeedValue:F2}");
             AddStatRow("방어력", sc.FinalDefense.ToString());
             AddStatRow("화염 저항", $"{sc.FinalFireResist}% / {sc.FinalMaxFireResist}%");
             AddStatRow("냉기 저항", $"{sc.FinalIceResist}% / {sc.FinalMaxIceResist}%");

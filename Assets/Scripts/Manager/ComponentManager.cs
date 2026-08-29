@@ -10,6 +10,11 @@ namespace ARPG.Component
         private readonly Dictionary<Type, IComponentPool> _componentPools = new();
 
         /// <summary>
+        /// <see cref="_componentPools"/>와 같은 풀들을 for 순회용으로 보관. Reset()에서 전체 풀을 비울 때 사용.
+        /// </summary>
+        private readonly List<IComponentPool> _poolList = new();
+
+        /// <summary>
         /// Entity별로 등록된 컴포넌트 타입들을 추적
         /// Key: EntityId, Value: 해당 Entity에 등록된 컴포넌트 타입들
         /// </summary>
@@ -57,6 +62,8 @@ namespace ARPG.Component
 
             // 보통 사용되는 컴포넌트
             { typeof(InputComponent), 100 },
+            { typeof(SkillAimIndicatorComponent), 8 },
+            { typeof(SkillMovementPenaltyComponent), 20 },
 
             // AI 컴포넌트 (NPC/몬스터용)
             { typeof(AIComponent), 500 },
@@ -141,17 +148,24 @@ namespace ARPG.Component
 
         public void Reset()
         {
-            // 모든 컴포넌트 풀 정리
-            _componentPools.Clear();
+            // 풀 인스턴스는 유지하고 내용만 비운다. 시스템이 OnCreate에서 캐시한 SparseSet 참조가
+            // Reset 이후에도 유효해야 하기 때문 — 풀을 교체하면 캐시한 시스템들이 조용히 죽은 풀을 읽는다.
+            // 확보된 용량(_poolSizes 기반)도 함께 보존된다.
+            for (int i = 0; i < _poolList.Count; i++)
+            {
+                _poolList[i].Clear();
+            }
+
             _entityComponents.Clear();
 
-            // 모든 PoolCache<T>.Pool 무효화 (static 필드라 인스턴스 Clear로 안 사라짐)
+            // PoolCache<T>.Pool 무효화. 풀 인스턴스가 유지되므로 필수는 아니지만,
+            // static 캐시를 인스턴스 상태와 어긋나지 않게 유지하는 방어 단계로 남긴다.
             for (int i = 0; i < _cacheInvalidators.Count; i++)
             {
                 _cacheInvalidators[i].Invoke();
             }
 
-            Debug.Log("ComponentManager Reset - All component pools cleared");
+            Debug.Log($"ComponentManager Reset - {_poolList.Count} component pools cleared");
         }
 
         // 컴포넌트 추가/업데이트 (존재하면 업데이트, 없으면 추가)
@@ -287,6 +301,7 @@ namespace ARPG.Component
             int capacity = _poolSizes.TryGetValue(type, out int size) ? size : DEFAULT_POOL_SIZE;
             SparseSet<T> newPool = new SparseSet<T>(capacity);
             _componentPools[type] = newPool;
+            _poolList.Add(newPool);
             PoolCache<T>.Pool = newPool;
 
             Debug.Log($"[ComponentManager] Created component pool for {type.Name} with capacity {capacity}");

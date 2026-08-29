@@ -16,13 +16,21 @@ namespace ARPG.Systems
         private Input.ArpgInputAction.PlayerActions? _input;
 
         private ComponentManager _componentManager = null!;
+        private Camera? _mainCamera;
         private int _playerEntityId;
+
+        private static readonly Key[] _skillDigitKeys =
+        {
+            Key.Digit1, Key.Digit2, Key.Digit3, Key.Digit4,
+            Key.Digit5, Key.Digit6, Key.Digit7, Key.Digit8,
+        };
 
         public void OnCreate()
         {
             _input = AR.s.UI.Input.Player;
             
             _componentManager = AR.s.Component;
+            _mainCamera = Camera.main;
             _playerEntityId = -1;
 
             Debug.Log("System_Input Created");
@@ -30,6 +38,8 @@ namespace ARPG.Systems
 
         public void OnReset()
         {
+            _mainCamera = null;
+            _playerEntityId = -1;
             Debug.Log("System_Input Reset");
         }
 
@@ -111,6 +121,14 @@ namespace ARPG.Systems
 
             inputComponent.MoveDirection = _input.Value.Move.ReadValue<Vector2>();
             inputComponent.MousePosition = _input.Value.MouseMove.ReadValue<Vector2>();
+            if (_mainCamera == null)
+            {
+                _mainCamera = Camera.main;
+            }
+            if (_mainCamera != null)
+            {
+                inputComponent.MouseWorldPosition = _mainCamera.ScreenToWorldPoint(inputComponent.MousePosition);
+            }
             inputComponent.IsInteracting = _input.Value.Interact.WasPressedThisFrame();
             inputComponent.IsSprinting = _input.Value.Sprint.IsPressed();
 
@@ -123,13 +141,9 @@ namespace ARPG.Systems
             if (_input.Value.Jump.IsPressed()) heldMask |= 1 << 1;
             if (Keyboard.current != null)
             {
-                Key[] heldDigitKeys = {
-                    Key.Digit1, Key.Digit2, Key.Digit3, Key.Digit4,
-                    Key.Digit5, Key.Digit6, Key.Digit7, Key.Digit8,
-                };
-                for (int i = 0; i < heldDigitKeys.Length; i++)
+                for (int i = 0; i < _skillDigitKeys.Length; i++)
                 {
-                    if (Keyboard.current[heldDigitKeys[i]].isPressed)
+                    if (Keyboard.current[_skillDigitKeys[i]].isPressed)
                         heldMask |= 1 << (i + 2);
                 }
             }
@@ -147,7 +161,7 @@ namespace ARPG.Systems
 
             if (_input.Value.Attack.IsPressed() == true)
             {
-                if (_input.Value.Attack.WasPressedThisFrame() == true && CheckPickupItem(inputComponent.MousePosition) == true)
+                if (_input.Value.Attack.WasPressedThisFrame() == true && CheckPickupItem(inputComponent.MouseWorldPosition) == true)
                 {
                     inputComponent.IsAttacking = false;
                 }
@@ -173,13 +187,9 @@ namespace ARPG.Systems
             // 추후 키바인딩 UI 도입 시 ArpgInput 액션으로 이전 가능. 일단 raw 키로 처리.
             if (Keyboard.current != null)
             {
-                Key[] digitKeys = {
-                    Key.Digit1, Key.Digit2, Key.Digit3, Key.Digit4,
-                    Key.Digit5, Key.Digit6, Key.Digit7, Key.Digit8,
-                };
-                for (int i = 0; i < digitKeys.Length; i++)
+                for (int i = 0; i < _skillDigitKeys.Length; i++)
                 {
-                    if (Keyboard.current[digitKeys[i]].wasPressedThisFrame)
+                    if (Keyboard.current[_skillDigitKeys[i]].wasPressedThisFrame)
                     {
                         UseSkill(ref inputComponent, i + 2); // 슬롯 2~9
                     }
@@ -187,12 +197,10 @@ namespace ARPG.Systems
             }
         }
 
-        private bool CheckPickupItem(Vector3 inMousePos)
+        private bool CheckPickupItem(Vector2 inMouseWorldPosition)
         {
-            Vector3 mouseWorldPos = Camera.main.ScreenToWorldPoint(new Vector3(inMousePos.x, inMousePos.y, 0f));
-
             // 2D 레이캐스트 (2D 게임의 경우)
-            RaycastHit2D hit = Physics2D.Raycast(mouseWorldPos, Vector2.zero);
+            RaycastHit2D hit = Physics2D.Raycast(inMouseWorldPosition, Vector2.zero);
             if (hit.collider != null)
             {
                 // 아이템 컴포넌트 확인
@@ -211,9 +219,7 @@ namespace ARPG.Systems
 
         private void UseSkill(ref InputComponent inInputComponent, int slotIndex)
         {
-            Vector2 targetPosition = Camera.main.ScreenToWorldPoint(inInputComponent.MousePosition);
-
-            if (SkillHelper.GetSkillCommandComponent(slotIndex, _playerEntityId, targetPosition, out var command) == false)
+            if (SkillHelper.GetSkillCommandComponent(slotIndex, _playerEntityId, inInputComponent.MouseWorldPosition, out var command) == false)
                 return;
 
             // 캐릭터 엔티티에 커맨드 설정 (이미 있으면 최신 값으로 덮어쓰기)

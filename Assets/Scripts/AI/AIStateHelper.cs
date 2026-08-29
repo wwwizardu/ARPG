@@ -151,7 +151,7 @@ namespace ARPG.AI
 
             // Speed 항상 설정 (PF 있어도 handler 의도한 속도 유지)
             Vector2 directDirection = (targetPosition - transform.Position).normalized;
-            velocity.Speed = stat.FinalMoveSpeed * stat.FinalMoveSpeedMul / 100f * speedMultiplier;
+            velocity.Speed = stat.FinalMoveSpeedValue * speedMultiplier * SkillHelper.GetSkillMovementMultiplier(entityId);
             // 임시 Direction (PF 미연산/실패 케이스 fallback). System_Pathfinding이 Following 상태면 덮어씀.
 
             // PathfindingComponent에 Goal 반영
@@ -215,7 +215,7 @@ namespace ARPG.AI
 
             Vector2 direction = (transform.Position - threatPosition).normalized;
             velocity.Direction = direction;
-            velocity.Speed = stat.FinalMoveSpeed * stat.FinalMoveSpeedMul / 100f * speedMultiplier;
+            velocity.Speed = stat.FinalMoveSpeedValue * speedMultiplier * SkillHelper.GetSkillMovementMultiplier(entityId);
             cm.SetComponent(entityId, velocity);
         }
     }

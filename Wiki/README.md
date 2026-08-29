@@ -4,10 +4,11 @@
 name: wiki-map
 description: Docs/ 전체 주제를 얕고 넓게 조망하는 지도 페이지. 주제별 상세 위키 페이지의 진입점.
 type: map
-last_updated: 2026-08-22
+last_updated: 2026-08-28
 sources:
   - Wiki/current_status.md
   - Wiki/combat.md
+  - Wiki/skill_aim.md
   - Docs/README.md
   - Docs/combat/combatSystem.md
   - Docs/combat/ModSystem_Changelog.md
@@ -29,9 +30,10 @@ sources:
 
 | 주제 | 한 줄 요약 | 문서 위치 | 흩어짐 | 코드 연결도 |
 |------|-----------|----------|:------:|:----------:|
-| **current_status** → [current_status.md](current_status.md) | 2026-08-22 기준 구현 현황·미검증 항목·권장 재개 순서 [src: Wiki/current_status.md] | 최신 관련 Docs + 코드·테이블 대조 | — | 상 |
+| **current_status** → [current_status.md](current_status.md) | 2026-08-28 기준 구현 현황·미검증 항목·권장 재개 순서 [src: Wiki/current_status.md] | 최신 관련 Docs + 코드·테이블 대조 | — | 상 |
 | **overview** | 게임 컨셉(3대 축)과 시스템별 구현 현황·로드맵 | `Docs/overview/` 2장 (gameOverview, implementationStatus) + `Docs/README.md`(대시보드) | 하 | 하 |
 | **combat** → [combat.md](combat.md) | 장비 옵션 글로벌화, 무기 Base/고유 강화 경계, 피해·치명타·공격속도 프로필과 전투 소비 경로 [src: Wiki/combat.md] | `Docs/combat/` 9장 + 관련 전투 코드 [src: Docs/combat/] | 상 | 상 |
+| **skill_aim** → [skill_aim.md](skill_aim.md) | 커서 조준 추적·효과 커밋, 플레이어 방향 화살표 View, 스킬 사용 중 이동 감속 [src: Wiki/skill_aim.md] | `Docs/combat/POE2_CURSOR_TRACKING_PLAN.md` + 조준·스킬·이동 코드 | 중 | 상 |
 | **ai_monster** | 몬스터 AI 상태머신 패턴과 데이터 주도 스폰 풀 | `Docs/ai_monster/` 2장 (monsterAIPattern, MONSTER_SPAWN_DESIGN) | 하 | 중 |
 | **map** | 청크 기반 오픈월드 맵 생성·바이옴 타일셋·충돌/길찾기 | `Docs/map/` 3장 (MAP_DESIGN, COLLISION_PATHFINDING_DESIGN, THEME_TILESET_REFACTOR) | 중 | 중 |
 | **village** → [village.md](village.md) | 마을 자가성장 — 자원·건설·Tier·벽의 실시간/추상 LOD와 서비스 [src: Docs/village/VILLAGE_RUNTIME_DESIGN.md] | `Docs/village/` 4장 (런타임·추상 건설·우선순위·성장 목표) | 중 | 상 |

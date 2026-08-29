@@ -334,9 +334,26 @@ public class GlobalEnum
 
     public enum SkillTargetType
     {
-        SingleEntity,
         Direction,
         Position,   // 지점 지정 (마우스 위치로 도약하는 Leap Slam 등)
+    }
+
+    public enum SkillAimTrackingMode : byte
+    {
+        Default,
+        SnapshotOnCommand,
+        TrackUntilCommit,
+        TrackPerCommit,
+        TrackContinuously,
+    }
+
+    public enum SkillMovementMode : byte
+    {
+        Default,
+        FullSpeed,
+        Reduced,
+        Locked,
+        OwnedMotion,
     }
 
     /// <summary>

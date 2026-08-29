@@ -40,7 +40,7 @@
 
 | 컬럼 | 의미 |
 |---|---|
-| `SkillTargetType` | `SingleEntity` / `Direction` / `Position` |
+| `SkillTargetType` | `Direction` / `Position` |
 | `SkillRangeMin` / `SkillRangeMax` | 시전 가능 사거리 (AI/UI용) |
 | `SkillTargetRange1` | 히트 판정 거리 (즉발) |
 | `SkillTargetRange2` | 히트 판정 각도 (360=원, 그 외=부채꼴) |
@@ -75,11 +75,11 @@
 | 근접 평타·광역 | A1 ~ A5 | ✅ | — |
 | 이동/돌진 | M1 ~ M3 | M1만 | M2/M3 (§6.3) |
 | 원거리 발사체 | R1 ~ R4 | ✅ | R3 관통/다중 (§6.4) |
-| 원소 스펠 | S1 ~ S6 | S1·S2·S6 | S3·S4·S5 (§6.5/§6.6) |
-| 버프/디버프 | B1 ~ B4 | — | 전부 (§6.2/§6.7) |
-| 채널링/차징 | C1 ~ C3 | — | 전부 (§6.1) |
+| 원소 스펠 | S1·S2·S4·S5·S6 | S1·S2·S6 | S4·S5 (§6.3/§6.6) |
+| 버프/디버프 | B2 ~ B3 | — | 전부 (§6.2/§6.7) |
+| 채널링/차징 | C1 ~ C2 | — | 전부 (§6.1) |
 
-총 **25종 초안**. 한 캐릭터/직업이 모두 가지는 것은 아니며, 상위 시스템(스킬 트리/장비 그란트 등)이 슬롯에 매핑.
+총 **21종 초안**. 한 캐릭터/직업이 모두 가지는 것은 아니며, 상위 시스템(스킬 트리/장비 그란트 등)이 슬롯에 매핑.
 
 ---
 
@@ -88,10 +88,10 @@
 모두 `SkillType=Melee`, `Tags=Attack|Melee|Physics`(+옵션).
 
 ### A1. Strike — 단발 평타 *(이미 존재, SkillId=1)*
-- `SkillTargetType`: SingleEntity
+- `SkillTargetType`: Direction, `SkillTargetRange1`: 2.0 (거리), `SkillTargetRange2`: 45 (각도)
 - `HitCount`: 1, `HitInterval`: 0
 - `ProcessTime`: 0.4 (무기 공속 스케일), `DamageTime`: 0.4
-- 특징: 가장 가까운 적 지정. AI 기본 공격으로도 사용.
+- 특징: 커서 방향 좁은 부채꼴 판정. AI 기본 공격으로도 사용.
 
 ### A2. Cleave — 부채꼴 광역
 - `SkillTargetType`: Direction
@@ -129,7 +129,7 @@
 `Tags`에 `Move` 포함. `SkillType=Jump`인 경우 자동 점프 처리.
 
 ### M1. QuickHop — 짧은 도약 *(이미 존재, SkillId=5)*
-- `SkillType`: Jump, `SkillTargetType`: SingleEntity (제자리)
+- `SkillType`: Jump, `SkillTargetType`: Direction, `SkillRangeMax`: 4.0
 - `ArcHeight`: 0.5, `ProcessTime`: 0.3
 - 특징: 회피용. `JumpComponent.InvincibleHeight` 이상에서 무적.
 
@@ -193,11 +193,6 @@
 - 효과: `Chill` 부여(이속 -30%, 3초)
 - `Cooltime`: 5
 
-### S3. Chain Lightning — 연쇄 번개 *(요구: §6.5)*
-- `SkillTargetType`: SingleEntity
-- 첫 타겟 적중 후 N회 연쇄 (반경 3, N=3)
-- 의존: 신규 컴포넌트/서비스 필요(연쇄 타겟 탐색). 또는 `ProjectileTable`에 ChainCount 추가.
-
 ### S4. Poison Cloud — 위치 지정 장판 *(요구: §6.6)*
 - `SkillTargetType`: Position
 - 장판 지속 시간 동안 진입 적에게 Poison DoT
@@ -219,11 +214,6 @@
 
 전부 `SkillType=Buff` 또는 `Tags=Buff/Debuff`. 적용은 §6.2(스킬 효과로 BuffComponent 부여) 의존.
 
-### B1. War Cry — 자기 공격력 버프
-- `SkillTargetType`: SingleEntity (자기 자신)
-- 효과: 공격력 +20%, 10초
-- `Cooltime`: 30
-
 ### B2. Iron Skin — 토글 방어 *(요구: §6.1, §6.2)*
 - ExecutionType: Toggle (현재 고정 MultiHit이라 컬럼화 필요)
 - 효과: 방어 +30%, 이속 -10%, 마나 채널 소모
@@ -233,11 +223,6 @@
 - `SkillTargetType`: Direction (각도 360)
 - 효과: 자기 + 아군 공격력 +10%, 5초
 - 의존: 아군 판별 로직(Faction/Tag) + Buff 적용.
-
-### B4. Curse of Weakness — 단일 디버프
-- `SkillTargetType`: SingleEntity
-- 효과: 적 공격력 -15%, 8초
-- `Tags`: Spell | Debuff
 
 ---
 
@@ -256,12 +241,6 @@
 - `MaxChargeTime`: 1.5, `MinChargeRatio`: 0.3
 - 입력 떼는 순간 차지 비율로 데미지 스케일된 발사체
 - 의존: `ProcessChargeSkill`의 입력 끊김 분기(현재 TODO).
-
-### C3. Drain Life — 단일 흡혈 채널링
-- ExecutionType: Channeling
-- `SkillTargetType`: SingleEntity
-- 매 틱 데미지 + LifeSteal 100%
-- 의존: C1과 동일.
 
 ---
 
@@ -300,11 +279,6 @@
 - ※ §6.8 `SkillEffectType.SpawnProjectile`은 별도 용도로 유지: "스킬과 다른 종류의 발사체를 스폰"(예: 폭발의 파편, 시체 폭발)에만 사용. 일반 Multi Shot에 사용 금지.
 - 포물선(R4): 발사체에 `ArcHeight` 적용 미해결. 별도 `ArcProjectile` 분기 또는 ProjectileSystem 보강 필요.
 - 영향: R4 (포물선만 미해결).
-
-### §6.5 연쇄 / 다중 타겟 메커니즘 *(우선순위: 낮음)*
-- 신규 컴포넌트 `ChainComponent` 또는 `ProjectileTable.ChainCount`.
-- 첫 타겟에서 가장 가까운 미타격 적 N개 탐색.
-- 영향: S3.
 
 ### §6.6 지속형 장판 (AreaEffect) *(우선순위: 낮음)*
 - `AreaEffectComponent { Position, Radius, DamageType, TickInterval, Duration, OwnerId, BuffId }`.
@@ -432,9 +406,9 @@ SkillEffectTable                         // 새 테이블
 | 1 ~ 49 | 근접 (A) | A1=1 (기존), A2=10, A3=11, A4=12, A5=13 |
 | 50 ~ 99 | 이동 (M) | M1=5 (기존, QuickHop), M2=50, M3=51 |
 | 100 ~ 199 | 원거리 (R) | R1=100, R2=101, R3=102, R4=103 |
-| 200 ~ 299 | 스펠 (S) | S1=200 ~ S6=205 |
-| 300 ~ 399 | 버프 (B) | B1=300 ~ B4=303 |
-| 400 ~ 499 | 채널/차징 (C) | C1=400 ~ C3=402 |
+| 200 ~ 299 | 스펠 (S) | S1=200, S2=201, S4=203, S5=204, S6=205 |
+| 300 ~ 399 | 버프 (B) | B2=301, B3=302 |
+| 400 ~ 499 | 채널/차징 (C) | C1=400, C2=401 |
 
 ProjectileId 대역도 동일 규칙 권장: 화살 100번대, 마법 200번대.
 
@@ -446,12 +420,12 @@ ProjectileId 대역도 동일 규칙 권장: 화살 100번대, 마법 200번대.
 
 1. **시스템 변경 0**: A2 Cleave, A3 Whirlwind(채널링 변형 포함, ExecutionType=2), A4 Heavy Slam, R1 Power Shot, R3 Piercing Bolt, S2 Ice Nova (테이블 행만 추가). ✅ §6.1 완료로 채널링도 시스템 변경 0 그룹에 포함.
 2. **§6.8 SkillEffect 골격 도입** (트리거 enum + Executor 빈 디스패치 + System_Skill 8개 호출 지점). 동작 변화 0, 토대만 마련.
-3. **§6.2 + §6.8 첫 EffectType (LifeStealOnHit, ApplyBuffOnHit)**: A5 Lacerate, B1 War Cry, B4 Curse of Weakness, S1 Fireball, S6 Frost Bolt. (§6.1은 완료)
+3. **§6.2 + §6.8 첫 EffectType (LifeStealOnHit, ApplyBuffOnHit)**: A5 Lacerate, S1 Fireball, S6 Frost Bolt. (§6.1은 완료)
 4. **§6.3**: M2 Leap Slam, M3 Dash Strike, S5 Lightning Strike, C1 Beam Cast.
 5. **§6.4 + EffectType.SpawnProjectile 계열**: R2 Multi Shot, R4 Arc Shot, "투사체 분리" 옵션.
 6. **§6.9 토템·지뢰·함정 위임** (§6.8 + Faction + Lifetime 의존): T1 Spell Totem, T2 Remote Mine, T3 Trap.
 7. **§6.6**: S4 Poison Cloud.
-8. **마지막**: S3 Chain Lightning, B2 Iron Skin, B3 Battle Roar, C2 Charged Bolt, C3 Drain Life.
+8. **마지막**: B2 Iron Skin, B3 Battle Roar, C2 Charged Bolt.
 
 ---
 
@@ -464,3 +438,4 @@ ProjectileId 대역도 동일 규칙 권장: 화살 100번대, 마법 200번대.
 - 2026-05-04 (rev 3): R2 Multi Shot 구현 — `SkillEffectType.SpawnProjectile` + `Stat.ProjectileCountAdd` 추가. SkillEffect 2003 / Skill Id=101. 발사체 옵션 합산 컨벤션(Param=base, Stat=modifier) 도입. §6.4를 §6.8에 흡수. 분산 각도는 코드 상수(15°/발) 고정 — 추후 Stat 추가 시 교체 예정.
 - 2026-05-04 (rev 4): R2 설계 재검토 — SpawnProjectile EffectType 기반 접근은 "스킬당 별도 SkillEffect 행 필요"라는 조합 폭발 문제로 폐기. 대신 **`SkillTable.BaseProjectileCount` 컬럼**을 추가하고 System_Skill의 ProjectileId 분기를 N발 부채꼴 발사로 확장. R2는 `ProjectileId=1, BaseProjectileCount=3`만으로 정의. `Stat.ProjectileCountAdd`는 모든 발사체 스킬에 자동 적용. SpawnProjectile EffectType은 "스킬과 다른 종류의 발사체 스폰" 용도로 살려둠.
 - 2026-05-16: `LifeSteal` 효과 경로 단일화. 기존 `LifeStealOnHit` (EffectAction)을 폐기하고 `SkillEffectKind.StatBonus + EffectType.LifeSteal`로 통합. `SkillStatBonusOnHitComponent.LifeStealBonus` 필드 추가 → `SkillAttackProfileComponent.LifeStealRatio`에서 캐릭터 stat과 합산 캐시. SkillEffectExecutor의 `LifeStealOnHit` 케이스 제거, `DownloadTables.InferSkillEffectKindFromEffectType`에서 `LifeSteal` 분기 제거(이제 default StatBonus로 추론). 매 적중마다 트리거 디스패치 없이 `DamageCalculator`가 단일 비율로 흡혈 처리. SkillEffect 1001 행 `Kind=StatBonus` 확정.
+- 2026-08-28: `SkillTargetType.SingleEntity` 폐기. 네임락(대상 ID 고정) 방식을 사용하지 않기로 결정하여 enum 멤버와 관련 런타임 경로(`FindClosestEntity`, `SkillTargetComponent.TargetId`/`TargetType`/`SetEntityTarget`/`HasTarget`)를 모두 제거. 이에 의존한 S3 Chain Lightning / B1 War Cry / B4 Curse of Weakness / C3 Drain Life 4종과, 유일 의존 스킬이 사라진 §6.5(연쇄 메커니즘)를 카탈로그에서 삭제 — 25종 → 21종. 문서와 실제 테이블이 어긋나 있던 A1 Strike / M1 QuickHop의 타겟 타입을 실제 값(`Direction`)으로 정정. 아울러 `SkillUsePolicyResolver.RequiresDirectionalAim`이 명시된 `AimTrackingMode`보다 먼저 검사되어 명시값을 무시하던 문제를 수정 — 이제 이 판정은 `Default` 해석 규칙과 화살표 표시 판단에만 쓰인다(명시값 우선).

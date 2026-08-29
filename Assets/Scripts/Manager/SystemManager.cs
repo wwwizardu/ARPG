@@ -21,6 +21,15 @@ namespace ARPG.Systems
         {
             Debug.Log("SystemManager Initialized");
 
+            // 재초기화 시 중복 등록 방지. Reset()은 등록을 유지하므로 해제는 여기서만 한다.
+            _systems.Clear();
+            _updateSystems.Clear();
+            _fixedUpdateSystems.Clear();
+            _lateUpdateSystems.Clear();
+            _updateSystemTimers.Clear();
+            _fixedUpdateSystemTimers.Clear();
+            _lateUpdateSystemTimers.Clear();
+
             // Systems 등록 (Priority 순서대로 주석)
 
             // Priority 5: Time System (Update) - 게임 시간 진행
@@ -108,6 +117,10 @@ namespace ARPG.Systems
             System_Pathfinding pathfindingSystem = new();
             RegisterSystems(pathfindingSystem);
 
+            // Priority 90: Skill Movement Penalty (FixedUpdate) - 스킬 단계별 일반 이동 배율 계산
+            System_SkillMovementPenalty skillMovementPenaltySystem = new();
+            RegisterSystems(skillMovementPenaltySystem);
+
             // Priority 100: Movement System (FixedUpdate) - 이동 로직
             System_Move moveSystem = new();
             RegisterSystems(moveSystem);
@@ -124,13 +137,13 @@ namespace ARPG.Systems
             System_Projectile projectileSystem = new();
             RegisterSystems(projectileSystem);
 
+            // Priority 190: Skill Aim System (FixedUpdate) - 최신 커서 방향으로 논리 조준 회전
+            System_SkillAim skillAimSystem = new();
+            RegisterSystems(skillAimSystem);
+
             // Priority 200: Skill System (FixedUpdate) - 스킬 로직
             System_Skill skillSystem = new();
             RegisterSystems(skillSystem);
-
-            // Priority 220: Jump System (FixedUpdate) - 점프 궤적 갱신 및 착지 처리
-            System_Jump jumpSystem = new();
-            RegisterSystems(jumpSystem);
 
             // Priority 240: Area Effect System (FixedUpdate) - 장판 틱 처리 (반경 내 적 데미지/버프)
             System_AreaEffect areaEffectSystem = new();
@@ -151,6 +164,14 @@ namespace ARPG.Systems
             // Priority 500: Animation System (Update) - 애니메이션 제어
             System_Animation animationSystem = new();
             RegisterSystems(animationSystem);
+
+            // Priority 510: Skill Aim Indicator (Update) - ECS 조준 방향을 플레이어 전용 View에 표시
+            System_SkillAimIndicator skillAimIndicatorSystem = new();
+            RegisterSystems(skillAimIndicatorSystem);
+
+            // Priority 800: Jump System (Update) - 확정된 점프 궤적 갱신 및 착지 처리
+            System_Jump jumpSystem = new();
+            RegisterSystems(jumpSystem);
 
             // Priority 1000: Render System (Update) - GameObject 동기화
             System_Render renderSystem = new();
@@ -203,6 +224,10 @@ namespace ARPG.Systems
             timers.AddRange(sortedTimers);
         }
 
+        /// <summary>
+        /// 모든 시스템을 초기 상태로 되돌린다. 시스템 등록은 유지하므로 Reset 직후에도 게임이 계속 돌아간다.
+        /// 등록 해제는 <see cref="Initialize"/>가 재초기화 시점에 담당한다.
+        /// </summary>
         public void Reset()
         {
             for (int i = 0; i < _systems.Count; i++)
@@ -210,15 +235,15 @@ namespace ARPG.Systems
                 _systems[i].OnReset();
             }
 
-            _systems.Clear();
-            _updateSystems.Clear();
-            _fixedUpdateSystems.Clear();
-            _lateUpdateSystems.Clear();
-            _updateSystemTimers.Clear();
-            _fixedUpdateSystemTimers.Clear();
-            _lateUpdateSystemTimers.Clear();
+            // UpdateInterval 누적 타이머도 초기 상태로 되돌린다.
+            for (int i = 0; i < _updateSystemTimers.Count; i++)
+                _updateSystemTimers[i] = 0f;
+            for (int i = 0; i < _fixedUpdateSystemTimers.Count; i++)
+                _fixedUpdateSystemTimers[i] = 0f;
+            for (int i = 0; i < _lateUpdateSystemTimers.Count; i++)
+                _lateUpdateSystemTimers[i] = 0f;
 
-            Debug.Log("SystemManager Reset - All systems disposed");
+            Debug.Log($"SystemManager Reset - {_systems.Count} systems reset");
         }
 
         public void RegisterSystems(ISystem inSystem)

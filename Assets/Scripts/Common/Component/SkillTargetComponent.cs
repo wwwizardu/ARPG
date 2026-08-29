@@ -8,31 +8,11 @@ namespace ARPG.Component
     /// </summary>
     public struct SkillTargetComponent
     {
-        /// <summary>타겟 타입 (플레이어, 몬스터, NPC 등)</summary>
-        public byte TargetType;
-
-        /// <summary>타겟 엔티티 ID</summary>
-        public long TargetId;
-
         /// <summary>타겟 위치 (위치 기반 스킬용)</summary>
         public Vector2 TargetPosition;
 
-        /// <summary>타겟 방향 (방향 기반 스킬용)</summary>
+        /// <summary>회전 제한이 적용된 현재 유효 조준 방향. 전투 판정과 방향 View의 정본</summary>
         public Vector2 TargetDirection;
-
-        /// <summary>
-        /// 타겟이 유효한지 여부
-        /// </summary>
-        public readonly bool HasTarget => TargetId != 0 || TargetPosition != Vector2.zero;
-
-        /// <summary>
-        /// 엔티티 타겟 설정
-        /// </summary>
-        public void SetEntityTarget(byte targetType, long targetId)
-        {
-            TargetType = targetType;
-            TargetId = targetId;
-        }
 
         /// <summary>
         /// 위치 타겟 설정
@@ -40,7 +20,6 @@ namespace ARPG.Component
         public void SetPositionTarget(Vector2 position)
         {
             TargetPosition = position;
-            TargetId = 0;
         }
 
         /// <summary>
@@ -49,7 +28,6 @@ namespace ARPG.Component
         public void SetDirectionTarget(Vector2 direction)
         {
             TargetDirection = direction.normalized;
-            TargetId = 0;
         }
 
         /// <summary>
@@ -57,8 +35,6 @@ namespace ARPG.Component
         /// </summary>
         public void Reset()
         {
-            TargetType = 0;
-            TargetId = 0;
             TargetPosition = Vector2.zero;
             TargetDirection = Vector2.zero;
         }

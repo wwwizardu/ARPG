@@ -88,6 +88,9 @@ namespace ARPG.Component
         /// <summary>토글이 활성화 상태인지</summary>
         public bool IsToggleActive;
 
+        /// <summary>TrackUntilCommit 계열 조준이 현재 실행에서 최종 확정됐는지 여부</summary>
+        public bool IsAimCommitted;
+
         /// <summary>
         /// 스킬 데이터를 초기화
         /// </summary>
@@ -97,6 +100,12 @@ namespace ARPG.Component
             LastChannelingTime = 0f;
             CurrentChargeTime = 0f;
             IsToggleActive = false;
+            ResetAimRuntimeData();
+        }
+
+        public void ResetAimRuntimeData()
+        {
+            IsAimCommitted = false;
         }
     }
 }
