@@ -6,6 +6,8 @@
 >
 > **현재 런타임 정본**: 구현이 완료되기 전까지 [VILLAGE_RUNTIME_DESIGN.md](VILLAGE_RUNTIME_DESIGN.md), [ABSTRACT_CONSTRUCTION_DESIGN.md](ABSTRACT_CONSTRUCTION_DESIGN.md), [BUILD_PRIORITY_DESIGN.md](BUILD_PRIORITY_DESIGN.md), [VILLAGE_NPC_BOUNDARY_DESIGN.md](../npc/VILLAGE_NPC_BOUNDARY_DESIGN.md)가 현행 동작의 정본이다. 이 문서는 그 정본을 변경하기 위한 작업 순서이지 현재 구현 계약이 아니다.
 >
+> **후속 사용자 결정 (2026-08-30, 마법 부여 접근성)**: V6의 Dwarf 전용 Forge 접근성 계약을 후속 설계에서 폐기한다. [ITEM_ENCHANTMENT_DESIGN.md](../combat/ITEM_ENCHANTMENT_DESIGN.md) MVP는 신규 게임의 모든 Race·Profile·초기 Stage 마을에 Forge 160을 최소 `FacilityTier=1`로 멱등 보장한다. 기존 누적 성장 결과가 Tier 2/3이면 높은 값을 유지하며, 구 세이브 전체 backfill은 범위에서 제외한다. 이 항목은 아직 미구현이므로 구현 전 런타임은 아래 V6 기록대로 Dwarf 전용이다.
+>
 > **관련 콘텐츠 방향**: [VILLAGE_GROWTH_STAGES.md](VILLAGE_GROWTH_STAGES.md) · [MAP_DESIGN.md](../map/MAP_DESIGN.md)
 
 ---
@@ -836,6 +838,8 @@ Stage 입력을 경제 인구와 분리한 후보를 검증하기 위해 실제 
 > 의도적으로 미달로 남긴다. Trade 재료는 물약·약초 아이템이 없어 실태그 5종(Ore/HeavyArmor/Arcane/Ranged/
 > RareImport) 순열로만 세분화한다. Layout은 슬롯 오프셋만 Race별 변주(콤팩트/벽 없음). 역할은 가벼운 실제
 > 효과(TradeHub 상권 강화·Capital Cap 상향) + Frontier/Conquered 확장점.
+>
+> **후속 변경 (2026-08-30)**: 위 Dwarf 전용 결정은 당시 구현·검증 이력으로만 유지한다. 마법 부여 MVP 구현 시 Forge 160을 모든 신규 게임 마을의 최소 Tier 1 공통 접근 서비스로 승격한다. 상세 계약은 `ITEM_ENCHANTMENT_DESIGN.md` §5.1을 따른다.
 
 #### 작업
 
@@ -1035,6 +1039,8 @@ V8은 현재 구현 범위에 포함하지 않는다. V0~V7에서는 후속 확�
 | 첫 Profile | Dwarf 광산 마을 | V0 |
 | 필수 시설 수 | 중심 거점 + 시장 + 휴식소, 최대 3개 | V0 |
 | 특수 시설 배치 | Village Tier 1, Town Tier 2, City Tier 3 | V0 |
+| Forge 최소 접근성 | 신규 게임의 모든 Race·Profile·초기 Stage 마을에 Forge 160 Tier 1 이상 보장. 기존 Tier 2/3은 유지 | 2026-08-30 마법 부여 MVP |
+| Forge 구 세이브 | 전체 backfill 제외, New Game 완성형부터 적용 | 2026-08-30 마법 부여 MVP |
 | 초기 필수 시설 비용 | 자원·건설시간 미사용, 완공 원장으로 생성 | V3 |
 | 벽 정본 | 기능 없는 청사진 경계 제거, 충돌·HP·Gate 개폐 기능을 가진 방어 구조만 사용 | V4 |
 | 상점 슬롯 | 공통 2 + 특산 2 + 특수/희귀 1 | V5 |

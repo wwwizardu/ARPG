@@ -1,8 +1,8 @@
 #nullable enable
+using System.Collections.Generic;
 using ARPG.Base;
-using ARPG.Component;
 using ARPG.Data;
-using ARPG.Village;
+using ARPG.Item;
 using Unity.AppUI.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -12,321 +12,463 @@ using Text = Unity.AppUI.UI.Text;
 namespace ARPG.UI
 {
     /// <summary>
-    /// Phase D: 강화 UI (Furnace anchor 기준).
-    /// HasObjectSet으로 단계 결정:
-    ///   - 1단계 (Furnace만): 분해
-    ///   - 2단계 (+ Anvil): Mod 재롤
-    ///   - 3단계 (+ QuenchVat): Mod 추가 + 비용 -20%
-    ///
-    /// 사용자 흐름: 인벤토리 그리드에서 장비 선택 → 분해/재롤/MOD추가 버튼 클릭.
+    /// 미장착 장비와 랜덤 교체/추가 작업만 선택하는 Forge 마법부여 UI.
+    /// 후보 구성·옵션 롤·비용·데이터 변경은 ItemEnchantmentService만 수행한다.
     /// </summary>
     public class UIForge : UIBaseForm
     {
-        public enum ForgeTier
-        {
-            None,
-            Basic,      // Furnace
-            Standard,   // + Anvil
-            Premium,    // + Anvil + QuenchVat
-        }
-
-        private const int REROLL_BASE_COST = 50;
-        private const int ADDMOD_BASE_COST = 80;
-
         private UIDocument? _document;
         private Button? _disassembleBtn;
-        private Button? _rerollBtn;
-        private Button? _addModBtn;
+        private Button? _replaceBtn;
+        private Button? _addBtn;
         private IconButton? _closeBtn;
         private Text? _tierText;
-        private Text? _discountText;
         private Text? _selectedText;
+        private Text? _replaceCostText;
+        private Text? _replaceStatusText;
+        private Text? _addCostText;
+        private Text? _addStatusText;
+        private Text? _resultTitle;
+        private VisualElement? _selectedOptions;
+        private VisualElement? _resultSection;
+        private VisualElement? _beforeOptions;
+        private VisualElement? _afterOptions;
 
         private int _forgeEntityId = -1;
-        private int _villageId = -1;
-        private ForgeTier _tier = ForgeTier.None;
+        private GlobalEnum.ForgeTier _tier = GlobalEnum.ForgeTier.None;
         private int _selectedSlotIndex = -1;
+        private int _selectedItemInstanceId = -1;
+        private bool _testBinding;
+        private ItemEnchantmentResult? _lastResult;
         private VisualElement? _lastRoot;
 
         public override void Initialize(string inName, bool isForm = false)
         {
             base.Initialize(inName, isForm);
-
             _document = GetComponent<UIDocument>();
             if (_document == null)
             {
                 Debug.LogError("[UIForge] UIDocument 컴포넌트 없음");
                 return;
             }
-
             EnsureBound();
-        }
-
-        /// <summary>
-        /// UIDocument는 SetActive 토글 시마다 rootVisualElement를 재구성하므로
-        /// root 변경을 감지해 매번 재바인딩. UIManager.Close는 SetActive(false)만 호출하고
-        /// 두 번째 Show 시 Initialize를 다시 호출하지 않기 때문.
-        /// </summary>
-        private void EnsureBound()
-        {
-            if (_document == null) return;
-            VisualElement root = _document.rootVisualElement;
-            if (root == null) return;
-            if (root == _lastRoot) return; // 같은 root → 이미 바인딩됨
-
-            _lastRoot = root;
-
-            _disassembleBtn = root.Q<Button>("disassemble-btn");
-            _rerollBtn = root.Q<Button>("reroll-btn");
-            _addModBtn = root.Q<Button>("addmod-btn");
-            _closeBtn = root.Q<IconButton>("close-btn");
-            _tierText = root.Q<Text>("tier-text");
-            _discountText = root.Q<Text>("discount-text");
-            _selectedText = root.Q<Text>("selected-text");
-
-            if (_disassembleBtn != null) _disassembleBtn.clicked += OnClickDisassemble;
-            if (_rerollBtn != null) _rerollBtn.clicked += OnClickReroll;
-            if (_addModBtn != null) _addModBtn.clicked += OnClickAddMod;
-            if (_closeBtn != null) _closeBtn.clicked += () => Close();
         }
 
         public void Bind(int forgeEntityId)
         {
             EnsureBound();
             _forgeEntityId = forgeEntityId;
+            _tier = GlobalEnum.ForgeTier.None;
+            _testBinding = false;
+            ResetSelections();
 
-            if (AR.s.Component.TryGetComponent<PlacedObjectComponent>(_forgeEntityId, out var po) == false)
+            if (AR.s.Item.Enchantment.TryResolveForgeTier(forgeEntityId, out _tier) == false)
             {
-                Debug.LogWarning($"[UIForge] Bind 실패 — entityId={forgeEntityId} PlacedObject 없음");
-                return;
+                Debug.LogWarning($"[UIForge] Bind 실패 — entityId={forgeEntityId}는 유효한 Forge가 아님");
             }
-            _villageId = po.VillageId;
-            Vector2Int anchor = new Vector2Int(po.TileX, po.TileY);
-
-            // V4 (VILLAGE_REWORK_PLAN §3.6): 단일 제련소의 FacilityTier(1/2/3)가 기능 단계 정본.
-            //  Tier 1 = Basic(분해), Tier 2 = Standard(+Mod 재롤), Tier 3 = Premium(+Mod 추가, 비용 -20%)
-            // FacilityTier가 0인 구 세이브 배치(Furnace+Anvil+QuenchVat 세트)만 기존 세트 평가를 유지한다.
-            if (po.FacilityTier >= 3)
-                _tier = ForgeTier.Premium;
-            else if (po.FacilityTier == 2)
-                _tier = ForgeTier.Standard;
-            else if (po.FacilityTier == 1)
-                _tier = ForgeTier.Basic;
-            // 세트 단계 평가 (구 세이브 fallback — 가장 높은 단계 기준)
-            else if (AR.s.Village.HasObjectSet(_villageId, ObjectSetType.ForgePremium, anchor))
-                _tier = ForgeTier.Premium;
-            else if (AR.s.Village.HasObjectSet(_villageId, ObjectSetType.ForgeStandard, anchor))
-                _tier = ForgeTier.Standard;
-            else if (AR.s.Village.HasObjectSet(_villageId, ObjectSetType.ForgeBasic, anchor))
-                _tier = ForgeTier.Basic;
-            else
-                _tier = ForgeTier.None;
-
-            Debug.Log($"[Forge] v{_villageId} 강화 단계 {_tier} (FacilityTier={po.FacilityTier})");
-            _selectedSlotIndex = -1;
             RefreshAll();
         }
 
-        public void BindForTest(ForgeTier tier = ForgeTier.Premium)
+        public void BindForTest(GlobalEnum.ForgeTier tier = GlobalEnum.ForgeTier.Premium)
         {
             EnsureBound();
+#if UNITY_EDITOR
             _forgeEntityId = -1;
-            _villageId = -1;
             _tier = tier;
-            _selectedSlotIndex = -1;
+            _testBinding = true;
+            ResetSelections();
             RefreshAll();
-            Debug.Log($"[UIForge] BindForTest — 테스트 모드 ({tier})");
+            Debug.Log($"[UIForge] BindForTest — Editor 테스트 모드 ({tier})");
+#else
+            _forgeEntityId = -1;
+            _tier = GlobalEnum.ForgeTier.None;
+            _testBinding = false;
+            ResetSelections();
+            RefreshAll();
+            Debug.LogWarning("[UIForge] BindForTest는 Unity Editor에서만 사용할 수 있습니다.");
+#endif
         }
 
         public override void OnOpen()
         {
             base.OnOpen();
             EnsureBound();
+            ResetSelections();
+            if (_testBinding == false && _forgeEntityId >= 0)
+            {
+                if (AR.s.Item.Enchantment.TryResolveForgeTier(_forgeEntityId,
+                        out GlobalEnum.ForgeTier resolved) == true)
+                    _tier = resolved;
+                else
+                    _tier = GlobalEnum.ForgeTier.None;
+            }
             RefreshAll();
         }
 
-        // ========== 액션 ==========
-
-        public void OnClickDisassemble()
+        private void EnsureBound()
         {
-            if (_tier < ForgeTier.Basic) return;
-            ItemData? item = GetSelectedItem();
-            if (item == null) { Debug.Log("[Forge] 선택된 장비 없음"); return; }
-
-            // TODO: 인벤토리 슬롯 → 자원 환원 + 슬롯 비우기
-            Debug.Log($"[Forge] 분해: {item.Table?.Name} (slot={_selectedSlotIndex})");
-            _selectedSlotIndex = -1;
-            RefreshAll();
-        }
-
-        public void OnClickReroll()
-        {
-            if (_tier < ForgeTier.Standard) return;
-            ItemData? item = GetSelectedItem();
-            if (item == null) { Debug.Log("[Forge] 선택된 장비 없음"); return; }
-
-            int cost = ApplyDiscount(REROLL_BASE_COST);
-            // TODO: Currency 차감 + Mod 풀 재롤
-            Debug.Log($"[Forge] Mod 재롤: {item.Table?.Name} (slot={_selectedSlotIndex}, 비용={cost}G)");
-        }
-
-        public void OnClickAddMod()
-        {
-            if (_tier < ForgeTier.Premium) return;
-            ItemData? item = GetSelectedItem();
-            if (item == null) { Debug.Log("[Forge] 선택된 장비 없음"); return; }
-
-            int cost = ApplyDiscount(ADDMOD_BASE_COST);
-            // TODO: Currency 차감 + Mod 빈 슬롯 채우기
-            Debug.Log($"[Forge] Mod 추가: {item.Table?.Name} (slot={_selectedSlotIndex}, 비용={cost}G)");
-        }
-
-        // ========== 인벤토리 그리드 ==========
-
-        private void RebuildInventoryGrid()
-        {
-            // 매번 root에서 다시 query — 캐시된 _inventoryGrid는 두 번째 Show 시 stale일 수 있음
-            // (UIDocument가 비활성/활성될 때 rootVisualElement가 재구성되면서 자식 참조가 끊김)
-            if (_document == null) return;
+            if (_document == null)
+                return;
             VisualElement root = _document.rootVisualElement;
-            if (root == null) return;
-
-            VisualElement? grid = root.Q<VisualElement>("inventory-grid");
-            if (grid == null) return;
-
-            grid.Clear();
-
-            var inventory = AR.s.Player?.Inventory;
-            if (inventory == null)
-            {
-                AddEmptyMessage(grid, "플레이어 인벤토리 없음");
+            if (root == null || root == _lastRoot)
                 return;
-            }
 
-            var items = inventory.Items;
-            if (items == null || items.Count == 0)
-            {
-                AddEmptyMessage(grid, "인벤토리 비어있음");
-                return;
-            }
+            _lastRoot = root;
+            _disassembleBtn = root.Q<Button>("disassemble-btn");
+            _replaceBtn = root.Q<Button>("replace-btn");
+            _addBtn = root.Q<Button>("add-btn");
+            _closeBtn = root.Q<IconButton>("close-btn");
+            _tierText = root.Q<Text>("tier-text");
+            _selectedText = root.Q<Text>("selected-text");
+            _replaceCostText = root.Q<Text>("replace-cost-text");
+            _replaceStatusText = root.Q<Text>("replace-status-text");
+            _addCostText = root.Q<Text>("add-cost-text");
+            _addStatusText = root.Q<Text>("add-status-text");
+            _resultTitle = root.Q<Text>("result-title");
+            _selectedOptions = root.Q<VisualElement>("selected-options");
+            _resultSection = root.Q<VisualElement>("result-section");
+            _beforeOptions = root.Q<VisualElement>("before-options");
+            _afterOptions = root.Q<VisualElement>("after-options");
 
-            int equipmentCount = 0;
-            for (int i = 0; i < items.Count; i++)
-            {
-                int slotIdx = i; // closure capture
-                ItemData? item = items[i];
-
-                VisualElement slot = new VisualElement();
-                slot.AddToClassList("forge-inv-slot");
-
-                bool isEquipment = item != null && item.Table != null
-                    && item.Table.ItemType == GlobalEnum.ItemType.Equipment;
-
-                if (isEquipment)
-                {
-                    slot.AddToClassList("forge-inv-slot-equipment");
-                    if (slotIdx == _selectedSlotIndex)
-                        slot.AddToClassList("forge-inv-slot-selected");
-
-                    VisualElement icon = new VisualElement();
-                    icon.AddToClassList("forge-inv-icon");
-
-                    Sprite? sprite = item!.Table != null && string.IsNullOrEmpty(item.Table.SpriteName) == false
-                        ? AR.s.Data.GetSprite(item.Table.SpriteName)
-                        : null;
-                    if (sprite != null)
-                        icon.style.backgroundImage = new StyleBackground(sprite);
-
-                    slot.Add(icon);
-                    slot.RegisterCallback<ClickEvent>(_ => OnSelectSlot(slotIdx));
-                    slot.tooltip = item.Table?.Name ?? string.Empty;
-                    equipmentCount++;
-                }
-                else if (item != null)
-                {
-                    // 장비 아닌 아이템 — 회색 처리 (선택 불가)
-                    slot.AddToClassList("forge-inv-slot-disabled");
-                }
-                // else: 빈 슬롯 — 기본 스타일
-
-                grid.Add(slot);
-            }
-
-            if (equipmentCount == 0)
-                AddEmptyMessage(grid, "장비가 없습니다");
+            if (_disassembleBtn != null)
+                _disassembleBtn.clicked += OnClickDisassemble;
+            if (_replaceBtn != null)
+                _replaceBtn.clicked += OnClickReplace;
+            if (_addBtn != null)
+                _addBtn.clicked += OnClickAdd;
+            if (_closeBtn != null)
+                _closeBtn.clicked += OnClickClose;
         }
 
-        private void AddEmptyMessage(VisualElement grid, string msg)
+        private void OnClickClose()
         {
-            Text emptyText = new Text { text = msg };
-            emptyText.AddToClassList("forge-inv-empty-text");
-            grid.Add(emptyText);
+            Close();
+        }
+
+        private void OnClickDisassemble()
+        {
+            Debug.Log("[UIForge] 분해는 이번 MVP 범위가 아닙니다.");
+        }
+
+        private void OnClickReplace()
+        {
+            ExecuteOperation(GlobalEnum.ItemEnchantmentOperation.ReplaceAffix);
+        }
+
+        private void OnClickAdd()
+        {
+            ExecuteOperation(GlobalEnum.ItemEnchantmentOperation.AddAffix);
+        }
+
+        private void ExecuteOperation(GlobalEnum.ItemEnchantmentOperation operation)
+        {
+            if (GetSelectedItem() == null)
+                return;
+
+            ItemEnchantmentRequest request = CreateRequest(operation);
+            ItemEnchantmentResult result;
+#if UNITY_EDITOR
+            result = _testBinding == true
+                ? AR.s.Item.Enchantment.ExecuteForTest(request, _tier)
+                : AR.s.Item.Enchantment.Execute(request);
+#else
+            result = AR.s.Item.Enchantment.Execute(request);
+#endif
+            if (result.Success == false)
+            {
+                _lastResult = null;
+                RefreshAll();
+                Text? status = operation == GlobalEnum.ItemEnchantmentOperation.ReplaceAffix
+                    ? _replaceStatusText : _addStatusText;
+                if (status != null)
+                    status.text = GetFailureMessage(result.FailureReason);
+                return;
+            }
+
+            _lastResult = result;
+            RefreshAll();
         }
 
         private void OnSelectSlot(int slotIndex)
         {
             ItemData? item = AR.s.Player?.Inventory?.GetItemBySlotIndex(slotIndex);
-            if (item == null || item.Table == null || item.Table.ItemType != GlobalEnum.ItemType.Equipment)
+            if (IsEnchantableInventoryEquipment(item) == false)
                 return;
 
             _selectedSlotIndex = slotIndex;
-            Debug.Log($"[Forge] 선택: slot={slotIndex} {item.Table.Name}");
+            _selectedItemInstanceId = item!.ItemInstanceId;
+            _lastResult = null;
             RefreshAll();
-        }
-
-        // ========== 갱신 ==========
-
-        private ItemData? GetSelectedItem()
-        {
-            if (_selectedSlotIndex < 0) return null;
-            return AR.s.Player?.Inventory?.GetItemBySlotIndex(_selectedSlotIndex);
-        }
-
-        private int ApplyDiscount(int baseCost)
-        {
-            return _tier == ForgeTier.Premium ? Mathf.RoundToInt(baseCost * 0.8f) : baseCost;
         }
 
         private void RefreshAll()
         {
-            if (_tierText != null)
-            {
-                // V4: 신규 마을은 단일 제련소의 FacilityTier가 단계 정본 — 세트 구성 표기 제거
-                _tierText.text = _tier switch
-                {
-                    ForgeTier.Premium => "제련소 Tier 3 — 분해·Mod 재롤·Mod 추가 (비용 -20%)",
-                    ForgeTier.Standard => "제련소 Tier 2 — 분해·Mod 재롤",
-                    ForgeTier.Basic => "제련소 Tier 1 — 분해",
-                    _ => "강화 불가 — 제련 시설 없음",
-                };
-            }
-
-            if (_discountText != null)
-            {
-                _discountText.text = _tier == ForgeTier.Premium
-                    ? "Premium 할인: 모든 비용 -20%"
-                    : string.Empty;
-            }
-
+            RefreshTier();
             RebuildInventoryGrid();
+            RebuildSelectedOptions();
+            RefreshOperations();
+            RebuildResult();
+            _disassembleBtn?.SetEnabled(false);
+        }
 
+        private void RefreshTier()
+        {
+            if (_tierText == null)
+                return;
+            _tierText.text = _tier switch
+            {
+                GlobalEnum.ForgeTier.Premium => "제련소 Tier 3 — MVP 비용·후보는 Tier 1과 동일",
+                GlobalEnum.ForgeTier.Standard => "제련소 Tier 2 — MVP 비용·후보는 Tier 1과 동일",
+                GlobalEnum.ForgeTier.Basic => "제련소 Tier 1 — 랜덤 옵션 변경·추가 사용 가능",
+                _ => "마법부여 불가 — 유효한 제련소가 없습니다",
+            };
+        }
+
+        private void RebuildInventoryGrid()
+        {
+            if (_document == null)
+                return;
+            VisualElement? grid = _document.rootVisualElement.Q<VisualElement>("inventory-grid");
+            if (grid == null)
+                return;
+            grid.Clear();
+
+            Inventory? inventory = AR.s.Player?.Inventory;
+            if (inventory == null || inventory.Items == null)
+            {
+                AddMessage(grid, "플레이어 인벤토리가 없습니다", "forge-inv-empty-text");
+                return;
+            }
+
+            int equipmentCount = 0;
+            List<ItemData?> items = inventory.Items;
+            for (int i = 0; i < items.Count; i++)
+            {
+                int slotIndex = i;
+                ItemData? item = items[i];
+                VisualElement slot = new VisualElement();
+                slot.AddToClassList("forge-inv-slot");
+
+                if (IsEnchantableInventoryEquipment(item) == true)
+                {
+                    slot.AddToClassList("forge-inv-slot-equipment");
+                    if (slotIndex == _selectedSlotIndex)
+                        slot.AddToClassList("forge-inv-slot-selected");
+
+                    VisualElement icon = new VisualElement();
+                    icon.AddToClassList("forge-inv-icon");
+                    Sprite? sprite = string.IsNullOrEmpty(item!.Table!.SpriteName) == false
+                        ? AR.s.Data.GetSprite(item.Table.SpriteName)
+                        : null;
+                    if (sprite != null)
+                        icon.style.backgroundImage = new StyleBackground(sprite);
+                    slot.Add(icon);
+                    slot.RegisterCallback<ClickEvent>(_ => OnSelectSlot(slotIndex));
+                    slot.tooltip = item.Table.Name;
+                    equipmentCount++;
+                }
+                else if (item != null)
+                {
+                    slot.AddToClassList("forge-inv-slot-disabled");
+                    slot.tooltip = item.Table?.ItemType == GlobalEnum.ItemType.Equipment
+                        ? "인스턴스 1개로 분리된 장비만 마법부여할 수 있습니다"
+                        : string.Empty;
+                }
+                grid.Add(slot);
+            }
+            if (equipmentCount == 0)
+                AddMessage(grid, "마법부여할 미장착 장비가 없습니다", "forge-inv-empty-text");
+        }
+
+        private void RebuildSelectedOptions()
+        {
+            if (_selectedOptions == null)
+                return;
+            _selectedOptions.Clear();
             ItemData? selected = GetSelectedItem();
             if (_selectedText != null)
-            {
                 _selectedText.text = selected != null
-                    ? $"선택: {selected.Table?.Name}"
-                    : "강화할 장비를 선택하세요";
+                    ? $"선택: {selected.Table?.Name} (Item #{selected.ItemInstanceId})"
+                    : "장비를 선택하세요";
+            if (selected == null)
+            {
+                AddMessage(_selectedOptions, "선택된 장비 없음", "forge-list-empty");
+                return;
+            }
+            AddOptionLines(_selectedOptions,
+                AR.s.Item.Enchantment.GetOptionSnapshots(selected));
+        }
+
+        private void RefreshOperations()
+        {
+            RefreshOperation(GlobalEnum.ItemEnchantmentOperation.ReplaceAffix,
+                _replaceBtn, _replaceCostText, _replaceStatusText);
+            RefreshOperation(GlobalEnum.ItemEnchantmentOperation.AddAffix,
+                _addBtn, _addCostText, _addStatusText);
+        }
+
+        private void RefreshOperation(GlobalEnum.ItemEnchantmentOperation operation,
+            Button? button, Text? costText, Text? statusText)
+        {
+            button?.SetEnabled(false);
+            if (costText != null)
+                costText.text = "비용: -";
+            if (statusText != null)
+                statusText.text = GetSelectedItem() == null ? "먼저 장비를 선택하세요." : string.Empty;
+            if (GetSelectedItem() == null)
+                return;
+
+            ItemEnchantmentRequest request = CreateRequest(operation);
+            ItemEnchantmentPreview preview;
+#if UNITY_EDITOR
+            preview = _testBinding == true
+                ? AR.s.Item.Enchantment.InspectForTest(request, _tier)
+                : AR.s.Item.Enchantment.Inspect(request);
+#else
+            preview = AR.s.Item.Enchantment.Inspect(request);
+#endif
+            if (costText != null && preview.MaterialItem != null)
+            {
+                costText.text = $"비용: {preview.MaterialItem.Name} " +
+                    $"{preview.RequiredMaterialCount}개 (보유 {preview.OwnedMaterialCount}) + " +
+                    $"{preview.FinalGoldCost} Gold (보유 {preview.OwnedGold})";
+            }
+            if (statusText != null)
+            {
+                if (preview.CanApply == false)
+                    statusText.text = GetFailureMessage(preview.FailureReason);
+                else if (operation == GlobalEnum.ItemEnchantmentOperation.ReplaceAffix)
+                    statusText.text = $"교체 가능 옵션 {preview.ReplaceableAffixCount}개 · 랜덤 대체 후보 {preview.RandomCandidateCount}개";
+                else
+                    statusText.text = $"랜덤 후보 {preview.RandomCandidateCount}개 · Prefix {preview.PrefixCount}/{preview.SlotLimit} · Postfix {preview.PostfixCount}/{preview.SlotLimit}";
+            }
+            button?.SetEnabled(preview.CanApply);
+        }
+
+        private void RebuildResult()
+        {
+            if (_resultSection == null || _beforeOptions == null || _afterOptions == null)
+                return;
+            if (_lastResult == null || _lastResult.Success == false)
+            {
+                _resultSection.AddToClassList("forge-hidden");
+                _beforeOptions.Clear();
+                _afterOptions.Clear();
+                return;
             }
 
-            // 단계 + 선택 모두 충족해야 활성
-            bool hasSelection = selected != null;
-            if (_disassembleBtn != null) _disassembleBtn.SetEnabled(_tier >= ForgeTier.Basic && hasSelection);
-            if (_rerollBtn != null) _rerollBtn.SetEnabled(_tier >= ForgeTier.Standard && hasSelection);
-            if (_addModBtn != null) _addModBtn.SetEnabled(_tier >= ForgeTier.Premium && hasSelection);
+            _resultSection.RemoveFromClassList("forge-hidden");
+            if (_resultTitle != null)
+            {
+                if (_lastResult.ResolvedOperation
+                    == GlobalEnum.ItemEnchantmentOperation.ReplaceAffix)
+                {
+                    _resultTitle.text = $"랜덤 옵션 변경 성공 — " +
+                        $"{_lastResult.ReplacedMod?.DisplayText} → {_lastResult.AppliedMod?.DisplayText} / " +
+                        $"재료 {_lastResult.ConsumedMaterialCount}개 + {_lastResult.ConsumedGold} Gold";
+                }
+                else
+                {
+                    _resultTitle.text = $"랜덤 옵션 추가 성공 — " +
+                        $"{_lastResult.AppliedMod?.DisplayText} / 재료 " +
+                        $"{_lastResult.ConsumedMaterialCount}개 + {_lastResult.ConsumedGold} Gold";
+                }
+            }
+            _beforeOptions.Clear();
+            _afterOptions.Clear();
+            AddOptionLines(_beforeOptions, _lastResult.BeforeOptions);
+            AddOptionLines(_afterOptions, _lastResult.AfterOptions);
+        }
 
-            // 비용 표시 (Premium 할인 반영)
-            if (_rerollBtn != null) _rerollBtn.title = $"Mod 재롤 ({ApplyDiscount(REROLL_BASE_COST)}G)";
-            if (_addModBtn != null) _addModBtn.title = $"Mod 추가 ({ApplyDiscount(ADDMOD_BASE_COST)}G)";
+        private ItemData? GetSelectedItem()
+        {
+            if (_selectedSlotIndex < 0 || _selectedItemInstanceId < 0)
+                return null;
+            ItemData? item = AR.s.Player?.Inventory?.GetItemBySlotIndex(_selectedSlotIndex);
+            return IsEnchantableInventoryEquipment(item) == true
+                && item!.ItemInstanceId == _selectedItemInstanceId
+                ? item
+                : null;
+        }
+
+        private ItemEnchantmentRequest CreateRequest(
+            GlobalEnum.ItemEnchantmentOperation operation)
+        {
+            return new ItemEnchantmentRequest
+            {
+                ForgeEntityId = _forgeEntityId,
+                TargetInventorySlot = _selectedSlotIndex,
+                TargetItemInstanceId = _selectedItemInstanceId,
+                Operation = operation,
+            };
+        }
+
+        private void ResetSelections()
+        {
+            _selectedSlotIndex = -1;
+            _selectedItemInstanceId = -1;
+            _lastResult = null;
+        }
+
+        private static bool IsEnchantableInventoryEquipment(ItemData? item)
+        {
+            return item != null
+                && item.Table != null
+                && item.Table.ItemType == GlobalEnum.ItemType.Equipment
+                && item.Equipment != null
+                && item.Quantity == 1;
+        }
+
+        private static void AddOptionLines(VisualElement container,
+            IReadOnlyList<EquipmentOptionSnapshot> options)
+        {
+            if (options.Count == 0)
+            {
+                AddMessage(container, "옵션 없음", "forge-list-empty");
+                return;
+            }
+            for (int i = 0; i < options.Count; i++)
+            {
+                Text line = new Text { text = options[i].DisplayText };
+                line.AddToClassList("forge-option-line");
+                container.Add(line);
+            }
+        }
+
+        private static void AddMessage(VisualElement container, string message,
+            string className)
+        {
+            Text text = new Text { text = message };
+            text.AddToClassList(className);
+            container.Add(text);
+        }
+
+        private static string GetFailureMessage(ItemEnchantmentFailureReason reason)
+        {
+            return reason switch
+            {
+                ItemEnchantmentFailureReason.None => string.Empty,
+                ItemEnchantmentFailureReason.ForgeNotFound => "유효한 제련소를 확인할 수 없습니다.",
+                ItemEnchantmentFailureReason.ForgeTierInsufficient => "Tier 1 이상 제련소가 필요합니다.",
+                ItemEnchantmentFailureReason.TargetNotFound => "선택한 장비를 인벤토리에서 찾을 수 없습니다.",
+                ItemEnchantmentFailureReason.TargetChanged => "장비 슬롯이 변경되었습니다. 다시 선택하세요.",
+                ItemEnchantmentFailureReason.TargetQuantityInvalid => "인스턴스 1개로 분리된 장비만 마법부여할 수 있습니다.",
+                ItemEnchantmentFailureReason.NotEquipment => "미장착 장비만 마법부여할 수 있습니다.",
+                ItemEnchantmentFailureReason.ImmutableSlot => "Base·Implicit·무기 고유 강화는 변경할 수 없습니다.",
+                ItemEnchantmentFailureReason.AmbiguousExistingGroup => "같은 Slot·Group 옵션이 여러 개인 구 세이브 데이터 오류입니다.",
+                ItemEnchantmentFailureReason.AffixLimitReached => "Prefix와 Postfix가 모두 가득 찼습니다.",
+                ItemEnchantmentFailureReason.NoAffixAvailable => "변경할 Prefix/Postfix 옵션이 없습니다.",
+                ItemEnchantmentFailureReason.NoRandomCandidate => "조건에 맞는 다른 랜덤 옵션 후보가 없습니다.",
+                ItemEnchantmentFailureReason.MaterialMissing => "필요한 마법부여 재료가 부족합니다.",
+                ItemEnchantmentFailureReason.GoldInsufficient => "Gold가 부족합니다.",
+                ItemEnchantmentFailureReason.IncompatibleMod => "장비 옵션 데이터가 올바르지 않습니다.",
+                ItemEnchantmentFailureReason.EffectNotImplemented => "실제 전투 소비 경로가 확인되지 않은 효과입니다.",
+                ItemEnchantmentFailureReason.DuplicateGroup => "Group이 없거나 중복 규칙이 잘못된 Mod 데이터입니다.",
+                ItemEnchantmentFailureReason.TierUnavailable => "플레이어 레벨과 아이템 Tier에 맞는 결과 Tier가 없습니다.",
+                ItemEnchantmentFailureReason.UnsupportedOperation => "아직 지원하지 않는 마법부여 작업입니다.",
+                ItemEnchantmentFailureReason.CostDataInvalid => "마법부여 비용 테이블을 사용할 수 없습니다.",
+                _ => "마법부여 처리에 실패했습니다. 데이터는 변경되지 않았습니다.",
+            };
         }
     }
 }

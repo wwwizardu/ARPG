@@ -88,13 +88,15 @@ namespace ARPG.Systems
                     shrineUI.BindForTest();
             }
 
-            // [TEST] G키 — Forge UI 열기 (실제 Forge 없이 테스트용, Premium 단계로 가정)
+            // [TEST] G키 — Forge UI 열기 (Editor 진단 전용, Premium 단계로 가정)
+#if UNITY_EDITOR
             if (Keyboard.current != null && Keyboard.current.gKey.wasPressedThisFrame)
             {
                 var forgeUI = AR.s.UI.Show<UI.UIForge>(AddressablePath.Forge, UIManager.Layer.Main);
                 if (forgeUI != null)
-                    forgeUI.BindForTest(UI.UIForge.ForgeTier.Premium);
+                    forgeUI.BindForTest(GlobalEnum.ForgeTier.Premium);
             }
+#endif
 
             // [TEST] M키 — Shop UI 열기 (실제 MerchantStall 없이 테스트용)
             if (Keyboard.current != null && Keyboard.current.mKey.wasPressedThisFrame)

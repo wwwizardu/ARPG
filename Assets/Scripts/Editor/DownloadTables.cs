@@ -102,6 +102,12 @@ namespace ARPG.Editor
             for (int i = 0; i < _tableEntries.Count; i++)
                 await _tableEntries[i].DownloadAction();
 
+            if (ValidateModSetup() == false)
+            {
+                Debug.LogError("[DownloadTables] Mod/ModTier 검증 실패로 전체 테이블 저장을 중단합니다.");
+                return;
+            }
+
             foreach (var tableType in _tableDic.Keys)
             {
                 var tableList = (IList)_tableDic[tableType];
@@ -155,6 +161,45 @@ namespace ARPG.Editor
             Debug.Log($"download {typeof(T).Name} Completed...");
         }
 
+        private static async Task DownloadModTablesTogether()
+        {
+            TableEntry modEntry = GetTableEntry<ModTable>();
+            TableEntry tierEntry = GetTableEntry<ModTierTable>();
+            if (modEntry == null || tierEntry == null)
+            {
+                Debug.LogError("[DownloadTables] ModTable 또는 ModTierTable 등록 정보를 찾을 수 없습니다.");
+                return;
+            }
+
+            _tableDic = new();
+            bool modDownloaded = await modEntry.DownloadAction();
+            bool tierDownloaded = await tierEntry.DownloadAction();
+            if (modDownloaded == false || tierDownloaded == false
+                || ValidateModSetup() == false)
+            {
+                Debug.LogError("[DownloadTables] Mod/ModTier 다운로드 또는 검증 실패로 저장하지 않습니다.");
+                return;
+            }
+
+            SaveTable(typeof(ModTable).Name, _tableDic[typeof(ModTable)], modEntry.SaveType);
+            SaveTable(typeof(ModTierTable).Name, _tableDic[typeof(ModTierTable)],
+                tierEntry.SaveType);
+
+            AssetDatabase.Refresh();
+            Debug.Log("download ModTable + ModTierTable Completed...");
+        }
+
+        private static TableEntry GetTableEntry<T>() where T : TableBase
+        {
+            for (int i = 0; i < _tableEntries.Count; i++)
+            {
+                if (_tableEntries[i].Type == typeof(T))
+                    return _tableEntries[i];
+            }
+
+            return null;
+        }
+
         // 알파벳 순으로 개별 테이블 다운로드 메뉴 (priority 100 → All과 분리되는 separator)
         [MenuItem("ARPG/Download Table/AiTable", false, 100)]
         private static async void DownloadAiTable() => await DownloadSingleTable<AiTable>();
@@ -202,10 +247,10 @@ namespace ARPG.Editor
         private static async void DownloadJobBonusTable() => await DownloadSingleTable<JobBonusTable>();
 
         [MenuItem("ARPG/Download Table/ModTable", false, 100)]
-        private static async void DownloadModTable() => await DownloadSingleTable<ModTable>();
+        private static async void DownloadModTable() => await DownloadModTablesTogether();
 
         [MenuItem("ARPG/Download Table/ModTierTable", false, 100)]
-        private static async void DownloadModTierTable() => await DownloadSingleTable<ModTierTable>();
+        private static async void DownloadModTierTable() => await DownloadModTablesTogether();
 
         [MenuItem("ARPG/Download Table/MonsterArchetypeTable", false, 100)]
         private static async void DownloadMonsterArchetypeTable() => await DownloadSingleTable<MonsterArchetypeTable>();
@@ -399,6 +444,98 @@ namespace ARPG.Editor
                     warnings++;
                 }
             }
+        }
+
+        private static bool ValidateModSetup()
+        {
+            List<ModTable> mods = GetTableList<ModTable>();
+            List<ModTierTable> tiers = GetTableList<ModTierTable>();
+            if (mods == null || tiers == null)
+            {
+                Debug.LogError("[ValidateMod] ModTable과 ModTierTable을 함께 다운로드해야 합니다.");
+                return false;
+            }
+
+            int errors = 0;
+            HashSet<int> modIds = new HashSet<int>();
+            for (int i = 0; i < mods.Count; i++)
+            {
+                ModTable mod = mods[i];
+                if (modIds.Add(mod.Id) == false)
+                {
+                    Debug.LogError($"[ValidateMod] ModTable 중복 Id={mod.Id}");
+                    errors++;
+                }
+
+                bool isAffix = mod.Slot == GlobalEnum.ModSlot.Prefix
+                    || mod.Slot == GlobalEnum.ModSlot.Postfix;
+                if (isAffix == true && string.IsNullOrWhiteSpace(mod.Group) == true)
+                {
+                    Debug.LogError($"[ValidateMod] Mod Id={mod.Id}의 Group이 비어 있습니다.");
+                    errors++;
+                }
+
+                if (isAffix == true
+                    && mod.AllowedEquipTypes == GlobalEnum.EquipmentTypeMask.None)
+                {
+                    Debug.LogError($"[ValidateMod] Mod Id={mod.Id}의 AllowedEquipTypes가 비어 있습니다.");
+                    errors++;
+                }
+            }
+
+            HashSet<int> tierIds = new HashSet<int>();
+            HashSet<long> modTierPairs = new HashSet<long>();
+            HashSet<int> modsWithTier = new HashSet<int>();
+            for (int i = 0; i < tiers.Count; i++)
+            {
+                ModTierTable tier = tiers[i];
+                if (tierIds.Add(tier.Id) == false)
+                {
+                    Debug.LogError($"[ValidateMod] ModTierTable 중복 Id={tier.Id}");
+                    errors++;
+                }
+
+                if (modIds.Contains(tier.ModId) == false)
+                {
+                    Debug.LogError($"[ValidateMod] ModTier Id={tier.Id}가 없는 Mod Id={tier.ModId}를 참조합니다.");
+                    errors++;
+                }
+                else
+                {
+                    modsWithTier.Add(tier.ModId);
+                }
+
+                long pairKey = ((long)tier.ModId << 32) | (uint)tier.Tier;
+                if (modTierPairs.Add(pairKey) == false)
+                {
+                    Debug.LogError($"[ValidateMod] Mod Id={tier.ModId}, Tier={tier.Tier} 조합이 중복됩니다.");
+                    errors++;
+                }
+
+                if (tier.Tier <= 0 || tier.Min1 > tier.Max1 || tier.Min2 > tier.Max2
+                    || tier.RequiredLevel < 0 || tier.Weight <= 0)
+                {
+                    Debug.LogError($"[ValidateMod] ModTier Id={tier.Id}의 Tier/범위/레벨/가중치가 올바르지 않습니다.");
+                    errors++;
+                }
+            }
+
+            for (int i = 0; i < mods.Count; i++)
+            {
+                ModTable mod = mods[i];
+                bool isAffix = mod.Slot == GlobalEnum.ModSlot.Prefix
+                    || mod.Slot == GlobalEnum.ModSlot.Postfix;
+                if (isAffix == true && modsWithTier.Contains(mod.Id) == false)
+                {
+                    Debug.LogError($"[ValidateMod] Prefix/Postfix Mod Id={mod.Id}에 Tier 행이 없습니다.");
+                    errors++;
+                }
+            }
+
+            if (errors == 0)
+                Debug.Log($"[ValidateMod] PASS — Mods={mods.Count}, Tiers={tiers.Count}");
+
+            return errors == 0;
         }
 
         private static List<T> GetTableList<T>() where T : TableBase

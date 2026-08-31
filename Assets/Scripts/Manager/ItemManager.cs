@@ -15,11 +15,14 @@ namespace ARPG.Item
         // 필드 초기값부터 유효 ID 범위(1+)를 사용한다.
         private int _instanceIdCounter = 1;
         private Dictionary<int, ItemObject> _itemInstances = new Dictionary<int, ItemObject>();
+        private ItemEnchantmentService _enchantment = null!;
         public int NextItemInstanceId => _instanceIdCounter;
+        public ItemEnchantmentService Enchantment => _enchantment;
 
         public void Initialize()
         {
             _instanceIdCounter = Mathf.Max(1, AR.s.Data.NextItemInstanceId);
+            _enchantment = new ItemEnchantmentService();
             Debug.Log("ItemManager Initialized");
         }
 

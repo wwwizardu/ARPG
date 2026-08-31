@@ -46,6 +46,9 @@ namespace ARPG.Data
         private ImmutableDictionary<int, Tables.ModTable> _modTable = null!;
         private ImmutableDictionary<int, Tables.ModTierTable> _modTierTable = null!;
         private ImmutableDictionary<int, Tables.ItemImplicitTable> _itemImplicitTable = null!;
+        private ImmutableDictionary<int, Tables.ItemEnchantmentCostTable> _itemEnchantmentCostTable = null!;
+        private Dictionary<GlobalEnum.ItemEnchantmentOperation, Tables.ItemEnchantmentCostTable>
+            _itemEnchantmentCostByOperation = new();
         private ImmutableDictionary<int, Tables.VillageTable> _villageTable = null!;
         private ImmutableDictionary<int, Tables.VillageStageTable> _villageStageTable = null!;
         private ImmutableDictionary<int, Tables.JobBonusTable> _jobBonusTable = null!;
@@ -87,6 +90,7 @@ namespace ARPG.Data
                 LoadTable<Tables.ModTable>("ModTable.bytes", tables => _modTable = tables),
                 LoadTable<Tables.ModTierTable>("ModTierTable.bytes", tables => _modTierTable = tables),
                 LoadTable<Tables.ItemImplicitTable>("ItemImplicitTable.bytes", tables => _itemImplicitTable = tables),
+                LoadTable<Tables.ItemEnchantmentCostTable>("ItemEnchantmentCostTable.bytes", tables => _itemEnchantmentCostTable = tables),
                 LoadTable<Tables.VillageTable>("VillageTable.bytes", tables => _villageTable = tables),
                 LoadTable<Tables.VillageStageTable>("VillageStageTable.bytes", tables => _villageStageTable = tables),
                 LoadTable<Tables.JobBonusTable>("JobBonusTable.bytes", tables => _jobBonusTable = tables),
@@ -199,6 +203,34 @@ namespace ARPG.Data
             foreach (var table in _itemImplicitTable.Values)
             {
                 table.LoadLate();
+            }
+
+            // ItemEnchantmentCostTable -> Currency ItemTable 참조 연결 + Operation 인덱스 구축.
+            _itemEnchantmentCostByOperation.Clear();
+            List<Tables.ItemEnchantmentCostTable> enchantmentCosts =
+                new List<Tables.ItemEnchantmentCostTable>(_itemEnchantmentCostTable.Values);
+            enchantmentCosts.Sort((a, b) => a.Id.CompareTo(b.Id));
+            HashSet<GlobalEnum.ItemEnchantmentOperation> duplicateOperations =
+                new HashSet<GlobalEnum.ItemEnchantmentOperation>();
+            for (int i = 0; i < enchantmentCosts.Count; i++)
+            {
+                Tables.ItemEnchantmentCostTable table = enchantmentCosts[i];
+                table.LoadLate();
+                if (table.IsValid == false)
+                    continue;
+                if (duplicateOperations.Contains(table.Operation) == true)
+                    continue;
+                if (_itemEnchantmentCostByOperation.TryGetValue(table.Operation,
+                        out Tables.ItemEnchantmentCostTable existing) == true)
+                {
+                    Debug.LogError($"[DataManager_Table] Duplicate ItemEnchantmentCost operation: " +
+                        $"{table.Operation} (row Ids={existing.Id},{table.Id}). " +
+                        "모든 중복 행을 비활성화합니다.");
+                    _itemEnchantmentCostByOperation.Remove(table.Operation);
+                    duplicateOperations.Add(table.Operation);
+                    continue;
+                }
+                _itemEnchantmentCostByOperation.Add(table.Operation, table);
             }
 
             // EquipmentBaseStatTable → ModTable/ModTierTable 참조 연결 + ItemId 인덱스 구축
@@ -715,6 +747,26 @@ namespace ARPG.Data
                     continue;
                 result.Add(table);
             }
+            return result;
+        }
+
+        /// <summary>
+        /// 요청한 랜덤 마법부여 작업의 유효한 비용 규칙을 반환한다.
+        /// 잘못된 행과 중복 Operation은 로드 진단에서 제외된다.
+        /// </summary>
+        public Tables.ItemEnchantmentCostTable? GetItemEnchantmentCost(
+            GlobalEnum.ItemEnchantmentOperation operation)
+        {
+            if (_itemEnchantmentCostByOperation.TryGetValue(operation, out var table) == true)
+                return table;
+            return null;
+        }
+
+        public List<Tables.ItemEnchantmentCostTable> GetAllItemEnchantmentCosts()
+        {
+            List<Tables.ItemEnchantmentCostTable> result =
+                new List<Tables.ItemEnchantmentCostTable>(_itemEnchantmentCostTable.Values);
+            result.Sort((a, b) => a.Id.CompareTo(b.Id));
             return result;
         }
 

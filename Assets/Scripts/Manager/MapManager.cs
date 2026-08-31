@@ -52,6 +52,9 @@ namespace ARPG.Map
             _renderedChunks = new HashSet<Vector2Int>();
             _chunkPool = new Stack<MapChunkData>();
 
+            // HistoryManager의 새 게임 부트스트랩은 GameScene.CreateMap() 전에 청크를 조회할 수 있다.
+            _randomGenerator = new System.Random(_randomSeed);
+
             // BiomeThemeEntry[] → Dictionary 변환 (MAP_DESIGN.md §4.5)
             BuildThemeDictionary();
 

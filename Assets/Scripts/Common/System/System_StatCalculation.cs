@@ -69,6 +69,7 @@ namespace ARPG.Systems
                 if (modifiers == null || modifiers.Count == 0)
                 {
                     // modifier가 없으면 Base = Final 그대로 저장
+                    ClampCurrentResources(entityId, ref stat);
                     AR.s.Component.SetComponent(entityId, stat);
                     SyncDerivedStatComponents(entityId, stat);
                     AR.s.Component.RemoveComponent<StatDirtyTag>(entityId);
@@ -135,7 +136,8 @@ namespace ARPG.Systems
                     }
                 }
 
-                // 7단계: 업데이트된 스탯 저장
+                // 7단계: 최대치가 내려간 경우 현재 자원을 새 최대치 안으로 보정 후 저장
+                ClampCurrentResources(entityId, ref stat);
                 AR.s.Component.SetComponent(entityId, stat);
 
                 // 7-2단계: 파생 컴포넌트/캐시 갱신
@@ -150,6 +152,17 @@ namespace ARPG.Systems
                     AR.s.Message.Broadcast(new StatRecalculatedMessage { EntityId = entityId });
                 }
             }
+        }
+
+        private void ClampCurrentResources(int entityId, ref StatComponent stat)
+        {
+            int maxHp = Mathf.Max(0, stat.FinalMaxHp);
+            int clampedHp = Mathf.Clamp(stat.CurrentHp, 0, maxHp);
+            if (clampedHp != stat.CurrentHp)
+                stat.SetCurrentHp(entityId, clampedHp);
+
+            int maxMp = Mathf.Max(0, stat.FinalMaxMp);
+            stat.CurrentMp = Mathf.Clamp(stat.CurrentMp, 0, maxMp);
         }
 
         /// <summary>

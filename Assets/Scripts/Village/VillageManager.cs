@@ -25,7 +25,17 @@ namespace ARPG.Village
         public void Initialize()
         {
             if (_villageList.Count > 0)
+            {
+                // 세이브 로드는 데이터만 등록한다. Map/Building/Component 초기화 후
+                // 호출되는 이 시점에 항상 활성 마을을 실체화한다.
+                for (int i = 0; i < _villageList.Count; i++)
+                {
+                    VillageData data = _villageList[i];
+                    if (data.SettlementId < 0)
+                        MaterializeVillage(data.VillageId);
+                }
                 return;
+            }
 
             List<MapFileData> villageMaps = AR.s.Map.GetMapFileDataByType(MapType.Village);
             for (int i = 0; i < villageMaps.Count; i++)
@@ -438,11 +448,6 @@ namespace ARPG.Village
 
                 data.EntityId = -1;   // 런타임 LOD: 로드 직후엔 모두 추상 상태 (JsonIgnore라 이미 -1이지만 명시)
                 AddVillage(data);
-
-                // 손제작 마을(연대기 미연결)만 즉시 실체화 (항상 활성).
-                // 연대기 연결 마을은 추상 상태로 로드 — 근처가 되면 UpdateMaterialization이 실체화한다.
-                if (data.SettlementId < 0)
-                    MaterializeVillage(data.VillageId);
             }
 
             if (profileBackfills > 0)
@@ -507,7 +512,10 @@ namespace ARPG.Village
                 PlacedObjectSaveData saved = data.PlacedObjects[i];
                 if (pendingOnly == true && saved.PlacementPending == false
                     && VillageConstructionPosition.IsAssigned(saved) == true)
+                {
+                    SynchronizePlacedObjectRuntime(saved, data.VillageId);
                     continue;
+                }
 
                 Tables.BuildableItemTable? t = AR.s.Data.GetBuildableItem(saved.TableId);
                 if (t == null) continue;
@@ -528,6 +536,25 @@ namespace ARPG.Village
                 saved.PlacementPending = false;
                 CreatePlacedObjectRuntime(data, saved, t);
             }
+        }
+
+        private void SynchronizePlacedObjectRuntime(PlacedObjectSaveData saved,
+            int villageId)
+        {
+            if (saved.BuildingEntityId >= 0)
+                AR.s.Building.SetFacilityTier(saved.BuildingEntityId,
+                    saved.FacilityTier);
+
+            int entityId = _placedObjects.GetEntityAtTile(villageId,
+                new Vector2Int(saved.TileX, saved.TileY));
+            if (entityId < 0
+                || AR.s.Component.TryGetComponent<PlacedObjectComponent>(entityId,
+                    out var placedObject) == false
+                || placedObject.FacilityTier == saved.FacilityTier)
+                return;
+
+            placedObject.FacilityTier = saved.FacilityTier;
+            AR.s.Component.SetComponent(entityId, placedObject);
         }
 
         private bool TryRestoreCompletedBuilding(VillageData data,

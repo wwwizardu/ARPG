@@ -1,0 +1,1 @@
+[{"MaterialItemId":1001,"Operation":"ReplaceAffix","MaterialCount":1,"GoldCost":25,"RequiredForgeTier":"Basic","Id":1},{"MaterialItemId":1002,"Operation":"AddAffix","MaterialCount":1,"GoldCost":40,"RequiredForgeTier":"Basic","Id":2}]

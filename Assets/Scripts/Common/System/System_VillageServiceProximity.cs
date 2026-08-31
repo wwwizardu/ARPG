@@ -13,9 +13,11 @@ namespace ARPG.Systems
     /// 1. 플레이어가 어느 마을 안인지 — VillageManager.FindVillageContaining (단 1개)
     /// 2. 마을 안이면 AR.s.Village.PlacedObjects.GetAllEntitiesInVillage 순회
     /// 3. 각 PlacedObjectComponent의 Service 비트 + 거리로 가장 가까운 Shop/Forge/Inn/Shrine 결정
-    /// 4. 마을 밖 → 모두 -1/None으로 클리어
+    /// 4. Gate는 마을 밖에서도 열 수 있어야 하므로 실체화된 VillageComponent 풀에서 별도 탐색
+    /// 5. 마을 밖 → Gate/NPC를 제외한 시설은 -1/None으로 유지
     ///
-    /// "단일 마을 한정"은 §10.3 외곽 보호 마진과 자연스럽게 맞물림 (벽 밖 플레이어는 서비스 잡힘 X).
+    /// "단일 마을 한정"은 §10.3 외곽 보호 마진과 자연스럽게 맞물림
+    /// (벽 밖 플레이어는 시설이 잡히지 않지만 Gate는 상호작용 가능).
     /// </summary>
     public class System_VillageServiceProximity : IUpdateSystem
     {
@@ -35,7 +37,14 @@ namespace ARPG.Systems
         // NPC 클릭 임계 (NPC_EQUIPMENT_DESIGN.md UI 패스, Q2=1.5 tile)
         private const float NPC_RANGE        = 1.5f;
 
-        public void OnCreate() { }
+        private ComponentManager _componentManager = null!;
+        private SparseSet<VillageComponent> _villagePool = null!;
+
+        public void OnCreate()
+        {
+            _componentManager = AR.s.Component;
+            _villagePool = _componentManager.GetComponentPool<VillageComponent>();
+        }
 
         public void OnUpdate(float inDeltaTime)
         {
@@ -44,7 +53,7 @@ namespace ARPG.Systems
             if (playerEntityId < 0) return;
 
             // 플레이어 위치
-            if (AR.s.Component.TryGetComponent<TransformComponent>(playerEntityId, out var playerTr) == false)
+            if (_componentManager.TryGetComponent<TransformComponent>(playerEntityId, out var playerTr) == false)
                 return;
 
             int playerTileX = Mathf.FloorToInt(playerTr.Position.x);
@@ -52,7 +61,7 @@ namespace ARPG.Systems
             int villageId = AR.s.Village.FindVillageContaining(playerTileX, playerTileY);
 
             // 기존 컴포넌트 (없으면 부착)
-            if (AR.s.Component.TryGetComponent<PlayerNearbyServicesComponent>(playerEntityId, out var nearby) == false)
+            if (_componentManager.TryGetComponent<PlayerNearbyServicesComponent>(playerEntityId, out var nearby) == false)
             {
                 nearby = new PlayerNearbyServicesComponent
                 {
@@ -63,7 +72,7 @@ namespace ARPG.Systems
                     NearestCivicEntityId = -1,
                     NearestVillageId = -1,
                 };
-                AR.s.Component.AddComponent(playerEntityId, nearby);
+                _componentManager.AddComponent(playerEntityId, nearby);
             }
 
             // 마을 안/밖과 무관하게 NPC는 검색 (월드 어디서든 NPC 클릭 가능)
@@ -73,10 +82,14 @@ namespace ARPG.Systems
             nearby.NearestNpcEntityId = npcId;
             nearby.NearestNpcDistanceSqr = npcId >= 0 ? npcSqr : float.MaxValue;
 
+            // Gate는 닫힌 벽의 바깥에서도 열 수 있어야 하므로 마을 내부 판정과 분리한다.
+            // VillageComponent 풀에는 현재 실체화된 마을만 존재한다.
+            CollectNearestGate(playerTr.Position, ref nearby);
+
             if (villageId < 0)
             {
-                // 마을 밖 — 시설은 없지만 NPC는 위에서 처리됨
-                AR.s.Component.SetComponent(playerEntityId, nearby);
+                // 마을 밖 — 시설은 없지만 Gate/NPC는 위에서 처리됨
+                _componentManager.SetComponent(playerEntityId, nearby);
                 return;
             }
 
@@ -86,7 +99,7 @@ namespace ARPG.Systems
             for (int i = 0; i < entities.Count; i++)
             {
                 int entityId = entities[i];
-                if (AR.s.Component.TryGetComponent<PlacedObjectComponent>(entityId, out var po) == false) continue;
+                if (_componentManager.TryGetComponent<PlacedObjectComponent>(entityId, out var po) == false) continue;
 
                 float dx = po.TileX - playerTr.Position.x;
                 float dy = po.TileY - playerTr.Position.y;
@@ -132,10 +145,7 @@ namespace ARPG.Systems
                 }
             }
 
-            // V4: 기능성 Gate — 벽 세그먼트 정본(VillageData.WallSegments)에서 근접 Gate 탐색.
-            CollectNearestGate(villageId, playerTr.Position, ref nearby);
-
-            AR.s.Component.SetComponent(playerEntityId, nearby);
+            _componentManager.SetComponent(playerEntityId, nearby);
         }
 
         public void OnReset() { }
@@ -144,33 +154,37 @@ namespace ARPG.Systems
         /// 근접 Gate 세그먼트(건설 완료)를 찾아 컴포넌트에 기록한다.
         /// Gate는 Entity가 아니라 VillageData.WallSegments 정본이라 별도 수집 경로를 쓴다.
         /// </summary>
-        private static void CollectNearestGate(int villageId, Vector2 playerPosition,
+        private void CollectNearestGate(Vector2 playerPosition,
             ref PlayerNearbyServicesComponent nearby)
         {
-            VillageData? village = AR.s.Village.GetVillage(villageId);
-            if (village == null || village.EntityId < 0
-                || village.WallSegments == null)
-                return;
-
-            for (int i = 0; i < village.WallSegments.Count; i++)
+            for (int villageIndex = 0; villageIndex < _villagePool.Count; villageIndex++)
             {
-                WallSegmentSaveData segment = village.WallSegments[i];
-                if (segment.IsBuilt == false
-                    || segment.Orient != (int)WallOrientation.Gate)
+                VillageComponent villageComponent = _villagePool.GetByIndex(villageIndex);
+                VillageData? village = AR.s.Village.GetVillage(villageComponent.VillageId);
+                if (village == null || village.WallSegments == null)
                     continue;
 
-                float dx = segment.TileX - playerPosition.x;
-                float dy = segment.TileY - playerPosition.y;
-                float sqr = dx * dx + dy * dy;
-                if (sqr > GATE_RANGE_SQR || sqr >= nearby.NearestGateDistanceSqr)
-                    continue;
+                for (int segmentIndex = 0; segmentIndex < village.WallSegments.Count;
+                    segmentIndex++)
+                {
+                    WallSegmentSaveData segment = village.WallSegments[segmentIndex];
+                    if (segment.IsBuilt == false
+                        || segment.Orient != (int)WallOrientation.Gate)
+                        continue;
 
-                nearby.NearestGateVillageId = villageId;
-                nearby.NearestGateSegmentId = segment.SegmentId;
-                nearby.NearestGateTileX = segment.TileX;
-                nearby.NearestGateTileY = segment.TileY;
-                nearby.NearestGateIsOpen = segment.IsOpen;
-                nearby.NearestGateDistanceSqr = sqr;
+                    float dx = segment.TileX - playerPosition.x;
+                    float dy = segment.TileY - playerPosition.y;
+                    float sqr = dx * dx + dy * dy;
+                    if (sqr > GATE_RANGE_SQR || sqr >= nearby.NearestGateDistanceSqr)
+                        continue;
+
+                    nearby.NearestGateVillageId = village.VillageId;
+                    nearby.NearestGateSegmentId = segment.SegmentId;
+                    nearby.NearestGateTileX = segment.TileX;
+                    nearby.NearestGateTileY = segment.TileY;
+                    nearby.NearestGateIsOpen = segment.IsOpen;
+                    nearby.NearestGateDistanceSqr = sqr;
+                }
             }
         }
 

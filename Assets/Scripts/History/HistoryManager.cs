@@ -30,7 +30,10 @@ namespace ARPG.History
             EnsureWorldSimInitialized();
             AR.s.Village.EnsureVillageProfiles();
             if (generatedNewGameHistory == true)
+            {
                 BootstrapNewGameVillageDevelopment();
+                EnsureNewGameMinimumForges();
+            }
         }
 
         /// <summary>
@@ -378,6 +381,51 @@ namespace ARPG.History
                 $"notOperational={skippedNotOperational}, settlements={sim.Settlements.Length}, " +
                 $"milestones={milestonesApplied}, facilities={facilitiesCreated}, " +
                 $"pendingPlacements={pendingPlacements}, walledVillages={initialWallVillages}");
+        }
+
+        /// <summary>
+        /// 신규 게임에만 적용하는 공통 Forge 후조건. 종족별 초기 마일스톤이 모두 끝난 뒤
+        /// 실행해 Dwarf Tier 2/3 승격을 보존하고, 연대기 미연결 BaseTown도 함께 포함한다.
+        /// </summary>
+        private void EnsureNewGameMinimumForges()
+        {
+            IReadOnlyList<VillageData> villages = AR.s.Village.GetAllVillages();
+            int created = 0;
+            int normalized = 0;
+            int unchanged = 0;
+            int errors = 0;
+
+            for (int i = 0; i < villages.Count; i++)
+            {
+                VillageData village = villages[i];
+                MinimumForgeEnsureResult result =
+                    VillageInitialDevelopment.EnsureMinimumForge(village,
+                        AR.s.Data.GetBuildableItem, out string error);
+
+                if (result == MinimumForgeEnsureResult.Created)
+                {
+                    created++;
+                    AR.s.Village.RetryPendingPlacements(village.VillageId);
+                }
+                else if (result == MinimumForgeEnsureResult.TierNormalized)
+                {
+                    normalized++;
+                    AR.s.Village.RetryPendingPlacements(village.VillageId);
+                }
+                else if (result == MinimumForgeEnsureResult.Unchanged)
+                {
+                    unchanged++;
+                }
+                else
+                {
+                    errors++;
+                    Debug.LogError($"[VillageBootstrap] 공통 Forge 보장 실패: {error}");
+                }
+            }
+
+            Debug.Log($"[VillageBootstrap] New Game 공통 Forge 최소 보장: " +
+                $"villages={villages.Count}, created={created}, normalized={normalized}, " +
+                $"unchanged={unchanged}, errors={errors}");
         }
 
         /// <summary>

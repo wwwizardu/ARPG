@@ -256,6 +256,29 @@ public class GlobalEnum
 
     }
 
+    /// <summary>
+    /// 제련소 시설 단계. MVP 마법부여는 Basic 이상에서 동일한 기능과 비용을 사용한다.
+    /// </summary>
+    public enum ForgeTier
+    {
+        None,
+        Basic,
+        Standard,
+        Premium,
+    }
+
+    /// <summary>
+    /// 아이템 마법부여 비용 규칙과 랜덤 작업 종류.
+    /// MVP는 기존 옵션 하나의 랜덤 교체와 신규 옵션 하나의 랜덤 추가를 지원한다.
+    /// </summary>
+    public enum ItemEnchantmentOperation
+    {
+        ReplaceAffix,
+        AddAffix,
+        RerollAffixValues,
+        RerollAllAffixes,
+    }
+
     public enum ItemCategory
     {
         // 장비

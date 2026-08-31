@@ -1,5 +1,3 @@
-/* Forge UI 스타일 — 인벤토리 그리드 포함 */
-
 .forge-root {
     width: 100%;
     height: 100%;
@@ -11,66 +9,109 @@
     position: absolute;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.6);
+    background-color: rgba(0, 0, 0, 0.68);
 }
 
 .forge-panel {
-    width: 640px;
-    padding: 24px;
+    width: 980px;
+    max-height: 900px;
+    padding: 22px;
     border-radius: 12px;
-    background-color: rgba(28, 28, 32, 0.96);
+    background-color: rgba(28, 28, 32, 0.98);
     border-width: 1px;
-    border-color: rgba(180, 140, 80, 0.4);
+    border-color: rgba(180, 140, 80, 0.5);
+}
+
+.forge-header,
+.forge-tier-row,
+.forge-actions,
+.forge-columns,
+.forge-result-columns {
+    flex-direction: row;
 }
 
 .forge-header {
-    flex-direction: row;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 12px;
+    margin-bottom: 10px;
 }
 
-.forge-title {
-    color: rgb(220, 180, 100);
+.forge-title,
+.forge-result-title {
+    color: rgb(230, 185, 95);
 }
 
 .forge-close-icon {
     --appui-iconbutton-size: 32px;
 }
 
-.forge-body {
-    flex-direction: column;
-    padding-top: 12px;
-    padding-bottom: 12px;
+.forge-tier-row {
+    justify-content: space-between;
+    padding-top: 10px;
+    padding-bottom: 10px;
 }
 
 .forge-tier {
-    margin-bottom: 4px;
-    color: rgb(220, 220, 220);
+    color: rgb(225, 225, 225);
 }
 
-.forge-discount {
-    color: rgb(255, 200, 80);
+.forge-tier-note {
+    color: rgb(170, 210, 150);
     font-size: 12px;
 }
 
-.forge-section {
-    flex-direction: column;
+.forge-columns {
+    height: 430px;
     padding-top: 12px;
     padding-bottom: 12px;
 }
 
-.forge-section-title {
-    color: rgb(200, 200, 200);
+.forge-column {
+    width: 50%;
+    min-width: 0;
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+.forge-column-left {
+    border-right-width: 1px;
+    border-right-color: rgba(130, 130, 145, 0.35);
+}
+
+.forge-section-title,
+.forge-subtitle {
+    color: rgb(205, 205, 210);
     margin-bottom: 8px;
+    font-size: 13px;
+}
+
+.forge-subtitle {
+    margin-top: 8px;
     font-size: 12px;
 }
 
-/* 인벤토리 그리드 */
+.forge-scroll {
+    border-width: 1px;
+    border-color: rgba(105, 105, 120, 0.45);
+    border-radius: 6px;
+    background-color: rgba(18, 18, 22, 0.45);
+}
+
+.forge-equipment-scroll {
+    height: 235px;
+}
+
+.forge-options-scroll {
+    height: 105px;
+    border-width: 1px;
+    border-color: rgba(90, 90, 105, 0.35);
+    border-radius: 5px;
+}
+
 .forge-inventory-grid {
     flex-direction: row;
     flex-wrap: wrap;
-    margin-bottom: 8px;
+    padding: 5px;
 }
 
 .forge-inv-slot {
@@ -86,21 +127,21 @@
 }
 
 .forge-inv-slot:hover {
-    border-color: rgba(255, 215, 100, 0.6);
+    border-color: rgba(255, 215, 100, 0.65);
 }
 
 .forge-inv-slot-equipment {
     border-color: rgba(180, 140, 80, 0.6);
-    background-color: rgba(60, 50, 40, 0.7);
+    background-color: rgba(60, 50, 40, 0.72);
 }
 
 .forge-inv-slot-disabled {
-    opacity: 0.3;
+    opacity: 0.25;
 }
 
 .forge-inv-slot-selected {
     border-color: rgb(255, 215, 100);
-    background-color: rgba(100, 80, 40, 0.8);
+    background-color: rgba(100, 80, 40, 0.85);
 }
 
 .forge-inv-icon {
@@ -109,29 +150,102 @@
     -unity-background-scale-mode: scale-to-fit;
 }
 
-.forge-inv-empty-text {
-    color: rgb(120, 120, 120);
+.forge-inv-empty-text,
+.forge-list-empty {
+    color: rgb(135, 135, 140);
     font-size: 11px;
+    margin: 8px;
 }
 
 .forge-selected {
     color: rgb(255, 215, 100);
-    margin-top: 8px;
+    margin-top: 7px;
 }
 
-/* 액션 버튼 */
+.forge-operation-card {
+    margin-bottom: 12px;
+    padding: 12px;
+    border-width: 1px;
+    border-color: rgba(125, 125, 140, 0.5);
+    border-radius: 6px;
+    background-color: rgba(48, 48, 58, 0.7);
+}
+
+.forge-card-title {
+    color: rgb(225, 225, 230);
+    font-size: 12px;
+}
+
+.forge-card-detail {
+    color: rgb(165, 165, 175);
+    font-size: 11px;
+    margin-top: 4px;
+}
+
+.forge-cost {
+    color: rgb(240, 200, 105);
+    margin-top: 6px;
+    font-size: 12px;
+}
+
+.forge-status {
+    color: rgb(220, 135, 120);
+    margin-top: 5px;
+    font-size: 11px;
+}
+
+.forge-option-list {
+    padding: 6px;
+}
+
+.forge-option-line {
+    color: rgb(190, 190, 200);
+    font-size: 11px;
+    margin-bottom: 3px;
+}
+
 .forge-actions {
-    flex-direction: row;
-    justify-content: space-between;
+    justify-content: flex-end;
     padding-top: 12px;
 }
 
-.forge-action-btn {
-    flex-grow: 1;
-    margin-left: 4px;
-    margin-right: 4px;
+.forge-secondary-btn {
+    width: 190px;
+    margin-right: 8px;
 }
 
-.forge-action-btn:disabled {
+.forge-operation-btn {
+    width: 100%;
+    margin-top: 10px;
+}
+
+.forge-secondary-btn:disabled,
+.forge-operation-btn:disabled {
     opacity: 0.4;
+}
+
+.forge-result-section {
+    padding-top: 12px;
+}
+
+.forge-result-title {
+    margin-top: 10px;
+    margin-bottom: 8px;
+}
+
+.forge-result-column {
+    width: 50%;
+    padding-left: 8px;
+    padding-right: 8px;
+}
+
+.forge-result-scroll {
+    height: 135px;
+    border-width: 1px;
+    border-color: rgba(105, 105, 120, 0.4);
+    border-radius: 5px;
+}
+
+.forge-hidden {
+    display: none;
 }

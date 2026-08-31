@@ -1,10 +1,8 @@
-# Wiki 지도 (Map)
-
 ---
 name: wiki-map
 description: Docs/ 전체 주제를 얕고 넓게 조망하는 지도 페이지. 주제별 상세 위키 페이지의 진입점.
 type: map
-last_updated: 2026-08-28
+last_updated: 2026-09-01
 sources:
   - Wiki/current_status.md
   - Wiki/combat.md
@@ -12,13 +10,16 @@ sources:
   - Docs/README.md
   - Docs/combat/combatSystem.md
   - Docs/combat/ModSystem_Changelog.md
+  - Docs/combat/ITEM_ENCHANTMENT_DESIGN.md
   - Docs/village/VILLAGE_RUNTIME_DESIGN.md
   - Docs/village/ABSTRACT_CONSTRUCTION_DESIGN.md
   - Docs/village/BUILD_PRIORITY_DESIGN.md
   - Docs/npc/VILLAGE_NPC_BOUNDARY_DESIGN.md
-  - Docs/ 하위 전 폴더 (파일 목록·분량·상호 링크 수준의 얕은 스캔)
-  - Assets/Scripts/ (폴더·파일명·주요 심볼 수준의 얕은 스캔)
+  - Docs/
+  - Assets/Scripts/
 ---
+
+# Wiki 지도 (Map)
 
 > 이 페이지는 프로젝트 전체를 **얕고 넓게** 보여주는 지도다. 각 주제를 깊게 다루지 않으며,
 > 상세 내용은 원본 문서(`Docs/`)와 주제별 위키 페이지가 담당한다.
@@ -30,13 +31,13 @@ sources:
 
 | 주제 | 한 줄 요약 | 문서 위치 | 흩어짐 | 코드 연결도 |
 |------|-----------|----------|:------:|:----------:|
-| **current_status** → [current_status.md](current_status.md) | 2026-08-28 기준 구현 현황·미검증 항목·권장 재개 순서 [src: Wiki/current_status.md] | 최신 관련 Docs + 코드·테이블 대조 | — | 상 |
+| **current_status** → [current_status.md](current_status.md) | 2026-09-01 기준 구현 현황·미검증 항목·권장 재개 순서 [src: Wiki/current_status.md] | 최신 관련 Docs + 코드·테이블 대조 | — | 상 |
 | **overview** | 게임 컨셉(3대 축)과 시스템별 구현 현황·로드맵 | `Docs/overview/` 2장 (gameOverview, implementationStatus) + `Docs/README.md`(대시보드) | 하 | 하 |
-| **combat** → [combat.md](combat.md) | 장비 옵션 글로벌화, 무기 Base/고유 강화 경계, 피해·치명타·공격속도 프로필과 전투 소비 경로 [src: Wiki/combat.md] | `Docs/combat/` 9장 + 관련 전투 코드 [src: Docs/combat/] | 상 | 상 |
+| **combat** → [combat.md](combat.md) | 장비 옵션 글로벌화, 일반 장비 마법부여, 무기 Base/고유 강화 경계와 공격 프로필 [src: Wiki/combat.md] | `Docs/combat/` + 마법부여·전투 코드와 테이블 [src: Docs/combat/, Assets/Scripts/Item/] | 상 | 상 |
 | **skill_aim** → [skill_aim.md](skill_aim.md) | 커서 조준 추적·효과 커밋, 플레이어 방향 화살표 View, 스킬 사용 중 이동 감속 [src: Wiki/skill_aim.md] | `Docs/combat/POE2_CURSOR_TRACKING_PLAN.md` + 조준·스킬·이동 코드 | 중 | 상 |
 | **ai_monster** | 몬스터 AI 상태머신 패턴과 데이터 주도 스폰 풀 | `Docs/ai_monster/` 2장 (monsterAIPattern, MONSTER_SPAWN_DESIGN) | 하 | 중 |
 | **map** | 청크 기반 오픈월드 맵 생성·바이옴 타일셋·충돌/길찾기 | `Docs/map/` 3장 (MAP_DESIGN, COLLISION_PATHFINDING_DESIGN, THEME_TILESET_REFACTOR) | 중 | 중 |
-| **village** → [village.md](village.md) | 마을 자가성장 — 자원·건설·Tier·벽의 실시간/추상 LOD와 서비스 [src: Docs/village/VILLAGE_RUNTIME_DESIGN.md] | `Docs/village/` 4장 (런타임·추상 건설·우선순위·성장 목표) | 중 | 상 |
+| **village** → [village.md](village.md) | 마을 자가성장 LOD·서비스와 신규 게임 전 마을 Forge Tier 1 접근성 [src: Wiki/village.md] | `Docs/village/` + 마법부여 Forge 접근성 계약 [src: Docs/village/, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md] | 중 | 상 |
 | **npc** → [npc.md](npc.md) | NPC 관계·상호작용·소망(퀘스트)·자율 활동·동료·장비 | `Docs/npc/` (VILLAGE_NPC_BOUNDARY_DESIGN 포함) | 상 | 중 |
 | **world_history** → [world_history.md](world_history.md) | 절차적 역사 생성(정착지 연대기)과 LLM 내러티브 엔진(대화·소망 생성) | `Docs/world_history/` 5장 (PROCEDURAL_HISTORY_DESIGN, WORLD_HISTORY_PLAN, WORLD_EVENT_DESIGN, NARRATIVE_ENGINE_DESIGN, NARRATIVE_ENGINE_SPIKE) | 상 | 중 |
 | **tech** | ECS SparseSet 최적화와 2,400 NPC 대응 파티션 세이브·32샤드·원자 커밋 [src: Docs/tech/SAVE_PARTITION_DESIGN.md] | `Docs/tech/` 2장 (ECS_PERFORMANCE_OPTIMIZATION_PLAN, SAVE_PARTITION_DESIGN) | 하 | 중 |
@@ -46,8 +47,8 @@ sources:
 **판정 근거 (얕은 스캔 수준):**
 
 - **흩어짐**: 폴더 내 문서 수 + 문서 간 마크다운 링크 밀도로 판단.
-  npc(NPC_ACTIVITY 34개, QUEST 20개, RELATION_HISTORY 20개 링크)와 world_history(NARRATIVE_ENGINE 27개, WORLD_EVENT 29개, PROCEDURAL_HISTORY 25개 링크)가 상호 참조 밀도 최상위. [src: Docs/ 전체 링크 스캔]
-  combat은 링크는 적지만 9장으로 문서 수가 많으며, 스킬 관련 내용이 4~5개 문서(SKILL_DESIGN/SKILLBOOK/RUNE/EFFECT_IDEAS/AI_SKILL_SELECTION)에 나뉘어 있다. [추론: 파일명·README 설명 기준, 본문 중복 여부는 미검증]
+  npc(NPC_ACTIVITY 34개, QUEST 20개, RELATION_HISTORY 20개 링크)와 world_history(NARRATIVE_ENGINE 27개, WORLD_EVENT 29개, PROCEDURAL_HISTORY 25개 링크)가 상호 참조 밀도 최상위. [추론: Docs/ 전체 링크 스캔]
+  combat은 링크는 적지만 11장으로 문서 수가 많으며, 스킬 관련 내용이 4~5개 문서(SKILL_DESIGN/SKILLBOOK/RUNE/EFFECT_IDEAS/AI_SKILL_SELECTION)에 나뉘어 있다. [src: Docs/combat/] [추론: 파일명·README 설명 기준, 본문 중복 여부는 미검증]
 - **코드 연결도**: `Assets/Scripts/` 폴더·파일명 수준 확인.
   - combat: `Common/System/`의 System_Skill·System_SkillAttackProfileCalculation·System_StatCalculation·System_BuffUpdate·System_Projectile·System_AreaEffect + `Skill/`(DamageCalculator) + `AI/` 공격 핸들러 등 광범위. [src: Assets/Scripts/Common/System/, Assets/Scripts/Skill/]
   - village: `Village/`의 공통 시뮬레이션 코어·원장·배치 코드와 `System_Village*` 런타임 시스템이 연결된다. [src: Assets/Scripts/Village/, Assets/Scripts/Common/System/]
@@ -58,11 +59,11 @@ sources:
 
 1. **npc** — 7개 문서가 서로를 "정본"으로 지목하며 역할이 쪼개져 있다(관계·선물 루프는 interactionSystem §4, 소망 데이터 모델은 QUEST_SYSTEM, 호감도 변동은 NPC_ACTIVITY §8.3). 다음 작업(Phase E·관계 시스템)이 전부 이 영역이라, 어느 문서의 어느 절이 권위인지 한 장으로 종합할 이득이 가장 크다. [src: Docs/README.md]
 2. **world_history** — 상호 링크 밀도가 가장 높고(문서당 14~29개), 설계(PROCEDURAL_HISTORY)·계획(WORLD_HISTORY_PLAN)·파생 설계(NARRATIVE_ENGINE)·검증(SPIKE)이 층층이 얽혀 있다. 문서상 "보류"인데 코드(`History/` 15파일, NpcNarrative*)는 이미 존재해 문서-코드 간 현황 대조 가치도 높다.
-3. **combat** — 9개 문서에 combatSystem vs combatSystemCompletion과 SKILL 계열 4~5장의 내용 분산이 있고, 관련 코드가 System/Skill/Buff/AI 여러 폴더에 걸쳐 가장 넓게 퍼져 있다. [src: Docs/combat/] [추론: 문서 간 실제 중복 정도는 본문 대조 전이므로 추정]
+3. **combat** — 11개 문서에 combatSystem vs combatSystemCompletion, 마법부여, SKILL 계열 4~5장의 내용 분산이 있고, 관련 코드가 System/Skill/Buff/AI 여러 폴더에 걸쳐 가장 넓게 퍼져 있다. [src: Docs/combat/] [추론: 문서 간 실제 중복 정도는 본문 대조 전이므로 추정]
 
 **village 종합 페이지 추가 완료**: 전체 책임은 `VILLAGE_RUNTIME_DESIGN.md`, 추상 LOD와 초기 발전은 `ABSTRACT_CONSTRUCTION_DESIGN.md`, 후보 선택은 `BUILD_PRIORITY_DESIGN.md`가 정본이다. [src: Docs/village/VILLAGE_RUNTIME_DESIGN.md, Docs/village/ABSTRACT_CONSTRUCTION_DESIGN.md, Docs/village/BUILD_PRIORITY_DESIGN.md]
 
-**combat 종합 페이지 추가 완료**: 장비 옵션 글로벌화 이후의 무기 Base·고유 강화·글로벌 옵션 책임과 현행 공격 프로필 공식을 [combat.md](combat.md)에 종합했다. 현행 규칙은 `combatSystem.md`, 마이그레이션과 후속 과제는 `ModSystem_Changelog.md`의 2026-08-22 항목을 정본으로 삼는다. [src: Wiki/combat.md, Docs/combat/combatSystem.md, Docs/combat/ModSystem_Changelog.md]
+**combat 종합 페이지 갱신 완료**: 장비 옵션 글로벌화 이후의 무기 Base·고유 강화·글로벌 옵션 책임과 공격 프로필에 더해, 미장착 장비 Prefix/Postfix 랜덤 교체·추가, 비용·후보·트랜잭션·Forge UI·회귀 검증을 [combat.md](combat.md)에 종합했다. 현행 계산 규칙은 `combatSystem.md`, 마이그레이션은 `ModSystem_Changelog.md`, 마법부여의 확정 규칙·검증·후속 경계는 구현 완료 후에도 `ITEM_ENCHANTMENT_DESIGN.md`를 active 원본으로 유지한다. 문서의 구현 전 기준선과 Phase 계획은 이력으로 구분한다. [src: Wiki/combat.md, Docs/combat/combatSystem.md, Docs/combat/ModSystem_Changelog.md, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md]
 
 ## 위키 종합 필요성이 낮은 주제
 

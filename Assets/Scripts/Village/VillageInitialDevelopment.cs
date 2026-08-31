@@ -4,6 +4,14 @@ using System.Collections.Generic;
 
 namespace ARPG.Village
 {
+    public enum MinimumForgeEnsureResult
+    {
+        Unchanged,
+        Created,
+        TierNormalized,
+        DataError,
+    }
+
     public sealed class VillageInitialDevelopmentResult
     {
         public int MilestonesApplied;
@@ -31,6 +39,70 @@ namespace ARPG.Village
     /// </summary>
     public static class VillageInitialDevelopment
     {
+        /// <summary>
+        /// 신규 게임 마을의 공통 Forge 최소 보장. 종족별 성장 계획과 별개인 마지막
+        /// 후조건으로 적용하며, Dwarf 계획이 만든 상위 Tier는 그대로 보존한다.
+        /// PlacedObjects/PlacedObjectTypeIds가 불일치하거나 Forge가 중복된 데이터는
+        /// 임의로 고치지 않고 오류로 거부한다.
+        /// </summary>
+        public static MinimumForgeEnsureResult EnsureMinimumForge(VillageData village,
+            Func<int, Tables.BuildableItemTable?> tableResolver, out string error)
+        {
+            error = string.Empty;
+            int forgeTableId = VillageInitialFacilityCatalog.FORGE_TABLE_ID;
+            int recordCount = 0;
+            int typeIdCount = 0;
+            PlacedObjectSaveData? forgeRecord = null;
+
+            for (int i = 0; i < village.PlacedObjects.Count; i++)
+            {
+                PlacedObjectSaveData placed = village.PlacedObjects[i];
+                if (placed.TableId != forgeTableId)
+                    continue;
+
+                recordCount++;
+                forgeRecord = placed;
+            }
+
+            for (int i = 0; i < village.PlacedObjectTypeIds.Count; i++)
+            {
+                if (village.PlacedObjectTypeIds[i] == forgeTableId)
+                    typeIdCount++;
+            }
+
+            if (recordCount > 1 || typeIdCount > 1 || recordCount != typeIdCount)
+            {
+                error = $"Village {village.VillageId}: Forge {forgeTableId} 원장 불일치/중복 " +
+                    $"(records={recordCount}, typeIds={typeIdCount})";
+                return MinimumForgeEnsureResult.DataError;
+            }
+
+            if (recordCount == 1)
+            {
+                if (forgeRecord!.FacilityTier >= 1)
+                    return MinimumForgeEnsureResult.Unchanged;
+
+                forgeRecord.FacilityTier = 1;
+                return MinimumForgeEnsureResult.TierNormalized;
+            }
+
+            Tables.BuildableItemTable? table = tableResolver(forgeTableId);
+            if (table == null || table.Id != forgeTableId
+                || table.SpawnType != GlobalEnum.BuildableSpawnType.Entity
+                || ((ProvidedService)table.ProvidedService & ProvidedService.Forge) == 0)
+            {
+                error = $"Village {village.VillageId}: Forge {forgeTableId} 테이블이 없거나 " +
+                    "Entity/Forge 서비스 계약을 충족하지 않음";
+                return MinimumForgeEnsureResult.DataError;
+            }
+
+            VillageConstructionLedger.ApplyCompletedBuild(village, table,
+                VillageConstructionPosition.UnassignedTile,
+                VillageConstructionPosition.UnassignedTile);
+            village.PlacedObjects[village.PlacedObjects.Count - 1].FacilityTier = 1;
+            return MinimumForgeEnsureResult.Created;
+        }
+
         /// <summary>
         /// Profile → 성장 명세 결정. 저장된 GrowthPlanId가 카탈로그에 없거나 Profile이 없으면
         /// V1 fallback 정책과 같은 결정론 기본 명세를 사용하고 경고를 반환한다.

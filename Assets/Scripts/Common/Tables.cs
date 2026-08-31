@@ -425,6 +425,60 @@ namespace ARPG.Tables
         [JsonProperty("Weight")] public int Weight;
     }
 
+    /// <summary>
+    /// 일반 장비 Prefix/Postfix 마법부여 작업별 비용 규칙.
+    /// 플레이어가 선택한 랜덤 교체/추가 Operation으로 이 테이블을 조회한다.
+    /// </summary>
+    [Serializable]
+    public class ItemEnchantmentCostTable : TableBase
+    {
+        [JsonProperty("MaterialItemId")] public int MaterialItemId;
+        [JsonProperty("Operation")] public GE.ItemEnchantmentOperation Operation;
+        [JsonProperty("MaterialCount")] public int MaterialCount;
+        [JsonProperty("GoldCost")] public int GoldCost;
+        [JsonProperty("RequiredForgeTier")] public GE.ForgeTier RequiredForgeTier;
+
+        [JsonIgnore] public ItemTable? MaterialItem;
+        [JsonIgnore] public string ValidationError = string.Empty;
+
+        [JsonIgnore]
+        public bool IsValid => string.IsNullOrEmpty(ValidationError) == true;
+
+        public override void LoadLate()
+        {
+            MaterialItem = AR.s.Data?.GetItem(MaterialItemId);
+            if (MaterialItem == null)
+            {
+                ValidationError = $"Material ItemTable {MaterialItemId} not found";
+            }
+            else if (MaterialItem.ItemType != GE.ItemType.Currency)
+            {
+                ValidationError = $"Material ItemTable {MaterialItemId} is not Currency";
+            }
+            else if (MaterialCount <= 0)
+            {
+                ValidationError = "MaterialCount must be greater than zero";
+            }
+            else if (GoldCost < 0)
+            {
+                ValidationError = "GoldCost cannot be negative";
+            }
+            else if (RequiredForgeTier < GE.ForgeTier.Basic)
+            {
+                ValidationError = "RequiredForgeTier must be Basic or higher";
+            }
+            else
+            {
+                ValidationError = string.Empty;
+            }
+
+            if (IsValid == false)
+            {
+                UnityEngine.Debug.LogError($"[ItemEnchantmentCostTable] Invalid row Id={Id}: {ValidationError}");
+            }
+        }
+    }
+
     [Serializable]
     public class DropTable : TableBase
     {

@@ -1,5 +1,6 @@
 #nullable enable
 using ARPG.Data;
+using ARPG.Item;
 using ARPG.Tables;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
@@ -84,6 +85,8 @@ namespace ARPG.Manager
         private Label? _itDesc;
 
         private bool _isReady = false;
+        private Rect _pendingAnchorScreenRect;
+        private bool _hasPendingPositionUpdate = false;
 
         public void Initialize()
         {
@@ -143,12 +146,13 @@ namespace ARPG.Manager
 
             ShowContent(activeContent);
             _frame.style.display = DisplayStyle.Flex;
-            UpdatePosition(anchorScreenRect);
+            RequestPositionUpdate(anchorScreenRect);
         }
 
         public void Hide()
         {
             if (_frame == null) return;
+            _hasPendingPositionUpdate = false;
             _frame.style.display = DisplayStyle.None;
         }
 
@@ -527,47 +531,11 @@ namespace ARPG.Manager
         {
             if (container == null || mod.Table == null) return;
 
-            string body = FormatModLine(mod);
+            string body = EquipmentOptionText.FormatModLine(mod);
 
             Label line = new Label(body);
             line.AddToClassList(isImplicit ? "tooltip-statline-implicit" : "tooltip-modline");
             container.Add(line);
-        }
-
-        private static string FormatModLine(ModInstance mod)
-        {
-            if (mod.Table == null)
-                return string.Empty;
-
-            if (mod.Table.EffectType == GlobalEnum.ModEffectType.FlatStat
-                && mod.Table.TargetStat == GlobalEnum.Stat.CriRate)
-            {
-                return $"치명타 확률 +{mod.Value1}%";
-            }
-
-            if (mod.Table.EffectType == GlobalEnum.ModEffectType.FlatStat
-                && mod.Table.TargetStat == GlobalEnum.Stat.AttackSpeed
-                && mod.Slot != GlobalEnum.ModSlot.Base)
-            {
-                return $"공격속도 {mod.Value1}% 증가";
-            }
-
-            if (mod.Table.EffectType == GlobalEnum.ModEffectType.IncreasedStat)
-            {
-                if (mod.Table.TargetStat == GlobalEnum.Stat.CriRate
-                    || mod.Table.TargetStat == GlobalEnum.Stat.CriRateMul)
-                    return $"치명타 확률 {mod.Value1}% 증가";
-
-                if (mod.Table.TargetStat == GlobalEnum.Stat.AttackSpeed
-                    || mod.Table.TargetStat == GlobalEnum.Stat.AttackSpeedMul)
-                    return $"공격속도 {mod.Value1}% 증가";
-
-                return $"{mod.Table.Name}: {mod.Value1}% 증가";
-            }
-
-            return mod.Value2 > 0
-                ? $"{mod.Table.Name}: +{mod.Value1}~{mod.Value2}"
-                : $"{mod.Table.Name}: +{mod.Value1}";
         }
 
         private static void AppendEnhancementLine(
@@ -706,7 +674,7 @@ namespace ARPG.Manager
             BuildSkillPageContentFromEffect(effect);
             ShowContent(_contentSkillPage);
             _frame.style.display = DisplayStyle.Flex;
-            UpdatePosition(anchorScreenRect);
+            RequestPositionUpdate(anchorScreenRect);
         }
 
         private static string DescribeEffect(Tables.SkillEffectTable effect)
@@ -755,6 +723,29 @@ namespace ARPG.Manager
             }
         }
 
+        private void RequestPositionUpdate(Rect anchorScreenRect)
+        {
+            _pendingAnchorScreenRect = anchorScreenRect;
+            _hasPendingPositionUpdate = true;
+
+            // 이미 레이아웃이 계산된 툴팁은 즉시 이동하고,
+            // display 복원이나 콘텐츠 변경으로 크기가 바뀌면 GeometryChangedEvent에서 보정한다.
+            UpdatePosition(anchorScreenRect);
+        }
+
+        private void OnTooltipGeometryChanged(GeometryChangedEvent evt)
+        {
+            if (_hasPendingPositionUpdate == false || _frame == null) return;
+            if (_frame.style.display == DisplayStyle.None)
+            {
+                _hasPendingPositionUpdate = false;
+                return;
+            }
+
+            _hasPendingPositionUpdate = false;
+            UpdatePosition(_pendingAnchorScreenRect);
+        }
+
         private static void SetStatLine(Label? label, string? text)
         {
             if (label == null) return;
@@ -798,6 +789,7 @@ namespace ARPG.Manager
 
             _root = root;
             _frame = root.Q<VisualElement>("tooltip");
+            _frame?.RegisterCallback<GeometryChangedEvent>(OnTooltipGeometryChanged);
 
             _contentSkillBook = root.Q<VisualElement>("content-skillbook");
             _contentSkillPage = root.Q<VisualElement>("content-skillpage");

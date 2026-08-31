@@ -162,6 +162,56 @@ namespace ARPG.Item
             }
         }
 
+        /// <summary>
+        /// 인벤토리 전체 스택에서 ItemId의 보유 수량을 합산한다.
+        /// </summary>
+        public int GetTotalQuantity(int itemId)
+        {
+            if (itemId <= 0 || _items == null)
+                return 0;
+
+            int total = 0;
+            for (int i = 0; i < _items.Count; i++)
+            {
+                ItemData? item = _items[i];
+                if (item == null || item.Id != itemId || item.Quantity <= 0)
+                    continue;
+                total += item.Quantity;
+            }
+            return total;
+        }
+
+        public bool CanConsumeItem(int itemId, int quantity)
+        {
+            return itemId > 0 && quantity > 0 && GetTotalQuantity(itemId) >= quantity;
+        }
+
+        /// <summary>
+        /// 전체 수량을 먼저 검증한 다음 낮은 슬롯 인덱스부터 결정론적으로 소비한다.
+        /// 수량이 부족하면 어떤 스택도 변경하지 않는다.
+        /// </summary>
+        public bool TryConsumeItem(int itemId, int quantity)
+        {
+            if (CanConsumeItem(itemId, quantity) == false)
+                return false;
+
+            int remaining = quantity;
+            for (int i = 0; i < _items.Count && remaining > 0; i++)
+            {
+                ItemData? item = _items[i];
+                if (item == null || item.Id != itemId || item.Quantity <= 0)
+                    continue;
+
+                int consume = Mathf.Min(item.Quantity, remaining);
+                item.Quantity -= consume;
+                remaining -= consume;
+                if (item.Quantity == 0)
+                    _items[i] = null;
+            }
+
+            return remaining == 0;
+        }
+
         public bool MoveItem(int inFromIndex, int inToIndex)
         {
             // 인덱스 유효성 검사

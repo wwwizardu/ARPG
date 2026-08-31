@@ -6,31 +6,71 @@
         <ui:VisualElement name="overlay" class="forge-overlay" picking-mode="Position"/>
         <ui:VisualElement name="panel" class="forge-panel">
             <ui:VisualElement class="forge-header">
-                <appui:Heading text="강화" size="L" class="forge-title"/>
+                <appui:Heading text="제련소 마법부여" size="L" class="forge-title"/>
                 <appui:IconButton name="close-btn" icon="x" class="forge-close-icon"/>
             </ui:VisualElement>
 
             <appui:Divider/>
-
-            <ui:VisualElement class="forge-body">
-                <appui:Text name="tier-text" text="강화 단계" class="forge-tier"/>
-                <appui:Text name="discount-text" text="" class="forge-discount"/>
+            <ui:VisualElement class="forge-tier-row">
+                <appui:Text name="tier-text" text="제련소 단계" class="forge-tier"/>
+                <appui:Text text="옵션 종류는 실행 시 랜덤으로 결정됩니다" class="forge-tier-note"/>
             </ui:VisualElement>
 
             <appui:Divider/>
+            <ui:VisualElement class="forge-columns">
+                <ui:VisualElement class="forge-column forge-column-left">
+                    <appui:Text text="1. 인벤토리 미장착 장비" class="forge-section-title"/>
+                    <ui:ScrollView name="equipment-scroll" class="forge-scroll forge-equipment-scroll">
+                        <ui:VisualElement name="inventory-grid" class="forge-inventory-grid"/>
+                    </ui:ScrollView>
+                    <appui:Text name="selected-text" text="장비를 선택하세요" class="forge-selected"/>
+                    <appui:Text text="현재 전체 옵션" class="forge-subtitle"/>
+                    <ui:ScrollView class="forge-options-scroll">
+                        <ui:VisualElement name="selected-options" class="forge-option-list"/>
+                    </ui:ScrollView>
+                </ui:VisualElement>
 
-            <ui:VisualElement class="forge-section">
-                <appui:Text text="인벤토리 (장비만)" class="forge-section-title"/>
-                <ui:VisualElement name="inventory-grid" class="forge-inventory-grid"/>
-                <appui:Text name="selected-text" text="강화할 장비를 선택하세요" class="forge-selected"/>
+                <ui:VisualElement class="forge-column forge-column-right">
+                    <appui:Text text="2. 마법부여 작업" class="forge-section-title"/>
+                    <ui:VisualElement class="forge-operation-card">
+                        <appui:Text text="변화의 오브 — 랜덤 옵션 변경" class="forge-card-title"/>
+                        <appui:Text text="기존 Prefix/Postfix 하나를 무작위로 선택해 같은 슬롯의 다른 옵션으로 교체합니다." class="forge-card-detail"/>
+                        <appui:Text name="replace-cost-text" text="비용: -" class="forge-cost"/>
+                        <appui:Text name="replace-status-text" text="먼저 장비를 선택하세요." class="forge-status"/>
+                        <appui:Button name="replace-btn" title="랜덤 옵션 변경" variant="Accent" size="M" class="forge-operation-btn"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="forge-operation-card">
+                        <appui:Text text="엑잘티드 오브 — 랜덤 옵션 추가" class="forge-card-title"/>
+                        <appui:Text text="빈 Prefix/Postfix 자리에 적용 가능한 옵션 하나를 무작위로 추가합니다." class="forge-card-detail"/>
+                        <appui:Text name="add-cost-text" text="비용: -" class="forge-cost"/>
+                        <appui:Text name="add-status-text" text="먼저 장비를 선택하세요." class="forge-status"/>
+                        <appui:Button name="add-btn" title="랜덤 옵션 추가" variant="Accent" size="M" class="forge-operation-btn"/>
+                    </ui:VisualElement>
+                </ui:VisualElement>
             </ui:VisualElement>
 
             <appui:Divider/>
-
             <ui:VisualElement class="forge-actions">
-                <appui:Button name="disassemble-btn" title="분해" variant="Default" size="M" class="forge-action-btn"/>
-                <appui:Button name="reroll-btn" title="Mod 재롤 (50G)" variant="Accent" size="M" class="forge-action-btn"/>
-                <appui:Button name="addmod-btn" title="Mod 추가 (80G)" variant="Accent" size="M" class="forge-action-btn"/>
+                <appui:Button name="disassemble-btn" title="분해 (후속 기능)" variant="Default" size="M" class="forge-secondary-btn"/>
+            </ui:VisualElement>
+
+            <ui:VisualElement name="result-section" class="forge-result-section forge-hidden">
+                <appui:Divider/>
+                <appui:Text name="result-title" text="마법부여 성공" class="forge-result-title"/>
+                <ui:VisualElement class="forge-result-columns">
+                    <ui:VisualElement class="forge-result-column">
+                        <appui:Text text="변경 전" class="forge-subtitle"/>
+                        <ui:ScrollView class="forge-result-scroll">
+                            <ui:VisualElement name="before-options" class="forge-option-list"/>
+                        </ui:ScrollView>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="forge-result-column">
+                        <appui:Text text="변경 후" class="forge-subtitle"/>
+                        <ui:ScrollView class="forge-result-scroll">
+                            <ui:VisualElement name="after-options" class="forge-option-list"/>
+                        </ui:ScrollView>
+                    </ui:VisualElement>
+                </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>
