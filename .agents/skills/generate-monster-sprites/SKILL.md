@@ -67,7 +67,8 @@ Apply explicit user overrides to frame counts, facing direction, destination, or
 
 13. Visually inspect the 13 final PNGs. Check character identity, action readability, chronological motion, facing direction, apparent scale, stable ground line, transparent background, and edge halos. Regenerate only the bad frame while reusing `Idle1` and adjacent action frames as references, then normalize and validate the full set again.
 14. Let Unity create `.meta` files. When Unity tooling is available, refresh the destination and match the neighboring monster import settings: Sprite (2D and UI), Single, 32 PPU, mipmaps off, alpha transparency on.
-15. Report the saved folder, generated frame list, chroma key used, validation result, and any deviations from defaults.
+15. After the final PNG set has passed validation and visual inspection, delete the task-scoped `tmp/imagegen/<monster-kebab>/` directory, including raw sources, alpha intermediates, reference sheets, and contact sheets. Resolve and verify the exact repository-relative target before deleting it, and never delete another monster's temporary directory. If the task is blocked or incomplete, keep only the intermediates required to resume and report their location.
+16. Report the saved folder, generated frame list, chroma key used, validation result, cleanup result, and any deviations from defaults.
 
 ## Generation Rules
 
