@@ -35,7 +35,7 @@ sources:
 | **overview** | 게임 컨셉(3대 축)과 시스템별 구현 현황·로드맵 | `Docs/overview/` 2장 (gameOverview, implementationStatus) + `Docs/README.md`(대시보드) | 하 | 하 |
 | **combat** → [combat.md](combat.md) | 장비 옵션 글로벌화, 일반 장비 마법부여, 무기 Base/고유 강화 경계와 공격 프로필 [src: Wiki/combat.md] | `Docs/combat/` + 마법부여·전투 코드와 테이블 [src: Docs/combat/, Assets/Scripts/Item/] | 상 | 상 |
 | **skill_aim** → [skill_aim.md](skill_aim.md) | 커서 조준 추적·효과 커밋, 플레이어 방향 화살표 View, 스킬 사용 중 이동 감속 [src: Wiki/skill_aim.md] | `Docs/combat/POE2_CURSOR_TRACKING_PLAN.md` + 조준·스킬·이동 코드 | 중 | 상 |
-| **ai_monster** | 몬스터 AI 상태머신 패턴과 데이터 주도 스폰 풀 | `Docs/ai_monster/` 2장 (monsterAIPattern, MONSTER_SPAWN_DESIGN) | 하 | 중 |
+| **ai_monster** → [monster_spawn_runtime.md](monster_spawn_runtime.md) | 몬스터 AI·데이터 주도 종 풀과 거리 기반 스폰/Warm 청크 캐시 구현 전 제안 [src: Wiki/monster_spawn_runtime.md] | `Docs/ai_monster/` 2장 + 런타임 스폰 제안 | 중 | 상 |
 | **map** | 청크 기반 오픈월드 맵 생성·바이옴 타일셋·충돌/길찾기 | `Docs/map/` 3장 (MAP_DESIGN, COLLISION_PATHFINDING_DESIGN, THEME_TILESET_REFACTOR) | 중 | 중 |
 | **village** → [village.md](village.md) | 마을 자가성장 LOD·서비스와 신규 게임 전 마을 Forge Tier 1 접근성 [src: Wiki/village.md] | `Docs/village/` + 마법부여 Forge 접근성 계약 [src: Docs/village/, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md] | 중 | 상 |
 | **npc** → [npc.md](npc.md) | NPC 관계·상호작용·소망(퀘스트)·자율 활동·동료·장비 | `Docs/npc/` (VILLAGE_NPC_BOUNDARY_DESIGN 포함) | 상 | 중 |
@@ -70,7 +70,7 @@ sources:
 - **overview** — 게임 컨셉 지도 역할은 `Docs/README.md`가 유지하지만 구현 현황은 2026-07-13 이후 드리프트됐다. 별도 장기 주제 페이지 대신 [current_status.md](current_status.md)가 최신 코드·테이블 대조를 보완한다. [src: Docs/README.md, Docs/overview/implementationStatus.md, Wiki/current_status.md]
 - **tech** — ECS 성능과 세이브 파티션 문서가 각각 자기완결적이며, 세이브 현황은 current_status와 npc 위키가 연결한다. [src: Docs/tech/ECS_PERFORMANCE_OPTIMIZATION_PLAN.md, Docs/tech/SAVE_PARTITION_DESIGN.md, Wiki/current_status.md, Wiki/npc.md]
 - **economy** — 현행 추가 문서는 경매장 1장이고 구현 전 코드 앵커까지 한 문서에 모여 있다. 지역 상권 구현 현황은 village 위키와 current_status가 연결한다. [src: Docs/economy/AUCTION_HOUSE_DESIGN.md, Wiki/village.md, Wiki/current_status.md]
-- **ai_monster** — 2장뿐이고 상호 의존이 얕다.
+- **ai_monster** — 원본 2장의 상호 의존은 얕지만, 거리 기반 스폰·Warm 청크 캐시는 맵 풀링과 몬스터 생명주기를 함께 바꾸므로 별도 구현 전 제안 페이지를 둔다. [src: Wiki/monster_spawn_runtime.md]
 - **map** — 3장이지만 MAP_DESIGN.md(1,031행) 한 장에 대부분이 집중돼 있어 이미 사실상 단일 정본. [추론]
 - **_archive** — 보류/폐기 문서로 위키 종합 대상에서 제외.
 
