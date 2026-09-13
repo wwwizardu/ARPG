@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using ARPG.Component;
 using ARPG.Systems;
 using ARPG.Utility;
@@ -62,39 +61,36 @@ namespace ARPG.Systems
 
                 // Velocity만 저장 (Position은 System_Render에서 업데이트)
                 AR.s.Component.SetComponent(entityId, velocity);
-
-                if (isAirborne == false
-                    && AR.s.Component.TryGetComponent<StateComponent>(entityId, out var state) == true)
-                {
-                    CheckStateChanges(entityId, ref velocity, ref state);
-                }
             }
 
-
+            UpdateMovementStates();
         }
 
-        private void CheckStateChanges(int entityId, ref VelocityComponent refVelocity,  ref StateComponent refState)
+        private void UpdateMovementStates()
         {
-            // 이동 상태 업데이트
-            if (refVelocity.Velocity.sqrMagnitude > 0.001f)
-            {
-                if(refState.MoveState != Creature.MovementStates.Walking)
-                {
-                    refState.MovementStatePrev = refState.MoveState;
-                    refState.MoveState = Creature.MovementStates.Walking;    
-                }
-            }
-            else
-            {
-                if(refState.MoveState != Creature.MovementStates.Idle)
-                {
-                    refState.MovementStatePrev = refState.MoveState;
-                    refState.MoveState = Creature.MovementStates.Idle;
-                }
-            }
+            SparseSet<StateComponent> statePool = AR.s.Component.GetComponentPool<StateComponent>();
 
-            AR.s.Component.SetComponent(entityId, refState);
+            for (int i = 0; i < statePool.Count; i++)
+            {
+                int entityId = statePool.GetEntityId(i);
+                if (AR.s.Component.HasComponent<JumpComponent>(entityId) == true)
+                    continue;
+
+                if (AR.s.Component.TryGetComponent<VelocityComponent>(entityId, out var velocity) == false)
+                    continue;
+
+                StateComponent state = statePool.GetByIndex(i);
+                Creature.MovementStates nextState = velocity.Velocity.sqrMagnitude > 0.001f
+                    ? Creature.MovementStates.Walking
+                    : Creature.MovementStates.Idle;
+
+                if (state.MoveState == nextState)
+                    continue;
+
+                state.MovementStatePrev = state.MoveState;
+                state.MoveState = nextState;
+                statePool.SetByIndex(i, state);
+            }
         }
-
     }
 }

@@ -1,23 +1,25 @@
 #nullable enable
+using System;
 using System.Collections.Generic;
-using Cysharp.Threading.Tasks;
-using UnityEngine;
 using ARPG.Base;
 using ARPG.Component;
-using ARPG.Creature;
 using ARPG.Factory;
 using ARPG.Map;
 using ARPG.Scene;
-using ARPG.Utility;
+using Cysharp.Threading.Tasks;
+using UnityEngine;
 
 namespace ARPG.Monster
 {
     public class MonsterManager : MonoBehaviour
     {
-        private List<EntityBase> _monsters = new();
-        private Dictionary<Vector2Int, ChunkMonsterData> _chunkMonsters = new();
-        private Transform? _monsterParent;
+        private const float DefaultMoveRadius = 0.3f;
 
+        private readonly List<EntityBase> _monsters = new();
+        private readonly Dictionary<Vector2Int, ChunkMonsterData> _chunkMonsters = new();
+        private readonly Dictionary<int, MonsterSpawnOrigin> _monsterOrigins = new();
+        private readonly List<PendingSpawnReservation> _pendingSpawnReservations = new();
+        private Transform? _monsterParent;
 
         [Header("Monster Spawn (Group-based)")]
         [SerializeField] private int _mainMonsterTableId = 1003;
@@ -32,23 +34,40 @@ namespace ARPG.Monster
         [SerializeField] private float _interGroupMinDistance = 4f;
         [SerializeField] private int _anchorRejectionAttempts = 8;
 
-        [Header("Monster Lifecycle")]
-        [SerializeField] private float _chunkMonsterLifetime = 300f; // 5분
-        [SerializeField] private float _activationDistance = 25f; // 몬스터 활성화 거리
-        [SerializeField] private float _deactivationDistance = 30f; // 몬스터 비활성화 거리 (하이스테리시스)
+        [Header("Monster Spawn Director")]
+        [SerializeField] private float _spawnCheckInterval = 0.5f;
+        [SerializeField] private float _minimumSpawnDistance = 10f;
+        [SerializeField] private float _maximumSpawnDistance = 24f;
+        [SerializeField] private int _maxSpawnGroupsPerCheck = 1;
+        [SerializeField] private int _maxSpawnEntitiesPerCheck = 12;
+        [SerializeField] private Vector2 _slotCooldownRange = new Vector2(45f, 75f);
 
-        // SpawnInitialMonstersInChunk 호출마다 재사용 — GC 회피
-        private readonly List<Vector2> _placedAnchorsCache = new();
-
-        // 현재 처리 중인 청크의 Zone 파라미터 (ResolveSpawnParams가 세팅, SpawnGroup/SampleGroupOffset이 읽음)
-        private float _currentGroupRadius;
-        private float _currentInterGroupMinDistance;
+        [Header("Monster Activation")]
+        [SerializeField] private float _activationDistance = 25f;
+        [SerializeField] private float _deactivationDistance = 30f;
 
         public enum GroupDistribution
         {
-            Uniform,             // 반경 내 균등
-            GaussianFromCenter   // 중심 가까이 더 빽빽
+            Uniform,
+            GaussianFromCenter
         }
+
+        public float MinimumSpawnDistanceSqr =>
+            Mathf.Max(0f, _minimumSpawnDistance) * Mathf.Max(0f, _minimumSpawnDistance);
+
+        public float SpawnCheckInterval => Mathf.Max(0.02f, _spawnCheckInterval);
+
+        public float MaximumSpawnDistanceSqr
+        {
+            get
+            {
+                float maximum = Mathf.Max(0f, Mathf.Max(_minimumSpawnDistance, _maximumSpawnDistance));
+                return maximum * maximum;
+            }
+        }
+
+        public int MaxSpawnGroupsPerCheck => Mathf.Max(0, _maxSpawnGroupsPerCheck);
+        public int MaxSpawnEntitiesPerCheck => Mathf.Max(0, _maxSpawnEntitiesPerCheck);
 
         public void Initialize()
         {
@@ -56,20 +75,19 @@ namespace ARPG.Monster
 
         public void Reset()
         {
-            // 모든 몬스터 제거
-            for (int i = 0; i < _monsters.Count; i++)
+            _monsterOrigins.Clear();
+            _chunkMonsters.Clear();
+            _pendingSpawnReservations.Clear();
+
+            while (_monsters.Count > 0)
             {
-                var entity = _monsters[i];
-                if (entity != null && entity.gameObject != null)
+                EntityBase entity = _monsters[_monsters.Count - 1];
+                _monsters.RemoveAt(_monsters.Count - 1);
+                if (entity != null)
                 {
-                    AR.s.Entity.DestroyEntity(entity.EntityId);
-                    Destroy(entity.gameObject);
+                    DestroyMonsterEntity(entity.EntityId, entity);
                 }
             }
-
-            // 컬렉션 정리
-            _monsters.Clear();
-            _chunkMonsters.Clear();
         }
 
         public void SetMorsterRoot(Transform inMonsterRoot)
@@ -90,207 +108,209 @@ namespace ARPG.Monster
         }
 
         /// <summary>
-        /// System_EntityDestroy에서 MonsterTag 확인 후 호출
-        /// MonsterManager의 추적 정보에서 몬스터를 제거
+        /// System_EntityDestroy에서 MonsterTag 확인 후 호출한다.
+        /// 일반 사망/제거는 출신 슬롯의 생존 수를 감소시킨다.
         /// </summary>
         public void UnregisterMonsterByEntityId(int entityId)
         {
-            for (int i = 0; i < _monsters.Count; i++)
+            RemoveMonsterFromGlobalList(entityId);
+
+            if (_monsterOrigins.TryGetValue(entityId, out MonsterSpawnOrigin origin) == false)
+                return;
+
+            _monsterOrigins.Remove(entityId);
+            if (_chunkMonsters.TryGetValue(origin.ChunkCoord, out ChunkMonsterData? chunkMonsters) &&
+                chunkMonsters.GenerationId == origin.GenerationId)
             {
-                if (_monsters[i] != null && _monsters[i].EntityId == entityId)
-                {
-                    _monsters.RemoveAt(i);
-                    return;
-                }
+                RemoveEntityId(chunkMonsters.SpawnedMonsterIds, entityId);
+            }
+
+            if (AR.s.Map == null ||
+                AR.s.Map.TryGetChunkSpawnRuntime(origin.ChunkCoord, origin.GenerationId,
+                    out ChunkSpawnRuntimeData runtime) == false ||
+                origin.SlotIndex < 0 || origin.SlotIndex >= runtime.Slots.Length)
+            {
+                return;
+            }
+
+            MonsterSpawnSlotState slot = runtime.Slots[origin.SlotIndex];
+            slot.AliveMemberCount = Mathf.Max(0, slot.AliveMemberCount - 1);
+            if (slot.AliveMemberCount == 0)
+            {
+                BeginSlotCooldown(slot);
             }
         }
 
-        public async Cysharp.Threading.Tasks.UniTask<int> SpawnMonsterAtPosition(Vector3 position, Vector2Int chunkCoord, int monsterTableId, bool isOriginalSpawn = true)
+        public void ResolveSpawnSlotGenerationParams(int zone,
+            out Vector2Int mainCountRange,
+            out Vector2Int subCountRange,
+            out float interGroupMinDistance)
         {
-            if (AR.s.CurrentScene is GameScene gameScene == false)
-                return -1;
+            ResolveSpawnParams(zone,
+                out mainCountRange, out _,
+                out subCountRange, out _,
+                out _, out interGroupMinDistance);
+        }
 
-            Vector3 spawnPos = new Vector3(position.x, position.y, -0.05f);
-
-            // 청크 거리 → Zone → 몬스터 레벨 (BALANCE_DESIGN: zone과 monster level 1:1 매핑).
-            // 향후 ZoneTable에 MonsterLevel 컬럼을 둬서 디자이너가 곡선 튜닝 가능.
-            int monsterLevel = AR.s.Map.GetZone(chunkCoord);
-
-            // EntityFactory를 통해 몬스터 생성 (Addressable)
-            var (entityId, entity) = await EntityFactory.CreateMonster(monsterTableId, spawnPos, gameScene.MonsterRoot, monsterLevel);
-
-            if (entityId < 0 || entity == null)
-                return -1;
-
-            AddMonster(entity);
-
-            // ActivationDistanceComponent 추가
-            EntityFactory.AddActivationComponent(entityId, _activationDistance, _deactivationDistance);
-
-            if (_chunkMonsters.ContainsKey(chunkCoord) == false)
+        public bool TrySpawnSlot(Vector2Int chunkCoord, int generationId, int slotIndex,
+            int remainingEntityBudget, out int scheduledEntityCount)
+        {
+            scheduledEntityCount = 0;
+            if (remainingEntityBudget <= 0 || AR.s.Map == null)
+                return false;
+            if (AR.s.Map.TryGetActiveChunkSpawnRuntime(chunkCoord, out ChunkSpawnRuntimeData runtime) == false ||
+                runtime.GenerationId != generationId ||
+                slotIndex < 0 || slotIndex >= runtime.Slots.Length)
             {
-                _chunkMonsters[chunkCoord] = new ChunkMonsterData(chunkCoord);
+                return false;
             }
 
-            _chunkMonsters[chunkCoord].spawnedMonsterIds.Add(entityId);
-            _chunkMonsters[chunkCoord].hasSpawned = true;
-
-            if (isOriginalSpawn)
+            MonsterSpawnSlotState slot = runtime.Slots[slotIndex];
+            if (slot.IsDisabled == true || slot.IsPending == true || slot.AliveMemberCount > 0 ||
+                Time.time < slot.NextSpawnTime)
             {
-                _chunkMonsters[chunkCoord].originalSpawnCount++;
+                return false;
+            }
+            if (AR.s.Map.IsMonsterSpawnSlotTerrainValid(chunkCoord, generationId, slotIndex, true) == false)
+                return false;
+
+            int zone = AR.s.Map.GetZone(chunkCoord);
+            ResolveSpawnParams(zone,
+                out _, out Vector2Int mainSizeRange,
+                out _, out Vector2Int subSizeRange,
+                out float groupRadius, out float interGroupMinDistance);
+
+            Vector2 anchorWorld = AR.s.Map.GetMonsterSpawnSlotWorldPosition(chunkCoord, slot.LocalPosition);
+            if (AR.s.Map.IsMonsterSpawnAnchorSeparated(anchorWorld, interGroupMinDistance,
+                    chunkCoord, generationId, slotIndex) == false)
+            {
+                return false;
             }
 
-            return entityId;
+            Vector2Int sizeRange = slot.GroupKind == MonsterSpawnGroupKind.Main
+                ? mainSizeRange
+                : subSizeRange;
+            int minimumSize = Mathf.Max(0, Mathf.Min(sizeRange.x, sizeRange.y));
+            int maximumSize = Mathf.Max(0, Mathf.Max(sizeRange.x, sizeRange.y));
+            if (maximumSize <= 0)
+            {
+                slot.IsDisabled = true;
+                return false;
+            }
+
+            int targetSize = UnityEngine.Random.Range(minimumSize, maximumSize + 1);
+            if (targetSize <= 0 || targetSize > remainingEntityBudget)
+                return false;
+
+            GlobalEnum.BiomeType chunkBiome = AR.s.Map.GetChunkBiome(chunkCoord);
+            int fallbackMonsterId = slot.GroupKind == MonsterSpawnGroupKind.Main
+                ? _mainMonsterTableId
+                : _subMonsterTableId;
+            int monsterTableId = BiomeMonsterMapping.SampleMonsterId(chunkBiome, fallbackMonsterId);
+            float monsterRadius = ResolveMonsterMoveRadius(monsterTableId);
+
+            // Addressables 요청 전에 슬롯을 예약한다.
+            int pendingVersion = slot.BeginPending();
+            List<Vector3> positions = BuildGroupPositions(chunkCoord, generationId, slotIndex,
+                pendingVersion, anchorWorld, targetSize, groupRadius, monsterRadius);
+            if (positions.Count == 0)
+            {
+                slot.CancelPending();
+                return false;
+            }
+
+            slot.LastUsedTime = Time.time;
+            for (int i = 0; i < positions.Count; i++)
+            {
+                _pendingSpawnReservations.Add(new PendingSpawnReservation(
+                    chunkCoord, generationId, slotIndex, pendingVersion,
+                    positions[i], monsterRadius));
+            }
+
+            scheduledEntityCount = positions.Count;
+            SpawnSlotGroupAsync(chunkCoord, generationId, slotIndex, pendingVersion, monsterTableId,
+                positions, monsterRadius, interGroupMinDistance).Forget();
+            return true;
         }
 
         public void ActivateChunkMonsters(Vector2Int chunkCoord)
         {
-            if (_chunkMonsters.ContainsKey(chunkCoord) == false)
+            if (_chunkMonsters.TryGetValue(chunkCoord, out ChunkMonsterData? chunkData) == false)
+                return;
+            if (AR.s.Map == null || AR.s.Map.IsChunkGenerationActive(chunkCoord, chunkData.GenerationId) == false)
                 return;
 
-            // 시간 갱신만 수행, 거리 기반 활성화는 System_EntityActivation이 담당
-            _chunkMonsters[chunkCoord].lastActiveTime = Time.time;
+            for (int i = 0; i < chunkData.SpawnedMonsterIds.Count; i++)
+            {
+                SynchronizeActivationState(chunkData.SpawnedMonsterIds[i]);
+            }
         }
 
         public void DeactivateChunkMonsters(Vector2Int chunkCoord)
         {
-            if (_chunkMonsters.ContainsKey(chunkCoord) == false)
+            RemovePendingReservations(chunkCoord, -1, -1, -1);
+
+            if (_chunkMonsters.TryGetValue(chunkCoord, out ChunkMonsterData? chunkData) == false)
                 return;
 
-            ChunkMonsterData chunkData = _chunkMonsters[chunkCoord];
-            chunkData.lastActiveTime = Time.time;
-
-            for (int i = 0; i < chunkData.spawnedMonsterIds.Count; i++)
+            for (int i = 0; i < chunkData.SpawnedMonsterIds.Count; i++)
             {
-                int entityId = chunkData.spawnedMonsterIds[i];
+                int entityId = chunkData.SpawnedMonsterIds[i];
+                if (AR.s.Component.TryGetComponent<ActivationDistanceComponent>(entityId, out var activation))
+                {
+                    activation.IsActivated = false;
+                    AR.s.Component.SetComponent(entityId, activation);
+                }
+
+                if (AR.s.Message.TryGetEntity(entityId, out var entity) && entity.gameObject != null)
+                {
+                    entity.gameObject.SetActive(false);
+                }
+            }
+        }
+
+        public void ExpireChunkMonsters(Vector2Int chunkCoord, int generationId)
+        {
+            RemovePendingReservations(chunkCoord, generationId, -1, -1);
+
+            if (_chunkMonsters.TryGetValue(chunkCoord, out ChunkMonsterData? chunkData) == false ||
+                chunkData.GenerationId != generationId)
+            {
+                return;
+            }
+
+            _chunkMonsters.Remove(chunkCoord);
+            for (int i = chunkData.SpawnedMonsterIds.Count - 1; i >= 0; i--)
+            {
+                int entityId = chunkData.SpawnedMonsterIds[i];
+                if (_monsterOrigins.TryGetValue(entityId, out MonsterSpawnOrigin origin) &&
+                    origin.GenerationId == generationId)
+                {
+                    _monsterOrigins.Remove(entityId);
+                }
+
+                RemoveMonsterFromGlobalList(entityId);
                 if (AR.s.Message.TryGetEntity(entityId, out var entity))
                 {
-                    if (entity.gameObject != null)
-                    {
-                        entity.gameObject.SetActive(false);
-
-                        if (AR.s.Component.TryGetComponent<ActivationDistanceComponent>(entityId, out var activation))
-                        {
-                            activation.IsActivated = false;
-                            AR.s.Component.SetComponent(entityId, activation);
-                        }
-                    }
+                    DestroyMonsterEntity(entityId, entity);
                 }
-            }
-        }
-
-        public bool HasChunkSpawned(Vector2Int chunkCoord)
-        {
-            return _chunkMonsters.ContainsKey(chunkCoord) && _chunkMonsters[chunkCoord].hasSpawned;
-        }
-
-        public int GetAliveMonsterCountInChunk(Vector2Int chunkCoord)
-        {
-            if (_chunkMonsters.ContainsKey(chunkCoord) == false)
-                return 0;
-
-            ChunkMonsterData chunkData = _chunkMonsters[chunkCoord];
-            int aliveCount = 0;
-
-            for (int i = 0; i < chunkData.spawnedMonsterIds.Count; i++)
-            {
-                int entityId = chunkData.spawnedMonsterIds[i];
-                if (AR.s.Component.TryGetComponent<StateComponent>(entityId, out var state))
+                else
                 {
-                    if (state.Condition != CharacterConditions.Dead)
-                    {
-                        aliveCount++;
-                    }
-                }
-            }
-
-            return aliveCount;
-        }
-
-        public int GetOriginalSpawnCountInChunk(Vector2Int chunkCoord)
-        {
-            if (_chunkMonsters.ContainsKey(chunkCoord) == false)
-                return 0;
-
-            return _chunkMonsters[chunkCoord].originalSpawnCount;
-        }
-
-        public void GetActiveChunksWithMonstersNonAlloc(List<Vector2Int> result)
-        {
-            result.Clear();
-
-            if (AR.s.Map == null)
-                return;
-
-            var mapActiveChunkCoords = AR.s.Map.GetActiveChunkCoords();
-            foreach (var chunkCoord in mapActiveChunkCoords)
-            {
-                if (_chunkMonsters.ContainsKey(chunkCoord) && _chunkMonsters[chunkCoord].hasSpawned)
-                {
-                    result.Add(chunkCoord);
+                    DestroyMonsterEntityWithoutRegistryEntry(entityId);
                 }
             }
         }
 
-        public void SpawnInitialMonstersInChunk(Vector2Int chunkCoord)
+        public bool IsMonsterSourceChunkActive(int entityId)
         {
-            if (HasChunkSpawned(chunkCoord))
-                return;
-
+            if (_monsterOrigins.TryGetValue(entityId, out MonsterSpawnOrigin origin) == false)
+                return true;
             if (AR.s.Map == null)
-                return;
+                return false;
 
-            if (AR.s.Map.TryGetChunkSpawnPositions(chunkCoord, out var spawnPositions) == false)
-                return;
-
-            if (spawnPositions.Count == 0)
-                return;
-
-            // Zone별 스폰 파라미터 룩업 (Cap 방식). 시트 미정의/누락 시 인스펙터 값 fallback.
-            int zone = AR.s.Map.GetZone(chunkCoord);
-            ResolveSpawnParams(zone,
-                out Vector2Int mainCountRange, out Vector2Int mainSizeRange,
-                out Vector2Int subCountRange, out Vector2Int subSizeRange,
-                out float groupRadius, out float interGroupMinDistance);
-
-            // 다른 메서드(SpawnGroup, SampleGroupOffset)와 공유하기 위해 현재 청크의 값으로 임시 세팅
-            _currentGroupRadius = groupRadius;
-            _currentInterGroupMinDistance = interGroupMinDistance;
-
-            _placedAnchorsCache.Clear();
-
-            // biome 스폰 풀(공용 ∪ biome전용)에서 그룹마다 종 샘플링. 풀 비면 인스펙터 폴백.
-            // MONSTER_SPAWN_DESIGN.md Phase 1: 그룹 anchor마다 풀에서 1종 → 그룹 내 동종.
-            GlobalEnum.BiomeType chunkBiome = AR.s.Map.GetChunkBiome(chunkCoord);
-
-            int mainCount = Random.Range(mainCountRange.x, mainCountRange.y + 1);
-            for (int i = 0; i < mainCount; i++)
-            {
-                int size = Random.Range(mainSizeRange.x, mainSizeRange.y + 1);
-                int mainId = BiomeMonsterMapping.SampleMonsterId(chunkBiome, _mainMonsterTableId);
-                SpawnGroup(chunkCoord, spawnPositions, mainId, size);
-            }
-
-            int subCount = Random.Range(subCountRange.x, subCountRange.y + 1);
-            for (int i = 0; i < subCount; i++)
-            {
-                int size = Random.Range(subSizeRange.x, subSizeRange.y + 1);
-                int subId = BiomeMonsterMapping.SampleMonsterId(chunkBiome, _subMonsterTableId);
-                SpawnGroup(chunkCoord, spawnPositions, subId, size);
-            }
-
-            // 그룹이 하나도 안 떨어진 경우(거부 샘플링 실패 누적, Zone 1 안전지대 등)에도 청크는 스폰 처리됨으로 간주
-            // — 다음 0.5초마다 재시도 방지.
-            if (_chunkMonsters.ContainsKey(chunkCoord) == false)
-            {
-                _chunkMonsters[chunkCoord] = new ChunkMonsterData(chunkCoord);
-                _chunkMonsters[chunkCoord].hasSpawned = true;
-            }
+            return AR.s.Map.IsChunkGenerationActive(origin.ChunkCoord, origin.GenerationId);
         }
 
-        /// <summary>
-        /// Zone → 스폰 파라미터. ZoneTable 행 없으면 인스펙터 글로벌 값으로 fallback.
-        /// </summary>
         private void ResolveSpawnParams(int zone,
             out Vector2Int mainCountRange, out Vector2Int mainSizeRange,
             out Vector2Int subCountRange, out Vector2Int subSizeRange,
@@ -300,144 +320,432 @@ namespace ARPG.Monster
             if (row != null)
             {
                 mainCountRange = new Vector2Int(row.MainGroupCountMin, row.MainGroupCountMax);
-                mainSizeRange  = new Vector2Int(row.MainGroupSizeMin,  row.MainGroupSizeMax);
-                subCountRange  = new Vector2Int(row.SubGroupCountMin,  row.SubGroupCountMax);
-                subSizeRange   = new Vector2Int(row.SubGroupSizeMin,   row.SubGroupSizeMax);
-                groupRadius           = row.GroupRadius           > 0f ? row.GroupRadius           : _groupRadius;
-                interGroupMinDistance = row.InterGroupMinDistance > 0f ? row.InterGroupMinDistance : _interGroupMinDistance;
-                Debug.Log($"<color=yellow>[ZoneSpawn] zone={zone} capRowId={row.Id} main={mainCountRange.x}~{mainCountRange.y}×{mainSizeRange.x}~{mainSizeRange.y} sub={subCountRange.x}~{subCountRange.y}×{subSizeRange.x}~{subSizeRange.y}</color>");
+                mainSizeRange = new Vector2Int(row.MainGroupSizeMin, row.MainGroupSizeMax);
+                subCountRange = new Vector2Int(row.SubGroupCountMin, row.SubGroupCountMax);
+                subSizeRange = new Vector2Int(row.SubGroupSizeMin, row.SubGroupSizeMax);
+                groupRadius = row.GroupRadius > 0f ? row.GroupRadius : _groupRadius;
+                interGroupMinDistance = row.InterGroupMinDistance > 0f
+                    ? row.InterGroupMinDistance
+                    : _interGroupMinDistance;
                 return;
             }
 
             mainCountRange = _mainGroupCount;
-            mainSizeRange  = _mainGroupSize;
-            subCountRange  = _subGroupCount;
-            subSizeRange   = _subGroupSize;
-            groupRadius           = _groupRadius;
+            mainSizeRange = _mainGroupSize;
+            subCountRange = _subGroupCount;
+            subSizeRange = _subGroupSize;
+            groupRadius = _groupRadius;
             interGroupMinDistance = _interGroupMinDistance;
-            Debug.Log($"<color=yellow>[ZoneSpawn] zone={zone} FALLBACK(inspector) dataNull={AR.s.Data == null} main={mainCountRange.x}~{mainCountRange.y}×{mainSizeRange.x}~{mainSizeRange.y} sub={subCountRange.x}~{subCountRange.y}×{subSizeRange.x}~{subSizeRange.y}</color>");
         }
 
-        private void SpawnGroup(Vector2Int chunkCoord, List<Vector2Int> spawnPositions, int monsterTableId, int size)
+        private async UniTaskVoid SpawnSlotGroupAsync(Vector2Int chunkCoord, int generationId,
+            int slotIndex, int pendingVersion, int monsterTableId, List<Vector3> positions,
+            float monsterRadius, float interGroupMinDistance)
         {
-            if (size <= 0 || spawnPositions.Count == 0)
-                return;
-
-            // anchor: 거부 샘플링으로 무리 간 최소 거리 확보 (Zone별 값 사용)
-            float interGroupSqr = _currentInterGroupMinDistance * _currentInterGroupMinDistance;
-            Vector2Int anchorLocal = default;
-            bool anchorFound = false;
-            for (int attempt = 0; attempt < _anchorRejectionAttempts; attempt++)
+            int successfulSpawnCount = 0;
+            try
             {
-                Vector2Int candidate = spawnPositions[Random.Range(0, spawnPositions.Count)];
-                Vector2 candidateWorld = ChunkLocalToWorld(chunkCoord, candidate);
-
-                bool tooClose = false;
-                for (int i = 0; i < _placedAnchorsCache.Count; i++)
+                for (int i = 0; i < positions.Count; i++)
                 {
-                    if ((_placedAnchorsCache[i] - candidateWorld).sqrMagnitude < interGroupSqr)
+                    if (IsSpawnReservationValid(chunkCoord, generationId, slotIndex, pendingVersion,
+                            interGroupMinDistance) == false)
                     {
-                        tooClose = true;
                         break;
                     }
-                }
 
-                if (tooClose == false)
+                    (int entityId, EntityBase? entity) result;
+                    try
+                    {
+                        result = await CreateMonsterAsync(monsterTableId, positions[i], chunkCoord);
+                    }
+                    catch (Exception exception)
+                    {
+                        Debug.LogError($"[MonsterSpawn] CreateMonster failed: {exception.Message}");
+                        continue;
+                    }
+
+                    if (result.entityId < 0 || result.entity == null)
+                        continue;
+
+                    if (IsSpawnReservationValid(chunkCoord, generationId, slotIndex, pendingVersion,
+                            interGroupMinDistance) == false ||
+                        AR.s.Map.IsMonsterSpawnWorldPositionValid(chunkCoord, generationId,
+                            positions[i]) == false ||
+                        CanPlaceMonsterAt(positions[i], monsterRadius,
+                            chunkCoord, generationId, slotIndex, pendingVersion) == false)
+                    {
+                        DestroyMonsterEntity(result.entityId, result.entity);
+                        continue;
+                    }
+
+                    AddMonster(result.entity);
+                    EntityFactory.AddActivationComponent(result.entityId,
+                        _activationDistance, _deactivationDistance);
+                    RegisterMonsterOrigin(result.entityId, chunkCoord, generationId, slotIndex);
+                    SynchronizeActivationState(result.entityId);
+                    successfulSpawnCount++;
+                }
+            }
+            finally
+            {
+                RemovePendingReservations(chunkCoord, generationId, slotIndex, pendingVersion);
+
+                if (AR.s.Map != null &&
+                    AR.s.Map.TryGetChunkSpawnRuntime(chunkCoord, generationId,
+                        out ChunkSpawnRuntimeData runtime) &&
+                    slotIndex >= 0 && slotIndex < runtime.Slots.Length)
                 {
-                    anchorLocal = candidate;
-                    anchorFound = true;
+                    MonsterSpawnSlotState slot = runtime.Slots[slotIndex];
+                    if (slot.IsPendingReservation(pendingVersion) == true)
+                    {
+                        slot.IsPending = false;
+                        if (successfulSpawnCount > 0 && slot.AliveMemberCount == 0)
+                        {
+                            BeginSlotCooldown(slot);
+                        }
+                    }
+                }
+            }
+        }
+
+        private async UniTask<(int entityId, EntityBase? entity)> CreateMonsterAsync(
+            int monsterTableId, Vector3 position, Vector2Int chunkCoord)
+        {
+            if (AR.s.CurrentScene is GameScene gameScene == false)
+                return (-1, null);
+
+            int monsterLevel = AR.s.Map.GetZone(chunkCoord);
+            return await EntityFactory.CreateMonster(monsterTableId, position,
+                gameScene.MonsterRoot, monsterLevel);
+        }
+
+        private List<Vector3> BuildGroupPositions(Vector2Int chunkCoord, int generationId,
+            int slotIndex, int pendingVersion, Vector2 anchorWorld, int targetSize,
+            float groupRadius, float monsterRadius)
+        {
+            List<Vector3> result = new List<Vector3>(targetSize);
+            int attemptsPerMember = Mathf.Max(1, _anchorRejectionAttempts);
+            float memberMinimumDistance = monsterRadius * 2f;
+            float memberDistanceSqr = memberMinimumDistance * memberMinimumDistance;
+
+            for (int memberIndex = 0; memberIndex < targetSize; memberIndex++)
+            {
+                bool found = false;
+                for (int attempt = 0; attempt < attemptsPerMember; attempt++)
+                {
+                    Vector2 offset = SampleGroupOffset(groupRadius);
+                    Vector3 position = new Vector3(anchorWorld.x + offset.x,
+                        anchorWorld.y + offset.y, -0.05f);
+                    if (AR.s.Map.IsMonsterSpawnWorldPositionValid(chunkCoord, generationId,
+                            position) == false ||
+                        CanPlaceMonsterAt(position, monsterRadius,
+                            chunkCoord, generationId, slotIndex, pendingVersion) == false)
+                    {
+                        continue;
+                    }
+
+                    bool overlapsPlannedMember = false;
+                    for (int i = 0; i < result.Count; i++)
+                    {
+                        Vector2 delta = (Vector2)(result[i] - position);
+                        if (delta.sqrMagnitude < memberDistanceSqr)
+                        {
+                            overlapsPlannedMember = true;
+                            break;
+                        }
+                    }
+
+                    if (overlapsPlannedMember == true)
+                        continue;
+
+                    result.Add(position);
+                    found = true;
                     break;
                 }
+
+                if (found == false)
+                    break;
             }
 
-            if (anchorFound == false)
-                return; // 청크가 좁아 더 둘 자리 없음
+            return result;
+        }
 
-            Vector2 anchorWorld = ChunkLocalToWorld(chunkCoord, anchorLocal);
-            _placedAnchorsCache.Add(anchorWorld);
-
-            for (int i = 0; i < size; i++)
+        private bool IsSpawnReservationValid(Vector2Int chunkCoord, int generationId,
+            int slotIndex, int pendingVersion, float interGroupMinDistance)
+        {
+            if (AR.s.Map == null || AR.s.MyPlayer == null ||
+                AR.s.Map.TryGetActiveChunkSpawnRuntime(chunkCoord,
+                    out ChunkSpawnRuntimeData runtime) == false ||
+                runtime.GenerationId != generationId ||
+                slotIndex < 0 || slotIndex >= runtime.Slots.Length)
             {
-                Vector2 offset = SampleGroupOffset();
-                Vector3 worldPos = new Vector3(anchorWorld.x + offset.x, anchorWorld.y + offset.y, -0.05f);
-                SpawnMonsterAtPosition(worldPos, chunkCoord, monsterTableId).Forget();
+                return false;
+            }
+
+            MonsterSpawnSlotState slot = runtime.Slots[slotIndex];
+            if (slot.IsPendingReservation(pendingVersion) == false || slot.IsDisabled == true ||
+                AR.s.Map.IsMonsterSpawnSlotTerrainValid(chunkCoord, generationId,
+                    slotIndex, true) == false)
+            {
+                return false;
+            }
+
+            Vector2 anchorWorld = AR.s.Map.GetMonsterSpawnSlotWorldPosition(chunkCoord,
+                slot.LocalPosition);
+            Vector2 playerPosition = AR.s.MyPlayer.transform.position;
+            float distanceSqr = (anchorWorld - playerPosition).sqrMagnitude;
+            if (distanceSqr < MinimumSpawnDistanceSqr || distanceSqr > MaximumSpawnDistanceSqr)
+                return false;
+
+            return AR.s.Map.IsMonsterSpawnAnchorSeparated(anchorWorld, interGroupMinDistance,
+                chunkCoord, generationId, slotIndex);
+        }
+
+        private bool CanPlaceMonsterAt(Vector3 position, float radius,
+            Vector2Int chunkCoord, int generationId, int slotIndex, int pendingVersion)
+        {
+            for (int i = 0; i < _monsters.Count; i++)
+            {
+                EntityBase entity = _monsters[i];
+                if (entity == null ||
+                    AR.s.Component.TryGetComponent<TransformComponent>(entity.EntityId,
+                        out var transform) == false)
+                {
+                    continue;
+                }
+
+                float otherRadius = DefaultMoveRadius;
+                if (AR.s.Component.TryGetComponent<ColliderComponent>(entity.EntityId, out var collider))
+                {
+                    otherRadius = collider.MoveRadius;
+                }
+
+                float minimumDistance = radius + otherRadius;
+                Vector2 delta = transform.Position - (Vector2)position;
+                if (delta.sqrMagnitude < minimumDistance * minimumDistance)
+                    return false;
+            }
+
+            for (int i = 0; i < _pendingSpawnReservations.Count; i++)
+            {
+                PendingSpawnReservation reservation = _pendingSpawnReservations[i];
+                if (reservation.ChunkCoord == chunkCoord &&
+                    reservation.GenerationId == generationId &&
+                    reservation.SlotIndex == slotIndex &&
+                    reservation.PendingVersion == pendingVersion)
+                {
+                    continue;
+                }
+
+                float minimumDistance = radius + reservation.Radius;
+                Vector2 delta = (Vector2)(reservation.Position - position);
+                if (delta.sqrMagnitude < minimumDistance * minimumDistance)
+                    return false;
+            }
+
+            return true;
+        }
+
+        private void RegisterMonsterOrigin(int entityId, Vector2Int chunkCoord,
+            int generationId, int slotIndex)
+        {
+            if (_chunkMonsters.TryGetValue(chunkCoord, out ChunkMonsterData? chunkData) == false ||
+                chunkData.GenerationId != generationId)
+            {
+                chunkData = new ChunkMonsterData(chunkCoord, generationId);
+                _chunkMonsters[chunkCoord] = chunkData;
+            }
+
+            chunkData.SpawnedMonsterIds.Add(entityId);
+            _monsterOrigins[entityId] = new MonsterSpawnOrigin(chunkCoord, generationId, slotIndex);
+
+            if (AR.s.Map.TryGetChunkSpawnRuntime(chunkCoord, generationId,
+                    out ChunkSpawnRuntimeData runtime) &&
+                slotIndex >= 0 && slotIndex < runtime.Slots.Length)
+            {
+                runtime.Slots[slotIndex].AliveMemberCount++;
             }
         }
 
-        private static Vector2 ChunkLocalToWorld(Vector2Int chunkCoord, Vector2Int localPos)
+        private void SynchronizeActivationState(int entityId)
         {
-            int chunkSize = AR.s.Map.chunkSize;
-            return new Vector2(chunkCoord.x * chunkSize + localPos.x, chunkCoord.y * chunkSize + localPos.y);
+            if (AR.s.Component.TryGetComponent<ActivationDistanceComponent>(entityId,
+                    out var activation) == false ||
+                AR.s.Message.TryGetEntity(entityId, out var entity) == false ||
+                entity.gameObject == null)
+            {
+                return;
+            }
+
+            bool shouldActivate = false;
+            if (IsMonsterSourceChunkActive(entityId) == true && AR.s.MyPlayer != null &&
+                AR.s.Component.TryGetComponent<TransformComponent>(entityId, out var transform))
+            {
+                Vector2 playerPosition = AR.s.MyPlayer.transform.position;
+                shouldActivate = (transform.Position - playerPosition).sqrMagnitude <=
+                                 activation.ActivationDistanceSqr;
+            }
+
+            activation.IsActivated = shouldActivate;
+            AR.s.Component.SetComponent(entityId, activation);
+            entity.gameObject.SetActive(shouldActivate);
         }
 
-        private Vector2 SampleGroupOffset()
+        private float ResolveMonsterMoveRadius(int monsterTableId)
         {
-            float angle = Random.Range(0f, Mathf.PI * 2f);
-            float radius = _currentGroupRadius;
+            var table = AR.s.Data != null ? AR.s.Data.GetMonster(monsterTableId) : null;
+            return table != null && table.MoveRadius > 0f ? table.MoveRadius : DefaultMoveRadius;
+        }
 
-            float r;
+        private Vector2 SampleGroupOffset(float groupRadius)
+        {
+            float angle = UnityEngine.Random.Range(0f, Mathf.PI * 2f);
+            float radius;
             if (_groupDistribution == GroupDistribution.GaussianFromCenter)
             {
-                // Box-Muller로 표준정규 → |z|*sigma. sigma=R/2, 그 이상은 R로 클램프 (~95% 안에 들어옴)
-                float u1 = 1f - Random.value;
-                float u2 = 1f - Random.value;
-                float z = Mathf.Sqrt(-2f * Mathf.Log(u1)) * Mathf.Cos(2f * Mathf.PI * u2);
-                r = Mathf.Min(Mathf.Abs(z) * (radius * 0.5f), radius);
+                float u1 = 1f - UnityEngine.Random.value;
+                float u2 = 1f - UnityEngine.Random.value;
+                float z = Mathf.Sqrt(-2f * Mathf.Log(u1)) *
+                          Mathf.Cos(2f * Mathf.PI * u2);
+                radius = Mathf.Min(Mathf.Abs(z) * (groupRadius * 0.5f), groupRadius);
             }
             else
             {
-                // Uniform disk: sqrt(u) * R
-                r = radius * Mathf.Sqrt(Random.value);
+                radius = groupRadius * Mathf.Sqrt(UnityEngine.Random.value);
             }
 
-            return new Vector2(Mathf.Cos(angle) * r, Mathf.Sin(angle) * r);
+            return new Vector2(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius);
         }
 
-        public async Cysharp.Threading.Tasks.UniTask<int> RespawnMonsterInChunk(Vector2Int chunkCoord, Vector2Int spawnPos)
+        private void BeginSlotCooldown(MonsterSpawnSlotState slot)
         {
-            Vector3 worldPos = new Vector3(
-                chunkCoord.x * AR.s.Map.chunkSize + spawnPos.x,
-                chunkCoord.y * AR.s.Map.chunkSize + spawnPos.y,
-                -0.05f
-            );
-
-            // 리스폰 시점에 어떤 종이 죽었는지 추적하지 않으므로 메인 종으로 통일.
-            // 종별 추적이 필요해지면 ChunkMonsterData에 TableId 기록 추가.
-            // biome 스폰 풀에서 재샘플 — Spawn 시점과 일관 (MONSTER_SPAWN_DESIGN.md).
-            GlobalEnum.BiomeType chunkBiome = AR.s.Map.GetChunkBiome(chunkCoord);
-            int mainId = BiomeMonsterMapping.SampleMonsterId(chunkBiome, _mainMonsterTableId);
-            return await SpawnMonsterAtPosition(worldPos, chunkCoord, mainId, false);
+            float minimum = Mathf.Max(0f, Mathf.Min(_slotCooldownRange.x, _slotCooldownRange.y));
+            float maximum = Mathf.Max(0f, Mathf.Max(_slotCooldownRange.x, _slotCooldownRange.y));
+            slot.NextSpawnTime = Time.time + UnityEngine.Random.Range(minimum, maximum);
+            slot.LastUsedTime = Time.time;
         }
 
-        private readonly List<Vector2Int> _expiredChunksCache = new();
-
-        public void CleanupExpiredChunkMonsters()
+        private void RemovePendingReservations(Vector2Int chunkCoord, int generationId, int slotIndex,
+            int pendingVersion)
         {
-            _expiredChunksCache.Clear();
-
-            foreach (var kvp in _chunkMonsters)
+            for (int i = _pendingSpawnReservations.Count - 1; i >= 0; i--)
             {
-                ChunkMonsterData chunkData = kvp.Value;
-                if (Time.time - chunkData.lastActiveTime > _chunkMonsterLifetime)
+                PendingSpawnReservation reservation = _pendingSpawnReservations[i];
+                if (reservation.ChunkCoord != chunkCoord)
+                    continue;
+                if (generationId >= 0 && reservation.GenerationId != generationId)
+                    continue;
+                if (slotIndex >= 0 && reservation.SlotIndex != slotIndex)
+                    continue;
+                if (pendingVersion >= 0 && reservation.PendingVersion != pendingVersion)
+                    continue;
+
+                _pendingSpawnReservations.RemoveAt(i);
+            }
+        }
+
+        private void RemoveMonsterFromGlobalList(int entityId)
+        {
+            for (int i = 0; i < _monsters.Count; i++)
+            {
+                EntityBase entity = _monsters[i];
+                if (entity == null || entity.EntityId != entityId)
+                    continue;
+
+                int lastIndex = _monsters.Count - 1;
+                _monsters[i] = _monsters[lastIndex];
+                _monsters.RemoveAt(lastIndex);
+                return;
+            }
+        }
+
+        private static void RemoveEntityId(List<int> entityIds, int entityId)
+        {
+            for (int i = 0; i < entityIds.Count; i++)
+            {
+                if (entityIds[i] != entityId)
+                    continue;
+
+                int lastIndex = entityIds.Count - 1;
+                entityIds[i] = entityIds[lastIndex];
+                entityIds.RemoveAt(lastIndex);
+                return;
+            }
+        }
+
+        private static void DestroyMonsterEntity(int entityId, EntityBase entity)
+        {
+            var animationSystem = AR.s.System.GetSystem<Systems.System_Animation>();
+            if (animationSystem != null)
+            {
+                animationSystem.UnregisterSpriteAnimation(entityId);
+            }
+
+            var renderSystem = AR.s.System.GetSystem<Systems.System_Render>();
+            if (renderSystem != null)
+            {
+                renderSystem.UnregisterEntity(entityId);
+            }
+
+            entity.OnEntityDestroy();
+            AR.s.Entity.DestroyEntity(entityId);
+            UnityEngine.Object.Destroy(entity.gameObject);
+        }
+
+        private static void DestroyMonsterEntityWithoutRegistryEntry(int entityId)
+        {
+            var animationSystem = AR.s.System.GetSystem<Systems.System_Animation>();
+            if (animationSystem != null)
+            {
+                animationSystem.UnregisterSpriteAnimation(entityId);
+            }
+
+            var renderSystem = AR.s.System.GetSystem<Systems.System_Render>();
+            if (renderSystem != null)
+            {
+                GameObject gameObject = renderSystem.GetGameObject(entityId);
+                renderSystem.UnregisterEntity(entityId);
+                if (gameObject != null)
                 {
-                    // 만료된 청크의 몬스터들 정리
-                    for (int i = 0; i < chunkData.spawnedMonsterIds.Count; i++)
-                    {
-                        int entityId = chunkData.spawnedMonsterIds[i];
-                        if (AR.s.Message.TryGetEntity(entityId, out var entity))
-                        {
-                            _monsters.Remove(entity);
-                            AR.s.Entity.DestroyEntity(entityId);
-                            Destroy(entity.gameObject);
-                        }
-                    }
-                    _expiredChunksCache.Add(kvp.Key);
+                    UnityEngine.Object.Destroy(gameObject);
                 }
             }
 
-            for (int i = 0; i < _expiredChunksCache.Count; i++)
+            AR.s.Entity.DestroyEntity(entityId);
+        }
+
+        private readonly struct MonsterSpawnOrigin
+        {
+            public readonly Vector2Int ChunkCoord;
+            public readonly int GenerationId;
+            public readonly int SlotIndex;
+
+            public MonsterSpawnOrigin(Vector2Int chunkCoord, int generationId, int slotIndex)
             {
-                _chunkMonsters.Remove(_expiredChunksCache[i]);
+                ChunkCoord = chunkCoord;
+                GenerationId = generationId;
+                SlotIndex = slotIndex;
+            }
+        }
+
+        private readonly struct PendingSpawnReservation
+        {
+            public readonly Vector2Int ChunkCoord;
+            public readonly int GenerationId;
+            public readonly int SlotIndex;
+            public readonly int PendingVersion;
+            public readonly Vector3 Position;
+            public readonly float Radius;
+
+            public PendingSpawnReservation(Vector2Int chunkCoord, int generationId,
+                int slotIndex, int pendingVersion, Vector3 position, float radius)
+            {
+                ChunkCoord = chunkCoord;
+                GenerationId = generationId;
+                SlotIndex = slotIndex;
+                PendingVersion = pendingVersion;
+                Position = position;
+                Radius = radius;
             }
         }
     }

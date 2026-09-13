@@ -129,7 +129,7 @@ namespace ARPG.Systems
             System_MapChunkLoader mapChunkLoaderSystem = new();
             RegisterSystems(mapChunkLoaderSystem);
 
-            // Priority 130: Monster Spawn System (FixedUpdate) - 몬스터 최초 스폰 + 리스폰 (0.5초 간격)
+            // Priority 130: Monster Spawn System (FixedUpdate) - 거리 링/슬롯 스폰 + Warm 청크 정리 (0.5초 간격)
             System_MonsterSpawn monsterSpawnSystem = new();
             RegisterSystems(monsterSpawnSystem);
 

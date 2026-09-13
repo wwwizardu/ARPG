@@ -49,12 +49,28 @@ namespace ARPG.Systems
                 int entityId = pool.GetEntityId(i);
                 ActivationDistanceComponent activation = pool.GetByIndex(i);
 
+                // 몬스터는 현재 위치가 아니라 출신 청크 생명주기를 따른다.
+                // Warm 청크의 몬스터는 거리가 가까워도 다시 활성화하지 않는다.
+                if (cm.HasComponent<MonsterTag>(entityId) &&
+                    AR.s.Monster != null &&
+                    AR.s.Monster.IsMonsterSourceChunkActive(entityId) == false)
+                {
+                    activation.IsActivated = false;
+                    if (AR.s.Message.TryGetEntity(entityId, out var inactiveEntity) &&
+                        inactiveEntity.gameObject != null)
+                    {
+                        inactiveEntity.gameObject.SetActive(false);
+                    }
+                    pool.Set(entityId, activation);
+                    continue;
+                }
+
                 if (cm.TryGetComponent<TransformComponent>(entityId, out var transform) == false)
                     continue;
 
                 float distSqr = (playerPos - new Vector3(transform.Position.x, transform.Position.y, 0f)).sqrMagnitude;
 
-                if (activation.IsActivated)
+                if (activation.IsActivated == true)
                 {
                     if (distSqr > activation.DeactivationDistanceSqr)
                     {

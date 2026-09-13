@@ -54,6 +54,11 @@ MonoBehaviour:
   _groupDistribution: 1
   _interGroupMinDistance: 5
   _anchorRejectionAttempts: 8
-  _chunkMonsterLifetime: 300
+  _spawnCheckInterval: 0.5
+  _minimumSpawnDistance: 10
+  _maximumSpawnDistance: 24
+  _maxSpawnGroupsPerCheck: 1
+  _maxSpawnEntitiesPerCheck: 12
+  _slotCooldownRange: {x: 45, y: 75}
   _activationDistance: 25
   _deactivationDistance: 30

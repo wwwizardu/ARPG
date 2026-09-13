@@ -484,7 +484,8 @@ MonoBehaviour:
   maxChunkX: 50
   minChunkY: -50
   maxChunkY: 50
-  _monsterSpawnRate: 0.1
+  _warmChunkLifetime: 300
+  _maxWarmChunkCount: 20
   _themeTileSet: {fileID: 11400000, guid: 460dc19b749967d42a7aaba5b52e8a6c, type: 2}
   _themeEntries:
   - Biome: 0

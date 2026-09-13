@@ -26,8 +26,8 @@ namespace ARPG.Map
         }
 
         /// <summary>
-        /// biome별 MonsterSpawn 후보 확률. 0~1.
-        /// 현재 코드 기본은 0.1 (_monsterSpawnRate). 이 값이 곱해짐.
+        /// biome별 몬스터 스폰 슬롯 밀도 배율.
+        /// ZoneTable에서 뽑은 Main/Sub 슬롯 수에 각각 한 번만 적용한다.
         /// </summary>
         public static float GetMonsterSpawnMultiplier(GlobalEnum.BiomeType biome)
         {

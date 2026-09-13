@@ -24,15 +24,17 @@ namespace ARPG.Map
         public int minChunkY = -98;
         public int maxChunkY = 98;
 
-        [Header("Monster Spawn")]
-        [SerializeField] private float _monsterSpawnRate = 0.1f;
+        [Header("Warm Chunk Cache")]
+        [SerializeField] private float _warmChunkLifetime = 300f;
+        [SerializeField] private int _maxWarmChunkCount = 20;
 
-        private int _randomSeed = 12345;
         private static readonly Vector2Int InvalidChunk = new Vector2Int(-100000, -100000);
 
-        // _activeChunks stores generated chunk data. _renderedChunks is the visible/activated subset.
+        // _activeChunks는 Active/Warm 청크 모두를 보존한다. _renderedChunks는 Active 부분집합이다.
         private Dictionary<Vector2Int, MapChunkData> _activeChunks;
         private HashSet<Vector2Int> _renderedChunks;
+        private List<Vector2Int> _loadedChunkCoords;
+        private List<Vector2Int> _renderedChunkCoords;
         private Dictionary<Vector2Int, MapFileData> _mapFileDataDic = new();
         // R1: 절차 정착지 청사진 origin(StartPosition) → 연대기 SettlementId(placement 인덱스). 마을↔정착지 매핑용
         private Dictionary<Vector2Int, int> _settlementIdByOrigin = new();
@@ -41,19 +43,18 @@ namespace ARPG.Map
         // 메모리: region당 Dictionary<BiomeType,int> ~수십 바이트, 무해.
         private Dictionary<Vector2Int, RegionData> _regionData = new();
         private Stack<MapChunkData> _chunkPool;
-        private System.Random _randomGenerator;
         private Vector2Int _currentPlayerChunk = InvalidChunk;
         private int _loadRadius = 2;
         private const int POOL_SIZE = 20;
+        private int _nextChunkGenerationId = 1;
 
         public void Initialize()
         {
             _activeChunks = new Dictionary<Vector2Int, MapChunkData>();
             _renderedChunks = new HashSet<Vector2Int>();
+            _loadedChunkCoords = new List<Vector2Int>();
+            _renderedChunkCoords = new List<Vector2Int>();
             _chunkPool = new Stack<MapChunkData>();
-
-            // HistoryManager의 새 게임 부트스트랩은 GameScene.CreateMap() 전에 청크를 조회할 수 있다.
-            _randomGenerator = new System.Random(_randomSeed);
 
             // BiomeThemeEntry[] → Dictionary 변환 (MAP_DESIGN.md §4.5)
             BuildThemeDictionary();
@@ -66,22 +67,24 @@ namespace ARPG.Map
 
         public void Reset()
         {
-            _randomGenerator = new System.Random(_randomSeed);
-
-            foreach (var chunkPair in _activeChunks)
+            for (int i = 0; i < _loadedChunkCoords.Count; i++)
             {
-                if (_renderedChunks.Contains(chunkPair.Key))
+                Vector2Int chunkCoord = _loadedChunkCoords[i];
+                MapChunkData chunk = _activeChunks[chunkCoord];
+                if (_renderedChunks.Contains(chunkCoord))
                 {
-                    RemoveChunkFromTilemap(chunkPair.Value);
+                    RemoveChunkFromTilemap(chunk);
                 }
 
-                MapChunkData chunk = chunkPair.Value;
+                chunk.InvalidateGeneration();
                 chunk.Deactivate();
                 _chunkPool.Push(chunk);
             }
 
             _activeChunks.Clear();
             _renderedChunks.Clear();
+            _loadedChunkCoords.Clear();
+            _renderedChunkCoords.Clear();
             _tileModifications.Clear();
             _regionData.Clear();
             _currentPlayerChunk = InvalidChunk;
@@ -99,8 +102,9 @@ namespace ARPG.Map
         /// </summary>
         private void OnBuildableTileLoaded(int buildableId)
         {
-            foreach (var chunkCoord in _renderedChunks)
+            for (int i = 0; i < _renderedChunkCoords.Count; i++)
             {
+                Vector2Int chunkCoord = _renderedChunkCoords[i];
                 if (_activeChunks.TryGetValue(chunkCoord, out MapChunkData chunk))
                 {
                     RenderChunkToTilemap(chunk);
@@ -110,9 +114,6 @@ namespace ARPG.Map
 
         public void CreateMap(int inSeed, Vector3 playerPosition)
         {
-            _randomSeed = inSeed;
-            _randomGenerator = new System.Random(_randomSeed);
-
             // MapFileData의 NPC 오브젝트를 NpcManager에 1회 등록
             RegisterAllNpcsToManager();
 
@@ -248,7 +249,16 @@ namespace ARPG.Map
 
         public IEnumerable<Vector2Int> GetActiveChunkCoords()
         {
-            return _renderedChunks;
+            return _renderedChunkCoords;
+        }
+
+        public void GetActiveChunkCoordsNonAlloc(List<Vector2Int> result)
+        {
+            result.Clear();
+            for (int i = 0; i < _renderedChunkCoords.Count; i++)
+            {
+                result.Add(_renderedChunkCoords[i]);
+            }
         }
 
         public bool IsChunkActive(Vector2Int chunkCoord)
@@ -267,15 +277,144 @@ namespace ARPG.Map
             return IsChunkActive(new Vector2Int(chunkX, chunkY));
         }
 
-        public bool TryGetChunkSpawnPositions(Vector2Int chunkCoord, out List<Vector2Int> spawnPositions)
+        public bool TryGetActiveChunkSpawnRuntime(Vector2Int chunkCoord, out ChunkSpawnRuntimeData spawnRuntime)
         {
-            if (_renderedChunks.Contains(chunkCoord) && _activeChunks.TryGetValue(chunkCoord, out MapChunkData chunk))
+            if (_activeChunks.TryGetValue(chunkCoord, out MapChunkData chunk) &&
+                chunk.runtimeState == MapChunkRuntimeState.Active &&
+                _renderedChunks.Contains(chunkCoord))
             {
-                spawnPositions = chunk.monsterSpawnPositions;
+                spawnRuntime = chunk.spawnRuntime;
                 return true;
             }
-            spawnPositions = null;
+
+            spawnRuntime = null;
             return false;
+        }
+
+        public bool TryGetChunkSpawnRuntime(Vector2Int chunkCoord, int generationId,
+            out ChunkSpawnRuntimeData spawnRuntime)
+        {
+            if (_activeChunks.TryGetValue(chunkCoord, out MapChunkData chunk) &&
+                chunk.runtimeState != MapChunkRuntimeState.Expired &&
+                chunk.spawnRuntime.GenerationId == generationId)
+            {
+                spawnRuntime = chunk.spawnRuntime;
+                return true;
+            }
+
+            spawnRuntime = null;
+            return false;
+        }
+
+        public bool IsChunkGenerationActive(Vector2Int chunkCoord, int generationId)
+        {
+            return _activeChunks.TryGetValue(chunkCoord, out MapChunkData chunk) &&
+                   chunk.runtimeState == MapChunkRuntimeState.Active &&
+                   chunk.spawnRuntime.GenerationId == generationId &&
+                   _renderedChunks.Contains(chunkCoord);
+        }
+
+        public Vector2 GetMonsterSpawnSlotWorldPosition(Vector2Int chunkCoord, Vector2Int localPosition)
+        {
+            return new Vector2(
+                chunkCoord.x * chunkSize + localPosition.x,
+                chunkCoord.y * chunkSize + localPosition.y);
+        }
+
+        public bool IsMonsterSpawnSlotTerrainValid(Vector2Int chunkCoord, int generationId, int slotIndex,
+            bool disableWhenBlocked)
+        {
+            if (TryGetChunkSpawnRuntime(chunkCoord, generationId, out ChunkSpawnRuntimeData runtime) == false ||
+                slotIndex < 0 || slotIndex >= runtime.Slots.Length)
+            {
+                return false;
+            }
+
+            MonsterSpawnSlotState slot = runtime.Slots[slotIndex];
+            bool isValid = IsMonsterSpawnLocalPositionValid(chunkCoord, generationId, slot.LocalPosition);
+            if (isValid == false && disableWhenBlocked)
+            {
+                slot.IsDisabled = true;
+                slot.CancelPending();
+            }
+
+            return isValid;
+        }
+
+        public bool IsMonsterSpawnWorldPositionValid(Vector2Int chunkCoord, int generationId, Vector2 worldPosition)
+        {
+            int worldTileX = Mathf.FloorToInt(worldPosition.x);
+            int worldTileY = Mathf.FloorToInt(worldPosition.y);
+            int positionChunkX = Mathf.FloorToInt((float)worldTileX / chunkSize);
+            int positionChunkY = Mathf.FloorToInt((float)worldTileY / chunkSize);
+            if (positionChunkX != chunkCoord.x || positionChunkY != chunkCoord.y)
+                return false;
+
+            Vector2Int localPosition = new Vector2Int(
+                worldTileX - chunkCoord.x * chunkSize,
+                worldTileY - chunkCoord.y * chunkSize);
+            return IsMonsterSpawnLocalPositionValid(chunkCoord, generationId, localPosition);
+        }
+
+        public bool IsMonsterSpawnAnchorSeparated(Vector2 anchorWorld, float minimumDistance,
+            Vector2Int sourceChunkCoord, int sourceGenerationId, int sourceSlotIndex)
+        {
+            float minimumDistanceSqr = minimumDistance * minimumDistance;
+            for (int i = 0; i < _loadedChunkCoords.Count; i++)
+            {
+                Vector2Int chunkCoord = _loadedChunkCoords[i];
+                MapChunkData chunk = _activeChunks[chunkCoord];
+                if (chunk.runtimeState == MapChunkRuntimeState.Expired)
+                    continue;
+
+                MonsterSpawnSlotState[] slots = chunk.spawnRuntime.Slots;
+                for (int slotIndex = 0; slotIndex < slots.Length; slotIndex++)
+                {
+                    MonsterSpawnSlotState slot = slots[slotIndex];
+                    if (slot.AliveMemberCount <= 0 && slot.IsPending == false)
+                        continue;
+                    if (chunkCoord == sourceChunkCoord &&
+                        chunk.spawnRuntime.GenerationId == sourceGenerationId &&
+                        slotIndex == sourceSlotIndex)
+                    {
+                        continue;
+                    }
+
+                    Vector2 otherAnchor = GetMonsterSpawnSlotWorldPosition(chunkCoord, slot.LocalPosition);
+                    if ((otherAnchor - anchorWorld).sqrMagnitude < minimumDistanceSqr)
+                        return false;
+                }
+            }
+
+            return true;
+        }
+
+        private bool IsMonsterSpawnLocalPositionValid(Vector2Int chunkCoord, int generationId,
+            Vector2Int localPosition)
+        {
+            if (_activeChunks.TryGetValue(chunkCoord, out MapChunkData chunk) == false ||
+                chunk.runtimeState == MapChunkRuntimeState.Expired ||
+                chunk.spawnRuntime.GenerationId != generationId)
+            {
+                return false;
+            }
+            if (localPosition.x < 0 || localPosition.x >= chunkSize ||
+                localPosition.y < 0 || localPosition.y >= chunkSize)
+            {
+                return false;
+            }
+
+            ulong tileData = chunk.tiles[localPosition.x, localPosition.y];
+            if ((tileData & (ulong)GlobalEnum.TileFlag.Hill) != 0 ||
+                (tileData & (ulong)GlobalEnum.TileFlag.Blocked) != 0 ||
+                (tileData & (ulong)GlobalEnum.TileFlag.ObjectLayerMask) != 0)
+            {
+                return false;
+            }
+
+            int worldTileX = chunkCoord.x * chunkSize + localPosition.x;
+            int worldTileY = chunkCoord.y * chunkSize + localPosition.y;
+            return AR.s.Building == null || AR.s.Building.IsTileOccupied(worldTileX, worldTileY) == false;
         }
 
         /// <summary>
@@ -460,8 +599,8 @@ namespace ARPG.Map
             // 수정 기록 저장 (같은 위치면 덮어쓰기)
             SetTileModification(chunkCoord, localX, localY, objectId, false);
 
-            // 활성 청크면 즉시 반영
-            if (_renderedChunks.Contains(chunkCoord) && _activeChunks.TryGetValue(chunkCoord, out MapChunkData chunk))
+            // Active/Warm 보존 청크에 즉시 반영. Warm은 재진입 시 재생성하지 않는다.
+            if (_activeChunks.TryGetValue(chunkCoord, out MapChunkData chunk))
             {
                 // 타일 데이터 갱신
                 ulong currentTile = chunk.tiles[localX, localY];
@@ -470,9 +609,12 @@ namespace ARPG.Map
                 currentTile |= (ulong)GlobalEnum.TileFlag.Blocked;
                 currentTile &= ~(ulong)GlobalEnum.TileFlag.MonsterSpawn;
                 chunk.tiles[localX, localY] = currentTile;
+                DisableMonsterSpawnSlotAtLocal(chunk, new Vector2Int(localX, localY));
 
-                // 타일맵에 즉시 렌더링
-                RenderSingleObjectTile(worldX, worldY, (ulong)objectId);
+                if (_renderedChunks.Contains(chunkCoord))
+                {
+                    RenderSingleObjectTile(worldX, worldY, (ulong)objectId);
+                }
             }
 
             return true;
@@ -502,15 +644,18 @@ namespace ARPG.Map
             // 수정 기록 저장
             SetTileModification(chunkCoord, localX, localY, 0, true);
 
-            // 활성 청크면 즉시 반영
-            if (_renderedChunks.Contains(chunkCoord) && _activeChunks.TryGetValue(chunkCoord, out MapChunkData chunk))
+            // Active/Warm 보존 청크에 즉시 반영.
+            if (_activeChunks.TryGetValue(chunkCoord, out MapChunkData chunk))
             {
                 ulong currentTile = chunk.tiles[localX, localY];
                 currentTile &= ~(ulong)GlobalEnum.TileFlag.ObjectLayerMask;
                 currentTile &= ~(ulong)GlobalEnum.TileFlag.Blocked;
                 chunk.tiles[localX, localY] = currentTile;
 
-                RenderSingleObjectTile(worldX, worldY, 0);
+                if (_renderedChunks.Contains(chunkCoord))
+                {
+                    RenderSingleObjectTile(worldX, worldY, 0);
+                }
             }
 
             return true;
@@ -542,6 +687,20 @@ namespace ARPG.Map
                 ObjectId = objectId,
                 IsRemoval = isRemoval,
             });
+        }
+
+        private static void DisableMonsterSpawnSlotAtLocal(MapChunkData chunk, Vector2Int localPosition)
+        {
+            MonsterSpawnSlotState[] slots = chunk.spawnRuntime.Slots;
+            for (int i = 0; i < slots.Length; i++)
+            {
+                if (slots[i].LocalPosition != localPosition)
+                    continue;
+
+                slots[i].IsDisabled = true;
+                slots[i].CancelPending();
+                return;
+            }
         }
 
         private void RenderSingleObjectTile(int worldX, int worldY, ulong objectId)

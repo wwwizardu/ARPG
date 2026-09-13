@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using Cysharp.Threading.Tasks;
+using ARPG.Map;
 using UnityEngine;
 
 namespace ARPG.Systems
@@ -7,106 +7,134 @@ namespace ARPG.Systems
     public class System_MonsterSpawn : IFixedUpdateSystem
     {
         public int Priority => 130;
-        public float UpdateInterval => 0.5f;
+        public float UpdateInterval => AR.s.Monster != null
+            ? AR.s.Monster.SpawnCheckInterval
+            : 0.5f;
 
         private readonly List<Vector2Int> _activeChunksCache = new();
-        private readonly List<Vector2Int> _availableSpawnCache = new();
-        private float _respawnTimer;
-        private float _cleanupTimer;
+        private readonly List<SpawnCandidate> _spawnCandidatesCache = new();
 
         public void OnCreate()
         {
-            _respawnTimer = 0f;
-            _cleanupTimer = 0f;
             Debug.Log("System_MonsterSpawn Created");
         }
 
         public void OnReset()
         {
             _activeChunksCache.Clear();
-            _availableSpawnCache.Clear();
-            _respawnTimer = 0f;
-            _cleanupTimer = 0f;
+            _spawnCandidatesCache.Clear();
             Debug.Log("System_MonsterSpawn Reset called");
         }
 
         public void OnFixedUpdate(float inFixedDeltaTime)
         {
-            if (AR.s.Monster == null || AR.s.Map == null)
+            if (AR.s.Map == null)
                 return;
 
-            // 1) 최초 스폰: 활성 청크 중 아직 스폰 안 된 청크 처리 (0.5초마다)
-            CheckInitialSpawns();
+            // Warm TTL/LRU는 슬롯별 타이머 없이 중앙 주기 검사로 처리한다.
+            AR.s.Map.CleanupWarmChunks();
 
-            // 2) 리스폰: 60초마다 죽은 몬스터 보충
-            _respawnTimer += 0.5f;
-            if (_respawnTimer >= 60f)
-            {
-                _respawnTimer = 0f;
-                CheckRespawns();
-            }
+            if (AR.s.Monster == null || AR.s.MyPlayer == null)
+                return;
 
-            // 3) 만료 청크 정리: 60초마다 오래된 청크 몬스터 제거
-            _cleanupTimer += 0.5f;
-            if (_cleanupTimer >= 60f)
+            int remainingGroupBudget = AR.s.Monster.MaxSpawnGroupsPerCheck;
+            int remainingEntityBudget = AR.s.Monster.MaxSpawnEntitiesPerCheck;
+            if (remainingGroupBudget <= 0 || remainingEntityBudget <= 0)
+                return;
+
+            CollectSpawnCandidates((Vector2)AR.s.MyPlayer.transform.position);
+            _spawnCandidatesCache.Sort(CompareSpawnCandidates);
+
+            for (int i = 0; i < _spawnCandidatesCache.Count; i++)
             {
-                _cleanupTimer = 0f;
-                AR.s.Monster.CleanupExpiredChunkMonsters();
+                if (remainingGroupBudget <= 0 || remainingEntityBudget <= 0)
+                    break;
+
+                SpawnCandidate candidate = _spawnCandidatesCache[i];
+                if (AR.s.Monster.TrySpawnSlot(candidate.ChunkCoord, candidate.GenerationId,
+                        candidate.SlotIndex, remainingEntityBudget, out int scheduledEntityCount) == false)
+                {
+                    continue;
+                }
+
+                remainingGroupBudget--;
+                remainingEntityBudget -= scheduledEntityCount;
             }
         }
 
-        private void CheckInitialSpawns()
+        private void CollectSpawnCandidates(Vector2 playerPosition)
         {
-            var activeChunkCoords = AR.s.Map.GetActiveChunkCoords();
-            foreach (var chunkCoord in activeChunkCoords)
+            _spawnCandidatesCache.Clear();
+            AR.s.Map.GetActiveChunkCoordsNonAlloc(_activeChunksCache);
+            float currentTime = Time.time;
+            float minimumDistanceSqr = AR.s.Monster.MinimumSpawnDistanceSqr;
+            float maximumDistanceSqr = AR.s.Monster.MaximumSpawnDistanceSqr;
+
+            for (int chunkIndex = 0; chunkIndex < _activeChunksCache.Count; chunkIndex++)
             {
-                if (AR.s.Monster.HasChunkSpawned(chunkCoord) == false)
+                Vector2Int chunkCoord = _activeChunksCache[chunkIndex];
+                if (AR.s.Map.TryGetActiveChunkSpawnRuntime(chunkCoord,
+                        out ChunkSpawnRuntimeData runtime) == false)
                 {
-                    AR.s.Monster.SpawnInitialMonstersInChunk(chunkCoord);
+                    continue;
+                }
+
+                MonsterSpawnSlotState[] slots = runtime.Slots;
+                for (int slotIndex = 0; slotIndex < slots.Length; slotIndex++)
+                {
+                    MonsterSpawnSlotState slot = slots[slotIndex];
+                    if (slot.IsDisabled == true || slot.IsPending == true || slot.AliveMemberCount > 0 ||
+                        currentTime < slot.NextSpawnTime)
+                    {
+                        continue;
+                    }
+                    if (AR.s.Map.IsMonsterSpawnSlotTerrainValid(chunkCoord,
+                            runtime.GenerationId, slotIndex, true) == false)
+                    {
+                        continue;
+                    }
+
+                    Vector2 worldPosition = AR.s.Map.GetMonsterSpawnSlotWorldPosition(
+                        chunkCoord, slot.LocalPosition);
+                    float distanceSqr = (worldPosition - playerPosition).sqrMagnitude;
+                    if (distanceSqr < minimumDistanceSqr || distanceSqr > maximumDistanceSqr)
+                        continue;
+
+                    _spawnCandidatesCache.Add(new SpawnCandidate(
+                        chunkCoord,
+                        runtime.GenerationId,
+                        slotIndex,
+                        slot.LastUsedTime,
+                        Random.value));
                 }
             }
         }
 
-        private void CheckRespawns()
+        private static int CompareSpawnCandidates(SpawnCandidate left, SpawnCandidate right)
         {
-            AR.s.Monster.GetActiveChunksWithMonstersNonAlloc(_activeChunksCache);
+            int lastUsedComparison = left.LastUsedTime.CompareTo(right.LastUsedTime);
+            if (lastUsedComparison != 0)
+                return lastUsedComparison;
 
-            for (int i = 0; i < _activeChunksCache.Count; i++)
+            return left.RandomTieBreaker.CompareTo(right.RandomTieBreaker);
+        }
+
+        private readonly struct SpawnCandidate
+        {
+            public readonly Vector2Int ChunkCoord;
+            public readonly int GenerationId;
+            public readonly int SlotIndex;
+            public readonly float LastUsedTime;
+            public readonly float RandomTieBreaker;
+
+            public SpawnCandidate(Vector2Int chunkCoord, int generationId, int slotIndex,
+                float lastUsedTime, float randomTieBreaker)
             {
-                Vector2Int chunkCoord = _activeChunksCache[i];
-                int originalCount = AR.s.Monster.GetOriginalSpawnCountInChunk(chunkCoord);
-                int aliveCount = AR.s.Monster.GetAliveMonsterCountInChunk(chunkCoord);
-                int deadCount = originalCount - aliveCount;
-
-                if (deadCount <= 0)
-                    continue;
-
-                if (AR.s.Map.TryGetChunkSpawnPositions(chunkCoord, out var spawnPositions) == false)
-                    continue;
-
-                if (spawnPositions.Count == 0)
-                    continue;
-
-                // 재사용 리스트에 스폰 가능 위치 복사
-                _availableSpawnCache.Clear();
-                for (int j = 0; j < spawnPositions.Count; j++)
-                {
-                    _availableSpawnCache.Add(spawnPositions[j]);
-                }
-
-                // 죽은 몬스터 수만큼 리스폰
-                for (int j = 0; j < deadCount && _availableSpawnCache.Count > 0; j++)
-                {
-                    int randomIndex = Random.Range(0, _availableSpawnCache.Count);
-                    Vector2Int spawnPos = _availableSpawnCache[randomIndex];
-
-                    AR.s.Monster.RespawnMonsterInChunk(chunkCoord, spawnPos).Forget();
-
-                    // 같은 위치에 중복 스폰 방지 (swap-and-pop)
-                    int lastIndex = _availableSpawnCache.Count - 1;
-                    _availableSpawnCache[randomIndex] = _availableSpawnCache[lastIndex];
-                    _availableSpawnCache.RemoveAt(lastIndex);
-                }
+                ChunkCoord = chunkCoord;
+                GenerationId = generationId;
+                SlotIndex = slotIndex;
+                LastUsedTime = lastUsedTime;
+                RandomTieBreaker = randomTieBreaker;
             }
         }
     }

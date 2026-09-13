@@ -6,7 +6,11 @@ namespace ARPG.Map
 {
     public partial class MapManager : MonoBehaviour
     {
-        private List<Vector2Int> _candidateSpawnPositions = new List<Vector2Int>();
+        private readonly List<Vector2Int> _candidateSpawnPositions = new();
+        private readonly List<MonsterSpawnSlotState> _spawnSlotsCache = new();
+        private readonly List<Vector2Int> _chunksToWarmCache = new();
+        private readonly List<Vector2Int> _warmChunkCoordsCache = new();
+        private readonly List<Vector2Int> _expiredChunkCoordsCache = new();
 
         public static ulong CombineTileData(ulong currentTile, uint inGroundTileId, uint inHillFlag, uint inMonsterSpawnFlag, ulong inObjectId = 0)
         {
@@ -213,11 +217,23 @@ namespace ARPG.Map
             }
 
             MapChunkData chunk = GetChunkFromPool();
-            chunk.SetChunkPosition(chunkX, chunkY);
+            chunk.SetChunkPosition(chunkX, chunkY, GetNextChunkGenerationId(), Time.time);
             GenerateChunkData(chunk);
             _activeChunks[chunkKey] = chunk;
+            _loadedChunkCoords.Add(chunkKey);
 
             return chunk;
+        }
+
+        private int GetNextChunkGenerationId()
+        {
+            int generationId = _nextChunkGenerationId;
+            _nextChunkGenerationId++;
+            if (_nextChunkGenerationId <= 0)
+            {
+                _nextChunkGenerationId = 1;
+            }
+            return generationId;
         }
 
         private MapChunkData GetChunkFromPool()
@@ -234,8 +250,6 @@ namespace ARPG.Map
 
         private void GenerateChunkData(MapChunkData chunk)
         {
-            chunk.monsterSpawnPositions.Clear();
-
             // Zone = max(|cx|, |cy|) + 1, [1, 99] 클램프. 시드 청크 (0,0)이 Zone 1.
             int dist = Mathf.Max(Mathf.Abs(chunk.chunkX), Mathf.Abs(chunk.chunkY));
             chunk.zone = Mathf.Clamp(dist + 1, 1, 99);
@@ -260,18 +274,13 @@ namespace ARPG.Map
             // 청크 대표 biome = 청크 중심 cluster의 biome (MonsterManager 풀 선택 등 legacy 1-biome caller용).
             chunk.chunkBiome = BiomeNoise.ComputeChunkBiome(chunk.chunkX, chunk.chunkY, chunkSize, mapSeed);
 
-            // 몬스터 스폰 후보 위치 임시 저장
-            _candidateSpawnPositions.Clear();
-
             // 1. 타일 데이터 생성 — cluster 단위 biome 적용 (cluster당 BiomeTable 룩업 1회 캐시).
             //    절차 생성 셀의 ground 비트는 0 (passthrough — 렌더러가 cluster biome.Ground로 직접 룩업).
             float[] clusterHillThresholds = new float[clusterCount];
-            float[] clusterSpawnRates = new float[clusterCount];
             for (int i = 0; i < clusterCount; i++)
             {
                 GlobalEnum.BiomeType cb = chunk.clusterBiomes[i];
                 clusterHillThresholds[i] = BiomeTable.GetHillThreshold(cb);
-                clusterSpawnRates[i] = _monsterSpawnRate * BiomeTable.GetMonsterSpawnMultiplier(cb);
             }
 
             for (int x = 0; x < chunkSize; x++)
@@ -283,7 +292,6 @@ namespace ARPG.Map
 
                     int clusterIdx = (y / BiomeNoise.CLUSTER_SIZE) * clustersPerSide + (x / BiomeNoise.CLUSTER_SIZE);
                     float hillThreshold = clusterHillThresholds[clusterIdx];
-                    float spawnRate = clusterSpawnRates[clusterIdx];
 
                     // Hill 비트 — cluster biome별 임계값. elevation 노이즈는 *변주*용으로 유지 (Hill 분포 결정)
                     float elevationNoise = Mathf.PerlinNoise(
@@ -294,15 +302,8 @@ namespace ARPG.Map
                     if (elevationNoise > hillThreshold)
                         hillFlag = (uint)GlobalEnum.TileFlag.Hill;
 
-                    // 몬스터 스폰 후보 — cluster biome 보정 곱하기
-                    uint monsterSpawnFlag = 0;
-                    if (hillFlag == 0 && _randomGenerator.NextDouble() < spawnRate)
-                    {
-                        monsterSpawnFlag = (uint)GlobalEnum.TileFlag.MonsterSpawn;
-                        _candidateSpawnPositions.Add(new Vector2Int(x, y));
-                    }
-
-                    chunk.tiles[x, y] = CombineTileData(0UL, 0u, hillFlag, monsterSpawnFlag);
+                    // MonsterSpawn 후보는 타일 정본에 기록하지 않고, 오버레이 후 별도 슬롯으로 생성한다.
+                    chunk.tiles[x, y] = CombineTileData(0UL, 0u, hillFlag, 0u);
                 }
             }
 
@@ -312,14 +313,103 @@ namespace ARPG.Map
             // 3. 플레이어 배치 오브젝트 오버레이
             OverlayTileModifications(chunk);
 
-            // 4. 후보 위치 중 최종적으로 몬스터 스폰 플래그가 유지된 위치만 수집
-            foreach (var pos in _candidateSpawnPositions)
+            // 4. 최종 지형에서 이 청크 세대의 불변 Main/Sub 슬롯 배열을 생성한다.
+            GenerateMonsterSpawnSlots(chunk);
+        }
+
+        private void GenerateMonsterSpawnSlots(MapChunkData chunk)
+        {
+            _candidateSpawnPositions.Clear();
+            _spawnSlotsCache.Clear();
+
+            for (int x = 0; x < chunkSize; x++)
             {
-                ulong tileData = chunk.tiles[pos.x, pos.y];
-                if ((tileData & (uint)GlobalEnum.TileFlag.MonsterSpawn) != 0)
+                for (int y = 0; y < chunkSize; y++)
                 {
-                    chunk.monsterSpawnPositions.Add(pos);
+                    // 이전 청사진에 남아 있는 레거시 비트도 런타임 슬롯 정본으로 사용하지 않는다.
+                    ulong tileData = chunk.tiles[x, y] & ~(ulong)GlobalEnum.TileFlag.MonsterSpawn;
+                    chunk.tiles[x, y] = tileData;
+
+                    if ((tileData & (ulong)GlobalEnum.TileFlag.Hill) != 0 ||
+                        (tileData & (ulong)GlobalEnum.TileFlag.Blocked) != 0 ||
+                        (tileData & (ulong)GlobalEnum.TileFlag.ObjectLayerMask) != 0)
+                    {
+                        continue;
+                    }
+
+                    _candidateSpawnPositions.Add(new Vector2Int(x, y));
                 }
+            }
+
+            if (AR.s.Monster == null)
+            {
+                chunk.spawnRuntime.Slots = System.Array.Empty<MonsterSpawnSlotState>();
+                return;
+            }
+
+            AR.s.Monster.ResolveSpawnSlotGenerationParams(chunk.zone,
+                out Vector2Int mainCountRange,
+                out Vector2Int subCountRange,
+                out float interGroupMinDistance);
+
+            float biomeMultiplier = BiomeTable.GetMonsterSpawnMultiplier(chunk.chunkBiome);
+            int mainSlotCount = RollScaledSlotCount(mainCountRange, biomeMultiplier);
+            int subSlotCount = RollScaledSlotCount(subCountRange, biomeMultiplier);
+
+            AddMonsterSpawnSlots(MonsterSpawnGroupKind.Main, mainSlotCount, interGroupMinDistance);
+            AddMonsterSpawnSlots(MonsterSpawnGroupKind.Sub, subSlotCount, interGroupMinDistance);
+
+            chunk.spawnRuntime.Slots = _spawnSlotsCache.ToArray();
+        }
+
+        private static int RollScaledSlotCount(Vector2Int countRange, float multiplier)
+        {
+            int minimum = Mathf.Max(0, Mathf.Min(countRange.x, countRange.y));
+            int maximum = Mathf.Max(0, Mathf.Max(countRange.x, countRange.y));
+            if (maximum <= 0)
+                return 0;
+
+            int baseCount = Random.Range(minimum, maximum + 1);
+            float scaled = Mathf.Max(0f, baseCount * Mathf.Max(0f, multiplier));
+            int result = Mathf.FloorToInt(scaled);
+            float fraction = scaled - result;
+            if (Random.value < fraction)
+            {
+                result++;
+            }
+
+            return Mathf.Clamp(result, 0, maximum);
+        }
+
+        private void AddMonsterSpawnSlots(MonsterSpawnGroupKind groupKind, int targetCount,
+            float interGroupMinDistance)
+        {
+            float minimumDistanceSqr = interGroupMinDistance * interGroupMinDistance;
+            int addedCount = 0;
+            while (addedCount < targetCount && _candidateSpawnPositions.Count > 0)
+            {
+                int candidateIndex = Random.Range(0, _candidateSpawnPositions.Count);
+                Vector2Int candidate = _candidateSpawnPositions[candidateIndex];
+                int lastIndex = _candidateSpawnPositions.Count - 1;
+                _candidateSpawnPositions[candidateIndex] = _candidateSpawnPositions[lastIndex];
+                _candidateSpawnPositions.RemoveAt(lastIndex);
+
+                bool isSeparated = true;
+                for (int i = 0; i < _spawnSlotsCache.Count; i++)
+                {
+                    Vector2 delta = _spawnSlotsCache[i].LocalPosition - candidate;
+                    if (delta.sqrMagnitude < minimumDistanceSqr)
+                    {
+                        isSeparated = false;
+                        break;
+                    }
+                }
+
+                if (isSeparated == false)
+                    continue;
+
+                _spawnSlotsCache.Add(new MonsterSpawnSlotState(candidate, groupKind));
+                addedCount++;
             }
         }
 
@@ -404,42 +494,41 @@ namespace ARPG.Map
             }
         }
 
-        private void ReturnChunkToPool(int chunkX, int chunkY)
+        private void ExpireChunk(Vector2Int chunkCoord)
         {
-            Vector2Int chunkKey = new Vector2Int(chunkX, chunkY);
-            if (_activeChunks.ContainsKey(chunkKey))
+            if (_activeChunks.TryGetValue(chunkCoord, out MapChunkData chunk) == false)
+                return;
+
+            int expiredGenerationId = chunk.spawnRuntime.GenerationId;
+            chunk.InvalidateGeneration();
+
+            if (_renderedChunks.Contains(chunkCoord))
             {
-                MapChunkData chunk = _activeChunks[chunkKey];
-                _activeChunks.Remove(chunkKey);
-
-                if (_renderedChunks.Remove(chunkKey))
-                {
-                    RemoveChunkFromTilemap(chunk); // 타일맵에서 청크 제거
-                }
-
-                chunk.Deactivate();
-                _chunkPool.Push(chunk);
+                OnChunkDeactivated(chunkCoord);
+                RemoveChunkFromTilemap(chunk);
+                RemoveRenderedChunkCoord(chunkCoord);
             }
+
+            if (AR.s.Monster != null)
+            {
+                AR.s.Monster.ExpireChunkMonsters(chunkCoord, expiredGenerationId);
+            }
+
+            _activeChunks.Remove(chunkCoord);
+            RemoveCoordFromList(_loadedChunkCoords, chunkCoord);
+            chunk.Deactivate();
+            _chunkPool.Push(chunk);
         }
 
         public void SetSeed(int newSeed)
         {
             mapSeed = newSeed;
-            _randomGenerator = new System.Random(mapSeed);
-
-            foreach (var chunk in _activeChunks.Values)
+            while (_loadedChunkCoords.Count > 0)
             {
-                Vector2Int chunkCoord = new Vector2Int(chunk.chunkX, chunk.chunkY);
-                if (_renderedChunks.Contains(chunkCoord))
-                {
-                    RemoveChunkFromTilemap(chunk);
-                }
-
-                chunk.Deactivate();
-                _chunkPool.Push(chunk);
+                Vector2Int chunkCoord = _loadedChunkCoords[_loadedChunkCoords.Count - 1];
+                ExpireChunk(chunkCoord);
             }
-            _activeChunks.Clear();
-            _renderedChunks.Clear();
+
             _currentPlayerChunk = InvalidChunk;
         }
 
@@ -466,8 +555,10 @@ namespace ARPG.Map
 
                     if (chunk != null && _renderedChunks.Contains(chunkPos) == false)
                     {
+                        chunk.Activate(Time.time);
                         RenderChunkToTilemap(chunk);
                         _renderedChunks.Add(chunkPos);
+                        _renderedChunkCoords.Add(chunkPos);
                         OnChunkActivated(chunkPos, chunk);
                     }
                 }
@@ -476,29 +567,94 @@ namespace ARPG.Map
 
         private void UnloadDistantChunks()
         {
-            List<Vector2Int> chunksToReturn = new List<Vector2Int>();
+            _chunksToWarmCache.Clear();
 
-            foreach (var chunkPair in _activeChunks)
+            for (int i = 0; i < _renderedChunkCoords.Count; i++)
             {
-                Vector2Int chunkPos = chunkPair.Key;
+                Vector2Int chunkPos = _renderedChunkCoords[i];
                 int deltaX = Mathf.Abs(chunkPos.x - _currentPlayerChunk.x);
                 int deltaY = Mathf.Abs(chunkPos.y - _currentPlayerChunk.y);
                 int maxDistance = Mathf.Max(deltaX, deltaY); // Chebyshev 거리
 
                 if (maxDistance > _loadRadius)
                 {
-                    chunksToReturn.Add(chunkPos);
+                    _chunksToWarmCache.Add(chunkPos);
                 }
             }
 
-            foreach (var chunkPos in chunksToReturn)
+            for (int i = 0; i < _chunksToWarmCache.Count; i++)
             {
-                if (_renderedChunks.Contains(chunkPos))
-                {
-                    OnChunkDeactivated(chunkPos);
-                }
+                Vector2Int chunkPos = _chunksToWarmCache[i];
+                if (_activeChunks.TryGetValue(chunkPos, out MapChunkData chunk) == false)
+                    continue;
 
-                ReturnChunkToPool(chunkPos.x, chunkPos.y);
+                // 먼저 상태를 Warm으로 바꾸어 새 예약과 비동기 완료를 차단한다.
+                chunk.Warm(Time.time);
+                OnChunkDeactivated(chunkPos);
+                RemoveChunkFromTilemap(chunk);
+                RemoveRenderedChunkCoord(chunkPos);
+            }
+        }
+
+        public void CleanupWarmChunks()
+        {
+            float currentTime = Time.time;
+            _warmChunkCoordsCache.Clear();
+            _expiredChunkCoordsCache.Clear();
+
+            for (int i = 0; i < _loadedChunkCoords.Count; i++)
+            {
+                Vector2Int chunkCoord = _loadedChunkCoords[i];
+                MapChunkData chunk = _activeChunks[chunkCoord];
+                if (chunk.runtimeState != MapChunkRuntimeState.Warm)
+                    continue;
+
+                if (currentTime - chunk.spawnRuntime.LastActiveTime >= _warmChunkLifetime)
+                {
+                    _expiredChunkCoordsCache.Add(chunkCoord);
+                }
+                else
+                {
+                    _warmChunkCoordsCache.Add(chunkCoord);
+                }
+            }
+
+            for (int i = 0; i < _expiredChunkCoordsCache.Count; i++)
+            {
+                ExpireChunk(_expiredChunkCoordsCache[i]);
+            }
+
+            int maximumWarmChunks = Mathf.Max(0, _maxWarmChunkCount);
+            int evictionCount = _warmChunkCoordsCache.Count - maximumWarmChunks;
+            if (evictionCount <= 0)
+                return;
+
+            _warmChunkCoordsCache.Sort((left, right) =>
+                _activeChunks[left].spawnRuntime.LastActiveTime.CompareTo(
+                    _activeChunks[right].spawnRuntime.LastActiveTime));
+            for (int i = 0; i < evictionCount; i++)
+            {
+                ExpireChunk(_warmChunkCoordsCache[i]);
+            }
+        }
+
+        private void RemoveRenderedChunkCoord(Vector2Int chunkCoord)
+        {
+            _renderedChunks.Remove(chunkCoord);
+            RemoveCoordFromList(_renderedChunkCoords, chunkCoord);
+        }
+
+        private static void RemoveCoordFromList(List<Vector2Int> coords, Vector2Int target)
+        {
+            for (int i = 0; i < coords.Count; i++)
+            {
+                if (coords[i] != target)
+                    continue;
+
+                int lastIndex = coords.Count - 1;
+                coords[i] = coords[lastIndex];
+                coords.RemoveAt(lastIndex);
+                return;
             }
         }
 
@@ -514,7 +670,7 @@ namespace ARPG.Map
 
         public List<Vector2Int> GetActiveChunkPositions()
         {
-            return new List<Vector2Int>(_renderedChunks);
+            return new List<Vector2Int>(_renderedChunkCoords);
         }
 
         public List<MapFileData> GetMapFileDataByType(MapType mapType)

@@ -145,7 +145,7 @@ namespace ARPG.Utility
             AR.s.Component.AddComponent(buffEntityId, newBuff);
 
             // 5. 버프 효과 로드 및 StatModifier 추가
-            LoadBuffEffects(buffEntityId, targetEntityId, buffTableID);
+            LoadBuffEffects(buffEntityId, targetEntityId, buffTable);
 
             // 6. Dirty 태그 추가 (스탯 재계산 요청)
             AR.s.Component.AddComponent(targetEntityId, new StatDirtyTag());
@@ -363,28 +363,31 @@ namespace ARPG.Utility
         /// <summary>
         /// 버프 효과를 테이블에서 로드하여 StatModifier 추가
         /// </summary>
-        private static void LoadBuffEffects(int buffEntityId, int targetEntityId, int buffTableID)
+        private static void LoadBuffEffects(int buffEntityId, int targetEntityId, BuffTable buffTable)
         {
-            // buffTableID에 따라 다른 효과 적용
-            switch (buffTableID)
+            // 테이블 ID가 변경되어도 상태이상 효과가 유지되도록 EffectType으로 분기
+            switch (buffTable.EffectType)
             {
                 // ========== 상태 이상 버프 ==========
-                case 1: // 출혈 (DoT만, StatModifier 없음)
+                case GE.BuffEffectType.Blooding: // 출혈 (DoT만, StatModifier 없음)
                     break;
 
-                case 2: // 점화 (DoT만, StatModifier 없음)
+                case GE.BuffEffectType.Ignite: // 점화 (DoT만, StatModifier 없음)
                     break;
 
-                case 3: // 냉기 (이동/공격 속도 감소)
+                case GE.BuffEffectType.Chill: // 냉기 (이동/공격 속도 감소)
                     AddStatModifier(targetEntityId, buffEntityId, GE.Stat.MoveSpeed, StatModifierType.Multiply, -30, 0); // -30%
                     AddStatModifier(targetEntityId, buffEntityId, GE.Stat.AttackSpeed, StatModifierType.Multiply, -20, 0); // -20%
                     break;
 
-                case 5: // 중독 (DoT + HP 재생 감소)
+                case GE.BuffEffectType.Poison: // 중독 (DoT + HP 재생 감소)
                     AddStatModifier(targetEntityId, buffEntityId, GE.Stat.HpGeneration, StatModifierType.Multiply, -50, 0); // HP 재생 -50%
                     break;
+            }
 
-                // ========== 일반 버프 (예시) ==========
+            // ========== 일반 버프 (예시) ==========
+            switch (buffTable.Id)
+            {
                 case 1001: // 공격력 버프
                     AddStatModifier(targetEntityId, buffEntityId, GE.Stat.AttackMin, StatModifierType.Add, 10, 0);
                     AddStatModifier(targetEntityId, buffEntityId, GE.Stat.AttackMax, StatModifierType.Add, 10, 0);

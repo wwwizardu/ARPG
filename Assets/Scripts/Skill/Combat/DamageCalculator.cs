@@ -467,18 +467,15 @@ namespace ARPG.Skill.Combat
                 int totalIgniteDamage = Mathf.FloorToInt(fireDamage * 0.5f);
                 int tickDamage = totalIgniteDamage / 4;
 
-                int igniteBuffId = 2;
-                float igniteDuration = 4f;
-
-                int buffEntityId = Utility.BuffHelper.AddBuff(targetId, igniteBuffId, igniteDuration);
+                int buffEntityId = Utility.BuffHelper.AddBuffByEffectType(targetId, GlobalEnum.BuffEffectType.Ignite);
 
                 if (buffEntityId != -1 && AR.s.Component.TryGetComponent<BuffInstance>(buffEntityId, out var buff))
                 {
                     buff.TickDamage = tickDamage;
                     AR.s.Component.SetComponent(buffEntityId, buff);
-                }
 
-                Debug.Log($"[DamageCalculator] 점화 발동 - Target: {targetId}, FireDamage: {fireDamage:F0}, TickDamage: {tickDamage}/초");
+                    Debug.Log($"[DamageCalculator] 점화 발동 - Target: {targetId}, FireDamage: {fireDamage:F0}, TickDamage: {tickDamage}/초");
+                }
             }
         }
 
@@ -487,10 +484,7 @@ namespace ARPG.Skill.Combat
         /// </summary>
         private static void ApplyChill(int targetId)
         {
-            int chillBuffId = 3;
-            float chillDuration = 2f;
-
-            Utility.BuffHelper.AddBuff(targetId, chillBuffId, chillDuration);
+            Utility.BuffHelper.AddBuffByEffectType(targetId, GlobalEnum.BuffEffectType.Chill);
         }
 
         /// <summary>
@@ -501,18 +495,15 @@ namespace ARPG.Skill.Combat
             int totalPoisonDamage = Mathf.FloorToInt(poisonDamage * 0.2f);
             int tickDamage = totalPoisonDamage / 10;
 
-            int poisonBuffId = 5;
-            float poisonDuration = 10f;
-
-            int buffEntityId = Utility.BuffHelper.AddBuff(targetId, poisonBuffId, poisonDuration);
+            int buffEntityId = Utility.BuffHelper.AddBuffByEffectType(targetId, GlobalEnum.BuffEffectType.Poison);
 
             if (buffEntityId != -1 && AR.s.Component.TryGetComponent<BuffInstance>(buffEntityId, out var buff))
             {
                 buff.TickDamage = tickDamage;
                 AR.s.Component.SetComponent(buffEntityId, buff);
-            }
 
-            Debug.Log($"[DamageCalculator] 중독 적용 - Target: {targetId}, PoisonDamage: {poisonDamage:F0}, TickDamage: {tickDamage}/초");
+                Debug.Log($"[DamageCalculator] 중독 적용 - Target: {targetId}, PoisonDamage: {poisonDamage:F0}, TickDamage: {tickDamage}/초");
+            }
         }
     }
 }

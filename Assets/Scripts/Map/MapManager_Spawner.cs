@@ -10,12 +10,7 @@ namespace ARPG.Map
 
         public void OnChunkActivated(Vector2Int chunkCoord, MapChunkData chunkData)
         {
-            if (AR.s.Monster == null)
-                return;
-
-            // 이미 스폰된 청크는 기존 몬스터 활성화만 수행
-            // 최초 스폰은 System_MonsterSpawn이 담당
-            if (AR.s.Monster.HasChunkSpawned(chunkCoord))
+            if (AR.s.Monster != null)
             {
                 AR.s.Monster.ActivateChunkMonsters(chunkCoord);
             }
@@ -35,10 +30,10 @@ namespace ARPG.Map
 
         public void OnChunkDeactivated(Vector2Int chunkCoord)
         {
-            if (AR.s.Monster == null)
-                return;
-
-            AR.s.Monster.DeactivateChunkMonsters(chunkCoord);
+            if (AR.s.Monster != null)
+            {
+                AR.s.Monster.DeactivateChunkMonsters(chunkCoord);
+            }
 
             // NPC 상태 저장 및 비활성화 (NpcManager의 SaveData 기반)
             if (AR.s.Npc != null)

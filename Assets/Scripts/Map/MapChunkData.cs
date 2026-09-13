@@ -1,32 +1,108 @@
-using UnityEngine;
+using System;
 using System.Collections.Generic;
+using UnityEngine;
 
 namespace ARPG.Map
 {
-    [System.Serializable]
-    public class ChunkMonsterData
+    public enum MapChunkRuntimeState
     {
-        public Vector2Int chunkCoord;
-        public List<int> spawnedMonsterIds;
-        public float lastActiveTime;
-        public bool hasSpawned;
-        public int originalSpawnCount;
-        
-        public ChunkMonsterData(Vector2Int coord)
+        Active,
+        Warm,
+        Expired
+    }
+
+    public enum MonsterSpawnGroupKind
+    {
+        Main,
+        Sub
+    }
+
+    [Serializable]
+    public sealed class MonsterSpawnSlotState
+    {
+        public Vector2Int LocalPosition;
+        public MonsterSpawnGroupKind GroupKind;
+        public float NextSpawnTime;
+        public float LastUsedTime = -1f;
+        public bool IsDisabled;
+        public bool IsPending;
+        public int PendingVersion;
+        public int AliveMemberCount;
+
+        public MonsterSpawnSlotState(Vector2Int localPosition, MonsterSpawnGroupKind groupKind)
         {
-            chunkCoord = coord;
-            spawnedMonsterIds = new List<int>();
-            lastActiveTime = Time.time;
-            hasSpawned = false;
-            originalSpawnCount = 0;
+            LocalPosition = localPosition;
+            GroupKind = groupKind;
+        }
+
+        public int BeginPending()
+        {
+            AdvancePendingVersion();
+            IsPending = true;
+            return PendingVersion;
+        }
+
+        public void CancelPending()
+        {
+            if (IsPending == true)
+            {
+                AdvancePendingVersion();
+            }
+            IsPending = false;
+        }
+
+        public bool IsPendingReservation(int pendingVersion)
+        {
+            return IsPending == true && PendingVersion == pendingVersion;
+        }
+
+        private void AdvancePendingVersion()
+        {
+            PendingVersion++;
+            if (PendingVersion <= 0)
+            {
+                PendingVersion = 1;
+            }
         }
     }
-}
 
-namespace ARPG.Map
-{
-    [System.Serializable]
-    public class MapChunkData
+    [Serializable]
+    public sealed class ChunkSpawnRuntimeData
+    {
+        public int GenerationId;
+        public float LastActiveTime;
+        public MonsterSpawnSlotState[] Slots = Array.Empty<MonsterSpawnSlotState>();
+
+        public void Initialize(int generationId, float currentTime)
+        {
+            GenerationId = generationId;
+            LastActiveTime = currentTime;
+            Slots = Array.Empty<MonsterSpawnSlotState>();
+        }
+
+        public void Invalidate()
+        {
+            GenerationId = 0;
+            Slots = Array.Empty<MonsterSpawnSlotState>();
+        }
+    }
+
+    [Serializable]
+    public sealed class ChunkMonsterData
+    {
+        public Vector2Int ChunkCoord;
+        public int GenerationId;
+        public readonly List<int> SpawnedMonsterIds = new();
+
+        public ChunkMonsterData(Vector2Int chunkCoord, int generationId)
+        {
+            ChunkCoord = chunkCoord;
+            GenerationId = generationId;
+        }
+    }
+
+    [Serializable]
+    public sealed class MapChunkData
     {
         public int chunkX;
         public int chunkY;
@@ -39,29 +115,54 @@ namespace ARPG.Map
         // 8/2 = 4 → 16 entries. Renderer/Generator가 per-cluster theme 결정에 사용.
         public GlobalEnum.BiomeType[] clusterBiomes;
         public ulong[,] tiles;
-        public bool isActive;
-        public List<Vector2Int> monsterSpawnPositions;
+        public MapChunkRuntimeState runtimeState;
+        public ChunkSpawnRuntimeData spawnRuntime;
 
         public MapChunkData(int chunkSize)
         {
             tiles = new ulong[chunkSize, chunkSize];
             int clustersPerSide = chunkSize / BiomeNoise.CLUSTER_SIZE;
             clusterBiomes = new GlobalEnum.BiomeType[clustersPerSide * clustersPerSide];
-            monsterSpawnPositions = new List<Vector2Int>();
-            isActive = false;
+            spawnRuntime = new ChunkSpawnRuntimeData();
+            runtimeState = MapChunkRuntimeState.Expired;
         }
 
-        public void SetChunkPosition(int x, int y)
+        public void SetChunkPosition(int x, int y, int generationId, float currentTime)
         {
             chunkX = x;
             chunkY = y;
-            isActive = true;
+            runtimeState = MapChunkRuntimeState.Warm;
+            spawnRuntime.Initialize(generationId, currentTime);
+        }
+
+        public void Activate(float currentTime)
+        {
+            runtimeState = MapChunkRuntimeState.Active;
+            spawnRuntime.LastActiveTime = currentTime;
+        }
+
+        public void Warm(float currentTime)
+        {
+            runtimeState = MapChunkRuntimeState.Warm;
+            spawnRuntime.LastActiveTime = currentTime;
+
+            MonsterSpawnSlotState[] slots = spawnRuntime.Slots;
+            for (int i = 0; i < slots.Length; i++)
+            {
+                slots[i].CancelPending();
+            }
+        }
+
+        public void InvalidateGeneration()
+        {
+            runtimeState = MapChunkRuntimeState.Expired;
+            spawnRuntime.GenerationId = 0;
         }
 
         public void Deactivate()
         {
-            isActive = false;
-            monsterSpawnPositions.Clear();
+            runtimeState = MapChunkRuntimeState.Expired;
+            spawnRuntime.Invalidate();
         }
     }
 }

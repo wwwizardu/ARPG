@@ -1,7 +1,7 @@
 {
   "dependencies": {
     "com.coplaydev.unity-mcp": {
-      "version": "https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v9.7.3",
+      "version": "https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v10.2.0",
       "depth": 0,
       "source": "git",
       "dependencies": {
@@ -15,7 +15,7 @@
         "com.unity.nuget.newtonsoft-json": "3.0.2",
         "com.unity.test-framework": "1.1.31"
       },
-      "hash": "85c101f5329ec1b0c6f70cba44614166dd78f53c"
+      "hash": "30d22075093d1d35dfb0091c1c7550e9ad948577"
     },
     "com.cysharp.unitask": {
       "version": "https://github.com/Cysharp/UniTask.git?path=src/UniTask/Assets/Plugins/UniTask",
