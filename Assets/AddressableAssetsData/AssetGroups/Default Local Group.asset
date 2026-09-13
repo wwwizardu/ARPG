@@ -20,6 +20,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0cb288d8aadb4461bdc4aa5874c0b541
+    m_Address: Animation/SwampToad
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 109379a8d1252184fb128a7533daee84
     m_Address: UI/Shrine
     m_ReadOnly: 0
@@ -130,13 +135,13 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 4d238e5944774c04b7d1f593109a89df
-    m_Address: Prefabs/Player/SkillAimIndicator
+  - m_GUID: 4befc4a636c75fc4ba1a872701c1237a
+    m_Address: Sprites/Items/MiningCart
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 4befc4a636c75fc4ba1a872701c1237a
-    m_Address: Sprites/Items/MiningCart
+  - m_GUID: 4d238e5944774c04b7d1f593109a89df
+    m_Address: Prefabs/Player/SkillAimIndicator
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -165,8 +170,18 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c92ae5f679ea49c18bc9a8f4e7d286fc
+    m_Address: Projectile/Projectile_SwampToadPoisonSpit
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7c427aeacf06dde43ac3b30bb18968cc
     m_Address: Sprites/Items/Woodpile
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8018c952922a8eb4bb1c3fc9c8404be9
+    m_Address: Animation/GoblinShaman
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
