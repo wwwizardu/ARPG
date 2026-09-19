@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace ARPG.Systems
 {
-    public class System_MonsterSpawn : IFixedUpdateSystem
+    public class System_MonsterSpawn : IFixedUpdateSystem, IWorldMapSystem
     {
         public int Priority => 130;
         public float UpdateInterval => AR.s.Monster != null

@@ -10,6 +10,8 @@ namespace ARPG.Map
 
         public void OnChunkActivated(Vector2Int chunkCoord, MapChunkData chunkData)
         {
+            if (Context.Kind == MapKind.Dungeon) return;
+            AR.s.Dungeon.RefreshEntranceChunk(chunkCoord, true);
             if (AR.s.Monster != null)
             {
                 AR.s.Monster.ActivateChunkMonsters(chunkCoord);
@@ -30,6 +32,8 @@ namespace ARPG.Map
 
         public void OnChunkDeactivated(Vector2Int chunkCoord)
         {
+            if (Context.Kind == MapKind.Dungeon) return;
+            AR.s.Dungeon.RefreshEntranceChunk(chunkCoord, false);
             if (AR.s.Monster != null)
             {
                 AR.s.Monster.DeactivateChunkMonsters(chunkCoord);

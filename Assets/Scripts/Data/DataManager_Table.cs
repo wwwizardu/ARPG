@@ -50,6 +50,7 @@ namespace ARPG.Data
         private Dictionary<GlobalEnum.ItemEnchantmentOperation, Tables.ItemEnchantmentCostTable>
             _itemEnchantmentCostByOperation = new();
         private ImmutableDictionary<int, Tables.VillageTable> _villageTable = null!;
+        private ImmutableDictionary<int, Tables.DungeonTable> _dungeonTable = null!;
         private ImmutableDictionary<int, Tables.VillageStageTable> _villageStageTable = null!;
         private ImmutableDictionary<int, Tables.JobBonusTable> _jobBonusTable = null!;
         // Phase D: JobType → JobBonusTable 빠른 조회 인덱스 (LoadLate에서 구축)
@@ -92,6 +93,7 @@ namespace ARPG.Data
                 LoadTable<Tables.ItemImplicitTable>("ItemImplicitTable.bytes", tables => _itemImplicitTable = tables),
                 LoadTable<Tables.ItemEnchantmentCostTable>("ItemEnchantmentCostTable.bytes", tables => _itemEnchantmentCostTable = tables),
                 LoadTable<Tables.VillageTable>("VillageTable.bytes", tables => _villageTable = tables),
+                LoadTable<Tables.DungeonTable>("DungeonTable.bytes", tables => _dungeonTable = tables),
                 LoadTable<Tables.VillageStageTable>("VillageStageTable.bytes", tables => _villageStageTable = tables),
                 LoadTable<Tables.JobBonusTable>("JobBonusTable.bytes", tables => _jobBonusTable = tables),
                 LoadTable<Tables.ZoneTable>("ZoneTable.bytes", tables => _zoneTable = tables)
@@ -759,6 +761,16 @@ namespace ARPG.Data
         {
             if (_itemEnchantmentCostByOperation.TryGetValue(operation, out var table) == true)
                 return table;
+            return null;
+        }
+
+        public Tables.DungeonTable? GetDungeonTable(int id)
+        {
+            if (_dungeonTable.TryGetValue(id, out var table))
+            {
+                return table;
+            }
+
             return null;
         }
 

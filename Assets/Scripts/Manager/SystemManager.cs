@@ -129,6 +129,11 @@ namespace ARPG.Systems
             System_MapChunkLoader mapChunkLoaderSystem = new();
             RegisterSystems(mapChunkLoaderSystem);
 
+            // Priority 110/120/260 (Update): bounded placement, interior streaming, checkpoint scheduling.
+            RegisterSystems(new System_DungeonPlacement());
+            RegisterSystems(new System_DungeonStreaming());
+            RegisterSystems(new System_DungeonCheckpoint());
+
             // Priority 130: Monster Spawn System (FixedUpdate) - 거리 링/슬롯 스폰 + Warm 청크 정리 (0.5초 간격)
             System_MonsterSpawn monsterSpawnSystem = new();
             RegisterSystems(monsterSpawnSystem);
@@ -347,6 +352,7 @@ namespace ARPG.Systems
             for (int i = 0; i < _updateSystems.Count; i++)
             {
                 IUpdateSystem system = _updateSystems[i];
+                if (CanRun(system) == false) continue;
                 float updateInterval = system.UpdateInterval;
 
                 if (updateInterval <= 0f)
@@ -374,6 +380,7 @@ namespace ARPG.Systems
             for (int i = 0; i < _fixedUpdateSystems.Count; i++)
             {
                 IFixedUpdateSystem system = _fixedUpdateSystems[i];
+                if (CanRun(system) == false) continue;
                 float updateInterval = system.UpdateInterval;
 
                 if (updateInterval <= 0f)
@@ -394,6 +401,15 @@ namespace ARPG.Systems
         }
 
         // LateUpdate: Update와 FixedUpdate 이후 실행 (카메라, 렌더링 동기화)
+        private static bool CanRun(ISystem system)
+        {
+            if (AR.s == null || AR.s.IsInitialized == false) return false;
+            if (system is IWorldMapSystem && AR.s.Dungeon.IsInside) return false;
+            if (AR.s.Dungeon.GameplayPaused)
+                return system is System_Input || system is System_DungeonCheckpoint;
+            return true;
+        }
+
         private void LateUpdate()
         {
             float deltaTime = Time.deltaTime;
@@ -401,6 +417,7 @@ namespace ARPG.Systems
             for (int i = 0; i < _lateUpdateSystems.Count; i++)
             {
                 ILateUpdateSystem system = _lateUpdateSystems[i];
+                if (CanRun(system) == false) continue;
                 float updateInterval = system.UpdateInterval;
 
                 if (updateInterval <= 0f)

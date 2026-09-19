@@ -1058,7 +1058,7 @@ namespace ARPG
 #endif
 
             // V 키 입력 시 마을 UI 토글 (마을 안에 있을 때만 열림)
-            if (UnityEngine.Input.GetKeyDown(KeyCode.V) == true)
+            if (AR.s.Dungeon.IsInside == false && UnityEngine.Input.GetKeyDown(KeyCode.V) == true)
             {
                 if (IsShow("UI/UIVillage") == true)
                 {

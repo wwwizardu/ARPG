@@ -70,6 +70,7 @@ namespace ARPG.Editor
             // EquipmentBaseStat: A~N가 실제 데이터, O~S는 시트 가독성용 보조 컬럼(다운로드 제외).
             // 슬롯당 3컬럼(ModId, Value1, Value2) × 4 슬롯 = 12컬럼 + Id + ItemId = 14컬럼.
             Register<EquipmentBaseStatTable>(list, "972309111&range=A:N");
+            Register<DungeonTable>(list, "1672490546&range=A:J");
             Register<VillageTable>(list, "441028134&range=A:F");
             Register<VillageStageTable>(list, "467145019&range=A:Q");
             // 청크 Zone(시드 청크 (0,0) 기준 Chebyshev 거리+1)별 몬스터 스폰 파라미터
@@ -227,6 +228,9 @@ namespace ARPG.Editor
 
         [MenuItem("ARPG/Download Table/DropTable", false, 100)]
         private static async void DownloadDropTable() => await DownloadSingleTable<DropTable>();
+
+        [MenuItem("ARPG/Download Table/DungeonTable", false, 100)]
+        private static async void DownloadDungeonTable() => await DownloadSingleTable<DungeonTable>();
 
         [MenuItem("ARPG/Download Table/EquipmentBaseStatTable", false, 100)]
         private static async void DownloadEquipmentBaseStatTable() => await DownloadSingleTable<EquipmentBaseStatTable>();
@@ -688,6 +692,10 @@ namespace ARPG.Editor
                 {
                     ParseEquipmentBaseStatTable(equipmentBaseStatTable, values);
                 }
+                else if (table is DungeonTable dungeonTable)
+                {
+                    ParseDungeonTable(dungeonTable, values);
+                }
                 else if (table is VillageTable villageTable)
                 {
                     ParseVillageTable(villageTable, values);
@@ -759,6 +767,34 @@ namespace ARPG.Editor
             table.DefaultNpcList = values[3];
             table.RespawnCooldown = float.Parse(values[4]);
             table.SpawnRadius = float.Parse(values[5]);
+        }
+
+        private static void ParseDungeonTable(DungeonTable table, string[] values)
+        {
+            if (values.Length < 10)
+            {
+                Debug.LogError($"[ParseDungeonTable] Invalid data length. Expected at least 10, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            table.Name = values[1];
+            table.RoomCount = int.Parse(values[2]);
+            table.MonsterTableId = int.Parse(values[3]);
+            table.MonsterLevel = int.Parse(values[4]);
+            table.BossTableId = int.Parse(values[5]);
+            table.BossLevel = int.Parse(values[6]);
+            table.CompletionGold = int.Parse(values[7]);
+            table.ChestGold = int.Parse(values[8]);
+            table.ReplacementCooldownHours = ParseFloatSafe(values, 9);
+
+            if (table.RoomCount < 6 || table.RoomCount > 12 ||
+                table.MonsterTableId <= 0 || table.MonsterLevel <= 0 ||
+                table.BossTableId <= 0 || table.BossLevel <= 0 ||
+                table.CompletionGold < 0 || table.ChestGold < 0 ||
+                table.ReplacementCooldownHours < 0f)
+            {
+                throw new FormatException($"DungeonTable Id {table.Id} contains an out-of-range value.");
+            }
         }
 
         private static void ParseVillageStageTable(VillageStageTable table, string[] values)

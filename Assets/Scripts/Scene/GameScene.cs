@@ -54,7 +54,9 @@ namespace ARPG.Scene
             _cameraController.Initialize(player);
             AR.s.Player.AddPlayer(player);
 
-            AR.s.Map.CreateMap(12345, player.transform.position);
+            AR.s.WorldMap.CreateMap(AR.s.Data.WorldSeed, player.transform.position);
+            if (await AR.s.Dungeon.RestoreSessionAsync() == false) return;
+            if (AR.s.Dungeon.IsInside == false) AR.s.Item.RestoreContextDrops();
 
             // 맵 생성 완료 후 청크 로더 활성화
             if (AR.s.Component.TryGetComponent<MapChunkLoaderComponent>(playerEntityId, out var chunkLoader))

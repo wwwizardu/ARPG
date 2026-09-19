@@ -11,7 +11,7 @@ namespace ARPG.Systems
     /// 개별 NPC의 오프스크린 활동을 시간분할로 전진한다.
     /// 상태는 NpcSaveData가 소유하며, 이 시스템은 틱마다 한정된 수만 처리한다.
     /// </summary>
-    public class System_NpcSim : IFixedUpdateSystem
+    public class System_NpcSim : IFixedUpdateSystem, IWorldMapSystem
     {
         // 총 NPC 수와 무관하게 틱당 비용을 제한한다.
         private const int TickBudget = 12;

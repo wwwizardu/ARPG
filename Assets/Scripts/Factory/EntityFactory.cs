@@ -38,6 +38,7 @@ namespace ARPG.Factory
         /// <returns>(entityId, entity) 튜플. 실패 시 (-1, null)</returns>
         public static async UniTask<(int entityId, EntityBase? entity)> CreateMonster(int monsterTableId, Vector3 position, Transform? parent = null, int level = 0)
         {
+            using var contextLoad = AR.s.Map.Context.BeginLoad();
             // 1. 테이블 로드
             MonsterTable? table = AR.s.Data.GetMonster(monsterTableId);
             if (table == null)
@@ -52,6 +53,12 @@ namespace ARPG.Factory
             if (obj == null)
             {
                 Debug.LogError($"[EntityFactory] Failed to instantiate entity prefab");
+                return (-1, null);
+            }
+
+            if (contextLoad.IsCurrent == false)
+            {
+                Addressables.ReleaseInstance(obj);
                 return (-1, null);
             }
 
@@ -71,6 +78,11 @@ namespace ARPG.Factory
             await AddCreatureComponents(entityId, table, entity);
 
             // 4-1. Archetype × Level 스탯 스케일링 (HP / 모든 속성 공격력)
+            if (contextLoad.IsCurrent == false || entity == null || entity.IsCurrentEntity == false)
+            {
+                ReleaseUnfinishedEntity(entity);
+                return (-1, null);
+            }
             int effectiveLevel = level > 0 ? level : table.Level;
             ApplyMonsterArchetypeScaling(entityId, table, effectiveLevel);
 
@@ -123,6 +135,7 @@ namespace ARPG.Factory
         /// <returns>(entityId, entity) 튜플. 실패 시 (-1, null)</returns>
         public static async UniTask<(int entityId, EntityBase? entity)> CreateNpc(int npcTableId, Vector3 position, Transform? parent = null, int savedEntityId = -1, NpcSaveData? saveData = null)
         {
+            using var contextLoad = AR.s.Map.Context.BeginLoad();
             // 1. 테이블 로드
             NpcTable? table = AR.s.Data.GetNpc(npcTableId);
             if (table == null)
@@ -137,6 +150,12 @@ namespace ARPG.Factory
             if (obj == null)
             {
                 Debug.LogError($"[EntityFactory] Failed to instantiate entity prefab for NPC");
+                return (-1, null);
+            }
+
+            if (contextLoad.IsCurrent == false)
+            {
+                Addressables.ReleaseInstance(obj);
                 return (-1, null);
             }
 
@@ -160,6 +179,11 @@ namespace ARPG.Factory
             await AddCreatureComponents(entityId, table, entity);
 
             // NpcTag는 AI 컴포넌트 부착보다 먼저 등록해야 AddAIComponents의 isNpc 판정이 정상 동작
+            if (contextLoad.IsCurrent == false || entity == null || entity.IsCurrentEntity == false)
+            {
+                ReleaseUnfinishedEntity(entity);
+                return (-1, null);
+            }
             // (Patrol/PatrolRanged BehaviorType 강제 + Patrol 초기 상태)
             AR.s.Component.AddComponent(entityId, new NpcTag());
 
@@ -316,6 +340,17 @@ namespace ARPG.Factory
         /// finalHp  = BaseHp  × HpPerLevel^(Level-1)  × Archetype.HpMul
         /// finalDmg = (StatDamage + SkillTableDamage) × DmgPerLevel^(Level-1) × Archetype.DmgMul
         /// </summary>
+        private static void ReleaseUnfinishedEntity(EntityBase? entity)
+        {
+            if (entity == null) return;
+            if (entity.IsCurrentEntity)
+            {
+                entity.OnEntityDestroy();
+                AR.s.Entity.DestroyEntity(entity.EntityId);
+            }
+            Addressables.ReleaseInstance(entity.gameObject);
+        }
+
         private static void ApplyMonsterArchetypeScaling(int entityId, MonsterTable table, int effectiveLevel)
         {
             if (effectiveLevel <= 0)
@@ -412,10 +447,11 @@ namespace ARPG.Factory
             }
 
             // 그림자 프리팹 로드 → _visual 아래 자식으로 추가 (지면 고정)
+            if (entity == null || entity.IsCurrentEntity == false) return;
             try
             {
                 GameObject shadowObj = await Addressables.InstantiateAsync(SHADOW_PREFAB_KEY, entity.Visual.transform).ToUniTask();
-                if (shadowObj != null)
+                if (shadowObj != null && entity != null)
                 {
                     shadowObj.transform.localPosition = Vector3.zero;
                     entity.SetShadow(shadowObj);
@@ -675,6 +711,7 @@ namespace ARPG.Factory
         /// </summary>
         public static async void CreateAreaEffect(int casterEntityId, int areaEffectTableId, Vector2 position, int skillId = 0)
         {
+            using var contextLoad = AR.s.Map.Context.BeginLoad();
             ComponentManager cm = AR.s.Component;
 
             AreaEffectTable? table = AR.s.Data.GetAreaEffect(areaEffectTableId);
@@ -730,7 +767,7 @@ namespace ARPG.Factory
                 return;
             }
 
-            if (cm.HasComponent<DestroyTag>(entityId) || cm.HasComponent<AreaEffectComponent>(entityId) == false)
+            if (contextLoad.IsCurrent == false || cm.HasComponent<DestroyTag>(entityId) || cm.HasComponent<AreaEffectComponent>(entityId) == false)
             {
                 AddressablePool.Return(table.PrefabKey, obj);
                 return;
@@ -1017,6 +1054,7 @@ namespace ARPG.Factory
 
         private static async UniTaskVoid LoadAnimationAsync(int entityId, GameObject obj, AnimationTable animData)
         {
+            using var contextLoad = AR.s.Map.Context.BeginLoad();
             if (AR.s.Component.TryGetComponent<SpriteAnimationComponent>(entityId, out var spriteAnim))
             {
                 spriteAnim.LoadState = AnimationLoadState.Loading;
@@ -1037,6 +1075,9 @@ namespace ARPG.Factory
 
                 var slAsset = await Addressables.LoadAssetAsync<SpriteLibraryAsset>(
                     animData.SpriteLibraryPath).ToUniTask(cancellationToken: cts.Token);
+
+                if (contextLoad.IsCurrent == false || obj == null ||
+                    obj.GetComponent<EntityBase>()?.IsCurrentEntity != true) return;
 
                 if (slAsset == null)
                 {
@@ -1089,7 +1130,8 @@ namespace ARPG.Factory
             }
             catch (System.Exception e)
             {
-                UpdateAnimationLoadState(entityId, AnimationLoadState.Failed);
+                if (contextLoad.IsCurrent && obj != null && obj.GetComponent<EntityBase>()?.IsCurrentEntity == true)
+                    UpdateAnimationLoadState(entityId, AnimationLoadState.Failed);
                 Debug.LogError($"[EntityFactory] Failed to load animation for Entity {entityId}: {e.Message}");
             }
             finally

@@ -15,7 +15,7 @@ namespace ARPG.Village
     /// </summary>
     public static class ServiceUIRouter
     {
-        public enum CandidateKind { None, Shop, Forge, Inn, Shrine, Hub, Gate, Npc }
+        public enum CandidateKind { None, Shop, Forge, Inn, Shrine, Hub, Gate, Npc, Dungeon, DungeonChest }
 
         public struct Candidate
         {
@@ -28,15 +28,24 @@ namespace ARPG.Village
             public int TileX;             // 프롬프트 표시 위치 (시설/Gate 타일)
             public int TileY;
             public bool HasTile;          // false = NPC(타일 좌표 없음, Transform 사용)
+            public string DungeonId;
+            public int DungeonObjectId;
         }
 
         /// <summary>
         /// 거리 최소 후보 선택 — 프롬프트 표시와 F키 라우팅이 같은 결과를 공유한다.
         /// </summary>
-        public static bool TryGetBestCandidate(in PlayerNearbyServicesComponent nearby,
+        public static bool TryGetBestCandidate(in PlayerNearbyServicesComponent cached,
             out Candidate candidate)
         {
             candidate = new Candidate { Kind = CandidateKind.None, EntityId = -1 };
+            if (AR.s.Dungeon.IsInside) return AR.s.Dungeon.TryGetInteraction(out candidate);
+            if (AR.s.Dungeon.GameplayPaused) return false;
+            // Prompt and E both compare current positions, including moving NPCs.
+            AR.s.System.GetSystem<Systems.System_VillageServiceProximity>()?.OnUpdate(0);
+            var nearby = cached;
+            if (AR.s.Component.TryGetComponent<PlayerNearbyServicesComponent>(AR.s.Data.CurrentPlayerEntityId, out var refreshed))
+                nearby = refreshed;
             float bestSqr = float.MaxValue;
 
             if ((nearby.AvailableServices & ProvidedService.Shop) != 0
@@ -110,6 +119,10 @@ namespace ARPG.Village
             }
             // Civic은 현재 UI 라우팅 대상 아님 (Phase E 이상)
 
+            if (candidate.Kind == CandidateKind.Npc) bestSqr = candidate.DistanceSqr;
+            if (AR.s.Dungeon.TryGetInteraction(out var dungeon) && dungeon.DistanceSqr < bestSqr)
+                candidate = dungeon;
+
             return candidate.Kind != CandidateKind.None;
         }
 
@@ -121,6 +134,8 @@ namespace ARPG.Village
         {
             switch (candidate.Kind)
             {
+                case CandidateKind.Dungeon: return "던전 입장";
+                case CandidateKind.DungeonChest: return "상자 열기";
                 case CandidateKind.Shop:
                     return GetFacilityPrompt(VillageInitialFacilityCatalog.MERCHANT_STALL_TABLE_ID, "거래");
                 case CandidateKind.Forge:
@@ -149,6 +164,11 @@ namespace ARPG.Village
             float bestSqr = candidate.DistanceSqr;
             switch (candidate.Kind)
             {
+                case CandidateKind.Dungeon:
+                    _ = AR.s.Dungeon.EnterAsync(candidate.DungeonId);
+                    return true;
+                case CandidateKind.DungeonChest:
+                    return AR.s.Dungeon.OpenChest(candidate.DungeonObjectId);
                 case CandidateKind.Shop:
                 {
                     Debug.Log($"[Service] v{nearby.NearestVillageId} 열기: Shop (entityId={bestEntityId}, sqr={bestSqr:F2})");

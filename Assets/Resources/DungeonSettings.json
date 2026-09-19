@@ -1,0 +1,9 @@
+{
+  "DefaultDungeonTableId": 1,
+  "CandidatesPerFrame": 2,
+  "TileQueriesPerFrame": 32,
+  "ChunksPerFrame": 2,
+  "PlacementMilliseconds": 1.5,
+  "ApproachDistance": 64,
+  "AutoSaveSeconds": 30
+}

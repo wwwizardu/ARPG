@@ -58,6 +58,11 @@ namespace ARPG.Systems
                 // CurrentHp가 0 이하이면 사망 처리
                 if (stat.CurrentHp <= 0)
                 {
+                    if (AR.s.Dungeon.HandleDeath(entityId))
+                    {
+                        cm.RemoveComponent<HpDirtyTag>(entityId);
+                        continue;
+                    }
                     // 상태 변경 (죽음)
                     if (cm.TryGetComponent<StateComponent>(entityId, out StateComponent state))
                     {

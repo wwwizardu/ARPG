@@ -55,6 +55,19 @@ Run tools sequentially: issue one tool call, wait for its result, then continue.
 
 Do not create, copy, or junction-link a secondary Unity project for testing. A separate project forces Unity to build a fresh `Library` and reimport project assets, so its time and disk cost grows with the resource set. Use the currently open project/editor, existing project-local test or diagnostic paths, or non-Unity static validation instead. If a required validation cannot run through those paths, stop and report the limitation rather than creating another Unity project.
 
+Delete temporary files and directories created for validation or testing before finishing the task, after the processes using them have stopped. This includes temporary test saves, logs, scratch reports, backups, and generated build configuration. Summarize the necessary verification results in the final response or a requested deliverable before deleting the temporary evidence.
+
+Limit cleanup to temporary artifacts created by the current task. Preserve pre-existing files, user changes, established diagnostic tools, and requested final deliverables. Do not delete shared Unity caches or an entire `Temp` directory to clean up task-specific files.
+
+## Validation and Diagnostic Placement
+
+- Distinguish checks needed only to validate the current change from invariants that need ongoing verification. Do not keep task-specific validation files merely because they could be reused later.
+- Compilation is a check of the current change: run the appropriate existing Runtime/Editor build commands. Do not add a permanent verification script or test project just to wrap those commands.
+- Put expensive, repeatable diagnostics in Unity Editor menu commands so they can be run explicitly when needed. Extend the relevant existing diagnostic menu and code before adding a new entry. File I/O, large data scans, stress tests, fault injection, and save/load round trips belong here; use isolated temporary data and clean it up after execution.
+- Put lightweight ongoing checks at the relevant runtime state transitions or lifecycle boundaries, enabled only in the Editor with `#if UNITY_EDITOR` or an equivalent compile-time guard. Keep these checks cheap, avoid unnecessary per-frame checks and log spam, and exclude them from player builds.
+- Reuse the feature's existing diagnostic code. Do not accumulate a new `verify.*` script, standalone host project, test directory, or scratch report for each task. Keep one-off validation scaffolding temporary and remove it when the task is finished.
+- When changing a contract covered by a maintained Editor diagnostic or runtime check, update that check in the same change so it continues to verify the intended behavior.
+
 ## Wiki Reference Rules
 
 `Wiki/` is a knowledge layer that synthesizes the original documentation and code. Follow the operating rules in `Wiki/_SCHEMA.md`.

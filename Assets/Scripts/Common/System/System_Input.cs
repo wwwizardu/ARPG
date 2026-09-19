@@ -52,6 +52,8 @@ namespace ARPG.Systems
             if(AR.s.UI.UpdateInput() == false) // UI가 입력을 처리한 경우 Player Input을 처리하지 않음
                 return;
 
+            if (AR.s.Dungeon.GameplayPaused) return;
+
             if (_playerEntityId == -1)
             {
                 var inputComponentPool = AR.s.Component.GetComponentPool<InputComponent>();
@@ -73,7 +75,7 @@ namespace ARPG.Systems
             }
 
             // [TEST] B키 — Inn UI 열기 (실제 InnBed 없이 테스트용, 휴식/세이브 전용 — 고용 경로는 D6로 제거)
-            if (Keyboard.current != null && Keyboard.current.bKey.wasPressedThisFrame)
+            if (AR.s.Dungeon.IsInside == false && Keyboard.current != null && Keyboard.current.bKey.wasPressedThisFrame)
             {
                 var innUI = AR.s.UI.Show<UI.UIInn>(AddressablePath.Inn, UIManager.Layer.Main);
                 if (innUI != null)
@@ -81,7 +83,7 @@ namespace ARPG.Systems
             }
 
             // [TEST] N키 — Shrine UI 열기 (실제 Shrine 없이 테스트용)
-            if (Keyboard.current != null && Keyboard.current.nKey.wasPressedThisFrame)
+            if (AR.s.Dungeon.IsInside == false && Keyboard.current != null && Keyboard.current.nKey.wasPressedThisFrame)
             {
                 var shrineUI = AR.s.UI.Show<UI.UIShrine>(AddressablePath.Shrine, UIManager.Layer.Main);
                 if (shrineUI != null)
@@ -90,7 +92,7 @@ namespace ARPG.Systems
 
             // [TEST] G키 — Forge UI 열기 (Editor 진단 전용, Premium 단계로 가정)
 #if UNITY_EDITOR
-            if (Keyboard.current != null && Keyboard.current.gKey.wasPressedThisFrame)
+            if (AR.s.Dungeon.IsInside == false && Keyboard.current != null && Keyboard.current.gKey.wasPressedThisFrame)
             {
                 var forgeUI = AR.s.UI.Show<UI.UIForge>(AddressablePath.Forge, UIManager.Layer.Main);
                 if (forgeUI != null)
@@ -99,7 +101,7 @@ namespace ARPG.Systems
 #endif
 
             // [TEST] M키 — Shop UI 열기 (실제 MerchantStall 없이 테스트용)
-            if (Keyboard.current != null && Keyboard.current.mKey.wasPressedThisFrame)
+            if (AR.s.Dungeon.IsInside == false && Keyboard.current != null && Keyboard.current.mKey.wasPressedThisFrame)
             {
                 var shopUI = AR.s.UI.Show<UI.UIShopMerchant>(AddressablePath.ShopMerchant, UIManager.Layer.Main);
                 if (shopUI != null)
@@ -159,6 +161,7 @@ namespace ARPG.Systems
                 && AR.s.Component.TryGetComponent<PlayerNearbyServicesComponent>(_playerEntityId, out var nearby))
             {
                 ServiceUIRouter.Open(nearby);
+                if (AR.s.Dungeon.IsBusy) return;
             }
 
             if (_input.Value.Attack.IsPressed() == true)

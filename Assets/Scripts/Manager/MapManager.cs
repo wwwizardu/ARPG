@@ -47,9 +47,13 @@ namespace ARPG.Map
         private int _loadRadius = 2;
         private const int POOL_SIZE = 20;
         private int _nextChunkGenerationId = 1;
+        public MapContext Context { get; private set; } = new();
 
         public void Initialize()
         {
+            Context.IsActive = true;
+            Context.Epoch++;
+            if (Context.Kind == MapKind.World) mapSeed = AR.s.Data.WorldSeed;
             _activeChunks = new Dictionary<Vector2Int, MapChunkData>();
             _renderedChunks = new HashSet<Vector2Int>();
             _loadedChunkCoords = new List<Vector2Int>();
@@ -67,6 +71,8 @@ namespace ARPG.Map
 
         public void Reset()
         {
+            Context.IsActive = false;
+            Context.Epoch++;
             for (int i = 0; i < _loadedChunkCoords.Count; i++)
             {
                 Vector2Int chunkCoord = _loadedChunkCoords[i];
@@ -114,6 +120,8 @@ namespace ARPG.Map
 
         public void CreateMap(int inSeed, Vector3 playerPosition)
         {
+            if (inSeed != mapSeed)
+                throw new System.InvalidOperationException("World seed must be loaded before map initialization.");
             // MapFileData의 NPC 오브젝트를 NpcManager에 1회 등록
             RegisterAllNpcsToManager();
 
@@ -168,6 +176,14 @@ namespace ARPG.Map
 
         public void UpdateChunksAroundPlayer(Vector3 playerPosition)
         {
+            if (Context.Kind == MapKind.Dungeon)
+            {
+                _currentPlayerChunk = WorldPositionToChunk(playerPosition);
+                UnloadDistantChunks();
+                LoadDungeonChunksBudgeted(AR.s.Dungeon.Settings.ChunksPerFrame);
+                CleanupWarmChunks();
+                return;
+            }
             Vector2Int playerChunk = WorldPositionToChunk(playerPosition);
 
             if (playerChunk != _currentPlayerChunk)
@@ -186,6 +202,8 @@ namespace ARPG.Map
         
         public ulong GetTileAt(int worldX, int worldY)
         {
+            // Collision/path queries outside the visible interior ring must not allocate chunks.
+            if (Context.Kind == MapKind.Dungeon) return SampleDungeonTile(worldX, worldY);
             int chunkX = Mathf.FloorToInt((float)worldX / chunkSize);
             int chunkY = Mathf.FloorToInt((float)worldY / chunkSize);
 
@@ -475,7 +493,7 @@ namespace ARPG.Map
             if ((tile & (ulong)GlobalEnum.TileFlag.Blocked) != 0)
                 return true;
 
-            if (AR.s.Building != null && AR.s.Building.IsTileOccupied(worldTileX, worldTileY) == true)
+            if (Context.Kind == MapKind.World && AR.s.Building != null && AR.s.Building.IsTileOccupied(worldTileX, worldTileY) == true)
                 return true;
 
             return false;
@@ -551,6 +569,7 @@ namespace ARPG.Map
             int currentHp)
         {
             buildingEntityId = -1;
+            if (Context.Kind == MapKind.Dungeon) return false;
             if (objectId <= 0)
                 return false;
             if (IsWorldTileInBounds(worldX, worldY) == false)

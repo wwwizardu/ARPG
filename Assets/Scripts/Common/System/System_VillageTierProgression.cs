@@ -15,7 +15,7 @@ namespace ARPG.Systems
     /// Stage 4 (City) 승격은 Phase C+ 이관 — Stage 3 도달 후 멈춤.
     /// 세트 판정(Furnace+Anvil)은 PlacedObjectTypeIds 단순 카운트로 대체. Phase D HasObjectSet에서 정교화.
     /// </summary>
-    public class System_VillageTierProgression : IFixedUpdateSystem
+    public class System_VillageTierProgression : IFixedUpdateSystem, IWorldMapSystem
     {
         // 도메인 대역 (CLAUDE.md): 60-64 Lifecycle
         public int Priority => 60;

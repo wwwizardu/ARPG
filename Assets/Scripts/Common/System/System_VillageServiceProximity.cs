@@ -19,7 +19,7 @@ namespace ARPG.Systems
     /// "단일 마을 한정"은 §10.3 외곽 보호 마진과 자연스럽게 맞물림
     /// (벽 밖 플레이어는 시설이 잡히지 않지만 Gate는 상호작용 가능).
     /// </summary>
-    public class System_VillageServiceProximity : IUpdateSystem
+    public class System_VillageServiceProximity : IUpdateSystem, IWorldMapSystem
     {
         // 도메인 대역 (CLAUDE.md): 60-64 Lifecycle (IUpdate)
         public int Priority => 61;

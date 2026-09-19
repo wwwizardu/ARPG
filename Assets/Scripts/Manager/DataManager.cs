@@ -13,9 +13,13 @@ namespace ARPG.Data
 {
     public partial class DataManager : MonoBehaviour
     {
-        private const ushort CURRENT_WORLD_DATA_VERSION = 14;
+        private const ushort CURRENT_WORLD_DATA_VERSION = 16;
         private const ushort CURRENT_PLAYER_DATA_VERSION = 2;
         private WorldData _worldData = new();
+        public int WorldSeed => _worldData.WorldSeed;
+        public float ElapsedWorldGameHours => _worldData.ElapsedWorldGameHours;
+        public DungeonSaveRoot Dungeons => _worldData.Dungeons;
+        public List<WorldDropItemData> WorldDrops => _worldData.WorldDropItemDatas;
         private List<PlayerData> _playerDataList = new();
         private int _currentPlayerEntityId = 0; // 현재 활성화된 플레이어 ID
         
@@ -61,6 +65,7 @@ namespace ARPG.Data
 
         public async Task Initialize()
         {
+            await WaitForSaveIdleAsync();
             // 데이터 초기화 로직
             await LoadTableAsync();
 
@@ -80,6 +85,24 @@ namespace ARPG.Data
         }
 
         public async Task<bool> Load()
+        {
+            if (_isLoading == true) return false;
+            _isLoading = true;
+            // Invalidate uncommitted snapshots, then drain both writes and maintenance
+            // before reading/restoring manifests or replacing runtime state.
+            ResetPartitionedSaveState();
+            int lifetime = _saveLifetime;
+            try
+            {
+                await WaitForSaveIdleAsync();
+                if (lifetime != _saveLifetime) return false;
+                bool result = await LoadCoreAsync();
+                return result && lifetime == _saveLifetime;
+            }
+            finally { _isLoading = false; }
+        }
+
+        private async Task<bool> LoadCoreAsync()
         {
             string savePath = Path.Combine(Application.persistentDataPath, "Saved");
             string worldDataPath = Path.Combine(savePath, "WorldData.json");
@@ -356,15 +379,22 @@ namespace ARPG.Data
 
         public Task<bool> SaveAsync(SaveScope scope = SaveScope.All)
         {
+            if (AR.s.Dungeon.IsBusy) return Task.FromResult(false);
+            if (AR.s.Dungeon.CompletionPending && AR.s.Dungeon.IsCommitting == false)
+                return AR.s.Dungeon.CompleteAsync(scope);
             return SavePartitionedAsync(scope);
         }
+
+        // Only DungeonManager's exclusive transition calls this after draining existing saves.
+        public Task<bool> SaveDungeonTransactionAsync(SaveScope scope) => SavePartitionedAsync(scope);
 
         public bool DropItem(Vector2 inPosition, ItemData inItem)
         {
             if (inItem == null)
                 return false;
 
-            return _worldData.AddDropItem(inPosition.x, inPosition.y, inItem);
+            AR.s.Item.RecordContextDrop(inItem, new Vector3(inPosition.x, inPosition.y, -0.01f));
+            return true;
         }
 
         // ==================== 플레이어 관리 메서드 ====================
@@ -587,6 +617,13 @@ namespace ARPG.Data
             {
                 _worldData.NpcPopulation.TargetNpcCount = -1;
                 _worldData.NpcPopulation.NeedsImmediateTargetTopUp = true;
+            }
+
+            // 버전 15 -> 16: 저장 가능한 누적 월드 시간 추가.
+            // 구 세이브는 0시간에서 시작하고 이후 저장부터 소수 시간을 포함해 유지한다.
+            if (fromVersion < 16 && toVersion >= 16)
+            {
+                _worldData.ElapsedWorldGameHours = 0f;
             }
         }
 

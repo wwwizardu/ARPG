@@ -11,7 +11,11 @@ namespace ARPG.Data
     [Serializable]
     public class WorldData
     {
-        public ushort Version = 14;
+        public ushort Version = 16;
+        // Legacy worlds used 12345. Field initializer deliberately preserves that map.
+        public int WorldSeed = 12345;
+        public float ElapsedWorldGameHours;
+        public DungeonSaveRoot Dungeons = new();
 
         public List<WorldDropItemData> WorldDropItemDatas = new();
         public List<VillageData> VillageDatas = new();
@@ -40,6 +44,12 @@ namespace ARPG.Data
 
         public void LoadCompleted()
         {
+            if (float.IsNaN(ElapsedWorldGameHours) || float.IsInfinity(ElapsedWorldGameHours) ||
+                ElapsedWorldGameHours < 0f) ElapsedWorldGameHours = 0f;
+            if (Dungeons == null) Dungeons = new();
+            for (int d = 0; d < Dungeons.Dungeons.Count; d++)
+                for (int i = 0; i < Dungeons.Dungeons[d].Drops.Count; i++)
+                    Dungeons.Dungeons[d].Drops[i].ItemData?.OnLoadCompleted();
             if (WorldDropItemDatas == null)
                 WorldDropItemDatas = new();
             for (int i = 0; i < WorldDropItemDatas.Count; i++)

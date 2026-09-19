@@ -13,7 +13,7 @@ namespace ARPG.Systems
     ///
     /// 실제 배치는 System_VillageBuildQueue가 담당 (다음 틱부터 1칸씩 순차 진행).
     /// </summary>
-    public class System_VillageWallPlanner : IFixedUpdateSystem
+    public class System_VillageWallPlanner : IFixedUpdateSystem, IWorldMapSystem
     {
         // 도메인 대역 (CLAUDE.md): 65-69 Construction
         public int Priority => 67;

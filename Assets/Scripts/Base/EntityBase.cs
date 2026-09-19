@@ -28,6 +28,8 @@ namespace ARPG.Base
         private bool _hasSkillAimIndicatorHandle;
 
         public int EntityId { get { return _entityId; } }
+        public bool IsCurrentEntity => AR.s != null && AR.s.Message != null &&
+            AR.s.Message.TryGetEntity(_entityId, out var registered) && registered == this;
         public GameObject Visual => _visual;
         public SpriteRenderer SpriteRenderer => _sr;
         public GameObject Shadow => _shadow;
@@ -103,7 +105,9 @@ namespace ARPG.Base
             // MessageManager에서 등록 해제 (앱 종료 시 AR이 먼저 파괴될 수 있음)
             if (_entityId >= 0 && AR.s != null && AR.s.Message != null)
             {
-                AR.s.Message.UnregisterEntity(_entityId);
+                // Context switches may reuse an ID before Unity's deferred OnDestroy runs.
+                if (AR.s.Message.TryGetEntity(_entityId, out var registered) && registered == this)
+                    AR.s.Message.UnregisterEntity(_entityId);
             }
 
             // 핸들러 정리

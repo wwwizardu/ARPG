@@ -16,7 +16,7 @@ namespace ARPG.Manager
         private float _accumulator;         // 실시간 누적기
 
         /// <summary>
-        /// 누적 게임 시간 (시간 단위, 정수 부분만)
+        /// 저장된 누적 게임 시간 (시간 단위). 소수 부분은 Initialize에서 그대로 복원한다.
         /// </summary>
         public float ElapsedGameTime => _elapsedGameTime;
 
@@ -27,7 +27,7 @@ namespace ARPG.Manager
 
         public void Initialize()
         {
-            _elapsedGameTime = 0f;
+            _elapsedGameTime = Mathf.Max(0f, AR.s.Data.ElapsedWorldGameHours);
             _accumulator = 0f;
         }
 

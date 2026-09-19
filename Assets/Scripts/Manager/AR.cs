@@ -32,6 +32,7 @@ namespace ARPG
         private Base.SceneBase? _currentScene;
 
         private PlayerManager _playerManager = new PlayerManager();
+        private readonly Dungeon.DungeonManager _dungeonManager = new();
         private PlayerSkillManager _playerSkillManager = new PlayerSkillManager();
         // 엔티티 생명주기(ID 발급/등록/소멸 오케스트레이션) — 구 EntityIdHelper. plain class, 프리팹 배선 불필요
         private Manager.EntityManager _entityManager = new Manager.EntityManager();
@@ -43,7 +44,9 @@ namespace ARPG
         public Systems.SystemManager System => _systemManager;
         public Component.ComponentManager Component => _componentManager;
         public Data.DataManager Data => _dataManager;
-        public MapManager Map => _mapManager;
+        public MapManager Map => _dungeonManager.ActiveMap ?? _mapManager;
+        public MapManager WorldMap => _mapManager;
+        public Dungeon.DungeonManager Dungeon => _dungeonManager;
         public UIManager UI => _uiManager;
         public Monster.MonsterManager Monster => _monsterManager;
         public Npc.NpcManager Npc => _npcManager;
@@ -97,6 +100,7 @@ namespace ARPG
             _tooltipManager.Initialize();
             _effectManager.Initialize();
             _historyManager.Initialize();
+            _dungeonManager.Initialize();
 
             _initialized = true;
 
@@ -105,10 +109,13 @@ namespace ARPG
 
         public void Reset()
         {
+            _initialized = false;
             // 시스템을 가장 먼저 리셋한다. 각 System.OnReset()이 아직 살아 있는 컴포넌트 풀을 보고
             // 런타임 컴포넌트(JumpComponent, SkillMovementPenaltyComponent 등)를 정리하므로,
             // 엔티티를 파괴하는 매니저들보다 앞서야 한다.
             _systemManager.Reset();
+            _itemManager.UnloadContextDrops();
+            _dungeonManager.Reset();
 
             _dataManager.Reset();
             _uiManager.Reset();

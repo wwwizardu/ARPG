@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace ARPG.Systems
 {
-    public class System_MapChunkLoader : IFixedUpdateSystem
+    public class System_MapChunkLoader : IFixedUpdateSystem, IWorldMapSystem
     {
         public int Priority => 120;
         public float UpdateInterval => 0.2f;

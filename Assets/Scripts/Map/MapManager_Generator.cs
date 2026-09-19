@@ -36,8 +36,11 @@ namespace ARPG.Map
                 _chunkPool.Push(new MapChunkData(chunkSize));
             }
 
-            LoadFixedMapFiles();
-            PlaceRaceSettlements();
+            if (Context.Kind == MapKind.World)
+            {
+                LoadFixedMapFiles();
+                PlaceRaceSettlements();
+            }
         }
 
         /// <summary>
@@ -250,6 +253,12 @@ namespace ARPG.Map
 
         private void GenerateChunkData(MapChunkData chunk)
         {
+            if (Context.Kind == MapKind.Dungeon)
+            {
+                GenerateDungeonChunk(chunk);
+                OverlayTileModifications(chunk);
+                return;
+            }
             // Zone = max(|cx|, |cy|) + 1, [1, 99] 클램프. 시드 청크 (0,0)이 Zone 1.
             int dist = Mathf.Max(Mathf.Abs(chunk.chunkX), Mathf.Abs(chunk.chunkY));
             chunk.zone = Mathf.Clamp(dist + 1, 1, 99);
@@ -509,7 +518,7 @@ namespace ARPG.Map
                 RemoveRenderedChunkCoord(chunkCoord);
             }
 
-            if (AR.s.Monster != null)
+            if (Context.Kind == MapKind.World && AR.s.Monster != null)
             {
                 AR.s.Monster.ExpireChunkMonsters(chunkCoord, expiredGenerationId);
             }
@@ -522,6 +531,8 @@ namespace ARPG.Map
 
         public void SetSeed(int newSeed)
         {
+            if (Context.Kind == MapKind.World && newSeed != AR.s.Data.WorldSeed)
+                throw new System.InvalidOperationException("Changing the seed of a saved world is unsupported.");
             mapSeed = newSeed;
             while (_loadedChunkCoords.Count > 0)
             {

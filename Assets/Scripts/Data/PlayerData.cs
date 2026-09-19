@@ -20,6 +20,12 @@ namespace ARPG.Data
 
         public float PositionX;
         public float PositionZ;
+        public Map.MapKind CurrentMapKind;
+        public string ActiveDungeonId = string.Empty;
+        public float DungeonPositionX;
+        public float DungeonPositionY;
+        public float WorldReturnX;
+        public float WorldReturnY;
 
         public int CurrentHp;
         public int CurrentMp;

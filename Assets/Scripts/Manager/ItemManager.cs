@@ -9,7 +9,7 @@ using UnityEngine.AddressableAssets;
 
 namespace ARPG.Item
 {
-    public class ItemManager : MonoBehaviour
+    public partial class ItemManager : MonoBehaviour
     {
         // DataManager가 ItemManager.Initialize보다 먼저 신규 PlayerData를 만들 수 있으므로
         // 필드 초기값부터 유효 ID 범위(1+)를 사용한다.
@@ -38,54 +38,10 @@ namespace ARPG.Item
 
         public async Task<bool> CreateItem(int inItemId, int inQuantity, Vector3 inPosition)
         {
-            if (inQuantity <= 0)
-            {
-                Debug.LogError($"[Monster] DropItemObjectAsync - inQuantity is invalid, inItemId({inItemId}), inQuantity({inQuantity})");
-                return false;
-            }
-
-            var handle = Addressables.InstantiateAsync("Item/Item", inPosition, Quaternion.identity);
-            var itemObject = await handle.Task;
-
-            if (itemObject == null)
-            {
-                Debug.LogError($"[Monster] DropItemObjectAsync - itemObject is null");
-                return false;
-            }
-
-            var item = itemObject.GetComponent<ItemObject>();
-            if (item == null)
-            {
-                Addressables.ReleaseInstance(itemObject);
-                Debug.Log("[Monster] DropItemObjectAsync - item is null");
-                return false;
-            }
-
-            // 아이템 데이터 생성 — ItemType별 인스턴스 데이터(SkillBook/SkillPage)도 자동으로 채워짐
-            ItemData? itemData = CreateInventoryItemData(inItemId, inQuantity);
-            if (itemData == null)
-            {
-                Addressables.ReleaseInstance(itemObject);
-                return false;
-            }
-
-            item.Initialize(itemData);
-
-            // 아이템 인스턴스 등록
-            if (_itemInstances.ContainsKey(itemData.ItemInstanceId))
-            {
-                Debug.LogError($"[ItemManager] CreateItem - Item instance ID already exists, ID({itemData.ItemInstanceId})");
-                Addressables.ReleaseInstance(itemObject);
-                return false;
-            }
-
-            _itemInstances[itemData.ItemInstanceId] = item;
-
-            Debug.Log("[Monster] Item dropped successfully");
-
-            return true;
+            if (inQuantity <= 0) return false;
+            ItemData? item = CreateInventoryItemData(inItemId, inQuantity);
+            return item != null && await CreateItemFromData(item, inPosition);
         }
-
         /// <summary>
         /// 이미 만들어진 ItemData를 월드에 드랍 (스킬북 등 인스턴스 변동분이 있는 아이템용).
         /// CreateItem(itemId)가 일반 ItemData만 만드는 것과 달리, 외부에서 SkillBookData 등을 미리 채워 전달.
@@ -99,8 +55,16 @@ namespace ARPG.Item
                 return false;
             }
 
+            using var contextLoad = AR.s.Map.Context.BeginLoad();
+            if (itemData.ItemInstanceId == 0) itemData.ItemInstanceId = _instanceIdCounter++;
+            RecordContextDrop(itemData, position);
             var handle = Addressables.InstantiateAsync("Item/Item", position, Quaternion.identity);
             var itemObject = await handle.Task;
+            if (contextLoad.IsCurrent == false)
+            {
+                if (itemObject != null) Addressables.ReleaseInstance(itemObject);
+                return false;
+            }
             if (itemObject == null)
             {
                 Debug.LogError("[ItemManager] CreateItemFromData - InstantiateAsync returned null");
@@ -140,9 +104,11 @@ namespace ARPG.Item
 
             if (0 <= AR.s.Player?.Inventory?.AddItem(inItem.ItemData))
             {
+                RemoveContextDrop(inItem.ItemData.ItemInstanceId);
                 AR.s.Item.DestroyItem(inItem.ItemData.ItemInstanceId);
 
-                AR.s.Data.SavePlayer();
+                _ = AR.s.Data.SaveAsync(SaveScope.Player | SaveScope.World | (AR.s.Dungeon.IsInside ? SaveScope.Dungeons : SaveScope.Map));
+                return true;
             }
 
             return false;
@@ -162,6 +128,8 @@ namespace ARPG.Item
             // ECS 엔티티 제거 (WorldItemComponent 포함)
             if (item != null && item.EntityId >= 0)
             {
+                item.OnEntityDestroy();
+                AR.s.System.GetSystem<Systems.System_Render>()?.UnregisterEntity(item.EntityId);
                 AR.s.Entity.DestroyEntity(item.EntityId);
             }
 

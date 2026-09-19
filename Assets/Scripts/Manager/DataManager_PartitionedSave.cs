@@ -4,8 +4,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 using UnityEngine;
 
 namespace ARPG.Data
@@ -25,6 +27,7 @@ namespace ARPG.Data
         private const string PART_PLAYER = "player";
         private const string PART_WORLD = "world";
         private const string PART_MAP = "map";
+        private const string PART_DUNGEONS = "dungeons";
         private const string PART_VILLAGES = "villages";
         private const string PART_BUILDINGS = "buildings";
         private const string PART_CHRONICLE = "chronicle";
@@ -34,6 +37,13 @@ namespace ARPG.Data
         private const string PART_NPC_PARTIES = "npc_parties";
 
         private SaveManifest? _activeSaveManifest;
+        // One lane owns disk preparation, manifest replacement and maintenance, across Reset.
+        private readonly SemaphoreSlim _saveIoGate = new(1, 1);
+        private readonly SaveDtoSnapshot _saveSnapshots = new();
+        private Task _saveMaintenanceTask = Task.CompletedTask;
+        private bool _isLoading;
+        private int _saveLifetime;
+        private int _saveOperationLifetime;
         private SaveScope _queuedSaveScope = SaveScope.None;
         private int _nextItemInstanceId = 1;
 
@@ -43,6 +53,38 @@ namespace ARPG.Data
         /// 서로 다른 파티션에 있어, 부분 저장이 버전만 올리면 마이그레이션이 유실되기 때문).
         /// </summary>
         private bool _needsFullSaveAfterMigration;
+        private TaskCompletionSource<bool>? _saveCompletion;
+        private TaskCompletionSource<bool>? _queuedSaveCompletion;
+        public bool IsSaving => _isSaving;
+        public long SaveRevision => _activeSaveManifest?.Revision ?? 0;
+
+#if UNITY_EDITOR
+        private readonly int _editorMainThreadId = Environment.CurrentManagedThreadId;
+        // Editor fault injection is instance-owned and never touches the real slot when an override is set.
+        public string? DiagnosticSavePath { get; set; }
+        public string? DiagnosticFailurePoint { get; set; }
+        public Func<Task>? DiagnosticBeforeCommit { get; set; }
+        public Action? DiagnosticAfterCapture { get; set; }
+        public Action<string>? DiagnosticWorkerStage { get; set; }
+        public bool DiagnosticSkipRuntimeCapture { get; set; }
+        public double DiagnosticCaptureMilliseconds { get; private set; }
+        public double DiagnosticPrepareMilliseconds { get; private set; }
+        public double DiagnosticCommitMilliseconds { get; private set; }
+#endif
+
+        public async Task WaitForSaveIdleAsync()
+        {
+            do
+            {
+                while (_saveCompletion != null)
+                    await _saveCompletion.Task;
+                await _saveIoGate.WaitAsync();
+                _saveIoGate.Release();
+                await _saveMaintenanceTask;
+                // A new request may have arrived while we were draining maintenance.
+            }
+            while (_saveCompletion != null);
+        }
 
         public int NextItemInstanceId => _nextItemInstanceId;
 
@@ -58,6 +100,9 @@ namespace ARPG.Data
 
         private void ResetPartitionedSaveState()
         {
+            // Called on the main thread, as is the final manifest replacement. Workers own
+            // detached data and may finish, but cannot commit into a different lifetime.
+            _saveLifetime++;
             _activeSaveManifest = null;
             _queuedSaveScope = SaveScope.None;
             _nextItemInstanceId = 1;
@@ -163,10 +208,27 @@ namespace ARPG.Data
                     worldSim!.Version != PARTITION_SCHEMA_VERSION ||
                     npcMeta!.Version != PARTITION_SCHEMA_VERSION ||
                     npcSocial!.Version != PARTITION_SCHEMA_VERSION ||
-                    npcParties!.Version != PARTITION_SCHEMA_VERSION)
+                    npcParties!.Version != PARTITION_SCHEMA_VERSION ||
+                    float.IsNaN(world.ElapsedWorldGameHours) ||
+                    float.IsInfinity(world.ElapsedWorldGameHours) ||
+                    world.ElapsedWorldGameHours < 0f)
                 {
                     return false;
                 }
+
+                DungeonSaveRoot dungeons = new();
+                if (manifest.Parts.ContainsKey(PART_DUNGEONS) == true)
+                {
+                    if (TryReadPart(slotPath, manifest, PART_DUNGEONS,
+                        out DungeonSaveRoot? loadedDungeons) == false || loadedDungeons == null ||
+                        loadedDungeons.Version != 1 || loadedDungeons.Villages == null || loadedDungeons.Dungeons == null)
+                        return false;
+                    dungeons = loadedDungeons;
+                }
+                else if (world.WorldDataVersion >= 15)
+                    return false; // Only old schemas may legitimately omit this partition.
+                if (Dungeon.DungeonSaveValidation.IsConsistent(dungeons, player.Players, world.WorldSeed) == false)
+                    return false;
 
                 Dictionary<int, Npc.NpcSaveData> npcs = new();
                 for (int shardIndex = 0; shardIndex < NPC_SHARD_COUNT; shardIndex++)
@@ -193,6 +255,7 @@ namespace ARPG.Data
                 {
                     Player = player!,
                     World = world!,
+                    Dungeons = dungeons,
                     Map = map!,
                     Villages = villages!,
                     Buildings = buildings!,
@@ -252,6 +315,9 @@ namespace ARPG.Data
             _worldData = new WorldData
             {
                 Version = snapshot.World.WorldDataVersion,
+                WorldSeed = snapshot.World.WorldSeed,
+                ElapsedWorldGameHours = snapshot.World.ElapsedWorldGameHours,
+                Dungeons = snapshot.Dungeons,
                 WorldDropItemDatas = snapshot.Map.WorldDropItems ?? new(),
                 VillageDatas = snapshot.Villages.Villages ?? new(),
                 NpcSaveDatas = snapshot.Npcs,
@@ -337,92 +403,140 @@ namespace ARPG.Data
 
         private async Task<bool> SavePartitionedAsync(SaveScope requestedScope)
         {
+            if (_isLoading == true) return false;
+            int requestedLifetime = _saveLifetime;
+            while (_isSaving == true && _saveOperationLifetime != requestedLifetime)
+            {
+                await _saveCompletion!.Task;
+                if (requestedLifetime != _saveLifetime || _isLoading == true) return false;
+            }
             if (requestedScope == SaveScope.None)
                 return true;
 
             if (_isSaving == true)
             {
                 _queuedSaveScope |= requestedScope;
+                _queuedSaveCompletion ??= new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                 Debug.Log($"[DataManager] Save in progress. Queued scope: {_queuedSaveScope}");
-                return true;
+                return await _queuedSaveCompletion.Task;
             }
 
             _isSaving = true;
-            bool finalResult = true;
-            SaveScope scope = requestedScope;
+            _saveOperationLifetime = _saveLifetime;
+            _saveCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var request = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _ = RunSaveQueueAsync(requestedScope, request, _saveLifetime, _saveCompletion);
+            return await request.Task;
+        }
 
-            do
+        private async Task RunSaveQueueAsync(SaveScope scope, TaskCompletionSource<bool> request,
+            int lifetime, TaskCompletionSource<bool> idle)
+        {
+            bool result = false;
+            try
             {
-                _queuedSaveScope = SaveScope.None;
-                bool result = await WritePartitionSnapshotAsync(scope, true);
-                if (result == false)
-                    finalResult = false;
-                scope = _queuedSaveScope;
+                while (scope != SaveScope.None && lifetime == _saveLifetime)
+                {
+                    result = await WritePartitionSnapshotAsync(scope, true);
+                    // Each caller observes its own committed batch. A later queued failure
+                    // must never make an already committed transaction roll back in memory.
+                    request.TrySetResult(result);
+                    if (result == false || lifetime != _saveLifetime) break;
+                    scope = _queuedSaveScope;
+                    if (scope == SaveScope.None) break;
+                    request = _queuedSaveCompletion!;
+                    _queuedSaveScope = SaveScope.None;
+                    _queuedSaveCompletion = null;
+                    await Task.Yield();
+                }
             }
-            while (scope != SaveScope.None);
-
-            _isSaving = false;
-            return finalResult;
+            catch (Exception ex)
+            {
+                Debug.LogError($"[DataManager] Save failed: {ex.Message}");
+                result = false;
+            }
+            finally
+            {
+                request.TrySetResult(false);
+                _queuedSaveCompletion?.TrySetResult(false);
+                _queuedSaveCompletion = null;
+                _queuedSaveScope = SaveScope.None;
+                _isSaving = false;
+                _saveCompletion = null;
+                idle.TrySetResult(result);
+            }
         }
 
         private async Task<bool> WritePartitionSnapshotAsync(SaveScope requestedScope,
             bool captureRuntimeManagers)
         {
+            int lifetime = _saveLifetime;
             string savePath = Path.Combine(Application.persistentDataPath, "Saved");
+#if UNITY_EDITOR
+            if (string.IsNullOrEmpty(DiagnosticSavePath) == false) savePath = DiagnosticSavePath;
+            if (DiagnosticSkipRuntimeCapture == true) captureRuntimeManagers = false;
+#endif
             string slotPath = GetSlotPath(savePath);
-            string partsPath = GetPartsPath(slotPath);
-
-            // _activeSaveManifest가 null이면 이 저장은 rev 1부터 다시 시작한다.
-            // 이때 디스크에 남아 있는 구세대 파트 파일은 nextManifest가 참조하지 않으므로
-            // CleanupUnreferencedPartFiles가 전량 삭제해 버린다 — manifest.prev.json이 가리키던
-            // 복구본까지 함께 사라진다. 지우는 대신 recovery_XXX 폴더로 통째로 옮겨 보존한다.
-            if (_activeSaveManifest == null &&
-                TryQuarantineOrphanedSave(slotPath, partsPath) == false)
-            {
-                return false;
-            }
-
-            Directory.CreateDirectory(partsPath);
-
-            SaveScope scope = requestedScope;
-            if (_activeSaveManifest == null)
-                scope = SaveScope.All;
-
-            // 마이그레이션 결과는 world 파트 밖(NpcPopulation 등)에도 걸쳐 있는데
-            // WorldDataVersion만 world 파트에 있다. 부분 스코프 저장이 버전만 올려 두면
-            // 다음 로드에서 마이그레이션이 영구히 건너뛰어지므로 전체 스코프로 승격한다.
-            if (_needsFullSaveAfterMigration == true)
-                scope = SaveScope.All;
-
-            long revision = (_activeSaveManifest?.Revision ?? 0) + 1;
-            Dictionary<string, PendingSavePart> pending = new();
-
+            await _saveIoGate.WaitAsync();
+            bool maintenanceOwnsGate = false;
             try
             {
+                if (lifetime != _saveLifetime) return false;
+                SaveScope scope = requestedScope;
+                if (captureRuntimeManagers == true && AR.s.Dungeon.RequiresCheckpoint == true)
+                    scope |= SaveScope.Player | SaveScope.World | SaveScope.Dungeons;
+                if (_activeSaveManifest == null || _needsFullSaveAfterMigration == true)
+                    scope = SaveScope.All;
+
+                // No awaits during capture: all parts describe the same main-thread state.
+#if UNITY_EDITOR
+                AssertEditorMainThread("save snapshot capture");
+#endif
+                var captureTimer = System.Diagnostics.Stopwatch.StartNew();
+                Dictionary<string, PendingSavePart> pending = new();
                 CapturePendingParts(scope, captureRuntimeManagers, pending);
-
-                SaveManifest nextManifest = CloneManifest(_activeSaveManifest, revision);
-                List<string> pendingKeys = new List<string>(pending.Keys);
-                for (int i = 0; i < pendingKeys.Count; i++)
+                SaveManifest? previous = _activeSaveManifest;
+                SaveManifest next = CloneManifest(previous, (previous?.Revision ?? 0) + 1);
+                captureTimer.Stop();
+                string? failurePoint = null;
+                Action<string>? workerStage = null;
+#if UNITY_EDITOR
+                DiagnosticCaptureMilliseconds = captureTimer.Elapsed.TotalMilliseconds;
+                DiagnosticAfterCapture?.Invoke();
+                failurePoint = DiagnosticFailurePoint;
+                workerStage = DiagnosticWorkerStage;
+#endif
+                // Only independent DTOs and immutable arguments cross this boundary.
+                var prepared = await Task.Run(() =>
                 {
-                    string partKey = pendingKeys[i];
-                    SavePartReference part = await WritePartFileAsync(partsPath, partKey,
-                        pending[partKey], revision);
-                    nextManifest.Parts[partKey] = part;
-                }
-
-                nextManifest.SavedAtUtc = DateTime.UtcNow.ToString("O");
-                await CommitManifestAsync(slotPath, nextManifest);
-
-                SaveManifest? previousManifest = _activeSaveManifest;
-                _activeSaveManifest = nextManifest;
-                if (scope == SaveScope.All)
-                    _needsFullSaveAfterMigration = false;
-                // previousManifest가 null인 경우는 TryQuarantineOrphanedSave가 parts를 비워 둔
-                // 직후뿐이다 — 이 시점의 partsPath에는 nextManifest가 참조하는 파일만 있다.
-                CleanupUnreferencedPartFiles(partsPath, nextManifest, previousManifest);
-                Debug.Log($"[DataManager] Partitioned save completed. Revision: {revision}, " +
-                          $"Scope: {scope}");
+                    var timer = System.Diagnostics.Stopwatch.StartNew();
+                    string path = PreparePartitionFiles(slotPath, pending, next,
+                        previous == null, failurePoint, workerStage);
+                    return (Path: path, Milliseconds: timer.Elapsed.TotalMilliseconds);
+                });
+#if UNITY_EDITOR
+                DiagnosticPrepareMilliseconds = prepared.Milliseconds;
+                if (DiagnosticBeforeCommit != null) await DiagnosticBeforeCommit();
+#endif
+                // Main-thread transaction boundary. Reset/Load cannot interleave with this
+                // replacement and publication. Disk commit is irrevocable success.
+                if (lifetime != _saveLifetime) return false;
+#if UNITY_EDITOR
+                AssertEditorMainThread("save manifest commit");
+#endif
+                var commitTimer = System.Diagnostics.Stopwatch.StartNew();
+                CommitManifest(slotPath, prepared.Path);
+                _activeSaveManifest = next;
+                if (scope == SaveScope.All) _needsFullSaveAfterMigration = false;
+                commitTimer.Stop();
+#if UNITY_EDITOR
+                DiagnosticCommitMilliseconds = commitTimer.Elapsed.TotalMilliseconds;
+#endif
+                // Hand off the SAME lane before reporting success. No subsequent preparation,
+                // quarantine or Load may overlap this cleanup, even after Reset.
+                _saveMaintenanceTask = CleanupAfterSaveAsync(slotPath, next, previous, failurePoint, workerStage);
+                maintenanceOwnsGate = true;
+                Debug.Log($"[DataManager] Partitioned save completed. Revision: {next.Revision}, Scope: {scope}");
                 return true;
             }
             catch (Exception ex)
@@ -430,11 +544,77 @@ namespace ARPG.Data
                 Debug.LogError($"[DataManager] Partitioned save failed: {ex.Message}");
                 return false;
             }
+            finally
+            {
+                if (maintenanceOwnsGate == false) _saveIoGate.Release();
+            }
+        }
+
+        private static string PreparePartitionFiles(string slotPath,
+            Dictionary<string, PendingSavePart> pending, SaveManifest next, bool quarantine,
+            string? failurePoint, Action<string>? workerStage)
+        {
+            workerStage?.Invoke("prepare");
+            string partsPath = GetPartsPath(slotPath);
+            if (quarantine == true && TryQuarantineOrphanedSave(slotPath, partsPath) == false)
+                throw new IOException("Could not preserve the previous save.");
+            Directory.CreateDirectory(partsPath);
+            // Own settings per worker; do not race the shared lazy JsonSettings instance.
+            var settings = new JsonSerializerSettings();
+            settings.Converters.Add(new StringEnumConverter());
+#if UNITY_EDITOR
+            if (failurePoint == "serialize") settings.Converters.Insert(0, new DiagnosticFailingSaveConverter());
+#endif
+            List<string> keys = new(pending.Keys);
+            for (int i = 0; i < keys.Count; i++)
+            {
+                string key = keys[i];
+                workerStage?.Invoke("serialize");
+                string json = JsonConvert.SerializeObject(pending[key].Snapshot, Formatting.None, settings);
+                next.Parts[key] = WritePartFile(partsPath, key, pending[key].SchemaVersion,
+                    json, next.Revision, failurePoint);
+                if (failurePoint == "after-part") throw new IOException("Injected after-part failure");
+            }
+            next.SavedAtUtc = DateTime.UtcNow.ToString("O");
+            workerStage?.Invoke("manifest-serialize");
+            string manifestJson = JsonConvert.SerializeObject(next, Formatting.None, settings);
+            string tempPath = Path.Combine(slotPath, $"manifest.{Guid.NewGuid():N}.tmp");
+            WritePreparedFile(tempPath, Encoding.UTF8.GetBytes(manifestJson));
+            if (failurePoint == "before-manifest") throw new IOException("Injected before-manifest failure");
+            return tempPath;
+        }
+
+        private async Task CleanupAfterSaveAsync(string slotPath, SaveManifest current,
+            SaveManifest? previous, string? failurePoint, Action<string>? workerStage)
+        {
+            try
+            {
+                await Task.Run(() =>
+                {
+                    workerStage?.Invoke("cleanup");
+                    if (failurePoint == "cleanup") throw new IOException("Injected cleanup failure");
+                    CleanupUnreferencedPartFiles(GetPartsPath(slotPath), current, previous);
+                    string[] abandoned = Directory.GetFiles(slotPath, "manifest.*.tmp");
+                    for (int i = 0; i < abandoned.Length; i++) File.Delete(abandoned[i]);
+                });
+            }
+            catch (Exception ex)
+            {
+                // The next successful save scans again, including any files left by a
+                // failed write or interrupted cleanup. A committed save remains successful.
+                Debug.LogWarning("[DataManager] Saved; cleanup will retry after the next save: " + ex.Message);
+            }
+            finally { _saveIoGate.Release(); }
         }
 
         private void CapturePendingParts(SaveScope scope, bool captureRuntimeManagers,
             Dictionary<string, PendingSavePart> pending)
         {
+            if ((scope & SaveScope.Dungeons) != 0)
+            {
+                if (captureRuntimeManagers == true) AR.s.Dungeon.CaptureCheckpoint();
+                AddPendingPart(pending, PART_DUNGEONS, _worldData.Dungeons);
+            }
             if ((scope & SaveScope.Player) != 0)
             {
                 if (captureRuntimeManagers == true)
@@ -461,11 +641,14 @@ namespace ARPG.Data
                 {
                     _nextItemInstanceId = Math.Max(_nextItemInstanceId,
                         AR.s.Item.NextItemInstanceId);
+                    _worldData.ElapsedWorldGameHours = AR.s.Time.CurrentGameTime;
                 }
                 WorldSaveRoot root = new WorldSaveRoot
                 {
                     WorldDataVersion = CURRENT_WORLD_DATA_VERSION,
                     NextItemInstanceId = _nextItemInstanceId,
+                    WorldSeed = _worldData.WorldSeed,
+                    ElapsedWorldGameHours = _worldData.ElapsedWorldGameHours,
                 };
                 AddPendingPart(pending, PART_WORLD, root);
             }
@@ -476,7 +659,7 @@ namespace ARPG.Data
                 {
                     WorldDropItems = _worldData.WorldDropItemDatas,
                     TileModifications = captureRuntimeManagers == true
-                        ? AR.s.Map.SaveTileModifications()
+                        ? AR.s.WorldMap.SaveTileModifications()
                         : _worldData.TileModifications,
                 };
                 AddPendingPart(pending, PART_MAP, root);
@@ -567,12 +750,10 @@ namespace ARPG.Data
             }
         }
 
-        private static void AddPendingPart<T>(Dictionary<string, PendingSavePart> pending,
+        private void AddPendingPart<T>(Dictionary<string, PendingSavePart> pending,
             string key, T root)
         {
-            string json = JsonConvert.SerializeObject(root, Formatting.None,
-                JsonSettings.Default);
-            pending[key] = new PendingSavePart(PARTITION_SCHEMA_VERSION, json);
+            pending[key] = new PendingSavePart(PARTITION_SCHEMA_VERSION, _saveSnapshots.Capture(root));
         }
 
         private static Dictionary<int, Npc.NpcSaveData>[] SplitNpcShards(
@@ -613,62 +794,57 @@ namespace ARPG.Data
             for (int i = 0; i < partKeys.Count; i++)
             {
                 string partKey = partKeys[i];
-                result.Parts[partKey] = source.Parts[partKey];
+                SavePartReference part = source.Parts[partKey];
+                result.Parts[partKey] = new SavePartReference
+                {
+                    FileName = part.FileName, SchemaVersion = part.SchemaVersion,
+                    Revision = part.Revision, Length = part.Length, Sha256 = part.Sha256,
+                };
             }
             return result;
         }
 
-        private static async Task<SavePartReference> WritePartFileAsync(string partsPath,
-            string partKey, PendingSavePart pending, long revision)
+        private static SavePartReference WritePartFile(string partsPath, string partKey,
+            int schemaVersion, string json, long revision, string? failurePoint)
         {
-            return await Task.Run(() =>
+            byte[] bytes = Encoding.UTF8.GetBytes(json);
+            string hash = ComputeSha256(bytes);
+            string safeKey = partKey.Replace(Path.DirectorySeparatorChar, '_')
+                .Replace(Path.AltDirectorySeparatorChar, '_');
+            string fileName = $"{safeKey}.r{revision:D8}.{Guid.NewGuid():N}.json";
+            string finalPath = Path.Combine(partsPath, fileName);
+            string tempPath = finalPath + ".tmp";
+            WritePreparedFile(tempPath, bytes, failurePoint == "part-write");
+            File.Move(tempPath, finalPath);
+            return new SavePartReference
             {
-                byte[] bytes = Encoding.UTF8.GetBytes(pending.Json);
-                string hash = ComputeSha256(bytes);
-                string safeKey = partKey.Replace(Path.DirectorySeparatorChar, '_')
-                    .Replace(Path.AltDirectorySeparatorChar, '_');
-                string fileName = $"{safeKey}.r{revision:D8}.{Guid.NewGuid():N}.json";
-                string finalPath = Path.Combine(partsPath, fileName);
-                string tempPath = finalPath + ".tmp";
-
-                File.WriteAllBytes(tempPath, bytes);
-                File.Move(tempPath, finalPath);
-
-                return new SavePartReference
-                {
-                    FileName = fileName,
-                    SchemaVersion = pending.SchemaVersion,
-                    Revision = revision,
-                    Length = bytes.LongLength,
-                    Sha256 = hash,
-                };
-            });
+                FileName = fileName, SchemaVersion = schemaVersion, Revision = revision,
+                Length = bytes.LongLength, Sha256 = hash,
+            };
         }
 
-        private static async Task CommitManifestAsync(string slotPath,
-            SaveManifest manifest)
+        private static void WritePreparedFile(string path, byte[] bytes, bool failDuringWrite = false)
+        {
+            using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            if (failDuringWrite == true)
+            {
+                stream.Write(bytes, 0, bytes.Length / 2);
+                throw new IOException("Injected partial partition write failure");
+            }
+            stream.Write(bytes, 0, bytes.Length);
+            // Dispose flushes managed buffers and closes the file before rename, matching the original
+            // writer's process-crash guarantees without forcing a disk flush per partition.
+        }
+
+        private static void CommitManifest(string slotPath, string tempPath)
         {
             string manifestPath = Path.Combine(slotPath, MANIFEST_FILE);
             string previousPath = Path.Combine(slotPath, PREVIOUS_MANIFEST_FILE);
-            string tempPath = Path.Combine(slotPath,
-                $"manifest.{Guid.NewGuid():N}.tmp");
-            string json = JsonConvert.SerializeObject(manifest, Formatting.None,
-                JsonSettings.Default);
-
-            await Task.Run(() =>
-            {
-                Directory.CreateDirectory(slotPath);
-                File.WriteAllText(tempPath, json, new UTF8Encoding(false));
-                if (File.Exists(manifestPath) == false)
-                {
-                    File.Move(tempPath, manifestPath);
-                    return;
-                }
-
-                if (File.Exists(previousPath) == true)
-                    File.Delete(previousPath);
+            if (File.Exists(manifestPath) == false)
+                File.Move(tempPath, manifestPath);
+            else
+                // Do not delete the existing backup first: failed replacement must preserve it.
                 File.Replace(tempPath, manifestPath, previousPath, true);
-            });
         }
 
         /// <summary>
@@ -743,26 +919,17 @@ namespace ARPG.Data
         private static void CleanupUnreferencedPartFiles(string partsPath,
             SaveManifest current, SaveManifest? previous)
         {
-            try
+            HashSet<string> retained = new(StringComparer.OrdinalIgnoreCase);
+            AddManifestFiles(retained, current);
+            if (previous != null) AddManifestFiles(retained, previous);
+            string[] files = Directory.GetFiles(partsPath, "*", SearchOption.TopDirectoryOnly);
+            for (int i = 0; i < files.Length; i++)
             {
-                HashSet<string> retained = new HashSet<string>(
-                    StringComparer.OrdinalIgnoreCase);
-                AddManifestFiles(retained, current);
-                if (previous != null)
-                    AddManifestFiles(retained, previous);
-
-                string[] files = Directory.GetFiles(partsPath, "*.json",
-                    SearchOption.TopDirectoryOnly);
-                for (int i = 0; i < files.Length; i++)
-                {
-                    string fileName = Path.GetFileName(files[i]);
-                    if (retained.Contains(fileName) == false)
-                        File.Delete(files[i]);
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning($"[DataManager] Save part cleanup skipped: {ex.Message}");
+                string fileName = Path.GetFileName(files[i]);
+                if ((fileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ||
+                     fileName.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase)) &&
+                    retained.Contains(fileName) == false)
+                    File.Delete(files[i]);
             }
         }
 
@@ -831,6 +998,9 @@ namespace ARPG.Data
 
             for (int i = 0; i < _worldData.WorldDropItemDatas.Count; i++)
                 ScanItemInstanceId(_worldData.WorldDropItemDatas[i].ItemData, ref maxId);
+            for (int d = 0; d < _worldData.Dungeons.Dungeons.Count; d++)
+                for (int i = 0; i < _worldData.Dungeons.Dungeons[d].Drops.Count; i++)
+                    ScanItemInstanceId(_worldData.Dungeons.Dungeons[d].Drops[i].ItemData, ref maxId);
 
             for (int i = 0; i < _worldData.VillageDatas.Count; i++)
             {
@@ -875,6 +1045,7 @@ namespace ARPG.Data
         {
             public PlayerSaveRoot Player = null!;
             public WorldSaveRoot World = null!;
+            public DungeonSaveRoot Dungeons = new();
             public MapSaveRoot Map = null!;
             public VillageSaveRoot Villages = null!;
             public BuildingSaveRoot Buildings = null!;
@@ -889,13 +1060,30 @@ namespace ARPG.Data
         private readonly struct PendingSavePart
         {
             public readonly int SchemaVersion;
-            public readonly string Json;
+            public readonly object? Snapshot;
 
-            public PendingSavePart(int schemaVersion, string json)
+            public PendingSavePart(int schemaVersion, object? snapshot)
             {
                 SchemaVersion = schemaVersion;
-                Json = json;
+                Snapshot = snapshot;
             }
         }
+
+#if UNITY_EDITOR
+        private void AssertEditorMainThread(string operation)
+        {
+            Debug.Assert(Environment.CurrentManagedThreadId == _editorMainThreadId,
+                $"[DataManager] {operation} left the Unity main thread.");
+        }
+
+        private sealed class DiagnosticFailingSaveConverter : JsonConverter
+        {
+            public override bool CanConvert(Type objectType) => true;
+            public override void WriteJson(JsonWriter writer, object? value, JsonSerializer serializer)
+                => throw new JsonSerializationException("Injected JSON converter failure");
+            public override object? ReadJson(JsonReader reader, Type objectType, object? existingValue, JsonSerializer serializer)
+                => throw new NotSupportedException();
+        }
+#endif
     }
 }

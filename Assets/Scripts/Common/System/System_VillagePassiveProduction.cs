@@ -11,7 +11,7 @@ namespace ARPG.Systems
     /// 계산과 carry 원장은 VillageResourceSimulation/VillageData에 있고,
     /// VillageStorageComponent는 실시간 표시용 미러로만 유지한다.
     /// </summary>
-    public class System_VillagePassiveProduction : IFixedUpdateSystem
+    public class System_VillagePassiveProduction : IFixedUpdateSystem, IWorldMapSystem
     {
         private const int MAX_DELTA_HOURS_PER_TICK = 1;
         private const int HUNGER_WARN_THRESHOLD = 24;

@@ -654,6 +654,24 @@ namespace ARPG.Tables
         [JsonProperty("PrefabKey")] public string PrefabKey = string.Empty;          // Addressable 프리팹 키 (장판 본체 시각)
     }
 
+    /// <summary>
+    /// 절차 던전의 콘텐츠 및 보상 프로필. 런타임 프레임 예산은 DungeonSettings에 남긴다.
+    /// 던전 최초 생성 시 이 값들은 DungeonRecord에 스냅샷된다.
+    /// </summary>
+    [Serializable]
+    public class DungeonTable : TableBase
+    {
+        [JsonProperty("Name")] public string Name = string.Empty;
+        [JsonProperty("RoomCount")] public int RoomCount;
+        [JsonProperty("MonsterTableId")] public int MonsterTableId;
+        [JsonProperty("MonsterLevel")] public int MonsterLevel;
+        [JsonProperty("BossTableId")] public int BossTableId;
+        [JsonProperty("BossLevel")] public int BossLevel;
+        [JsonProperty("CompletionGold")] public int CompletionGold;
+        [JsonProperty("ChestGold")] public int ChestGold;
+        [JsonProperty("ReplacementCooldownHours")] public float ReplacementCooldownHours;
+    }
+
     [Serializable]
     public class VillageTable : TableBase
     {

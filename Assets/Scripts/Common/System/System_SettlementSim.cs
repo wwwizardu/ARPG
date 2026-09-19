@@ -18,7 +18,7 @@ namespace ARPG.Systems
     /// 런타임 상태로 소유하여 OnReset에서 초기화한다.
     /// Priority 50: Village 도메인 per-village 시스템(52~68)보다 먼저 world 추상 상태를 갱신.
     /// </summary>
-    public class System_SettlementSim : IFixedUpdateSystem
+    public class System_SettlementSim : IFixedUpdateSystem, IWorldMapSystem
     {
         public int Priority => 50;
         public float UpdateInterval => 0.5f;   // 라운드로빈이라 자주 돌 필요 없음 — CPU 절약

@@ -68,6 +68,7 @@ namespace ARPG.Manager
         /// </summary>
         public void Save(PlayerData inPlayerData)
         {
+            if (AR.s.Dungeon.HasPlayerSaveOverride) return;
             if (_myPlayer == null)
                 return;
 
@@ -83,8 +84,16 @@ namespace ARPG.Manager
             // 현재 위치 저장 (권위 소스는 TransformComponent — System_Render가 transform과 동기화)
             if (AR.s.Component.TryGetComponent<TransformComponent>(_myPlayer.EntityId, out var transformComponent) == true)
             {
-                inPlayerData.PositionX = transformComponent.Position.x;
-                inPlayerData.PositionZ = transformComponent.Position.y;
+                if (AR.s.Dungeon.IsInside)
+                {
+                    inPlayerData.DungeonPositionX = transformComponent.Position.x;
+                    inPlayerData.DungeonPositionY = transformComponent.Position.y;
+                }
+                else
+                {
+                    inPlayerData.PositionX = transformComponent.Position.x;
+                    inPlayerData.PositionZ = transformComponent.Position.y;
+                }
             }
         }
     }

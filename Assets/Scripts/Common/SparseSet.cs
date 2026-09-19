@@ -11,6 +11,8 @@ namespace ARPG
     {
         void Remove(int entityId);
         bool Contains(int entityId);
+        object Capture(int entityId);
+        void Restore(int entityId, object value);
 
         /// <summary>
         /// 저장된 모든 엔트리를 제거한다. 풀 인스턴스 자체는 유지되므로 캐시된 참조가 계속 유효하다.
@@ -35,6 +37,8 @@ namespace ARPG
 
         public int Count => _count;
         public int Capacity => _data.Length;
+        public object Capture(int entityId) => Get(entityId);
+        public void Restore(int entityId, object value) => Add(entityId, (T)value);
 
         public SparseSet(int capacity = 100)
         {

@@ -43,6 +43,7 @@ namespace ARPG.Factory
             int villageId, int savedEntityId = -1, int savedHp = -1,
             bool isUnderConstruction = false, int facilityTier = 0)
         {
+            using var contextLoad = AR.s.WorldMap.Context.BeginLoad();
             BuildableItemTable? table = AR.s.Data.GetBuildableItem(tableId);
             if (table == null)
             {
@@ -56,6 +57,12 @@ namespace ARPG.Factory
             if (obj == null)
             {
                 Debug.LogError($"[BuildingFactory] Failed to instantiate building prefab");
+                return (-1, null);
+            }
+
+            if (contextLoad.IsCurrent == false)
+            {
+                Addressables.ReleaseInstance(obj);
                 return (-1, null);
             }
 
@@ -115,6 +122,11 @@ namespace ARPG.Factory
             }
 
             // HP바 부착 (완성 빌딩도 데미지 받으면 표시되도록 항상 부착).
+            if (contextLoad.IsCurrent == false || entity == null || entity.IsCurrentEntity == false)
+            {
+                ReleaseUnfinishedBuilding(entity);
+                return (-1, null);
+            }
             // table.HP <= 0 인 빌딩은 HP 개념이 없으므로 스킵.
             // await 필수 — 다음의 AutoRegisterChildHandlers가 HpBarView를 등록할 때 GameObject가 살아있어야 함.
             if (table.HP > 0)
@@ -123,6 +135,11 @@ namespace ARPG.Factory
             }
 
             // 자식 프리팹의 IEntityMessageHandler 자동 등록 (HpBarView도 여기서 등록됨)
+            if (contextLoad.IsCurrent == false || entity == null || entity.IsCurrentEntity == false)
+            {
+                ReleaseUnfinishedBuilding(entity);
+                return (-1, null);
+            }
             entity.AutoRegisterChildHandlers();
 
             // 초기 HP바 갱신 — DamageMessage로 fillAmount 즉시 동기화
@@ -201,6 +218,18 @@ namespace ARPG.Factory
         /// 빌딩에 StatComponent + HP바 프리팹 부착.
         /// 진행도/HP를 단일 표현으로 통합 — fillAmount = CurrentHp / MaxHp.
         /// </summary>
+        private static void ReleaseUnfinishedBuilding(EntityBase? entity)
+        {
+            if (entity == null) return;
+            if (entity.IsCurrentEntity)
+            {
+                AR.s.System.GetSystem<Systems.System_Render>()?.UnregisterEntity(entity.EntityId);
+                entity.OnEntityDestroy();
+                AR.s.Entity.DestroyEntity(entity.EntityId);
+            }
+            Addressables.ReleaseInstance(entity.gameObject);
+        }
+
         private static async UniTask AttachStatAndHpBar(int entityId, EntityBase entity, int currentHp, int maxHp)
         {
             // StatComponent — MaxHp만 의미있게 사용. 다른 스탯은 0으로 두어도 무방 (전투 시스템이 빌딩을 별도 분기 처리하지 않으면 데미지 계산 시 적용됨).
@@ -346,6 +375,7 @@ namespace ARPG.Factory
         /// </summary>
         private static async UniTaskVoid LoadSpriteLibraryAsync(int entityId, EntityBase entity, AnimationTable animData)
         {
+            using var contextLoad = AR.s.WorldMap.Context.BeginLoad();
             UpdateAnimationLoadState(entityId, AnimationLoadState.Loading);
 
             using CancellationTokenSource cts = new();
@@ -361,6 +391,8 @@ namespace ARPG.Factory
 
                 UnityEngine.U2D.Animation.SpriteLibraryAsset slAsset = await Addressables.LoadAssetAsync<UnityEngine.U2D.Animation.SpriteLibraryAsset>(
                     animData.SpriteLibraryPath).ToUniTask(cancellationToken: cts.Token);
+
+                if (contextLoad.IsCurrent == false || entity == null || entity.IsCurrentEntity == false) return;
 
                 if (slAsset == null || entity == null)
                 {
@@ -397,7 +429,8 @@ namespace ARPG.Factory
             }
             catch (System.Exception e)
             {
-                UpdateAnimationLoadState(entityId, AnimationLoadState.Failed);
+                if (contextLoad.IsCurrent && entity != null && entity.IsCurrentEntity)
+                    UpdateAnimationLoadState(entityId, AnimationLoadState.Failed);
                 Debug.LogError($"[BuildingFactory] Failed to load animation for Building {entityId}: {e.Message}");
             }
         }

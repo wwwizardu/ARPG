@@ -18,7 +18,7 @@ namespace ARPG.Systems
     ///    단 건설중 빌딩이 데미지를 받으면 진행도가 후퇴한다 (HP↔진행도 양방향 동기화 유지).
     /// 우선순위 정책은 BUILD_PRIORITY_DESIGN.md §2 (4 Layer 점수) 참조.
     /// </summary>
-    public class System_VillageBuildQueue : IFixedUpdateSystem
+    public class System_VillageBuildQueue : IFixedUpdateSystem, IWorldMapSystem
     {
         private const int DEFAULT_MAX_RADIUS = 3;
 

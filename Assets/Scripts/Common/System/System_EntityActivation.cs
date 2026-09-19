@@ -52,6 +52,7 @@ namespace ARPG.Systems
                 // 몬스터는 현재 위치가 아니라 출신 청크 생명주기를 따른다.
                 // Warm 청크의 몬스터는 거리가 가까워도 다시 활성화하지 않는다.
                 if (cm.HasComponent<MonsterTag>(entityId) &&
+                    cm.HasComponent<DungeonObjectComponent>(entityId) == false &&
                     AR.s.Monster != null &&
                     AR.s.Monster.IsMonsterSourceChunkActive(entityId) == false)
                 {

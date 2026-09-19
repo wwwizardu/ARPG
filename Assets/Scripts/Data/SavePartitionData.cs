@@ -23,8 +23,9 @@ namespace ARPG.Data
         NpcState = 1 << 8,
         NpcSocial = 1 << 9,
         NpcParties = 1 << 10,
+        Dungeons = 1 << 11,
         All = Player | World | Map | Villages | Buildings | Chronicle |
-              WorldSim | NpcMeta | NpcState | NpcSocial | NpcParties,
+              WorldSim | NpcMeta | NpcState | NpcSocial | NpcParties | Dungeons,
     }
 
     [Serializable]
@@ -60,7 +61,9 @@ namespace ARPG.Data
     public sealed class WorldSaveRoot
     {
         public int Version = 1;
-        public ushort WorldDataVersion = 14;
+        public ushort WorldDataVersion = 16;
+        public int WorldSeed = 12345;
+        public float ElapsedWorldGameHours;
         public int NextItemInstanceId = 1;
     }
 
