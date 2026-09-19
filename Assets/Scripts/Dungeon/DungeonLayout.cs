@@ -7,7 +7,11 @@ namespace ARPG.Dungeon
     /// <summary>Versioned, bounded room graph generation. Saved geometry is the authority.</summary>
     public static class DungeonLayout
     {
-        public const int GeneratorVersion = 1;
+        public const int GeneratorVersion = 2;
+
+        private const int MONSTER_OBJECT_STRIDE = 10;
+        private const int CHEST_OBJECT_OFFSET = 1;
+        private const int MONSTER_POSITION_MARGIN = 2;
 
         public static uint Hash(int seed, int village, int slot, int generation, int channel)
         {
@@ -80,26 +84,49 @@ namespace ARPG.Dungeon
                 CompletionGold = table.CompletionGold, ChestGold = table.ChestGold,
                 ReplacementCooldownHours = Math.Max(0f, table.ReplacementCooldownHours) };
             int count = Math.Max(6, Math.Min(12, table.RoomCount));
+            int monsterCountMin = Math.Max(0, Math.Min(8, table.MonsterCountMin));
+            int monsterCountMax = Math.Max(monsterCountMin, Math.Min(8, table.MonsterCountMax));
+            int roomWidthMin = Math.Max(7, Math.Min(24, table.RoomWidthMin));
+            int roomWidthMax = Math.Max(roomWidthMin, Math.Min(24, table.RoomWidthMax));
+            int roomHeightMin = Math.Max(7, Math.Min(24, table.RoomHeightMin));
+            int roomHeightMax = Math.Max(roomHeightMin, Math.Min(24, table.RoomHeightMax));
+            int horizontalSpacing = roomWidthMax + 8;
+            int verticalSpacing = roomHeightMax + 8;
             for (int i = 0; i < count; i++)
             {
                 uint hash = Hash(result.Seed, i, 0, 0, 31);
                 int row = i / 3;
                 int column = row % 2 == 0 ? i % 3 : 2 - i % 3;
-                var room = new DungeonRoom { Id = i, X = column * 20 + 3 + (int)(hash % 3),
-                    Y = row * 20 + 3 + (int)((hash >> 3) % 3),
-                    Width = 9 + (int)((hash >> 6) % 4), Height = 9 + (int)((hash >> 9) % 4) };
+                var room = new DungeonRoom { Id = i,
+                    X = column * horizontalSpacing + 3 + (int)(hash % 3),
+                    Y = row * verticalSpacing + 3 + (int)((hash >> 3) % 3),
+                    Width = SampleInclusive(hash >> 6, roomWidthMin, roomWidthMax),
+                    Height = SampleInclusive(hash >> 9, roomHeightMin, roomHeightMax) };
                 result.Rooms.Add(room);
                 if (i > 0)
                 {
                     result.Corridors.Add(new DungeonCorridor { FromRoom = i - 1, ToRoom = i,
                         HorizontalFirst = (hash & 1) == 0 });
-                    result.Objects.Add(new DungeonObject { Id = i * 10, RoomId = i,
-                        Kind = i == count - 1 ? DungeonObjectKind.Boss : DungeonObjectKind.Monster,
-                        TableId = i == count - 1 ? table.BossTableId : table.MonsterTableId,
-                        Level = i == count - 1 ? table.BossLevel : table.MonsterLevel,
-                        X = room.X + room.Width / 2, Y = room.Y + room.Height / 2 });
-                    if (i % 2 == 1 && i < count - 1)
-                        result.Objects.Add(new DungeonObject { Id = i * 10 + 1, RoomId = i,
+                    bool isBossRoom = i == count - 1;
+                    bool hasChest = i % 2 == 1 && isBossRoom == false;
+                    int monsterCount = isBossRoom
+                        ? 1
+                        : SampleInclusive(hash >> 12, monsterCountMin, monsterCountMax);
+                    for (int monsterIndex = 0; monsterIndex < monsterCount; monsterIndex++)
+                    {
+                        if (TryGetMonsterPosition(result, room, monsterIndex, hasChest,
+                            out int monsterX, out int monsterY) == false)
+                            throw new InvalidOperationException($"Room {room.Id} has no valid monster position.");
+                        int objectOffset = monsterIndex == 0 ? 0 : monsterIndex + 1;
+                        result.Objects.Add(new DungeonObject { Id = i * MONSTER_OBJECT_STRIDE + objectOffset,
+                            RoomId = i,
+                            Kind = isBossRoom ? DungeonObjectKind.Boss : DungeonObjectKind.Monster,
+                            TableId = isBossRoom ? table.BossTableId : table.MonsterTableId,
+                            Level = isBossRoom ? table.BossLevel : table.MonsterLevel,
+                            X = monsterX, Y = monsterY });
+                    }
+                    if (hasChest == true)
+                        result.Objects.Add(new DungeonObject { Id = i * MONSTER_OBJECT_STRIDE + CHEST_OBJECT_OFFSET, RoomId = i,
                             Kind = DungeonObjectKind.Chest, X = room.X + 2, Y = room.Y + 2 });
                 }
             }
@@ -112,7 +139,7 @@ namespace ARPG.Dungeon
         public static bool Validate(DungeonRecord record, out string error)
         {
             error = "Invalid dungeon layout.";
-            if (record == null || record.GeneratorVersion != GeneratorVersion)
+            if (record == null || record.GeneratorVersion < 1 || record.GeneratorVersion > GeneratorVersion)
             {
                 error = "Unsupported Dungeon GeneratorVersion. Restore a compatible save/editor version; layout was not regenerated.";
                 return false;
@@ -149,13 +176,23 @@ namespace ARPG.Dungeon
             for (int i = 0; i < reached.Length; i++)
                 if (reached[i] == false) return false;
             var ids = new System.Collections.Generic.HashSet<int>();
+            var occupiedPositions = new System.Collections.Generic.HashSet<long>();
             int bosses = 0;
             for (int i = 0; i < record.Objects.Count; i++)
             {
                 var obj = record.Objects[i];
-                if (obj == null || ids.Add(obj.Id) == false || IsFloor(record, obj.X, obj.Y) == false)
+                if (obj == null || ids.Add(obj.Id) == false || obj.RoomId < 0 || obj.RoomId >= record.Rooms.Count)
                     return false;
-                if (obj.Kind == DungeonObjectKind.Boss) bosses++;
+                var room = record.Rooms[obj.RoomId];
+                long positionKey = ((long)obj.X << 32) ^ (uint)obj.Y;
+                if (obj.X < room.X || obj.Y < room.Y || obj.X >= room.X + room.Width ||
+                    obj.Y >= room.Y + room.Height || occupiedPositions.Add(positionKey) == false)
+                    return false;
+                if (obj.Kind == DungeonObjectKind.Boss)
+                {
+                    if (obj.RoomId != record.BossRoomId) return false;
+                    bosses++;
+                }
             }
             if (bosses != 1) return false;
             error = string.Empty;
@@ -183,6 +220,60 @@ namespace ARPG.Dungeon
                     return true;
             }
             return false;
+        }
+
+        private static int SampleInclusive(uint value, int min, int max)
+            => min + (int)(value % (uint)(max - min + 1));
+
+        private static bool TryGetMonsterPosition(DungeonRecord record, DungeonRoom room,
+            int monsterIndex, bool hasChest, out int x, out int y)
+        {
+            if (monsterIndex == 0)
+            {
+                x = room.X + room.Width / 2;
+                y = room.Y + room.Height / 2;
+                return IsObjectPositionAvailable(record, room, hasChest, x, y);
+            }
+
+            int innerWidth = room.Width - MONSTER_POSITION_MARGIN * 2;
+            int innerHeight = room.Height - MONSTER_POSITION_MARGIN * 2;
+            for (int attempt = 0; attempt < 32; attempt++)
+            {
+                uint hash = Hash(record.Seed, room.Id, monsterIndex, attempt, 43);
+                x = room.X + MONSTER_POSITION_MARGIN + (int)(hash % (uint)innerWidth);
+                y = room.Y + MONSTER_POSITION_MARGIN + (int)((hash >> 16) % (uint)innerHeight);
+                if (IsObjectPositionAvailable(record, room, hasChest, x, y) == true)
+                    return true;
+            }
+
+            for (int localY = 0; localY < innerHeight; localY++)
+            {
+                for (int localX = 0; localX < innerWidth; localX++)
+                {
+                    x = room.X + MONSTER_POSITION_MARGIN + localX;
+                    y = room.Y + MONSTER_POSITION_MARGIN + localY;
+                    if (IsObjectPositionAvailable(record, room, hasChest, x, y) == true)
+                        return true;
+                }
+            }
+
+            x = 0;
+            y = 0;
+            return false;
+        }
+
+        private static bool IsObjectPositionAvailable(DungeonRecord record, DungeonRoom room,
+            bool hasChest, int x, int y)
+        {
+            if (hasChest == true && x == room.X + 2 && y == room.Y + 2)
+                return false;
+            for (int i = 0; i < record.Objects.Count; i++)
+            {
+                var obj = record.Objects[i];
+                if (obj.RoomId == room.Id && obj.X == x && obj.Y == y)
+                    return false;
+            }
+            return true;
         }
 
         private static bool InSegment(int x, int y, int ax, int ay, int bx, int by, int radius)

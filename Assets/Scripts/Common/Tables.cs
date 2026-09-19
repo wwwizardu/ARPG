@@ -670,6 +670,12 @@ namespace ARPG.Tables
         [JsonProperty("CompletionGold")] public int CompletionGold;
         [JsonProperty("ChestGold")] public int ChestGold;
         [JsonProperty("ReplacementCooldownHours")] public float ReplacementCooldownHours;
+        [JsonProperty("MonsterCountMin")] public int MonsterCountMin = 1;
+        [JsonProperty("MonsterCountMax")] public int MonsterCountMax = 1;
+        [JsonProperty("RoomWidthMin")] public int RoomWidthMin = 9;
+        [JsonProperty("RoomWidthMax")] public int RoomWidthMax = 12;
+        [JsonProperty("RoomHeightMin")] public int RoomHeightMin = 9;
+        [JsonProperty("RoomHeightMax")] public int RoomHeightMax = 12;
     }
 
     [Serializable]

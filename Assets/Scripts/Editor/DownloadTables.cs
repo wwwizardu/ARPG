@@ -70,7 +70,7 @@ namespace ARPG.Editor
             // EquipmentBaseStat: A~N가 실제 데이터, O~S는 시트 가독성용 보조 컬럼(다운로드 제외).
             // 슬롯당 3컬럼(ModId, Value1, Value2) × 4 슬롯 = 12컬럼 + Id + ItemId = 14컬럼.
             Register<EquipmentBaseStatTable>(list, "972309111&range=A:N");
-            Register<DungeonTable>(list, "1672490546&range=A:J");
+            Register<DungeonTable>(list, "1672490546&range=A:P");
             Register<VillageTable>(list, "441028134&range=A:F");
             Register<VillageStageTable>(list, "467145019&range=A:Q");
             // 청크 Zone(시드 청크 (0,0) 기준 Chebyshev 거리+1)별 몬스터 스폰 파라미터
@@ -771,9 +771,9 @@ namespace ARPG.Editor
 
         private static void ParseDungeonTable(DungeonTable table, string[] values)
         {
-            if (values.Length < 10)
+            if (values.Length < 16)
             {
-                Debug.LogError($"[ParseDungeonTable] Invalid data length. Expected at least 10, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseDungeonTable] Invalid data length. Expected at least 16, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
@@ -786,12 +786,24 @@ namespace ARPG.Editor
             table.CompletionGold = int.Parse(values[7]);
             table.ChestGold = int.Parse(values[8]);
             table.ReplacementCooldownHours = ParseFloatSafe(values, 9);
+            table.MonsterCountMin = int.Parse(values[10]);
+            table.MonsterCountMax = int.Parse(values[11]);
+            table.RoomWidthMin = int.Parse(values[12]);
+            table.RoomWidthMax = int.Parse(values[13]);
+            table.RoomHeightMin = int.Parse(values[14]);
+            table.RoomHeightMax = int.Parse(values[15]);
 
             if (table.RoomCount < 6 || table.RoomCount > 12 ||
                 table.MonsterTableId <= 0 || table.MonsterLevel <= 0 ||
                 table.BossTableId <= 0 || table.BossLevel <= 0 ||
                 table.CompletionGold < 0 || table.ChestGold < 0 ||
-                table.ReplacementCooldownHours < 0f)
+                table.ReplacementCooldownHours < 0f ||
+                table.MonsterCountMin < 0 || table.MonsterCountMax < table.MonsterCountMin ||
+                table.MonsterCountMax > 8 ||
+                table.RoomWidthMin < 7 || table.RoomWidthMax < table.RoomWidthMin ||
+                table.RoomWidthMax > 24 ||
+                table.RoomHeightMin < 7 || table.RoomHeightMax < table.RoomHeightMin ||
+                table.RoomHeightMax > 24)
             {
                 throw new FormatException($"DungeonTable Id {table.Id} contains an out-of-range value.");
             }

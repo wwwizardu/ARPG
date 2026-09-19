@@ -51,7 +51,11 @@ namespace ARPG.EditorTools
                 Require(table.RoomCount > 0 && table.MonsterTableId > 0 && table.MonsterLevel > 0 &&
                     table.BossTableId > 0 && table.BossLevel > 0 && table.CompletionGold >= 0 &&
                     table.ChestGold >= 0 && float.IsNaN(table.ReplacementCooldownHours) == false &&
-                    float.IsInfinity(table.ReplacementCooldownHours) == false && table.ReplacementCooldownHours >= 0f,
+                    float.IsInfinity(table.ReplacementCooldownHours) == false && table.ReplacementCooldownHours >= 0f &&
+                    table.MonsterCountMin >= 0 && table.MonsterCountMax >= table.MonsterCountMin &&
+                    table.MonsterCountMax <= 8 &&
+                    table.RoomWidthMin >= 7 && table.RoomWidthMax >= table.RoomWidthMin && table.RoomWidthMax <= 24 &&
+                    table.RoomHeightMin >= 7 && table.RoomHeightMax >= table.RoomHeightMin && table.RoomHeightMax <= 24,
                     "DungeonTable row has valid generation, encounter and reward values");
             }
             report.AppendLine($"PASS: DungeonTable contains {rows.Count} structurally valid row(s).");
@@ -95,6 +99,26 @@ namespace ARPG.EditorTools
                 }
             }
             Require(two > 0 && three > 0, "both slot counts occur");
+            DungeonTable tunedTable = CreateDungeonTable();
+            tunedTable.MonsterCountMin = tunedTable.MonsterCountMax = 3;
+            tunedTable.RoomWidthMin = tunedTable.RoomWidthMax = 15;
+            tunedTable.RoomHeightMin = tunedTable.RoomHeightMax = 17;
+            VillageDungeonSlots tunedSlots = DungeonLayout.CreateSlots(12345, 776);
+            DungeonRecord tunedLayout = DungeonLayout.Generate(12345, 776, tunedSlots.Slots[0], tunedTable);
+            int[] roomMonsterCounts = new int[tunedLayout.Rooms.Count];
+            for (int i = 0; i < tunedLayout.Rooms.Count; i++)
+                Require(tunedLayout.Rooms[i].Width == 15 && tunedLayout.Rooms[i].Height == 17,
+                    "table-driven room dimensions");
+            for (int i = 0; i < tunedLayout.Objects.Count; i++)
+            {
+                DungeonObject obj = tunedLayout.Objects[i];
+                if (obj.Kind == DungeonObjectKind.Monster || obj.Kind == DungeonObjectKind.Boss)
+                    roomMonsterCounts[obj.RoomId]++;
+            }
+            Require(roomMonsterCounts[0] == 0, "start room remains safe");
+            for (int i = 1; i < tunedLayout.BossRoomId; i++)
+                Require(roomMonsterCounts[i] == 3, "table-driven normal room monster count");
+            Require(roomMonsterCounts[tunedLayout.BossRoomId] == 1, "boss room remains one boss");
             DungeonTable defaultTable = CreateDungeonTable();
             var legacyRoot = new DungeonSaveRoot();
             VillageDungeonSlots legacySlots = DungeonLayout.CreateSlots(12345, 777);
@@ -110,7 +134,7 @@ namespace ARPG.EditorTools
                 "legacy table migration values");
             Require(DungeonLayout.NormalizeTableReferences(legacyRoot, defaultTable) == false,
                 "legacy table migration idempotence");
-            report.AppendLine($"PASS: 300 villages (2 slots: {two}, 3 slots: {three}), deterministic IDs/rooms; 32 village layout samples, table snapshot/legacy migration, raster connectivity/reload, progress and unsupported versions.");
+            report.AppendLine($"PASS: 300 villages (2 slots: {two}, 3 slots: {three}), deterministic IDs/rooms; 32 village layout samples, table-driven room size/monster count, table snapshot/legacy migration, raster connectivity/reload, progress and unsupported versions.");
         }
 
         private static void ValidateRasterConnectivity(DungeonRecord record)
@@ -243,7 +267,8 @@ namespace ARPG.EditorTools
                 object snapshot = ReadSnapshot(data, slotPath, "manifest.json");
                 var loadedPlayer = ((PlayerSaveRoot)Field(snapshot, "Player")).Players[0];
                 var loadedDungeon = ((DungeonSaveRoot)Field(snapshot, "Dungeons")).Dungeons[0];
-                Require(loadedPlayer.ActiveDungeonId == loadedDungeon.DungeonId && loadedDungeon.GeneratorVersion == 1, "reconnect exact active structure");
+                Require(loadedPlayer.ActiveDungeonId == loadedDungeon.DungeonId &&
+                    loadedDungeon.GeneratorVersion == DungeonLayout.GeneratorVersion, "reconnect exact active structure");
 
                 record.KilledObjects.Add(10); record.OpenedChests.Add(11);
                 Require(await Write(data, SaveScope.Player | SaveScope.Dungeons), "progress checkpoint");
@@ -730,6 +755,12 @@ namespace ARPG.EditorTools
                 CompletionGold = 100,
                 ChestGold = 20,
                 ReplacementCooldownHours = 12f,
+                MonsterCountMin = 1,
+                MonsterCountMax = 1,
+                RoomWidthMin = 9,
+                RoomWidthMax = 12,
+                RoomHeightMin = 9,
+                RoomHeightMax = 12,
             };
         }
 
