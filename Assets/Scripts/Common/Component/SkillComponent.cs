@@ -91,6 +91,9 @@ namespace ARPG.Component
         /// <summary>TrackUntilCommit 계열 조준이 현재 실행에서 최종 확정됐는지 여부</summary>
         public bool IsAimCommitted;
 
+        /// <summary>현재 실행에서 AreaEffect 논리 엔티티가 이미 생성됐는지 여부</summary>
+        public bool IsAreaEffectCreated;
+
         /// <summary>
         /// 스킬 데이터를 초기화
         /// </summary>
@@ -100,6 +103,7 @@ namespace ARPG.Component
             LastChannelingTime = 0f;
             CurrentChargeTime = 0f;
             IsToggleActive = false;
+            IsAreaEffectCreated = false;
             ResetAimRuntimeData();
         }
 

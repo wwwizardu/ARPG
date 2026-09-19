@@ -564,6 +564,29 @@ namespace ARPG.Tables
         [JsonProperty("ChannelingInterval")] public float ChannelingInterval;            // Channeling: 효과 적용 간격(초)
         [JsonProperty("MaxChargeTime")] public float MaxChargeTime;                      // Charge: 최대 차징 시간(초)
         [JsonProperty("MinChargeRatio")] public float MinChargeRatio;                    // Charge: 최소 차징 비율(0~1)
+
+        /// <summary>
+        /// 커밋 시점에 직접 타격 판정을 수행하는지. 커밋 스케줄과 예고 도형이 공유하는 단일 정본.
+        /// 실제 데미지는 BaseDamageMul × (무기/스탯 Added + DamageMin/Max)이므로 DamageMin/Max가 0이어도
+        /// Attack/Spell 스킬은 타격한다 (예: QuickHop은 DamageMin/Max=0, BaseDamageMul=30).
+        /// 비전투 스킬은 Attack/Spell 태그를 빼거나 BaseDamageMul=0으로 구분한다.
+        /// </summary>
+        [JsonIgnore]
+        public bool HasDirectImpact => BaseDamageMul > 0
+            && (Tags & (GE.SkillTag.Attack | GE.SkillTag.Spell)) != 0;
+
+        /// <summary>
+        /// 타격 커밋을 System_Jump의 실제 착지 완료에 연결하는 스킬인지
+        /// (MONSTER_ATTACK_TELEGRAPH_DESIGN.md §12.3 점프 피해 커밋)
+        /// 채널링은 제외한다. 채널 틱은 ChannelingInterval 주기로 발생해 착지 한 시점에 정렬할 수 없고,
+        /// 착지 커밋 소비 경로가 ProcessMultiHitSkill뿐이라 채널링에 적용하면 커밋이 영구 잔류해
+        /// Process 상태를 벗어나지 못한다. 채널링 점프는 ChannelImpact로 "도약 1회 + 주기 타격"이 된다.
+        /// </summary>
+        [JsonIgnore]
+        public bool UsesLandingCommit => SkillType == GE.SkillType.Jump
+            && ArcHeight > 0f
+            && ExecutionType != SkillExecutionType.Channeling
+            && HasDirectImpact == true;
     }
 
     /// <summary>

@@ -92,6 +92,7 @@ namespace ARPG.Systems
         private void Land(int entityId, ref JumpComponent jump)
         {
             ComponentManager cm = AR.s.Component;
+            Vector2 landingPosition = jump.EndPosition;
 
             // 최종 위치 확정
             // - 현재 위치에서 EndPosition까지 직선 경로 검사 (ClipTrajectory)
@@ -120,11 +121,13 @@ namespace ARPG.Systems
                     }
 
                     transform.Position = reachable;
+                    landingPosition = reachable;
                     cm.SetComponent(entityId, transform);
                 }
                 else
                 {
                     transform.Position = jump.EndPosition;
+                    landingPosition = jump.EndPosition;
                     cm.SetComponent(entityId, transform);
                 }
             }
@@ -136,10 +139,31 @@ namespace ARPG.Systems
                     cm.SetComponent(entityId, state);
             }
 
+            // 실제 보정까지 끝난 착지 위치를 다음 FixedUpdate의 스킬 커밋 정본으로 전달한다.
+            // 체공 중 취소/스턴/사망으로 스킬이 이미 종료됐으면 커밋을 남기지 않는다.
+            // (남기면 idle 스킬 엔티티에 stale 커밋이 붙어 다음 시전이 Process 첫 틱에 즉시 타격한다.)
+            if (jump.SkillEntityId > 0
+                && cm.HasComponent<SkillComponent>(jump.SkillEntityId) == true
+                && cm.TryGetComponent<SkillStateComponent>(jump.SkillEntityId, out SkillStateComponent skillState) == true
+                && skillState.IsRunning == true)
+            {
+                cm.SetComponent(jump.SkillEntityId, new SkillLandingCommitComponent
+                {
+                    LandingPosition = landingPosition,
+                });
+
+                if (cm.TryGetComponent<AttackTelegraphComponent>(jump.SkillEntityId, out AttackTelegraphComponent telegraph) == true)
+                {
+                    telegraph.TargetPosition = landingPosition;
+                    telegraph.NextCommitFixedTime = Time.fixedTime + Time.fixedDeltaTime;
+                    cm.SetComponent(jump.SkillEntityId, telegraph);
+                }
+            }
+
             // JumpComponent 제거
             cm.RemoveComponent<JumpComponent>(entityId);
 
-            Debug.Log($"[System_Jump] Landed - EntityId: {entityId}, Position: {jump.EndPosition}");
+            Debug.Log($"[System_Jump] Landed - EntityId: {entityId}, Position: {landingPosition}");
         }
     }
 }

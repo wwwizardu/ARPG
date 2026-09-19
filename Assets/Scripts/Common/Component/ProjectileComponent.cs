@@ -9,5 +9,6 @@ namespace ARPG.Component
         public float CurrentLifeTime;   // 경과 시간
         public float HitRadius;         // 충돌 반경
         public bool IsPiercing;         // 관통 여부
+        public long VisualRequestToken; // 비동기 View 결과의 세대 검증 토큰
     }
 }

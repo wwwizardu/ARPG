@@ -64,6 +64,7 @@ namespace ARPG.Component
             { typeof(InputComponent), 100 },
             { typeof(SkillAimIndicatorComponent), 8 },
             { typeof(SkillMovementPenaltyComponent), 20 },
+            { typeof(AttackTelegraphComponent), 128 },
 
             // AI 컴포넌트 (NPC/몬스터용)
             { typeof(AIComponent), 500 },
@@ -80,6 +81,7 @@ namespace ARPG.Component
             { typeof(SkillTargetComponent), 50 },
             { typeof(SkillAttackProfileComponent), 50 }, // 스킬 엔티티와 1:1 — 데미지 계산용 캐시
             { typeof(SkillAttackProfileDirtyTag), 50 },  // 재계산 요청 태그 (처리 후 즉시 제거)
+            { typeof(SkillLandingCommitComponent), 32 }, // 점프 착지 후 다음 FixedUpdate까지 유지되는 일회성 신호
 
             // 매우 적게 사용되는 컴포넌트 (커맨드용, 일시적)
             { typeof(SkillCommandComponent), 20 },

@@ -9,7 +9,7 @@ namespace ARPG.Utility
 {
     public static class ProjectileHelper
     {
-        public static async void SpawnProjectile(
+        public static int SpawnProjectile(
             int ownerEntityId,
             int skillEntityId,
             int projectileTableId,
@@ -20,44 +20,29 @@ namespace ARPG.Utility
             if (table == null)
             {
                 Debug.LogError($"[ProjectileHelper] ProjectileTable not found - Id: {projectileTableId}");
-                return;
+                return -1;
             }
 
-            // 방향에 따라 회전
-            float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
-            Vector3 spawnPos = new Vector3(spawnPosition.x, spawnPosition.y, 0f);
-            Quaternion rotation = Quaternion.Euler(0f, 0f, angle);
+            Vector2 normalizedDirection = direction.sqrMagnitude > 0.0001f
+                ? direction.normalized
+                : Vector2.right;
+            float releaseAngle = Mathf.Atan2(normalizedDirection.y, normalizedDirection.x) * Mathf.Rad2Deg;
 
-            // AddressablePool에서 가져오기
-            GameObject? obj = null;
-            if (string.IsNullOrEmpty(table.PrefabKey) == false)
-            {
-                obj = await AddressablePool.Get(table.PrefabKey, spawnPos, rotation);
-            }
-
-            if (obj == null)
-            {
-                // 프리팹이 없으면 빈 오브젝트 생성
-                obj = new GameObject($"Projectile_{projectileTableId}");
-                obj.transform.position = spawnPos;
-                obj.transform.rotation = rotation;
-            }
-            obj.transform.rotation = Quaternion.Euler(0f, 0f, angle);
-
-            // 엔티티 ID 발급
+            // Release FixedUpdate에서 논리 엔티티를 먼저 만든다. Addressable 로딩은 게임플레이를 지연하지 않는다.
             int entityId = AR.s.Entity.CreateEntity();
+            long visualRequestToken = System.Diagnostics.Stopwatch.GetTimestamp() ^ ((long)entityId << 32);
 
             // ECS 컴포넌트 추가
             AR.s.Component.AddComponent(entityId, new TransformComponent
             {
                 Position = spawnPosition,
-                Rotation = angle,
+                Rotation = releaseAngle,
                 Scale = Vector2.one
             });
 
             AR.s.Component.AddComponent(entityId, new VelocityComponent
             {
-                Direction = direction,
+                Direction = normalizedDirection,
                 Speed = table.Speed
             });
 
@@ -69,13 +54,15 @@ namespace ARPG.Utility
                 LifeTime = table.LifeTime,
                 CurrentLifeTime = 0f,
                 HitRadius = table.HitRadius,
-                IsPiercing = table.IsPiercing
+                IsPiercing = table.IsPiercing,
+                VisualRequestToken = visualRequestToken,
             });
 
             AR.s.Component.AddComponent(entityId, new ProjectileTag());
 
             // [SkillEffect] OnProjectileSpawn 트리거
-            if (AR.s.Component.TryGetComponent<SkillComponent>(skillEntityId, out var skill) && skill.Table != null)
+            if (AR.s.Component.TryGetComponent<SkillComponent>(skillEntityId, out var skill) == true
+                && skill.Table != null)
             {
                 SkillEffectContext spawnCtx = new()
                 {
@@ -87,22 +74,76 @@ namespace ARPG.Utility
                 SkillEffectExecutor.Trigger(GE.SkillTrigger.OnProjectileSpawn, ref spawnCtx, skill.EffectiveSkillEffectIds);
             }
 
-            // System_Render에 등록 (ECS Position → GameObject transform 동기화)
-            var renderSystem = AR.s.System.GetSystem<Systems.System_Render>();
-            if (renderSystem != null)
+            AttachProjectileViewAsync(
+                entityId,
+                ownerEntityId,
+                projectileTableId,
+                visualRequestToken,
+                table.PrefabKey,
+                spawnPosition,
+                normalizedDirection).Forget();
+
+            Debug.Log($"[ProjectileHelper] Released projectile - EntityId: {entityId}, TableId: {projectileTableId}, Owner: {ownerEntityId}, Direction: {normalizedDirection}");
+            return entityId;
+        }
+
+        private static async UniTaskVoid AttachProjectileViewAsync(
+            int entityId,
+            int ownerEntityId,
+            int projectileTableId,
+            long visualRequestToken,
+            string prefabKey,
+            Vector2 spawnPosition,
+            Vector2 releaseDirection)
+        {
+            if (string.IsNullOrEmpty(prefabKey) == true)
+                return;
+
+            float releaseAngle = Mathf.Atan2(releaseDirection.y, releaseDirection.x) * Mathf.Rad2Deg;
+            Vector3 requestedPosition = new(spawnPosition.x, spawnPosition.y, 0f);
+            Quaternion requestedRotation = Quaternion.Euler(0f, 0f, releaseAngle);
+            GameObject? obj = await AddressablePool.Get(prefabKey, requestedPosition, requestedRotation);
+            if (obj == null)
+                return;
+
+            if (AR.s == null)
             {
-                var entityBase = obj.GetComponent<Base.EntityBase>();
-                if (entityBase != null)
-                {
-                    renderSystem.RegisterEntity(entityId, entityBase);
-                }
-                else
-                {
-                    Debug.LogError($"[ProjectileHelper] EntityBase component not found on projectile prefab. Add EntityBase to {obj.name}.");
-                }
+                AddressablePool.Return(prefabKey, obj);
+                return;
             }
 
-            Debug.Log($"[ProjectileHelper] Spawned projectile - EntityId: {entityId}, TableId: {projectileTableId}, Owner: {ownerEntityId}, Direction: {direction}");
+            ComponentManager cm = AR.s.Component;
+            if (cm.HasComponent<DestroyTag>(entityId) == true
+                || cm.TryGetComponent<ProjectileComponent>(entityId, out ProjectileComponent projectile) == false
+                || projectile.OwnerEntityId != ownerEntityId
+                || projectile.ProjectileTableId != projectileTableId
+                || projectile.VisualRequestToken != visualRequestToken)
+            {
+                AddressablePool.Return(prefabKey, obj);
+                return;
+            }
+
+            float currentAngle = releaseAngle;
+            if (cm.TryGetComponent<TransformComponent>(entityId, out TransformComponent currentTransform) == true)
+            {
+                obj.transform.position = new Vector3(currentTransform.Position.x, currentTransform.Position.y, 0f);
+            }
+            if (cm.TryGetComponent<VelocityComponent>(entityId, out VelocityComponent velocity) == true)
+            {
+                currentAngle = Mathf.Atan2(velocity.Direction.y, velocity.Direction.x) * Mathf.Rad2Deg;
+            }
+            obj.transform.rotation = Quaternion.Euler(0f, 0f, currentAngle);
+
+            Systems.System_Render? renderSystem = AR.s.System.GetSystem<Systems.System_Render>();
+            Base.EntityBase? entityBase = obj.GetComponent<Base.EntityBase>();
+            if (renderSystem == null || entityBase == null)
+            {
+                Debug.LogError($"[ProjectileHelper] EntityBase/System_Render missing for projectile prefab '{prefabKey}'.");
+                AddressablePool.Return(prefabKey, obj);
+                return;
+            }
+
+            renderSystem.RegisterEntity(entityId, entityBase);
         }
     }
 }

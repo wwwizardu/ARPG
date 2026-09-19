@@ -30,6 +30,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 129b9e59ec5479344a17a384912e1cbb
+    m_Address: Effects/FireRingBurst
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 129e10fa9fdbc334680c1f57b4a04ef1
     m_Address: Sprites/Items/CropPlot
     m_ReadOnly: 0
@@ -252,6 +257,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b553a736b1dd77246a077c4c0ac530bd
     m_Address: UI/SlotUI
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b95cd8764136a8249b2c3dc31107a2d0
+    m_Address: Prefabs/AreaEffect/FireRing
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

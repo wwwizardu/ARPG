@@ -8,6 +8,7 @@ namespace ARPG.Component
     /// </summary>
     public struct JumpComponent
     {
+        public int SkillEntityId;        // 착지 커밋을 받을 스킬 엔티티 ID
         public float Height;             // 현재 높이 (0 = 지면)
         public float Elapsed;            // 점프 시작 후 경과 시간
         public float Duration;           // 총 체공 시간

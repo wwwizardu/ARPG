@@ -66,6 +66,7 @@
 | **[SKILL_RUNE_DESIGN.md](combat/SKILL_RUNE_DESIGN.md)** | 스킬 룬 / 모디파이어 |
 | **[SKILL_EFFECT_IDEAS.md](combat/SKILL_EFFECT_IDEAS.md)** | 스킬 이펙트 아이디어 |
 | **[AI_SKILL_SELECTION_IMPLEMENTATION.md](combat/AI_SKILL_SELECTION_IMPLEMENTATION.md)** | AI 다중 스킬 가중치 선택 |
+| **[MONSTER_ATTACK_TELEGRAPH_DESIGN.md](combat/MONSTER_ATTACK_TELEGRAPH_DESIGN.md)** | 몬스터 공격 범위·피해 타이밍 예고와 중앙 배치 렌더링 설계 |
 | **[ModSystem_Changelog.md](combat/ModSystem_Changelog.md)** | 장비/스탯 mod 시스템 변경 이력 |
 
 ### 🤖 AI / 몬스터

@@ -4,6 +4,7 @@ using ARPG.Factory;
 using ARPG.Skill;
 using ARPG.Skill.Aim;
 using ARPG.Skill.Combat;
+using ARPG.Skill.Telegraph;
 using ARPG.Utility;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
@@ -38,6 +39,9 @@ namespace ARPG.Systems
             public readonly SparseSet<SkillStatBonusOnSkillStartComponent> SkillBonus;
             public readonly SparseSet<AnimatorComponent> Animator;
             public readonly SparseSet<SkillAimIndicatorComponent> SkillAimIndicator;
+            public readonly SparseSet<AttackTelegraphComponent> AttackTelegraph;
+            public readonly SparseSet<JumpComponent> Jump;
+            public readonly SparseSet<SkillLandingCommitComponent> LandingCommit;
 
             public SkillRuntimePools(ComponentManager cm)
             {
@@ -55,6 +59,9 @@ namespace ARPG.Systems
                 SkillBonus = cm.GetComponentPool<SkillStatBonusOnSkillStartComponent>();
                 Animator = cm.GetComponentPool<AnimatorComponent>();
                 SkillAimIndicator = cm.GetComponentPool<SkillAimIndicatorComponent>();
+                AttackTelegraph = cm.GetComponentPool<AttackTelegraphComponent>();
+                Jump = cm.GetComponentPool<JumpComponent>();
+                LandingCommit = cm.GetComponentPool<SkillLandingCommitComponent>();
             }
         }
 
@@ -88,6 +95,9 @@ namespace ARPG.Systems
                     skillTarget.Reset();
                     cm.SetComponent(skillEntityId, skillTarget);
                 }
+
+                cm.RemoveComponent<AttackTelegraphComponent>(skillEntityId);
+                cm.RemoveComponent<SkillLandingCommitComponent>(skillEntityId);
             }
 
             Debug.Log("System_Skill Reset called");
@@ -119,7 +129,7 @@ namespace ARPG.Systems
                     if (pools.SkillTiming.TryGet(skillEntityId, out var timing) == false)
                         continue;
 
-                    if (ShouldCancelSkill(skill, pools.State) == true)
+                    if (ShouldCancelSkill(skill, in pools) == true)
                     {
                         // 실행 중인 스킬이 있으면 취소
                         StopSkillInternal(skillEntityId, ref skill, ref skillState, in pools);
@@ -189,6 +199,8 @@ namespace ARPG.Systems
 
             target.Reset();
             inSkill.ResetAimRuntimeData();
+            inSkill.IsAreaEffectCreated = false;
+            AR.s.Component.RemoveComponent<SkillLandingCommitComponent>(skillEntityId);
 
             // 마나 가드 — 플레이어 전용. OnSkillCommand 효과 발화 전에 차단하여 효과 누수 방지
             int manaCost = inSkill.Table != null ? inSkill.Table.Mana : 0;
@@ -302,6 +314,10 @@ namespace ARPG.Systems
             AR.s.Component.SetComponent(skillEntityId, skillState);
             AR.s.Component.SetComponent(skillEntityId, inSkill);
             ActivateSkillRuntime(skillEntityId, inSkill, in pools);
+            if (pools.SkillTiming.TryGet(skillEntityId, out SkillTimingComponent attackTiming) == true)
+            {
+                CreateAttackTelegraph(skillEntityId, inSkill, target, attackTiming, in pools);
+            }
             TraceAim("Command", skillEntityId, inSkill.OwnerEntityId, target.TargetDirection, target.TargetPosition);
 
             // 마나 차감 — 플레이어 전용, 시전 확정 후 1회. 차감 후 UI 갱신용 메시지 발화
@@ -329,24 +345,25 @@ namespace ARPG.Systems
         /// <summary>
         /// 특정 캐릭터 상태에서 스킬이 취소되어야 하는지 확인
         /// </summary>
-        private bool ShouldCancelSkill(SkillComponent inSkill, SparseSet<StateComponent> statePool)
+        private bool ShouldCancelSkill(SkillComponent inSkill, in SkillRuntimePools pools)
         {
-            // 2. 캐릭터 상태 확인 - 스킬 취소가 필요한 상태인지 체크
-            if (statePool.TryGet(inSkill.OwnerEntityId, out var charState) == false)
+            if (AR.s.Component.HasComponent<DestroyTag>(inSkill.OwnerEntityId) == true)
+                return true;
+
+            // 캐릭터 필수 컴포넌트 — 없으면 데이터 문제이므로 보고만 하고 취소하지 않음
+            if (pools.State.Contains(inSkill.OwnerEntityId) == false)
             {
                 Debug.LogError($"[System_Skill] StateComponent not found for OwnerEntityId: {inSkill.OwnerEntityId}");
-                return false; // 상태 컴포넌트가 없으면 취소하지 않음
+                return false;
             }
 
-            // 스킬을 취소해야 하는 상태들
-            // Stunned 이상의 상태는 Input도 영향을 주지 못하므로 스킬도 취소
-            if(Creature.CharacterConditions.Stunned <= charState.Condition)
-            {
-                Debug.Log($"[System_Skill] Skill cancelled due to condition: {charState.Condition} (SkillEntityId: {inSkill.OwnerEntityId})");
-                return true;
-            }
+            // 중단 규칙 정본은 SkillInterruptRule — System_AttackTelegraph의 예고 제거와 같은 조건을 공유한다.
+            SkillInterruptReason reason = SkillInterruptRule.Evaluate(AR.s.Component, inSkill.OwnerEntityId);
+            if (reason == SkillInterruptReason.None)
+                return false;
 
-            return false;
+            Debug.Log($"[System_Skill] Skill cancelled - Reason: {reason} (OwnerEntityId: {inSkill.OwnerEntityId})");
+            return true;
         }
 
         /// <summary>
@@ -424,7 +441,18 @@ namespace ARPG.Systems
             // ProcessChannelingSkill에서 이미 End로 전이된 경우는 state.State가 더 이상 Process가 아니므로 중복 전이 방지
             bool hasInput = pools.Input.Contains(skill.OwnerEntityId);
             bool isPlayerChanneling = (skill.ExecutionType == SkillExecutionType.Channeling) && hasInput;
-            if (state.State == SkillState.Process && isPlayerChanneling == false && state.ElapsedTime >= timing.ProcessDuration)
+            SkillImpactSchedule processSchedule = ResolveImpactSchedule(skill, timing);
+            // 오너의 아무 점프가 아니라 이 스킬이 띄운 점프만 기다린다.
+            // 넉백·대시 같은 다른 점프 소스가 추가되면 오너 단위 검사는 엉뚱한 점프를 기다린다.
+            bool isOwnJumpAirborne = pools.Jump.TryGet(skill.OwnerEntityId, out JumpComponent ownerJump) == true
+                && ownerJump.SkillEntityId == skillEntityId;
+            bool waitsForLanding = processSchedule.Kind == SkillImpactKind.LandingImpact
+                && (isOwnJumpAirborne == true
+                    || pools.LandingCommit.Contains(skillEntityId) == true);
+            if (state.State == SkillState.Process
+                && isPlayerChanneling == false
+                && waitsForLanding == false
+                && state.ElapsedTime >= timing.ProcessDuration)
             {
                 OnChangeState(skillEntityId, ref state, ref skill, SkillState.End, in pools);
             }
@@ -517,32 +545,7 @@ namespace ARPG.Systems
             // 착지 위치는 SkillTargetType에 따라 결정
             if (pools.SkillTarget.TryGet(skillEntityId, out var target) == true)
             {
-                float maxDistance = inSkill.Table.SkillRangeMax;
-
-                switch (inSkill.Table.SkillTargetType)
-                {
-                    case GlobalEnum.SkillTargetType.Direction:
-                        // 방향으로 최대 거리만큼 이동
-                        if (maxDistance > 0f)
-                        {
-                            endPos = startPos + target.TargetDirection * maxDistance;
-                        }
-                        break;
-
-                    case GlobalEnum.SkillTargetType.Position:
-                        // 지점으로 이동 (최대 거리 제한)
-                        Vector2 toTarget = target.TargetPosition - startPos;
-                        float distSqr = toTarget.sqrMagnitude;
-                        if (maxDistance > 0f && distSqr > maxDistance * maxDistance)
-                        {
-                            endPos = startPos + toTarget.normalized * maxDistance;
-                        }
-                        else
-                        {
-                            endPos = target.TargetPosition;
-                        }
-                        break;
-                }
+                endPos = ResolveJumpEndPosition(inSkill.Table, target, startPos);
             }
 
             // 체공 시간 = Process 단계 시간. 점프 이동 구간은 Process에서만 실행되기 때문.
@@ -562,6 +565,7 @@ namespace ARPG.Systems
             // JumpComponent 생성
             JumpComponent jump = new JumpComponent
             {
+                SkillEntityId = skillEntityId,
                 Height = 0f,
                 Elapsed = 0f,
                 Duration = jumpDuration,
@@ -603,37 +607,15 @@ namespace ARPG.Systems
             bool isJumpLaunch = inSkill.Table != null
                 && inSkill.Table.SkillType == GlobalEnum.SkillType.Jump
                 && inSkill.Table.ArcHeight > 0f;
-            bool createsAreaEffect = inSkill.Table != null && inSkill.Table.AreaEffectId > 0;
-            if (isJumpLaunch == true || createsAreaEffect == true)
+            if (isJumpLaunch == true)
             {
-                string commitPhase = isJumpLaunch == true ? "LaunchCommit" : "AreaCommit";
-                target = CommitAim(skillEntityId, ref inSkill, target, commitPhase, in pools);
+                target = CommitAim(skillEntityId, ref inSkill, target, "LaunchCommit", in pools);
             }
 
             // 점프·이동 스킬은 선딜이 끝난 LaunchCommit에서 경로를 확정한 뒤 이동을 시작합니다.
             if (isJumpLaunch == true)
             {
                 StartJump(skillEntityId, ref inSkill, in pools);
-            }
-
-            // [AreaEffect] SkillTable.AreaEffectId > 0이면 장판 스폰
-            // Position 타겟은 마우스/지정 위치, 그 외는 caster 위치 기준.
-            if (createsAreaEffect == true && inSkill.Table != null)
-            {
-                Vector2 spawnPos;
-                if (inSkill.Table.SkillTargetType == GE.SkillTargetType.Position)
-                {
-                    spawnPos = target.TargetPosition;
-                }
-                else if (pools.Transform.TryGet(inSkill.OwnerEntityId, out var ownerTr))
-                {
-                    spawnPos = ownerTr.Position;
-                }
-                else
-                {
-                    spawnPos = Vector2.zero;
-                }
-                EntityFactory.CreateAreaEffect(inSkill.OwnerEntityId, inSkill.Table.AreaEffectId, spawnPos, inSkill.SkillId);
             }
 
             // Process 기간 동안 애니메이션 재생 요청
@@ -668,6 +650,8 @@ namespace ARPG.Systems
         /// </summary>
         private void OnEnterEndState(int skillEntityId, ref SkillComponent inSkill)
         {
+            AR.s.Component.RemoveComponent<SkillLandingCommitComponent>(skillEntityId);
+
             // [SkillEffect] OnSkillEnd 트리거
             SkillEffectContext endCtx = new()
             {
@@ -702,6 +686,8 @@ namespace ARPG.Systems
             }
 
             AR.s.Component.RemoveComponent<SkillMovementPenaltyComponent>(inSkill.OwnerEntityId);
+            AR.s.Component.RemoveComponent<AttackTelegraphComponent>(skillEntityId);
+            AR.s.Component.RemoveComponent<SkillLandingCommitComponent>(skillEntityId);
             if (pools.SkillAimIndicator.TryGet(inSkill.OwnerEntityId, out SkillAimIndicatorComponent indicator) == true)
             {
                 indicator.Reset();
@@ -854,6 +840,181 @@ namespace ARPG.Systems
             return Mathf.Max(multiplier, 0.1f);
         }
 
+        private static SkillImpactSchedule ResolveImpactSchedule(
+            SkillComponent skill,
+            SkillTimingComponent timing)
+        {
+            if (skill.Table == null)
+                return default;
+
+            SkillImpactExecutionMode executionMode;
+            switch (skill.ExecutionType)
+            {
+                case SkillExecutionType.Channeling:
+                    executionMode = SkillImpactExecutionMode.Channeling;
+                    break;
+                case SkillExecutionType.MultiHit:
+                    executionMode = SkillImpactExecutionMode.MultiHit;
+                    break;
+                case SkillExecutionType.Single:
+                    executionMode = SkillImpactExecutionMode.Single;
+                    break;
+                default:
+                    return default;
+            }
+
+            SkillImpactTimingInput input = new(
+                executionMode,
+                timing.StartDuration,
+                timing.ProcessDuration,
+                skill.Table.DamageTime,
+                skill.HitInterval,
+                skill.ChannelingInterval,
+                skill.HitCount,
+                skill.Table.HasDirectImpact,
+                skill.Table.ProjectileId > 0,
+                skill.Table.AreaEffectId > 0,
+                skill.Table.UsesLandingCommit);
+            return SkillImpactTimingResolver.Resolve(input);
+        }
+
+        private void CreateAttackTelegraph(
+            int skillEntityId,
+            SkillComponent skill,
+            SkillTargetComponent target,
+            SkillTimingComponent timing,
+            in SkillRuntimePools pools)
+        {
+            if (skill.Table == null || AR.s.Component.HasComponent<MonsterTag>(skill.OwnerEntityId) == false)
+                return;
+
+            SkillImpactSchedule schedule = ResolveImpactSchedule(skill, timing);
+            if (schedule.HasCommit == false)
+                return;
+
+            AttackTelegraphGeometry geometry = AttackTelegraphRuntimeGeometryResolver.Resolve(
+                AR.s.Component,
+                skillEntityId,
+                skill,
+                AttackTelegraphRuntimeGeometryResolver.ResolvePlayerHitRadius(AR.s.Component));
+            if (geometry.Shape == AttackTelegraphShape.None)
+                return;
+
+            Vector2 snapshotOrigin = Vector2.zero;
+            if (pools.Transform.TryGet(skill.OwnerEntityId, out TransformComponent ownerTransform) == true)
+            {
+                snapshotOrigin = AttackTelegraphRuntimeGeometryResolver.ResolveOrigin(
+                    AR.s.Component,
+                    skill.OwnerEntityId,
+                    geometry.Shape,
+                    ownerTransform.Position);
+            }
+
+            Vector2 targetPosition = target.TargetPosition;
+            if (geometry.OriginMode == AttackTelegraphOriginMode.LandingPosition)
+            {
+                targetPosition = ResolveJumpEndPosition(skill.Table, target, snapshotOrigin);
+            }
+
+            float warningStart = Time.fixedTime;
+            float nextCommit = warningStart + SkillImpactTimingResolver.GetQuantizedCommitOffset(
+                schedule,
+                0,
+                Time.fixedDeltaTime);
+            AttackTelegraphComponent telegraph = new()
+            {
+                OwnerEntityId = skill.OwnerEntityId,
+                Shape = geometry.Shape,
+                OriginMode = geometry.OriginMode,
+                SnapshotOrigin = snapshotOrigin,
+                TargetPosition = targetPosition,
+                Direction = AttackTelegraphGeometryResolver.NormalizeOrFallback(target.TargetDirection, Vector2.right),
+                Range = geometry.Range,
+                HalfAngleDeg = geometry.HalfAngleDeg,
+                Width = geometry.Width,
+                ProjectileCount = geometry.ProjectileCount,
+                ProjectileSpreadAngleDeg = geometry.ProjectileSpreadAngleDeg,
+                WarningStartFixedTime = warningStart,
+                NextCommitFixedTime = nextCommit,
+                CommitIndex = 0,
+                CommitCount = schedule.CommitCount,
+            };
+            AR.s.Component.SetComponent(skillEntityId, telegraph);
+        }
+
+
+        private void AdvanceAttackTelegraph(
+            int skillEntityId,
+            SkillComponent skill,
+            float processElapsed,
+            SkillImpactSchedule schedule,
+            in SkillRuntimePools pools)
+        {
+            int nextCommitIndex = skill.CurrentHitIndex;
+            if (schedule.HasCommitAt(nextCommitIndex) == false)
+            {
+                // 마지막 커밋 뒤에도 100% 상태를 유지하고 스킬 완료/취소 생명주기에서 제거합니다.
+                return;
+            }
+
+            if (pools.AttackTelegraph.TryGet(skillEntityId, out AttackTelegraphComponent telegraph) == false)
+                return;
+
+            if (pools.SkillTarget.TryGet(skillEntityId, out SkillTargetComponent target) == true)
+            {
+                telegraph.Direction = AttackTelegraphGeometryResolver.NormalizeOrFallback(
+                    target.TargetDirection,
+                    telegraph.Direction);
+                telegraph.TargetPosition = target.TargetPosition;
+            }
+
+            telegraph.WarningStartFixedTime = Time.fixedTime;
+            telegraph.NextCommitFixedTime = Time.fixedTime
+                + SkillImpactTimingResolver.GetQuantizedRemainingDelay(
+                    schedule,
+                    nextCommitIndex,
+                    processElapsed,
+                    Time.fixedDeltaTime);
+            telegraph.CommitIndex = nextCommitIndex;
+            telegraph.CommitCount = schedule.CommitCount;
+            AR.s.Component.SetComponent(skillEntityId, telegraph);
+        }
+
+        private static Vector2 ResolveJumpEndPosition(
+            ARPG.Tables.SkillTable table,
+            SkillTargetComponent target,
+            Vector2 startPosition)
+        {
+            float maxDistance = table.SkillRangeMax;
+            if (table.SkillTargetType == GlobalEnum.SkillTargetType.Direction)
+            {
+                if (maxDistance > 0f)
+                {
+                    Vector2 direction = AttackTelegraphGeometryResolver.NormalizeOrFallback(
+                        target.TargetDirection,
+                        Vector2.right);
+                    return startPosition + direction * maxDistance;
+                }
+                return startPosition;
+            }
+
+            if (table.SkillTargetType == GlobalEnum.SkillTargetType.Position)
+            {
+                Vector2 toTarget = target.TargetPosition - startPosition;
+                float distanceSqr = toTarget.sqrMagnitude;
+                if (maxDistance > 0f && distanceSqr > maxDistance * maxDistance)
+                {
+                    Vector2 direction = AttackTelegraphGeometryResolver.NormalizeOrFallback(
+                        toTarget,
+                        target.TargetDirection);
+                    return startPosition + direction * maxDistance;
+                }
+                return target.TargetPosition;
+            }
+
+            return startPosition;
+        }
+
         #region Skill Type Processing Methods
 
         /// <summary>
@@ -862,25 +1023,36 @@ namespace ARPG.Systems
         /// </summary>
         private void ProcessMultiHitSkill(int skillEntityId, ref SkillStateComponent state, ref SkillComponent skill, in SkillTimingComponent timing, in SkillRuntimePools pools)
         {
-            // 모든 히트가 완료되었으면 스킵
-            if (skill.CurrentHitIndex >= skill.HitCount)
+            SkillImpactSchedule schedule = ResolveImpactSchedule(skill, timing);
+            if (schedule.HasCommit == false || schedule.HasCommitAt(skill.CurrentHitIndex) == false)
                 return;
 
-            // Process 기간 가져오기
-            float processDuration = timing.ProcessDuration;
+            if (schedule.Kind == SkillImpactKind.LandingImpact)
+            {
+                if (pools.LandingCommit.TryGet(skillEntityId, out SkillLandingCommitComponent landingCommit) == false)
+                    return;
 
-            // DamageTime(비율) * ProcessDuration = 첫 히트 오프셋
-            float damageRatio = skill.Table != null ? Mathf.Clamp01(skill.Table.DamageTime) : 0f;
-            float firstHitOffset = damageRatio * processDuration;
-            float nextHitTime = firstHitOffset + skill.CurrentHitIndex * skill.HitInterval;
+                if (pools.SkillTarget.TryGet(skillEntityId, out SkillTargetComponent landingTarget) == true)
+                {
+                    landingTarget.TargetPosition = landingCommit.LandingPosition;
+                    AR.s.Component.SetComponent(skillEntityId, landingTarget);
+                }
 
-            // 다음 히트 시간이 되었으면 효과 적용
-            if (state.ElapsedTime >= nextHitTime)
+                AR.s.Component.RemoveComponent<SkillLandingCommitComponent>(skillEntityId);
+                ProcessSkillHit(skillEntityId, ref skill, in pools);
+                skill.CurrentHitIndex++;
+                AdvanceAttackTelegraph(skillEntityId, skill, state.ElapsedTime, schedule, in pools);
+                return;
+            }
+
+            float nextCommitTime = schedule.GetProcessCommitOffset(skill.CurrentHitIndex);
+            if (state.ElapsedTime >= nextCommitTime)
             {
                 ProcessSkillHit(skillEntityId, ref skill, in pools);
                 skill.CurrentHitIndex++;
+                AdvanceAttackTelegraph(skillEntityId, skill, state.ElapsedTime, schedule, in pools);
 
-                Debug.Log($"[System_Skill] MultiHit {skill.CurrentHitIndex}/{skill.HitCount} at {state.ElapsedTime:F3}s - SkillEntityId: {skillEntityId}");
+                Debug.Log($"[System_Skill] Commit {skill.CurrentHitIndex}/{schedule.CommitCount} ({schedule.Kind}) at {state.ElapsedTime:F3}s - SkillEntityId: {skillEntityId}");
             }
         }
 
@@ -910,11 +1082,21 @@ namespace ARPG.Systems
                 return;
             }
 
-            // 채널링 간격마다 효과 적용
-            if (state.ElapsedTime - skill.LastChannelingTime >= skill.ChannelingInterval)
+            if (pools.SkillTiming.TryGet(skillEntityId, out SkillTimingComponent timing) == false)
+                return;
+
+            SkillImpactSchedule schedule = ResolveImpactSchedule(skill, timing);
+            if (schedule.HasCommit == false)
+                return;
+
+            // 첫 틱은 DamageTime × ProcessDuration, 이후 틱은 ChannelingInterval을 사용한다.
+            float nextCommitTime = schedule.GetProcessCommitOffset(skill.CurrentHitIndex);
+            if (state.ElapsedTime >= nextCommitTime)
             {
                 ProcessSkillHit(skillEntityId, ref skill, in pools);
+                skill.CurrentHitIndex++;
                 skill.LastChannelingTime = state.ElapsedTime;
+                AdvanceAttackTelegraph(skillEntityId, skill, state.ElapsedTime, schedule, in pools);
 
                 Debug.Log($"[System_Skill] Channeling tick at {state.ElapsedTime:F2}s - SkillEntityId: {skillEntityId}");
             }
@@ -987,15 +1169,59 @@ namespace ARPG.Systems
             }
             ARPG.Tables.SkillTable skillTable = skill.Table;
 
-            string commitPhase = skillTable.ProjectileId > 0 ? "ProjectileCommit" : "HitCommit";
+            string commitPhase = skillTable.AreaEffectId > 0
+                ? "AreaCommit"
+                : skillTable.ProjectileId > 0 ? "ProjectileCommit" : "HitCommit";
             target = CommitAim(skillEntityId, ref skill, target, commitPhase, in pools);
+
+            Vector2 commitPosition;
+            if (skillTable.SkillTargetType == GE.SkillTargetType.Position)
+            {
+                commitPosition = target.TargetPosition;
+            }
+            else if (pools.Transform.TryGet(skill.OwnerEntityId, out TransformComponent casterTransform) == true)
+            {
+                commitPosition = casterTransform.Position;
+            }
+            else
+            {
+                commitPosition = Vector2.zero;
+            }
+
+            // 기존 테이블의 "Hit" 같은 값은 Addressable 이펙트 키가 아니다.
+            // Effects/ 주소가 명시된 경우에만 첫 커밋 연출을 한 번 재생한다.
+            if (skill.CurrentHitIndex == 0
+                && string.IsNullOrEmpty(skillTable.ActivateName) == false
+                && skillTable.ActivateName.StartsWith("Effects/", System.StringComparison.Ordinal) == true)
+            {
+                Vector3 effectPosition = new Vector3(commitPosition.x, commitPosition.y, 0f);
+                AR.s.Effect.Spawn(skillTable.ActivateName, effectPosition, Quaternion.identity).Forget();
+            }
+
+            // 장판은 공통 스케줄의 첫 커밋에서 논리 엔티티를 즉시 생성한다.
+            // AreaEffect 시스템(priority 240)이 같은 FixedUpdate의 첫 틱을 처리한다.
+            // 생성은 IsAreaEffectCreated로 한 실행에 1회만 보장하고, 직접 타격/발사체는 그대로 진행한다.
+            // (장판과 직접 타격은 공존한다 — 예: 내려찍어 3연타 + 바닥에 불장판 1개)
+            if (skillTable.AreaEffectId > 0)
+            {
+                if (skill.IsAreaEffectCreated == false)
+                {
+                    EntityFactory.CreateAreaEffect(
+                        skill.OwnerEntityId,
+                        skillTable.AreaEffectId,
+                        commitPosition,
+                        skill.SkillId);
+                    skill.IsAreaEffectCreated = true;
+                    AR.s.Component.SetComponent(skillEntityId, skill);
+                }
+            }
 
             // 발사체 스킬인 경우 발사체 생성 (BaseProjectileCount + Stat.ProjectileCountAdd만큼 부채꼴 발사)
             if (skillTable.ProjectileId > 0)
             {
                 if (pools.Transform.TryGet(skill.OwnerEntityId, out var ownerTransform))
                 {
-                    const float SPREAD_ANGLE_PER_SHOT = 15f;  // 발사체 간 각도(도). 추후 Stat 합산 도입 시 교체
+                    const float SPREAD_ANGLE_PER_SHOT = AttackTelegraphGeometryResolver.DefaultProjectileSpreadAngleDeg;
 
                     // 발사 시작점 = owner의 몸통 중심 (HitOffset 적용). 타겟도 몸통 기준이라 방향이 직관적
                     Vector2 spawnOrigin = ownerTransform.Position;
@@ -1007,13 +1233,16 @@ namespace ARPG.Systems
                     Vector2 baseDir = SkillAimResolver.NormalizeOrFallback(target.TargetDirection, Vector2.right);
                     float baseAngle = Mathf.Atan2(baseDir.y, baseDir.x) * Mathf.Rad2Deg;
 
-                    int baseCount = Mathf.Max(1, skillTable.BaseProjectileCount);
                     int extraCount = 0;
                     if (pools.Stat.TryGet(skill.OwnerEntityId, out var ownerStat))
                         extraCount = ownerStat.FinalProjectileCountAdd;
+                    int skillExtraCount = 0;
                     if (pools.SkillBonus.TryGet(skillEntityId, out var skillBonus))
-                        extraCount += skillBonus.ProjectileCountAddBonus;
-                    int finalCount = Mathf.Max(1, baseCount + extraCount);
+                        skillExtraCount = skillBonus.ProjectileCountAddBonus;
+                    int finalCount = AttackTelegraphGeometryResolver.ResolveProjectileCount(
+                        skillTable.BaseProjectileCount,
+                        extraCount,
+                        skillExtraCount);
 
                     float totalSpread = (finalCount - 1) * SPREAD_ANGLE_PER_SHOT;
                     float startOffset = -totalSpread * 0.5f;
@@ -1035,6 +1264,11 @@ namespace ARPG.Systems
 
                 return;
             }
+
+            // 직접 타격이 없는 스킬(순수 장판 등)은 범위 판정을 돌리지 않는다.
+            // 돌리면 데미지 0인 헛 타격이 OnHit 효과와 HitEffect를 발화시킨다.
+            if (skillTable.HasDirectImpact == false)
+                return;
 
             // 즉발 스킬: 기존 로직
             System.Collections.Generic.List<int> hitEntities = GetEntitiesInSkillRange(skill, target, in pools);
@@ -1063,7 +1297,7 @@ namespace ARPG.Systems
             switch (skill.Table.SkillTargetType)
             {
                 case GlobalEnum.SkillTargetType.Direction:
-                    // 범위 원형 - TargetPosition 중심으로 범위 내 엔티티 체크
+                case GlobalEnum.SkillTargetType.Position:
                     CheckCircleRangeEntities(skill, target, _hitEntitiesCache, in pools);
                     break;
             }
@@ -1074,7 +1308,8 @@ namespace ARPG.Systems
         /// <summary>
         /// 원형 범위 내 엔티티 체크
         /// Range1: 거리, Range2: 각도 (360도면 전방향, 그 외는 부채꼴 한쪽 각도)
-        /// 시전자 발 좌표를 기준점으로 사용하고, 타겟은 ColliderComponent.HitOffset/HitRadius로 보정
+        /// Direction은 시전자 발 좌표, Position은 커밋된 지정 위치를 중심으로 사용한다.
+        /// 타겟은 ColliderComponent.HitOffset/HitRadius로 보정한다.
         /// caster가 faction을 가지면 적 faction 인덱스만 순회, 없으면 transform 풀 폴백.
         /// </summary>
         private void CheckCircleRangeEntities(SkillComponent skill, SkillTargetComponent target, System.Collections.Generic.List<int> outHitEntities, in SkillRuntimePools pools)
@@ -1092,16 +1327,15 @@ namespace ARPG.Systems
                 return;
             }
 
-            // 시전자 시점 기준은 발 좌표 그대로 (스킬 사거리 기획 의미상 발 기준)
-            Vector2 originPosition = ownerTransform.Position;
+            bool isPositionTarget = skill.Table.SkillTargetType == GlobalEnum.SkillTargetType.Position;
+            Vector2 originPosition = isPositionTarget == true ? target.TargetPosition : ownerTransform.Position;
 
-            // 유효 사거리 = owner.HitRadius + SkillTargetRange1 ("몸 밖으로 뻗는 추가 사거리" 모델)
-            // 큰 몹은 동일한 SkillTargetRange1로도 자기 몸 너머까지 자연스럽게 도달
+            // Direction은 몸 가장자리 밖 추가 거리, Position은 지정 지점의 고리 반경이다.
             float ownerHitRadius = 0f;
-            if (colliderPool.TryGet(skill.OwnerEntityId, out var ownerCollider))
+            if (isPositionTarget == false && colliderPool.TryGet(skill.OwnerEntityId, out var ownerCollider))
                 ownerHitRadius = ownerCollider.HitRadius;
 
-            float range = ownerHitRadius + skill.Table.SkillTargetRange1; // 거리(몸 가장자리 기준)
+            float range = ownerHitRadius + skill.Table.SkillTargetRange1;
             float halfAngleDeg = skill.Table.SkillTargetRange2; // 한쪽 각도 (360이면 전방향)
             Vector2 forward = target.TargetDirection;
 

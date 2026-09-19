@@ -173,6 +173,10 @@ namespace ARPG.Systems
             System_Jump jumpSystem = new();
             RegisterSystems(jumpSystem);
 
+            // Priority 900: Attack Telegraph (Update) - 활성 공격 ECS를 단일 Combined Mesh로 메인 카메라에 제출
+            System_AttackTelegraph attackTelegraphSystem = new();
+            RegisterSystems(attackTelegraphSystem);
+
             // Priority 1000: Render System (Update) - GameObject 동기화
             System_Render renderSystem = new();
             RegisterSystems(renderSystem);
