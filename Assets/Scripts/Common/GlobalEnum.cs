@@ -182,6 +182,7 @@ public class GlobalEnum
         LifeSteal,           // OnHit. Param1=흡혈 비율(%)
         ApplyBuff,           // OnHit. Param1=BuffId, Param2=스택, Param3=지속시간 오버라이드(0=기본)
         DelegateToTotem,     // OnSkillCommand. Param1=토템 생존시간(초)
+        SkillPropagation,    // OnSkillCommit/OnHit. Param1=SkillPropagationTable Id
     }
 
     /// <summary>
@@ -380,6 +381,16 @@ public class GlobalEnum
     }
 
     /// <summary>
+    /// How a selected propagation branch reaches its target.
+    /// </summary>
+    public enum SkillDeliveryType : byte
+    {
+        Inherit,
+        Instant,
+        Projectile,
+    }
+
+    /// <summary>
     /// 스킬 효과(SkillEffect)의 발동 시점.
     /// SkillEffectExecutor가 이 트리거에 매칭되는 효과만 실행한다.
     /// </summary>
@@ -387,6 +398,7 @@ public class GlobalEnum
     {
         OnSkillCommand,     // 시전 명령 처리 직전 (캔슬·시전 위임 가능)
         OnSkillStart,       // Process 단계 진입 직후 (시전 확정)
+        OnSkillCommit,      // 실제 DamageTime 커밋 직후 (기본 전달 억제 가능)
         OnHit,              // 적중한 적마다 1회
         OnCrit,             // 치명타 적중 (OnHit과 함께 발화)
         OnKill,             // 적중으로 적이 사망

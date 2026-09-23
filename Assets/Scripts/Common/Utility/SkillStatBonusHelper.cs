@@ -92,6 +92,8 @@ namespace ARPG.Utility
         /// <summary>
         /// Rebuild로 SkillStatBonusOn*Component에 흡수된 StatBonus 행을 제외하고 EffectAction만 남긴 SkillEffectIds 반환.
         /// SkillComponent.EffectiveSkillEffectIds에 저장될 런타임 트리거 순회용 인라인 배열을 만든다.
+        /// 같은 트리거에 활성 SkillPropagation이 2개 이상이면 설정 오류로 보고 해당 트리거의 전파를 모두 제외한다.
+        /// (스킬 생성 시 1회 검증 → 피격마다 재검사/에러 로그를 반복하지 않는다)
         /// </summary>
         public static SkillEffectIds FilterToActionEffects(IReadOnlyList<int> effectIds)
         {
@@ -106,9 +108,42 @@ namespace ARPG.Utility
                     continue;
                 if (t.Kind != GE.SkillEffectKind.EffectAction)
                     continue;
+                if (IsConflictingPropagation(t, effectIds))
+                {
+                    Debug.LogError($"[SkillStatBonusHelper] Multiple active SkillPropagation profiles are not allowed for trigger {t.Trigger}. Excluding EffectId={t.Id}.");
+                    continue;
+                }
                 result.Add(effectIds[i]);
             }
             return result;
+        }
+
+        private static bool IsConflictingPropagation(SkillEffectTable inEffect, IReadOnlyList<int> inEffectIds)
+        {
+            if (IsActivePropagation(inEffect) == false)
+                return false;
+
+            int activePropagationCount = 0;
+            for (int i = 0; i < inEffectIds.Count; i++)
+            {
+                SkillEffectTable other = AR.s.Data.GetSkillEffect(inEffectIds[i]);
+                if (other == null
+                    || other.Kind != GE.SkillEffectKind.EffectAction
+                    || other.Trigger != inEffect.Trigger
+                    || IsActivePropagation(other) == false)
+                {
+                    continue;
+                }
+
+                activePropagationCount++;
+            }
+
+            return activePropagationCount > 1;
+        }
+
+        private static bool IsActivePropagation(SkillEffectTable inEffect)
+        {
+            return inEffect.EffectType == GE.Stat.SkillPropagation && inEffect.Probability > 0;
         }
     }
 }

@@ -175,11 +175,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: c92ae5f679ea49c18bc9a8f4e7d286fc
-    m_Address: Projectile/Projectile_SwampToadPoisonSpit
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7c427aeacf06dde43ac3b30bb18968cc
     m_Address: Sprites/Items/Woodpile
     m_ReadOnly: 0
@@ -280,6 +275,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c92ae5f679ea49c18bc9a8f4e7d286fc
+    m_Address: Projectile/Projectile_SwampToadPoisonSpit
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: cfe20608e63749541049ccd6e5324f8b
     m_Address: Animation/PoisonMushroom
     m_ReadOnly: 0
@@ -352,6 +352,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f6bf4160ce2dba44db9bfc8cac1f132d
     m_Address: Atlas/Icon
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fd537b8dc6fcec2479057e7ec4c11a4e
+    m_Address: Effects/ChainLightningSegment
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

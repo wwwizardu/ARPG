@@ -198,6 +198,16 @@ namespace ARPG.Skill.Combat
         /// </summary>
         public static DamageResult Calculate(int skillEntityId, int attackerId, int targetId, SkillTable skillData)
         {
+            return Calculate(skillEntityId, attackerId, targetId, skillData, 1f);
+        }
+
+        /// <summary>
+        /// Calculates a hit with a delivery-specific damage multiplier.
+        /// The multiplier is applied after the skill's base multipliers and before
+        /// critical, armor, resistance, evasion, and block calculations.
+        /// </summary>
+        public static DamageResult Calculate(int skillEntityId, int attackerId, int targetId, SkillTable skillData, float damageMultiplier)
+        {
             DamageResult result = new DamageResult
             {
                 DamageType = skillData.DamageType
@@ -237,6 +247,13 @@ namespace ARPG.Skill.Combat
             iceDamage       *= damageMul;
             lightningDamage *= damageMul;
             poisonDamage    *= damageMul;
+
+            float clampedDamageMultiplier = Mathf.Max(0f, damageMultiplier);
+            physDamage      *= clampedDamageMultiplier;
+            fireDamage      *= clampedDamageMultiplier;
+            iceDamage       *= clampedDamageMultiplier;
+            lightningDamage *= clampedDamageMultiplier;
+            poisonDamage    *= clampedDamageMultiplier;
 
             // ========== 4단계: 치명타 판정 ==========
             if (Random.Range(0f, 100f) < profile.TotalCritRate)

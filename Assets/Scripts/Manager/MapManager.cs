@@ -28,6 +28,10 @@ namespace ARPG.Map
         [SerializeField] private float _warmChunkLifetime = 300f;
         [SerializeField] private int _maxWarmChunkCount = 20;
 
+        [Header("Monster Spawn Exclusion")]
+        // 마을 청사진 직사각형을 사방으로 넓혀 몬스터 스폰을 금지하는 여유 거리(타일)
+        [SerializeField] private int _villageSpawnExclusionMargin = 5;
+
         private static readonly Vector2Int InvalidChunk = new Vector2Int(-100000, -100000);
 
         // _activeChunks는 Active/Warm 청크 모두를 보존한다. _renderedChunks는 Active 부분집합이다.
@@ -421,6 +425,9 @@ namespace ARPG.Map
             {
                 return false;
             }
+
+            if (chunk.villageSpawnExclusion[localPosition.x, localPosition.y] == true)
+                return false;
 
             ulong tileData = chunk.tiles[localPosition.x, localPosition.y];
             if ((tileData & (ulong)GlobalEnum.TileFlag.Hill) != 0 ||

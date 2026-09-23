@@ -29,6 +29,7 @@ namespace ARPG.Skill.Combat
                 return;
 
             // 호출 시점에 전달되는 effectIds는 EntityFactory.CreateSkill에서 이미 EffectAction만 남도록 필터링된 인라인 배열(SkillComponent.EffectiveSkillEffectIds).
+            // 같은 트리거의 SkillPropagation 중복도 그 시점에 SkillStatBonusHelper.FilterToActionEffects가 제거한다.
             // StatBonus는 SkillStatBonusHelper가 컴포넌트로 사전 합산해 DamageCalculator가 소비하므로 여기 도달하지 않는다.
             for (int i = 0; i < effectIds.Count; i++)
             {
@@ -68,6 +69,10 @@ namespace ARPG.Skill.Combat
                     ExecuteDelegateToTotem(effect, ref ctx);
                     break;
 
+                case GE.Stat.SkillPropagation:
+                    ExecuteSkillPropagation(effect, ref ctx);
+                    break;
+
                 default:
                     // 시트에서 Kind=EffectAction으로 분류됐는데 여기 case가 없음 = 미구현 액션.
                     Debug.LogWarning($"[SkillEffectExecutor] EffectAction case 누락: EffectType={effect.EffectType}, EffectId={effect.Id}");
@@ -100,6 +105,33 @@ namespace ARPG.Skill.Combat
 
             ctx.CancelOriginalCast = true;
             Debug.Log($"[SkillEffect] DelegateToTotem - Caster({ctx.OwnerEntityId}) → Totem({totemId}) casting SkillId({ctx.SkillId}) for {duration}s");
+        }
+
+        private static void ExecuteSkillPropagation(SkillEffectTable effect, ref SkillEffectContext ctx)
+        {
+            int propagationTableId = Mathf.RoundToInt(effect.Param1);
+            if (propagationTableId <= 0)
+            {
+                Debug.LogError($"[SkillEffect] SkillPropagation requires Param1=SkillPropagationTable Id. EffectId={effect.Id}");
+                return;
+            }
+
+            if (effect.Trigger == GE.SkillTrigger.OnSkillCommit)
+            {
+                if (ARPG.Skill.Propagation.SkillPropagationRuntime.TryStartOnSkillCommit(propagationTableId, ref ctx) == true)
+                {
+                    ctx.SuppressDefaultImpact = true;
+                }
+                return;
+            }
+
+            if (effect.Trigger == GE.SkillTrigger.OnHit)
+            {
+                ARPG.Skill.Propagation.SkillPropagationRuntime.TryStartOnHit(propagationTableId, ref ctx);
+                return;
+            }
+
+            Debug.LogError($"[SkillEffect] SkillPropagation only supports OnSkillCommit or OnHit. EffectId={effect.Id}, Trigger={effect.Trigger}");
         }
 
         /// <summary>

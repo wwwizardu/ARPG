@@ -253,6 +253,9 @@ namespace ARPG.Map
 
         private void GenerateChunkData(MapChunkData chunk)
         {
+            // 풀에서 재사용된 청크의 이전 마킹을 지운다. 월드는 OverlayMapFileData에서 다시 채움
+            System.Array.Clear(chunk.villageSpawnExclusion, 0, chunk.villageSpawnExclusion.Length);
+
             if (Context.Kind == MapKind.Dungeon)
             {
                 GenerateDungeonChunk(chunk);
@@ -345,6 +348,8 @@ namespace ARPG.Map
                     {
                         continue;
                     }
+                    if (chunk.villageSpawnExclusion[x, y] == true)
+                        continue;
 
                     _candidateSpawnPositions.Add(new Vector2Int(x, y));
                 }
@@ -436,6 +441,14 @@ namespace ARPG.Map
                 Vector2Int mapFileWorldStart = mapFileData.StartPosition;
                 Vector2Int mapFileWorldEnd = new Vector2Int(mapFileWorldStart.x + mapFileData.Width - 1, mapFileWorldStart.y + mapFileData.Height - 1);
 
+                // 마을 청사진은 여유 거리만큼 넓힌 영역을 몬스터 스폰 금지로 마킹한다.
+                // 마을 본체가 옆 청크에 있어도 여유 거리가 걸치면 이 청크에 마킹된다.
+                if (mapFileData.MapType == MapType.Village)
+                {
+                    MarkVillageSpawnExclusion(chunk, chunkWorldStart, chunkWorldEnd,
+                        mapFileWorldStart, mapFileWorldEnd);
+                }
+
                 // 겹치는 영역이 있는지 확인
                 if (chunkWorldEnd.x < mapFileWorldStart.x || chunkWorldStart.x > mapFileWorldEnd.x ||
                     chunkWorldEnd.y < mapFileWorldStart.y || chunkWorldStart.y > mapFileWorldEnd.y)
@@ -469,6 +482,27 @@ namespace ARPG.Map
                             chunk.tiles[chunkLocalX, chunkLocalY] = mapTileData;
                         }
                     }
+                }
+            }
+        }
+
+        private void MarkVillageSpawnExclusion(MapChunkData chunk,
+            Vector2Int chunkWorldStart, Vector2Int chunkWorldEnd,
+            Vector2Int villageWorldStart, Vector2Int villageWorldEnd)
+        {
+            int margin = Mathf.Max(0, _villageSpawnExclusionMargin);
+            int startX = Mathf.Max(chunkWorldStart.x, villageWorldStart.x - margin);
+            int endX = Mathf.Min(chunkWorldEnd.x, villageWorldEnd.x + margin);
+            int startY = Mathf.Max(chunkWorldStart.y, villageWorldStart.y - margin);
+            int endY = Mathf.Min(chunkWorldEnd.y, villageWorldEnd.y + margin);
+            if (startX > endX || startY > endY)
+                return;
+
+            for (int worldX = startX; worldX <= endX; worldX++)
+            {
+                for (int worldY = startY; worldY <= endY; worldY++)
+                {
+                    chunk.villageSpawnExclusion[worldX - chunkWorldStart.x, worldY - chunkWorldStart.y] = true;
                 }
             }
         }

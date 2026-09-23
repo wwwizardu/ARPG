@@ -18,6 +18,8 @@ sources:
   - Docs/economy/AUCTION_HOUSE_DESIGN.md
   - Wiki/combat.md
   - Wiki/skill_aim.md
+  - Wiki/skill_propagation.md
+  - Docs/combat/SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md
   - Wiki/village.md
   - Assets/Scripts/Item/ItemEnchantmentService.cs
   - Assets/Scripts/Editor/ItemEnchantmentDiagnostics.cs
@@ -57,6 +59,7 @@ NPC 총량은 최신 밀도 설계에 따라 `max(맵 최소값, 마을 수×8)`
 | **몬스터 스폰** | `Any ∪ biome전용` 균등 풀을 그룹별·리스폰별 샘플 [src: Assets/Scripts/Map/Biome/BiomeMonsterMapping.cs, Assets/Scripts/Manager/MonsterManager.cs] | 실제 biome 분류 데이터, 가중치, Zone×풀, 엘리트·보스 [src: Docs/ai_monster/MONSTER_SPAWN_DESIGN.md §7.2.1] |
 | **장비 옵션·마법부여·공격 프로필** | 무기 Base/고유 강화 분리와 일반 옵션 글로벌화, 태그별 공격 프로필, 미장착 장비 Prefix/Postfix 랜덤 교체/추가, 테이블 비용, 메모리 트랜잭션, Forge 전후 비교 UI와 공통 옵션 문구까지 MVP 런타임 구현 완료 [src: Assets/Scripts/Data/ItemData.cs, Assets/Scripts/Common/Utility/EquipHelper.cs, Assets/Scripts/Common/System/System_SkillAttackProfileCalculation.cs, Assets/Scripts/Item/ItemEnchantmentService.cs, Assets/Scripts/UI/UIForge.cs, Assets/Scripts/Item/EquipmentOptionText.cs] | 운영 보강: 비용 시트 다운로드 등록. 회귀 검증: Editor 진단, Tier 1/2/3·실패 무변경·저장 왕복·장착 후 프로필/실제 타격. 분해·전체/수치 재롤·장착 장비 작업·무기 고유 제련은 후속 범위 [src: Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §12·§14, Assets/Scripts/Editor/DownloadTables.cs] |
 | **스킬 조준·이동 정책** | 커서 추적→효과 직전 커밋, 정책별 다단/채널 재커밋, 플레이어 화살표 View, Start/Process 감속과 End 복구, Jump LaunchCommit, A:AQ 파서·테이블 [src: Assets/Scripts/Common/System/System_SkillAim.cs, Assets/Scripts/Common/System/System_Skill.cs, Assets/Scripts/Common/System/System_SkillMovementPenalty.cs, Assets/Scripts/Common/System/System_SkillAimIndicator.cs, Assets/Scripts/Editor/DownloadTables.cs] | 설계된 EditMode 테스트 어셈블리/파일 추가와 실행, Direction·Position·Area·Projectile·MultiHit·Channeling·Jump 대표 스킬 PlayMode 실측 [src: Docs/combat/POE2_CURSOR_TRACKING_PLAN.md §0·§10.1·§검증 체크리스트, Assets/Scripts/Skill/Aim/SkillAimResolver.cs] |
+| **스킬 전파** (2026-09-23 추가) | 공용 연쇄·분열 런타임과 Instant 4연쇄 Chain Lightning, 대상에 붙는 대기 주문, `DeliveryType`별 전달 상한, 전파 Projectile 방문 대상 통과까지 구현하고 코드 리뷰 반영 [src: Wiki/skill_propagation.md, Docs/combat/SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md §13] | `HopInterval=0.2` 연쇄감 확인, Projectile/분열/OnHit 데이터 행 추가와 PlayMode 검증, 리뷰 반영분 플레이 테스트 [src: Docs/combat/SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md §3.4·§10.2] |
 | **스킬 페이지** | P-1 본체와 인스턴스 roll 완료, 드랍·상점 일부 완료 [src: Docs/combat/SKILL_RUNE_DESIGN.md §10] | 현행 효과 4개가 모두 Tier 1이므로 Tier 2/3 콘텐츠 추가, P-2 조건 처리, 장착 UI 폴리시 [src: Assets/_BinaryData/TableData/SkillEffectTable.bytes, Docs/combat/SKILL_RUNE_DESIGN.md §10] |
 | **경매장** | 월드 공유 물물교환 시장의 설계와 기본값 확정 [src: Docs/economy/AUCTION_HOUSE_DESIGN.md §디자인] | GO 신호 전이며 세이브·가치·시뮬·거래·건물·UI 전부 미구현 [src: Docs/economy/AUCTION_HOUSE_DESIGN.md §구현 계획] |
 

@@ -1198,6 +1198,17 @@ namespace ARPG.Systems
                 AR.s.Effect.Spawn(skillTable.ActivateName, effectPosition, Quaternion.identity).Forget();
             }
 
+            SkillEffectContext commitContext = new()
+            {
+                SkillEntityId = skillEntityId,
+                SkillId = skill.SkillId,
+                OwnerEntityId = skill.OwnerEntityId,
+                TargetPosition = commitPosition,
+            };
+            SkillEffectExecutor.Trigger(GE.SkillTrigger.OnSkillCommit, ref commitContext, skill.EffectiveSkillEffectIds);
+            if (commitContext.SuppressDefaultImpact == true)
+                return;
+
             // 장판은 공통 스케줄의 첫 커밋에서 논리 엔티티를 즉시 생성한다.
             // AreaEffect 시스템(priority 240)이 같은 FixedUpdate의 첫 틱을 처리한다.
             // 생성은 IsAreaEffectCreated로 한 실행에 1회만 보장하고, 직접 타격/발사체는 그대로 진행한다.
@@ -1276,7 +1287,10 @@ namespace ARPG.Systems
             for (int i = 0; i < hitEntities.Count; i++)
             {
                 int hitEntityId = hitEntities[i];
-                ApplySkillEffectToEntity(skillEntityId, skill, hitEntityId, in pools);
+                SkillHitProcessor.Process(new SkillHitRequest(skillEntityId, skill.OwnerEntityId, hitEntityId, 1f)
+                {
+                    IsProjectileDelivery = false,
+                }, skill);
             }
 
             Debug.Log($"[System_Skill] ProcessSkillHit - SkillEntityId: {skillEntityId}, OwnerEntityId: {skill.OwnerEntityId}, HitCount: {hitEntities.Count}");
@@ -1380,76 +1394,6 @@ namespace ARPG.Systems
         /// <summary>
         /// 특정 엔티티에게 스킬 효과를 적용합니다
         /// </summary>
-        private void ApplySkillEffectToEntity(int skillEntityId, SkillComponent skill, int targetEntityId, in SkillRuntimePools pools)
-        {
-            // 타겟 엔티티의 StatComponent 가져오기
-            if (pools.Stat.TryGet(targetEntityId, out var targetStat) == false)
-            {
-                Debug.LogWarning($"[System_Skill] Target entity has no StatComponent - TargetEntityId: {targetEntityId}");
-                return;
-            }
-
-            // 스킬 테이블 확인
-            if (skill.Table == null)
-            {
-                Debug.LogError($"[System_Skill] SkillTable is null - SkillId: {skill.SkillId}");
-                return;
-            }
-
-            // ========== DamageCalculator를 사용한 데미지 계산 ==========
-            DamageResult damageResult = DamageCalculator.Calculate(skillEntityId, skill.OwnerEntityId, targetEntityId, skill.Table);
-
-            // ========== 데미지 적용 (HP 감소, 흡혈, 반사, 메시지 전송, 상태이상) ==========
-            DamageCalculator.ApplyDamageResult(skillEntityId, skill.OwnerEntityId, targetEntityId, damageResult);
-
-            // 타겟 StatComponent 다시 가져오기 (ApplyDamageResult에서 HP가 변경됨)
-            if (pools.Stat.TryGet(targetEntityId, out targetStat) == false)
-            {
-                Debug.LogWarning($"[System_Skill] Target StatComponent lost after damage - TargetEntityId: {targetEntityId}");
-                return;
-            }
-
-            // [SkillEffect] OnHit / OnCrit / OnKill 트리거
-            SkillEffectContext hitCtx = new()
-            {
-                SkillEntityId = skillEntityId,
-                SkillId = skill.SkillId,
-                OwnerEntityId = skill.OwnerEntityId,
-                TargetEntityId = targetEntityId,
-                DamageResult = damageResult,
-            };
-            SkillEffectExecutor.Trigger(GE.SkillTrigger.OnHit, ref hitCtx, skill.EffectiveSkillEffectIds);
-            if (damageResult.IsCritical)
-            {
-                SkillEffectExecutor.Trigger(GE.SkillTrigger.OnCrit, ref hitCtx, skill.EffectiveSkillEffectIds);
-            }
-            if (targetStat.CurrentHp <= 0f)
-            {
-                SkillEffectExecutor.Trigger(GE.SkillTrigger.OnKill, ref hitCtx, skill.EffectiveSkillEffectIds);
-            }
-
-            // HitEffect 스폰 — 회피 시 미스폰, 블록은 스폰. 위치는 타겟 몸통 중심
-            if (damageResult.IsEvaded == false && string.IsNullOrEmpty(skill.Table.HitEffect) == false)
-            {
-                if (pools.Transform.TryGet(targetEntityId, out var targetTransform))
-                {
-                    Vector2 effectPos = targetTransform.Position;
-                    if (pools.Collider.TryGet(targetEntityId, out var targetCollider))
-                    {
-                        effectPos += targetCollider.HitOffset;
-                    }
-                    AR.s.Effect.Spawn(skill.Table.HitEffect, effectPos, Quaternion.identity).Forget();
-                }
-            }
-
-            Debug.Log($"[System_Skill] ApplySkillEffectToEntity - SkillEntityId: {skillEntityId}, SkillId: {skill.SkillId}, TargetEntityId: {targetEntityId}, Damage: {Mathf.RoundToInt(damageResult.FinalDamage)}, Critical: {damageResult.IsCritical}, Evaded: {damageResult.IsEvaded}, Blocked: {damageResult.IsBlocked}, RemainingHP: {targetStat.CurrentHp}/{targetStat.FinalMaxHp}");
-
-            // TODO: 추가 구현 필요
-            // - 버프/디버프 적용
-            // - 넉백, CC 효과 등
-            // - 사운드 재생
-        }
-
         /// <summary>
         /// 스킬 효과를 제거합니다 (주로 Toggle 스킬용)
         /// </summary>

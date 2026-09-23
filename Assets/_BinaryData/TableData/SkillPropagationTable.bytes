@@ -1,0 +1,1 @@
+[{"Name":"ChainLightning_4Hits","DeliveryType":"Instant","ChildCount":1,"MaxDepth":3,"InitialSearchRadius":2.5,"SearchRadius":4.0,"HopInterval":0.2,"DamageRatioPerGeneration":100.0,"MaxTotalDeliveries":4,"AllowRepeatTarget":false,"SegmentEffectKey":"Effects/ChainLightningSegment","MaxTurnAngleDeg":60.0,"Id":1}]

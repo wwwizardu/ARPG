@@ -58,6 +58,7 @@ namespace ARPG.Editor
             Register<SkillTable>(list, "92727160&range=A:AQ");
             // Phase 1: SkillEffect 합성 시스템용 테이블 (+ 스킬 페이지 Tier/비용 메타데이터 + Kind 분류 컬럼)
             Register<SkillEffectTable>(list, "1681865950&range=A:N");
+            Register<SkillPropagationTable>(list, "155977417&range=A:M");
             Register<SkillBookTable>(list, "1726438368&range=A:C");
             // 장판(지속 영역 효과) 테이블
             Register<AreaEffectTable>(list, "1891935594&range=A:M");
@@ -276,6 +277,9 @@ namespace ARPG.Editor
 
         [MenuItem("ARPG/Download Table/SkillEffectTable", false, 100)]
         private static async void DownloadSkillEffectTable() => await DownloadSingleTable<SkillEffectTable>();
+
+        [MenuItem("ARPG/Download Table/SkillPropagationTable", false, 100)]
+        private static async void DownloadSkillPropagationTable() => await DownloadSingleTable<SkillPropagationTable>();
 
         [MenuItem("ARPG/Download Table/SkillTable", false, 100)]
         private static async void DownloadSkillTable() => await DownloadSingleTable<SkillTable>();
@@ -647,6 +651,10 @@ namespace ARPG.Editor
                 else if (table is SkillEffectTable skillEffectTable)
                 {
                     ParseSkillEffectTable(skillEffectTable, values);
+                }
+                else if (table is SkillPropagationTable skillPropagationTable)
+                {
+                    ParseSkillPropagationTable(skillPropagationTable, values);
                 }
                 else if (table is SkillBookTable skillBookTable)
                 {
@@ -1438,10 +1446,86 @@ namespace ARPG.Editor
             {
                 case GlobalEnum.Stat.ApplyBuff:
                 case GlobalEnum.Stat.DelegateToTotem:
+                case GlobalEnum.Stat.SkillPropagation:
                     return GlobalEnum.SkillEffectKind.EffectAction;
                 default:
                     return GlobalEnum.SkillEffectKind.StatBonus;
             }
+        }
+
+        /// <summary>
+        /// SkillPropagationTable parser. Column M is the per-hop maximum turn angle.
+        /// Legacy 12-column rows remain unrestricted until their sheet is migrated.
+        /// </summary>
+        private static void ParseSkillPropagationTable(SkillPropagationTable table, string[] values)
+        {
+            if (values.Length < 12)
+            {
+                Debug.LogError($"[ParseSkillPropagationTable] Invalid data length. Expected at least 12, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            table.Name = values[1];
+            if (Enum.TryParse(values[2], true, out GlobalEnum.SkillDeliveryType deliveryType) == false
+                || Enum.IsDefined(typeof(GlobalEnum.SkillDeliveryType), deliveryType) == false)
+            {
+                Debug.LogError($"[ParseSkillPropagationTable] Id={table.Id}({table.Name}): invalid DeliveryType '{values[2]}'; Inherit is used.");
+                deliveryType = GlobalEnum.SkillDeliveryType.Inherit;
+            }
+
+            table.DeliveryType = deliveryType;
+            table.ChildCount = ParseIntSafe(values, 3);
+            table.MaxDepth = ParseIntSafe(values, 4);
+            table.InitialSearchRadius = ParseFloatSafe(values, 5);
+            table.SearchRadius = ParseFloatSafe(values, 6);
+            table.HopInterval = ParseFloatSafe(values, 7);
+            table.DamageRatioPerGeneration = ParseFloatSafe(values, 8);
+            table.MaxTotalDeliveries = ParseIntSafe(values, 9);
+            table.AllowRepeatTarget = string.Equals(values[10].Trim(), "true", StringComparison.OrdinalIgnoreCase);
+            table.SegmentEffectKey = values[11];
+            table.MaxTurnAngleDeg = values.Length > 12 && string.IsNullOrWhiteSpace(values[12]) == false
+                ? ParseFloatSafe(values, 12)
+                : 180f;
+
+            if (table.ChildCount < 1 || table.ChildCount > 4)
+            {
+                Debug.LogError($"[ParseSkillPropagationTable] Id={table.Id}({table.Name}): ChildCount must be 1~4; clamping {table.ChildCount}.");
+                table.ChildCount = Mathf.Clamp(table.ChildCount, 1, 4);
+            }
+            if (table.MaxDepth < 0 || table.MaxDepth > 8)
+            {
+                Debug.LogError($"[ParseSkillPropagationTable] Id={table.Id}({table.Name}): MaxDepth must be 0~8; clamping {table.MaxDepth}.");
+                table.MaxDepth = Mathf.Clamp(table.MaxDepth, 0, 8);
+            }
+            if (table.InitialSearchRadius < 0f || table.SearchRadius < 0f || table.HopInterval < 0f || table.DamageRatioPerGeneration < 0f)
+            {
+                Debug.LogError($"[ParseSkillPropagationTable] Id={table.Id}({table.Name}): radii, interval, and damage ratio must be non-negative; negative values are set to zero.");
+                table.InitialSearchRadius = Mathf.Max(0f, table.InitialSearchRadius);
+                table.SearchRadius = Mathf.Max(0f, table.SearchRadius);
+                table.HopInterval = Mathf.Max(0f, table.HopInterval);
+                table.DamageRatioPerGeneration = Mathf.Max(0f, table.DamageRatioPerGeneration);
+            }
+            if (table.MaxTurnAngleDeg < 0f || table.MaxTurnAngleDeg > 180f)
+            {
+                Debug.LogError($"[ParseSkillPropagationTable] Id={table.Id}({table.Name}): MaxTurnAngleDeg must be 0~180; clamping {table.MaxTurnAngleDeg}.");
+                table.MaxTurnAngleDeg = Mathf.Clamp(table.MaxTurnAngleDeg, 0f, 180f);
+            }
+            int maxTotalDeliveries = SkillPropagationTargetIds.GetMaxTotalDeliveries(table.DeliveryType);
+            if (table.MaxTotalDeliveries < 1 || table.MaxTotalDeliveries > maxTotalDeliveries)
+            {
+                Debug.LogError($"[ParseSkillPropagationTable] Id={table.Id}({table.Name}): MaxTotalDeliveries must be 1~{maxTotalDeliveries} for DeliveryType={table.DeliveryType}; clamping {table.MaxTotalDeliveries}.");
+                table.MaxTotalDeliveries = Mathf.Clamp(table.MaxTotalDeliveries, 1, maxTotalDeliveries);
+            }
+            if (table.AllowRepeatTarget == true)
+            {
+                Debug.LogError($"[ParseSkillPropagationTable] Id={table.Id}({table.Name}): AllowRepeatTarget is unsupported and is forced to false.");
+                table.AllowRepeatTarget = false;
+            }
+
+            // The delivery count depends on the SkillEffect trigger: OnSkillCommit
+            // includes the first selected generation, while OnHit starts after its
+            // source hit. Runtime validates the actual bound trigger before it
+            // creates a root, so a valid OnHit fork is not rejected as a commit tree.
         }
 
         /// <summary>

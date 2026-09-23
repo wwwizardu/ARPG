@@ -82,6 +82,11 @@ namespace ARPG.Component
             { typeof(SkillAttackProfileComponent), 50 }, // 스킬 엔티티와 1:1 — 데미지 계산용 캐시
             { typeof(SkillAttackProfileDirtyTag), 50 },  // 재계산 요청 태그 (처리 후 즉시 제거)
             { typeof(SkillLandingCommitComponent), 32 }, // 점프 착지 후 다음 FixedUpdate까지 유지되는 일회성 신호
+            { typeof(SkillPropagationComponent), 32 },
+            { typeof(SkillPropagationBranchComponent), 256 },
+            { typeof(SkillPropagationRequestComponent), 128 },
+            { typeof(InstantSkillDeliveryComponent), 128 },
+            { typeof(SkillPropagationWorkCompletedTag), 384 },
 
             // 매우 적게 사용되는 컴포넌트 (커맨드용, 일시적)
             { typeof(SkillCommandComponent), 20 },

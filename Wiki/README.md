@@ -7,6 +7,7 @@ sources:
   - Wiki/current_status.md
   - Wiki/combat.md
   - Wiki/skill_aim.md
+  - Wiki/skill_propagation.md
   - Docs/README.md
   - Docs/combat/combatSystem.md
   - Docs/combat/ModSystem_Changelog.md
@@ -35,6 +36,7 @@ sources:
 | **overview** | 게임 컨셉(3대 축)과 시스템별 구현 현황·로드맵 | `Docs/overview/` 2장 (gameOverview, implementationStatus) + `Docs/README.md`(대시보드) | 하 | 하 |
 | **combat** → [combat.md](combat.md) | 장비 옵션 글로벌화, 일반 장비 마법부여, 무기 Base/고유 강화 경계와 공격 프로필 [src: Wiki/combat.md] | `Docs/combat/` + 마법부여·전투 코드와 테이블 [src: Docs/combat/, Assets/Scripts/Item/] | 상 | 상 |
 | **skill_aim** → [skill_aim.md](skill_aim.md) | 커서 조준 추적·효과 커밋, 플레이어 방향 화살표 View, 스킬 사용 중 이동 감속 [src: Wiki/skill_aim.md] | `Docs/combat/POE2_CURSOR_TRACKING_PLAN.md` + 조준·스킬·이동 코드 | 중 | 상 |
+| **skill_propagation** → [skill_propagation.md](skill_propagation.md) | 연쇄·분열 공용 전파 런타임, 대상에 붙는 대기 주문, Chain Lightning 수직 슬라이스 [src: Wiki/skill_propagation.md] | `Docs/combat/SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md` + `Skill/Propagation/`·전파 시스템 코드 | 하 | 상 |
 | **ai_monster** → [monster_spawn_runtime.md](monster_spawn_runtime.md) | 몬스터 AI·데이터 주도 종 풀과 거리 기반 스폰/Warm 청크 캐시 구현 전 제안 [src: Wiki/monster_spawn_runtime.md] | `Docs/ai_monster/` 2장 + 런타임 스폰 제안 | 중 | 상 |
 | **map** | 청크 기반 오픈월드 맵 생성·바이옴 타일셋·충돌/길찾기 | `Docs/map/` 3장 (MAP_DESIGN, COLLISION_PATHFINDING_DESIGN, THEME_TILESET_REFACTOR) | 중 | 중 |
 | **village** → [village.md](village.md) | 마을 자가성장 LOD·서비스와 신규 게임 전 마을 Forge Tier 1 접근성 [src: Wiki/village.md] | `Docs/village/` + 마법부여 Forge 접근성 계약 [src: Docs/village/, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md] | 중 | 상 |

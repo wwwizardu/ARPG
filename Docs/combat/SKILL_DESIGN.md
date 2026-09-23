@@ -2,6 +2,8 @@
 
 현재 `System_Skill` / `SkillTable` / `DamageCalculator` 위에서 바로 또는 약간의 보강으로 구현 가능한 스킬 카탈로그.
 
+> **현행 판정 기준 (2026-09-20)**: "구현됨"은 해당 스킬의 `SkillTable` 행과 필요한 공용 런타임 경로가 모두 존재한다는 뜻이다. "런타임 준비 완료"는 공용 메커니즘은 존재하지만 해당 스킬의 테이블·효과·프리팹 콘텐츠가 아직 등록되지 않았다는 뜻이다. 이름이 같은 테이블 행이 없다는 사실만으로 시스템 미구현으로 판정하지 않는다.
+
 ---
 
 ## 0. 작성 원칙
@@ -34,7 +36,7 @@
 | `HitCount` / `HitInterval` | 다단히트 횟수 / 간격(초) |
 | `BaseAttackSpeedMul` | Attack 스킬의 공속 보정(100=1.0x) |
 | `Cooltime` | 쿨다운(초). `FinalCooldownReduction`(최대 90%) 적용 |
-| `Mana` | 마나 소모 (현재 소모 처리 미구현, §6.2) |
+| `Mana` | 플레이어 시전 명령 승인 후 실제 실행 직전에 소모. 마나 부족 시 명령을 거절하며, AI는 소비하지 않음 |
 
 ### 1.3 타겟/범위 컬럼
 
@@ -60,7 +62,7 @@
 | `ProjectileId` | >0이면 즉발 대신 발사체 스폰 (`ProjectileHelper`) |
 | `ArcHeight` | >0이면 포물선 (Jump/투사체) |
 | `AnimationName` | `AnimCategory` enum 매칭 (Idle/Move/Attack/Dead/Jump) |
-| `StartEffectName` / `ActivateName` / `HitEffect` | 이펙트 키 (현재 미연결) |
+| `StartEffectName` / `ActivateName` / `HitEffect` | `ActivateName`은 `Effects/` 키일 때 첫 커밋 위치에 1회 생성하고, `HitEffect`는 회피가 아닌 실제 적중 위치에 생성. `StartEffectName`은 파싱만 하고 런타임 소비 경로가 아직 없음 |
 
 ### 1.6 ExecutionType (런타임)
 
@@ -70,56 +72,60 @@
 
 ## 2. 스킬 카탈로그 개요
 
-| 카테고리 | 슬롯 | 즉시 가능 | 보강 후 가능 |
+| 카테고리 | 구현된 콘텐츠 | 런타임 준비 완료·콘텐츠 미등록 | 코드 보강 필요 |
 |---|---|---|---|
-| 근접 평타·광역 | A1 ~ A5 | ✅ | — |
-| 이동/돌진 | M1 ~ M3 | M1만 | M2/M3 (§6.3) |
-| 원거리 발사체 | R1 ~ R4 | ✅ | R3 관통/다중 (§6.4) |
-| 원소 스펠 | S1·S2·S4·S5·S6 | S1·S2·S6 | S4·S5 (§6.3/§6.6) |
-| 버프/디버프 | B2 ~ B3 | — | 전부 (§6.2/§6.7) |
-| 채널링/차징 | C1 ~ C2 | — | 전부 (§6.1) |
+| 근접 평타·광역 | A1·A3·A5 | A2·A4 | — |
+| 이동/돌진 | M1 | M2 | M3 라인 히트 |
+| 원거리 발사체 | R2 | R1·R3 | R4 투사체 포물선 |
+| 원소 스펠 | S4 | S1·S2·S5·S6 | — |
+| 버프/디버프 | — | — | B2 토글 자기 버프·B3 아군 범위 버프 |
+| 채널링/차징 | — | — | C1 라인 히트·C2 차지 해제 발동 |
 
-총 **21종 초안**. 한 캐릭터/직업이 모두 가지는 것은 아니며, 상위 시스템(스킬 트리/장비 그란트 등)이 슬롯에 매핑.
+총 **21종 초안** 중 현재 테이블과 런타임이 함께 존재하는 스킬은 A1·A3·A5·M1·R2·S4의 6종이다. A2·A4·M2·R1·R3·S1·S2·S5·S6의 9종은 공용 메커니즘이 이미 있어 콘텐츠 데이터 작성이 주 작업이다. 실제 코드 보강이 필요한 스킬은 M3·R4·B2·B3·C1·C2의 6종이다. 한 캐릭터/직업이 모두 가지는 것은 아니며, 상위 시스템(스킬 트리/장비 그란트 등)이 슬롯에 매핑한다.
+
+`SkillTable`에는 이 카탈로그 외에도 몬스터 전용 `StrikeMonster`, `GoblinFirebolt`, `SwampToadPoisonSpit`과 추가 스킬 `FireRing`이 있다. 이들은 카탈로그 구현 수에 포함하지 않는다.
+
+과거 삭제한 S3 Chain Lightning은 `SingleEntity`를 복원하지 않고 Position 커밋과 공용 연쇄·분열 런타임으로 다시 도입할 계획이다. 구현 계약은 [SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md](SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md)를 따른다. 실제 런타임과 데이터 행이 추가될 때 이 카탈로그에도 다시 포함한다.
 
 ---
 
 ## 3. 근접 (Melee Attack)
 
-모두 `SkillType=Melee`, `Tags=Attack|Melee|Physics`(+옵션).
+기획상 모두 근접 물리 공격이며 `Tags=Attack|Melee|Physics` 조합을 권장한다. 현행 A1·A3·A5 데이터는 호환성 때문에 `SkillType=Range`를 사용하고, A1은 `Melee` 태그도 아직 없다. 실제 근접 판정은 `SkillType`이 아니라 `ProjectileId=0`과 방향 부채꼴 범위로 동작한다.
 
-### A1. Strike — 단발 평타 *(이미 존재, SkillId=1)*
+### A1. Strike — 단발 평타 *(구현됨, SkillId=1)*
 - `SkillTargetType`: Direction, `SkillTargetRange1`: 2.0 (거리), `SkillTargetRange2`: 45 (각도)
 - `HitCount`: 1, `HitInterval`: 0
-- `ProcessTime`: 0.4 (무기 공속 스케일), `DamageTime`: 0.4
+- 현행 데이터: `ProcessTime=0.85`, `DamageTime=0.9`, `BaseAttackSpeedMul=130`, `Cooltime=0`
 - 특징: 커서 방향 좁은 부채꼴 판정. AI 기본 공격으로도 사용.
 
-### A2. Cleave — 부채꼴 광역
+### A2. Cleave — 부채꼴 광역 *(런타임 준비 완료, 콘텐츠 미등록)*
 - `SkillTargetType`: Direction
 - `SkillTargetRange1`: 1.5 (거리), `SkillTargetRange2`: 90 (각도, 양쪽 합 ≈ 180°)
 - `HitCount`: 1, `BaseAttackSpeedMul`: 80 (느린 풀스윙)
 - `Cooltime`: 0
 - 특징: 플레이어/근접 몬스터 공용. 마우스 방향 부채꼴.
+- 현행: `Direction` 원점 + `SkillTargetRange1/2` 부채꼴 판정이 이미 동작하므로 `SkillTable` 행과 연출만 추가하면 된다.
 
-### A3. Whirlwind — 자기 중심 360도 다단히트
+### A3. Whirlwind — 자기 중심 360도 다단히트 *(구현됨, SkillId=11)*
 - `SkillTargetType`: Direction (방향 무시, 각도 360)
-- `SkillTargetRange2`: 360
-- `HitCount`: 6, `HitInterval`: 0.15
-- `ProcessTime`: 1.0, `DamageTime`: 0.1
-- `Cooltime`: 6
-- 특징: 단순 다단히트로 표현 가능. 진정한 채널링은 C1 참조.
+- 현행 데이터: `SkillTargetRange1=1.5`, `SkillTargetRange2=360`, `ExecutionType=Channeling`
+- `ProcessTime=3.0`, `DamageTime=0.1`, `ChannelingInterval=0.15`, `Cooltime=0`
+- 특징: 입력을 유지하는 동안 자기 중심 360도 피해를 반복한다. `TrackContinuously` 정책으로 틱마다 방향을 재커밋하지만 360도 판정이라 피해 범위에는 방향이 영향을 주지 않는다.
 
-### A4. Heavy Slam — 큰 풀백 후 광역 일격
+### A4. Heavy Slam — 큰 풀백 후 광역 일격 *(런타임 준비 완료, 콘텐츠 미등록)*
 - `SkillTargetType`: Direction
 - `SkillTargetRange1`: 1.8, `SkillTargetRange2`: 120
 - `StartTime`: 0.6 (긴 선딜), `ProcessTime`: 0.3, `DamageTime`: 0.1
 - `BaseDamageMul`: 200, `Cooltime`: 5
 - 특징: StartTime을 길게 두는 것만으로 풀백 모션 구현. 차지형(B-Charge)으로 강화는 C2.
+- 현행: 선딜·단일 커밋·부채꼴 피해·공격속도 스케일 경로가 모두 존재한다. 별도 코드 변경은 필요하지 않는다.
 
-### A5. Lacerate — 다단히트 + 출혈 디버프
+### A5. Lacerate — 다단히트 + 출혈 디버프 *(구현됨, SkillId=13)*
 - `SkillTargetType`: Direction (좁은 각도)
-- `SkillTargetRange2`: 60
+- `SkillTargetRange1`: 1.5, `SkillTargetRange2`: 60
 - `HitCount`: 3, `HitInterval`: 0.1
-- 효과: `BuffEffectType.Blooding` 부여 (§6.7 디버프 적용 의존)
+- 효과: `SkillEffectId=1002`의 `ApplyBuff(OnHit)`가 `BuffId=1` 출혈을 부여
 - `Cooltime`: 4
 
 ---
@@ -128,19 +134,19 @@
 
 `Tags`에 `Move` 포함. `SkillType=Jump`인 경우 자동 점프 처리.
 
-### M1. QuickHop — 짧은 도약 *(이미 존재, SkillId=5)*
+### M1. QuickHop — 짧은 도약 *(구현됨, SkillId=5)*
 - `SkillType`: Jump, `SkillTargetType`: Direction, `SkillRangeMax`: 4.0
-- `ArcHeight`: 0.5, `ProcessTime`: 0.3
+- 현행 데이터: `ArcHeight=0.8`, `ProcessTime=0.6`, `Cooltime=2`
 - 특징: 회피용. `JumpComponent.InvincibleHeight` 이상에서 무적.
 
-### M2. Leap Slam — 위치 도약 + 착지 광역 *(요구: §6.3)*
+### M2. Leap Slam — 위치 도약 + 착지 광역 *(런타임 준비 완료, 콘텐츠 미등록)*
 - `SkillType`: Jump, `SkillTargetType`: Position
 - `ArcHeight`: 1.2, `SkillRangeMax`: 4.0
 - 착지 데미지: `SkillTargetRange1`: 1.5 (원형, 각도 360)
 - `Cooltime`: 6
-- 의존: `GetEntitiesInSkillRange`에 `Position` 분기 + 착지 시점 히트 트리거(§6.3).
+- 현행: `Position` 중심 원형 판정, 점프 착지 위치 보정, `SkillLandingCommitComponent`를 통한 착지 시점 피해 커밋이 구현되어 있다. `SkillTable` 행과 착지 연출만 추가하면 된다.
 
-### M3. Dash Strike — 방향 돌진 + 경로 적 타격 *(요구: §6.3)*
+### M3. Dash Strike — 방향 돌진 + 경로 적 타격 *(코드 보강 필요: §6.3)*
 - `SkillType`: Jump (혹은 Move 전용 시스템), `SkillTargetType`: Direction
 - `ArcHeight`: 0.1 (지면 부근), `SkillRangeMax`: 3.0
 - 경로상 적 1회 타격. 새로운 "라인 히트박스" 분기 필요(§6.3).
@@ -151,12 +157,13 @@
 
 모두 `Tags=Attack|Ranged|Projectile`(또는 `Spell` 대체), `ProjectileId>0`.
 
-### R1. Power Shot — 단발 직선 화살
+### R1. Power Shot — 단발 직선 화살 *(런타임 준비 완료, 콘텐츠 미등록)*
 - `ProjectileId`: 101
 - `SkillTargetType`: Direction
 - `SkillRangeMax`: 8.0
 - `ProcessTime`: 0.4, `DamageTime`: 0.3
 - `Cooltime`: 0
+- 현행: 단일 방향 투사체 생성·이동·피해·수명 경로는 몬스터 투사체와 R2가 사용 중이다. 정식 화살 `ProjectileTable` 행·프리팹과 스킬 행이 필요하다.
 
 ### R2. Multi Shot — 부채꼴 3발 ✅ *(2026-05-04 완료, rev 2)*
 - Skill 시트 Id=101, **ProjectileId=1(임시, Test 발사체 재사용)**, **BaseProjectileCount=3**, SkillEffectIds=null
@@ -167,11 +174,12 @@
 - 정식 화살 프리팹/Projectile 행이 마련되면 ProjectileId를 1→101로 갱신.
 - `Cooltime`: 4
 
-### R3. Piercing Bolt — 관통 볼트
+### R3. Piercing Bolt — 관통 볼트 *(런타임 준비 완료, 콘텐츠 미등록)*
 - `ProjectileId`: 102 (`ProjectileTable.IsPiercing=true`)
 - 직선 관통. 이미 `ProjectileTable.IsPiercing` 컬럼 존재.
+- 현행: `ProjectileComponent.IsPiercing`과 관통 시 투사체를 제거하지 않는 충돌 경로가 구현되어 있다. 현재 `ProjectileTable`에는 `IsPiercing=true`인 행이 없으므로 데이터·프리팹 추가가 필요하다.
 
-### R4. Arc Shot — 포물선 원거리 *(요구: §6.4)*
+### R4. Arc Shot — 포물선 원거리 *(코드 보강 필요: §6.4)*
 - `ProjectileId`: 103, `ArcHeight`: 1.5
 - 적의 머리 위로 떨어지는 활. 발사체에도 ArcHeight 사용 분기 필요(점프 외 투사체에 미적용).
 
@@ -181,62 +189,66 @@
 
 모두 `Tags=Spell|<Element>`. 데미지 = `DamageMin~DamageMax`. 무기 공속이 아닌 시전 속도 사용.
 
-### S1. Fireball — 단발 화염 발사체
+### S1. Fireball — 단발 화염 발사체 *(런타임 준비 완료, 콘텐츠 미등록)*
 - `ProjectileId`: 201
 - `DamageType`: Fire
 - 적중 시 `BuffEffectType.Ignite` 1스택 (§6.7)
+- 현행: Spell 투사체, `ApplyBuff` OnHit, 점화 `BuffTable` 행은 존재한다. Fireball 전용 `SkillTable`·`ProjectileTable`·`SkillEffectTable` 행과 프리팹을 연결해야 한다.
 
-### S2. Ice Nova — 자기 중심 360도 냉기
+### S2. Ice Nova — 자기 중심 360도 냉기 *(런타임 준비 완료, 콘텐츠 미등록)*
 - `SkillTargetType`: Direction (각도 360)
 - `SkillTargetRange1`: 2.0, `SkillTargetRange2`: 360
 - `HitCount`: 1
 - 효과: `Chill` 부여(이속 -30%, 3초)
 - `Cooltime`: 5
+- 현행: 자기 중심 360도 피해와 `ApplyBuff` OnHit, 냉동 `BuffTable` 행이 존재한다. 스킬·효과 데이터와 연출을 추가하면 된다.
 
-### S4. Poison Cloud — 위치 지정 장판 *(요구: §6.6)*
+### S4. Poison Cloud — 위치 지정 장판 *(구현됨, SkillId=203 / AreaEffectId=1)*
 - `SkillTargetType`: Position
 - 장판 지속 시간 동안 진입 적에게 Poison DoT
-- 의존: 지속형 `AreaEffectComponent` + 신규 시스템(`System_AreaEffect`).
+- 현행: `AreaEffectComponent`, `System_AreaEffect`, `AreaEffectTable`, 수명 정리, Addressable 프리팹까지 연결되어 있다.
 
-### S5. Lightning Strike — 위치 즉발 광역 *(요구: §6.3)*
+### S5. Lightning Strike — 위치 즉발 광역 *(런타임 준비 완료, 콘텐츠 미등록)*
 - `SkillTargetType`: Position
 - `SkillTargetRange1`: 1.2, `SkillTargetRange2`: 360
 - `DamageType`: Lightning
-- 의존: M2와 동일하게 Position 즉발 분기.
+- 현행: `Position` 중심 즉발 원형 판정이 구현되어 있어 스킬 데이터와 연출만 필요하다. 기존 예약 ID 204는 현재 `GoblinFirebolt`가 사용 중이므로 새 ID를 배정해야 한다.
 
-### S6. Frost Bolt — 단발 냉기 발사체
+### S6. Frost Bolt — 단발 냉기 발사체 *(런타임 준비 완료, 콘텐츠 미등록)*
 - `ProjectileId`: 202, `DamageType`: Ice
 - 적중 시 `Chill` 부여 (§6.7)
+- 현행: Spell 투사체와 `ApplyBuff` OnHit, 냉동 `BuffTable` 행이 존재한다. 기존 예약 ID 205는 현재 `SwampToadPoisonSpit`이 사용 중이므로 새 ID가 필요하다.
 
 ---
 
 ## 7. 버프 / 디버프 (Buff/Debuff)
 
-전부 `SkillType=Buff` 또는 `Tags=Buff/Debuff`. 적용은 §6.2(스킬 효과로 BuffComponent 부여) 의존.
+전부 `SkillType=Buff` 또는 `Tags=Buff/Debuff`. 적중 대상 버프는 §6.2 경로가 존재하지만, B2의 자기 토글 버프와 B3의 아군 범위 선택은 별도 보강이 필요하다.
 
-### B2. Iron Skin — 토글 방어 *(요구: §6.1, §6.2)*
-- ExecutionType: Toggle (현재 고정 MultiHit이라 컬럼화 필요)
+### B2. Iron Skin — 토글 방어 *(코드 보강 필요: §6.1, §6.2)*
+- ExecutionType: Toggle (컬럼과 런타임 분기는 존재)
 - 효과: 방어 +30%, 이속 -10%, 마나 채널 소모
-- 의존: Toggle 분기 활성화 + 효과 적용/제거 구현.
+- 의존: 자기 버프 적용, 토글 OFF 시 정확한 효과 제거, 지속 마나 소비 구현.
 
-### B3. Battle Roar — 주변 아군 버프
+### B3. Battle Roar — 주변 아군 버프 *(코드 보강 필요)*
 - `SkillTargetType`: Direction (각도 360)
 - 효과: 자기 + 아군 공격력 +10%, 5초
 - 의존: 아군 판별 로직(Faction/Tag) + Buff 적용.
+- 현행: `FactionComponent`는 존재하지만 일반 스킬 범위 조회는 적대 진영만 수집한다. 자기 자신과 같은 진영을 대상으로 하는 별도 범위 선택 및 버프 적용 경로가 필요하다.
 
 ---
 
 ## 8. 채널링 / 차징 / 토글 (요구: §6.1)
 
-`ExecutionType` 컬럼화 + 입력 유지 검사가 선행되어야 동작.
+`ExecutionType` 컬럼화와 입력 유지 검사는 구현됐다. C1은 라인 히트, C2는 입력 해제 시 차지 비율 확정과 발동이 남았다.
 
-### C1. Beam Cast — 빔 채널링
+### C1. Beam Cast — 빔 채널링 *(부분 구현: 채널링 완료, 라인 히트 필요)*
 - ExecutionType: Channeling
 - `SkillTargetType`: Direction
 - `ChannelingInterval`: 0.2, 매 틱 라인 히트
-- 의존: `ProcessChannelingSkill`은 코드상 존재. 입력 유지(`SkillCommandComponent` 잔존) 처리는 이미 됨. **라인 히트박스 분기**(§6.3)와 ExecutionType 컬럼화만 추가.
+- 의존: `ProcessChannelingSkill`, 입력 유지, `ExecutionType` 컬럼화, 틱별 조준 재커밋은 구현됐다. **라인 히트박스 분기**(§6.3)와 Beam 전용 데이터·연출이 남았다.
 
-### C2. Charged Bolt — 차징 발사체
+### C2. Charged Bolt — 차징 발사체 *(코드 보강 필요)*
 - ExecutionType: Charge
 - `MaxChargeTime`: 1.5, `MinChargeRatio`: 0.3
 - 입력 떼는 순간 차지 비율로 데미지 스케일된 발사체
@@ -253,45 +265,44 @@
 
 채택 내역:
 - `SkillTable`에 컬럼 추가: `ExecutionType`(0=Single,1=MultiHit,2=Channeling,3=Toggle,4=Charge), `ChannelingInterval`, `MaxChargeTime`, `MinChargeRatio`.
-- `EntityFactory.CreateSkill`이 테이블 `ExecutionType`을 그대로 매핑 (이전 MultiHit 하드코딩 해소). [EntityFactory.cs:612-615]
+- `EntityFactory.CreateSkill`이 테이블 `ExecutionType`과 채널링·차지 필드를 그대로 매핑한다(이전 MultiHit 하드코딩 해소). [EntityFactory.cs:841-846]
 - 입력 유지는 **`InputComponent.SkillSlotHeldMask`(int 비트마스크)** 로 채택 — 별도 `SkillInputHeldTag` 컴포넌트는 만들지 않음. 슬롯 매핑: bit 0=Attack(좌클릭), bit 1=Jump(Space), bit 2~9=Digit1~8.
-- `System_Input`이 매 프레임 `IsPressed()`로 마스크 갱신. [System_Input.cs:117-136]
-- `ProcessChannelingSkill`이 `SlotIndex`로 비트 조회. 입력 떼면 `End` 상태로 전이(후딜레이/쿨타임 정상 처리). AI는 `InputComponent` 없으므로 항상 held 취급, `ProcessDuration`이 종료를 결정. [System_Skill.cs:680-709]
-- `ProcessProcessState`가 플레이어 채널링일 때만 `ProcessDuration` 자동 종료를 스킵. [System_Skill.cs:340-342]
+- `System_Input`이 매 프레임 `IsPressed()`로 마스크를 갱신한다. [System_Input.cs:137-154]
+- `ProcessChannelingSkill`이 `SlotIndex`로 비트를 조회한다. 입력을 떼면 `End` 상태로 전이해 후딜레이와 쿨타임을 정상 처리한다. AI는 `InputComponent`가 없으므로 항상 held로 취급하고 `ProcessDuration`이 종료를 결정한다. [System_Skill.cs:1062-1103]
+- `ProcessProcessState`가 플레이어 채널링일 때만 `ProcessDuration` 자동 종료를 건너뛴다. [System_Skill.cs:412-450]
 
 남은 작업: Charge(`ProcessChargeSkill` 입력 끊김 분기), Toggle(`ProcessToggleSkill` 효과 적용/제거).
 
-영향: C1·C3 활성화. C2(Charge)·B2(Toggle)는 분기는 잡혀있으나 처리 로직 미완.
+영향: C1의 채널링 수명주기는 활성화됐다. C2(Charge)·B2(Toggle)는 분기까지만 존재하며 실제 처리 로직은 미완이다.
 
-### §6.2 마나 소모 + 버프 적용 훅 *(우선순위: 높음, 버프/스펠 전반)*
-- `ProcessSkillCommands`에서 시전 직전 `Mana` 소모 검사 (StatComponent.CurrentMana).
-- `ApplySkillEffectToEntity`의 TODO 자리에 `BuffComponent` 부여 로직 (`BuffTable` 매핑 컬럼 신설: 예 `OnHitBuffId`, `SelfBuffId`).
-- 영향: B1·B2·B3·B4·A5·S1·S2·S6.
+### §6.2 마나 소모 + 적중 버프 적용 훅 ✅ *(완료)*
+- 플레이어는 명령 승인 시 `SkillTable.Mana`와 `StatComponent.CurrentMp`를 검사하고, 실제 스킬 실행이 시작될 때 마나를 차감한다. 마나 부족·Stun·쿨타임 등으로 거절된 명령은 소비하지 않는다. AI는 마나를 소비하지 않는다.
+- 적중 버프는 `SkillEffectTable`의 `EffectType.ApplyBuff` + `Trigger.OnHit` 조합을 `SkillEffectExecutor`가 처리한다. A5 Lacerate가 이 경로로 출혈을 적용한다.
+- `BuffTable`에는 출혈·점화·냉동·중독이 존재한다. S1·S2·S6은 전용 `SkillEffectTable` 행과 스킬 연결만 남았다.
+- 자기 버프와 아군 범위 버프는 이 완료 범위에 포함되지 않으며 B2·B3에서 별도로 구현한다.
 
-### §6.3 Position/라인 즉발 히트 분기 *(우선순위: 높음, 도약·번개 강타·빔)*
-- `GetEntitiesInSkillRange`에 `case SkillTargetType.Position` 추가 (TargetPosition 중심 원형).
-- 라인 히트(돌진/빔용) 분기: 두 점 + 두께로 검사. 새 enum 값 또는 `SkillTargetRange2`를 두께로 재해석.
-- 점프 스킬은 착지 시점에 한 번 더 ProcessSkillHit 트리거가 필요(현재 ProcessTime 종료 = 착지 = ProcessHit과 어긋나는지 검토).
-- 영향: M2·M3·S5·C1.
+### §6.3 Position/라인 즉발 히트 분기 ◐ *(Position·착지 완료, 라인 히트 남음)*
+- 완료: `GetEntitiesInSkillRange`가 `SkillTargetType.Position`을 `TargetPosition` 중심 원형으로 판정한다. 이 경로는 S5 Lightning Strike를 데이터만으로 표현할 수 있다.
+- 완료: 비채널링 Jump 직접 피해는 `System_Jump`가 보정된 실제 착지 위치를 `SkillLandingCommitComponent`로 전달하고, 다음 스킬 FixedUpdate에서 한 번 커밋한다. M2 Leap Slam의 공용 런타임 의존성은 해결됐다.
+- 남음: M3 Dash Strike와 C1 Beam Cast에 필요한 선분/캡슐 형태의 라인 히트. 현재 `Direction`과 `Position` 모두 `HitboxMath.CircleVsSector`만 사용한다.
 
-### §6.4 발사체 다중/포물선 확장 ✅ *(다중 발사 완료, 포물선만 남음)*
+### §6.4 발사체 다중/관통/포물선 확장 ◐ *(다중·관통 완료, 포물선 남음)*
 - ~~다중 발사~~: `SkillTable.BaseProjectileCount` 컬럼 + `Stat.ProjectileCountAdd` 합산으로 처리 (R2 완료). System_Skill의 ProjectileId 분기가 N발 부채꼴 발사로 확장. **임의의 발사체 스킬에 자동 적용** — 장비 mod/버프가 +N 부여하면 R1·R2·S1 등 모든 스킬이 자동으로 다중 발사. ProjectileTable에는 컬럼 추가 없음, SkillEffect 행도 필요 없음.
+- ~~관통~~: `ProjectileTable.IsPiercing` → `ProjectileComponent.IsPiercing` 매핑과 관통 시 투사체 유지 경로가 구현됐다. R3은 `IsPiercing=true`인 데이터 행과 프리팹만 필요하다.
 - ※ §6.8 `SkillEffectType.SpawnProjectile`은 별도 용도로 유지: "스킬과 다른 종류의 발사체를 스폰"(예: 폭발의 파편, 시체 폭발)에만 사용. 일반 Multi Shot에 사용 금지.
 - 포물선(R4): 발사체에 `ArcHeight` 적용 미해결. 별도 `ArcProjectile` 분기 또는 ProjectileSystem 보강 필요.
 - 영향: R4 (포물선만 미해결).
 
-### §6.6 지속형 장판 (AreaEffect) *(우선순위: 낮음)*
-- `AreaEffectComponent { Position, Radius, DamageType, TickInterval, Duration, OwnerId, BuffId }`.
-- 신규 `System_AreaEffect`(FixedUpdate, Priority 250 정도).
-- 영향: S4.
+### §6.6 지속형 장판 (AreaEffect) ✅ *(완료)*
+- `SkillTable.AreaEffectId`, `AreaEffectTable`, `AreaEffectComponent`, `EntityFactory.CreateAreaEffect`, `System_AreaEffect`가 연결되어 있다.
+- `System_Lifetime`이 장판 만료를 담당하고, `CasterLinkComponent`와 시전자 진영 스냅샷으로 적대 대상만 틱 처리한다.
+- S4 Poison Cloud(`SkillId=203`, `AreaEffectId=1`)와 추가 스킬 FireRing(`SkillId=206`, `AreaEffectId=2`)이 현행 데이터를 사용한다.
 
-### §6.7 BuffEffect 트리거 매핑 *(우선순위: 중, §6.8 도입 시 흡수)*
-- 스킬 적중 시 `BuffEffectTable` 적용 규칙. `SkillTable`에 `OnHitBuffEffectId` 컬럼.
-- DamageCalculator 또는 ApplySkillEffectToEntity 단계에서 부여.
-- 영향: A5·S1·S2·S6.
-- **주**: §6.8 SkillEffect 시스템이 도입되면 `EffectType.ApplyBuffOnHit`로 자연스럽게 흡수됨. 단독 컬럼 추가는 §6.8을 건너뛸 때만 의미 있음.
+### §6.7 BuffEffect 트리거 매핑 ✅ *(§6.8 SkillEffect로 흡수 완료)*
+- 별도 `OnHitBuffEffectId` 컬럼은 추가하지 않았다. `SkillTable.SkillEffectIds` → `SkillEffectTable(ApplyBuff, OnHit)` → `SkillEffectExecutor` 경로가 동일 책임을 수행한다.
+- A5 Lacerate는 효과 1002로 출혈을 적용한다. S1 Fireball, S2 Ice Nova, S6 Frost Bolt는 점화·냉동 효과 데이터 연결이 남았다.
 
-### §6.8 SkillEffect 합성형 효과 시스템 ✅ *(골격 완료, 2026-05-04 확인. 신규 EffectType 확장만 남음)*
+### §6.8 SkillEffect 합성형 효과 시스템 ◐ *(핵심 골격 완료, 일부 트리거·EffectType 확장 남음)*
 **목적**: "명중 시 HP 흡수", "투사체 분리", "치명타 시 추가 발사체" 등의 옵션을 코드 분기 없이 데이터로 합성한다. PoE 보조 젬과 본질적으로 같은 모델.
 
 **구현 위치**:
@@ -310,7 +321,7 @@
 
 **SkillEffect.SpawnProjectile은 별도 용도**: "스킬과 다른 종류의 발사체 스폰"(폭발 파편, 시체 폭발 등). 일반 Multi Shot에는 사용 안 함.
 
-**남은 작업**: SpawnProjectileOnHit(분리) / SpawnAreaEffectOnKill / ManaRestoreOnKill / KnockbackOnHit / DelegateToMine·Trap 등 `SkillEffectType` enum 추가 + Executor case 추가. 합산형 옵션은 `Stat.ProjectilePierceAdd` / `ProjectileChainAdd` / `ProjectileSpreadAdd` / `ProjectileForkCountAdd` 추가.
+**남은 작업**: SpawnProjectileOnHit(분리) / SpawnAreaEffectOnKill / ManaRestoreOnKill / KnockbackOnHit / DelegateToMine·Trap 등 `SkillEffectType` enum 추가 + Executor case 추가. 연쇄·분열은 투사체 전용 Stat을 개별 추가하기 전에 [공용 스킬 전파 계획](SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md)의 `SkillPropagation` 모델로 구현한다.
 
 **문제 의식**: 현재는 새 옵션 1개 = `SkillTable` 컬럼 1개 + `System_Skill` 분기 1개. 옵션 N × 스킬 M 조합 폭발. `ApplySkillEffectToEntity`의 TODO 주석들이 이 한계를 드러냄.
 
@@ -336,7 +347,7 @@ SkillEffectTable                         // 새 테이블
 | `OnHit` | 적중한 적마다 1회 | Owner, Target, DamageResult |
 | `OnCrit` | 치명타 적중 | 위 + IsCrit |
 | `OnKill` | 적중으로 적이 사망 | Owner, KilledTarget |
-| `OnProjectileSpawn` | 발사체 생성 직후 | ProjectileEntity |
+| `OnProjectileSpawn` | `ProjectileHelper.SpawnProjectile`에서 논리 Projectile 생성 직후 | ProjectileEntity |
 | `OnProjectileHit` | 발사체 적중 시 | ProjectileEntity, Target |
 | `OnSkillEnd` | End 단계 종료 | Owner |
 
@@ -357,43 +368,21 @@ SkillEffectTable                         // 새 테이블
 
 **영향**: §6.2(버프 적용)·§6.7·§6.9 모두 EffectType으로 흡수됨. 새 옵션 추가 시 EffectType enum 1줄 + 디스패처 case 1개 + 테이블 행 1개. 기존 SkillTable 행 변경 0.
 
-### §6.9 토템·지뢰·함정 — 시전 주체 위임 *(우선순위: 중, §6.8 의존)*
+### §6.9 토템·지뢰·함정 — 시전 주체 위임 ◐ *(토템 완료, 지뢰·함정 미구현)*
 **목적**: PoE 보조 젬(Spell Totem / Remote Mine / Trap)처럼 **플레이어가 시전한 스킬을 다른 엔티티가 대신 시전하도록** 한다.
 
-**아키텍처 적합성**: `SkillComponent.OwnerEntityId`가 임의 엔티티가 될 수 있고, `EntityIdHelper.CreateSkillEntity(ownerId, slot)`가 결정적 ID라 토템 엔티티가 자기 슬롯에 스킬을 가질 수 있음. 자율 발사 인프라(`AIComponent` + `SkillHelper.PickFireSkill`)도 재활용 가능.
+**토템 현행 구현**:
+- `SkillEffectTable` 효과 1010 `Delegate_Totem_8s`가 `OnSkillCommand`에서 원래 시전을 취소하고 `EntityFactory.CreateTotem`을 호출한다.
+- 토템은 시전자의 `StatComponent`와 `FactionComponent`를 스냅샷 복사하고 `CasterLinkComponent`, `LifetimeComponent`, `TotemTag`를 가진다.
+- 슬롯 0에 원본 스킬을 생성하며 `StationaryAttackStateHandler`가 같은 진영을 제외한 사거리 내 적을 자율 공격한다.
+- `System_Lifetime`은 만료 시 `DestroyTag`를 부착하고, HP 0 정리는 기존 `System_HpCheck` 경로를 사용한다.
 
-**참고 — HP/사망 처리는 모두 기존 인프라가 자동**: 토템은 caster의 StatComponent를 스냅샷 복사하므로 HP를 가지며, FactionComponent가 caster 진영을 그대로 따르므로 적의 공격 대상이 됨. HP가 0이 되면 `System_HpCheck`가 `DestroyTag`를 부착해 정리. 별도 토템 사망 코드 불필요.
+**남은 작업**:
+- `DelegateToMine` / `DelegateToTrap` EffectType과 실행기 분기
+- `MineComponent` / `TrapComponent`, 기폭·근접 트리거 시스템과 데이터
+- 토템의 실제 스킬별 PlayMode 검증과 전용 View/연출
 
-**4가지 결정**:
-
-1. **스탯 모델 — 스냅샷 (권장)**
-   - 토템/지뢰 스폰 시 caster의 `StatComponent`를 그대로 복사 (live link 아님).
-   - 흡혈/킬보상 등은 caster에게 귀속하기 위해 `CasterLinkComponent { CasterEntityId }` 신설.
-   - 기준: 스냅샷 단순성 + caster 사망 시 토템이 살아있어도 안전.
-
-2. **자율 시전 — 기존 AI 재활용 + Faction 추가**
-   - `FactionComponent { byte FactionId }` 신설 (0=Neutral, 1=Player, 2=Hostile).
-   - `FindClosestEntity`/`CheckCircleRangeEntities`에 "다른 진영만" 필터 1줄 추가.
-   - 토템 전용 `AiTable` 1행 + `SkillHelper.PickFireSkill` 그대로 사용.
-   - **새 시스템 0개**.
-
-3. **생존 모델 — 공통 LifetimeComponent + 보조별 추가 컴포넌트**
-   ```
-   struct LifetimeComponent { float Remaining; }              // 공통
-   struct MineComponent     { byte State; float TriggerRange; }
-   struct TrapComponent     { float TriggerRange; }
-   ```
-   - 토템: `Lifetime` + `AI*`
-   - 지뢰: `Lifetime` + `Mine` (대기 → 명령 기폭 → 자폭 FSM)
-   - 함정: `Trap` (적 근접 트리거)
-   - 신규 시스템: `System_Lifetime` (FixedUpdate, Priority ~70). `System_Mine`은 지뢰 도입 시.
-
-4. **위임 메커니즘 — §6.8 SkillEffect 의존**
-   - 새 EffectType: `DelegateToTotem` / `DelegateToMine` / `DelegateToTrap`.
-   - Trigger: `OnSkillCommand` (스킬 시전 직전). 디스패처가 위임 효과를 발견하면 **caster의 원래 시전을 캔슬**하고 토템/지뢰 엔티티를 스폰. 스폰된 엔티티가 `CreateSkill(totemId, slot=0, 원래 SkillId)`로 동일 스킬을 자신의 슬롯에 보유.
-   - 효과: 한 SkillTable 행("Fireball")이 보조 효과 ID 조합에 따라 일반 시전 / 토템 / 지뢰 / 함정 모두로 동작.
-
-**영향**: 토템·지뢰·함정 스킬군 전체. 새 카테고리 "T" 추가 가능 (예: T1 Spell Totem, T2 Remote Mine, T3 Arrow Trap).
+**영향**: 토템 위임은 데이터로 사용 가능하다. 지뢰·함정은 후속 카테고리로 남는다.
 
 ---
 
@@ -406,26 +395,28 @@ SkillEffectTable                         // 새 테이블
 | 1 ~ 49 | 근접 (A) | A1=1 (기존), A2=10, A3=11, A4=12, A5=13 |
 | 50 ~ 99 | 이동 (M) | M1=5 (기존, QuickHop), M2=50, M3=51 |
 | 100 ~ 199 | 원거리 (R) | R1=100, R2=101, R3=102, R4=103 |
-| 200 ~ 299 | 스펠 (S) | S1=200, S2=201, S4=203, S5=204, S6=205 |
+| 200 ~ 299 | 스펠 (S) | S1=200, S2=201, S4=203 (기존), S5/S6=미정 |
 | 300 ~ 399 | 버프 (B) | B2=301, B3=302 |
 | 400 ~ 499 | 채널/차징 (C) | C1=400, C2=401 |
 
 ProjectileId 대역도 동일 규칙 권장: 화살 100번대, 마법 200번대.
 
+기존 제안 ID 204와 205는 각각 몬스터 전용 `GoblinFirebolt`, `SwampToadPoisonSpit`이 사용 중이다. S5 Lightning Strike와 S6 Frost Bolt를 추가할 때 충돌하지 않는 새 ID를 배정한다.
+
 ---
 
 ## 11. 구현 우선순위 로드맵
 
-기획 문서 채택 후 권장 구현 순서. **§6.8(SkillEffect)을 가장 먼저 도입하면 이후 옵션·보조가 데이터 추가만으로 동작**하므로 우선순위가 가장 높음.
+현행 공용 런타임을 재사용하고, 필요한 새 메커니즘을 묶어 추가하는 순서다.
 
-1. **시스템 변경 0**: A2 Cleave, A3 Whirlwind(채널링 변형 포함, ExecutionType=2), A4 Heavy Slam, R1 Power Shot, R3 Piercing Bolt, S2 Ice Nova (테이블 행만 추가). ✅ §6.1 완료로 채널링도 시스템 변경 0 그룹에 포함.
-2. **§6.8 SkillEffect 골격 도입** (트리거 enum + Executor 빈 디스패치 + System_Skill 8개 호출 지점). 동작 변화 0, 토대만 마련.
-3. **§6.2 + §6.8 첫 EffectType (LifeStealOnHit, ApplyBuffOnHit)**: A5 Lacerate, S1 Fireball, S6 Frost Bolt. (§6.1은 완료)
-4. **§6.3**: M2 Leap Slam, M3 Dash Strike, S5 Lightning Strike, C1 Beam Cast.
-5. **§6.4 + EffectType.SpawnProjectile 계열**: R2 Multi Shot, R4 Arc Shot, "투사체 분리" 옵션.
-6. **§6.9 토템·지뢰·함정 위임** (§6.8 + Faction + Lifetime 의존): T1 Spell Totem, T2 Remote Mine, T3 Trap.
-7. **§6.6**: S4 Poison Cloud.
-8. **마지막**: B2 Iron Skin, B3 Battle Roar, C2 Charged Bolt.
+1. **데이터 전용 스킬 추가**: A2 Cleave, A4 Heavy Slam, M2 Leap Slam, R1 Power Shot, R3 Piercing Bolt, S1 Fireball, S2 Ice Nova, S5 Lightning Strike, S6 Frost Bolt. 스킬·투사체·효과·프리팹을 연결하고 S5/S6에는 충돌하지 않는 새 ID를 배정한다.
+2. **라인 히트 공용화**: 선분/캡슐 판정을 하나의 런타임 경로로 추가한 뒤 M3 Dash Strike와 C1 Beam Cast가 공유한다.
+3. **포물선 투사체**: Projectile 런타임에 높이 진행과 충돌 정책을 추가해 R4 Arc Shot을 구현한다.
+4. **자기·아군 버프**: 자기 자신과 동일 진영 범위 선택, 적용·제거 수명주기를 추가해 B2 Iron Skin과 B3 Battle Roar를 구현한다. B2는 토글 OFF와 지속 마나 소비까지 포함한다.
+5. **차지 해제 발동**: `ProcessChargeSkill`에 입력 해제 감지, 최소/최대 차지 비율, 피해 스케일을 추가해 C2 Charged Bolt를 구현한다.
+6. **후속 확장**: 필요할 때 지뢰·함정 위임과 신규 SkillEffectType을 추가한다.
+
+각 단계는 테이블 정합성 검사 후 Direction·Position·Jump·Projectile·Area·MultiHit·Channeling 대표 스킬을 PlayMode에서 검증한다.
 
 ---
 
@@ -439,3 +430,4 @@ ProjectileId 대역도 동일 규칙 권장: 화살 100번대, 마법 200번대.
 - 2026-05-04 (rev 4): R2 설계 재검토 — SpawnProjectile EffectType 기반 접근은 "스킬당 별도 SkillEffect 행 필요"라는 조합 폭발 문제로 폐기. 대신 **`SkillTable.BaseProjectileCount` 컬럼**을 추가하고 System_Skill의 ProjectileId 분기를 N발 부채꼴 발사로 확장. R2는 `ProjectileId=1, BaseProjectileCount=3`만으로 정의. `Stat.ProjectileCountAdd`는 모든 발사체 스킬에 자동 적용. SpawnProjectile EffectType은 "스킬과 다른 종류의 발사체 스폰" 용도로 살려둠.
 - 2026-05-16: `LifeSteal` 효과 경로 단일화. 기존 `LifeStealOnHit` (EffectAction)을 폐기하고 `SkillEffectKind.StatBonus + EffectType.LifeSteal`로 통합. `SkillStatBonusOnHitComponent.LifeStealBonus` 필드 추가 → `SkillAttackProfileComponent.LifeStealRatio`에서 캐릭터 stat과 합산 캐시. SkillEffectExecutor의 `LifeStealOnHit` 케이스 제거, `DownloadTables.InferSkillEffectKindFromEffectType`에서 `LifeSteal` 분기 제거(이제 default StatBonus로 추론). 매 적중마다 트리거 디스패치 없이 `DamageCalculator`가 단일 비율로 흡혈 처리. SkillEffect 1001 행 `Kind=StatBonus` 확정.
 - 2026-08-28: `SkillTargetType.SingleEntity` 폐기. 네임락(대상 ID 고정) 방식을 사용하지 않기로 결정하여 enum 멤버와 관련 런타임 경로(`FindClosestEntity`, `SkillTargetComponent.TargetId`/`TargetType`/`SetEntityTarget`/`HasTarget`)를 모두 제거. 이에 의존한 S3 Chain Lightning / B1 War Cry / B4 Curse of Weakness / C3 Drain Life 4종과, 유일 의존 스킬이 사라진 §6.5(연쇄 메커니즘)를 카탈로그에서 삭제 — 25종 → 21종. 문서와 실제 테이블이 어긋나 있던 A1 Strike / M1 QuickHop의 타겟 타입을 실제 값(`Direction`)으로 정정. 아울러 `SkillUsePolicyResolver.RequiresDirectionalAim`이 명시된 `AimTrackingMode`보다 먼저 검사되어 명시값을 무시하던 문제를 수정 — 이제 이 판정은 `Default` 해석 규칙과 화살표 표시 판단에만 쓰인다(명시값 우선).
+- 2026-09-20: 코드·바이너리 테이블 재대조. 구현 판정을 `공용 런타임`과 `개별 콘텐츠 등록`으로 분리하고 21종을 구현 6종·런타임 준비 9종·코드 보강 필요 6종으로 재분류했다. 마나 소비, Position 즉발, Jump 착지 커밋, 관통, AreaEffect, ApplyBuff, 토템 위임의 완료 상태를 반영하고 로드맵을 남은 작업 기준으로 교체했다. S5/S6의 기존 예약 ID 204/205 충돌도 기록했다.

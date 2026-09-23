@@ -25,6 +25,18 @@ namespace ARPG.Skill.Combat
         // OnProjectileSpawn / OnProjectileHit
         public int ProjectileEntityId;
 
+        // OnHit propagation uses this as the forward axis for its first child search.
+        // Zero preserves unrestricted behavior when the hit has no meaningful direction.
+        public Vector2 ImpactDirection;
+
+        // SkillPropagation root shared by a propagated child delivery. 0 means the hit
+        // is an original delivery and may start an OnHit propagation root.
+        public int PropagationRootEntityId;
+
+        // OnSkillCommit 전용 - 전파 EffectAction이 true로 세팅하면 Projectile/Area/직접
+        // 기본 전달을 생성하지 않는다.
+        public bool SuppressDefaultImpact;
+
         // OnSkillCommand 전용 - 디스패처가 true로 세팅하면 원래 시전을 캔슬
         public bool CancelOriginalCast;
     }

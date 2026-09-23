@@ -115,12 +115,15 @@ namespace ARPG.Map
         // 8/2 = 4 → 16 entries. Renderer/Generator가 per-cluster theme 결정에 사용.
         public GlobalEnum.BiomeType[] clusterBiomes;
         public ulong[,] tiles;
+        // 마을 청사진 영역(+여유 거리)에 속해 몬스터 스폰이 금지된 타일. GenerateChunkData에서 채움
+        public bool[,] villageSpawnExclusion;
         public MapChunkRuntimeState runtimeState;
         public ChunkSpawnRuntimeData spawnRuntime;
 
         public MapChunkData(int chunkSize)
         {
             tiles = new ulong[chunkSize, chunkSize];
+            villageSpawnExclusion = new bool[chunkSize, chunkSize];
             int clustersPerSide = chunkSize / BiomeNoise.CLUSTER_SIZE;
             clusterBiomes = new GlobalEnum.BiomeType[clustersPerSide * clustersPerSide];
             spawnRuntime = new ChunkSpawnRuntimeData();

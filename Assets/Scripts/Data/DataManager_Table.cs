@@ -35,6 +35,7 @@ namespace ARPG.Data
         private ImmutableDictionary<int, Tables.DropEquipmentTable> _dropWeaponBaseStatTable = null!;
         private ImmutableDictionary<int, Tables.SkillTable> _skillTable = null!;
         private ImmutableDictionary<int, Tables.SkillEffectTable> _skillEffectTable = null!;
+        private ImmutableDictionary<int, Tables.SkillPropagationTable> _skillPropagationTable = null!;
         private ImmutableDictionary<int, Tables.SkillBookTable> _skillBookTable = null!;
         private ImmutableDictionary<int, Tables.AiTable> _aiTable = null!;
         private ImmutableDictionary<int, Tables.BuffTable> _buffTable = null!;
@@ -81,6 +82,7 @@ namespace ARPG.Data
                 LoadTable<Tables.DropEquipmentTable>("DropEquipmentTable.bytes", tables => _dropWeaponBaseStatTable = tables),
                 LoadTable<Tables.SkillTable>("SkillTable.bytes", tables => _skillTable = tables),
                 LoadTable<Tables.SkillEffectTable>("SkillEffectTable.bytes", tables => _skillEffectTable = tables),
+                LoadTable<Tables.SkillPropagationTable>("SkillPropagationTable.bytes", tables => _skillPropagationTable = tables),
                 LoadTable<Tables.SkillBookTable>("SkillBookTable.bytes", tables => _skillBookTable = tables),
                 LoadTable<Tables.AiTable>("AiTable.bytes", tables => _aiTable = tables),
                 LoadTable<Tables.BuffTable>("BuffTable.bytes", tables => _buffTable = tables),
@@ -750,6 +752,16 @@ namespace ARPG.Data
                 result.Add(table);
             }
             return result;
+        }
+
+        public Tables.SkillPropagationTable? GetSkillPropagation(int id)
+        {
+            if (_skillPropagationTable.TryGetValue(id, out var table))
+            {
+                return table;
+            }
+
+            return null;
         }
 
         /// <summary>

@@ -62,6 +62,7 @@
 | **[combatSystemCompletion.md](combat/combatSystemCompletion.md)** | 전투 완성 로드맵 (사실상 완료) |
 | **[BALANCE_DESIGN.md](combat/BALANCE_DESIGN.md)** | PoE2 톤 밸런스 곡선 / 방어 공식 / TTK |
 | **[SKILL_DESIGN.md](combat/SKILL_DESIGN.md)** | 현재 시스템 위 스킬 카탈로그 |
+| **[SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md](combat/SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md)** | 주문·투사체 공용 연쇄/분열 전파 시스템 구현 계획 |
 | **[SKILLBOOK_DESIGN.md](combat/SKILLBOOK_DESIGN.md)** | 스킬북 장착식 스킬 (코드 완료) |
 | **[SKILL_RUNE_DESIGN.md](combat/SKILL_RUNE_DESIGN.md)** | 스킬 룬 / 모디파이어 |
 | **[SKILL_EFFECT_IDEAS.md](combat/SKILL_EFFECT_IDEAS.md)** | 스킬 이펙트 아이디어 |

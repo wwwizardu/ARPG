@@ -46,6 +46,24 @@ namespace ARPG.Systems
             {
                 int entityId = pool.GetEntityId(i);
 
+                // 외부 제거(만료, 씬 정리 등)가 정상 전파 완료 경로보다 먼저 도달하면
+                // 남은 작업 수를 한 번만 해제한다. 완료 경로는 marker를 남겨 이 블록을 건너뛴다.
+                if (cm.HasComponent<SkillPropagationWorkCompletedTag>(entityId) == false)
+                {
+                    if (cm.TryGetComponent<SkillPropagationRequestComponent>(entityId, out SkillPropagationRequestComponent propagationRequest) == true)
+                    {
+                        Skill.Propagation.SkillPropagationRuntime.CompleteOutstandingDelivery(propagationRequest.RootEntityId);
+                    }
+                    else if (cm.TryGetComponent<InstantSkillDeliveryComponent>(entityId, out InstantSkillDeliveryComponent instantDelivery) == true)
+                    {
+                        Skill.Propagation.SkillPropagationRuntime.CompleteOutstandingDelivery(instantDelivery.RootEntityId);
+                    }
+                    else if (cm.TryGetComponent<SkillPropagationBranchComponent>(entityId, out SkillPropagationBranchComponent propagationBranch) == true)
+                    {
+                        Skill.Propagation.SkillPropagationRuntime.CompleteOutstandingDelivery(propagationBranch.RootEntityId);
+                    }
+                }
+
                 // MonsterTag가 있으면 MonsterManager에서 제거
                 if (cm.HasComponent<MonsterTag>(entityId))
                 {

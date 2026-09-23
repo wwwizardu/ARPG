@@ -150,6 +150,14 @@ namespace ARPG.Systems
             System_Skill skillSystem = new();
             RegisterSystems(skillSystem);
 
+            // Priority 210: Skill Propagation System (FixedUpdate) - 전파 요청 대상 선택 및 전달 생성
+            System_SkillPropagation skillPropagationSystem = new();
+            RegisterSystems(skillPropagationSystem);
+
+            // Priority 220: Instant Skill Delivery System (FixedUpdate) - 즉발 전파 적중 처리
+            System_InstantSkillDelivery instantSkillDeliverySystem = new();
+            RegisterSystems(instantSkillDeliverySystem);
+
             // Priority 240: Area Effect System (FixedUpdate) - 장판 틱 처리 (반경 내 적 데미지/버프)
             System_AreaEffect areaEffectSystem = new();
             RegisterSystems(areaEffectSystem);

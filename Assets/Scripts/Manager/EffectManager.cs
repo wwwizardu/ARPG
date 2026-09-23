@@ -4,6 +4,9 @@ using ARPG.Utility;
 using ARPG.Visual;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.AddressableAssets.ResourceLocators;
+using UnityEngine.ResourceManagement.ResourceLocations;
 
 namespace ARPG.Manager
 {
@@ -28,6 +31,7 @@ namespace ARPG.Manager
     {
         private readonly Dictionary<int, EffectInstance> _active = new Dictionary<int, EffectInstance>(64);
         private readonly List<EffectInstance> _resetBuffer = new List<EffectInstance>(64);
+        private readonly HashSet<string> _missingSegmentKeys = new HashSet<string>();
         private Transform? _root;
         private int _nextInstanceId;
 
@@ -58,6 +62,7 @@ namespace ARPG.Manager
 
             _active.Clear();
             _resetBuffer.Clear();
+            _missingSegmentKeys.Clear();
         }
 
         /// <summary>
@@ -103,6 +108,65 @@ namespace ARPG.Manager
             _active[id] = instance;
 
             return new EffectHandle(id);
+        }
+
+        /// <summary>
+        /// Spawns a snapshot-based two-point effect. A key without SkillPropagationSegmentView
+        /// still behaves as an ordinary effect, so a visual setup failure never blocks combat.
+        /// 키가 등록되지 않았으면 연출 없이 진행한다 (경고는 키당 1회, 매 hop마다 로드 실패 LogError를 반복하지 않도록 사전 검사).
+        /// </summary>
+        public async UniTask<EffectHandle> SpawnSegment(string key, Vector2 startPosition, Vector2 endPosition)
+        {
+            if (HasAddressableGameObjectKey(key) == false)
+            {
+                if (_missingSegmentKeys.Add(key) == true)
+                {
+                    Debug.LogWarning($"[EffectManager] Segment Addressable key is not registered: '{key}'. The segment visual is skipped.");
+                }
+
+                return EffectHandle.Invalid;
+            }
+
+            EffectHandle handle = await Spawn(key, new Vector3(startPosition.x, startPosition.y, 0f), Quaternion.identity);
+            if (handle.IsValid == false)
+                return handle;
+
+            if (_active.TryGetValue(handle.InstanceId, out EffectInstance instance) == true && instance != null)
+            {
+                SkillPropagationSegmentView? segmentView = instance.GetComponent<SkillPropagationSegmentView>();
+                if (segmentView != null)
+                {
+                    segmentView.SetEndpoints(startPosition, endPosition);
+                }
+            }
+
+            return handle;
+        }
+
+        private static bool HasAddressableGameObjectKey(string inKey)
+        {
+            if (string.IsNullOrEmpty(inKey))
+                return false;
+
+            IEnumerator<IResourceLocator> resourceLocatorEnumerator = Addressables.ResourceLocators.GetEnumerator();
+            try
+            {
+                while (resourceLocatorEnumerator.MoveNext() == true)
+                {
+                    IResourceLocator resourceLocator = resourceLocatorEnumerator.Current;
+                    if (resourceLocator.Locate(inKey, typeof(GameObject), out IList<IResourceLocation> locations) == true
+                        && locations.Count > 0)
+                    {
+                        return true;
+                    }
+                }
+            }
+            finally
+            {
+                resourceLocatorEnumerator.Dispose();
+            }
+
+            return false;
         }
 
         /// <summary>

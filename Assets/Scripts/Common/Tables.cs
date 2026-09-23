@@ -612,6 +612,28 @@ namespace ARPG.Tables
     }
 
     /// <summary>
+    /// Shared chain/fork propagation profile. SkillEffectTable.SkillPropagation actions
+    /// reference this table through Param1.
+    /// </summary>
+    [Serializable]
+    public class SkillPropagationTable : TableBase
+    {
+        [JsonProperty("Name")] public string Name = string.Empty;
+        [JsonProperty("DeliveryType")] public GE.SkillDeliveryType DeliveryType = GE.SkillDeliveryType.Inherit;
+        [JsonProperty("ChildCount")] public int ChildCount = 1;
+        [JsonProperty("MaxDepth")] public int MaxDepth;
+        [JsonProperty("InitialSearchRadius")] public float InitialSearchRadius;
+        [JsonProperty("SearchRadius")] public float SearchRadius;
+        [JsonProperty("HopInterval")] public float HopInterval;
+        [JsonProperty("DamageRatioPerGeneration")] public float DamageRatioPerGeneration = 100f;
+        // 상한은 DeliveryType에 따라 다르다. SkillPropagationTargetIds.GetMaxTotalDeliveries 참고.
+        [JsonProperty("MaxTotalDeliveries")] public int MaxTotalDeliveries = 4;
+        [JsonProperty("AllowRepeatTarget")] public bool AllowRepeatTarget;
+        [JsonProperty("SegmentEffectKey")] public string SegmentEffectKey = string.Empty;
+        [JsonProperty("MaxTurnAngleDeg")] public float MaxTurnAngleDeg = 180f;
+    }
+
+    /// <summary>
     /// 스킬북 등급별 룰. 현재는 페이지 시스템(용량/슬롯) 룰을 보관하지만 향후 다른 등급별 책 룰도 여기에 통합 가능.
     /// Id는 ItemTable.Tier와 매칭한다. (1=Common, 2=Rare, 3=Epic)
     /// </summary>
