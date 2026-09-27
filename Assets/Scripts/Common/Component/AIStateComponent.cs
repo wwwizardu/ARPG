@@ -10,7 +10,8 @@ namespace ARPG.Component
         Attack,         // 공격
         Retreat,        // 후퇴
         Flee,           // 도주 (NPC 위협 대응)
-        Return          // 귀환
+        Return,         // 귀환
+        Follow          // 추종 (동행 NPC, NPC_COMBAT_DESIGN §4.2)
     }
 
     public struct AIStateComponent

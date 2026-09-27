@@ -1,3 +1,5 @@
+using ARPG.AI;
+using ARPG.AI.StateHandlers;
 using ARPG.Component;
 using ARPG.Utility;
 using UnityEngine;
@@ -48,8 +50,11 @@ namespace ARPG.Systems
                 int entityId = perceptionPool.GetEntityId(i);
                 AIPerceptionComponent perception = perceptionPool.GetByIndex(i);
 
-                // NPC는 타겟을 인식하지 않음 (관계 기반 행동은 추후 구현)
-                if (cm.HasComponent<NpcTag>(entityId))
+                // 전투 허용 상태가 아닌 NPC는 타겟을 인식하지 않음 (NPC_COMBAT_DESIGN §3.4)
+                // 화면 안 사냥 중(NpcActivityPausedTag)인 NPC는 태그가 있어도 제외 — 결과는 계산 판정 소관
+                if (cm.HasComponent<NpcTag>(entityId) == true &&
+                    (cm.HasComponent<NpcCombatEnabledTag>(entityId) == false ||
+                     cm.HasComponent<NpcActivityPausedTag>(entityId) == true))
                     continue;
 
                 // AI 컴포넌트
@@ -59,6 +64,16 @@ namespace ARPG.Systems
                 // AI 엔티티 Transform
                 if (cm.TryGetComponent<TransformComponent>(entityId, out var transform) == false)
                     continue;
+
+                // 동행 NPC가 리더에게서 추종 반경 밖으로 멀어지면 타겟을 놓고 Follow로 복귀 (§4.2)
+                if (cm.TryGetComponent<NpcCompanionComponent>(entityId, out var companion) == true &&
+                    cm.TryGetComponent<TransformComponent>(companion.LeaderEntityId, out var leaderTransform) == true &&
+                    (leaderTransform.Position - transform.Position).sqrMagnitude >
+                    FollowStateHandler.LeashDropDistance * FollowStateHandler.LeashDropDistance)
+                {
+                    AIStateHelper.ClearTarget(entityId, ref ai);
+                    continue;
+                }
 
                 // AI 자신의 진영 (없으면 중립으로 간주 → 타겟 못 잡음)
                 if (cm.TryGetComponent<FactionComponent>(entityId, out var selfFaction) == false)

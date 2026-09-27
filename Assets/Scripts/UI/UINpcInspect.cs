@@ -45,6 +45,7 @@ namespace ARPG.UI
         // 내러티브 검증 스파이크 — 대화 버튼 연결용
         private Text? _dialogueLabel;
         private VisualElement? _giftList;
+        private Button? _companionBtn;
         private static readonly bool _enableWishSpike = false;
 
         public override void Initialize(string inName, bool isForm = false)
@@ -143,6 +144,7 @@ namespace ARPG.UI
             RebuildActivity();
             RebuildHistory();
             RebuildStats();
+            RefreshCompanionButton();
         }
 
         private void RebuildHistory()
@@ -563,6 +565,37 @@ namespace ARPG.UI
             Button giftBtn = new() { title = "선물" };
             giftBtn.clicked += OnClickGift;
             bar.Add(giftBtn);
+
+            // 임시 동행 요청 — 던전 전용 (NPC_COMBAT_DESIGN §4.5). 예약 여부에 따라 요청/취소로 바뀐다.
+            _companionBtn = new() { title = "동행 요청" };
+            _companionBtn.clicked += OnClickCompanion;
+            bar.Add(_companionBtn);
+        }
+
+        private void RefreshCompanionButton()
+        {
+            if (_companionBtn == null || AR.s.Npc == null)
+                return;
+
+            // 던전 안 동행은 퇴장으로만 끝나므로 던전 안에서는 메뉴를 띄우지 않는다
+            _companionBtn.style.display = AR.s.Dungeon.IsInside == true ? DisplayStyle.None : DisplayStyle.Flex;
+            _companionBtn.title = AR.s.Npc.IsCompanionReserved(_entityId) == true ? "동행 취소" : "동행 요청";
+        }
+
+        private void OnClickCompanion()
+        {
+            if (_entityId < 0 || AR.s.Npc == null)
+                return;
+
+            string message;
+            if (AR.s.Npc.IsCompanionReserved(_entityId) == true)
+                AR.s.Npc.CancelCompanion(_entityId, out message);
+            else
+                AR.s.Npc.RequestCompanion(_entityId, out message);
+
+            if (_dialogueLabel != null)
+                _dialogueLabel.text = message;
+            RefreshCompanionButton();
         }
 
         private void OnClickTalk()

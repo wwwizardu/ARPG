@@ -89,6 +89,7 @@ namespace ARPG.Dungeon
             bool created = false;
             PlayerMapSnapshot before = default;
             bool staged = false;
+            bool companionStaged = false;
             try
             {
                 await DrainAsync(AR.s.WorldMap.Context);
@@ -132,18 +133,24 @@ namespace ARPG.Dungeon
                 _playerSaveOverride = true;
                 staged = true;
                 if (created == true) AR.s.Data.Dungeons.Dungeons.Add(record);
+                // 임시 동행 예약이 있으면 입장 커밋(World)에 동행 진행 상태를 함께 싣는다 (NPC_COMBAT_DESIGN §4.5)
+                companionStaged = AR.s.Npc.StageCompanionDungeonEntry();
                 bool saved = await CommitAsync(SaveScope.Player | SaveScope.World | SaveScope.Map | SaveScope.Dungeons);
                 if (lifetime != _lifetime) return false;
                 if (saved == false)
                 {
                     before.Restore(player);
                     if (created == true) AR.s.Data.Dungeons.Dungeons.Remove(record);
+                    if (companionStaged == true) AR.s.Npc.RevertCompanionDungeonEntry();
                     Notify("저장에 실패해 던전 입장을 취소했습니다.");
                     return false;
                 }
                 staged = false;
                 if (lifetime != _lifetime) return false;
                 ActivateInterior(record);
+                // 월드 엔티티가 비실체화된 뒤이므로 같은 EntityId로 던전에 소환한다. 소환 실패는 입장을 실패시키지 않는다.
+                await AR.s.Npc.SummonCompanionAsync();
+                if (lifetime != _lifetime) return false;
                 return true;
             }
             catch (Exception ex)
@@ -152,6 +159,7 @@ namespace ARPG.Dungeon
                 {
                     before.Restore(AR.s.Data.Player);
                     if (created == true) AR.s.Data.Dungeons.Dungeons.Remove(record);
+                    if (companionStaged == true) AR.s.Npc.RevertCompanionDungeonEntry();
                 }
                 else if (AR.s.Data.Player.CurrentMapKind == MapKind.Dungeon)
                     _recoveryRequired = true;
@@ -209,6 +217,7 @@ namespace ARPG.Dungeon
             var player = AR.s.Data.Player;
             PlayerMapSnapshot before = default;
             bool staged = false;
+            int companionId = -1;
             DungeonRecord record = _active;
             try
             {
@@ -231,12 +240,15 @@ namespace ARPG.Dungeon
                 _playerSaveOverride = true;
                 staged = true;
                 if (record.Completed == true) AR.s.Data.Dungeons.Dungeons.Remove(record);
+                // 퇴장(ESC·사망 공통) 시 동행 종료를 퇴장 커밋(World)에 함께 싣는다 (NPC_COMBAT_DESIGN §4.5)
+                companionId = AR.s.Npc.StageCompanionDungeonExit();
                 bool saved = await CommitAsync(SaveScope.Player | SaveScope.World | SaveScope.Dungeons);
                 if (lifetime != _lifetime) return false;
                 if (saved == false)
                 {
                     before.Restore(player);
                     if (record.Completed == true) AR.s.Data.Dungeons.Dungeons.Add(record);
+                    AR.s.Npc.RevertCompanionDungeonExit(companionId);
                     Notify("저장에 실패했습니다. 던전에서 퇴장을 다시 시도할 수 있습니다.");
                     return false;
                 }
@@ -250,6 +262,8 @@ namespace ARPG.Dungeon
                 ActiveMap = null;
                 _active = null;
                 _components.RestoreSuspended(_suspendedWorld);
+                // 월드 맵 기준으로 귀환 위치를 계산해야 하므로 ActiveMap 해제 뒤, 청크 재활성화(ResumeWorld) 전에 처리한다.
+                AR.s.Npc.FinishCompanionDungeonExit(companionId, returnPosition);
                 MovePlayer(returnPosition, death);
                 AR.s.WorldMap.ResumeWorld(new Vector3(returnPosition.x, returnPosition.y, 0));
                 AR.s.Item.RestoreContextDrops();
@@ -263,6 +277,7 @@ namespace ARPG.Dungeon
                     before.Restore(player);
                     if (record.Completed == true && AR.s.Data.Dungeons.Dungeons.Contains(record) == false)
                         AR.s.Data.Dungeons.Dungeons.Add(record);
+                    AR.s.Npc.RevertCompanionDungeonExit(companionId);
                 }
                 Notify("던전 퇴장 오류: " + ex.Message);
                 return false;

@@ -51,6 +51,10 @@ namespace ARPG.Systems
 
         private static void AdvanceNpcActivity(NpcSaveData saveData, int entityId, float now, int worldSeed)
         {
+            // 던전 안에서 동행 중인 NPC는 활동 선택·판정에서 제외한다 (NPC_COMBAT_DESIGN §4.5)
+            if (AR.s.Npc.IsCompanionInDungeon(entityId) == true)
+                return;
+
             // 평상시에는 now에서 다음 활동을 시작한다. 시간 점프 후에는 이전 phase 종료시각을
             // 다음 활동의 시작시각으로 사용해 과거 구간을 시간 순서대로 결제한다.
             float decisionTime = now;
@@ -124,7 +128,10 @@ namespace ARPG.Systems
         private static void StartNextActivity(NpcSaveData saveData, int entityId, float startGameTime, int worldSeed)
         {
             NpcActivityState activity = saveData.Activity;
-            NpcActivityKind kind = NpcActivityResolver.SelectNextActivity(saveData, entityId, startGameTime, worldSeed);
+            // 동행 예약 NPC는 원정(Hunt)을 떠나지 않도록 Rest만 고른다 (NPC_COMBAT_DESIGN §4.5)
+            NpcActivityKind kind = AR.s.Npc.IsCompanionReserved(entityId) == true
+                ? NpcActivityKind.Rest
+                : NpcActivityResolver.SelectNextActivity(saveData, entityId, startGameTime, worldSeed);
 
             if (kind == NpcActivityKind.Hunt && AR.s.Npc.TryCreateHuntParty(entityId, out NpcPartyState? party) &&
                 party != null)

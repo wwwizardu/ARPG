@@ -329,6 +329,7 @@ namespace ARPG.Data
                 NpcRelationList = snapshot.NpcSocial.Relations ?? new(),
                 NpcPartyStates = snapshot.NpcParties.Parties ?? new(),
                 NpcPopulation = snapshot.NpcMeta.Population ?? new(),
+                NpcCompanion = snapshot.World.NpcCompanion ?? new(),
                 WorldSim = snapshot.WorldSim.WorldSim ?? new(),
             };
 
@@ -649,6 +650,7 @@ namespace ARPG.Data
                     NextItemInstanceId = _nextItemInstanceId,
                     WorldSeed = _worldData.WorldSeed,
                     ElapsedWorldGameHours = _worldData.ElapsedWorldGameHours,
+                    NpcCompanion = _worldData.NpcCompanion,
                 };
                 AddPendingPart(pending, PART_WORLD, root);
             }

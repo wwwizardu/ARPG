@@ -70,11 +70,14 @@ namespace ARPG.AI
 
         /// <summary>
         /// NPC의 기본 상태 반환.
+        /// 동행 NPC → Follow (Chase/Attack에서 타겟을 잃으면 추종으로 복귀)
         /// NPC → Patrol
         /// 몬스터 → Idle
         /// </summary>
         public static AIState GetDefaultState(int entityId)
         {
+            if (AR.s.Component.HasComponent<NpcCompanionComponent>(entityId))
+                return AIState.Follow;
             if (IsNpc(entityId))
                 return AIState.Patrol;
             return AIState.Idle;

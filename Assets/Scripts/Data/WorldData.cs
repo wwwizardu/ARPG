@@ -31,6 +31,8 @@ namespace ARPG.Data
         public List<NpcPartyState> NpcPartyStates = new();
         // 물리 모험가의 전역 목표 수와 보충 시각. 경제 인구와 무관하다.
         public NpcPopulationState NpcPopulation = new();
+        // NPC_COMBAT_DESIGN §4.5 — 임시 동행 예약·진행 상태 (World 파티션)
+        public NpcCompanionState NpcCompanion = new();
 
         // PROCEDURAL_HISTORY §0 런타임 LOD — 게임 중 변동하는 정착지 라이브 추상 층.
         // Chronicle(정지 스냅샷)과 분리. 최초/구세이브는 HistoryManager가 Chronicle에서 초기화.
@@ -69,6 +71,8 @@ namespace ARPG.Data
                 NpcPartyStates = new();
             if (NpcPopulation == null)
                 NpcPopulation = new();
+            if (NpcCompanion == null)
+                NpcCompanion = new();
             if (Chronicle == null)
                 Chronicle = new();
             if (Chronicle.Events == null)

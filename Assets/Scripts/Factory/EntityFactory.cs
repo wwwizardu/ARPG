@@ -187,6 +187,9 @@ namespace ARPG.Factory
             // (Patrol/PatrolRanged BehaviorType 강제 + Patrol 초기 상태)
             AR.s.Component.AddComponent(entityId, new NpcTag());
 
+            // 진영 명시 — "컴포넌트 없음 = 중립" 암묵 규칙에 기대지 않는다 (NPC_COMBAT_DESIGN §3.2)
+            AR.s.Component.AddComponent(entityId, new FactionComponent { FactionId = Faction.Neutral });
+
             // NPC 고유 성향 스탯 (saveData에 영속화됨, 신규 NPC는 생성자에서 랜덤 부여됨)
             AR.s.Component.AddComponent(entityId, saveData != null ? saveData.NpcStat : new NpcStatComponent());
 

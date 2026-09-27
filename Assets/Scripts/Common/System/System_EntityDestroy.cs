@@ -73,6 +73,14 @@ namespace ARPG.Systems
                 // NpcTag가 있으면 NpcManager에서 제거
                 if (cm.HasComponent<NpcTag>(entityId))
                 {
+                    // 전투 사망(System_HpCheck가 Condition=Dead 설정)만 영구 사망으로 기록한다.
+                    // MarkNpcDead 발 파괴는 내부에서 이미 Dead라 no-op.
+                    // Unregister가 saveData.Condition을 Dead로 덮으면 MarkNpcDead가 조기 반환하므로 반드시 먼저 호출.
+                    if (cm.TryGetComponent<StateComponent>(entityId, out StateComponent npcState) == true &&
+                        npcState.Condition == Creature.CharacterConditions.Dead)
+                    {
+                        AR.s.Npc.MarkNpcDead(entityId, AR.s.Time.CurrentGameTime);
+                    }
                     AR.s.Npc.UnregisterNpcByEntityId(entityId);
                 }
 

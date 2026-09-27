@@ -109,6 +109,8 @@ namespace ARPG.Component
             // 마을 시스템 컴포넌트
             { typeof(NpcVillageComponent), 200 },
             { typeof(NpcActivityPausedTag), 200 }, // 이동 중 materialize된 NPC의 조우 대기 태그
+            { typeof(NpcCombatEnabledTag), 8 },    // 전투 허용 NPC (동행·결투 중, 동시에 소수)
+            { typeof(NpcCompanionComponent), 8 },  // 동행 추종 NPC (v1은 1명)
             { typeof(VillageStorageComponent), 32 },   // 마을 1개당 1개, 현재 <10, 여유 32
             { typeof(VillageComponent), 32 },          // 마을 1개당 1개 (Phase C: Stage/Bounds/Threat)
             { typeof(WallPlanRequestTag), 32 },        // Stage 3 도달 시 부착, 처리 후 제거

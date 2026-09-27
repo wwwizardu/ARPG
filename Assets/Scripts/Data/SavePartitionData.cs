@@ -65,6 +65,8 @@ namespace ARPG.Data
         public int WorldSeed = 12345;
         public float ElapsedWorldGameHours;
         public int NextItemInstanceId = 1;
+        // NPC_COMBAT_DESIGN §4.5 — 던전 입장·퇴장 커밋이 World 범위를 포함하므로 여기에 둔다.
+        public NpcCompanionState? NpcCompanion;
     }
 
     [Serializable]

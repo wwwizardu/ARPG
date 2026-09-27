@@ -3,6 +3,7 @@ namespace ARPG.Component
     /// <summary>
     /// 진영 식별 컴포넌트. 스킬·발사체·AI가 적대 대상을 가려낼 때 사용.
     /// 동일 FactionId = 아군, 다른 FactionId = 적. FactionComponent가 없는 엔티티는 중립으로 간주(스킬 대상 아님).
+    /// NPC는 EntityFactory.CreateNpc에서 Neutral을 명시적으로 부착한다.
     /// 토템·지뢰는 caster의 FactionId를 그대로 복사.
     /// </summary>
     public struct FactionComponent

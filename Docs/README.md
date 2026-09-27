@@ -106,6 +106,8 @@
 | **[interactionSystem.md](npc/interactionSystem.md)** | 설계 완료, 미구현 — 30행동·관계 4축 + **관계·선물 몰입 루프**(§4: 대화·선호·유추 선물·보답) |
 | **[NPC_ACTIVITY_DESIGN.md](npc/NPC_ACTIVITY_DESIGN.md)** ⭐ | 설계 초안 — 모험가 자율 행동/원정 (몬스터 처치·던전 탐험 파티, 부상·죽음, 월드이벤트 트리거). 활동 *내용* 정본 (⚠ 정주/작업자 분류는 단순화로 폐기 — 모험가 단일. 시뮬 *프레임*은 NPC_SIMULATION으로 승격) |
 | **[NPC_SIMULATION_DESIGN.md](npc/NPC_SIMULATION_DESIGN.md)** ⭐ | 설계 초안 (2026-07-09) — 개별 NPC LOD 시뮬 *기반*: 근처=풀 ECS/멀리=경량 상태 tick, 오프스크린 상태머신, 로밍·월드 영향. NPC 시뮬 아키텍처 정본 |
+| **[NPC_AMBITION_DESIGN.md](npc/NPC_AMBITION_DESIGN.md)** | 설계 초안 (2026-09-24) — NPC 야망·모험가 경제: 성격→야망→활동 효용 선택, Gold·장비 반영 전투력·소문·평판, 상점 재고 변경(빈도 제한), 협력·배신(플레이어 대상 포함, 플레이어 대상 절도 제외)·NPC 간 절도, 양방향 배신(플레이어도 NPC 배신 가능), 명분 기반 결투(아무 NPC에게나 신청 가능), 낮은 확률의 NPC 던전 완료, 마을 Gold 약한 유입 |
+| **[NPC_COMBAT_DESIGN.md](npc/NPC_COMBAT_DESIGN.md)** | 설계 초안 (2026-09-24) — NPC_AMBITION에서 분리. NPC 실전투 런타임: 진영·조건부 인식, 동행 추종·순간이동·던전 동반, 도주·드랍 줍기, 결투 진행·무릎 꿇기, 전투 사망 연결. 구현 단계 B1~B5 |
 | **[dungeonSystem.md](_archive/dungeonSystem.md)** | 설계 완료, ⏸ 오픈월드 운영으로 보류 |
 
 ### 🛠️ 기술 / 시스템

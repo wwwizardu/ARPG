@@ -31,8 +31,10 @@ namespace ARPG.Systems
 
                 // 비활성 청크의 엔티티는 AI를 돌리지 않는다.
                 // (오프스크린 몬스터 수명 잔존·활성 영역 밖으로 이동한 NPC 등 → 비활성 청크 길찾기 경고 원천 차단)
+                // 동행 NPC는 예외 — 뒤처져 비활성 청크에 남아도 Follow가 리더 옆으로 순간이동시켜야 한다 (NPC_COMBAT_DESIGN §4.3)
                 if (componentManager.TryGetComponent<TransformComponent>(entityId, out var aiTransform) == true &&
-                    AR.s.Map.IsChunkActiveAtWorld(aiTransform.Position) == false)
+                    AR.s.Map.IsChunkActiveAtWorld(aiTransform.Position) == false &&
+                    componentManager.HasComponent<NpcCompanionComponent>(entityId) == false)
                     continue;
 
                 // AI 상태 컴포넌트 확인

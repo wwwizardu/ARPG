@@ -16,7 +16,7 @@ using ARPG.Village;
 
 namespace ARPG.Npc
 {
-    public class NpcManager : MonoBehaviour
+    public partial class NpcManager : MonoBehaviour
     {
         private Dictionary<int, NpcSaveData> _npcSaveDict = new();
         private Dictionary<Vector2Int, List<int>> _chunkNpcs = new();
@@ -64,6 +64,7 @@ namespace ARPG.Npc
             LoadPlayerRelations(AR.s.Data.PlayerNpcRelationList);
             LoadRelations(AR.s.Data.NpcRelationList);
             LoadParties(AR.s.Data.NpcPartyStates);
+            ValidateCompanionState();
         }
 
         public void Reset()
@@ -2169,10 +2170,12 @@ namespace ARPG.Npc
 
         private static bool IsEligibleHuntPartyMember(NpcSaveData saveData)
         {
+            // 동행 예약 NPC는 다른 NPC의 사냥 파티에 끌려가지 않는다 (NPC_COMBAT_DESIGN §4.5)
             return saveData.Condition != CharacterConditions.Dead &&
                    saveData.Activity.Phase == NpcActivityPhase.Idle &&
                    saveData.Activity.Kind == NpcActivityKind.None &&
-                   saveData.Activity.PartyId < 0;
+                   saveData.Activity.PartyId < 0 &&
+                   AR.s.Data.NpcCompanion.ReservedNpcId != saveData.EntityId;
         }
 
         private bool IsHostilePartyRelation(int leaderId, int candidateId)
