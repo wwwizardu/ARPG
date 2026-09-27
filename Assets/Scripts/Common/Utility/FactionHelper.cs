@@ -28,6 +28,8 @@ namespace ARPG.Utility
         /// 2) 결투 중인 NPC는 결투 상대만 노린다 (Q10) — 다른 대상은 적대 아님
         /// 3) 결투 중인 NPC는 적대 진영(몬스터)의 적대 대상이 된다 [D21] (평소 몬스터는 Neutral NPC를 무시)
         /// 4) 그 외에는 기존 진영 판정
+        /// 토템·장판 등 대리 시전체(CasterLinkComponent)는 1)·2)를 원 시전자 기준으로 본다 — 플레이어 토템도 결투 상대를 공격한다.
+        /// 반대로 결투 중 NPC는 상대의 토템·소환물을 공격하지 않는다(2). 어그로 시스템 도입 때 재검토.
         /// 결투가 없으면(풀 비어 있음) 조회 한 번으로 진영 판정에 바로 위임한다.
         /// </summary>
         public static bool IsEntityHostile(int casterEntityId, Faction casterFaction, int targetEntityId, Faction targetFaction)
@@ -37,11 +39,15 @@ namespace ARPG.Utility
             if (duelPool.Count == 0)
                 return IsFactionHostile(casterFaction, targetFaction);
 
-            if (duelPool.TryGet(casterEntityId, out DuelComponent casterDuel) == true)
+            int duelCasterId = casterEntityId;
+            if (cm.TryGetComponent<CasterLinkComponent>(casterEntityId, out CasterLinkComponent casterLink) == true)
+                duelCasterId = casterLink.CasterEntityId;
+
+            if (duelPool.TryGet(duelCasterId, out DuelComponent casterDuel) == true)
             {
                 if (casterDuel.OpponentId == targetEntityId)
                     return true;
-                if (cm.HasComponent<NpcTag>(casterEntityId) == true)
+                if (cm.HasComponent<NpcTag>(duelCasterId) == true)
                     return false;
             }
 
