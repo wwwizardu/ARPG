@@ -37,7 +37,10 @@ namespace ARPG.Dungeon
         public bool CompletionPending => _completionPending;
         public bool HasPlayerSaveOverride => _playerSaveOverride;
         public bool RequiresCheckpoint => IsInside || _busy || AR.s.Data.Player.CurrentMapKind == MapKind.Dungeon;
-        public bool GameplayPaused => IsBusy || _deathPending || _completionPending || (IsInside && _menuOpen);
+        public bool GameplayPaused => IsBusy || _deathPending ||
+                                      (_completionPending == true &&
+                                       (AR.s.Npc == null || AR.s.Npc.IsPlayerInDuel == false)) ||
+                                      (IsInside && _menuOpen);
         public DungeonRecord ActiveRecord => _active;
 
         public void Initialize()
@@ -83,6 +86,11 @@ namespace ARPG.Dungeon
             Vector2 entrance = new Vector2(slot.EntranceX + 0.5f, slot.EntranceY + 0.5f);
             if (Vector2.SqrMagnitude(playerPosition - entrance) > 9f ||
                 AR.s.WorldMap.IsChunkActiveAtWorld(entrance) == false) return false;
+            if (AR.s.Npc.IsPlayerInDuel == true)
+            {
+                Notify("결투 중에는 던전에 입장할 수 없습니다.");
+                return false;
+            }
             _busy = true;
             int lifetime = _lifetime;
             DungeonRecord record = FindRecord(dungeonId);
@@ -135,7 +143,8 @@ namespace ARPG.Dungeon
                 if (created == true) AR.s.Data.Dungeons.Dungeons.Add(record);
                 // 임시 동행 예약이 있으면 입장 커밋(World)에 동행 진행 상태를 함께 싣는다 (NPC_COMBAT_DESIGN §4.5)
                 companionStaged = AR.s.Npc.StageCompanionDungeonEntry();
-                bool saved = await CommitAsync(SaveScope.Player | SaveScope.World | SaveScope.Map | SaveScope.Dungeons);
+                bool saved = await CommitAsync(SaveScope.Player | SaveScope.World | SaveScope.Map |
+                                               SaveScope.NpcState | SaveScope.Dungeons);
                 if (lifetime != _lifetime) return false;
                 if (saved == false)
                 {
@@ -215,6 +224,11 @@ namespace ARPG.Dungeon
         {
             death = death || _deathPending;
             if (_busy == true || IsInside == false) return false;
+            if (AR.s.Npc.IsPlayerInDuel == true)
+            {
+                Notify("결투 중에는 던전에서 나갈 수 없습니다.");
+                return false;
+            }
             if (_completionPending == true && await CompleteAsync() == false) return false;
             _busy = true;
             int lifetime = _lifetime;
@@ -246,7 +260,8 @@ namespace ARPG.Dungeon
                 if (record.Completed == true) AR.s.Data.Dungeons.Dungeons.Remove(record);
                 // 퇴장(ESC·사망 공통) 시 동행 종료를 퇴장 커밋(World)에 함께 싣는다 (NPC_COMBAT_DESIGN §4.5)
                 companionId = AR.s.Npc.StageCompanionDungeonExit();
-                bool saved = await CommitAsync(SaveScope.Player | SaveScope.World | SaveScope.Dungeons);
+                bool saved = await CommitAsync(SaveScope.Player | SaveScope.World |
+                                               SaveScope.NpcState | SaveScope.Dungeons);
                 if (lifetime != _lifetime) return false;
                 if (saved == false)
                 {
@@ -306,6 +321,7 @@ namespace ARPG.Dungeon
         public async Task<bool> CompleteAsync(SaveScope scope = SaveScope.Player | SaveScope.World | SaveScope.Dungeons)
         {
             if (_busy == true || IsInside == false) return false;
+            if (AR.s.Npc.IsPlayerInDuel == true) return false;
             if (_active.Completed == true) { _completionPending = false; return true; }
             if (_completionPending == false || TryFindSlot(_active.DungeonId, out var village, out var slot) == false ||
                 slot.Generation != _active.Generation) return false;
@@ -320,7 +336,8 @@ namespace ARPG.Dungeon
                     _active.ReplacementCooldownHours, out var transaction) == false) return false;
                 using (transaction)
                 {
-                    if (await CommitAsync(scope | SaveScope.Player | SaveScope.World | SaveScope.Dungeons) == false)
+                    if (await CommitAsync(scope | SaveScope.Player | SaveScope.World |
+                                          SaveScope.NpcState | SaveScope.Dungeons) == false)
                     {
                         Notify("보스 완료 저장 실패. 보상과 입구 교체를 함께 재시도합니다.");
                         return false;

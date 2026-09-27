@@ -30,7 +30,11 @@ namespace ARPG.UI
                         ((RectTransform)_exitDungeon.transform).anchoredPosition += new Vector2(0, -65);
                 }
             }
-            if (_exitDungeon != null) _exitDungeon.gameObject.SetActive(AR.s.Dungeon.IsInside);
+            if (_exitDungeon != null)
+            {
+                _exitDungeon.gameObject.SetActive(AR.s.Dungeon.IsInside);
+                _exitDungeon.interactable = AR.s.Npc.IsPlayerInDuel == false;
+            }
             AR.s.Dungeon.SetMenuOpen(true);
         }
 
@@ -46,8 +50,13 @@ namespace ARPG.UI
             _saving = true;
             try
             {
+                // 결투 중에는 저장 요청을 거부한다 (NPC_COMBAT_DESIGN §7.2)
+                bool duelBlocked = AR.s.Npc.IsPlayerInDuel == true;
                 bool saved = await AR.s.Data.SaveAsync();
-                AR.s.UI.SetNotify(saved ? "진행 상황을 저장했습니다." : "저장에 실패했습니다. 다시 시도하세요.");
+                if (duelBlocked == true)
+                    AR.s.UI.SetNotify("결투 중에는 저장할 수 없습니다.");
+                else
+                    AR.s.UI.SetNotify(saved ? "진행 상황을 저장했습니다." : "저장에 실패했습니다. 다시 시도하세요.");
             }
             finally { _saving = false; }
         }
@@ -55,11 +64,14 @@ namespace ARPG.UI
         public async void OnClickExitDungeon()
         {
             if (_saving == true || AR.s.Dungeon.IsBusy == true) return;
+            if (AR.s.Npc.IsPlayerInDuel == true)
+            {
+                AR.s.UI.SetNotify("결투 중에는 던전에서 나갈 수 없습니다.");
+                return;
+            }
             _saving = true;
             try { if (await AR.s.Dungeon.ExitAsync() == true) Close(); }
             finally { _saving = false; }
         }
     }    
 }
-
-

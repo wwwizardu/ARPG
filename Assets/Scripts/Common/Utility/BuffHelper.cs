@@ -245,6 +245,31 @@ namespace ARPG.Utility
         }
 
         /// <summary>
+        /// 엔티티의 해제 가능한 버프·디버프만 제거한다.
+        /// IsDispellable=false인 패시브·영구 효과는 유지한다.
+        /// </summary>
+        public static int RemoveAllDispellableBuffs(int targetEntityId)
+        {
+            SparseSet<BuffInstance> buffPool = AR.s.Component.GetComponentPool<BuffInstance>();
+            if (buffPool == null || buffPool.Count == 0)
+                return 0;
+
+            int removedCount = 0;
+            for (int i = buffPool.Count - 1; i >= 0; i--)
+            {
+                int buffEntityId = buffPool.GetEntityId(i);
+                BuffInstance buff = buffPool.GetByIndex(i);
+                if (buff.TargetEntityId != targetEntityId || IsDispellable(buff) == false)
+                    continue;
+
+                RemoveBuff(buffEntityId);
+                removedCount++;
+            }
+
+            return removedCount;
+        }
+
+        /// <summary>
         /// 엔티티가 특정 버프를 보유하고 있는지 확인
         /// </summary>
         public static bool HasBuff(int targetEntityId, int buffTableID)
@@ -280,6 +305,35 @@ namespace ARPG.Utility
             }
 
             return count;
+        }
+
+        /// <summary>엔티티가 보유한 해제 가능한 버프·디버프 개수.</summary>
+        public static int GetDispellableBuffCount(int targetEntityId)
+        {
+            SparseSet<BuffInstance> buffPool = AR.s.Component.GetComponentPool<BuffInstance>();
+            if (buffPool == null || buffPool.Count == 0)
+                return 0;
+
+            int count = 0;
+            for (int i = 0; i < buffPool.Count; i++)
+            {
+                BuffInstance buff = buffPool.GetByIndex(i);
+                if (buff.TargetEntityId == targetEntityId && IsDispellable(buff) == true)
+                    count++;
+            }
+
+            return count;
+        }
+
+        private static bool IsDispellable(BuffInstance buff)
+        {
+            BuffTable buffTable = AR.s.Data?.GetBuff(buff.BuffTableID);
+            if (buffTable != null)
+                return buffTable.IsDispellable;
+
+            // 테이블이 사라진 고아 버프는 패시브로 간주해 보존할 근거가 없으므로 정리한다.
+            Debug.LogWarning($"[BuffHelper] BuffTable not found while checking dispel policy - TableID: {buff.BuffTableID}");
+            return true;
         }
 
         private static void ApplyDamageBasedBuffEffect(int buffEntityId, BuffTable buffTable, float dealtDamage)

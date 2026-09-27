@@ -12,6 +12,10 @@ namespace ARPG.Npc
         PartyAffinityChanged = 2,
         Wounded = 3,
         NotableItemAcquired = 4,
+        // 플레이어와의 결투 결과 (NPC_COMBAT_DESIGN §7.4, B4). 참가자: NPC 본인 + 플레이어
+        DuelWon = 5,
+        DuelLost = 6,
+        DuelDrawn = 7,
     }
 
     /// <summary>NPC가 사건을 알게 된 직접성 등급. 내러티브 지식 거리의 입력이다.</summary>

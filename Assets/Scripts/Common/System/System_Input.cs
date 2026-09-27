@@ -133,7 +133,11 @@ namespace ARPG.Systems
             {
                 inputComponent.MouseWorldPosition = _mainCamera.ScreenToWorldPoint(inputComponent.MousePosition);
             }
-            inputComponent.IsInteracting = _input.Value.Interact.WasPressedThisFrame();
+            bool interactionPressed = _input.Value.Interact.WasPressedThisFrame();
+            bool interactionBlocked = AR.s.Npc.IsPlayerInDuel == true;
+            inputComponent.IsInteracting = interactionPressed && interactionBlocked == false;
+            if (interactionPressed == true && interactionBlocked == true)
+                AR.s.UI.SetNotify("결투 중에는 상호작용할 수 없습니다.");
             inputComponent.IsSprinting = _input.Value.Sprint.IsPressed();
 
             // 좌클릭 = 아이템 줍기 + 슬롯 0 공격 공용.

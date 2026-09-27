@@ -106,7 +106,7 @@ namespace ARPG.Skill.Propagation
             if (inComponentManager.HasComponent<DestroyTag>(inCandidateEntityId) == true)
                 return false;
             if (inComponentManager.TryGetComponent<FactionComponent>(inCandidateEntityId, out FactionComponent candidateFaction) == false
-                || FactionHelper.IsFactionHostile(inOwnerFaction.FactionId, candidateFaction.FactionId) == false)
+                || FactionHelper.IsEntityHostile(inOwnerEntityId, inOwnerFaction.FactionId, inCandidateEntityId, candidateFaction.FactionId) == false)
             {
                 return false;
             }

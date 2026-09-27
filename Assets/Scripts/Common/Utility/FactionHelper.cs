@@ -22,8 +22,40 @@ namespace ARPG.Utility
         }
 
         /// <summary>
+        /// 엔티티 단위 적대 판정 — 결투 규칙(NPC_COMBAT_DESIGN §3.3)을 진영 판정보다 우선 적용하는 단일 chokepoint.
+        /// 스킬 피격·발사체·장판·전파·AI 타겟 탐색은 모두 이 함수를 거친다.
+        /// 1) 결투 쌍이면 적대 (동행 NPC와의 결투도 진영과 무관하게 적대)
+        /// 2) 결투 중인 NPC는 결투 상대만 노린다 (Q10) — 다른 대상은 적대 아님
+        /// 3) 결투 중인 NPC는 적대 진영(몬스터)의 적대 대상이 된다 [D21] (평소 몬스터는 Neutral NPC를 무시)
+        /// 4) 그 외에는 기존 진영 판정
+        /// 결투가 없으면(풀 비어 있음) 조회 한 번으로 진영 판정에 바로 위임한다.
+        /// </summary>
+        public static bool IsEntityHostile(int casterEntityId, Faction casterFaction, int targetEntityId, Faction targetFaction)
+        {
+            ComponentManager cm = AR.s.Component;
+            SparseSet<DuelComponent> duelPool = cm.GetComponentPool<DuelComponent>();
+            if (duelPool.Count == 0)
+                return IsFactionHostile(casterFaction, targetFaction);
+
+            if (duelPool.TryGet(casterEntityId, out DuelComponent casterDuel) == true)
+            {
+                if (casterDuel.OpponentId == targetEntityId)
+                    return true;
+                if (cm.HasComponent<NpcTag>(casterEntityId) == true)
+                    return false;
+            }
+
+            if (casterFaction == Faction.Hostile &&
+                duelPool.Contains(targetEntityId) == true &&
+                cm.HasComponent<NpcTag>(targetEntityId) == true)
+                return true;
+
+            return IsFactionHostile(casterFaction, targetFaction);
+        }
+
+        /// <summary>
         /// caster와 target이 서로 적대인지. caster 진영이 없으면 마이그레이션 안전을 위해 적대로 간주.
-        /// target 진영이 없거나 Neutral이면 적대 아님.
+        /// target 진영이 없거나 Neutral이면 적대 아님. 결투 쌍 규칙은 IsEntityHostile이 우선 적용한다.
         /// </summary>
         public static bool IsHostileTo(int casterEntityId, int targetEntityId)
         {
@@ -32,7 +64,7 @@ namespace ARPG.Utility
                 return true;
             if (cm.TryGetComponent<FactionComponent>(targetEntityId, out var targetFaction) == false)
                 return false;
-            return IsFactionHostile(casterFaction.FactionId, targetFaction.FactionId);
+            return IsEntityHostile(casterEntityId, casterFaction.FactionId, targetEntityId, targetFaction.FactionId);
         }
 
         /// <summary>
@@ -72,10 +104,10 @@ namespace ARPG.Utility
                 if (candidateId == selfEntityId)
                     continue;
 
-                // 진영 필터 — 후보가 self와 적대일 때만 (진영 없으면 제외)
+                // 진영 필터 — 후보가 self와 적대일 때만 (진영 없으면 제외). 결투 쌍 규칙 포함
                 if (factionPool.TryGet(candidateId, out var candidateFaction) == false)
                     continue;
-                if (IsFactionHostile(selfFaction, candidateFaction.FactionId) == false)
+                if (IsEntityHostile(selfEntityId, selfFaction, candidateId, candidateFaction.FactionId) == false)
                     continue;
 
                 if (requireStatComponent && statPool.Contains(candidateId) == false)

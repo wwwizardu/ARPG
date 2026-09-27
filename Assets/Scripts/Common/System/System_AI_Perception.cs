@@ -65,6 +65,23 @@ namespace ARPG.Systems
                 if (cm.TryGetComponent<TransformComponent>(entityId, out var transform) == false)
                     continue;
 
+                // 결투 중인 NPC는 인식 대상을 결투 상대로 고정한다 (NPC_COMBAT_DESIGN §3.4, Q10: 상대만 노린다).
+                // 결투 영역이 없으므로 [D20] 거리·시야와 무관하게 상대를 계속 본다.
+                if (cm.TryGetComponent<DuelComponent>(entityId, out var npcDuel) == true &&
+                    cm.HasComponent<NpcTag>(entityId) == true)
+                {
+                    if (cm.TryGetComponent<TransformComponent>(npcDuel.OpponentId, out var opponentTransform) == true &&
+                        cm.HasComponent<DestroyTag>(npcDuel.OpponentId) == false)
+                    {
+                        MarkTargetSeen(cm, entityId, ref ai, ref perception, npcDuel.OpponentId, opponentTransform.Position);
+                    }
+                    else
+                    {
+                        AIStateHelper.ClearTarget(entityId, ref ai);
+                    }
+                    continue;
+                }
+
                 // 동행 NPC가 리더에게서 추종 반경 밖으로 멀어지면 타겟을 놓고 Follow로 복귀 (§4.2)
                 if (cm.TryGetComponent<NpcCompanionComponent>(entityId, out var companion) == true &&
                     cm.TryGetComponent<TransformComponent>(companion.LeaderEntityId, out var leaderTransform) == true &&
@@ -81,6 +98,16 @@ namespace ARPG.Systems
                 if (selfFaction.FactionId == Faction.Neutral)
                     continue;
 
+                // 결투 참가자가 근처에 있는 몬스터는 참가자(플레이어·NPC) 중 무작위로 타겟을 고른다 (§3.3 D21).
+                // 결투와 무관한 몬스터(근처에 참가자 없음)는 아래 기존 규칙(가장 가까운 적)을 그대로 쓴다.
+                if (selfFaction.FactionId == Faction.Hostile &&
+                    TrySelectDuelParticipantTarget(cm, transform.Position, perception, ai.TargetEntityId,
+                        out int duelTargetId, out Vector2 duelTargetPosition) == true)
+                {
+                    MarkTargetSeen(cm, entityId, ref ai, ref perception, duelTargetId, duelTargetPosition);
+                    continue;
+                }
+
                 // 진영 기반으로 가장 가까운 적 탐색 (FactionHelper 위임)
                 int targetEntityId = FactionHelper.FindNearestEnemy(
                     entityId,
@@ -96,14 +123,7 @@ namespace ARPG.Systems
                 // 타겟 감지 성공
                 if (targetEntityId != -1)
                 {
-                    cm.AddComponent(entityId, new AICanSeeTargetTag());
-
-                    ai.TargetEntityId = targetEntityId;
-                    ai.LastKnownTargetPos = targetPosition;
-                    cm.SetComponent(entityId, ai);
-
-                    perception.LastDetectionTime = Time.time;
-                    cm.SetComponent(entityId, perception);
+                    MarkTargetSeen(cm, entityId, ref ai, ref perception, targetEntityId, targetPosition);
                 }
                 // 타겟 감지 실패
                 else
@@ -125,5 +145,88 @@ namespace ARPG.Systems
             }
         }
 
+        private static void MarkTargetSeen(ComponentManager cm, int entityId, ref AIComponent ai,
+            ref AIPerceptionComponent perception, int targetEntityId, Vector2 targetPosition)
+        {
+            cm.AddComponent(entityId, new AICanSeeTargetTag());
+
+            ai.TargetEntityId = targetEntityId;
+            ai.LastKnownTargetPos = targetPosition;
+            cm.SetComponent(entityId, ai);
+
+            perception.LastDetectionTime = Time.time;
+            cm.SetComponent(entityId, perception);
+        }
+
+        /// <summary>
+        /// 몬스터의 결투 참가자 타겟 선택 (§3.3 D21). 어그로 시스템이 없으므로 감지 범위 안의 참가자 중 무작위로 고른다.
+        /// 현재 타겟이 놓침 범위 안의 참가자면 유지한다 — 인식 틱(0.2초)마다 다시 뽑아 타겟이 흔들리지 않게 하기 위함.
+        /// </summary>
+        private static bool TrySelectDuelParticipantTarget(ComponentManager cm, Vector2 selfPosition,
+            AIPerceptionComponent perception, int currentTargetId, out int targetEntityId, out Vector2 targetPosition)
+        {
+            targetEntityId = -1;
+            targetPosition = Vector2.zero;
+
+            SparseSet<DuelComponent> duelPool = cm.GetComponentPool<DuelComponent>();
+            if (duelPool.Count == 0)
+                return false;
+
+            float loseRangeSqr = perception.LoseTargetRange * perception.LoseTargetRange;
+            if (currentTargetId >= 0 &&
+                duelPool.Contains(currentTargetId) == true &&
+                cm.HasComponent<DestroyTag>(currentTargetId) == false &&
+                cm.TryGetComponent<TransformComponent>(currentTargetId, out var currentTransform) == true &&
+                (currentTransform.Position - selfPosition).sqrMagnitude <= loseRangeSqr)
+            {
+                targetEntityId = currentTargetId;
+                targetPosition = currentTransform.Position;
+                return true;
+            }
+
+            float detectionRangeSqr = perception.DetectionRange * perception.DetectionRange;
+            int candidateCount = 0;
+            for (int i = 0; i < duelPool.Count; i++)
+            {
+                if (IsDuelCandidateInRange(cm, duelPool.GetEntityId(i), selfPosition, detectionRangeSqr, out _) == true)
+                    candidateCount++;
+            }
+            if (candidateCount == 0)
+                return false;
+
+            int pick = Random.Range(0, candidateCount);
+            for (int i = 0; i < duelPool.Count; i++)
+            {
+                int candidateId = duelPool.GetEntityId(i);
+                if (IsDuelCandidateInRange(cm, candidateId, selfPosition, detectionRangeSqr, out Vector2 candidatePosition) == false)
+                    continue;
+                if (pick > 0)
+                {
+                    pick--;
+                    continue;
+                }
+
+                targetEntityId = candidateId;
+                targetPosition = candidatePosition;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsDuelCandidateInRange(ComponentManager cm, int candidateId, Vector2 selfPosition,
+            float rangeSqr, out Vector2 candidatePosition)
+        {
+            candidatePosition = Vector2.zero;
+            if (cm.HasComponent<DestroyTag>(candidateId) == true ||
+                cm.HasComponent<StatComponent>(candidateId) == false ||
+                cm.TryGetComponent<TransformComponent>(candidateId, out var candidateTransform) == false)
+                return false;
+            if ((candidateTransform.Position - selfPosition).sqrMagnitude > rangeSqr)
+                return false;
+
+            candidatePosition = candidateTransform.Position;
+            return true;
+        }
     }
 }

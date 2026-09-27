@@ -29,6 +29,10 @@ namespace ARPG.Systems
                 if (componentManager.HasComponent<NpcActivityPausedTag>(entityId))
                     continue;
 
+                // 드랍 줍기 중인 NPC는 System_NpcPickup이 이동을 소유한다 (NPC_COMBAT_DESIGN §6, B5)
+                if (componentManager.HasComponent<NpcPickupComponent>(entityId))
+                    continue;
+
                 // 비활성 청크의 엔티티는 AI를 돌리지 않는다.
                 // (오프스크린 몬스터 수명 잔존·활성 영역 밖으로 이동한 NPC 등 → 비활성 청크 길찾기 경고 원천 차단)
                 // 동행 NPC는 예외 — 뒤처져 비활성 청크에 남아도 Follow가 리더 옆으로 순간이동시켜야 한다 (NPC_COMBAT_DESIGN §4.3)

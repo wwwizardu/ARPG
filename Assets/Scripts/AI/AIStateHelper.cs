@@ -70,12 +70,15 @@ namespace ARPG.AI
 
         /// <summary>
         /// NPC의 기본 상태 반환.
+        /// 결투 중 NPC → Idle (상대를 다시 인식하면 Chase. Patrol의 겁많음 Flee 전환·Follow 추종을 타지 않게 한다)
         /// 동행 NPC → Follow (Chase/Attack에서 타겟을 잃으면 추종으로 복귀)
         /// NPC → Patrol
         /// 몬스터 → Idle
         /// </summary>
         public static AIState GetDefaultState(int entityId)
         {
+            if (AR.s.Component.HasComponent<DuelComponent>(entityId) && IsNpc(entityId))
+                return AIState.Idle;
             if (AR.s.Component.HasComponent<NpcCompanionComponent>(entityId))
                 return AIState.Follow;
             if (IsNpc(entityId))

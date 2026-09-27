@@ -381,6 +381,13 @@ namespace ARPG.Data
         public Task<bool> SaveAsync(SaveScope scope = SaveScope.All)
         {
             if (AR.s.Dungeon.IsBusy) return Task.FromResult(false);
+            // 결투 중에는 던전 체크포인트를 포함한 모든 일반 저장 요청을 거부한다 (NPC_COMBAT_DESIGN §7.2).
+            // 결투 종료 결과는 NpcManager.EndPlayerDuel이 결투 컴포넌트를 제거한 뒤 별도로 저장한다.
+            if (AR.s.Npc != null && AR.s.Npc.IsPlayerInDuel == true)
+            {
+                Debug.Log($"[DataManager] 결투 중 저장 거부 - Scope: {scope}");
+                return Task.FromResult(false);
+            }
             if (AR.s.Dungeon.CompletionPending && AR.s.Dungeon.IsCommitting == false)
                 return AR.s.Dungeon.CompleteAsync(scope);
             return SavePartitionedAsync(scope);

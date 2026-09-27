@@ -2178,11 +2178,13 @@ namespace ARPG.Npc
         private static bool IsEligibleHuntPartyMember(NpcSaveData saveData)
         {
             // 동행 예약 NPC는 다른 NPC의 사냥 파티에 끌려가지 않는다 (NPC_COMBAT_DESIGN §4.5)
+            // 플레이어와 결투 중인 NPC도 파티에 뽑히지 않는다 (§9, B4)
             return saveData.Condition != CharacterConditions.Dead &&
                    saveData.Activity.Phase == NpcActivityPhase.Idle &&
                    saveData.Activity.Kind == NpcActivityKind.None &&
                    saveData.Activity.PartyId < 0 &&
-                   AR.s.Data.NpcCompanion.ReservedNpcId != saveData.EntityId;
+                   AR.s.Data.NpcCompanion.ReservedNpcId != saveData.EntityId &&
+                   AR.s.Component.HasComponent<DuelComponent>(saveData.EntityId) == false;
         }
 
         private bool IsHostilePartyRelation(int leaderId, int candidateId)

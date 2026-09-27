@@ -55,6 +55,13 @@ namespace ARPG.Systems
                     continue;
                 }
 
+                // 결투 참가자는 원인과 관계없이 사망 대신 HP 1로 두고 결투를 끝낸다 (NPC_COMBAT_DESIGN §7.2 D22·Q11).
+                // 사망·파괴 파이프라인(던전 플레이어 사망 가로채기 포함)보다 먼저 가로챈다.
+                if (stat.CurrentHp <= 0 && AR.s.Npc.TryInterceptDuelDefeat(entityId) == true)
+                {
+                    cm.TryGetComponent<StatComponent>(entityId, out stat);
+                }
+
                 // CurrentHp가 0 이하이면 사망 처리
                 if (stat.CurrentHp <= 0)
                 {

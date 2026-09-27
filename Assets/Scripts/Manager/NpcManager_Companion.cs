@@ -272,6 +272,31 @@ namespace ARPG.Npc
         /// <param name="fallbackPosition">소속 마을이 없는 NPC의 귀환 위치 (던전 입구 복귀 지점)</param>
         public void FinishCompanionDungeonExit(int npcId, Vector2 fallbackPosition)
         {
+            ReturnCompanionHome(npcId, fallbackPosition, worldMapActive: true);
+        }
+
+        /// <summary>
+        /// 던전 안에서 동행 중인 NPC와 결투가 끝나면(승패·무승부 무관) 동행을 끝내고 NPC를 소속 마을로 귀환시킨다 [D26].
+        /// 처리는 던전 퇴장 시 귀환(FinishCompanionDungeonExit)과 같다. 동행 상태가 비므로 이후 퇴장 커밋은 귀환을 다시 하지 않는다.
+        /// 동행 예약만 한 NPC(던전 밖)는 대상이 아니다 — 예약은 유지한다.
+        /// </summary>
+        public void EndCompanionAfterDuel(int npcId)
+        {
+            if (IsCompanionInDungeon(npcId) == false)
+                return;
+
+            ClearCompanionState();
+            // 소속 마을이 없는 NPC는 던전 퇴장 때와 같이 플레이어의 던전 입구 복귀 지점으로 돌아간다
+            Vector2 fallbackPosition = new Vector2(AR.s.Data.Player.WorldReturnX, AR.s.Data.Player.WorldReturnY);
+            ReturnCompanionHome(npcId, fallbackPosition, worldMapActive: AR.s.Dungeon.IsInside == false);
+        }
+
+        /// <summary>
+        /// 동행 종료 귀환 본체. 진영 Neutral·태그 제거 후 던전 쪽 엔티티를 비실체화하고, 소속 마을의 NPC 배치 위치로 되돌린 뒤 활동을 Idle로 돌린다.
+        /// </summary>
+        /// <param name="worldMapActive">false면 던전 맵이 활성이라 월드 충돌 검사를 할 수 없다 — 위치만 정하고 보정은 청크 활성화(SpawnNpc)에 맡긴다</param>
+        private void ReturnCompanionHome(int npcId, Vector2 fallbackPosition, bool worldMapActive)
+        {
             if (npcId < 0)
                 return;
 
@@ -306,7 +331,7 @@ namespace ARPG.Npc
                 return;
             }
 
-            Vector2 homePosition = ResolveCompanionReturnPosition(saveData, fallbackPosition);
+            Vector2 homePosition = ResolveCompanionReturnPosition(saveData, fallbackPosition, worldMapActive);
             saveData.Position = homePosition;
             AddNpcToChunk(PositionToChunk(homePosition), npcId);
 
@@ -392,7 +417,7 @@ namespace ARPG.Npc
             return true;
         }
 
-        private Vector2 ResolveCompanionReturnPosition(NpcSaveData saveData, Vector2 fallbackPosition)
+        private Vector2 ResolveCompanionReturnPosition(NpcSaveData saveData, Vector2 fallbackPosition, bool worldMapActive)
         {
             VillageData? village = AR.s.Village.GetVillage(saveData.VillageId);
             if (village == null)
@@ -401,7 +426,19 @@ namespace ARPG.Npc
             // 기존 NPC 스폰·배치 규칙 재사용 [D18]
             VillageTable? table = AR.s.Data.GetVillageTable(village.TableId);
             float radius = table != null ? table.SpawnRadius : 0f;
-            return GetRandomSpawnPositionInVillage(village, radius, saveData.NpcTableId);
+            if (worldMapActive == true)
+                return GetRandomSpawnPositionInVillage(village, radius, saveData.NpcTableId);
+
+            // 던전 안(결투 후 귀환 D26): AR.s.Map이 던전 맵이라 월드 타일 충돌을 볼 수 없다.
+            // 같은 반경 규칙으로 위치만 정하고, 막힌 자리는 청크 활성화 때 SpawnNpc(TryResolveNpcSpawnPosition)가 보정한다.
+            Vector2 candidate = village.Position;
+            if (radius > 0f)
+            {
+                float angle = UnityEngine.Random.Range(0f, Mathf.PI * 2f);
+                float r = UnityEngine.Random.Range(0f, radius);
+                candidate += new Vector2(Mathf.Cos(angle) * r, Mathf.Sin(angle) * r);
+            }
+            return candidate;
         }
 
         private void RemoveNpcFromAllChunks(int entityId)

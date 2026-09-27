@@ -85,12 +85,8 @@ namespace ARPG.Systems
 
                 FactionComponent candidateFaction = factionPool.GetByIndex(i);
 
-                // Neutral은 NPC·중립 — 타격 대상 아님
-                if (candidateFaction.FactionId == Faction.Neutral)
-                    continue;
-
-                // 같은 진영(아군) 제외
-                if (candidateFaction.FactionId == area.CasterFaction)
+                // Neutral(NPC·중립)·같은 진영(아군) 제외. 결투 쌍 규칙(NPC_COMBAT_DESIGN §3.3)은 IsEntityHostile이 우선 적용
+                if (FactionHelper.IsEntityHostile(area.OwnerEntityId, area.CasterFaction, candidateId, candidateFaction.FactionId) == false)
                     continue;
 
                 if (cm.TryGetComponent<TransformComponent>(candidateId, out var candidateTransform) == false)

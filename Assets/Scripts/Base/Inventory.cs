@@ -64,6 +64,22 @@ namespace ARPG.Item
             return -1;
         }
 
+        /// <summary>AddItem(inItem)이 성공할지 미리 확인한다 (같은 규칙: Stackable이면 같은 ID 슬롯에 합산, 아니면 빈 슬롯).</summary>
+        public bool CanAddItem(ItemData inItem)
+        {
+            if (inItem == null)
+                return false;
+
+            for (int i = 0; i < _items.Count; i++)
+            {
+                if (_items[i] == null)
+                    return true;
+                if (inItem.Table != null && inItem.Table.Stackable && _items[i]!.Id == inItem.Id)
+                    return true;
+            }
+            return false;
+        }
+
         public bool AddItem(ItemData inItem, int slotIndex, out ItemData? replacedItem)
         {
             replacedItem = null;

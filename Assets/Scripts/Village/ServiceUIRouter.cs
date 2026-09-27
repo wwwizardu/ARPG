@@ -17,6 +17,9 @@ namespace ARPG.Village
     {
         public enum CandidateKind { None, Shop, Forge, Inn, Shrine, Hub, Gate, Npc, Dungeon, DungeonChest }
 
+        // 던전 안 NPC 상호작용 임계 — 월드 NPC 임계(System_VillageServiceProximity, 1.5타일)와 같다
+        private const float DUNGEON_NPC_RANGE = 1.5f;
+
         public struct Candidate
         {
             public CandidateKind Kind;
@@ -39,7 +42,8 @@ namespace ARPG.Village
             out Candidate candidate)
         {
             candidate = new Candidate { Kind = CandidateKind.None, EntityId = -1 };
-            if (AR.s.Dungeon.IsInside) return AR.s.Dungeon.TryGetInteraction(out candidate);
+            if (AR.s.Npc.IsPlayerInDuel == true) return false;
+            if (AR.s.Dungeon.IsInside) return TryGetDungeonCandidate(out candidate);
             if (AR.s.Dungeon.GameplayPaused) return false;
             // Prompt and E both compare current positions, including moving NPCs.
             AR.s.System.GetSystem<Systems.System_VillageServiceProximity>()?.OnUpdate(0);
@@ -157,6 +161,11 @@ namespace ARPG.Village
 
         public static bool Open(in PlayerNearbyServicesComponent nearby)
         {
+            if (AR.s.Npc.IsPlayerInDuel == true)
+            {
+                AR.s.UI.SetNotify("결투 중에는 상호작용할 수 없습니다.");
+                return false;
+            }
             if (TryGetBestCandidate(nearby, out Candidate candidate) == false)
                 return false;
 
@@ -221,6 +230,47 @@ namespace ARPG.Village
                 default:
                     return false;
             }
+        }
+
+        /// <summary>
+        /// 던전 안 후보: 상자 + 실체화된 NPC(동행 NPC). NPC 대화 메뉴에서 던전 안 결투 신청을 할 수 있게 한다 (NPC_COMBAT_DESIGN §7.2 D19·D23).
+        /// 월드용 근접 집계(System_VillageServiceProximity)는 던전에서 돌지 않고, 동행 NPC는 월드 청크 인덱스에 없으므로 NpcTag 풀을 직접 본다.
+        /// </summary>
+        private static bool TryGetDungeonCandidate(out Candidate candidate)
+        {
+            bool found = AR.s.Dungeon.TryGetInteraction(out candidate);
+            if (AR.s.Dungeon.IsBusy == true)
+                return found;
+
+            int playerId = AR.s.Data.CurrentPlayerEntityId;
+            ComponentManager cm = AR.s.Component;
+            if (cm.TryGetComponent<TransformComponent>(playerId, out var playerTransform) == false)
+                return found;
+
+            float bestSqr = found == true ? candidate.DistanceSqr : DUNGEON_NPC_RANGE * DUNGEON_NPC_RANGE;
+            SparseSet<NpcTag> npcPool = cm.GetComponentPool<NpcTag>();
+            for (int i = 0; i < npcPool.Count; i++)
+            {
+                int npcId = npcPool.GetEntityId(i);
+                if (cm.HasComponent<DestroyTag>(npcId) == true ||
+                    cm.TryGetComponent<TransformComponent>(npcId, out var npcTransform) == false)
+                    continue;
+
+                float sqr = (npcTransform.Position - playerTransform.Position).sqrMagnitude;
+                if (sqr > DUNGEON_NPC_RANGE * DUNGEON_NPC_RANGE || sqr >= bestSqr)
+                    continue;
+
+                bestSqr = sqr;
+                found = true;
+                candidate = new Candidate
+                {
+                    Kind = CandidateKind.Npc,
+                    EntityId = npcId,
+                    DistanceSqr = sqr,
+                    HasTile = false,
+                };
+            }
+            return found;
         }
 
         private static void SetFacilityCandidate(ref Candidate candidate,

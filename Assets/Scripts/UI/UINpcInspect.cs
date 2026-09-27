@@ -46,6 +46,7 @@ namespace ARPG.UI
         private Text? _dialogueLabel;
         private VisualElement? _giftList;
         private Button? _companionBtn;
+        private Button? _duelBtn;
         private static readonly bool _enableWishSpike = false;
 
         public override void Initialize(string inName, bool isForm = false)
@@ -145,6 +146,7 @@ namespace ARPG.UI
             RebuildHistory();
             RebuildStats();
             RefreshCompanionButton();
+            RefreshDuelButton();
         }
 
         private void RebuildHistory()
@@ -203,6 +205,9 @@ namespace ARPG.UI
                 NpcDeedKind.NotableItemAcquired => string.IsNullOrEmpty(entry.ItemDisplayName)
                     ? "주요 아이템 획득"
                     : $"{entry.ItemDisplayName} 획득",
+                NpcDeedKind.DuelWon => $"{GetOtherParticipantName(entry)}와 결투에서 승리",
+                NpcDeedKind.DuelLost => $"{GetOtherParticipantName(entry)}와 결투에서 패배",
+                NpcDeedKind.DuelDrawn => $"{GetOtherParticipantName(entry)}와 결투에서 무승부",
                 NpcDeedKind.Fell => "사망",
                 NpcDeedKind.VentureFailed => "원정 실패",
                 _ => "알 수 없는 사건",
@@ -570,6 +575,38 @@ namespace ARPG.UI
             _companionBtn = new() { title = "동행 요청" };
             _companionBtn.clicked += OnClickCompanion;
             bar.Add(_companionBtn);
+
+            // 결투 신청 (NPC_COMBAT_DESIGN §7). 어떤 NPC에게든·던전 안에서도 신청할 수 있다 [D19]. B4는 항상 수락(스텁).
+            _duelBtn = new() { title = "결투 신청" };
+            _duelBtn.clicked += OnClickDuel;
+            bar.Add(_duelBtn);
+        }
+
+        private void RefreshDuelButton()
+        {
+            if (_duelBtn == null || AR.s.Npc == null)
+                return;
+
+            // 결투는 한 번에 1건 — 진행 중이면 메뉴를 띄우지 않는다
+            _duelBtn.style.display = AR.s.Npc.IsPlayerInDuel == true ? DisplayStyle.None : DisplayStyle.Flex;
+        }
+
+        private void OnClickDuel()
+        {
+            if (_entityId < 0 || AR.s.Npc == null)
+                return;
+
+            bool accepted = AR.s.Npc.RequestDuel(_entityId, out string message);
+            if (_dialogueLabel != null)
+                _dialogueLabel.text = message;
+            if (accepted == false)
+            {
+                AR.s.UI.SetNotify(message);
+                return;
+            }
+
+            // 신청한 자리에서 바로 싸우므로 패널을 닫는다 [D20]
+            Close();
         }
 
         private void RefreshCompanionButton()

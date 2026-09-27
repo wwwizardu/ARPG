@@ -112,6 +112,9 @@ namespace ARPG.Systems
             System_Lifetime lifetimeSystem = new();
             RegisterSystems(lifetimeSystem);
 
+            // Priority 75: NPC Pickup System (FixedUpdate) - NPC 드랍 줍기 이동·도착 판정 (NPC_COMBAT_DESIGN §6, B5)
+            RegisterSystems(new System_NpcPickup());
+
             // Priority 80: Pathfinding System (FixedUpdate) - PathfindingComponent A* + Waypoint 추적
             // AI Behavior(50) 이후, Move(100) 이전 — Velocity.Direction을 waypoint 방향으로 덮어씀
             System_Pathfinding pathfindingSystem = new();
@@ -169,6 +172,9 @@ namespace ARPG.Systems
             // Priority 250: HP Check System (FixedUpdate) - HP 0 체크 및 DeathMessage 전송
             System_HpCheck hpCheckSystem = new();
             RegisterSystems(hpCheckSystem);
+
+            // Priority 255: Duel System (FixedUpdate) - 결투 패배 확정·시간 제한(3분)·참가자 소멸 종료 (NPC_COMBAT_DESIGN §7.2)
+            RegisterSystems(new System_Duel());
 
             // Priority 500: Entity Activation System (FixedUpdate) - 거리 기반 엔티티 활성화/비활성화 (0.5초 간격)
             System_EntityActivation entityActivationSystem = new();

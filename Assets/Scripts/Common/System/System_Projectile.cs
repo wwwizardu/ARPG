@@ -138,7 +138,7 @@ namespace ARPG.Systems
                 {
                     if (factionPool.TryGet(targetId, out var targetFaction) == false)
                         continue;
-                    if (FactionHelper.IsFactionHostile(ownerFaction.FactionId, targetFaction.FactionId) == false)
+                    if (FactionHelper.IsEntityHostile(proj.OwnerEntityId, ownerFaction.FactionId, targetId, targetFaction.FactionId) == false)
                         continue;
                 }
 

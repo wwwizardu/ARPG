@@ -54,6 +54,9 @@ namespace ARPG.Systems
             // 던전 안에서 동행 중인 NPC는 활동 선택·판정에서 제외한다 (NPC_COMBAT_DESIGN §4.5)
             if (AR.s.Npc.IsCompanionInDungeon(entityId) == true)
                 return;
+            // 플레이어와 결투 중인 NPC도 제외한다 — 결투 도중 사냥을 시작하면 조우 대기 태그가 붙어 인식이 꺼진다 (§9, B4)
+            if (AR.s.Npc.IsInPlayerDuel(entityId) == true)
+                return;
 
             // 평상시에는 now에서 다음 활동을 시작한다. 시간 점프 후에는 이전 phase 종료시각을
             // 다음 활동의 시작시각으로 사용해 과거 구간을 시간 순서대로 결제한다.
@@ -225,6 +228,13 @@ namespace ARPG.Systems
             UpdatePartyAnalyticPositions(party, now);
             if (activity.PhaseEndGameTime > now)
                 return;
+
+            // 파티원이 플레이어와 결투 중이면 파티 판정을 결투가 끝날 때까지 미룬다 (§9, B4)
+            for (int i = 0; i < party.MemberIds.Count; i++)
+            {
+                if (AR.s.Npc.IsInPlayerDuel(party.MemberIds[i]) == true)
+                    return;
+            }
 
             ResolvePartyHunt(party, activity.PhaseEndGameTime, worldSeed);
         }

@@ -111,6 +111,8 @@ namespace ARPG.Component
             { typeof(NpcActivityPausedTag), 200 }, // 이동 중 materialize된 NPC의 조우 대기 태그
             { typeof(NpcCombatEnabledTag), 8 },    // 전투 허용 NPC (동행·결투 중, 동시에 소수)
             { typeof(NpcCompanionComponent), 8 },  // 동행 추종 NPC (v1은 1명)
+            { typeof(DuelComponent), 4 },          // 결투 참가자 (플레이어↔NPC 1건 = 2개)
+            { typeof(NpcPickupComponent), 8 },     // 드랍 줍기 중인 NPC (디버그·C1 배신 규칙 호출, 동시에 소수)
             { typeof(VillageStorageComponent), 32 },   // 마을 1개당 1개, 현재 <10, 여유 32
             { typeof(VillageComponent), 32 },          // 마을 1개당 1개 (Phase C: Stage/Bounds/Threat)
             { typeof(WallPlanRequestTag), 32 },        // Stage 3 도달 시 부착, 처리 후 제거
