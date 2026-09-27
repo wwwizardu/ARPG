@@ -188,6 +188,10 @@ namespace ARPG.Dungeon
                 await DrainAsync(AR.s.WorldMap.Context);
                 if (lifetime != _lifetime) return false;
                 ActivateInterior(record);
+                // 던전 안에서 저장·재접속했으면 동행 NPC를 플레이어 옆에 다시 소환한다 (NPC_COMBAT_DESIGN §4.5, B3).
+                // 소환 실패는 복원을 실패시키지 않는다 — 퇴장 시 FinishCompanionDungeonExit가 마을로 되돌린다.
+                await AR.s.Npc.SummonCompanionAsync();
+                if (lifetime != _lifetime) return false;
                 new System_StatCalculation().OnUpdate(0);
                 if (_components.TryGetComponent<StatComponent>(player.PlayerId, out var restoredStat) == true)
                 {

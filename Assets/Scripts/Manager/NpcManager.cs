@@ -201,6 +201,9 @@ namespace ARPG.Npc
                 return false;
             if (AR.s.Component.HasComponent<NpcTag>(entityId) == false)
                 return false;
+            // 던전 동행 NPC는 던전 좌표를 월드 저장 위치·청크 인덱스에 쓰지 않는다 (호출자가 Transform만 보정)
+            if (IsCompanionInDungeon(entityId) == true)
+                return false;
 
             SetNpcPosition(entityId, saveData, position);
             return true;
@@ -926,7 +929,9 @@ namespace ARPG.Npc
                 saveData.Condition = state.Condition;
             }
 
-            if (AR.s.Component.TryGetComponent<TransformComponent>(entityId, out var transform))
+            // 던전 동행 NPC의 Transform은 던전 좌표다 — 월드 저장 위치·청크 인덱스를 덮지 않는다
+            if (IsCompanionInDungeon(entityId) == false &&
+                AR.s.Component.TryGetComponent<TransformComponent>(entityId, out var transform))
             {
                 saveData.Position = new Vector2(transform.Position.x, transform.Position.y);
 
@@ -957,7 +962,9 @@ namespace ARPG.Npc
 
                 int entityId = kvp.Key;
 
-                if (AR.s.Component.TryGetComponent<TransformComponent>(entityId, out var transform))
+                // 던전 동행 NPC는 입장 전 월드 위치를 유지한다. 던전 좌표가 저장되면 재접속 시 월드 청크 인덱스가 오염된다.
+                if (IsCompanionInDungeon(entityId) == false &&
+                    AR.s.Component.TryGetComponent<TransformComponent>(entityId, out var transform))
                 {
                     saveData.Position = new Vector2(transform.Position.x, transform.Position.y);
                 }

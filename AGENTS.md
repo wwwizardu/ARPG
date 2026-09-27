@@ -23,7 +23,7 @@ This is a Unity 6000.0.42f1 LTS 2D URP ARPG using a custom ECS architecture, not
 
 - Prefix member variables with `_`; order methods `public` → `protected` → `private`.
 - `Initialize()` is for one-time setup; `Reset()` must clean up and restore the initial state.
-- Use `for`, never `foreach`, for runtime iteration. Use `SqrMagnitude` for distance comparisons.
+- Use `for` for performance-sensitive runtime iteration, such as per-frame/tick hot loops or large collections. Otherwise, choose `for` or `foreach` based on clarity. Use `SqrMagnitude` for distance comparisons.
 - Use explicit boolean/null comparisons (for example, `== false` and `== null`) instead of `!`.
 - Components contain data only; game logic belongs in systems.
 - Use `ComponentManager.TryGetComponent` for optional components and `GetComponentPool<T>()` for iteration. Cache `ComponentManager` references and size pools appropriately.

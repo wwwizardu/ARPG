@@ -87,6 +87,26 @@ ESC는 현재 UIManager에서 열린 UI가 없을 때 `UIMainMenu`를 연다. �
 
 보스 처치와 재입장 진행 복원은 같은 `DungeonId`에 대해 멱등이어야 한다. 저장 도중 종료되면 이전 manifest 전체로 돌아가므로 완료·보상·입구 교체 중 일부만 적용되는 상태를 만들지 않는다. 저장된 `GeneratorVersion`이 지원되지 않으면 임의 재생성하지 않고 명확한 복구/마이그레이션 경로를 제공한다. [제안]
 
+### 5.3 동행 NPC 추가 계약
+
+[NPC_COMBAT_DESIGN §4.4·§4.5](../npc/NPC_COMBAT_DESIGN.md)의 임시 동행(던전 전용)이 던전 컨텍스트 전환에 끼워지는 자리다. 동행의 규칙(요청 조건·추종·전투)은 NPC_COMBAT이 소유하고, 이 절은 **전환·저장 순서**만 정한다. 구현은 `NpcManager_Companion`이 담당하고 `DungeonManager`가 호출한다. [`NpcManager_Companion.cs`](../../Assets/Scripts/Manager/NpcManager_Companion.cs), [`DungeonManager.cs`](../../Assets/Scripts/Dungeon/DungeonManager.cs)
+
+**저장 소유권**: 동행 상태(`NpcCompanionState` — 예약 NPC EntityId, 던전 안 동행 여부)는 **World 파티션**(`WorldSaveRoot.NpcCompanion`)에 둔다. 입장·퇴장·체크포인트 커밋이 모두 World를 포함하므로 플레이어 위치와 동행 상태가 한 revision에 묶인다. `NpcSaveData`에는 필드를 추가하지 않는다. [확정]
+
+**입장**: 저장 직전에 예약을 검증한다(`StageCompanionDungeonEntry`). 예약 NPC가 죽었거나 부상·원정 중이면 예약을 취소하고 알린다. 통과하면 `IsInDungeon = true`를 입장 커밋에 함께 싣고, 저장이 실패하면 되돌린다. 저장 성공 → `ActivateInterior`(월드 청크 비활성화로 월드 쪽 NPC 엔티티가 ID를 유지한 채 비실체화됨) → 예약 NPC를 **같은 EntityId**로 플레이어 옆 통행 가능한 타일에 소환한다(`SummonCompanionAsync`). 소환 실패는 입장을 실패시키지 않는다. [확정]
+
+**재접속 복원**: `RestoreSessionAsync`가 `ActivateInterior` 뒤 같은 소환을 호출한다. 로드 시 플레이어가 던전 밖인데 `IsInDungeon`이 남아 있으면 해제하고, 예약 NPC가 없거나 죽었으면 예약을 지운다. [확정]
+
+**퇴장(ESC·사망 공통)**: 저장 직전에 동행 상태를 비워(`StageCompanionDungeonExit`) 퇴장 커밋에 싣고, 저장이 실패하면 되돌린다. 저장 성공 후 던전 맵을 내리고 월드 엔티티를 복원(`RestoreSuspended`)한 뒤, **`ResumeWorld` 전에** 동행 NPC를 정리한다(`FinishCompanionDungeonExit`): 진영 Neutral·전투 태그 제거 → 던전 쪽 엔티티 비실체화 → 소속 마을의 NPC 배치 위치(기존 스폰 규칙)로 저장 위치·청크 인덱스 갱신 → 활동 Idle. 귀환 위치 계산이 월드 맵을 조회해야 하므로 `ActiveMap` 해제 뒤여야 하고, 이어지는 `ResumeWorld`의 청크 활성화가 그 자리에 NPC를 실체화한다. 소속 마을이 없는 NPC는 플레이어의 입구 복귀 지점으로 돌아간다. [확정]
+
+**던전 좌표 격리**: 동행 중에는 NPC의 던전 좌표를 월드 저장 위치(`NpcSaveData.Position`)·청크 인덱스에 쓰지 않는다. `SaveAllActiveNpcs`, 길찾기 보정(`TryRelocateMaterializedNpc`), `UnregisterNpcByEntityId`가 동행 중 NPC의 좌표 갱신을 건너뛴다. 저장 위치는 입장 전 월드 위치로 유지되고, 퇴장 시 마을 위치로 교체된다. [확정]
+
+**던전 안 사망**: 동행 NPC가 전투로 죽으면 기존 사망 파이프라인(`System_HpCheck` → `System_EntityDestroy` → `MarkNpcDead`)이 영구 사망을 기록하고, 이어서 동행을 즉시 끝낸다(`EndCompanionOnDeath`). 이후 체크포인트·재접속은 죽은 NPC를 소환하지 않는다. `HandleDeath`는 NPC를 가로채지 않는다(플레이어·던전 오브젝트 전용). [확정]
+
+**시스템 가동**: 던전 안에서는 `IWorldMapSystem`(`System_NpcSim`, `System_Time` 등)이 멈추므로 동행 NPC의 활동 판정도 멈춘다. 동행 NPC는 `System_AI_Behavior`의 "비활성 청크 AI 정지"에서 예외로 두어, 뒤처져도 순간이동할 수 있게 한다. [확정]
+
+**하지 않는 것**: 동행 NPC의 HP는 저장하지 않는다(재접속 시 최대 HP로 소환). NPC는 던전 드랍·상자·완료 보상을 받지 않는다(D16). 필드 동행과 함께 입장하는 최종 형태(§4.4)는 C1에서 이 계약 위에 얹는다.
+
 ## 6. 성능 계약
 
 | 시점 | 수행 | 하지 않는 작업 |

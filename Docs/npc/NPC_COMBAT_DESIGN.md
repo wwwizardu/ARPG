@@ -3,7 +3,7 @@ _초안 작성: 2026-09-24 — [NPC_AMBITION_DESIGN.md](NPC_AMBITION_DESIGN.md) 
 
 > **한 줄**: 지금은 전투 부품만 있고 싸우지 않는 NPC가, **동행 중이거나 결투 중일 때만** 화면 안에서 실제로 싸우게 만든다.
 >
-> **상태**: 🟦 설계 초안 — 미구현.
+> **상태**: 🟨 부분 구현 — B1·B2·B3 완료(2026-09-27). B4(결투)·B5(도주·드랍 줍기) 미구현. 구현 위치는 §4.6.
 >
 > **책임**: NPC 실전투의 **런타임 메커니즘**을 정의한다. 진영, 인식, 추종, 순간이동, 던전 동반, 임시 동행 요청(던전 전용), 도주, 드랍 줍기, 결투 진행, 무릎 꿇기, 전투 사망 처리가 여기에 속한다.
 >
@@ -12,22 +12,24 @@ _초안 작성: 2026-09-24 — [NPC_AMBITION_DESIGN.md](NPC_AMBITION_DESIGN.md) 
 > **관련 문서**:
 > - [NPC_AMBITION_DESIGN.md](NPC_AMBITION_DESIGN.md) — 상위 설계. 결정 D6~D8, D12~D14가 본 문서에 적용된다.
 > - [NPC_SIMULATION_DESIGN.md](NPC_SIMULATION_DESIGN.md) — 실체화/오프스크린 LOD와 `NpcActivityPausedTag`.
-> - [DUNGEON_RUNTIME_DESIGN.md](../map/DUNGEON_RUNTIME_DESIGN.md) — 던전 컨텍스트 전환. 동행 NPC 포함이 추가 계약으로 필요하다(§4.4).
+> - [DUNGEON_RUNTIME_DESIGN.md](../map/DUNGEON_RUNTIME_DESIGN.md) — 던전 컨텍스트 전환. 동행 NPC를 포함하는 추가 계약은 그 문서 §5.3에 있다.
 > - [monsterAIPattern.md](../ai_monster/monsterAIPattern.md) — 기존 AI 상태 머신.
 
 ---
 
-## 1. 현재 상태 (2026-09-24 코드 기준)
+## 1. 현재 상태 (2026-09-27 코드 기준, B3 완료 시점)
 
 | 항목 | 현재 | 근거 |
 |------|------|------|
 | 전투 컴포넌트 | ✅ 있음. `CreateNpc`가 Stat·State·Skill(AI 테이블 스킬)·AI를 붙이고, 장비 modifier를 스탯에 합산한다 | [EntityFactory.cs](../../Assets/Scripts/Factory/EntityFactory.cs) |
-| 적 인식 | ❌ NPC면 인식을 건너뛴다("관계 기반 행동은 추후 구현") | [System_AI_Perception.cs:52](../../Assets/Scripts/Common/System/System_AI_Perception.cs) |
-| 진영 | ❌ NPC에는 `FactionComponent`가 붙지 않는다 → 중립 취급. 몬스터가 NPC를 공격하지 않고, 플레이어 스킬도 NPC에게 맞지 않는다 | [EntityFactory.cs](../../Assets/Scripts/Factory/EntityFactory.cs), [FactionHelper.cs](../../Assets/Scripts/Common/Utility/FactionHelper.cs) |
-| AI 기본 상태 | NPC는 Patrol로 시작한다(`AIStateHelper.GetDefaultState`) | [AIStateHelper.cs](../../Assets/Scripts/AI/AIStateHelper.cs) |
-| 실체화 Hunt | ❌ `NpcActivityPausedTag`로 기본 AI를 멈추고 경로만 이동한다. 결과는 종료 시점에 계산으로 판정한다 | [System_NpcSim.cs](../../Assets/Scripts/Common/System/System_NpcSim.cs) |
-| 도주 상태 | ✅ `AIState.Flee`와 `FleeStateHandler`가 있다 | [StateHandlers/](../../Assets/Scripts/AI/StateHandlers/) |
-| 전투 사망 처리 | ⚠️ NPC 엔티티가 파괴되면 `UnregisterNpcByEntityId`만 호출된다. 영구 사망(`MarkNpcDead`, `Fell` Deed, 관계 기억)과 연결되어 있지 않다 | [System_EntityDestroy.cs](../../Assets/Scripts/Common/System/System_EntityDestroy.cs) |
+| 적 인식 | ✅ 조건부(B2). `NpcCombatEnabledTag`가 있고 `NpcActivityPausedTag`가 없는 NPC만 적을 인식한다. 그 외 NPC는 지금도 인식을 건너뛴다 | [System_AI_Perception.cs](../../Assets/Scripts/Common/System/System_AI_Perception.cs) |
+| 진영 | ✅ 명시(B1). 모든 NPC에 `FactionComponent { Neutral }`이 붙는다. 동행 중에만 `Player`로 바뀐다(B2) | [EntityFactory.cs](../../Assets/Scripts/Factory/EntityFactory.cs), [FactionHelper.cs](../../Assets/Scripts/Common/Utility/FactionHelper.cs) |
+| AI 기본 상태 | NPC는 Patrol로 시작한다. `NpcCompanionComponent`가 있으면 기본 상태가 `Follow`다(B2, `AIStateHelper.GetDefaultState`) | [AIStateHelper.cs](../../Assets/Scripts/AI/AIStateHelper.cs) |
+| 실체화 Hunt | 변화 없음. `NpcActivityPausedTag`로 기본 AI를 멈추고 경로만 이동하며, 결과는 종료 시점에 계산으로 판정한다. 이 태그가 있으면 인식에서도 제외된다 | [System_NpcSim.cs](../../Assets/Scripts/Common/System/System_NpcSim.cs) |
+| 도주 상태 | ✅ `AIState.Flee`와 `FleeStateHandler`가 있다. 동행 해제와의 연결은 B5 | [StateHandlers/](../../Assets/Scripts/AI/StateHandlers/) |
+| 전투 사망 처리 | ✅ 연결(B1). 전투로 죽은 NPC만 `MarkNpcDead`로 영구 사망을 기록하고, 청크 이탈 같은 비실체화는 기록하지 않는다. 동행 중이면 동행도 즉시 끝난다(B3) | [System_EntityDestroy.cs](../../Assets/Scripts/Common/System/System_EntityDestroy.cs) |
+| 임시 동행(던전 전용) | ✅ B2·B3. 대화 메뉴 요청/취소, World 파티션 저장, 입장 시 소환·재접속 시 재소환, 퇴장 시 마을 귀환 | [NpcManager_Companion.cs](../../Assets/Scripts/Manager/NpcManager_Companion.cs) |
+| 추종·순간이동 | ✅ 던전 안(B2). 필드 추종·순간이동은 C1 | [FollowStateHandler.cs](../../Assets/Scripts/AI/StateHandlers/FollowStateHandler.cs) |
 
 ---
 
@@ -101,6 +103,7 @@ _초안 작성: 2026-09-24 — [NPC_AMBITION_DESIGN.md](NPC_AMBITION_DESIGN.md) 
 
 - 플레이어와 일정 거리(예: 화면 밖, 약 15타일) 이상 떨어지거나 길찾기가 일정 시간 실패하면, 플레이어 근처의 **통행 가능한 타일**로 순간이동한다.
 - **던전 안**(§4.5)에서는 B2부터 적용한다. 방과 통로 구조에서 NPC가 끼거나 뒤처지는 것을 막는다.
+- 동행 NPC는 `System_AI_Behavior`의 "비활성 청크에서는 AI를 돌리지 않는다" 규칙에서 **예외**다. 뒤처져 비활성 청크에 남은 NPC도 Follow가 돌아야 순간이동할 수 있기 때문이다. 순간이동 거리(15타일) 안쪽에서 경로가 비활성 청크를 지나면 길찾기가 실패하고, 실패가 3초 이어지면 순간이동한다. [확정: B2]
 - **필드**에서는 C1(필드 동행)에서 적용한다. 청크 경계를 넘어 NPC가 비활성 청크에 남는 일도 이 규칙으로 막는다.
 
 ### 4.4 던전 동반 — 최종 형태 [D14]
@@ -127,32 +130,53 @@ _초안 작성: 2026-09-24 — [NPC_AMBITION_DESIGN.md](NPC_AMBITION_DESIGN.md) 
 - 요청할 수 없는 상태: NPC가 부상(Wounded) 중이거나 원정 중(Venturing)이다. 이미 다른 NPC와 동행 예약이 있다(한 번에 1명).
 - 예약한 NPC와 다시 대화하면 **"동행 취소"** 가 뜬다. 예약은 시간이 지나도 **만료되지 않는다** [D17].
 - 예약만 한 상태에서는 NPC가 평소처럼 마을에서 지낸다. 필드에서 따라다니지 않는다.
+- 요청·취소는 **던전 밖에서만** 한다. 던전 안에서는 대화 메뉴에 동행 버튼을 띄우지 않고, 던전 안 동행은 퇴장으로만 끝난다.
 
 **소환 (던전 입장 시)**
 - 던전 입장(`DungeonManager.EnterAsync`)이 끝나고 내부가 활성화된 뒤, 예약된 NPC를 **플레이어 옆 통행 가능한 타일**에 실체화한다.
 - 같은 NPC가 두 곳에 동시에 존재하면 안 된다. 월드 쪽 엔티티는 입장 시 월드 맵이 비워질 때 함께 비실체화되고, 던전에서는 **같은 EntityId**로 실체화한다(`EntityFactory.CreateNpc`의 `savedEntityId` 재사용). 구현 시 월드 엔티티가 확실히 제거되는지 검증한다.
-- 소환 시점에 NPC가 죽었거나 부상 중이면 예약을 취소하고 소환하지 않는다(알림 표시).
+- 소환 시점에 NPC가 죽었거나 부상 중이면 예약을 취소하고 소환하지 않는다(알림 표시). 원정 중(Venturing·파티 소속)인 경우도 방어적으로 같이 취소한다. 정상 흐름에서는 아래 제외 조건 때문에 생기지 않는다.
+- 검증은 입장 저장 **직전**에 하고, 통과하면 던전 안 동행 여부를 입장 커밋에 함께 저장한다. 소환 자체가 실패해도 입장은 실패시키지 않는다(퇴장 때 마을로 되돌린다).
 
 **던전 안**
 - §4.1 아군 피해 없음, §4.2 추종, §4.3 던전 안 순간이동을 적용한다.
 - 던전 보스를 잡아 완료해도 동행은 **퇴장할 때까지** 유지한다.
 - NPC는 전리품을 줍지 않고, 던전 보상(상자·완료 보상)은 모두 플레이어가 갖는다 [D16]. 분배·정산은 C1.
-- 던전 안에서 NPC가 죽으면 §8 전투 사망 연결로 영구 사망 처리하고 동행을 종료한다.
+- 던전 안에서 NPC가 죽으면 §8 전투 사망 연결로 영구 사망 처리하고 동행을 **즉시** 종료한다. 이후 저장·재접속은 죽은 NPC를 소환하지 않는다(B3).
 
 **퇴장 → 원래 마을로 귀환**
 - 던전 퇴장(`ExitAsync`) 시 동행을 종료한다. ESC 퇴장과 플레이어 사망으로 인한 퇴장(`death = true`) 모두 같다.
 - 진영을 `Neutral`로, 전투 허용 태그를 제거하고, 던전 쪽 엔티티를 비실체화한다.
 - NPC의 위치를 **소속 마을**(`NpcSaveData.VillageId`)의 NPC 배치 위치로 되돌린다. 위치는 기존 NPC 스폰·배치 규칙을 재사용한다 [D18]. 해당 청크가 활성이면 그 자리에 실체화하고, 아니면 저장 위치만 바꾼다(다음에 청크가 로드될 때 마을에 나타난다).
+- **소속 마을이 없는 NPC**(`VillageId = -1`)는 플레이어의 던전 입구 복귀 지점으로 돌아간다. D18이 가리킬 배치 위치가 없기 때문이다. [확정: B2]
 - NPC의 활동 상태는 Idle로 돌려 다음 활동 선택을 기존 시뮬레이션에 맡긴다.
 
 **저장 · 재접속**
 - 동행 예약·진행 상태(예약 NPC EntityId, 던전 안 동행 여부)는 **World 파티션**에 저장한다. 던전 입장·퇴장 커밋이 이미 World 범위를 포함한다. `NpcSaveData`에는 필드를 추가하지 않는다(§9).
 - 던전 안에서 저장 후 재접속하면(`RestoreSessionAsync`) 동행 NPC를 플레이어 옆에 다시 소환한다.
 - 예약만 한 상태에서 저장·재접속하면 예약이 유지된다.
+- 동행 중에는 NPC의 **던전 좌표를 월드 저장 위치·청크 인덱스에 쓰지 않는다.** 저장 위치는 입장 전 월드 위치로 유지되고 퇴장 시 마을 위치로 바뀐다. 던전 안에서 전체 저장을 해도 재접속 때 월드 청크 인덱스가 오염되지 않는다(B3).
+- 동행 NPC의 HP는 저장하지 않는다. 재접속하면 최대 HP로 소환된다.
+- 던전 체크포인트 저장은 NPC 파티션을 포함하지 않으므로, 던전 안 사망 기록은 다음 전체 저장 때 파일에 남는다(필드 사망과 같다). 그 사이 비정상 종료되면 NPC는 생존 상태로 복원되고 동행만 끝난 상태가 된다.
 
 **화면 밖 시뮬레이션과의 관계**
 - 동행 중(던전 안)인 NPC는 `System_NpcSim`의 활동 선택·판정 대상에서 **제외**해야 한다. 그렇지 않으면 던전에 있는 NPC가 동시에 사냥을 떠나는 상태가 된다. 이것이 A 갈래 코드에 대한 **유일한 추가 접점**이다(§9).
-- 예약만 한 상태에서는 제외하지 않는다. 다만 예약 중에 원정(Hunt)을 떠나지 않도록, 예약 NPC는 활동 선택에서 Rest만 고르게 한다. [제안]
+  - 참고: `System_NpcSim`과 `System_Time`은 `IWorldMapSystem`이라 던전 안에서는 **원래 돌지 않는다**(게임 시간도 멈춘다). 제외 조건은 이 구조가 바뀌어도 동행 NPC가 판정되지 않게 하는 방어선이다.
+- 예약만 한 상태에서는 제외하지 않는다. 다만 예약 중에 원정(Hunt)을 떠나지 않도록, 예약 NPC는 활동 선택에서 Rest만 고른다. [확정: B2]
+- 예약 NPC는 **다른 NPC의 사냥 파티 모집에서도 제외**한다. Rest 고정만으로는 다른 리더가 만드는 파티(`NpcManager.TryCreateHuntParty`)에 뽑혀 원정을 떠나는 경로가 남기 때문이다. [확정: B2]
+
+### 4.6 구현 위치 (B2·B3)
+
+| 역할 | 위치 |
+|------|------|
+| 동행 상태(World 파티션) | `NpcCompanionState` — `WorldData.NpcCompanion`, `WorldSaveRoot.NpcCompanion` |
+| 요청/취소·소환·귀환·사망 종료 | `NpcManager_Companion.cs` (`RequestCompanion`, `CancelCompanion`, `StageCompanionDungeonEntry`, `SummonCompanionAsync`, `StageCompanionDungeonExit`, `FinishCompanionDungeonExit`, `EndCompanionOnDeath`) |
+| 던전 전환 호출 | `DungeonManager.EnterAsync` / `RestoreSessionAsync` / `ExitAsync` — 순서는 [DUNGEON_RUNTIME §5.3](../map/DUNGEON_RUNTIME_DESIGN.md) |
+| 전투 허용·추종 컴포넌트 | `NpcCombatEnabledTag`, `NpcCompanionComponent { LeaderEntityId, PathFailedSince }` |
+| 추종·순간이동 | `FollowStateHandler` — 추종 2~4타일, 리더 6타일 이내일 때 교전 개시, 순간이동 15타일·길찾기 실패 3초 |
+| 조건부 인식·추종 반경 | `System_AI_Perception` — 리더에게서 10타일 넘게 떨어지면 타겟 해제 |
+| 대화 메뉴 | `UINpcInspect` 상호작용 바의 "동행 요청 / 동행 취소" |
+| 디버그 | `NpcCombatDebugMenu` — 강제 전투 사망, NPC 상태 로그, 동행 요청/취소/상태 로그 |
 
 ---
 
@@ -239,7 +263,8 @@ _초안 작성: 2026-09-24 — [NPC_AMBITION_DESIGN.md](NPC_AMBITION_DESIGN.md) 
 |------|------|
 | `NpcSaveData` | B는 결투(B4) 전까지 저장 필드를 추가하지 않는다. 추가할 때는 A 쪽 변경 뒤에 올린다 |
 | `NpcActivityPausedTag` | 이 태그가 붙은 NPC는 항상 전투 허용 대상에서 제외한다(§3.1) |
-| `System_NpcSim` | 던전 안에서 동행 중인 NPC는 활동 선택·판정에서 제외하고, 예약 중인 NPC는 Rest만 고른다(§4.5). **최소한의 제외 조건만 추가**하고 기존 판정 로직은 바꾸지 않는다 |
+| `System_NpcSim` | 던전 안에서 동행 중인 NPC는 활동 선택·판정에서 제외하고, 예약 중인 NPC는 Rest만 고른다(§4.5). **최소한의 제외 조건만 추가**하고 기존 판정 로직은 바꾸지 않는다 ✅ B2 |
+| `NpcManager` 사냥 파티 모집 | 예약 NPC는 `IsEligibleHuntPartyMember`에서 제외한다(§4.5). 파티 판정 로직 자체는 바꾸지 않는다 ✅ B2 |
 | 동행 상태 저장 | `NpcSaveData`가 아니라 World 파티션에 둔다(§4.5) |
 | `NpcManager.MarkNpcDead` | 동작을 바꾸지 않고 호출만 추가한다(§8) |
 | `EntityFactory.CreateNpc` | B1이 진영 컴포넌트를 추가한다. A는 이 함수를 거의 건드리지 않는다 |
@@ -250,13 +275,13 @@ _초안 작성: 2026-09-24 — [NPC_AMBITION_DESIGN.md](NPC_AMBITION_DESIGN.md) 
 
 ## 10. 구현 단계
 
-| 단계 | 내용 | 완료 기준 |
-|------|------|----------|
-| **B1** | 진영 명시(§3.2) + 전투 사망 연결(§8) | 모든 NPC가 `Neutral` 진영을 가짐. 기존 동작(몬스터가 NPC 무시, 스킬 미적중) 변화 없음. 전투 사망과 비실체화가 구분되고, 전투 사망만 `MarkNpcDead`로 기록됨(디버그 강제 사망으로 검증) |
-| **B2** | 임시 동행 요청(§4.5): 대화 메뉴 "동행 요청/취소", 예약 저장(World), 던전 입장 시 소환, 퇴장 시 원래 마을로 귀환, `System_NpcSim` 제외 조건. + 조건부 인식(§3.4) + 추종 상태(§4.2) + 던전 안 순간이동(§4.3) + 아군 피해 없음 확인(§4.1) | 동행 요청 후 들어간 첫 던전에서 NPC가 플레이어 옆에 소환됨. 따라다니며 플레이어 편으로 몬스터와 싸우고, 플레이어 광역 스킬에 맞지 않음. 멀어지면 순간이동. 퇴장(ESC·사망 모두) 후 NPC가 원래 마을에 있음. 동행 중 NPC가 동시에 사냥을 떠나지 않음. 동행이 아닌 NPC와 사냥 중인 NPC는 기존대로 싸우지 않음 |
-| **B3** | 던전 안 저장·재접속 복원(§4.5) + 던전 안 NPC 사망 처리 검증(§8) + DUNGEON_RUNTIME 추가 계약 문서화 | 던전 안에서 저장·재접속해도 동행 NPC가 다시 소환됨. 예약만 한 상태도 저장·재접속 후 유지됨. 던전 안에서 NPC가 죽으면 영구 사망으로 기록되고 동행이 끝남 |
-| **B4** | 결투 상대 한정 적대(§3.3) + 결투 흐름(§7) + 무릎 꿇기(§7.3) | 결투 중 두 참가자만 서로 적대하고 몬스터·제3자와 무관함. NPC가 HP 임계에서 죽지 않고 멈춤. 처단 시 영구 사망, 자비 시 생존. 플레이어 패배 시 HP 1. 명분·응답은 스텁 |
-| **B5** | 도주 전환(§5) + 드랍 줍기(§6) | 디버그 명령으로 동행 NPC가 도주하고 동행이 해제됨. NPC가 바닥 드랍을 주워 자기 인벤토리에 넣음 |
+| 단계 | 내용 | 완료 기준 | 상태 |
+|------|------|----------|------|
+| **B1** | 진영 명시(§3.2) + 전투 사망 연결(§8) | 모든 NPC가 `Neutral` 진영을 가짐. 기존 동작(몬스터가 NPC 무시, 스킬 미적중) 변화 없음. 전투 사망과 비실체화가 구분되고, 전투 사망만 `MarkNpcDead`로 기록됨(디버그 강제 사망으로 검증) | ✅ |
+| **B2** | 임시 동행 요청(§4.5): 대화 메뉴 "동행 요청/취소", 예약 저장(World), 던전 입장 시 소환, 퇴장 시 원래 마을로 귀환, `System_NpcSim` 제외 조건. + 조건부 인식(§3.4) + 추종 상태(§4.2) + 던전 안 순간이동(§4.3) + 아군 피해 없음 확인(§4.1) | 동행 요청 후 들어간 첫 던전에서 NPC가 플레이어 옆에 소환됨. 따라다니며 플레이어 편으로 몬스터와 싸우고, 플레이어 광역 스킬에 맞지 않음. 멀어지면 순간이동. 퇴장(ESC·사망 모두) 후 NPC가 원래 마을에 있음. 동행 중 NPC가 동시에 사냥을 떠나지 않음. 동행이 아닌 NPC와 사냥 중인 NPC는 기존대로 싸우지 않음 | ✅ 2026-09-24. 광역 스킬 미적중과 사냥 중 NPC 비전투는 코드로만 확인(인게임 미확인) |
+| **B3** | 던전 안 저장·재접속 복원(§4.5) + 던전 안 NPC 사망 처리 검증(§8) + DUNGEON_RUNTIME 추가 계약 문서화 | 던전 안에서 저장·재접속해도 동행 NPC가 다시 소환됨. 예약만 한 상태도 저장·재접속 후 유지됨. 던전 안에서 NPC가 죽으면 영구 사망으로 기록되고 동행이 끝남 | ✅ 2026-09-27. DUNGEON_RUNTIME §5.3 작성 |
+| **B4** | 결투 상대 한정 적대(§3.3) + 결투 흐름(§7) + 무릎 꿇기(§7.3) | 결투 중 두 참가자만 서로 적대하고 몬스터·제3자와 무관함. NPC가 HP 임계에서 죽지 않고 멈춤. 처단 시 영구 사망, 자비 시 생존. 플레이어 패배 시 HP 1. 명분·응답은 스텁 | 미구현 |
+| **B5** | 도주 전환(§5) + 드랍 줍기(§6) | 디버그 명령으로 동행 NPC가 도주하고 동행이 해제됨. NPC가 바닥 드랍을 주워 자기 인벤토리에 넣음 | 미구현 |
 
 - 각 단계는 **기존 NPC 동작을 깨지 않는 것**을 공통 완료 기준으로 한다(마을 NPC는 싸우지 않음, 화면 안 사냥은 기존대로 경로 이동).
 

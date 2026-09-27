@@ -324,11 +324,30 @@ namespace ARPG.Npc
             Debug.Log($"[NpcCompanion] 동행 종료 - EntityId: {npcId}, 귀환 위치: {homePosition}, VillageId: {saveData.VillageId}");
         }
 
+        /// <summary>
+        /// 동행 NPC가 전투로 죽으면 System_EntityDestroy가 MarkNpcDead·Unregister 뒤에 호출한다.
+        /// 동행을 즉시 끝내 이후 체크포인트·재접속이 죽은 NPC를 다시 소환하지 않게 한다 (NPC_COMBAT_DESIGN §4.5·§8).
+        /// </summary>
+        public void EndCompanionOnDeath(int npcId)
+        {
+            NpcCompanionState state = AR.s.Data.NpcCompanion;
+            if (state.ReservedNpcId != npcId || npcId < 0)
+                return;
+
+            bool wasInDungeon = state.IsInDungeon;
+            ClearCompanionState();
+            // 죽은 NPC는 청크 활성화·로드에서 제외되지만, 던전 좌표 항목이 남지 않게 인덱스에서 뺀다
+            RemoveNpcFromAllChunks(npcId);
+            NotifyCompanion($"{GetDisplayName(npcId)}이(가) 쓰러져 동행이 끝났습니다.");
+            Debug.Log($"[NpcCompanion] 동행 종료 (전투 사망) - EntityId: {npcId}, InDungeon: {wasInDungeon}");
+        }
+
         #endregion
 
         /// <summary>
         /// 로드 직후 동행 상태 정합성 보정. 예약 NPC가 없거나 죽었으면 예약을 지우고,
-        /// 플레이어가 던전 밖인데 IsInDungeon이 남아 있으면 해제한다. (던전 안 재접속 복원은 B3)
+        /// 플레이어가 던전 밖인데 IsInDungeon이 남아 있으면 해제한다.
+        /// 던전 안 재접속이면 상태를 유지하고, DungeonManager.RestoreSessionAsync가 SummonCompanionAsync로 다시 소환한다.
         /// </summary>
         private void ValidateCompanionState()
         {

@@ -76,12 +76,18 @@ namespace ARPG.Systems
                     // 전투 사망(System_HpCheck가 Condition=Dead 설정)만 영구 사망으로 기록한다.
                     // MarkNpcDead 발 파괴는 내부에서 이미 Dead라 no-op.
                     // Unregister가 saveData.Condition을 Dead로 덮으면 MarkNpcDead가 조기 반환하므로 반드시 먼저 호출.
-                    if (cm.TryGetComponent<StateComponent>(entityId, out StateComponent npcState) == true &&
-                        npcState.Condition == Creature.CharacterConditions.Dead)
+                    bool combatDeath = cm.TryGetComponent<StateComponent>(entityId, out StateComponent npcState) == true &&
+                                       npcState.Condition == Creature.CharacterConditions.Dead;
+                    if (combatDeath == true)
                     {
                         AR.s.Npc.MarkNpcDead(entityId, AR.s.Time.CurrentGameTime);
                     }
                     AR.s.Npc.UnregisterNpcByEntityId(entityId);
+                    // 동행 중 전투 사망이면 동행을 즉시 끝낸다 (NPC_COMBAT_DESIGN §4.5·§8)
+                    if (combatDeath == true)
+                    {
+                        AR.s.Npc.EndCompanionOnDeath(entityId);
+                    }
                 }
 
                 // BuildingTag가 있으면 BuildingManager에서 제거

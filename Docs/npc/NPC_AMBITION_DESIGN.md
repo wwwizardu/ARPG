@@ -30,7 +30,7 @@ _초안 작성: 2026-09-24_
 - Hunt 보상은 마을 Food뿐이다. NPC에게는 **골드도 개인 전리품도 없다.** [src: Assets/Scripts/Common/System/System_NpcSim.cs]
 - 성격 8수치(`NpcStatComponent`: 친화·정직·탐욕·충성·용기·호기심·자존심·인내)가 있다. 하지만 대화 토픽 가중치와 관계 backfill에만 쓰이고, **행동 동기로는 쓰이지 않는다.** [src: Assets/Scripts/Common/Component/NpcStatComponent.cs, Assets/Scripts/Npc/Narrative/DialogueTopicSelector.cs]
 
-- NPC는 전투용 컴포넌트(Stat·State·Skill·AI)를 갖고 있지만 **실제로 싸우지 않는다.** 적 인식을 건너뛰고, 진영이 없어서 중립으로 취급되며, 화면 안에서 사냥할 때도 AI를 멈춘 채 경로만 이동한다. 상세 내용은 [NPC_COMBAT_DESIGN §1](NPC_COMBAT_DESIGN.md). [src: Assets/Scripts/Factory/EntityFactory.cs, Assets/Scripts/Common/System/System_AI_Perception.cs]
+- NPC는 전투용 컴포넌트(Stat·State·Skill·AI)를 갖고 있지만 **평소에는 싸우지 않는다.** 모든 NPC가 중립(`Neutral`) 진영이라 적을 인식하지 않고, 화면 안에서 사냥할 때도 AI를 멈춘 채 경로만 이동한다. 예외는 플레이어가 대화로 요청한 **임시 동행(던전 전용)** 뿐이다. 이때만 NPC가 플레이어 편으로 던전 몬스터와 싸운다(NPC_COMBAT B2·B3, 2026-09-27). 상세 내용은 [NPC_COMBAT_DESIGN §1](NPC_COMBAT_DESIGN.md). [src: Assets/Scripts/Factory/EntityFactory.cs, Assets/Scripts/Common/System/System_AI_Perception.cs, Assets/Scripts/Manager/NpcManager_Companion.cs]
 
 → NPC에게 **강해질 이유도, 강해질 방법도, 강해졌다는 결과도 없다.**
 
