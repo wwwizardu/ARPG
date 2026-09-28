@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace ARPG.Village
 {
-    public class VillageManager : MonoBehaviour
+    public partial class VillageManager : MonoBehaviour
     {
         private readonly Dictionary<int, VillageData> _villages = new();
         // Dictionary는 VillageId 조회, List는 시스템의 인덱스 기반 시간분할 순회에 사용한다.
@@ -437,7 +437,13 @@ namespace ARPG.Village
                         continue;
                     }
                     entry.Item.OnLoadCompleted();
+                    // NPC_AMBITION P1b: 품절 구매자 표시 필드 보정 (null 방어)
+                    if (entry.NpcBuyerName == null)
+                        entry.NpcBuyerName = string.Empty;
                 }
+                // NPC_AMBITION P1b: NPC 구매 원장 보정. 필드 없는 구 세이브는 초기값(-1/0/-1)으로 들어온다.
+                if (data.NpcPurchaseCount < 0)
+                    data.NpcPurchaseCount = 0;
 
                 // V5 (§11.5): 가격 스냅샷이 없는 구 포맷 매물은 진열품을 유지하고 가격만
                 // TradeProfile로 보정한다 — 유실 없음. MerchantRestockCycle == -1(구 세이브)은

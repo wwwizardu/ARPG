@@ -33,6 +33,8 @@ namespace ARPG.Village
         Specialty = 1,
         RareImport = 2,
         FacilityPool = 3,
+        // NPC_AMBITION_DESIGN §7.2, D42 — NPC가 판 전리품 진열 슬롯 (회차당 최대 2개, 롤 대상 아님).
+        AdventurerConsignment = 4,
     }
 
     /// <summary>상점 UI에 표시할 지역 가격 사유 (§8.5).</summary>

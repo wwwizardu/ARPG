@@ -109,6 +109,16 @@ namespace ARPG.Village
         // V5: 마지막 롤의 재입고 회차. -1 = 구 세이브/미롤 (다음 상점 진입 시 결정론 재롤).
         public int MerchantRestockCycle = -1;
 
+        // NPC_AMBITION_DESIGN §7.2, §12 — NPC 구매의 상점 보호(재고 쪽) 원장. 구 세이브는 필드가 없어 기본값으로 로드된다.
+        // NpcPurchaseCount가 속한 재입고 회차. 현재 회차와 다르면 카운트를 0으로 보고 새로 센다. -1 = 기록 없음.
+        public int NpcPurchaseCycle = -1;
+        // NpcPurchaseCycle 회차의 NPC 구매 건수 (매물 종류의 25%, 최소 1·최대 3 제한).
+        public int NpcPurchaseCount;
+        // 마지막 NPC 구매 트랜잭션 게임시각 (상점당 6시간 1건 제한). -1 = 없음.
+        // 모험가 매입품 슬롯과 품절 구매자 표시는 MerchantStock 엔트리(SlotKind/NpcBuyerName)에 들어 있어
+        // 재입고 롤의 Clear와 함께 사라진다.
+        public float LastNpcTradeGameTime = -1f;
+
         [JsonIgnore]
         public List<int> NpcEntityIds = new();
 

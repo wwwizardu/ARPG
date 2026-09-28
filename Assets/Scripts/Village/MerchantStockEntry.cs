@@ -25,5 +25,10 @@ namespace ARPG.Village
         public string TradeProfileId = string.Empty;  // roll 시점 TradeProfile 스냅샷.
         public TradeStockSlotKind SlotKind; // 보장/특산/희귀/특수 시설 슬롯 구분.
         public TradePriceReason PriceReason;// UI 표시 사유 — 지역 특산/현지 부족/희귀 수입.
+
+        // NPC_AMBITION_DESIGN §7.2, D42: NPC 구매로 품절됐을 때 "○○가 구매함" 표시용 구매자 스냅샷.
+        // 구 세이브는 필드가 없어 -1/빈 문자열 = NPC 구매 아님. 표시 전용이며 플레이어 거래 판정에는 쓰지 않는다.
+        public int NpcBuyerEntityId = -1;
+        public string NpcBuyerName = string.Empty;
     }
 }

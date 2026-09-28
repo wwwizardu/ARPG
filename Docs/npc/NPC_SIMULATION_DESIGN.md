@@ -26,7 +26,7 @@ Phase A~D로 마을은 자라지만, 스폰된 NPC는 **개별 이동 AI(Patrol)
 
 **결과**: NPC는 "움직이지만 살지는 않는다." 본 설계는 **개별 NPC가 살아 움직이며 세계를 바꾸는** 시뮬 층을 정의한다.
 
-**현재 MVP**: 오프스크린 `NpcSaveData` 상태머신과 `System_NpcSim`이 모든 생존 NPC를 시간분할 처리한다. Rest와 솔로 Hunt의 결과가 Food·부상·사망·연대기·전기에 반영되고, Hunt 이동은 LOD 전환 중에도 이어진다. 파티·이주·WORLD_EVENT 유발은 아직 구현하지 않았다.
+**현재 MVP**: 오프스크린 `NpcSaveData` 상태머신과 `System_NpcSim`이 모든 생존 NPC를 시간분할 처리한다. Rest와 솔로·파티 Hunt, 상점 Trade의 결과가 Food·전리품·Gold·부상·사망·연대기·전기에 반영되고, Hunt 이동은 LOD 전환 중에도 이어진다. 활동 동기와 경제는 [NPC_AMBITION_DESIGN.md](NPC_AMBITION_DESIGN.md)가 소유한다(P1 구현, 2026-09-28). 이주·WORLD_EVENT 유발은 아직 구현하지 않았다.
 
 ---
 
@@ -222,10 +222,10 @@ phase 결과가 세계에 실제로 남는다 — 전부 기존 훅 재사용:
 
 #### MVP 활동과 결과
 
-- `System_NpcSim`은 `Priority = 59`, 0.25초 간격, 한 번에 최대 8 NPC를 라운드로빈 처리한다. 시간 점프 시 NPC당 phase 전환은 최대 4회로 제한한다.
-- 구현된 활동은 **Rest(4 게임시간)** 와 **Hunt(8 게임시간, 솔로 또는 파티)** 다. 다음 활동은 `Patience`·`Courage`·`Curiosity` 기반 가중 선택으로 결정한다.
-- Hunt 결과는 `Success / Failed / Wounded / Dead`다. 성공하면 마을 Food를 1~4만큼 추가하고, 부상은 24 게임시간 회복 후 다시 활동 가능해진다. 부상은 `Deeds`에 기록되며, 파티 Hunt 결과는 생존 멤버 쌍의 호감도 변화도 각자 `Deeds`에 기록한다. 사망은 시뮬레이션 목록·활성 관계·호감도·마을 명단에서 제거되며 `Fell` 연대기와 `Deeds`를 남긴다.
-- 활동 선택·Hunt 결과·Food 보상·목표 좌표는 `DerivedSeed.ChannelNpcActivity` 기반으로 결정된다. Hunt는 출발지→목표지→귀환지의 analytic 좌표를 사용한다.
+- `System_NpcSim`은 `Priority = 59`, 0.25초 간격, 한 번에 최대 12개(NPC와 파티를 합친 통합 목록)를 라운드로빈 처리한다. 시간 점프 시 NPC당 phase 전환은 최대 4회로 제한한다. 목록에 NPC·파티가 추가·삭제되면 순회 커서는 0으로 돌아가지 않고 위치만 보정한다(2026-09-28 수정 — 이전에는 파티가 생길 때마다 커서가 0으로 돌아가 앞쪽 NPC만 활동했다).
+- 구현된 활동은 **Rest(4 게임시간, 무료)**, **Hunt(8 게임시간, 솔로 또는 파티)**, **Trade(1 게임시간, 마을 상점)** 다. 다음 활동은 성향·야망·필요 기반 효용 선택으로 결정한다([NPC_AMBITION_DESIGN.md](NPC_AMBITION_DESIGN.md) §6, D39·D40).
+- Hunt 결과는 `Success / Failed / Wounded / Dead`다. 전투력은 장비 반영 `NpcPower`로 판정한다(AMBITION §5.1). 성공하면 마을 Food를 1~4만큼 추가하고 개인 전리품을 1회 롤한다(AMBITION §7.1, 골드는 주지 않음). 사망 확률은 30게임일 기준 0.5~1% 수준으로 매우 낮다(AMBITION D48). 부상은 24 게임시간 회복 후 다시 활동 가능해지며, Gold가 있으면 추상 치료(10G, 소속 마을 Gold로)로 8 게임시간으로 줄일 수 있다(AMBITION §9, D36). 부상은 `Deeds`에 기록되며, 파티 Hunt 결과는 생존 멤버 쌍의 호감도 변화도 각자 `Deeds`에 기록한다. 사망은 시뮬레이션 목록·활성 관계·호감도·마을 명단에서 제거되며 `Fell` 연대기와 `Deeds`를 남긴다.
+- 활동 선택·Hunt 결과·Food 보상·목표 좌표·개인 전리품·치료 판정은 `DerivedSeed.ChannelNpcActivity` 기반으로 결정된다(salt 0 선택, 1 결과, 2 보상, 3 목표, 4 솔로 전리품, 5 솔로 치료, 10+i 파티원 결과, 20 파티 보상, 30+i 파티원 전리품, 40+i 파티원 치료). Hunt는 출발지→목표지→귀환지의 analytic 좌표를 사용한다.
 
 #### LOD와 관측
 

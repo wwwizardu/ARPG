@@ -321,6 +321,24 @@ namespace ARPG.EditorTools
                     CreateVillage(population), CreateVillage(population), targetHours,
                     sliced, 4096, out string slicedDifferences);
                 report.AppendLine($"- pop={population}, hours={targetHours:F0}, hourlyFast={hourlyFast} {hourlyDifferences}, sliced={slicedResult} {slicedDifferences}");
+
+                // NPC_AMBITION D41: NPC 거래·치료 Gold 이동을 섞어도 두 경로가 같고, 저장 상한(50)에 잘리지 않는지.
+                // 첫 출금은 잔액 부족으로 거절되어야 하고, 입금 합계는 상한을 넘긴다.
+                VillageNpcGoldTransfer[] transfers =
+                {
+                    new VillageNpcGoldTransfer(0.5f, -5),
+                    new VillageNpcGoldTransfer(2.25f, 40),
+                    new VillageNpcGoldTransfer(targetHours * 0.3f, 35),
+                    new VillageNpcGoldTransfer(targetHours * 0.6f, -30),
+                    new VillageNpcGoldTransfer(targetHours * 0.9f, 10),
+                };
+                VillageData goldRealtime = CreateVillage(population);
+                bool npcGold = VillageSimulationParity.AdvanceWithNpcGoldAndCompare(
+                    goldRealtime, CreateVillage(population), targetHours, unlimited, transfers,
+                    out string npcGoldDifferences);
+                int gold = VillageResourceSimulation.GetAmount(goldRealtime, GlobalEnum.ItemType.Gold);
+                int goldCap = VillageResourceSimulation.GetCap(goldRealtime, GlobalEnum.ItemType.Gold);
+                report.AppendLine($"  - npcGold={npcGold} {npcGoldDifferences} gold={gold} (cap {goldCap}, uncapped={gold > goldCap})");
             }
         }
 

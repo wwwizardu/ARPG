@@ -32,6 +32,8 @@ namespace ARPG.History
         public const ulong ChannelChronicle    = 0x43_48_52_4F_4E_49_43_4CUL; // "CHRONICL"
         public const ulong ChannelRelationBackfill = 0x52_45_4C_42_4B_46_49_4CUL; // "RELBKFIL"
         public const ulong ChannelNpcActivity = 0x4E_50_43_41_43_54_49_56UL; // "NPCACTIV"
+        // NPC_AMBITION_DESIGN D37/D38 — entityId 해시 기반 개인 편차·시작 Gold (worldSeed 비의존)
+        public const ulong ChannelNpcAmbition = 0x4E_50_43_41_4D_42_49_54UL; // "NPCAMBIT"
         public const ulong ChannelVillageBootstrap = 0x56_49_4C_4C_42_4F_4F_54UL; // "VILLBOOT"
 
         // VILLAGE_REWORK_PLAN V5 §8.5 — 상점 재입고 롤용 (SettlementId + RestockCycle 혼합)

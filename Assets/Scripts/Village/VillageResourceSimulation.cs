@@ -55,6 +55,23 @@ namespace ARPG.Village
             return true;
         }
 
+        /// <summary>
+        /// NPC 거래·치료 전용 Gold 입금 (NPC_AMBITION_DESIGN D34, D41). 인구 생산 Gold와 같은 규칙으로
+        /// 저장 상한 없이 누적한다. 닫힌 경제라 호출자는 같은 금액을 NPC Gold에서 먼저 뺀 상태여야 한다.
+        /// </summary>
+        public static void DepositNpcGold(VillageData village, int amount)
+        {
+            AccumulateUncapped(village, GlobalEnum.ItemType.Gold, amount);
+        }
+
+        /// <summary>
+        /// NPC 거래 전용 Gold 출금 (D34, D41). 잔액이 부족하면 아무것도 빼지 않고 false — 상점은 매입을 거절한다.
+        /// </summary>
+        public static bool TryWithdrawNpcGold(VillageData village, int amount)
+        {
+            return Consume(village, GlobalEnum.ItemType.Gold, amount);
+        }
+
         public static int AddCap(VillageData village, GlobalEnum.ItemType type, int amount)
         {
             int next = GetCap(village, type) + amount;

@@ -41,6 +41,8 @@ namespace ARPG.Npc
         public float When;
         public int AffinityDelta;
         public float RecoveryEndGameTime;
+        // Wounded 전용: 부상 시점에 추상 치료 서비스를 샀는지 (NPC_AMBITION_DESIGN D36). 구 세이브는 false.
+        public bool Treated;
         public int ItemId = -1;
         public string ItemDisplayName = string.Empty;
 

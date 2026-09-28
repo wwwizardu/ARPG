@@ -53,6 +53,18 @@ carry는 `VillageData`가 소유한다. 실체화 경로의 `VillageStorageCompo
 
 `JobBonusTable`이 데이터 로더에 남아 있더라도 현행 마을 생산에는 사용하지 않는다. 새 경제 기능이 이 테이블을 다시 사용하려면 별도 설계 결정이 필요하다.
 
+### 3.1 예외 — 모험가 활동이 마을 자원에 닿는 경로
+
+위 생산식과 별개로, 물리 NPC의 활동 결과가 마을 자원에 들어가는 경로는 아래 두 가지뿐이다. 둘 다 생산식(`Population` 기반)을 바꾸지 않고 결과 자원만 더하거나 옮긴다.
+
+1. **Hunt 성공 시 Food 유입** — 성공한 솔로·파티 Hunt가 소속 마을 Food를 추가한다. 정본은 [NPC_SIMULATION_DESIGN.md](NPC_SIMULATION_DESIGN.md)이며, 수치는 [NPC_AMBITION_DESIGN.md](NPC_AMBITION_DESIGN.md) §5.1(D31)에 따라 장비 반영 전투력으로 판정한다.
+2. **모험가 거래·치료의 Gold 이동** (NPC_AMBITION D34·D41) — 물리 NPC가 마을 상점에서 전리품을 팔거나 장비를 사고, 부상 치료비를 낼 때 `VillageData.Resources[Gold]`와 NPC 개인 Gold 사이에서 골드가 이동한다. 이 경제는 닫혀 있어 새 골드를 만들지 않는다. NPC 구매는 `MerchantStock`의 재고를 줄이고, NPC가 판 전리품 일부는 그 회차의 모험가 매입품 슬롯에 진열된다.
+   - 이 이동은 Gold 자원과 상점 재고에만 닿는다. Population, Tier, 건설 후보, 다른 자원에는 입력하지 않으며, NPC 판매는 자원 환원(`ReturnResourceType`)을 하지 않는다.
+   - 추상 경로와 실시간 경로가 같은 함수(`VillageResourceSimulation.DepositNpcGold`/`TryWithdrawNpcGold`)를 쓰고, `VillageSimulationParity`로 검사한다.
+   - 상점 서비스 제공 여부는 여전히 시설이 판정한다(§5). Shop 시설이 없는 마을에서는 NPC가 거래하지 않는다.
+
+§8의 금지 항목은 이 예외와 무관하게 그대로 유지한다.
+
 ---
 
 ## 4. 자가 건설

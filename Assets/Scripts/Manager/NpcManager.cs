@@ -95,6 +95,7 @@ namespace ARPG.Npc
             _playerRelations.Clear();
             _npcRelations.Clear();
             _narrative.Reset();
+            ResetAmbitionRuntime();
             _nameBag.Clear();
             _nameBagCursor = 0;
             _usedNames.Clear();
@@ -307,6 +308,8 @@ namespace ARPG.Npc
                 };
 
                 SeedNpcEquipment(saveData);
+                // 시드된 장비로 개인 상한 기준값·시작 Gold를 기록한다 (NPC_AMBITION_DESIGN D37, D38)
+                EnsureAmbitionInitialized(entityId, saveData);
 
                 if (villageId >= 0)
                 {
@@ -389,6 +392,8 @@ namespace ARPG.Npc
             };
 
             SeedNpcEquipment(saveData);
+            // 시드된 장비로 개인 상한 기준값·시작 Gold를 기록한다 (NPC_AMBITION_DESIGN D37, D38)
+            EnsureAmbitionInitialized(entityId, saveData);
 
             _npcSaveDict[entityId] = saveData;
             AddNpcToSimulation(entityId);
@@ -835,6 +840,9 @@ namespace ARPG.Npc
             }
 
             saveData.IsActive = false;
+
+            // 실체화 중 미뤄 둔 전리품 자동 장착을 ECS가 없어진 지금 적용한다 (NPC_AMBITION_DESIGN §7.1)
+            ApplyDeferredLootUpgrades(entityId, saveData);
         }
 
         private static void PauseMaterializedActivity(int entityId, NpcSaveData saveData)
@@ -1001,6 +1009,7 @@ namespace ARPG.Npc
             _simulationNpcIds.Clear();
             _simulationCursor = 0;
             _simulationWorkCursor = 0;
+            ResetAmbitionRuntime();
 
             if (npcSaveDatas == null || npcSaveDatas.Count == 0)
                 return;
@@ -1022,6 +1031,8 @@ namespace ARPG.Npc
 
                 // 장비/인벤토리 ItemData의 ItemTable 참조 복원 (PlayerData.LoadCompleted와 동일 패턴)
                 saveData.OnLoadCompleted();
+                // 구 세이브(InitialPower 필드 없음 = 0)는 현재 장비로 개인 상한 기준값·시작 Gold를 1회 기록한다 (D38)
+                EnsureAmbitionInitialized(entityId, saveData);
 
                 // 이름 순환 상태에 기존 이름을 등록해 신규 스폰이 재사용하지 않도록 한다.
                 // 구 세이브 호환 — Name 필드가 없던 시점의 데이터는 이름 풀에서 채워준다(등록은 PickName 내부에서).
@@ -1741,6 +1752,8 @@ namespace ARPG.Npc
                 : -1;
 
             RemoveNpcFromSimulation(entityId);
+            _npcPowerCache.Remove(entityId);
+            _deferredLootUpgradeItemIds.Remove(entityId);
             RemoveAllAffinityInvolving(entityId);
             RemovePlayerRelation(entityId);
             RecordDeceasedRelationMemories(entityId, ResolveNpcDisplayName(saveData), eventId, when);
@@ -1826,7 +1839,7 @@ namespace ARPG.Npc
             _narrative.InvalidateDialogues(entityId);
         }
 
-        public void AddWoundedDeed(int entityId, float when, float recoveryEndGameTime)
+        public void AddWoundedDeed(int entityId, float when, float recoveryEndGameTime, bool treated = false)
         {
             if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
                 return;
@@ -1835,6 +1848,7 @@ namespace ARPG.Npc
                 NpcKnowledgeLevel.Did, when)
             {
                 RecoveryEndGameTime = recoveryEndGameTime,
+                Treated = treated,
             };
             AddDeedParticipant(entry, entityId);
             saveData.Deeds.Add(entry);
@@ -2160,6 +2174,8 @@ namespace ARPG.Npc
                 _simulationCursor++;
             if (_simulationCursor >= _simulationNpcIds.Count)
                 _simulationCursor = 0;
+            // 통합 순회(파티 먼저 + NPC)에서의 위치로도 같은 보정을 한다.
+            AdjustWorkCursorOnInsert(_simulationPartyIds.Count + insertIndex);
         }
 
         private void RemoveNpcFromSimulation(int entityId)
@@ -2173,6 +2189,7 @@ namespace ARPG.Npc
                 _simulationCursor--;
             if (_simulationCursor < 0 || _simulationCursor >= _simulationNpcIds.Count)
                 _simulationCursor = 0;
+            AdjustWorkCursorOnRemove(_simulationPartyIds.Count + index);
         }
 
         private static bool IsEligibleHuntPartyMember(NpcSaveData saveData)
@@ -2214,9 +2231,10 @@ namespace ARPG.Npc
             if (index >= 0)
                 return;
 
-            _simulationPartyIds.Insert(~index, partyId);
-            if (_simulationWorkCursor > 0)
-                _simulationWorkCursor = 0;
+            int insertIndex = ~index;
+            _simulationPartyIds.Insert(insertIndex, partyId);
+            // 커서를 0으로 되돌리지 않는다. 파티가 자주 생기면 앞쪽 NPC만 계속 방문되는 편중이 생기기 때문이다.
+            AdjustWorkCursorOnInsert(insertIndex);
         }
 
         private void RemovePartyFromSimulation(int partyId)
@@ -2226,7 +2244,33 @@ namespace ARPG.Npc
                 return;
 
             _simulationPartyIds.RemoveAt(index);
-            _simulationWorkCursor = 0;
+            AdjustWorkCursorOnRemove(index);
+        }
+
+        /// <summary>
+        /// 통합 순회 목록(파티 → NPC)의 workIndex에 항목이 삽입된 뒤 커서를 보정한다.
+        /// 커서 위치 이하에 들어온 항목은 이번 바퀴에서 건너뛰고(다음 바퀴에 방문), 원래 다음 대상은 그대로 다음 대상으로 남긴다.
+        /// </summary>
+        private void AdjustWorkCursorOnInsert(int workIndex)
+        {
+            if (workIndex <= _simulationWorkCursor)
+                _simulationWorkCursor++;
+            ClampWorkCursor();
+        }
+
+        /// <summary>통합 순회 목록의 workIndex 항목이 빠진 뒤 커서를 보정한다. 커서 앞 항목이 빠지면 한 칸 당긴다.</summary>
+        private void AdjustWorkCursorOnRemove(int workIndex)
+        {
+            if (workIndex < _simulationWorkCursor)
+                _simulationWorkCursor--;
+            ClampWorkCursor();
+        }
+
+        private void ClampWorkCursor()
+        {
+            int totalCount = _simulationPartyIds.Count + _simulationNpcIds.Count;
+            if (_simulationWorkCursor < 0 || _simulationWorkCursor >= totalCount)
+                _simulationWorkCursor = 0;
         }
 
         private void RemoveNpcFromChunk(Vector2Int chunkCoord, int entityId)

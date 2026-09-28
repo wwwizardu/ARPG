@@ -66,6 +66,17 @@ namespace ARPG.Npc
         // NPC 인벤토리 (NPC_INVENTORY_SLOTCOUNT_MAX 칸). 슬롯 인덱스가 의미를 가지므로 null 슬롯 유지.
         public List<ItemData?> Inventory = new List<ItemData?>();
 
+        // 모험가 경제 (NPC_AMBITION_DESIGN §5, §12). 구 세이브에는 필드가 없어 기본값 0으로 로드된다.
+        // 개인 소지금. Hunt는 골드를 주지 않고 전리품 판매로만 늘어난다 (D33). 시작값은 결정론 30~90G (D37).
+        public int Gold;
+        // 개인 상한의 기준 전투력. 초기 장비 롤이 비결정론이라 재계산할 수 없어 저장한다 (D38).
+        // 0 이하 = 미초기화 → NpcManager가 생성 직후 또는 첫 로드 때 현재 장비로 1회 기록한다 (시작 Gold도 같은 시점).
+        public float InitialPower;
+        // 개인 편차. 개인 상한 = InitialPower × (1 + PowerCapBonus). 평범 +0.20, 강자(10%) +0.35~0.50 (§10.1).
+        public float PowerCapBonus;
+        // 마지막 상점 구매 게임시각 (NPC별 쇼핑 쿨다운 48h, §7.2). -1 = 구매 기록 없음 (구 세이브 포함).
+        public float LastTradeGameTime = -1f;
+
         [JsonIgnore]
         public Vector2 Position
         {

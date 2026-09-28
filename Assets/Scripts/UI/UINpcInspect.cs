@@ -201,7 +201,9 @@ namespace ARPG.UI
             {
                 NpcDeedKind.PartyAffinityChanged =>
                     $"{GetOtherParticipantName(entry)}와 함께 사냥 후 호감도 {FormatSignedValue(entry.AffinityDelta)}",
-                NpcDeedKind.Wounded => $"사냥 중 부상 · {entry.RecoveryEndGameTime:F1}시간까지 회복",
+                NpcDeedKind.Wounded => entry.Treated == true
+                    ? $"사냥 중 부상 · 치료받음 · {entry.RecoveryEndGameTime:F1}시간까지 회복"
+                    : $"사냥 중 부상 · {entry.RecoveryEndGameTime:F1}시간까지 회복",
                 NpcDeedKind.NotableItemAcquired => string.IsNullOrEmpty(entry.ItemDisplayName)
                     ? "주요 아이템 획득"
                     : $"{entry.ItemDisplayName} 획득",
@@ -299,6 +301,8 @@ namespace ARPG.UI
                 return "사냥 중";
             if (activity.Kind == NpcActivityKind.Rest)
                 return "휴식 중";
+            if (activity.Kind == NpcActivityKind.Trade)
+                return "거래 중";
             return "대기";
         }
 
@@ -392,6 +396,35 @@ namespace ARPG.UI
             AddPersonalityRow("호기심", nsc.Curiosity);
             AddPersonalityRow("자존심", nsc.Pride);
             AddPersonalityRow("인내심", nsc.Patience);
+
+            // 야망은 성격에서 결정론으로 도출하는 표시 전용 값이다 (NPC_AMBITION_DESIGN §4.2, 저장하지 않음)
+            NpcAmbitionProfile ambition = NpcAmbitionEvaluator.Evaluate(nsc);
+            AddPersonalityTextRow("야망", $"{GetAmbitionLabel(ambition.Primary)} (보조: {GetAmbitionLabel(ambition.Secondary)})");
+        }
+
+        private static string GetAmbitionLabel(NpcAmbitionKind ambition) => ambition switch
+        {
+            NpcAmbitionKind.Explorer => "탐험",
+            NpcAmbitionKind.Glory => "명예",
+            NpcAmbitionKind.Wealth => "부",
+            NpcAmbitionKind.Comrade => "동료",
+            NpcAmbitionKind.Opportunist => "기회",
+            NpcAmbitionKind.Cautious => "안전",
+            _ => "없음",
+        };
+
+        private void AddPersonalityTextRow(string label, string value)
+        {
+            if (_personalityList == null) return;
+            VisualElement row = new();
+            row.AddToClassList("npc-stat-row");
+            Text lab = new() { text = label };
+            lab.AddToClassList("npc-stat-label");
+            Text val = new() { text = value };
+            val.AddToClassList("npc-stat-value");
+            row.Add(lab);
+            row.Add(val);
+            _personalityList.Add(row);
         }
 
         private void AddPersonalityRow(string label, int value)

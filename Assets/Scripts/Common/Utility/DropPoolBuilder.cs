@@ -1,5 +1,6 @@
 #nullable enable
 using System.Collections.Generic;
+using ARPG.History;
 using ARPG.Tables;
 using UnityEngine;
 using GE = GlobalEnum;
@@ -142,6 +143,47 @@ namespace ARPG.Utility
             }
 
             return 0;
+        }
+
+        /// <summary>
+        /// SelectWeightedRandom과 같은 가중치 규칙을 결정론 RNG로 선택한다.
+        /// 화면 밖 NPC 전리품처럼 세이브/로드 뒤에도 같은 결과가 필요한 경로에서 쓴다 (NPC_AMBITION_DESIGN D35).
+        /// </summary>
+        public static int SelectWeightedRandom(List<DropPoolEntry> pool, int dropRarityBonus, HistoryRng rng)
+        {
+            if (pool == null || pool.Count == 0 || rng == null)
+                return 0;
+
+            int minTier = int.MaxValue;
+            for (int i = 0; i < pool.Count; i++)
+            {
+                if (pool[i].Tier < minTier)
+                    minTier = pool[i].Tier;
+            }
+
+            int totalWeight = 0;
+            for (int i = 0; i < pool.Count; i++)
+                totalWeight += GetBonusWeight(pool[i], minTier, dropRarityBonus);
+            if (totalWeight <= 0)
+                return 0;
+
+            int randomValue = rng.Range(0, totalWeight);
+            int cumulative = 0;
+            for (int i = 0; i < pool.Count; i++)
+            {
+                cumulative += GetBonusWeight(pool[i], minTier, dropRarityBonus);
+                if (randomValue < cumulative)
+                    return pool[i].ItemId;
+            }
+
+            return 0;
+        }
+
+        private static int GetBonusWeight(DropPoolEntry entry, int minTier, int dropRarityBonus)
+        {
+            if (dropRarityBonus > 0 && entry.Tier > minTier)
+                return entry.Weight * (100 + dropRarityBonus) / 100;
+            return entry.Weight;
         }
     }
 }

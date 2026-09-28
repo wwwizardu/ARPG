@@ -24,6 +24,8 @@ namespace ARPG.Npc
         None = 0,
         Rest = 1,
         Hunt = 2,
+        // 마을 상점 거래 (NPC_AMBITION_DESIGN D39). 1시간 뒤 종료 시점에 TradeAtShop 1회. 제자리 활동이라 Phase=Idle.
+        Trade = 3,
     }
 
     /// <summary>오프스크린 Hunt 종료 시 단 한 번 결정되는 결과.</summary>
@@ -69,6 +71,8 @@ namespace ARPG.Npc
         public NpcHuntOutcome LastHuntOutcome = NpcHuntOutcome.None;
         public int LastHuntFoodYield;
         public float LastOutcomeGameTime;
+        // 마지막 부상 회복 종료 시각. "부상 회복 직후" 필요(NPC_AMBITION_DESIGN §6.2) 판정용. -1 = 기록 없음 (구 세이브 포함).
+        public float RecoveredGameTime = -1f;
 
         [System.Xml.Serialization.XmlIgnore]
         [Newtonsoft.Json.JsonIgnore]

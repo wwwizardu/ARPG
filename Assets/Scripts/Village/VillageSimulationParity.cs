@@ -5,6 +5,19 @@ using UnityEngine;
 
 namespace ARPG.Village
 {
+    /// <summary>NPC 거래·치료로 마을 Gold가 움직인 1건 (패리티 검증 입력). Amount &gt; 0 입금, &lt; 0 출금.</summary>
+    public struct VillageNpcGoldTransfer
+    {
+        public float GameTime;
+        public int Amount;
+
+        public VillageNpcGoldTransfer(float gameTime, int amount)
+        {
+            GameTime = gameTime;
+            Amount = amount;
+        }
+    }
+
     /// <summary>
     /// 실시간 시간당 참조 실행과 추상 fast-forward 결과의 정합성 검증용 비교기.
     /// 호출자가 동일 초기 상태를 두 경로로 전진한 뒤 결과를 전달한다.
@@ -59,6 +72,80 @@ namespace ARPG.Village
             }
 
             return Compare(realtimeReference, abstractFastForward, out differences);
+        }
+
+        /// <summary>
+        /// NPC_AMBITION_DESIGN §9, D41: NPC 거래·치료 Gold 이동이 섞여도 두 경로가 같은 결과를 내는지 검증한다.
+        /// 실시간 참조는 시간 경계마다 전진하며 그 시각까지의 이동을 적용하고, 추상 경로는 이동 시각까지
+        /// fast-forward한 뒤 같은 이동을 적용한다. 두 경로 모두 VillageResourceSimulation의 NPC 전용 Gold
+        /// 경로(상한 없음·잔액 부족 시 실패)를 쓰므로 Gold·carry·건설 결과와 실패 건수가 같아야 한다.
+        /// transfers는 GameTime 오름차순이어야 한다. Amount &gt; 0 = 마을 입금, &lt; 0 = 마을 출금.
+        /// </summary>
+        public static bool AdvanceWithNpcGoldAndCompare(VillageData realtimeReference,
+            VillageData abstractFastForward, float targetGameTime,
+            VillageAbstractAdvanceOptions options, IReadOnlyList<VillageNpcGoldTransfer> transfers,
+            out string differences)
+        {
+            VillageAbstractAdvanceOptions validationOptions = CopyOptions(options);
+            validationOptions.GeneralEventBudget = int.MaxValue;
+            validationOptions.WallEventBudget = int.MaxValue;
+
+            int realtimeNext = 0;
+            int realtimeRejected = 0;
+            while (realtimeReference.LastConstructionSimGameTime
+                < targetGameTime - 0.0001f)
+            {
+                float nextHour = Mathf.Floor(
+                    realtimeReference.LastConstructionSimGameTime + 0.0001f) + 1f;
+                float next = Mathf.Min(targetGameTime, nextHour);
+                VillageAbstractAdvanceResult step =
+                    VillageAbstractConstruction.AdvanceAbstractConstruction(realtimeReference,
+                        next, validationOptions);
+                if (step.IsCaughtUp == false)
+                {
+                    differences = $"hourly reference stopped: {step.Status} at "
+                        + $"{step.ReachedGameTime}";
+                    return false;
+                }
+                realtimeNext = ApplyNpcGoldTransfersUntil(realtimeReference, transfers, realtimeNext,
+                    next, ref realtimeRejected);
+            }
+            realtimeNext = ApplyNpcGoldTransfersUntil(realtimeReference, transfers, realtimeNext,
+                float.MaxValue, ref realtimeRejected);
+
+            int abstractRejected = 0;
+            for (int i = 0; i < transfers.Count; i++)
+            {
+                float at = Mathf.Min(transfers[i].GameTime, targetGameTime);
+                if (at > abstractFastForward.LastConstructionSimGameTime)
+                {
+                    VillageAbstractAdvanceResult partial =
+                        VillageAbstractConstruction.AdvanceAbstractConstruction(abstractFastForward,
+                            at, validationOptions);
+                    if (partial.IsCaughtUp == false)
+                    {
+                        differences = $"fast-forward stopped: {partial.Status} at {partial.ReachedGameTime}";
+                        return false;
+                    }
+                }
+                ApplyNpcGoldTransfer(abstractFastForward, transfers[i], ref abstractRejected);
+            }
+            VillageAbstractAdvanceResult fast =
+                VillageAbstractConstruction.AdvanceAbstractConstruction(abstractFastForward,
+                    targetGameTime, validationOptions);
+            if (fast.IsCaughtUp == false)
+            {
+                differences = $"fast-forward stopped: {fast.Status} at {fast.ReachedGameTime}";
+                return false;
+            }
+
+            bool same = Compare(realtimeReference, abstractFastForward, out differences);
+            if (realtimeRejected != abstractRejected)
+            {
+                differences += $"npc gold rejected {realtimeRejected}!={abstractRejected}; ";
+                same = false;
+            }
+            return same;
         }
 
         public static bool AdvanceSlicedAndCompare(VillageData uninterrupted,
@@ -274,6 +361,12 @@ namespace ARPG.Village
                     + $"!={b.MerchantRestockCycle}; ");
             CompareFloat(builder, "LastMerchantRollGameTime",
                 a.LastMerchantRollGameTime, b.LastMerchantRollGameTime, floatTolerance);
+            // NPC_AMBITION P1b: NPC 구매 상점 보호 원장 (save/load 왕복 보존 확인)
+            if (a.NpcPurchaseCycle != b.NpcPurchaseCycle || a.NpcPurchaseCount != b.NpcPurchaseCount)
+                builder.Append($"NpcPurchase {a.NpcPurchaseCycle}/{a.NpcPurchaseCount}"
+                    + $"!={b.NpcPurchaseCycle}/{b.NpcPurchaseCount}; ");
+            CompareFloat(builder, "LastNpcTradeGameTime",
+                a.LastNpcTradeGameTime, b.LastNpcTradeGameTime, floatTolerance);
 
             CompareStringMultiset(builder, "milestone",
                 a.AppliedGrowthMilestones, b.AppliedGrowthMilestones);
@@ -383,7 +476,35 @@ namespace ARPG.Village
                 if (ea.PriceReason != eb.PriceReason)
                     builder.Append($"stock[{i}].PriceReason {ea.PriceReason}"
                         + $"!={eb.PriceReason}; ");
+                if (ea.NpcBuyerEntityId != eb.NpcBuyerEntityId)
+                    builder.Append($"stock[{i}].NpcBuyer {ea.NpcBuyerEntityId}"
+                        + $"!={eb.NpcBuyerEntityId}; ");
             }
+        }
+
+        private static int ApplyNpcGoldTransfersUntil(VillageData village,
+            IReadOnlyList<VillageNpcGoldTransfer> transfers, int startIndex, float untilGameTime,
+            ref int rejected)
+        {
+            int index = startIndex;
+            while (index < transfers.Count && transfers[index].GameTime <= untilGameTime)
+            {
+                ApplyNpcGoldTransfer(village, transfers[index], ref rejected);
+                index++;
+            }
+            return index;
+        }
+
+        private static void ApplyNpcGoldTransfer(VillageData village, VillageNpcGoldTransfer transfer,
+            ref int rejected)
+        {
+            if (transfer.Amount >= 0)
+            {
+                VillageResourceSimulation.DepositNpcGold(village, transfer.Amount);
+                return;
+            }
+            if (VillageResourceSimulation.TryWithdrawNpcGold(village, -transfer.Amount) == false)
+                rejected++;
         }
 
         private static VillageAbstractAdvanceOptions CopyOptions(

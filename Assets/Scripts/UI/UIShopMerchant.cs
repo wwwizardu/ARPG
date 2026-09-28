@@ -202,8 +202,10 @@ namespace ARPG.UI
             {
                 int stockIdx = i;
                 MerchantStockEntry entry = v.MerchantStock[i];
-                if (entry.RemainingCount <= 0) continue;
                 if (entry.Item == null || entry.Item.Table == null) continue;
+                // NPC_AMBITION §7.2, D42: NPC 구매로 품절된 매물만 "○○가 구매함"으로 남긴다. 플레이어 구매 품절은 기존처럼 숨긴다.
+                bool soldToNpc = entry.RemainingCount <= 0 && string.IsNullOrEmpty(entry.NpcBuyerName) == false;
+                if (entry.RemainingCount <= 0 && soldToNpc == false) continue;
 
                 ItemData stockItem = entry.Item;
                 Tables.ItemTable table = stockItem.Table;
@@ -234,10 +236,18 @@ namespace ARPG.UI
 
                 VisualElement info = new();
                 info.AddToClassList("shop-buy-info");
-                Text nameText = new() { text = $"{displayName} (재고 {entry.RemainingCount})" };
+                Text nameText = new()
+                {
+                    text = soldToNpc == true
+                        ? $"{displayName} ({entry.NpcBuyerName}{GetSubjectParticle(entry.NpcBuyerName)} 구매함)"
+                        : $"{displayName} (재고 {entry.RemainingCount})"
+                };
                 nameText.AddToClassList("shop-buy-name");
                 // V5 (§8.5): 지역 가격 사유 표기 — 지역 특산/현지 부족/희귀 수입.
                 string reasonLabel = GetPriceReasonLabel(entry.PriceReason);
+                // NPC_AMBITION D42: NPC가 판 전리품 진열 슬롯 표기.
+                if (entry.SlotKind == TradeStockSlotKind.AdventurerConsignment)
+                    reasonLabel = reasonLabel.Length > 0 ? $"모험가 매입품 · {reasonLabel}" : "모험가 매입품";
                 Text priceText = new()
                 {
                     text = reasonLabel.Length > 0
@@ -250,11 +260,12 @@ namespace ARPG.UI
                 row.Add(info);
 
                 // 구매 버튼
-                Button buyBtn = new() { title = "구매" };
+                Button buyBtn = new() { title = soldToNpc == true ? "품절" : "구매" };
                 buyBtn.size = Size.S;
                 buyBtn.variant = ButtonVariant.Accent;
-                buyBtn.SetEnabled(canAfford);
-                buyBtn.clicked += () => OnClickBuyStock(stockIdx);
+                buyBtn.SetEnabled(canAfford == true && soldToNpc == false);
+                if (soldToNpc == false)
+                    buyBtn.clicked += () => OnClickBuyStock(stockIdx);
                 row.Add(buyBtn);
 
                 // 호버 툴팁 — roll 시점에 완성된 매물 ItemData를 그대로 넘긴다.
@@ -412,6 +423,17 @@ namespace ARPG.UI
             Text emptyText = new() { text = msg };
             emptyText.AddToClassList("shop-empty-text");
             parent.Add(emptyText);
+        }
+
+        /// <summary>한글 이름 끝 받침 유무로 주격 조사(이/가)를 고른다. 한글이 아니면 "가".</summary>
+        private static string GetSubjectParticle(string name)
+        {
+            if (string.IsNullOrEmpty(name) == true)
+                return "가";
+            char last = name[name.Length - 1];
+            if (last < '가' || last > '힣')
+                return "가";
+            return (last - '가') % 28 == 0 ? "가" : "이";
         }
 
         /// <summary>V5 (§8.5): 지역 가격 사유 표기. Standard는 빈 문자열(표기 없음).</summary>

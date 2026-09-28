@@ -1,4 +1,5 @@
 #nullable enable
+using ARPG.Data;
 using ARPG.Npc;
 using ARPG.Scene;
 using ARPG.Creature;
@@ -96,6 +97,8 @@ namespace ARPG.Systems
                     activity.TargetKey = string.Empty;
                     activity.PhaseStartedGameTime = transitionTime;
                     activity.PhaseEndGameTime = 0f;
+                    // "부상 회복 직후" 필요 판정의 기준 시각 (NPC_AMBITION_DESIGN §6.2)
+                    activity.RecoveredGameTime = transitionTime;
                     saveData.LastSimGameTime = transitionTime;
                     AR.s.Npc.ResumeMaterializedNpcActivity(entityId);
                     continue;
@@ -112,9 +115,16 @@ namespace ARPG.Systems
                     continue;
                 }
 
+                if (activity.Kind == NpcActivityKind.Trade)
+                {
+                    // Trade는 종료 시점에 소속 마을 상점과 1회 거래한다 (D39). 판매·구매 결과는 TradeAtShop이 확정한다.
+                    ResolveTrade(saveData, entityId, transitionTime);
+                    continue;
+                }
+
                 if (activity.Kind == NpcActivityKind.Hunt)
                 {
-                    // Hunt만 종료 시점에 한 번의 결정론적 결과 롤을 수행한다.
+                    // Hunt는 종료 시점에 한 번의 결정론적 결과 롤을 수행한다.
                     ResolveHunt(saveData, entityId, transitionTime, worldSeed);
                     continue;
                 }
@@ -132,9 +142,10 @@ namespace ARPG.Systems
         {
             NpcActivityState activity = saveData.Activity;
             // 동행 예약 NPC는 원정(Hunt)을 떠나지 않도록 Rest만 고른다 (NPC_COMBAT_DESIGN §4.5)
+            // 그 밖에는 필요·야망·성향·기회로 Rest/Hunt/Trade 중 하나를 고른다 (NPC_AMBITION_DESIGN §6)
             NpcActivityKind kind = AR.s.Npc.IsCompanionReserved(entityId) == true
                 ? NpcActivityKind.Rest
-                : NpcActivityResolver.SelectNextActivity(saveData, entityId, startGameTime, worldSeed);
+                : AR.s.Npc.SelectNextActivity(entityId, saveData, startGameTime, worldSeed);
 
             if (kind == NpcActivityKind.Hunt && AR.s.Npc.TryCreateHuntParty(entityId, out NpcPartyState? party) &&
                 party != null)
@@ -144,12 +155,17 @@ namespace ARPG.Systems
             }
 
             activity.Kind = kind;
-            // 휴식은 제자리 활동이므로 Idle 표현을 유지하고, Hunt만 Venturing으로 표시한다.
+            // 휴식·거래는 제자리 활동이므로 Idle 표현을 유지하고, Hunt만 Venturing으로 표시한다.
+            // 거래는 P1에서 상점으로 이동하는 연출이 없다 (D39) — 화면 안 NPC도 상태만 Trade로 바뀌고 기본 AI를 유지한다.
             activity.Phase = kind == NpcActivityKind.Hunt ? NpcActivityPhase.Venturing : NpcActivityPhase.Idle;
-            activity.TargetKey = kind == NpcActivityKind.Hunt ? "hunt" : "rest";
+            activity.TargetKey = kind switch
+            {
+                NpcActivityKind.Hunt => "hunt",
+                NpcActivityKind.Trade => "trade",
+                _ => "rest",
+            };
             activity.PhaseStartedGameTime = startGameTime;
-            activity.PhaseEndGameTime = startGameTime +
-                (kind == NpcActivityKind.Hunt ? NpcActivityResolver.HuntDurationHours : NpcActivityResolver.RestDurationHours);
+            activity.PhaseEndGameTime = startGameTime + NpcActivityResolver.GetActivityDurationHours(kind);
             activity.HasMovementPath = kind == NpcActivityKind.Hunt;
             if (activity.HasMovementPath)
             {
@@ -303,13 +319,17 @@ namespace ARPG.Systems
             }
 
             NpcActivityState partyActivity = party.Activity;
-            float partyPower = NpcActivityResolver.GetPartyHuntPower(members);
+            // 파티원 전투력은 장비 반영 NpcPower를 capability로 옮긴 값 하나로 판정한다 (NPC_AMBITION_DESIGN §5.1)
+            float[] capabilities = new float[members.Count];
+            for (int i = 0; i < members.Count; i++)
+                capabilities[i] = AR.s.Npc.GetNpcHuntCapability(memberIds[i]);
+            float partyPower = NpcActivityResolver.GetPartyHuntPower(capabilities);
             NpcHuntOutcome[] outcomes = new NpcHuntOutcome[members.Count];
             int successCount = 0;
             int survivorCount = 0;
             for (int i = 0; i < members.Count; i++)
             {
-                NpcHuntOutcome outcome = NpcActivityResolver.ResolvePartyMemberHunt(members[i], partyPower,
+                NpcHuntOutcome outcome = NpcActivityResolver.ResolvePartyMemberHunt(capabilities[i], partyPower,
                     members.Count, party.PartyId, partyActivity.OutcomeSeedGameTime, worldSeed, i);
                 outcomes[i] = outcome;
                 if (outcome == NpcHuntOutcome.Success)
@@ -343,8 +363,12 @@ namespace ARPG.Systems
                 {
                     memberActivity.Phase = NpcActivityPhase.Wounded;
                     memberActivity.Kind = NpcActivityKind.None;
-                    memberActivity.PhaseEndGameTime = outcomeGameTime + NpcActivityResolver.WoundedRecoveryHours;
-                    AR.s.Npc.AddWoundedDeed(memberIds[i], outcomeGameTime, memberActivity.PhaseEndGameTime);
+                    // 부상 시점 1회 추상 치료 판정 — 치료받으면 24h → 8h (NPC_AMBITION_DESIGN D36)
+                    float recoveryHours = AR.s.Npc.ResolveWoundedTreatment(memberIds[i], member, party.PartyId,
+                        partyActivity.OutcomeSeedGameTime, worldSeed, NpcActivityResolver.PartyTreatmentSaltBase + i,
+                        out bool treated);
+                    memberActivity.PhaseEndGameTime = outcomeGameTime + recoveryHours;
+                    AR.s.Npc.AddWoundedDeed(memberIds[i], outcomeGameTime, memberActivity.PhaseEndGameTime, treated);
                 }
                 else if (outcomes[i] != NpcHuntOutcome.Dead)
                 {
@@ -358,6 +382,15 @@ namespace ARPG.Systems
 
             if (foodYield > 0 && members[0].VillageId >= 0)
                 AR.s.Village.ProduceResource(members[0].VillageId, GlobalEnum.ItemType.Food, foodYield, false);
+
+            // 분배 규칙은 P3 — P1a는 Success 결과를 받은 파티원 각자가 개인 전리품을 1회씩 롤한다 (관리 세션 결정)
+            for (int i = 0; i < members.Count; i++)
+            {
+                if (outcomes[i] != NpcHuntOutcome.Success)
+                    continue;
+                GrantHuntLoot(members[i], memberIds[i], party.PartyId, partyActivity.OutcomeSeedGameTime, worldSeed,
+                    NpcActivityResolver.PartyHuntLootSaltBase + i, outcomeGameTime);
+            }
 
             ApplyPartyRelationshipOutcome(memberIds, outcomes, successCount > 0, outcomeGameTime);
             for (int i = 0; i < members.Count; i++)
@@ -416,7 +449,9 @@ namespace ARPG.Systems
             float outcomeSeedGameTime = activity.OutcomeSeedGameTime > 0f
                 ? activity.OutcomeSeedGameTime
                 : huntStartedGameTime;
-            NpcHuntOutcome outcome = NpcActivityResolver.ResolveHunt(saveData, entityId,
+            // 장비 반영 전투력(용기 제외)을 판정 곡선의 capability로 옮긴다 (NPC_AMBITION_DESIGN §5.1, D31)
+            float capability = AR.s.Npc.GetNpcHuntCapability(entityId);
+            NpcHuntOutcome outcome = NpcActivityResolver.ResolveHunt(capability, entityId,
                 outcomeSeedGameTime, worldSeed);
 
             activity.LastHuntOutcome = outcome;
@@ -442,8 +477,11 @@ namespace ARPG.Systems
                 // 부상자는 회복 종료시각까지 다음 Hunt 선택에서 제외된다.
                 NotifyHuntOutcome(saveData, entityId, outcome, 0);
                 activity.Phase = NpcActivityPhase.Wounded;
-                activity.PhaseEndGameTime = outcomeGameTime + NpcActivityResolver.WoundedRecoveryHours;
-                AR.s.Npc.AddWoundedDeed(entityId, outcomeGameTime, activity.PhaseEndGameTime);
+                // 부상 시점 1회 추상 치료 판정 — 치료받으면 24h → 8h (NPC_AMBITION_DESIGN D36)
+                float recoveryHours = AR.s.Npc.ResolveWoundedTreatment(entityId, saveData, entityId,
+                    outcomeSeedGameTime, worldSeed, NpcActivityResolver.TreatmentSalt, out bool treated);
+                activity.PhaseEndGameTime = outcomeGameTime + recoveryHours;
+                AR.s.Npc.AddWoundedDeed(entityId, outcomeGameTime, activity.PhaseEndGameTime, treated);
                 return;
             }
 
@@ -453,14 +491,43 @@ namespace ARPG.Systems
 
             if (outcome == NpcHuntOutcome.Success && saveData.VillageId >= 0)
             {
-                int foodYield = NpcActivityResolver.GetHuntFoodYield(saveData, entityId,
+                int foodYield = NpcActivityResolver.GetHuntFoodYield(capability, entityId,
                     outcomeSeedGameTime, worldSeed);
                 activity.LastHuntFoodYield = foodYield;
                 // 오프스크린 Hunt마다 UI 알림을 만들지 않도록 조용히 자원만 반영한다.
                 AR.s.Village.ProduceResource(saveData.VillageId, GlobalEnum.ItemType.Food, foodYield, false);
             }
 
+            // Food는 마을로, 전리품은 개인 인벤토리로 간다. Hunt는 골드를 주지 않는다 (D33, D35)
+            if (outcome == NpcHuntOutcome.Success)
+                GrantHuntLoot(saveData, entityId, entityId, outcomeSeedGameTime, worldSeed,
+                    NpcActivityResolver.HuntLootSalt, outcomeGameTime);
+
             NotifyHuntOutcome(saveData, entityId, outcome, activity.LastHuntFoodYield);
+        }
+
+        private static void ResolveTrade(NpcSaveData saveData, int entityId, float outcomeGameTime)
+        {
+            NpcActivityState activity = saveData.Activity;
+            activity.Phase = NpcActivityPhase.Idle;
+            activity.Kind = NpcActivityKind.None;
+            activity.TargetKey = string.Empty;
+            activity.PhaseStartedGameTime = outcomeGameTime;
+            activity.PhaseEndGameTime = 0f;
+            saveData.LastSimGameTime = outcomeGameTime;
+
+            // 거래는 즉시 저장하지 않는다 (D47 ④, Hunt Food와 같은 정책). 소속 마을이 없으면 빈손으로 끝난다.
+            if (saveData.VillageId >= 0)
+                AR.s.Npc.TradeAtShop(entityId, saveData.VillageId);
+        }
+
+        private static void GrantHuntLoot(NpcSaveData saveData, int entityId, int rngOwnerId, float seedGameTime,
+            int worldSeed, int salt, float outcomeGameTime)
+        {
+            int zoneLevel = AR.s.Npc.GetNpcLootZoneLevel(saveData);
+            ItemData? loot = NpcActivityResolver.RollHuntLoot(rngOwnerId, seedGameTime, worldSeed, salt, zoneLevel);
+            if (loot != null)
+                AR.s.Npc.GrantHuntLoot(entityId, saveData, loot, outcomeGameTime);
         }
 
         private static void NotifyHuntOutcome(NpcSaveData saveData, int entityId,
