@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using Newtonsoft.Json;
 
 namespace ARPG.Npc
 {
@@ -16,6 +17,8 @@ namespace ARPG.Npc
         DuelWon = 5,
         DuelLost = 6,
         DuelDrawn = 7,
+        // NPC 던전 완료 (NPC_AMBITION_DESIGN §7.1, D58·D61). 참가자: 완료한 NPC 본인 + 함께 간 파티원
+        DungeonCleared = 8,
     }
 
     /// <summary>NPC가 사건을 알게 된 직접성 등급. 내러티브 지식 거리의 입력이다.</summary>
@@ -43,6 +46,10 @@ namespace ARPG.Npc
         public float RecoveryEndGameTime;
         // Wounded 전용: 부상 시점에 추상 치료 서비스를 샀는지 (NPC_AMBITION_DESIGN D36). 구 세이브는 false.
         public bool Treated;
+        // Wounded 전용: 부상을 입은 활동 (NPC_AMBITION P2c). DungeonDelve만 기록하고, None은 Hunt(구 세이브·기존 기록 포함)로 읽는다.
+        // 기본값이면 저장하지 않아 기존 Deed의 저장 크기는 늘지 않는다. 로드 시 필드가 없으면 None → 보정 불필요.
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public NpcActivityKind Activity;
         public int ItemId = -1;
         public string ItemDisplayName = string.Empty;
 

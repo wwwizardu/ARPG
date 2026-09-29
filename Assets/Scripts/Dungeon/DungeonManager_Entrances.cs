@@ -28,6 +28,8 @@ namespace ARPG.Dungeon
             var defaultTable = AR.s.Data.GetDungeonTable(defaultTableId);
             if (defaultTable != null)
                 DungeonLayout.NormalizeTableReferences(AR.s.Data.Dungeons, defaultTable);
+            // NPC 완료 필드(D58) 로드 보정 — 구 세이브는 기본값 -1, 비정상 값은 "기록 없음"으로
+            DungeonLayout.NormalizeNpcCompletionFields(AR.s.Data.Dungeons);
             var saved = AR.s.Data.Dungeons.Villages;
             for (int i = 0; i < saved.Count; i++)
             {
@@ -47,6 +49,7 @@ namespace ARPG.Dungeon
 
         public void TickPlacement()
         {
+            RefreshEntranceIndexIfDirty();
             if (_initialized == false || IsInside == true || _busy == true || AR.s.MyPlayer == null || AR.s.Data.IsSaving == true) return;
             var villages = AR.s.Village.GetAllVillages();
             if (villages.Count == 0) return;

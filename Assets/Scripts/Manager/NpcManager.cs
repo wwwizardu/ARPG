@@ -96,6 +96,7 @@ namespace ARPG.Npc
             _npcRelations.Clear();
             _narrative.Reset();
             ResetAmbitionRuntime();
+            ResetRumorRuntime();
             _nameBag.Clear();
             _nameBagCursor = 0;
             _usedNames.Clear();
@@ -854,7 +855,8 @@ namespace ARPG.Npc
                 AIStateHelper.StopMovement(entityId);
                 return;
             }
-            if (activity.Kind != NpcActivityKind.Hunt || activity.HasMovementPath == false)
+            // 원정(Hunt·DungeonDelve)만 조우 대기로 멈춘다 — Delve도 Hunt와 같은 왕복 경로 표현을 쓴다 (NPC_AMBITION §7.1)
+            if (NpcActivityResolver.IsExpedition(activity.Kind) == false || activity.HasMovementPath == false)
                 return;
             if (activity.PhaseEndGameTime <= AR.s.Time.CurrentGameTime)
                 return;
@@ -867,7 +869,7 @@ namespace ARPG.Npc
         private static void ResumeHuntPathFromCurrentPosition(NpcSaveData saveData, float now)
         {
             NpcActivityState activity = saveData.Activity;
-            if (activity.Kind != NpcActivityKind.Hunt || activity.HasMovementPath == false)
+            if (NpcActivityResolver.IsExpedition(activity.Kind) == false || activity.HasMovementPath == false)
                 return;
             if (activity.PhaseEndGameTime <= now)
                 return;
@@ -1126,7 +1128,10 @@ namespace ARPG.Npc
                     int memberId = validMembers[memberIndex];
                     NpcSaveData member = _npcSaveDict[memberId];
                     member.Activity.PartyId = party.PartyId;
-                    member.Activity.Kind = NpcActivityKind.Hunt;
+                    // 파티 활동 종류(Hunt/DungeonDelve)를 파티원에게 되돌린다. 구 세이브 파티는 Hunt뿐이다.
+                    member.Activity.Kind = party.Activity.Kind == NpcActivityKind.DungeonDelve
+                        ? NpcActivityKind.DungeonDelve
+                        : NpcActivityKind.Hunt;
                     member.Activity.Phase = NpcActivityPhase.Venturing;
                 }
             }
@@ -1512,7 +1517,17 @@ namespace ARPG.Npc
 
         public bool TryCreateHuntParty(int leaderId, out NpcPartyState? party)
         {
+            return TryCreateHuntParty(leaderId, out party, NpcActivityKind.Hunt);
+        }
+
+        /// <summary>
+        /// 원정 파티 자동 구성. Hunt와 DungeonDelve가 같은 모집 규칙을 쓴다 (NPC_AMBITION_DESIGN D55 "기존 자동 구성 재사용").
+        /// </summary>
+        public bool TryCreateHuntParty(int leaderId, out NpcPartyState? party, NpcActivityKind kind)
+        {
             party = null;
+            if (NpcActivityResolver.IsExpedition(kind) == false)
+                return false;
             if (_npcSaveDict.TryGetValue(leaderId, out NpcSaveData? leader) == false ||
                 IsEligibleHuntPartyMember(leader) == false)
                 return false;
@@ -1570,9 +1585,9 @@ namespace ARPG.Npc
                 int memberId = created.MemberIds[i];
                 NpcSaveData member = _npcSaveDict[memberId];
                 member.Activity.PartyId = partyId;
-                member.Activity.Kind = NpcActivityKind.Hunt;
+                member.Activity.Kind = kind;
                 member.Activity.Phase = NpcActivityPhase.Venturing;
-                member.Activity.TargetKey = "hunt";
+                member.Activity.TargetKey = kind == NpcActivityKind.Hunt ? "hunt" : "delve";
                 member.Activity.HasMovementPath = false;
             }
 
@@ -1752,6 +1767,8 @@ namespace ARPG.Npc
                 : -1;
 
             RemoveNpcFromSimulation(entityId);
+            // 소문 (P2b, D72): 본인 소문을 비우고 이 NPC가 소유자인 ItemOwner 소문을 마을 명단에서 지운다 (명단 제거 전).
+            PurgeRumorsOnNpcDeath(entityId, saveData);
             _npcPowerCache.Remove(entityId);
             _deferredLootUpgradeItemIds.Remove(entityId);
             RemoveAllAffinityInvolving(entityId);
@@ -1839,7 +1856,9 @@ namespace ARPG.Npc
             _narrative.InvalidateDialogues(entityId);
         }
 
-        public void AddWoundedDeed(int entityId, float when, float recoveryEndGameTime, bool treated = false)
+        /// <param name="activity">부상을 입은 활동. Delve만 DungeonDelve를 넘긴다 (기본 None = Hunt로 읽음, P2c).</param>
+        public void AddWoundedDeed(int entityId, float when, float recoveryEndGameTime, bool treated = false,
+            NpcActivityKind activity = NpcActivityKind.None)
         {
             if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
                 return;
@@ -1849,6 +1868,7 @@ namespace ARPG.Npc
             {
                 RecoveryEndGameTime = recoveryEndGameTime,
                 Treated = treated,
+                Activity = activity,
             };
             AddDeedParticipant(entry, entityId);
             saveData.Deeds.Add(entry);

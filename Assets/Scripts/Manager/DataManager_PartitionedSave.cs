@@ -486,6 +486,13 @@ namespace ARPG.Data
                 SaveScope scope = requestedScope;
                 if (captureRuntimeManagers == true && AR.s.Dungeon.RequiresCheckpoint == true)
                     scope |= SaveScope.Player | SaveScope.World | SaveScope.Dungeons;
+                // NPC 던전 완료(NPC_AMBITION D58)는 즉시 저장하지 않는다. 대신 슬롯 변경(Dungeons)과 NPC 보상(NpcState)이
+                // 한쪽만 저장되지 않도록, 둘 중 하나를 싣는 다음 저장이 나머지도 함께 싣는다.
+                const SaveScope npcCompletionScope = SaveScope.Dungeons | SaveScope.NpcState;
+                long npcCompletionRevision = AR.s.Dungeon.NpcCompletionRevision;
+                if (captureRuntimeManagers == true && AR.s.Dungeon.HasUnsavedNpcCompletion == true &&
+                    (scope & npcCompletionScope) != 0)
+                    scope |= npcCompletionScope;
                 if (_activeSaveManifest == null || _needsFullSaveAfterMigration == true)
                     scope = SaveScope.All;
 
@@ -529,6 +536,8 @@ namespace ARPG.Data
                 CommitManifest(slotPath, prepared.Path);
                 _activeSaveManifest = next;
                 if (scope == SaveScope.All) _needsFullSaveAfterMigration = false;
+                if (captureRuntimeManagers == true && (scope & npcCompletionScope) == npcCompletionScope)
+                    AR.s.Dungeon.MarkNpcCompletionSaved(npcCompletionRevision);
                 commitTimer.Stop();
 #if UNITY_EDITOR
                 DiagnosticCommitMilliseconds = commitTimer.Elapsed.TotalMilliseconds;

@@ -65,6 +65,7 @@ namespace ARPG.Dungeon
             if (_components != null) _components.RestoreSuspended(_suspendedWorld);
             ResetContent();
             ResetEntrances();
+            ResetNpcCompletion();
             if (ActiveMap != null)
             {
                 ActiveMap.Reset();

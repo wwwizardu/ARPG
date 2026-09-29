@@ -86,8 +86,8 @@ namespace ARPG.Npc
         }
 
         /// <summary>
-        /// §6.2 필요(P1: 골드 부족·가방 가득·부상 회복 직후)와 Trade 기회. 장비 부족·라이벌·소문 필요는 기준 데이터가 생기는
-        /// P2·P3에서 추가한다.
+        /// §6.2 필요(골드 부족·가방 가득·부상 회복 직후·유망한 소문)와 Trade·Delve 기회. 장비 부족·라이벌 필요는
+        /// 기준 데이터가 생기는 P3 이후에 추가한다.
         /// </summary>
         public NpcActivityChoiceContext BuildActivityChoiceContext(int entityId, NpcSaveData saveData, float gameTime)
         {
@@ -99,12 +99,16 @@ namespace ARPG.Npc
                     freeSlots++;
             }
 
+            bool delveAvailable = HasDelveOpportunity(saveData);
             return new NpcActivityChoiceContext
             {
                 GoldShort = saveData.Gold < NpcActivityResolver.TreatmentFee,
                 BagFull = freeSlots <= NpcActivityResolver.BagFullFreeSlotThreshold,
                 RecentlyRecovered = NpcActivityResolver.IsRecentlyRecovered(saveData.Activity, gameTime),
                 TradeAvailable = HasTradeOpportunity(entityId, saveData),
+                DelveAvailable = delveAvailable,
+                // "유망한 소문" 필요 (§6.2, D76). Delve 후보일 때만 본다.
+                HasPromisingRumor = delveAvailable == true && TryGetPromisingRumor(saveData, gameTime, out _) == true,
             };
         }
 
@@ -250,6 +254,10 @@ namespace ARPG.Npc
 
             if (replacedItem != null)
                 StoreInInventory(entityId, saveData, replacedItem);
+            // 소문 (P2b, D71·D72): 교체돼 무효가 된 ItemOwner 소문 정리 + 소유자 본인의 새 ItemOwner 소문
+            NotifyNpcEquipmentChanged(entityId, saveData, slot, item, gameTime);
+            // 자랑 Deed (P2c, D61): 업그레이드 장착만 기록한다 (전리품·구매·실체화 후 지연 장착 모두 이 경로). 일반 전리품은 기록하지 않는다.
+            AddNotableItemDeed(entityId, item.Id, item.Table != null ? item.Table.Name : string.Empty, gameTime);
             return true;
         }
 

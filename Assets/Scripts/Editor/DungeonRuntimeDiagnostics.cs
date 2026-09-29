@@ -48,7 +48,8 @@ namespace ARPG.EditorTools
             {
                 DungeonTable table = rows[i];
                 Require(table != null && table.Id > 0 && ids.Add(table.Id), "DungeonTable IDs are unique and positive");
-                Require(table.RoomCount > 0 && table.MonsterTableId > 0 && table.MonsterLevel > 0 &&
+                Require(table.RoomCount > 0 && table.MonsterTableIds != null &&
+                    table.MonsterTableIds.Count > 0 && table.MonsterTableIds.TrueForAll(id => id > 0) && table.MonsterLevel > 0 &&
                     table.BossTableId > 0 && table.BossLevel > 0 && table.CompletionGold >= 0 &&
                     table.ChestGold >= 0 && float.IsNaN(table.ReplacementCooldownHours) == false &&
                     float.IsInfinity(table.ReplacementCooldownHours) == false && table.ReplacementCooldownHours >= 0f &&
@@ -748,7 +749,7 @@ namespace ARPG.EditorTools
                 Id = 1,
                 Name = "Diagnostic Dungeon",
                 RoomCount = 9,
-                MonsterTableId = 1009,
+                MonsterTableIds = new List<int> { 1009 },
                 MonsterLevel = 1,
                 BossTableId = 1008,
                 BossLevel = 5,

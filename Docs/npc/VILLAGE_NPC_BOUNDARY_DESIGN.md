@@ -63,6 +63,8 @@ carry는 `VillageData`가 소유한다. 실체화 경로의 `VillageStorageCompo
    - 추상 경로와 실시간 경로가 같은 함수(`VillageResourceSimulation.DepositNpcGold`/`TryWithdrawNpcGold`)를 쓰고, `VillageSimulationParity`로 검사한다.
    - 상점 서비스 제공 여부는 여전히 시설이 판정한다(§5). Shop 시설이 없는 마을에서는 NPC가 거래하지 않는다.
 
+NPC_AMBITION P2(2026-09-29)의 **DungeonDelve·NPC 던전 완료·소문**은 새 경로를 만들지 않는다. Delve와 NPC 완료는 골드·Food를 주지 않고(AMBITION D55·D66) 마을 자원·Population·Tier에 입력하지 않는다. NPC 완료는 던전 슬롯(`WorldData.Dungeons`)만 바꾸며 그 규칙은 [DUNGEON_RUNTIME_DESIGN.md](../map/DUNGEON_RUNTIME_DESIGN.md) §3.3이 정한다. 소문은 NPC 개인 데이터다.
+
 §8의 금지 항목은 이 예외와 무관하게 그대로 유지한다.
 
 ---

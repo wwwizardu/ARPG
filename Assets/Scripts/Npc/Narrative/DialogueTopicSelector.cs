@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using ARPG.Creature;
+using ARPG.Data;
 using ARPG.History;
 using ARPG.Village;
 
@@ -20,6 +21,8 @@ namespace ARPG.Npc.Narrative
         private const int DefaultResourceCap = 50;
         private const float ImmediateRepeatHours = 1f;
         private const float LongAbsentHours = 48f;
+        // 야망 소문 토픽(DungeonRumor·ItemOwnerRumor)의 레퍼토리 우선순위 (P2c). 낮은 관계 단계의 잡담(Flavor)과 같다.
+        private const int AmbitionRumorPriority = 4;
 
         private enum GreetingEncounter
         {
@@ -72,10 +75,21 @@ namespace ARPG.Npc.Narrative
 
             AddNeeds(topics, save, village, threat);
             AddRumors(topics, npcId, chronicle);
+            AddAmbitionRumors(topics, npcId, save, false);
             AddFlavor(topics, save);
             AddPersonal(topics, npcId, save);
 
             return topics;
+        }
+
+        /// <summary>
+        /// 진단·검증용 (NPC_AMBITION P2c): 말하는 NPC가 가진 유효한 야망 소문 전부를 토픽 후보로 만든다 (대화 때는 종류마다 1개만 뽑힌다).
+        /// 실제 대화와 같은 코드(AddAmbitionRumors)로 문구·검증을 만든다. 만든 후보는 소문 노출로 센다.
+        /// </summary>
+        public static void CollectAmbitionRumorTopics(int npcId, List<DialogueTopic> into)
+        {
+            NpcSaveData? save = AR.s.Npc?.GetSaveData(npcId);
+            AddAmbitionRumors(into, npcId, save, true);
         }
 
         // ── 선택: 레퍼토리 캡(NPC별 1~3) + 그 안에서 셔플백(긴급 새치기) ──
@@ -185,6 +199,9 @@ namespace ARPG.Npc.Narrative
             // 상시 존재하는 야외 몬스터는 배경 화제다. 실제 사건이 생기기 전에는 일상·사연보다 앞서지 않는다.
             if (topic.Type == DialogueTopicType.ClearThreat)
                 return 2;
+            // 야망 소문은 지금 확인할 수 있는 실제 사건(유효 검증 통과)이라 연대기 소문보다 앞세운다 (P2c) — 낯선 사이에서도 일상 화제와 겨룬다.
+            if (topic.Type == DialogueTopicType.DungeonRumor || topic.Type == DialogueTopicType.ItemOwnerRumor)
+                return AmbitionRumorPriority;
 
             return topic.Category switch
             {
@@ -216,6 +233,8 @@ namespace ARPG.Npc.Narrative
                 DialogueTopicType.LostCompanion => save.NpcStat.Loyalty / 5,
                 DialogueTopicType.Boast => (save.NpcStat.Pride + save.NpcStat.Greed) / 10,
                 DialogueTopicType.PartyBond => (save.NpcStat.Loyalty + save.NpcStat.Friendliness) / 10,
+                DialogueTopicType.DungeonRumor => (save.NpcStat.Curiosity + save.NpcStat.Courage) / 10,
+                DialogueTopicType.ItemOwnerRumor => (save.NpcStat.Curiosity + save.NpcStat.Greed) / 10,
                 _ => 0,
             };
         }
@@ -586,6 +605,168 @@ namespace ARPG.Npc.Narrative
             }
         }
 
+        // ── 야망 소문 (NPC_AMBITION P2c, D60·D72·D75) ──
+        // 데이터 소스 = 말하는 NPC의 NpcSaveData.Rumors. 노출 직전 IsRumorValid로 검증하고, 다른 마을 던전 소문은 방어적으로 뺀다.
+        // 자기 장비 소문(직접 겪은 ItemOwner)은 자랑(Boast)이 맡으므로 뺀다. 대화 때는 전체에서 1개(종류 → 후보 순)를
+        // UnityEngine.Random으로 고른다 (연대기 소문과 같은 관례 — 대화 연출은 결정론 계약 밖). pickAll은 진단용(전부 반환).
+        private static void AddAmbitionRumors(List<DialogueTopic> topics, int npcId, NpcSaveData? save, bool pickAll)
+        {
+            if (save == null || save.Rumors == null || save.Rumors.Count == 0 || AR.s.Npc == null)
+                return;
+
+            float now = AR.s.Time != null ? AR.s.Time.CurrentGameTime : 0f;
+            List<DialogueTopic> dungeon = new();
+            List<DialogueTopic> item = new();
+            List<NpcRumor> rumors = save.Rumors;
+            for (int i = 0; i < rumors.Count; i++)
+            {
+                NpcRumor rumor = rumors[i];
+                if (AR.s.Npc.IsRumorValid(rumor) == false)
+                    continue;
+                DialogueTopic? t = rumor.Kind switch
+                {
+                    NpcRumorKind.DungeonInfo => BuildDungeonRumorTopic(npcId, save, rumor, now),
+                    NpcRumorKind.ItemOwner => BuildItemOwnerRumorTopic(npcId, rumor, now),
+                    _ => null,
+                };
+                if (t == null)
+                    continue;
+                if (t.Type == DialogueTopicType.DungeonRumor)
+                    dungeon.Add(t);
+                else
+                    item.Add(t);
+            }
+
+            if (pickAll == true)
+            {
+                AddAllRumorTopics(topics, dungeon);
+                AddAllRumorTopics(topics, item);
+                return;
+            }
+
+            // 대화 1회분에는 야망 소문 토픽을 최대 1개만 넣는다 — 소문을 가진 NPC가 대부분이라 둘 다 넣으면
+            // 낮은 관계 단계의 좁은 레퍼토리(2~3)를 소문이 모두 차지한다. 종류를 먼저 고르고(둘 다 있으면 반반) 그 안에서 1개.
+            List<DialogueTopic> kind = dungeon.Count > 0 && (item.Count == 0 || Random.value < 0.5f) ? dungeon : item;
+            if (kind.Count == 0)
+                return;
+            DialogueTopic picked = kind[Random.Range(0, kind.Count)];
+            AR.s.Npc.RecordRumorExposure(picked.Rumor!);
+            topics.Add(picked);
+        }
+
+        private static void AddAllRumorTopics(List<DialogueTopic> topics, List<DialogueTopic> candidates)
+        {
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                AR.s.Npc.RecordRumorExposure(candidates[i].Rumor!);
+                topics.Add(candidates[i]);
+            }
+        }
+
+        private static DialogueTopic? BuildDungeonRumorTopic(int npcId, NpcSaveData save, NpcRumor rumor, float now)
+        {
+            NpcRumorPlace place = AR.s.Npc.ResolveRumorDungeonPlace(rumor, save.VillageId, out int bearing);
+            // 다른 마을 던전(D75상 지금은 없음)·슬롯을 못 찾은 소문은 말하지 않는다 — 플레이어가 찾을 수 없는 장소를 가리키지 않게.
+            if (place != NpcRumorPlace.Bearing && place != NpcRumorPlace.Nearby)
+                return null;
+
+            string placeCore = NpcRumorPhrasing.PlaceCore(place, bearing);
+            string ago = NpcRumorPhrasing.AgoPhrase(rumor.EventGameTime, now);
+            string subject = NpcRumorPhrasing.NpcName(rumor.SubjectNpcId);
+            bool firsthand = rumor.SourceNpcId < 0;
+            bool self = rumor.SubjectNpcId == npcId;
+            string line;
+            if (rumor.Cleared == true)
+            {
+                string where = $"그 자리에 새로 생긴 던전은 {placeCore}에 있소.";
+                if (firsthand == true)
+                    line = self == true
+                        ? $"{ago} 내가 이 마을 던전 하나를 끝장냈소. {where}"
+                        : $"{ago} {NpcRumorPhrasing.Josa(subject, "과", "와")} 함께 이 마을 던전 하나를 끝장냈소. {where}";
+                else if (rumor.SourceNpcId == rumor.SubjectNpcId && rumor.Hops == 1)
+                    line = $"{subject} 일행이 {ago} 이 마을 던전 하나를 끝냈다고 내게 직접 그러더군. " +
+                           $"그 자리에 새 던전이 생겼는데, {placeCore}에 있다지.";
+                else
+                    line = $"{NpcRumorPhrasing.HeardPrefix(rumor)}{subject} 일행이 {ago} 이 마을 던전 하나를 끝냈다더군. " +
+                           $"그 자리에 새 던전이 생겼는데, {placeCore}에 있다지.";
+            }
+            else
+            {
+                string dungeonPlace = $"{placeCore} 던전";
+                if (firsthand == true)
+                    line = self == true
+                        ? $"{ago} {dungeonPlace}에 다녀왔소. 쓸 만한 걸 건져 왔지."
+                        : $"{ago} {NpcRumorPhrasing.Josa(subject, "과", "와")} 함께 {dungeonPlace}에 다녀왔소. 쓸 만한 걸 건져 왔지.";
+                else if (rumor.SourceNpcId == rumor.SubjectNpcId && rumor.Hops == 1)
+                    line = $"{NpcRumorPhrasing.Josa(subject, "이", "가")} {ago} {dungeonPlace}에서 한몫 챙겼다고 내게 직접 그러더군.";
+                else
+                    line = $"{NpcRumorPhrasing.HeardPrefix(rumor)}{NpcRumorPhrasing.Josa(subject, "이", "가")} {ago} " +
+                           $"{dungeonPlace}에서 한몫 챙겼다더군.";
+            }
+
+            DialogueTopic t = new()
+            {
+                Type = DialogueTopicType.DungeonRumor,
+                Category = DialogueTopicCategory.Rumor,
+                MinTier = AffinityTier.Stranger,
+                BaseLine = line,
+                CacheVariant = RumorCacheVariant(rumor),
+                Rumor = rumor,
+                RumorPlace = place,
+                RumorBearing = bearing,
+            };
+            t.Facts.Add(rumor.Cleared == true
+                ? $"{subject} 일행이 소속 마을의 던전 하나를 끝까지 공략했다. 그 던전은 사라졌고 같은 자리에 새 던전이 생겼다."
+                : $"{subject}{(self == true ? "(본인)" : string.Empty)}이(가) 소속 마을 던전 원정에 성공해 전리품(가치 {rumor.Value})을 얻었다.");
+            t.Facts.Add(place == NpcRumorPlace.Bearing
+                ? $"던전 위치: {placeCore} (입구가 있음). 마을·정착지에는 이름이 없으니 이름을 지어내지 말고 방향으로만 말할 것."
+                : "던전 위치: 이 근처 (입구가 아직 드러나지 않음). 방향이나 마을 이름을 지어내지 말 것.");
+            t.Facts.Add($"사건 시점: {ago} (게임 시간 {rumor.EventGameTime:F1}). 출처: {NpcRumorPhrasing.SourceNote(rumor)}.");
+            return t;
+        }
+
+        private static DialogueTopic? BuildItemOwnerRumorTopic(int npcId, NpcRumor rumor, float now)
+        {
+            // 자기 장비는 자랑(Boast) 토픽이 말한다.
+            if (rumor.SubjectNpcId == npcId || AR.s.Npc.TryGetRumorItem(rumor, out ItemData? item) == false || item == null)
+                return null;
+
+            string owner = NpcRumorPhrasing.NpcName(rumor.SubjectNpcId);
+            string itemName = item.Table != null ? item.Table.Name : "귀한 장비";
+            string ago = NpcRumorPhrasing.AgoPhrase(rumor.EventGameTime, now);
+            string line = rumor.SourceNpcId == rumor.SubjectNpcId && rumor.Hops == 1
+                ? $"{NpcRumorPhrasing.Josa(owner, "이", "가")} {ago} {NpcRumorPhrasing.Josa(itemName, "을", "를")} 손에 넣었다고 내게 직접 자랑하더군."
+                : $"{NpcRumorPhrasing.HeardPrefix(rumor)}{NpcRumorPhrasing.Josa(owner, "이", "가")} {ago} " +
+                  $"{NpcRumorPhrasing.Josa(itemName, "을", "를")} 손에 넣었다더군. 요즘 그걸 차고 다닌다지.";
+
+            DialogueTopic t = new()
+            {
+                Type = DialogueTopicType.ItemOwnerRumor,
+                Category = DialogueTopicCategory.Rumor,
+                MinTier = AffinityTier.Stranger,
+                BaseLine = line,
+                CacheVariant = RumorCacheVariant(rumor),
+                Rumor = rumor,
+            };
+            t.Facts.Add($"{owner}이(가) {itemName}을(를) 새로 장착하고 다닌다 (가치 {rumor.Value}). 지금도 사실이다.");
+            t.Facts.Add($"사건 시점: {ago} (게임 시간 {rumor.EventGameTime:F1}). 출처: {NpcRumorPhrasing.SourceNote(rumor)}.");
+            return t;
+        }
+
+        // 소문 내용·출처가 바뀌면 다른 값 → 다른 대화 캐시 항목 (같은 토픽 타입 안의 구분자)
+        private static int RumorCacheVariant(NpcRumor rumor)
+        {
+            bool dungeon = rumor.Kind == NpcRumorKind.DungeonInfo;
+            int h = StableHash((int)rumor.Kind, rumor.Cleared == true ? 1 : 0);
+            h = StableHash(h, dungeon == true ? rumor.VillageId : rumor.EquipSlot);
+            h = StableHash(h, dungeon == true ? rumor.SlotIndex : rumor.ItemInstanceId);
+            h = StableHash(h, dungeon == true ? rumor.Generation : 0);
+            h = StableHash(h, rumor.SubjectNpcId);
+            h = StableHash(h, (int)(rumor.EventGameTime * 100f));
+            h = StableHash(h, rumor.SourceNpcId);
+            return StableHash(h, rumor.Hops);
+        }
+
         // ── 잡담 ──
         private static void AddFlavor(List<DialogueTopic> topics, NpcSaveData? save)
         {
@@ -613,7 +794,7 @@ namespace ARPG.Npc.Narrative
 
         // ── 사연 (Personal — 개인 전기 Deeds·사별 기억. 난수 없이 최신순 = 결정론) ──
         // Fell은 사망자 본인 전기에만 남으므로 화자(생존자)의 상실은 DeceasedRelations가 접지.
-        // NotableItemAcquired(Boast)는 기록 경로 미배선(호출부 없음) — 배선되면 자동 동작.
+        // Boast = NotableItemAcquired(업그레이드 장착, P2c 배선) 또는 DungeonCleared(NPC 던전 완료) 중 최신 1건.
         // CacheVariant에 사건 식별자(Deeds 인덱스/사망자 id)를 실어 새 사건이면 캐시가 갈린다.
         private static void AddPersonal(List<DialogueTopic> topics, int npcId, NpcSaveData? save)
         {
@@ -635,15 +816,18 @@ namespace ARPG.Npc.Narrative
                 {
                     hasHunt = true;
                     added++;
+                    bool delve = deed.Activity == NpcActivityKind.DungeonDelve;
                     DialogueTopic t = new()
                     {
                         Type = DialogueTopicType.RecentHunt,
                         Category = DialogueTopicCategory.Personal,
                         MinTier = AffinityTier.Stranger,
-                        BaseLine = "지난 사냥에서 호되게 당했소. 아직 몸이 뻐근하구려.",
+                        BaseLine = delve
+                            ? "지난 던전 원정에서 호되게 당했소. 아직 몸이 뻐근하구려."
+                            : "지난 사냥에서 호되게 당했소. 아직 몸이 뻐근하구려.",
                         CacheVariant = i,
                     };
-                    t.Facts.Add($"게임 시간 {deed.When:F1}에 사냥을 나갔다가 부상을 입었다 ({KnowledgeHint(deed.HowKnown)}).");
+                    t.Facts.Add($"게임 시간 {deed.When:F1}에 {(delve ? "던전 원정" : "사냥")}을 나갔다가 부상을 입었다 ({KnowledgeHint(deed.HowKnown)}).");
                     topics.Add(t);
                 }
                 else if (deed.Kind == NpcDeedKind.PartyAffinityChanged && hasBond == false)
@@ -673,10 +857,33 @@ namespace ARPG.Npc.Narrative
                         Type = DialogueTopicType.Boast,
                         Category = DialogueTopicCategory.Personal,
                         MinTier = AffinityTier.Stranger,
-                        BaseLine = $"{item}을 손에 넣었소. 보는 눈이 있다면 알아보겠지.",
+                        BaseLine = $"{NpcRumorPhrasing.Josa(item, "을", "를")} 손에 넣었소. 보는 눈이 있다면 알아보겠지.",
                         CacheVariant = i,
                     };
                     t.Facts.Add($"게임 시간 {deed.When:F1}에 {item}을(를) 손에 넣었다 ({KnowledgeHint(deed.HowKnown)}).");
+                    topics.Add(t);
+                }
+                else if (deed.Kind == NpcDeedKind.DungeonCleared && hasBoast == false)
+                {
+                    // 자랑 (P2c, D61): NPC 던전 완료. NotableItemAcquired와 같은 Boast 타입이라 둘 중 최신 1건만 말한다.
+                    hasBoast = true;
+                    added++;
+                    string companions = OtherParticipantNames(deed, npcId);
+                    float now = AR.s.Time != null ? AR.s.Time.CurrentGameTime : deed.When;
+                    string ago = NpcRumorPhrasing.AgoPhrase(deed.When, now);
+                    DialogueTopic t = new()
+                    {
+                        Type = DialogueTopicType.Boast,
+                        Category = DialogueTopicCategory.Personal,
+                        MinTier = AffinityTier.Stranger,
+                        BaseLine = string.IsNullOrEmpty(companions)
+                            ? $"{ago} 이 마을 던전 하나를 내 손으로 끝장냈소. 그 자리엔 벌써 새 던전이 들어섰지."
+                            : $"{ago} {NpcRumorPhrasing.Josa(companions, "과", "와")} 함께 이 마을 던전 하나를 끝장냈소. 그 자리엔 벌써 새 던전이 들어섰지.",
+                        CacheVariant = i,
+                    };
+                    t.Facts.Add($"게임 시간 {deed.When:F1}에 소속 마을의 던전 하나를 끝까지 공략했다" +
+                                (string.IsNullOrEmpty(companions) ? " (혼자)" : $" ({companions}와(과) 함께)") +
+                                $". 끝낸 던전은 사라지고 그 자리에 새 던전이 생겼다 ({KnowledgeHint(deed.HowKnown)}).");
                     topics.Add(t);
                 }
             }
@@ -788,6 +995,23 @@ namespace ARPG.Npc.Narrative
                 return ResolveNpcName(participantId);
             }
             return "동료";
+        }
+
+        /// <summary>Deed 참가자 중 화자가 아닌 쪽 전원의 표시명("A, B"). 없으면 빈 문자열. 스냅샷 이름을 우선한다.</summary>
+        private static string OtherParticipantNames(NpcDeedEntry deed, int npcId)
+        {
+            string result = string.Empty;
+            for (int i = 0; i < deed.ParticipantSnapshots.Count; i++)
+            {
+                NpcDeedParticipant participant = deed.ParticipantSnapshots[i];
+                if (participant.EntityId == npcId)
+                    continue;
+                string name = string.IsNullOrEmpty(participant.DisplayName) == false
+                    ? participant.DisplayName
+                    : NpcRumorPhrasing.NpcName(participant.EntityId);
+                result = result.Length == 0 ? name : $"{result}, {name}";
+            }
+            return result;
         }
 
         /// <summary>지식 거리(NpcKnowledgeLevel) → 프롬프트 어조 힌트. 직접 겪은 일과 전해 들은 일의 말투를 가른다.</summary>

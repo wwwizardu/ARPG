@@ -26,6 +26,9 @@ namespace ARPG.Npc
         Hunt = 2,
         // 마을 상점 거래 (NPC_AMBITION_DESIGN D39). 1시간 뒤 종료 시점에 TradeAtShop 1회. 제자리 활동이라 Phase=Idle.
         Trade = 3,
+        // 던전 원정 (NPC_AMBITION_DESIGN §7.1, D55). 12시간 뒤 종료 시점에 1회 판정. 소속 마을 던전 슬롯을 추상 대상으로만 참조하고
+        // 던전 내부 저장 상태(처치·상자)는 바꾸지 않는다. Hunt처럼 Phase=Venturing이며 같은 왕복 경로 표현을 쓴다.
+        DungeonDelve = 4,
     }
 
     /// <summary>오프스크린 Hunt 종료 시 단 한 번 결정되는 결과.</summary>
@@ -50,7 +53,7 @@ namespace ARPG.Npc
         // 예: 휴식은 제자리 활동이므로 Phase=Idle, Kind=Rest로 저장한다.
         public NpcActivityPhase Phase = NpcActivityPhase.Idle;
         public NpcActivityKind Kind = NpcActivityKind.None;
-        // v1은 "rest"/"hunt"만 사용한다. Travel·Dungeon 단계에서 Zone/목적지 키로 확장한다.
+        // v1은 "rest"/"hunt"/"trade"를 쓴다. DungeonDelve는 대상 DungeonId를 담는다 (NPC_AMBITION_DESIGN §7.1).
         public string TargetKey = string.Empty;
         // 활동 중 이동 경로의 양 끝점. Hunt v1은 Origin→Target→Origin의 단일 왕복 경로를 사용한다.
         public float OriginPositionX;
@@ -109,7 +112,7 @@ namespace ARPG.Npc
                 ReturnPosition = OriginPosition;
                 OutboundFraction = 0.5f;
             }
-            if (Kind == NpcActivityKind.Hunt && OutcomeSeedGameTime <= 0f)
+            if ((Kind == NpcActivityKind.Hunt || Kind == NpcActivityKind.DungeonDelve) && OutcomeSeedGameTime <= 0f)
                 OutcomeSeedGameTime = PhaseStartedGameTime;
             if (PartyId < -1)
                 PartyId = -1;

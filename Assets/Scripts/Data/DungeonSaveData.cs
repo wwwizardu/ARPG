@@ -19,6 +19,8 @@ namespace ARPG.Data
         public int VillageId;
         public int SlotCount;
         public List<DungeonSlot> Slots = new();
+        // 마지막 NPC 던전 완료 게임시각 (NPC_AMBITION_DESIGN D58, 마을당 72h 쿨다운). -1 = 기록 없음 (구 세이브 포함).
+        public float LastNpcCompletionGameTime = -1f;
     }
 
     [Serializable]
@@ -36,6 +38,9 @@ namespace ARPG.Data
         public int PreviousY;
         public float PlacementReadyGameTime;
         public int NextCandidate;
+        // NPC 완료로 만들어진 세대 번호 (NPC_AMBITION_DESIGN D58). 이 값 == Generation이면 현재 세대가 NPC 교체 세대다.
+        // -1 = 해당 없음 (구 세이브 포함). 플레이어 완료는 새 슬롯 객체를 만들어 기본값(-1)으로 돌아간다.
+        public int NpcReplacedGeneration = -1;
     }
 
     [Serializable]

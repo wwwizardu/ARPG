@@ -143,6 +143,7 @@ namespace ARPG.UI
             RebuildPersonality();
             RebuildRelations();
             RebuildActivity();
+            RebuildRumors();
             RebuildHistory();
             RebuildStats();
             RefreshCompanionButton();
@@ -201,9 +202,10 @@ namespace ARPG.UI
             {
                 NpcDeedKind.PartyAffinityChanged =>
                     $"{GetOtherParticipantName(entry)}와 함께 사냥 후 호감도 {FormatSignedValue(entry.AffinityDelta)}",
+                // Activity: P2c부터 Delve 부상만 DungeonDelve로 기록한다. None(구 기록 포함)은 사냥.
                 NpcDeedKind.Wounded => entry.Treated == true
-                    ? $"사냥 중 부상 · 치료받음 · {entry.RecoveryEndGameTime:F1}시간까지 회복"
-                    : $"사냥 중 부상 · {entry.RecoveryEndGameTime:F1}시간까지 회복",
+                    ? $"{GetWoundedActivityLabel(entry)} 중 부상 · 치료받음 · {entry.RecoveryEndGameTime:F1}시간까지 회복"
+                    : $"{GetWoundedActivityLabel(entry)} 중 부상 · {entry.RecoveryEndGameTime:F1}시간까지 회복",
                 NpcDeedKind.NotableItemAcquired => string.IsNullOrEmpty(entry.ItemDisplayName)
                     ? "주요 아이템 획득"
                     : $"{entry.ItemDisplayName} 획득",
@@ -212,8 +214,30 @@ namespace ARPG.UI
                 NpcDeedKind.DuelDrawn => $"{GetOtherParticipantName(entry)}와 결투에서 무승부",
                 NpcDeedKind.Fell => "사망",
                 NpcDeedKind.VentureFailed => "원정 실패",
+                NpcDeedKind.DungeonCleared => CountOtherParticipants(entry) switch
+                {
+                    0 => "던전 공략 완료 (혼자)",
+                    1 => $"{NpcRumorPhrasing.Josa(GetOtherParticipantName(entry), "과", "와")} 함께 던전 공략 완료",
+                    int n => $"{GetOtherParticipantName(entry)} 외 {n - 1}명과 함께 던전 공략 완료",
+                },
                 _ => "알 수 없는 사건",
             };
+        }
+
+        private static string GetWoundedActivityLabel(NpcDeedEntry entry)
+        {
+            return entry.Activity == NpcActivityKind.DungeonDelve ? "던전 원정" : "사냥";
+        }
+
+        private int CountOtherParticipants(NpcDeedEntry entry)
+        {
+            int count = 0;
+            for (int i = 0; i < entry.Participants.Count; i++)
+            {
+                if (entry.Participants[i] != _entityId)
+                    count++;
+            }
+            return count;
         }
 
         private string GetOtherParticipantName(NpcDeedEntry entry)
@@ -275,6 +299,59 @@ namespace ARPG.UI
                 AddActivityRow("획득 식량", $"+{activity.LastHuntFoodYield}");
         }
 
+        /// <summary>
+        /// 보유 소문 읽기 전용 목록 (NPC_AMBITION_DESIGN P2b, D79 — 검증용 최소 표시, 문구는 P2c에서 다듬는다).
+        /// 대상이 사라진 소문은 보여 주지 않는다 (D72: 노출 직전 검증).
+        /// </summary>
+        private void RebuildRumors()
+        {
+            if (_activityList == null || _saveData == null || AR.s.Npc == null)
+                return;
+
+            int shown = 0;
+            List<NpcRumor> rumors = _saveData.Rumors;
+            for (int i = 0; i < rumors.Count; i++)
+            {
+                NpcRumor rumor = rumors[i];
+                if (AR.s.Npc.IsRumorValid(rumor) == false)
+                    continue;
+                AR.s.Npc.RecordRumorExposure(rumor);
+                AddActivityRow(shown == 0 ? "소문" : string.Empty, DescribeRumor(rumor));
+                shown++;
+            }
+            if (shown == 0)
+                AddActivityRow("소문", "없음");
+        }
+
+        private string DescribeRumor(NpcRumor rumor)
+        {
+            // P2c: 대화 토픽과 같은 낱말(NpcRumorPhrasing) — 장소는 이 NPC 마을 중심 기준 방향, 출처·시점 포함. 슬롯·세대는 검증용으로 남긴다.
+            string source = rumor.SourceNpcId < 0
+                ? "직접 겪음"
+                : $"{ResolveNpcName(rumor.SourceNpcId)}에게 들음({rumor.Hops}단계)";
+            string ago = NpcRumorPhrasing.AgoPhrase(rumor.EventGameTime, AR.s.Time.CurrentGameTime);
+            string subject = ResolveNpcName(rumor.SubjectNpcId);
+            if (rumor.Kind == NpcRumorKind.DungeonInfo)
+            {
+                int bearing = -1;
+                NpcRumorPlace place = NpcRumorPlace.Unavailable;
+                if (AR.s.Npc != null && _saveData != null)
+                    place = AR.s.Npc.ResolveRumorDungeonPlace(rumor, _saveData.VillageId, out bearing);
+                string what = rumor.Cleared == true
+                    ? $"{subject} 일행이 끝낸 자리의 새 던전"
+                    : $"{subject}의 원정 성공 (가치 {rumor.Value})";
+                string checkedMark = rumor.Checked == true ? " · 확인함" : string.Empty;
+                return $"{NpcRumorPhrasing.PlaceCore(place, bearing)} 던전[슬롯 {rumor.SlotIndex}·세대 {rumor.Generation}] · " +
+                       $"{what} · {source} · {ago}{checkedMark}";
+            }
+
+            string itemName = "장비";
+            if (AR.s.Npc != null && AR.s.Npc.TryGetRumorItem(rumor, out ItemData? item) == true && item != null &&
+                item.Table != null)
+                itemName = item.Table.Name;
+            return $"{subject}의 {itemName} (가치 {rumor.Value}) · {source} · {ago}";
+        }
+
         private void AddActivityRow(string label, string value)
         {
             if (_activityList == null)
@@ -303,6 +380,8 @@ namespace ARPG.UI
                 return "휴식 중";
             if (activity.Kind == NpcActivityKind.Trade)
                 return "거래 중";
+            if (activity.Kind == NpcActivityKind.DungeonDelve)
+                return "던전 원정 중";
             return "대기";
         }
 

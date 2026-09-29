@@ -26,6 +26,8 @@ namespace ARPG.Npc.Narrative
         SmallTalk, JobMood,
         // 사연 (Personal — 개인 전기 Deeds·사별 기억 접지. NARRATIVE_DIALOGUE_VARIETY §5 Phase 1)
         RecentHunt, LostCompanion, Boast, PartyBond,
+        // 야망 소문 (NPC_AMBITION P2c, D60 — NpcSaveData.Rumors 접지, 노출 직전 IsRumorValid 검증). 끝에만 추가한다.
+        DungeonRumor, ItemOwnerRumor,
     }
 
     /// <summary>대화 토픽 1건 — 시스템이 상태·백본에서 산출. LLM 없으면 BaseLine, 있으면 이 토픽을 풍부하게 서술.</summary>
@@ -38,6 +40,9 @@ namespace ARPG.Npc.Narrative
         public List<string> Facts = new();   // LLM에 줄 근거(이 토픽 관련 사실만)
         public string BaseLine = string.Empty; // LLM 없을 때 대사 (슬롯 치환 완료본)
         public int CacheVariant;             // 같은 토픽 타입 안의 내용 구분자(예: Deed 인덱스) — 대화 캐시 키에 포함, 새 사건이면 새 대사
+        public NpcRumor? Rumor;              // 야망 소문 토픽의 근거 소문 (P2c) — 진단 검증용, 그 외 토픽은 null
+        public NpcRumorPlace RumorPlace;     // 던전 소문의 장소 표현 종류 (P2c)
+        public int RumorBearing = -1;        // 던전 소문의 8방위 (0 북 … 7 북서, -1 = 방향 없음)
     }
 
     /// <summary>소망 종류 (닫힌 enum — LLM은 이 밖을 못 쓴다). QUEST §2.1.</summary>

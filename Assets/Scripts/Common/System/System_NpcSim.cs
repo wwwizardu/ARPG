@@ -106,7 +106,10 @@ namespace ARPG.Systems
 
                 if (activity.Kind == NpcActivityKind.Rest)
                 {
-                    // Rest는 별도 결과가 없는 시간 소모 활동이다.
+                    // Rest는 보상 없는 시간 소모 활동이다. 종료 시점에 같은 마을 대기 NPC와 소문을 확률적으로 교환한다
+                    // (NPC_AMBITION_DESIGN §7.4, D74). RNG는 Rest 시작 시각 기준이라 상태를 바꾸기 전에 부른다.
+                    AR.s.Npc.ExchangeRumorsOnRestEnd(entityId, saveData, activity.PhaseStartedGameTime, transitionTime,
+                        worldSeed);
                     activity.Kind = NpcActivityKind.None;
                     activity.TargetKey = string.Empty;
                     activity.PhaseStartedGameTime = transitionTime;
@@ -126,6 +129,13 @@ namespace ARPG.Systems
                 {
                     // Hunt는 종료 시점에 한 번의 결정론적 결과 롤을 수행한다.
                     ResolveHunt(saveData, entityId, transitionTime, worldSeed);
+                    continue;
+                }
+
+                if (activity.Kind == NpcActivityKind.DungeonDelve)
+                {
+                    // Delve도 종료 시점 1회 판정 (NPC_AMBITION_DESIGN §7.1, D55). 전리품·NPC 던전 완료까지 매니저가 확정한다.
+                    ResolveDelve(saveData, entityId, transitionTime, worldSeed);
                     continue;
                 }
 
@@ -154,19 +164,38 @@ namespace ARPG.Systems
                 return;
             }
 
+            // DungeonDelve (D55): 파티가 꾸려지면 파티로, 아니면 솔로로 간다. 대상 던전은 소속 마을 슬롯 중 결정론 선택.
+            string delveDungeonId = string.Empty;
+            Vector2 delveTarget = saveData.Position;
+            if (kind == NpcActivityKind.DungeonDelve)
+            {
+                if (AR.s.Npc.TryCreateHuntParty(entityId, out NpcPartyState? delveParty, NpcActivityKind.DungeonDelve) &&
+                    delveParty != null)
+                {
+                    StartPartyDelve(delveParty, startGameTime, worldSeed);
+                    return;
+                }
+                // 유망한 소문이 있으면 그 슬롯으로 가는 확인 원정 (D76)
+                if (AR.s.Npc.TryPrepareDelveTarget(entityId, entityId, saveData.VillageId, saveData.Position,
+                        startGameTime, worldSeed, out delveDungeonId, out delveTarget, out _) == false)
+                    kind = NpcActivityKind.Rest;   // 후보 판정 뒤 슬롯이 사라진 드문 경우 — 쉬고 다시 고른다
+            }
+
+            bool isExpedition = NpcActivityResolver.IsExpedition(kind);
             activity.Kind = kind;
-            // 휴식·거래는 제자리 활동이므로 Idle 표현을 유지하고, Hunt만 Venturing으로 표시한다.
+            // 휴식·거래는 제자리 활동이므로 Idle 표현을 유지하고, 원정(Hunt·Delve)만 Venturing으로 표시한다.
             // 거래는 P1에서 상점으로 이동하는 연출이 없다 (D39) — 화면 안 NPC도 상태만 Trade로 바뀌고 기본 AI를 유지한다.
-            activity.Phase = kind == NpcActivityKind.Hunt ? NpcActivityPhase.Venturing : NpcActivityPhase.Idle;
+            activity.Phase = isExpedition ? NpcActivityPhase.Venturing : NpcActivityPhase.Idle;
             activity.TargetKey = kind switch
             {
                 NpcActivityKind.Hunt => "hunt",
                 NpcActivityKind.Trade => "trade",
+                NpcActivityKind.DungeonDelve => delveDungeonId,
                 _ => "rest",
             };
             activity.PhaseStartedGameTime = startGameTime;
             activity.PhaseEndGameTime = startGameTime + NpcActivityResolver.GetActivityDurationHours(kind);
-            activity.HasMovementPath = kind == NpcActivityKind.Hunt;
+            activity.HasMovementPath = isExpedition;
             if (activity.HasMovementPath)
             {
                 float minX = AR.s.Map.minChunkX * AR.s.Map.chunkSize;
@@ -174,14 +203,16 @@ namespace ARPG.Systems
                 float minY = AR.s.Map.minChunkY * AR.s.Map.chunkSize;
                 float maxY = (AR.s.Map.maxChunkY + 1) * AR.s.Map.chunkSize - 1f;
                 activity.OriginPosition = saveData.Position;
-                activity.TargetPosition = NpcActivityResolver.GetHuntTargetPosition(saveData.Position, entityId,
-                    startGameTime, worldSeed, minX, maxX, minY, maxY);
+                activity.TargetPosition = kind == NpcActivityKind.DungeonDelve
+                    ? delveTarget
+                    : NpcActivityResolver.GetHuntTargetPosition(saveData.Position, entityId,
+                        startGameTime, worldSeed, minX, maxX, minY, maxY);
                 activity.ReturnPosition = saveData.Position;
                 activity.OutboundFraction = 0.5f;
                 activity.OutcomeSeedGameTime = startGameTime;
             }
             saveData.LastSimGameTime = startGameTime;
-            if (kind == NpcActivityKind.Hunt)
+            if (isExpedition)
                 AR.s.Npc.PauseMaterializedNpcActivity(entityId);
         }
 
@@ -194,21 +225,53 @@ namespace ARPG.Systems
                 return;
             }
 
-            NpcActivityState activity = party.Activity;
             float minX = AR.s.Map.minChunkX * AR.s.Map.chunkSize;
             float maxX = (AR.s.Map.maxChunkX + 1) * AR.s.Map.chunkSize - 1f;
             float minY = AR.s.Map.minChunkY * AR.s.Map.chunkSize;
             float maxY = (AR.s.Map.maxChunkY + 1) * AR.s.Map.chunkSize - 1f;
+            Vector2 target = NpcActivityResolver.GetHuntTargetPosition(leader.Position, party.PartyId,
+                startGameTime, worldSeed, minX, maxX, minY, maxY);
+            StartPartyExpedition(party, leader, NpcActivityKind.Hunt, "hunt", target, startGameTime);
+        }
+
+        /// <summary>파티 Delve 시작. 대상 던전·경로 목표는 PartyId 기준 결정론으로 정한다 (D55).</summary>
+        private static void StartPartyDelve(NpcPartyState party, float startGameTime, int worldSeed)
+        {
+            NpcSaveData? leader = AR.s.Npc.GetSaveData(party.LeaderId);
+            // 리더의 유망한 소문이 있으면 그 슬롯으로 가는 확인 원정 (D76)
+            if (leader == null || AR.s.Npc.TryPrepareDelveTarget(party.PartyId, party.LeaderId, leader.VillageId,
+                    leader.Position, startGameTime, worldSeed, out string dungeonId, out Vector2 target, out _) == false)
+            {
+                // 파티원을 Idle로 되돌려 다음 순회에서 다시 고르게 한다.
+                for (int i = 0; i < party.MemberIds.Count; i++)
+                {
+                    NpcSaveData? member = AR.s.Npc.GetSaveData(party.MemberIds[i]);
+                    if (member == null)
+                        continue;
+                    member.Activity.Kind = NpcActivityKind.None;
+                    member.Activity.Phase = NpcActivityPhase.Idle;
+                    member.Activity.TargetKey = string.Empty;
+                }
+                AR.s.Npc.DissolveParty(party.PartyId);
+                return;
+            }
+            StartPartyExpedition(party, leader, NpcActivityKind.DungeonDelve, dungeonId, target, startGameTime);
+        }
+
+        /// <summary>원정 파티(Hunt·DungeonDelve) 공통 시작. 파티가 시간축·경로를 소유하고 파티원은 PartyId만 가진다.</summary>
+        private static void StartPartyExpedition(NpcPartyState party, NpcSaveData leader, NpcActivityKind kind,
+            string targetKey, Vector2 targetPosition, float startGameTime)
+        {
+            NpcActivityState activity = party.Activity;
             activity.PartyId = party.PartyId;
-            activity.Kind = NpcActivityKind.Hunt;
+            activity.Kind = kind;
             activity.Phase = NpcActivityPhase.Venturing;
-            activity.TargetKey = "hunt";
+            activity.TargetKey = targetKey;
             activity.PhaseStartedGameTime = startGameTime;
-            activity.PhaseEndGameTime = startGameTime + NpcActivityResolver.HuntDurationHours;
+            activity.PhaseEndGameTime = startGameTime + NpcActivityResolver.GetActivityDurationHours(kind);
             activity.HasMovementPath = true;
             activity.OriginPosition = leader.Position;
-            activity.TargetPosition = NpcActivityResolver.GetHuntTargetPosition(leader.Position, party.PartyId,
-                startGameTime, worldSeed, minX, maxX, minY, maxY);
+            activity.TargetPosition = targetPosition;
             activity.ReturnPosition = leader.Position;
             activity.OutboundFraction = 0.5f;
             activity.OutcomeSeedGameTime = startGameTime;
@@ -221,9 +284,9 @@ namespace ARPG.Systems
                     continue;
 
                 member.Activity.PartyId = party.PartyId;
-                member.Activity.Kind = NpcActivityKind.Hunt;
+                member.Activity.Kind = kind;
                 member.Activity.Phase = NpcActivityPhase.Venturing;
-                member.Activity.TargetKey = "hunt";
+                member.Activity.TargetKey = targetKey;
                 member.Activity.HasMovementPath = false;
                 member.LastSimGameTime = startGameTime;
                 AR.s.Npc.PauseMaterializedNpcPartyActivity(memberId);
@@ -235,7 +298,7 @@ namespace ARPG.Systems
         private static void AdvancePartyActivity(NpcPartyState party, float now, int worldSeed)
         {
             NpcActivityState activity = party.Activity;
-            if (activity.Kind != NpcActivityKind.Hunt || activity.Phase != NpcActivityPhase.Venturing)
+            if (NpcActivityResolver.IsExpedition(activity.Kind) == false || activity.Phase != NpcActivityPhase.Venturing)
             {
                 AR.s.Npc.DissolveParty(party.PartyId);
                 return;
@@ -252,7 +315,10 @@ namespace ARPG.Systems
                     return;
             }
 
-            ResolvePartyHunt(party, activity.PhaseEndGameTime, worldSeed);
+            if (activity.Kind == NpcActivityKind.DungeonDelve)
+                ResolvePartyDelve(party, activity.PhaseEndGameTime, worldSeed);
+            else
+                ResolvePartyHunt(party, activity.PhaseEndGameTime, worldSeed);
         }
 
         private static void UpdatePartyAnalyticPositions(NpcPartyState party, float now)
@@ -289,7 +355,7 @@ namespace ARPG.Systems
         private static void UpdateAnalyticPosition(NpcSaveData saveData, int entityId, float now)
         {
             NpcActivityState activity = saveData.Activity;
-            if (activity.Kind != NpcActivityKind.Hunt || activity.HasMovementPath == false)
+            if (NpcActivityResolver.IsExpedition(activity.Kind) == false || activity.HasMovementPath == false)
                 return;
 
             float evaluationTime = now < activity.PhaseEndGameTime ? now : activity.PhaseEndGameTime;
@@ -504,6 +570,77 @@ namespace ARPG.Systems
                     NpcActivityResolver.HuntLootSalt, outcomeGameTime);
 
             NotifyHuntOutcome(saveData, entityId, outcome, activity.LastHuntFoodYield);
+        }
+
+        private static void ResolveDelve(NpcSaveData saveData, int entityId, float outcomeGameTime, int worldSeed)
+        {
+            NpcDelveReport report = AR.s.Npc.ResolveSoloDelve(entityId, saveData, outcomeGameTime, worldSeed);
+            NpcHuntOutcome outcome = report.Outcomes.Count > 0 ? report.Outcomes[0] : NpcHuntOutcome.Failed;
+            NotifyDelveOutcome(saveData, entityId, outcome);
+            if (outcome == NpcHuntOutcome.Dead)
+            {
+                AR.s.Npc.MarkNpcDead(entityId, outcomeGameTime);
+                return;
+            }
+            // 부상자는 회복이 끝날 때 재개한다 (Hunt와 같음)
+            if (outcome != NpcHuntOutcome.Wounded)
+                AR.s.Npc.ResumeMaterializedNpcActivity(entityId);
+        }
+
+        private static void ResolvePartyDelve(NpcPartyState party, float outcomeGameTime, int worldSeed)
+        {
+            int leaderId = party.LeaderId;
+            int partySize = party.MemberIds.Count;
+            NpcDelveReport? report = AR.s.Npc.ResolvePartyDelve(party, outcomeGameTime, worldSeed);
+            if (report == null)
+                return;
+
+            // 파티 호감도 변화는 Hunt와 같은 규칙
+            ApplyPartyRelationshipOutcome(report.MemberIds, report.Outcomes, report.SuccessCount > 0, outcomeGameTime);
+            int survivorCount = 0;
+            for (int i = 0; i < report.MemberIds.Count; i++)
+            {
+                int memberId = report.MemberIds[i];
+                if (report.Outcomes[i] == NpcHuntOutcome.Dead)
+                {
+                    AR.s.Npc.MarkNpcDead(memberId, outcomeGameTime);
+                    continue;
+                }
+                survivorCount++;
+                AR.s.Npc.ResumeMaterializedNpcActivity(memberId);
+            }
+
+            NpcSaveData? leader = AR.s.Npc.GetSaveData(leaderId);
+            if (leader == null || leader.IsActive == false)
+                return;
+            string leaderName = AR.s.Npc.GetDisplayName(leaderId);
+            string message = report.SuccessCount > 0
+                ? $"{leaderName} 원정대: 던전 원정에서 돌아왔습니다."
+                : $"{leaderName} 원정대: 던전 원정에 실패했습니다.";
+            if (survivorCount < partySize)
+                message += " 전사자가 발생했습니다.";
+            AR.s.UI.PushWorldFeed(message);
+        }
+
+        private static void NotifyDelveOutcome(NpcSaveData saveData, int entityId, NpcHuntOutcome outcome)
+        {
+            // Hunt와 같은 기준: 보이지 않는 NPC의 평범한 성공·실패는 알리지 않고, 부상·사망은 항상 알린다.
+            // NPC 던전 완료 자체는 피드로 따로 알리지 않는다 (D59: 소문·Deed·대화로만 드러낸다).
+            if (saveData.IsActive == false && outcome != NpcHuntOutcome.Wounded && outcome != NpcHuntOutcome.Dead)
+                return;
+
+            string name = AR.s.Npc.GetDisplayName(entityId);
+            string message = outcome switch
+            {
+                NpcHuntOutcome.Success => $"{name}: 던전 원정에서 돌아왔습니다.",
+                NpcHuntOutcome.Failed => $"{name}: 던전 원정에 실패했습니다.",
+                NpcHuntOutcome.Wounded => $"{name}: 던전 원정 중 부상을 입었습니다.",
+                NpcHuntOutcome.Dead => $"{name}: 던전 원정에서 돌아오지 못했습니다.",
+                _ => string.Empty,
+            };
+
+            if (string.IsNullOrEmpty(message) == false)
+                AR.s.UI.PushWorldFeed(message);
         }
 
         private static void ResolveTrade(NpcSaveData saveData, int entityId, float outcomeGameTime)

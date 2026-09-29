@@ -19,6 +19,8 @@ namespace ARPG.Npc
         public bool BagFull;             // 인벤토리 빈 칸 ≤ 1
         public bool RecentlyRecovered;   // Wounded 종료 후 RecentRecoveryHours 이내
         public bool TradeAvailable;      // 소속 마을 Shop이 있고 할 일(판매 또는 구매 후보)이 있음
+        public bool DelveAvailable;      // 소속 마을에 던전 슬롯(DungeonId)이 있음 (D56, 입구 배치 여부 무관 D57)
+        public bool HasPromisingRumor;   // "유망한 소문" 보유 (§6.2, D56·D76) — Delve 필요 배율
     }
 
     /// <summary>
@@ -85,7 +87,8 @@ namespace ARPG.Npc
         public const float TradeDurationHours = 1f;
         // 활동별 기본값. 세계 평균 Hunt 선택 비중 ≈ 43%(교체 전 식의 평균)가 되도록 맞춘 개발 튜닝 상수다 (D40).
         // 실행 중 자동 보정은 없다. 진단 메뉴 ARPG/Npc/Diagnostics/Ambition Sim으로 확인한다.
-        public const float RestBaseScore = 1.0f;
+        // P2a (D56): Delve 몫을 주로 Rest에서 가져오도록 1.0 → 0.9. Hunt 비중 43% ±5%p 유지를 진단으로 확인한다.
+        public const float RestBaseScore = 0.90f;
         public const float HuntBaseScore = 0.85f;
         public const float TradeBaseScore = 0.50f;
         // 필요 배율 (§6.2, P1 범위: 골드 부족·가방 가득·부상 회복 직후). 성향 클램프 밖에서 곱한다.
@@ -113,10 +116,82 @@ namespace ARPG.Npc
         public const float AmbitionCautiousRestBonus = 0.10f;      // 안전 → Rest
         public const float AmbitionCautiousHuntPenalty = 0.05f;    // 안전 → Hunt 감소
 
+        // ===== 던전 원정 DungeonDelve (NPC_AMBITION_DESIGN §7.1, D49·D55·D56) =====
+        public const float DelveDurationHours = 12f;
+        // 선택 기본값. 세계 평균 Delve 선택 비중 ≈ 5%가 되도록 맞춘 개발 튜닝 상수 (D56). 늘어난 몫은 Rest 기본값을 낮춰 가져온다.
+        // P2b: "유망한 소문" 배율(×1.5, 선택 시점 보유 약 21%)이 더해져 0.11 → 0.10으로 낮춰 세계 비중을 약 5%로 유지한다 (D76).
+        public const float DelveBaseScore = 0.10f;
+        // 성격 수치 항: 호기심·용기 → 던전 (§4.1 탐험 야망의 주 성격)
+        public const float DelveCuriosityDeviation = 0.10f;
+        public const float DelveCourageDeviation = 0.05f;
+        // 야망 항: 탐험 = 던전 원정 선호, 명예 = 강한 목표 선호, 안전 = 던전 기피 (§4.1)
+        public const float AmbitionExplorerDelveBonus = 0.15f;
+        public const float AmbitionGloryDelveBonus = 0.08f;
+        public const float AmbitionCautiousDelvePenalty = 0.10f;
+        // 판정 곡선: Hunt보다 성공은 낮고 피해(부상)는 많다 (D55). 사망 곡선은 Hunt와 같은 D48 수준을 쓴다.
+        public const float SoloDelveSuccessChanceAtZero = 0.30f;
+        public const float SoloDelveSuccessChanceAtFull = 0.76f;
+        public const float SoloDelveHarmChanceAtZero = 0.48f;
+        public const float SoloDelveHarmChanceAtFull = 0.14f;
+        public const float PartyDelveSuccessChanceAtZero = 0.38f;
+        public const float PartyDelveSuccessChanceAtFull = 0.84f;
+        public const float PartyDelveHarmChanceAtZero = 0.36f;
+        public const float PartyDelveHarmChanceAtFull = 0.08f;
+        // 보상은 전리품뿐 (D55, 골드·Food 없음). 원정 성공 = DungeonTable.MonsterLevel 일반 롤 1회,
+        // NPC 완료 보상 = BossLevel 일반 롤 1회 (희귀 가중치·보너스 롤 없음, D65 개정).
+        // NPC 던전 완료 확률 (D55): 원정 성공 시에만. capability 0.475 미만 0%, 0.475에서 3%, 1.0에서 8% (선형).
+        public const float DelveCompletionMinCapability = HuntCapabilityAtReference;
+        public const float DelveCompletionChanceAtMin = 0.03f;
+        public const float DelveCompletionChanceAtFull = 0.08f;
+        // Delve RNG salt (기존 0~5, 10+i, 20, 30+i, 40+i와 겹치지 않게 50번대 이후).
+        // 솔로(소유자 EntityId): 50 결과, 51 일반 전리품, 53 완료 판정, 54 완료 보상 전리품, 55 치료.
+        // 56 대상 슬롯 선택(솔로 EntityId / 파티 PartyId).
+        // 파티(소유자 PartyId): 60+i 파티원 결과, 70+i 일반 전리품, 90+i 치료, 100 완료 판정, 110+i 완료 보상.
+        // 52·80+i는 폐기된 희귀 보너스 롤의 번호다 — reserved, 재사용 금지 (다른 번호도 당기지 않는다).
+        public const int DelveOutcomeSalt = 50;
+        public const int DelveLootSalt = 51;
+        public const int DelveCompletionSalt = 53;
+        public const int DelveCompletionLootSalt = 54;
+        public const int DelveTreatmentSalt = 55;
+        public const int DelveTargetSalt = 56;
+        public const int PartyDelveOutcomeSaltBase = 60;
+        public const int PartyDelveLootSaltBase = 70;
+        public const int PartyDelveTreatmentSaltBase = 90;
+        public const int PartyDelveCompletionSalt = 100;
+        public const int PartyDelveCompletionLootSaltBase = 110;
+
+        // ===== 소문 (NPC_AMBITION_DESIGN §5.2·§6.2·§7.4, P2b D70~D77) =====
+        // "유망한 소문" 필요 배율 (D76). 성향 ±20% 클램프 밖에서 곱한다 (필요는 성향과 별개, D40).
+        public const float PromisingRumorDelveMultiplier = 1.5f;
+        // Rest 종료 시 교환 확률 (D74 개정: 항상이 아니라 확률적으로). 친화력 0 → Min, 100 → Max 선형.
+        // 세계 교환 시도 하루 약 1,000~1,500건을 목표로 진단(Ambition Sim)으로 맞춘 개발 튜닝 상수다.
+        public const float RumorExchangeChanceAtMinFriendliness = 0.30f;
+        public const float RumorExchangeChanceAtMaxFriendliness = 0.50f;
+        // 두 번째 상대 확률: 친화력 50 이하 0 → 100에서 Max 선형 (상대는 보통 1명, 친화력이 높으면 가끔 2명).
+        public const float RumorSecondPeerChanceAtMaxFriendliness = 0.50f;
+        // 받아들일 확률 = Base + PerCuriosity × 호기심/100 (§7.4, D74).
+        public const float RumorAcceptChanceBase = 0.50f;
+        public const float RumorAcceptChancePerCuriosity = 0.45f;
+        // 소문 RNG salt (D77). 소유자 = Rest 중이던 NPC EntityId, 시각 = Rest 시작 시각.
+        // 120 교환 발생(1번째 난수)·두 번째 상대(2번째 난수), 121 상대 고르기, 122+i 본인이 상대 i의 소문을 받을지,
+        // 124+i 상대 i가 본인의 소문을 받을지 (i = 0,1). 126~129는 P2b 예비.
+        public const int RumorExchangeSalt = 120;
+        public const int RumorPeerPickSalt = 121;
+        public const int RumorAcceptBySelfSaltBase = 122;
+        public const int RumorAcceptByPeerSaltBase = 124;
+
+        /// <summary>원정형 활동(Venturing + 왕복 경로 표현)인가. Hunt와 DungeonDelve.</summary>
+        public static bool IsExpedition(NpcActivityKind kind)
+        {
+            return kind == NpcActivityKind.Hunt || kind == NpcActivityKind.DungeonDelve;
+        }
+
         /// <summary>
-        /// 효용 기반 다음 활동 선택 (NPC_AMBITION_DESIGN §6, D39, D40). Idle 전환 때만 호출한다.
+        /// 효용 기반 다음 활동 선택 (NPC_AMBITION_DESIGN §6, D39, D40, D56). Idle 전환 때만 호출한다.
         /// 점수 = 기본값 × 필요 배율 × 성향·야망 배율(±20% 클램프) × 기회(0이면 후보 제외).
-        /// 상위 3개(P1 활동 세트는 Rest/Hunt/Trade 3개뿐이라 = 전부)를 점수 가중 랜덤으로 고른다. 결정론 RNG salt 0.
+        /// 후보 전체(Rest/Hunt/Trade/DungeonDelve)를 점수 가중 랜덤으로 고른다. 결정론 RNG salt 0.
+        /// §6.3 원안의 "상위 3개"를 활동 4개에 그대로 쓰면 점수가 가장 낮은 Delve가 Trade가 있을 때마다 빠져
+        /// D56의 5%를 맞출 수 없으므로 P2a는 전체 가중 랜덤을 유지한다.
         /// </summary>
         public static NpcActivityKind SelectNextActivity(NpcSaveData saveData, in NpcActivityChoiceContext context,
             int entityId, float startGameTime, int worldSeed)
@@ -126,7 +201,8 @@ namespace ARPG.Npc
             float restScore = GetActivityScore(NpcActivityKind.Rest, saveData.NpcStat, ambition, context);
             float huntScore = GetActivityScore(NpcActivityKind.Hunt, saveData.NpcStat, ambition, context);
             float tradeScore = GetActivityScore(NpcActivityKind.Trade, saveData.NpcStat, ambition, context);
-            float totalScore = restScore + huntScore + tradeScore;
+            float delveScore = GetActivityScore(NpcActivityKind.DungeonDelve, saveData.NpcStat, ambition, context);
+            float totalScore = restScore + huntScore + tradeScore + delveScore;
             if (totalScore <= 0f)
                 return NpcActivityKind.Rest;
 
@@ -136,7 +212,9 @@ namespace ARPG.Npc
                 return NpcActivityKind.Rest;
             if (pick < restScore + huntScore)
                 return NpcActivityKind.Hunt;
-            return NpcActivityKind.Trade;
+            if (pick < restScore + huntScore + tradeScore)
+                return NpcActivityKind.Trade;
+            return NpcActivityKind.DungeonDelve;
         }
 
         /// <summary>활동 하나의 효용 점수. 기회가 없는 활동(Trade 할 일 없음)은 0 — 후보에서 빠진다.</summary>
@@ -165,6 +243,14 @@ namespace ARPG.Npc
                         needMultiplier *= GoldShortTradeMultiplier;
                     if (context.BagFull == true)
                         needMultiplier *= BagFullTradeMultiplier;
+                    break;
+                case NpcActivityKind.DungeonDelve:
+                    if (context.DelveAvailable == false)
+                        return 0f;
+                    baseScore = DelveBaseScore;
+                    // "유망한 소문" 필요 배율 (§6.2, D56·D76)
+                    if (context.HasPromisingRumor == true)
+                        needMultiplier *= PromisingRumorDelveMultiplier;
                     break;
                 default:
                     return 0f;
@@ -199,6 +285,8 @@ namespace ARPG.Npc
                 NpcActivityKind.Hunt => CenteredTrait(stat.Courage) * HuntCourageDeviation
                     + CenteredTrait(stat.Curiosity) * HuntCuriosityDeviation,
                 NpcActivityKind.Trade => CenteredTrait(stat.Greed) * TradeGreedDeviation,
+                NpcActivityKind.DungeonDelve => CenteredTrait(stat.Curiosity) * DelveCuriosityDeviation
+                    + CenteredTrait(stat.Courage) * DelveCourageDeviation,
                 _ => 0f,
             };
         }
@@ -208,6 +296,18 @@ namespace ARPG.Npc
         /// </summary>
         private static float GetAmbitionDeviation(NpcActivityKind kind, NpcAmbitionKind ambition)
         {
+            // 던전 원정 (D56): 탐험·명예는 더 자주, 안전은 덜. Hunt 항은 P1 그대로 둔다 (Hunt 비중 유지).
+            if (kind == NpcActivityKind.DungeonDelve)
+            {
+                return ambition switch
+                {
+                    NpcAmbitionKind.Explorer => AmbitionExplorerDelveBonus,
+                    NpcAmbitionKind.Glory => AmbitionGloryDelveBonus,
+                    NpcAmbitionKind.Cautious => -AmbitionCautiousDelvePenalty,
+                    _ => 0f,
+                };
+            }
+
             switch (ambition)
             {
                 case NpcAmbitionKind.Explorer:
@@ -243,6 +343,7 @@ namespace ARPG.Npc
             {
                 NpcActivityKind.Hunt => HuntDurationHours,
                 NpcActivityKind.Trade => TradeDurationHours,
+                NpcActivityKind.DungeonDelve => DelveDurationHours,
                 _ => RestDurationHours,
             };
         }
@@ -467,6 +568,85 @@ namespace ARPG.Npc
             return rng.NextDouble() < Mathf.Clamp01(buyChance);
         }
 
+        /// <summary>솔로 Delve 판정 확률. Hunt보다 성공은 낮고 부상은 많다. 사망은 솔로 Hunt와 같은 D48 곡선.</summary>
+        public static void GetSoloDelveChances(float capability, out float deathChance, out float woundedChance,
+            out float successChance)
+        {
+            capability = Mathf.Clamp01(capability);
+            float harmChance = Mathf.Lerp(SoloDelveHarmChanceAtZero, SoloDelveHarmChanceAtFull, capability);
+            deathChance = Mathf.Lerp(SoloHuntDeathChanceAtZero, SoloHuntDeathChanceAtFull, capability);
+            woundedChance = harmChance - deathChance;
+            successChance = Mathf.Lerp(SoloDelveSuccessChanceAtZero, SoloDelveSuccessChanceAtFull, capability);
+        }
+
+        /// <summary>파티원 Delve 판정 확률. 사망은 파티원 Hunt와 같은 D48 곡선.</summary>
+        public static void GetPartyMemberDelveChances(float capability, out float deathChance, out float woundedChance,
+            out float successChance)
+        {
+            capability = Mathf.Clamp01(capability);
+            float harmChance = Mathf.Lerp(PartyDelveHarmChanceAtZero, PartyDelveHarmChanceAtFull, capability);
+            deathChance = Mathf.Lerp(PartyHuntDeathChanceAtZero, PartyHuntDeathChanceAtFull, capability);
+            woundedChance = harmChance - deathChance;
+            successChance = Mathf.Lerp(PartyDelveSuccessChanceAtZero, PartyDelveSuccessChanceAtFull, capability);
+        }
+
+        public static NpcHuntOutcome ResolveDelve(float capability, int entityId, float startGameTime, int worldSeed)
+        {
+            HistoryRng rng = CreateRng(entityId, startGameTime, worldSeed, DelveOutcomeSalt);
+            GetSoloDelveChances(capability, out float deathChance, out float woundedChance, out float successChance);
+            return PickOutcome((float)rng.NextDouble(), deathChance, woundedChance, successChance);
+        }
+
+        /// <summary>파티원 Delve 판정. capability는 Hunt처럼 개인 70% + 나머지 파티원 평균 30% (동료 지원).</summary>
+        public static NpcHuntOutcome ResolvePartyMemberDelve(float personalPower, float partyPower, int partySize,
+            int partyId, float startGameTime, int worldSeed, int memberIndex)
+        {
+            HistoryRng rng = CreateRng(partyId, startGameTime, worldSeed, PartyDelveOutcomeSaltBase + memberIndex);
+            float capability = GetPartyMemberCapability(personalPower, partyPower, partySize);
+            GetPartyMemberDelveChances(capability, out float deathChance, out float woundedChance,
+                out float successChance);
+            return PickOutcome((float)rng.NextDouble(), deathChance, woundedChance, successChance);
+        }
+
+        /// <summary>
+        /// NPC 던전 완료 확률 (D55). capability가 평범한 NPC 수준(0.475) 미만이면 0, 0.475에서 3%, 1.0에서 8%로 선형 증가.
+        /// </summary>
+        public static float GetDelveCompletionChance(float capability)
+        {
+            if (capability < DelveCompletionMinCapability)
+                return 0f;
+            float t = Mathf.Clamp01((capability - DelveCompletionMinCapability) / (1f - DelveCompletionMinCapability));
+            return Mathf.Lerp(DelveCompletionChanceAtMin, DelveCompletionChanceAtFull, t);
+        }
+
+        public static bool RollDelveCompletion(float chance, int rngOwnerId, float startGameTime, int worldSeed, int salt)
+        {
+            if (chance <= 0f)
+                return false;
+            HistoryRng rng = CreateRng(rngOwnerId, startGameTime, worldSeed, salt);
+            return rng.NextDouble() < Mathf.Clamp01(chance);
+        }
+
+        /// <summary>원정 대상 슬롯 인덱스를 결정론적으로 고른다 (소속 마을 슬롯 중 균등).</summary>
+        public static int PickDelveSlotIndex(int rngOwnerId, float startGameTime, int worldSeed, int slotCount)
+        {
+            if (slotCount <= 1)
+                return 0;
+            HistoryRng rng = CreateRng(rngOwnerId, startGameTime, worldSeed, DelveTargetSalt);
+            return rng.Range(0, slotCount);
+        }
+
+        private static NpcHuntOutcome PickOutcome(float roll, float deathChance, float woundedChance, float successChance)
+        {
+            if (roll < deathChance)
+                return NpcHuntOutcome.Dead;
+            if (roll < deathChance + woundedChance)
+                return NpcHuntOutcome.Wounded;
+            if (roll < deathChance + woundedChance + successChance)
+                return NpcHuntOutcome.Success;
+            return NpcHuntOutcome.Failed;
+        }
+
         /// <summary>
         /// Hunt 대상 좌표를 결정론적으로 고른다. 실제 경로 탐색은 하지 않고 오프스크린 보간용 종점만 만든다.
         /// </summary>
@@ -501,14 +681,39 @@ namespace ARPG.Npc
                 (progress - outboundFraction) / (1f - outboundFraction));
         }
 
-        private static HistoryRng CreateRng(int entityId, float startGameTime, int worldSeed, int salt)
+        /// <summary>소문 교환이 일어날 확률 (D74). 친화력 선형.</summary>
+        public static float GetRumorExchangeChance(int friendliness)
+        {
+            return Mathf.Lerp(RumorExchangeChanceAtMinFriendliness, RumorExchangeChanceAtMaxFriendliness,
+                Mathf.Clamp01(friendliness / 100f));
+        }
+
+        /// <summary>두 번째 교환 상대 확률 (D74). 친화력 50 이하 0.</summary>
+        public static float GetRumorSecondPeerChance(int friendliness)
+        {
+            return Mathf.Clamp01((friendliness - 50) / 50f) * RumorSecondPeerChanceAtMaxFriendliness;
+        }
+
+        /// <summary>건네받은 소문을 받아들일 확률 (§7.4, D74). 호기심 선형.</summary>
+        public static float GetRumorAcceptChance(int curiosity)
+        {
+            return RumorAcceptChanceBase + RumorAcceptChancePerCuriosity * Mathf.Clamp01(curiosity / 100f);
+        }
+
+        /// <summary>
+        /// 활동 결정론 RNG. 같은 (소유자, 활동 시작시각, worldSeed, salt)는 세이브/로드 뒤에도 같은 난수열을 준다.
+        /// 소문 교환(NpcManager_Rumor)도 이 채널을 쓴다 (salt 120~125).
+        /// </summary>
+        internal static HistoryRng CreateRng(int entityId, float startGameTime, int worldSeed, int salt)
         {
             // 활동 시작시각을 1/100 게임시간 단위로 양자화한다.
             // 같은 월드·NPC·활동 시작시각·판정 종류는 세이브/로드 뒤에도 같은 난수열을 얻는다.
             int startTick = Mathf.FloorToInt(startGameTime * 100f);
             // salt=0은 활동 선택, salt=1은 Hunt 결과, salt=2는 보상, salt=3은 목표 좌표, salt=4는 개인 전리품,
             // salt=5는 솔로 치료 구매, 10+i는 파티원 결과, 20은 파티 보상, 30+i는 파티원 개인 전리품,
-            // 40+i는 파티원 치료 구매에 사용한다.
+            // 40+i는 파티원 치료 구매, 50·51·53~56·60+i·70+i·90+i·100·110+i는 DungeonDelve(Delve*Salt 상수)에 사용한다.
+            // 52·80+i는 폐기된 Delve 희귀 보너스 롤 번호 — reserved, 재사용 금지.
+            // 120~125는 소문 교환(Rumor*Salt 상수), 126~129는 P2b 예비.
             int key = unchecked(worldSeed ^ (entityId * 486187739) ^ (startTick * 16777619) ^ salt);
             return new HistoryRng(DerivedSeed.Derive(key, DerivedSeed.ChannelNpcActivity));
         }

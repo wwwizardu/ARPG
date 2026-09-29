@@ -47,6 +47,48 @@ namespace ARPG.Dungeon
             => slot != null && slot.HasEntrance == false &&
                currentGameTime >= slot.PlacementReadyGameTime;
 
+        /// <summary>현재 세대가 NPC 완료로 교체된 세대인가 (NPC_AMBITION_DESIGN D58). NPC 완료는 항상 1 이상의 세대를 만든다.</summary>
+        public static bool IsNpcReplaced(DungeonSlot slot)
+            => slot != null && slot.NpcReplacedGeneration > 0 && slot.NpcReplacedGeneration == slot.Generation;
+
+        /// <summary>
+        /// NPC 완료 필드의 로드 보정 (D58, 스키마 버전 유지). 구 세이브는 필드가 없어 기본값(-1)이 들어오고,
+        /// 비정상 값(NaN·음수 시각, 현재 세대와 무관한 세대 표시)은 "기록 없음"으로 되돌린다. 바뀐 게 있으면 true.
+        /// </summary>
+        public static bool NormalizeNpcCompletionFields(DungeonSaveRoot root)
+        {
+            if (root == null || root.Villages == null)
+                return false;
+
+            bool changed = false;
+            for (int v = 0; v < root.Villages.Count; v++)
+            {
+                VillageDungeonSlots village = root.Villages[v];
+                if (village == null)
+                    continue;
+                if (float.IsNaN(village.LastNpcCompletionGameTime) || float.IsInfinity(village.LastNpcCompletionGameTime) ||
+                    village.LastNpcCompletionGameTime < -1f)
+                {
+                    village.LastNpcCompletionGameTime = -1f;
+                    changed = true;
+                }
+                if (village.Slots == null)
+                    continue;
+                for (int s = 0; s < village.Slots.Count; s++)
+                {
+                    DungeonSlot slot = village.Slots[s];
+                    if (slot == null || slot.NpcReplacedGeneration == -1)
+                        continue;
+                    if (slot.NpcReplacedGeneration <= 0 || slot.NpcReplacedGeneration > slot.Generation)
+                    {
+                        slot.NpcReplacedGeneration = -1;
+                        changed = true;
+                    }
+                }
+            }
+            return changed;
+        }
+
         public static bool NormalizeTableReferences(DungeonSaveRoot root, DungeonTable defaultTable)
         {
             if (root == null || defaultTable == null || defaultTable.Id <= 0)
@@ -121,7 +163,9 @@ namespace ARPG.Dungeon
                         result.Objects.Add(new DungeonObject { Id = i * MONSTER_OBJECT_STRIDE + objectOffset,
                             RoomId = i,
                             Kind = isBossRoom ? DungeonObjectKind.Boss : DungeonObjectKind.Monster,
-                            TableId = isBossRoom ? table.BossTableId : table.MonsterTableId,
+                            TableId = isBossRoom
+                                ? table.BossTableId
+                                : SelectMonsterTableId(table, result.Seed, i, monsterIndex),
                             Level = isBossRoom ? table.BossLevel : table.MonsterLevel,
                             X = monsterX, Y = monsterY });
                     }
@@ -224,6 +268,16 @@ namespace ARPG.Dungeon
 
         private static int SampleInclusive(uint value, int min, int max)
             => min + (int)(value % (uint)(max - min + 1));
+
+        private static int SelectMonsterTableId(DungeonTable table, int seed, int roomId, int monsterIndex)
+        {
+            if (table.MonsterTableIds == null || table.MonsterTableIds.Count == 0)
+                throw new InvalidOperationException($"DungeonTable Id {table.Id} has no MonsterTableIds.");
+            if (table.MonsterTableIds.Count == 1)
+                return table.MonsterTableIds[0];
+            uint hash = Hash(seed, roomId, monsterIndex, 0, 37);
+            return table.MonsterTableIds[SampleInclusive(hash, 0, table.MonsterTableIds.Count - 1)];
+        }
 
         private static bool TryGetMonsterPosition(DungeonRecord record, DungeonRoom room,
             int monsterIndex, bool hasChest, out int x, out int y)

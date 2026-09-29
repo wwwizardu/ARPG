@@ -76,6 +76,9 @@ namespace ARPG.Npc
         public float PowerCapBonus;
         // 마지막 상점 구매 게임시각 (NPC별 쇼핑 쿨다운 48h, §7.2). -1 = 구매 기록 없음 (구 세이브 포함).
         public float LastTradeGameTime = -1f;
+        // 소문 (NPC_AMBITION_DESIGN §5.2·§7.4, P2b D70~D78). 최대 8개, 대상별 1개. 구 세이브는 필드가 없어 빈 리스트로 보정한다.
+        // 유효성은 저장하지 않고 조회 시 NpcManager.IsRumorValid가 판정한다 (D72).
+        public List<NpcRumor> Rumors = new();
 
         [JsonIgnore]
         public Vector2 Position
@@ -145,6 +148,13 @@ namespace ARPG.Npc
                 Deeds[i].EnsureInitialized();
             if (DeceasedRelations == null)
                 DeceasedRelations = new List<DeceasedRelationMemory>();
+            if (Rumors == null)
+                Rumors = new List<NpcRumor>();
+            for (int i = Rumors.Count - 1; i >= 0; i--)
+            {
+                if (Rumors[i] == null)
+                    Rumors.RemoveAt(i);
+            }
         }
 
         /// <summary>

@@ -787,7 +787,8 @@ namespace ARPG.Editor
 
             table.Name = values[1];
             table.RoomCount = int.Parse(values[2]);
-            table.MonsterTableId = int.Parse(values[3]);
+            // 시트 컬럼명은 MonsterTableId 유지. "1009|1010"처럼 |로 여러 개 입력 가능
+            table.MonsterTableIds = ParseIntList(values[3]) ?? new List<int>();
             table.MonsterLevel = int.Parse(values[4]);
             table.BossTableId = int.Parse(values[5]);
             table.BossLevel = int.Parse(values[6]);
@@ -802,7 +803,7 @@ namespace ARPG.Editor
             table.RoomHeightMax = int.Parse(values[15]);
 
             if (table.RoomCount < 6 || table.RoomCount > 12 ||
-                table.MonsterTableId <= 0 || table.MonsterLevel <= 0 ||
+                HasValidIds(table.MonsterTableIds) == false || table.MonsterLevel <= 0 ||
                 table.BossTableId <= 0 || table.BossLevel <= 0 ||
                 table.CompletionGold < 0 || table.ChestGold < 0 ||
                 table.ReplacementCooldownHours < 0f ||
@@ -1352,7 +1353,7 @@ namespace ARPG.Editor
             table.BaseAttackSpeedMul = int.Parse(values[32]);
 
             // Phase 1·2: SkillEffect 합성 + ExecutionType 컬럼화 (빈 셀 허용)
-            table.SkillEffectIds     = ParseIntCsv(values.Length > 33 ? values[33] : "");
+            table.SkillEffectIds     = ParseIntList(values.Length > 33 ? values[33] : "");
             table.ExecutionType      = values.Length > 34 && string.IsNullOrWhiteSpace(values[34]) == false
                                        ? (SkillExecutionType)Enum.Parse(typeof(SkillExecutionType), values[34])
                                        : SkillExecutionType.MultiHit;
@@ -1544,21 +1545,34 @@ namespace ARPG.Editor
         }
 
         /// <summary>
-        /// CSV 형식 정수 리스트 파싱. 빈 문자열이면 null 반환.
-        /// 예: "1001,1002" → [1001, 1002], "" → null
+        /// '|' 구분 정수 리스트 파싱. 빈 문자열이면 null 반환.
+        /// 시트에서 ','는 천 단위 구분과 혼동되므로 '|'만 사용한다.
+        /// 예: "1001|1002" → [1001, 1002], "" → null
         /// </summary>
-        private static List<int> ParseIntCsv(string raw)
+        private static List<int> ParseIntList(string raw)
         {
             if (string.IsNullOrWhiteSpace(raw))
                 return null;
             var list = new List<int>();
-            var tokens = raw.Split(',');
+            var tokens = raw.Split('|');
             for (int i = 0; i < tokens.Length; i++)
             {
                 if (int.TryParse(tokens[i].Trim(), out var v))
                     list.Add(v);
             }
             return list.Count > 0 ? list : null;
+        }
+
+        private static bool HasValidIds(List<int> ids)
+        {
+            if (ids == null || ids.Count == 0)
+                return false;
+            for (int i = 0; i < ids.Count; i++)
+            {
+                if (ids[i] <= 0)
+                    return false;
+            }
+            return true;
         }
 
         private static GlobalEnum.SkillTag ParseSkillTags(string tagsRaw)

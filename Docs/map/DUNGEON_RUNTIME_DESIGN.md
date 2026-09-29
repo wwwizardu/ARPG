@@ -55,6 +55,16 @@ ESC는 현재 UIManager에서 열린 UI가 없을 때 `UIMainMenu`를 연다. �
 
 완료 당시 플레이어가 아직 내부에 있어도 현재 던전 컨텍스트는 **퇴장할 때까지 유지**한다. 던전 안에서 저장·재접속하더라도 이 완료된 세션을 복원할 수 있어야 한다. 월드 복귀 좌표는 이전 입구 부근의 안전한 타일로 유지한다. 복귀 좌표가 건설·타일 변경으로 막혔다면 인접 통행 가능 타일을 찾는다. 새 입구는 다른 위치여야 하지만, 오래전 완료한 좌표까지 영구 금지하면 저장 목록이 끝없이 자라므로 **직전 위치 재사용 금지**를 기본안으로 둔다. [제안]
 
+### 3.3 NPC 완료 추가 계약 (2026-09-29, NPC_AMBITION P2a)
+
+화면 밖 모험가 NPC가 드물게 던전을 완료해 슬롯 세대를 넘길 수 있다. 완료 확률·보상·빈도 같은 게임플레이 규칙은 [NPC_AMBITION_DESIGN §7.1](../npc/NPC_AMBITION_DESIGN.md)(D55·D57·D58·D63·D66~D68)이 소유하고, 이 절은 **슬롯 변경과 저장 계약**만 정한다. [src: Assets/Scripts/Dungeon/DungeonManager_NpcCompletion.cs] [확정]
+
+- **진입점 분리**: 플레이어 완료(`DungeonCompletionTransaction` — 플레이어 Gold·`DungeonRecord.Completed`·`CompletedCount`)는 바꾸지 않는다. NPC 완료는 슬롯 단위 진입점 `DungeonManager.TryCompleteByNpc`로 한다. 플레이어 Gold, `DungeonRecord`, 전역 `CompletedCount`는 건드리지 않는다.
+- **슬롯 변경**: 슬롯을 제자리에서 바꾼다 — `Generation`+1, 새 `DungeonId`, 입구가 있었으면 없애고 그 좌표를 이전 입구(`HasPreviousEntrance`/`PreviousX,Y`)로 기록, `PlacementReadyGameTime` = 지금 + 교체 쿨다운, `NextCandidate` = 0. 입구가 배치되지 않은 슬롯도 완료할 수 있다(입구는 플레이어가 마을 근처에 와야 배치된다). 입구 역색인은 dirty 표시 후 다음 `TickPlacement` 첫머리에서 다시 만든다.
+- **새 저장 필드**(기본값 + 로드 보정, 스키마 버전 유지): `VillageDungeonSlots.LastNpcCompletionGameTime`(−1 = 없음, 마을당 72h 쿨다운), `DungeonSlot.NpcReplacedGeneration`(−1 = 없음, 현재 `Generation`과 같으면 NPC 교체 세대). 플레이어 완료는 새 슬롯 객체를 만들어 표시가 기본값으로 돌아간다.
+- **보호 규칙**(하나라도 해당하면 거부): 플레이어가 입장한 던전(`DungeonRecord` 존재) / 플레이어가 던전 안(`IsInside`) / 입장·배치 저장 진행 중 / 요청 DungeonId가 현재 슬롯에 없음(이미 세대 전진) / 마을 72h 쿨다운 / 이번 완료 뒤 NPC 교체 슬롯이 그 마을 슬롯 수의 절반 초과. **`DungeonRecord` 보호는 세이브 무결성 조건이기도 하다** — 로드 시 저장 검증(`DungeonSaveValidation`)은 기록이 있는 던전의 슬롯 `DungeonId`가 기록과 같은지 확인하므로, 기록 있는 던전의 세대를 넘기면 로드가 깨진다.
+- **저장**: 즉시 저장하지 않는다. 미저장 NPC 완료가 있으면 다음 저장이 Dungeons 또는 NpcState 중 하나를 실을 때 둘을 함께 실어, 슬롯 변경과 NPC 보상이 같은 manifest revision에 커밋된다. 커밋 성공 시 미저장 표시를 지운다.
+
 ## 4. 던전 내부 맵
 
 월드와 던전은 타일맵·청크 캐시·타일 변경·몬스터·드랍 아이템·좌표계가 분리된 `MapContext`를 사용한다. 기존 `AR.s.Map`을 전역 월드 맵으로 가정하는 시스템이 많으므로, 구현 시 **현재 컨텍스트 조회 경로**를 먼저 마련해야 한다. 단순히 `MapManager.SetSeed()`로 시드만 바꾸면 월드 청사진과 다른 매니저의 상태를 격리할 수 없다. [`AR.cs`](../../Assets/Scripts/Manager/AR.cs), [`MapManager_Generator.cs`](../../Assets/Scripts/Map/MapManager_Generator.cs), [`System_MapChunkLoader.cs`](../../Assets/Scripts/Common/System/System_MapChunkLoader.cs)

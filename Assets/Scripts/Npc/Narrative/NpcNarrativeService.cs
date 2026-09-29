@@ -250,6 +250,8 @@ namespace ARPG.Npc.Narrative
             DialogueTopicType.LostCompanion => "잃은 사람 이야기",
             DialogueTopicType.Boast => "자랑거리",
             DialogueTopicType.PartyBond => "동료 이야기",
+            DialogueTopicType.DungeonRumor => "이 마을 던전 소문",
+            DialogueTopicType.ItemOwnerRumor => "누가 좋은 장비를 얻었다는 소문",
             _ => "잡담",
         };
 

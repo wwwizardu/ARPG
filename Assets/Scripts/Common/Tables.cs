@@ -685,7 +685,7 @@ namespace ARPG.Tables
     {
         [JsonProperty("Name")] public string Name = string.Empty;
         [JsonProperty("RoomCount")] public int RoomCount;
-        [JsonProperty("MonsterTableId")] public int MonsterTableId;
+        [JsonProperty("MonsterTableIds")] public List<int> MonsterTableIds = new(); // 일반 몬스터 후보. 몬스터마다 균등 확률로 1종 선택
         [JsonProperty("MonsterLevel")] public int MonsterLevel;
         [JsonProperty("BossTableId")] public int BossTableId;
         [JsonProperty("BossLevel")] public int BossLevel;
