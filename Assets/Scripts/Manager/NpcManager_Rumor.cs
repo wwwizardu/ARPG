@@ -548,7 +548,7 @@ namespace ARPG.Npc
         /// <summary>
         /// 교환 상대 조건 (D74): 같은 마을, 생존, 대기(Phase=Idle — 휴식·거래·활동 전), 파티 아님, 던전 동행·플레이어 결투 아님,
         /// Rival·Grudge 아님. 실체화된 NPC도 포함한다(교환은 화면에 보이는 연출이 없다).
-        /// 파티 모집 판정(IsEligibleHuntPartyMember)은 Kind==None을 요구해 대기 NPC 대부분을 빼므로 따로 둔다.
+        /// 파티 모집 후보(GetPartyCandidateRejectReason)는 거래 중 제외·20타일 범위·수락 확률이 붙으므로 따로 둔다 (D85).
         /// </summary>
         private bool IsEligibleRumorPeer(int selfId, NpcSaveData self, int candidateId)
         {

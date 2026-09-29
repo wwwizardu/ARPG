@@ -97,6 +97,7 @@ namespace ARPG.Npc
             _narrative.Reset();
             ResetAmbitionRuntime();
             ResetRumorRuntime();
+            ResetPartyRuntime();
             _nameBag.Clear();
             _nameBagCursor = 0;
             _usedNames.Clear();
@@ -1515,86 +1516,6 @@ namespace ARPG.Npc
             return _npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) ? saveData : null;
         }
 
-        public bool TryCreateHuntParty(int leaderId, out NpcPartyState? party)
-        {
-            return TryCreateHuntParty(leaderId, out party, NpcActivityKind.Hunt);
-        }
-
-        /// <summary>
-        /// 원정 파티 자동 구성. Hunt와 DungeonDelve가 같은 모집 규칙을 쓴다 (NPC_AMBITION_DESIGN D55 "기존 자동 구성 재사용").
-        /// </summary>
-        public bool TryCreateHuntParty(int leaderId, out NpcPartyState? party, NpcActivityKind kind)
-        {
-            party = null;
-            if (NpcActivityResolver.IsExpedition(kind) == false)
-                return false;
-            if (_npcSaveDict.TryGetValue(leaderId, out NpcSaveData? leader) == false ||
-                IsEligibleHuntPartyMember(leader) == false)
-                return false;
-
-            VillageData? village = AR.s.Village.GetVillage(leader.VillageId);
-            if (village == null)
-                return false;
-
-            const float recruitmentRangeSqr = 400f;
-            List<int> candidates = new List<int>();
-            List<int> villageNpcIds = village.NpcEntityIds;
-            for (int i = 0; i < villageNpcIds.Count; i++)
-            {
-                int candidateId = villageNpcIds[i];
-                if (candidateId == leaderId || _npcSaveDict.TryGetValue(candidateId, out NpcSaveData? candidate) == false)
-                    continue;
-                if (candidate.VillageId != leader.VillageId || IsEligibleHuntPartyMember(candidate) == false)
-                    continue;
-
-                Vector2 offset = candidate.Position - leader.Position;
-                if (offset.sqrMagnitude > recruitmentRangeSqr || IsHostilePartyRelation(leaderId, candidateId))
-                    continue;
-
-                candidates.Add(candidateId);
-            }
-
-            candidates.Sort((leftId, rightId) =>
-            {
-                int leftScore = GetPartyRecruitmentScore(leaderId, leftId);
-                int rightScore = GetPartyRecruitmentScore(leaderId, rightId);
-                if (leftScore != rightScore)
-                    return rightScore.CompareTo(leftScore);
-                return leftId.CompareTo(rightId);
-            });
-
-            if (candidates.Count == 0)
-                return false;
-
-            int partyId = _nextPartyId++;
-            NpcPartyState created = new NpcPartyState
-            {
-                PartyId = partyId,
-                LeaderId = leaderId,
-            };
-            created.MemberIds.Add(leaderId);
-            for (int i = 0; i < candidates.Count && created.MemberIds.Count < 4; i++)
-                created.MemberIds.Add(candidates[i]);
-            created.MemberIds.Sort();
-            created.Activity.PartyId = partyId;
-
-            _npcPartyDict.Add(partyId, created);
-            AddPartyToSimulation(partyId);
-            for (int i = 0; i < created.MemberIds.Count; i++)
-            {
-                int memberId = created.MemberIds[i];
-                NpcSaveData member = _npcSaveDict[memberId];
-                member.Activity.PartyId = partyId;
-                member.Activity.Kind = kind;
-                member.Activity.Phase = NpcActivityPhase.Venturing;
-                member.Activity.TargetKey = kind == NpcActivityKind.Hunt ? "hunt" : "delve";
-                member.Activity.HasMovementPath = false;
-            }
-
-            party = created;
-            return true;
-        }
-
         public void DissolveParty(int partyId)
         {
             if (_npcPartyDict.TryGetValue(partyId, out NpcPartyState? party) == false)
@@ -2210,39 +2131,6 @@ namespace ARPG.Npc
             if (_simulationCursor < 0 || _simulationCursor >= _simulationNpcIds.Count)
                 _simulationCursor = 0;
             AdjustWorkCursorOnRemove(_simulationPartyIds.Count + index);
-        }
-
-        private static bool IsEligibleHuntPartyMember(NpcSaveData saveData)
-        {
-            // 동행 예약 NPC는 다른 NPC의 사냥 파티에 끌려가지 않는다 (NPC_COMBAT_DESIGN §4.5)
-            // 플레이어와 결투 중인 NPC도 파티에 뽑히지 않는다 (§9, B4)
-            return saveData.Condition != CharacterConditions.Dead &&
-                   saveData.Activity.Phase == NpcActivityPhase.Idle &&
-                   saveData.Activity.Kind == NpcActivityKind.None &&
-                   saveData.Activity.PartyId < 0 &&
-                   AR.s.Data.NpcCompanion.ReservedNpcId != saveData.EntityId &&
-                   AR.s.Component.HasComponent<DuelComponent>(saveData.EntityId) == false;
-        }
-
-        private bool IsHostilePartyRelation(int leaderId, int candidateId)
-        {
-            return GetRelation(leaderId, candidateId, NpcRelationType.Rival) != null ||
-                   GetRelation(leaderId, candidateId, NpcRelationType.GrudgeAgainst) != null;
-        }
-
-        private int GetPartyRecruitmentScore(int leaderId, int candidateId)
-        {
-            int score = GetAffinity(leaderId, candidateId);
-            if (GetRelation(leaderId, candidateId, NpcRelationType.Spouse) != null)
-                score += 160;
-            else if (GetRelation(leaderId, candidateId, NpcRelationType.Sibling) != null)
-                score += 120;
-            else if (GetRelation(leaderId, candidateId, NpcRelationType.Friend) != null)
-                score += 80;
-
-            if (_npcSaveDict.TryGetValue(candidateId, out NpcSaveData? candidate))
-                score += candidate.NpcStat.Courage / 10 + candidate.SkillLevel * 2;
-            return score;
         }
 
         private void AddPartyToSimulation(int partyId)

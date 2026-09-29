@@ -157,7 +157,9 @@ namespace ARPG.Systems
                 ? NpcActivityKind.Rest
                 : AR.s.Npc.SelectNextActivity(entityId, saveData, startGameTime, worldSeed);
 
-            if (kind == NpcActivityKind.Hunt && AR.s.Npc.TryCreateHuntParty(entityId, out NpcPartyState? party) &&
+            // 원정 파티 자동 구성 (D85): 모집 시도 확률 → 후보(대기 None/Rest)별 수락 확률. 아무도 없으면 솔로.
+            if (kind == NpcActivityKind.Hunt &&
+                AR.s.Npc.TryCreateHuntParty(entityId, kind, startGameTime, worldSeed, out NpcPartyState? party) &&
                 party != null)
             {
                 StartPartyHunt(party, startGameTime, worldSeed);
@@ -169,8 +171,8 @@ namespace ARPG.Systems
             Vector2 delveTarget = saveData.Position;
             if (kind == NpcActivityKind.DungeonDelve)
             {
-                if (AR.s.Npc.TryCreateHuntParty(entityId, out NpcPartyState? delveParty, NpcActivityKind.DungeonDelve) &&
-                    delveParty != null)
+                if (AR.s.Npc.TryCreateHuntParty(entityId, kind, startGameTime, worldSeed,
+                        out NpcPartyState? delveParty) && delveParty != null)
                 {
                     StartPartyDelve(delveParty, startGameTime, worldSeed);
                     return;

@@ -174,11 +174,33 @@ namespace ARPG.Npc
         public const float RumorAcceptChancePerCuriosity = 0.45f;
         // 소문 RNG salt (D77). 소유자 = Rest 중이던 NPC EntityId, 시각 = Rest 시작 시각.
         // 120 교환 발생(1번째 난수)·두 번째 상대(2번째 난수), 121 상대 고르기, 122+i 본인이 상대 i의 소문을 받을지,
-        // 124+i 상대 i가 본인의 소문을 받을지 (i = 0,1). 126~129는 P2b 예비.
+        // 124+i 상대 i가 본인의 소문을 받을지 (i = 0,1). 126~129는 비워 둔 P2b 예비 번호 — 재사용 금지 (D85 파티는 130부터).
         public const int RumorExchangeSalt = 120;
         public const int RumorPeerPickSalt = 121;
         public const int RumorAcceptBySelfSaltBase = 122;
         public const int RumorAcceptByPeerSaltBase = 124;
+
+        // ===== 원정 파티 자동 구성 (NPC_AMBITION_DESIGN §7.5, D85) =====
+        // 모집 시도 확률 = 기본값 × 성향 배율(1 + clamp(친화력 항 + 동료 야망 항, ±DispositionMaxDeviation)) — D40과 같은 클램프.
+        // 원정 중 파티 비율 30~50%를 목표로 진단(Ambition Sim)으로 맞춘 개발 튜닝 상수다 (실행 중 자동 보정 없음).
+        public const float PartyRecruitAttemptBaseChance = 0.45f;
+        public const float PartyRecruitFriendlinessDeviation = 0.10f;   // 친화력 0/100 → ∓/±
+        public const float AmbitionComradePartyBonus = 0.15f;           // 동료 야망 (주 1.0 / 보조 0.5)
+        // 수락 확률 = clamp(Base + 호감도/100 × Affinity + 관계(친구·형제·배우자 중 하나면 +CloseRelation, 중복 없음)
+        //              + 용기 항 × Courage − (1 − 쉰 정도) × FreshRest, Min, Max).
+        // 쉰 정도 = 휴식 경과 / 휴식 길이(활동 없음이면 1) — 방금 쉬기 시작한 NPC는 덜 따라간다.
+        // TODO(P3): 리더 명성(Renown) 항 반영 예정 — 명성 도입 전까지 넣지 않는다.
+        public const float PartyAcceptBaseChance = 0.47f;
+        public const float PartyAcceptAffinityWeight = 0.45f;
+        public const float PartyAcceptCloseRelationBonus = 0.10f;
+        public const float PartyAcceptCourageDeviation = 0.10f;
+        public const float PartyAcceptFreshRestPenalty = 0.25f;
+        public const float PartyAcceptChanceMin = 0.05f;
+        public const float PartyAcceptChanceMax = 0.90f;
+        // 파티 모집 RNG salt (D85). 소유자 = 리더 EntityId, 시각 = 리더의 활동 결정 시각.
+        // 130 모집 시도 롤, 131 수락 난수열(모집 점수순 후보마다 1개씩 차례로 뽑는다). 132~139는 파티 모집 예비.
+        public const int PartyRecruitAttemptSalt = 130;
+        public const int PartyAcceptSalt = 131;
 
         /// <summary>원정형 활동(Venturing + 왕복 경로 표현)인가. Hunt와 DungeonDelve.</summary>
         public static bool IsExpedition(NpcActivityKind kind)
@@ -701,8 +723,37 @@ namespace ARPG.Npc
         }
 
         /// <summary>
+        /// 리더의 모집 시도 확률 (D85 ②). 친화력과 동료 야망을 약하게 반영하고 성향 영향은 ±20%로 묶는다 (D40).
+        /// </summary>
+        public static float GetPartyRecruitAttemptChance(in NpcStatComponent stat)
+        {
+            NpcAmbitionProfile ambition = NpcAmbitionEvaluator.Evaluate(stat);
+            float deviation = CenteredTrait(stat.Friendliness) * PartyRecruitFriendlinessDeviation;
+            if (ambition.Primary == NpcAmbitionKind.Comrade)
+                deviation += AmbitionComradePartyBonus;
+            if (ambition.Secondary == NpcAmbitionKind.Comrade)
+                deviation += AmbitionComradePartyBonus * SecondaryAmbitionWeight;
+            float multiplier = 1f + Mathf.Clamp(deviation, -DispositionMaxDeviation, DispositionMaxDeviation);
+            return Mathf.Clamp01(PartyRecruitAttemptBaseChance * multiplier);
+        }
+
+        /// <summary>
+        /// 후보의 수락 확률 (D85 ③). 리더와의 호감도(−100~100)·친밀 관계(친구·형제·배우자)·용기·쉰 정도(0~1)를 반영한다.
+        /// P3에서 리더 명성(Renown) 항이 추가될 예정이다.
+        /// </summary>
+        public static float GetPartyAcceptChance(int affinity, bool hasCloseRelation, int courage, float restedFraction)
+        {
+            float chance = PartyAcceptBaseChance
+                + Mathf.Clamp(affinity / 100f, -1f, 1f) * PartyAcceptAffinityWeight
+                + (hasCloseRelation == true ? PartyAcceptCloseRelationBonus : 0f)
+                + CenteredTrait(courage) * PartyAcceptCourageDeviation
+                - (1f - Mathf.Clamp01(restedFraction)) * PartyAcceptFreshRestPenalty;
+            return Mathf.Clamp(chance, PartyAcceptChanceMin, PartyAcceptChanceMax);
+        }
+
+        /// <summary>
         /// 활동 결정론 RNG. 같은 (소유자, 활동 시작시각, worldSeed, salt)는 세이브/로드 뒤에도 같은 난수열을 준다.
-        /// 소문 교환(NpcManager_Rumor)도 이 채널을 쓴다 (salt 120~125).
+        /// 소문 교환(NpcManager_Rumor)도 이 채널을 쓴다 (salt 120~125). 파티 모집(NpcManager_Party)은 130·131.
         /// </summary>
         internal static HistoryRng CreateRng(int entityId, float startGameTime, int worldSeed, int salt)
         {
@@ -713,7 +764,9 @@ namespace ARPG.Npc
             // salt=5는 솔로 치료 구매, 10+i는 파티원 결과, 20은 파티 보상, 30+i는 파티원 개인 전리품,
             // 40+i는 파티원 치료 구매, 50·51·53~56·60+i·70+i·90+i·100·110+i는 DungeonDelve(Delve*Salt 상수)에 사용한다.
             // 52·80+i는 폐기된 Delve 희귀 보너스 롤 번호 — reserved, 재사용 금지.
-            // 120~125는 소문 교환(Rumor*Salt 상수), 126~129는 P2b 예비.
+            // 120~125는 소문 교환(Rumor*Salt 상수). 126~129는 비워 둔 P2b 예비 번호 — 재사용 금지.
+            // 130은 파티 모집 시도, 131은 파티 수락 난수열(리더 EntityId·리더 결정 시각 기준, PartyRecruit*/PartyAccept* 상수).
+            // 132~139는 파티 모집 예비.
             int key = unchecked(worldSeed ^ (entityId * 486187739) ^ (startTick * 16777619) ^ salt);
             return new HistoryRng(DerivedSeed.Derive(key, DerivedSeed.ChannelNpcActivity));
         }

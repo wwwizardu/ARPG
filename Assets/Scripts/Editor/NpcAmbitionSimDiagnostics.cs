@@ -201,7 +201,18 @@ namespace ARPG.EditorTools
             public readonly long[] DeedBytesStart = new long[DeedKindCount];
             public readonly int[] DeedCountStart = new int[DeedKindCount];
             public TopicAudit Topics = new TopicAudit();
+
+            // D85: 원정 파티 자동 구성
+            public NpcPartyCounters PartyCounters = new NpcPartyCounters();
+            public long SoloHuntJudgments, PartyHuntJudgments, SoloDelveJudgments, PartyDelveJudgments;
+            public long SoloHuntStarts, PartyHuntStarts, SoloDelveStarts, PartyDelveStarts;
+            // 매 시간 생존 NPC 상태 표본: StateRest..StateIdle 인덱스
+            public readonly long[] StateHours = new long[StateSlotCount];
+            public long TotalFoodInflow;
         }
+
+        private const int StateRest = 0, StateSoloHunt = 1, StatePartyHunt = 2, StateTrade = 3, StateSoloDelve = 4,
+            StatePartyDelve = 5, StateWounded = 6, StateIdle = 7, StateSlotCount = 8;
 
         /// <summary>대화 토픽 검증 결과 (P2c). 시뮬 마지막 시각의 복제본에서 실제 DialogueTopicSelector 코드로 만든다.</summary>
         private sealed class TopicAudit
@@ -333,6 +344,7 @@ namespace ARPG.EditorTools
                     for (int i = 0; i < sim.NpcIds.Count; i++)
                         AdvanceNpc(sim, sim.NpcIds[i], now);
                     UpdateRumorPropagation(sim, now);
+                    SampleActivityStates(sim);
 
                     if (hour % 24 == 0)
                     {
@@ -915,9 +927,11 @@ namespace ARPG.EditorTools
                 else { sim.Today.SelectRest++; stats.Rest++; }
             }
 
-            if (kind == NpcActivityKind.Hunt && AR.s.Npc.TryCreateHuntParty(entityId, out NpcPartyState? party) &&
+            if (kind == NpcActivityKind.Hunt &&
+                AR.s.Npc.TryCreateHuntParty(entityId, kind, startGameTime, sim.WorldSeed, out NpcPartyState? party) &&
                 party != null)
             {
+                sim.PartyHuntStarts++;
                 StartPartyHunt(party, startGameTime);
                 return;
             }
@@ -926,9 +940,10 @@ namespace ARPG.EditorTools
             string delveDungeonId = string.Empty;
             if (kind == NpcActivityKind.DungeonDelve)
             {
-                if (AR.s.Npc.TryCreateHuntParty(entityId, out NpcPartyState? delveParty, NpcActivityKind.DungeonDelve) &&
-                    delveParty != null)
+                if (AR.s.Npc.TryCreateHuntParty(entityId, kind, startGameTime, sim.WorldSeed,
+                        out NpcPartyState? delveParty) && delveParty != null)
                 {
+                    sim.PartyDelveStarts++;
                     StartPartyDelve(sim, delveParty, startGameTime);
                     return;
                 }
@@ -938,6 +953,11 @@ namespace ARPG.EditorTools
                 else if (fromRumor == true)
                     sim.ConfirmationSolo.Add(entityId);
             }
+
+            if (kind == NpcActivityKind.Hunt)
+                sim.SoloHuntStarts++;
+            else if (kind == NpcActivityKind.DungeonDelve)
+                sim.SoloDelveStarts++;
 
             NpcActivityState activity = saveData.Activity;
             activity.Kind = kind;
@@ -1088,6 +1108,10 @@ namespace ARPG.EditorTools
             DayRow today = sim.Today;
             today.ExpectedDeaths += report.ExpectedDeaths;
             today.DelveDungeonChangedFailures += report.DungeonChangedFailures;
+            if (report.IsParty == true)
+                sim.PartyDelveJudgments += report.Outcomes.Count;
+            else
+                sim.SoloDelveJudgments += report.Outcomes.Count;
             for (int i = 0; i < report.Outcomes.Count; i++)
             {
                 today.DelveOutcomes++;
@@ -1206,6 +1230,7 @@ namespace ARPG.EditorTools
             activity.PhaseStartedGameTime = outcomeGameTime;
             saveData.LastSimGameTime = outcomeGameTime;
             CountHuntOutcome(sim, outcome);
+            sim.SoloHuntJudgments++;
 
             if (outcome == NpcHuntOutcome.Dead)
             {
@@ -1274,6 +1299,7 @@ namespace ARPG.EditorTools
                 if (outcomes[i] == NpcHuntOutcome.Success)
                     successCount++;
                 CountHuntOutcome(sim, outcomes[i]);
+                sim.PartyHuntJudgments++;
             }
 
             int foodYield = successCount > 0
@@ -1346,6 +1372,7 @@ namespace ARPG.EditorTools
             int produced = VillageResourceSimulation.Produce(village, GlobalEnum.ItemType.Food, amount);
             sim.Today.FoodYieldRaw += amount;
             sim.Today.FoodInflow += produced;
+            sim.TotalFoodInflow += produced;
             if (sim.VillageStats.TryGetValue(villageId, out VillageStats? stats))
                 stats.FoodInflow += produced;
         }
@@ -1730,6 +1757,7 @@ namespace ARPG.EditorTools
             sb.AppendLine($"닫힌 경제 검산 오차(일별 최대): {maxConservationError}");
             AppendRumorSummary(sb, sim, rows, days);
             AppendTopicSummary(sb, sim, days);
+            AppendPartySummary(sb, sim, days, first.Living);
 
             // ---- P2 완료 기준 체크리스트 (§13, §10.1 기조 — 30일 실행 기준) ----
             TopicAudit ta = sim.Topics;
@@ -1781,6 +1809,97 @@ namespace ARPG.EditorTools
             sb.Append(check);
             sb.AppendLine($"  [참고] 사망률: {deathNote}");
             return sb.ToString();
+        }
+
+        /// <summary>매 시간 생존 NPC의 활동 상태를 센다 — 선택 비중과 별개인 "실제 시간 비중" (파티로 끌려간 원정 시간 포함).</summary>
+        private static void SampleActivityStates(SimContext sim)
+        {
+            for (int i = 0; i < sim.NpcIds.Count; i++)
+            {
+                NpcSaveData saveData = sim.Npcs[sim.NpcIds[i]];
+                if (saveData.Condition == CharacterConditions.Dead)
+                    continue;
+                NpcActivityState activity = saveData.Activity;
+                if (activity.Phase == NpcActivityPhase.Dead)
+                    continue;
+                bool inParty = activity.PartyId >= 0;
+                int slot;
+                if (activity.Phase == NpcActivityPhase.Wounded)
+                    slot = StateWounded;
+                else if (activity.Kind == NpcActivityKind.Rest)
+                    slot = StateRest;
+                else if (activity.Kind == NpcActivityKind.Trade)
+                    slot = StateTrade;
+                else if (activity.Kind == NpcActivityKind.Hunt)
+                    slot = inParty ? StatePartyHunt : StateSoloHunt;
+                else if (activity.Kind == NpcActivityKind.DungeonDelve)
+                    slot = inParty ? StatePartyDelve : StateSoloDelve;
+                else
+                    slot = StateIdle;
+                sim.StateHours[slot]++;
+            }
+        }
+
+        /// <summary>
+        /// 원정 파티 통계 (D85). "원정 중 파티 비율"(정본) = 원정 판정(파티원 개인 판정 포함) 중 파티원 판정 비율 —
+        /// 원정을 다녀온 NPC-회 중 파티로 다녀온 비율이다. 원정 시작(그룹 단위) 중 파티 원정 비율과 시간 표본 비율도 함께 적는다.
+        /// </summary>
+        private static void AppendPartySummary(StringBuilder sb, SimContext sim, int days, int livingStart)
+        {
+            NpcPartyCounters c = sim.PartyCounters;
+            long huntJ = sim.SoloHuntJudgments + sim.PartyHuntJudgments;
+            long delveJ = sim.SoloDelveJudgments + sim.PartyDelveJudgments;
+            long partyJ = sim.PartyHuntJudgments + sim.PartyDelveJudgments;
+            sb.AppendLine("==== 원정 파티 (D85) ====");
+            sb.AppendLine($"원정 중 파티 비율(원정 판정 중 파티원 판정): Hunt {Pct(sim.PartyHuntJudgments, huntJ):F2}% " +
+                          $"({sim.PartyHuntJudgments}/{huntJ}) / Delve {Pct(sim.PartyDelveJudgments, delveJ):F2}% " +
+                          $"({sim.PartyDelveJudgments}/{delveJ}) / 합계 {Pct(partyJ, huntJ + delveJ):F2}%");
+            long huntStarts = sim.SoloHuntStarts + sim.PartyHuntStarts;
+            long delveStarts = sim.SoloDelveStarts + sim.PartyDelveStarts;
+            sb.AppendLine($"원정 시작(그룹 단위) 중 파티 원정: Hunt {Pct(sim.PartyHuntStarts, huntStarts):F2}% " +
+                          $"({sim.PartyHuntStarts}/{huntStarts}) / Delve {Pct(sim.PartyDelveStarts, delveStarts):F2}% " +
+                          $"({sim.PartyDelveStarts}/{delveStarts})");
+            for (int k = 0; k < 2; k++)
+            {
+                long parties = 0;
+                for (int size = 2; size <= NpcManager.MaxPartySize; size++)
+                    parties += c.PartiesBySize[k, size];
+                sb.AppendLine($"{(k == 0 ? "Hunt" : "Delve")} 모집: 시도 {c.Attempts[k]} → 시도 롤 통과 {c.AttemptsPassed[k]} " +
+                              $"({Pct(c.AttemptsPassed[k], c.Attempts[k]):F1}%) → 파티 {parties} / 수락자 0 {c.NobodyAccepted[k]} | " +
+                              $"크기 1(솔로)={c.Attempts[k] - parties} 2={c.PartiesBySize[k, 2]} 3={c.PartiesBySize[k, 3]} 4={c.PartiesBySize[k, 4]}");
+            }
+            sb.Append($"후보 수 분포(시도 롤 통과 {c.CandidateSamples}회, 평균 {(c.CandidateSamples > 0 ? c.CandidateTotal / (double)c.CandidateSamples : 0d):F2}명):");
+            string[] bucketLabels = { "0", "1", "2", "3", "4-5", "6-9", "10+" };
+            for (int i = 0; i < bucketLabels.Length; i++)
+                sb.Append($" {bucketLabels[i]}={Pct(c.CandidateBuckets[i], c.CandidateSamples):F1}%");
+            sb.AppendLine();
+            sb.Append("후보 탈락 사유:");
+            for (int r = 1; r < (int)NpcPartyRejectReason.Count; r++)
+                sb.Append($" {(NpcPartyRejectReason)r}={c.Rejections[r]}");
+            sb.AppendLine();
+            sb.Append("수락률(실측 / 평균 확률, 롤 수):");
+            string[] acceptLabels = { "관계(친구·형제·배우자)", "호감<0", "호감0~49", "호감50+" };
+            for (int b = 0; b < NpcPartyCounters.AcceptBucketCount; b++)
+            {
+                sb.Append($" {acceptLabels[b]} {Pct(c.Accepted[b], c.AcceptRolls[b]):F1}% / " +
+                          $"{(c.AcceptRolls[b] > 0 ? c.AcceptChanceSum[b] * 100d / c.AcceptRolls[b] : 0d):F1}% (n={c.AcceptRolls[b]}) |");
+            }
+            sb.AppendLine();
+            sb.AppendLine($"휴식 끊김 {c.RestInterrupted}회 (건너뛴 소문 교환 = 교환 롤이 통과했을 끊김 {c.RumorExchangesSkipped}회) | " +
+                          $"이미 끝난 휴식 정상 종료 후 합류 {c.RestCompletedBeforeJoin}회");
+            long total = 0;
+            for (int i = 0; i < StateSlotCount; i++)
+                total += sim.StateHours[i];
+            long[] h = sim.StateHours;
+            long expeditionHours = h[StateSoloHunt] + h[StatePartyHunt] + h[StateSoloDelve] + h[StatePartyDelve];
+            sb.AppendLine($"실제 시간 비중(매 시간 생존 NPC 표본): Rest {Pct(h[StateRest], total):F2}% / " +
+                          $"Hunt {Pct(h[StateSoloHunt] + h[StatePartyHunt], total):F2}% (솔로 {Pct(h[StateSoloHunt], total):F2} + 파티 {Pct(h[StatePartyHunt], total):F2}) / " +
+                          $"Trade {Pct(h[StateTrade], total):F2}% / Delve {Pct(h[StateSoloDelve] + h[StatePartyDelve], total):F2}% " +
+                          $"(솔로 {Pct(h[StateSoloDelve], total):F2} + 파티 {Pct(h[StatePartyDelve], total):F2}) / " +
+                          $"부상 {Pct(h[StateWounded], total):F2}% / 대기 {Pct(h[StateIdle], total):F2}%");
+            sb.AppendLine($"원정 시간 중 파티 비율: {Pct(h[StatePartyHunt] + h[StatePartyDelve], expeditionHours):F2}% | " +
+                          $"마을 Food 유입 합계 {sim.TotalFoodInflow} (하루 {sim.TotalFoodInflow / (float)Mathf.Max(1, days):F0}, " +
+                          $"NPC 1인당 {(livingStart > 0 ? sim.TotalFoodInflow / (float)livingStart : 0f):F2})");
         }
 
         private static void AppendAmbitionShares(StringBuilder sb, SimContext sim)
@@ -2198,6 +2317,7 @@ namespace ARPG.EditorTools
         private static void AttachRumorProbes(SimContext sim, List<FieldSwap> swaps)
         {
             Swap(swaps, AR.s.Npc, "_rumorCounters", sim.RumorCounters);
+            Swap(swaps, AR.s.Npc, "_partyCounters", sim.PartyCounters);
             AR.s.Npc.RumorExposureAudit = rumor =>
             {
                 bool valid = AuditRumorValidity(sim, rumor, out _);
