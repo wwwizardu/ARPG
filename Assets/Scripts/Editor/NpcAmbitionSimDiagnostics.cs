@@ -37,7 +37,7 @@ namespace ARPG.EditorTools
         private const float CowardFraction = 0.10f;
         private const int MaxExampleCases = 5;
         private const int MaxPhaseTransitionsPerNpc = 4;
-        private const int DeedKindCount = (int)NpcDeedKind.DungeonCleared + 1;
+        private const int DeedKindCount = (int)NpcDeedKind.AttackedWound + 1;
         private const int MaxTopicExamplesPerKind = 4;
 
         [MenuItem("ARPG/Npc/Diagnostics/Ambition Sim (30 days)", false, 431)]
@@ -78,6 +78,7 @@ namespace ARPG.EditorTools
             public int NpcCompletions;
             public int UpgradesDelve;
             public int Wounded;
+            public int SevereWounds;        // 그중 중상 (D91)
             public int Treatments;
             public int Deaths;
             public double ExpectedDeaths;   // 판정마다 사망 확률을 더한 기대값 — 고정 시드 한 번의 표본 변동을 걸러 본다
@@ -200,6 +201,8 @@ namespace ARPG.EditorTools
             public bool ProbePlayerEntered;
             public readonly long[] DeedBytesStart = new long[DeedKindCount];
             public readonly int[] DeedCountStart = new int[DeedKindCount];
+            // D91: 원정 부상 누적 요약(NpcSaveData.WoundCount) 합계 — 시작 시점
+            public long WoundCountStart;
             public TopicAudit Topics = new TopicAudit();
 
             // D85: 원정 파티 자동 구성
@@ -326,6 +329,7 @@ namespace ARPG.EditorTools
                 sim.NpcJsonBytesStart = MeasureNpcJsonBytes(sim, out _, out _);
                 sim.ProbePlayerEntered = probePlayerEntered;
                 MeasureDeedJsonBytes(sim, sim.DeedBytesStart, sim.DeedCountStart);
+                sim.WoundCountStart = SumWoundCount(sim);
                 Debug.unityLogger.logHandler = capture;
                 SwapInClones(sim, swaps);
                 AttachRumorProbes(sim, swaps);
@@ -1060,7 +1064,10 @@ namespace ARPG.EditorTools
                 return;
             }
             if (outcome == NpcHuntOutcome.Wounded)
+            {
                 CountTreatment(sim, saveData, report.Treated[0]);
+                CountSevere(sim, report.Severe[0]);
+            }
             if (AR.s.Npc.GetNpcPower(entityId) > powerBefore + PowerEpsilon)
                 sim.Today.UpgradesDelve++;
         }
@@ -1096,7 +1103,10 @@ namespace ARPG.EditorTools
                     continue;
                 }
                 if (report.Outcomes[i] == NpcHuntOutcome.Wounded)
+                {
                     CountTreatment(sim, member, report.Treated[i]);
+                    CountSevere(sim, report.Severe[i]);
+                }
                 int before = ids.IndexOf(memberId);
                 if (before >= 0 && AR.s.Npc.GetNpcPower(memberId) > powerBefore[before] + PowerEpsilon)
                     sim.Today.UpgradesDelve++;
@@ -1239,11 +1249,12 @@ namespace ARPG.EditorTools
             }
             if (outcome == NpcHuntOutcome.Wounded)
             {
-                activity.Phase = NpcActivityPhase.Wounded;
-                float recovery = AR.s.Npc.ResolveWoundedTreatment(entityId, saveData, entityId, seedGameTime,
-                    sim.WorldSeed, NpcActivityResolver.TreatmentSalt, out bool treated);
-                activity.PhaseEndGameTime = outcomeGameTime + recovery;
+                // 실제 System_NpcSim과 같은 공용 부상 처리 (중상·치료·상태 전이·기록, D91)
+                AR.s.Npc.ApplyExpeditionWound(entityId, saveData, NpcActivityKind.Hunt, entityId, seedGameTime,
+                    sim.WorldSeed, NpcActivityResolver.TreatmentSalt, NpcActivityResolver.SevereWoundHuntSalt,
+                    outcomeGameTime, out bool treated, out bool severe);
                 CountTreatment(sim, saveData, treated);
+                CountSevere(sim, severe);
                 return;
             }
 
@@ -1319,12 +1330,12 @@ namespace ARPG.EditorTools
 
                 if (outcomes[i] == NpcHuntOutcome.Wounded)
                 {
-                    activity.Phase = NpcActivityPhase.Wounded;
-                    activity.Kind = NpcActivityKind.None;
-                    float recovery = AR.s.Npc.ResolveWoundedTreatment(memberIds[i], member, party.PartyId, seedGameTime,
-                        sim.WorldSeed, NpcActivityResolver.PartyTreatmentSaltBase + i, out bool treated);
-                    activity.PhaseEndGameTime = outcomeGameTime + recovery;
+                    AR.s.Npc.ApplyExpeditionWound(memberIds[i], member, NpcActivityKind.Hunt, party.PartyId, seedGameTime,
+                        sim.WorldSeed, NpcActivityResolver.PartyTreatmentSaltBase + i,
+                        NpcActivityResolver.PartySevereWoundHuntSaltBase + i, outcomeGameTime, out bool treated,
+                        out bool severe);
                     CountTreatment(sim, member, treated);
+                    CountSevere(sim, severe);
                 }
                 else if (outcomes[i] != NpcHuntOutcome.Dead)
                 {
@@ -1404,6 +1415,20 @@ namespace ARPG.EditorTools
                 sim.Today.HuntSuccess++;
             else if (outcome == NpcHuntOutcome.Wounded)
                 sim.Today.Wounded++;
+        }
+
+        private static void CountSevere(SimContext sim, bool severe)
+        {
+            if (severe == true)
+                sim.Today.SevereWounds++;
+        }
+
+        private static long SumWoundCount(SimContext sim)
+        {
+            long total = 0;
+            for (int i = 0; i < sim.NpcIds.Count; i++)
+                total += sim.Npcs[sim.NpcIds[i]].WoundCount;
+            return total;
         }
 
         private static void CountTreatment(SimContext sim, NpcSaveData saveData, bool treated)
@@ -1534,7 +1559,7 @@ namespace ARPG.EditorTools
             sb.AppendLine("day,game_time,living_npcs,avg_power,avg_power_change_pct,cohort_avg_power,cohort_avg_power_change_pct,survivor_start_avg_power,survivorship_pct,survivor_growth_pct,p98_power,cap_exceed,max_power_cap_ratio," +
                           "upgrades_loot,upgrades_trade,upgrades_delve,select_rest,select_hunt,select_trade,select_delve," +
                           "rest_pct,hunt_pct,trade_pct,delve_pct," +
-                          "hunt_outcomes,hunt_success_pct,delve_outcomes,delve_success_pct,delve_completion_rolls,delve_dungeon_changed_failures,npc_completions,wounded,treatments,deaths,expected_deaths,gold_burned,world_gold,village_gold,npc_gold," +
+                          "hunt_outcomes,hunt_success_pct,delve_outcomes,delve_success_pct,delve_completion_rolls,delve_dungeon_changed_failures,npc_completions,wounded,severe_wounds,treatments,deaths,expected_deaths,gold_burned,world_gold,village_gold,npc_gold," +
                           "population_gold_produced,world_gold_conservation_error,food_inflow,food_yield_raw,trades_executed," +
                           "npc_sold,npc_sold_gold,npc_sell_rejected,npc_bought,npc_bought_gold," +
                           "rumor_exchange_attempts,rumor_transfers,rumors_held,rumor_holders,promising_holders,rumor_stored_invalid,confirmation_delves");
@@ -1587,6 +1612,7 @@ namespace ARPG.EditorTools
                   .Append(r.DelveDungeonChangedFailures).Append(',')
                   .Append(r.NpcCompletions).Append(',')
                   .Append(r.Wounded).Append(',')
+                  .Append(r.SevereWounds).Append(',')
                   .Append(r.Treatments).Append(',')
                   .Append(r.Deaths).Append(',')
                   .Append(F((float)r.ExpectedDeaths, 3)).Append(',')
@@ -1649,6 +1675,7 @@ namespace ARPG.EditorTools
             int dungeonChangedFailures = 0, lateCompletions = 0;
             int lateStartDay = Mathf.Max(1, days - 14);
             int huntOutcomes = 0, huntSuccess = 0, treatments = 0, deaths = 0, sold = 0, rejected = 0, bought = 0;
+            int woundedTotal = 0, severeTotal = 0;
             double expectedDeaths = 0d;
             float maxCapRatio = 0f;
             for (int i = 1; i < rows.Count; i++)
@@ -1663,6 +1690,7 @@ namespace ARPG.EditorTools
                     lateCompletions += r.NpcCompletions;
                 huntOutcomes += r.HuntOutcomes; huntSuccess += r.HuntSuccess;
                 treatments += r.Treatments; deaths += r.Deaths; expectedDeaths += r.ExpectedDeaths;
+                woundedTotal += r.Wounded; severeTotal += r.SevereWounds;
                 sold += r.Sold; rejected += r.SellRejected; bought += r.Bought;
                 maxCapExceed = Mathf.Max(maxCapExceed, r.CapExceed);
                 maxCapRatio = Mathf.Max(maxCapRatio, r.MaxCapRatio);
@@ -1713,6 +1741,10 @@ namespace ARPG.EditorTools
                           $"Trade {Pct(cowardTrade, cowardSelections):F2}% / Delve {Pct(cowardDelve, cowardSelections):F2}%");
             sb.AppendLine($"Hunt 판정 {huntOutcomes}건 성공률 {Pct(huntSuccess, huntOutcomes):F2}% | " +
                           $"Delve 판정 {delveOutcomes}건(파티원 개인 포함) 성공률 {Pct(delveSuccess, delveOutcomes):F2}% | 치료 {treatments}건");
+            long woundCountEnd = SumWoundCount(sim);
+            sb.AppendLine($"부상 등급(D91): 원정 부상 {woundedTotal}건 = 가벼운 {woundedTotal - severeTotal} / 중상 {severeTotal} " +
+                          $"(중상 비율 {Pct(severeTotal, woundedTotal):F2}%) | 누적 부상 요약 합계 {sim.WoundCountStart} → {woundCountEnd} " +
+                          $"(+{woundCountEnd - sim.WoundCountStart}, 사망자 포함)");
             sb.AppendLine($"NPC 던전 완료: {completions}건 (던전 슬롯 있는 마을 {villagesWithSlots}곳, 마을당 평균 " +
                           $"{(villagesWithSlots > 0 ? completions / (float)villagesWithSlots : 0f):F3}회 / {days}일) | " +
                           $"완료 확률 롤 통과 {completionRolls}건 | 마지막 15일(일 {lateStartDay}~{days}) 완료 {lateCompletions}건");
@@ -2002,6 +2034,8 @@ namespace ARPG.EditorTools
                     a.CollectMultiplePerType++;
 
                 bool hasNotable = false, hasCleared = false;
+                // 자랑 토픽은 두 종류 중 가장 최근 Deed를 말한다 — 목록 인덱스(CacheVariant) 대신 여기서 같은 규칙으로 찾는다 (D91)
+                NpcDeedKind latestBoastKind = NpcDeedKind.VentureFailed;
                 for (int d = 0; d < save.Deeds.Count; d++)
                 {
                     NpcDeedEntry deed = save.Deeds[d];
@@ -2009,14 +2043,16 @@ namespace ARPG.EditorTools
                         continue;
                     hasNotable |= deed.Kind == NpcDeedKind.NotableItemAcquired;
                     hasCleared |= deed.Kind == NpcDeedKind.DungeonCleared;
+                    if (deed.Kind == NpcDeedKind.NotableItemAcquired || deed.Kind == NpcDeedKind.DungeonCleared)
+                        latestBoastKind = deed.Kind;
                 }
                 if (hasNotable == true)
                     a.NotableDeedNpcs++;
                 if (hasCleared == true)
                     a.ClearedDeedNpcs++;
-                if (boast != null && boast.CacheVariant >= 0 && boast.CacheVariant < save.Deeds.Count)
+                if (boast != null && (hasNotable == true || hasCleared == true))
                 {
-                    NpcDeedKind kind = save.Deeds[boast.CacheVariant].Kind;
+                    NpcDeedKind kind = latestBoastKind;
                     if (kind == NpcDeedKind.NotableItemAcquired)
                         a.BoastItemNpcs++;
                     else if (kind == NpcDeedKind.DungeonCleared)
@@ -2303,13 +2339,26 @@ namespace ARPG.EditorTools
             int notable = (int)NpcDeedKind.NotableItemAcquired;
             int cleared = (int)NpcDeedKind.DungeonCleared;
             int wounded = (int)NpcDeedKind.Wounded;
+            int severe = (int)NpcDeedKind.SevereWound;
             sb.AppendLine($"Deed JSON: 시작 {totalStart / 1024f:F0}KB → 끝 {totalEnd / 1024f:F0}KB (+{(totalEnd - totalStart) / 1024f:F0}KB) | " +
                           $"NotableItemAcquired {sim.DeedCountStart[notable]}→{countEnd[notable]}건 " +
                           $"(+{(bytesEnd[notable] - sim.DeedBytesStart[notable]) / 1024f:F1}KB, 1건 평균 " +
                           $"{(countEnd[notable] > 0 ? bytesEnd[notable] / (float)countEnd[notable] : 0f):F0}B) | " +
                           $"DungeonCleared {sim.DeedCountStart[cleared]}→{countEnd[cleared]}건 " +
                           $"(+{(bytesEnd[cleared] - sim.DeedBytesStart[cleared]) / 1024f:F1}KB) | " +
-                          $"Wounded {sim.DeedCountStart[wounded]}→{countEnd[wounded]}건 (+{(bytesEnd[wounded] - sim.DeedBytesStart[wounded]) / 1024f:F0}KB)");
+                          $"Wounded {sim.DeedCountStart[wounded]}→{countEnd[wounded]}건 (+{(bytesEnd[wounded] - sim.DeedBytesStart[wounded]) / 1024f:F0}KB) | " +
+                          $"SevereWound {sim.DeedCountStart[severe]}→{countEnd[severe]}건 " +
+                          $"(+{(bytesEnd[severe] - sim.DeedBytesStart[severe]) / 1024f:F1}KB, 1건 평균 " +
+                          $"{(countEnd[severe] > 0 ? bytesEnd[severe] / (float)countEnd[severe] : 0f):F0}B)");
+            // 종류별 1건 평균 크기 (끝 시점, 배열 쉼표 포함) — Deed 직렬화 크기 비교용
+            sb.Append("  Deed 종류별 건수·1건 평균(끝):");
+            for (int k = 0; k < DeedKindCount; k++)
+            {
+                if (countEnd[k] == 0)
+                    continue;
+                sb.Append($" {(NpcDeedKind)k} {countEnd[k]}건/{bytesEnd[k] / (float)countEnd[k]:F0}B");
+            }
+            sb.AppendLine();
         }
 
         // ================= 소문 (P2b) =================

@@ -134,7 +134,7 @@ namespace ARPG.EditorTools
         }
 
         /// <summary>
-        /// 오프스크린 NPC를 지금 부상 상태로 만들고 실제 Hunt 부상과 같은 치료 판정·Deed 기록을 태운다.
+        /// 오프스크린 NPC를 지금 부상 상태로 만들고 실제 솔로 Hunt 부상과 같은 중상·치료 판정·기록(D91)을 태운다.
         /// RNG 시드는 현재 게임시각이다 (같은 시각에 두 번 부르면 같은 결과).
         /// </summary>
         public static void ForceWound(int npcId)
@@ -145,17 +145,14 @@ namespace ARPG.EditorTools
 
             float now = AR.s.Time.CurrentGameTime;
             long before = GetWorldGoldTotal();
-            float hours = AR.s.Npc.ResolveWoundedTreatment(npcId, saveData, npcId, now, AR.s.Map.mapSeed,
-                NpcActivityResolver.TreatmentSalt, out bool treated);
-            NpcActivityState activity = saveData.Activity;
-            activity.Phase = NpcActivityPhase.Wounded;
-            activity.Kind = NpcActivityKind.None;
-            activity.PhaseStartedGameTime = now;
-            activity.PhaseEndGameTime = now + hours;
-            AR.s.Npc.AddWoundedDeed(npcId, now, activity.PhaseEndGameTime, treated);
+            saveData.Activity.PhaseStartedGameTime = now;
+            float hours = AR.s.Npc.ApplyExpeditionWound(npcId, saveData, NpcActivityKind.Hunt, npcId, now,
+                AR.s.Map.mapSeed, NpcActivityResolver.TreatmentSalt, NpcActivityResolver.SevereWoundHuntSalt, now,
+                out bool treated, out bool severe);
             long after = GetWorldGoldTotal();
             Debug.Log($"[NpcAmbitionDebug] ForceWound {AR.s.Npc.GetDisplayName(npcId)} (EntityId: {npcId}) " +
-                      $"treated={treated} recovery={hours:F0}h gold={saveData.Gold} " +
+                      $"severe={severe} treated={treated} recovery={hours:F0}h woundCount={saveData.WoundCount} " +
+                      $"gold={saveData.Gold} " +
                       $"worldGold={before}->{after} conserved={before == after}");
         }
 

@@ -1747,7 +1747,8 @@ namespace ARPG.Npc
         }
 
         /// <summary>
-        /// NPC 주요 사건 이력에 항목을 추가한다. 이력은 NPC별로 영속하며 삭제하지 않는다.
+        /// NPC 주요 사건 이력에 항목을 추가한다. 이력은 NPC별로 영속한다.
+        /// 예외: D91 이전의 원정 부상(Wounded) Deed는 로드 때 누적 부상 요약으로 합치고 지운다 — 목록 인덱스를 식별자로 쓰지 말 것.
         /// </summary>
         public void AddDeed(int entityId, NpcDeedKind kind, int refEventId,
             NpcKnowledgeLevel howKnown, float when, int participantId)
@@ -1777,21 +1778,32 @@ namespace ARPG.Npc
             _narrative.InvalidateDialogues(entityId);
         }
 
-        /// <param name="activity">부상을 입은 활동. Delve만 DungeonDelve를 넘긴다 (기본 None = Hunt로 읽음, P2c).</param>
-        public void AddWoundedDeed(int entityId, float when, float recoveryEndGameTime, bool treated = false,
-            NpcActivityKind activity = NpcActivityKind.None)
+        /// <summary>
+        /// 원정 중상 Deed (D91 ②). ApplyExpeditionWound가 중상일 때만 부른다. 가벼운 부상은 Deed가 없다.
+        /// Kind·When만 남긴다 (저장 JSON = {"Kind":"SevereWound","When":…}). 활동은 NpcSaveData.LastWoundActivity가 가진다.
+        /// </summary>
+        private void AddSevereWoundDeed(int entityId, float when)
         {
             if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
                 return;
 
-            NpcDeedEntry entry = new NpcDeedEntry(NpcDeedKind.Wounded, -1,
-                NpcKnowledgeLevel.Did, when)
-            {
-                RecoveryEndGameTime = recoveryEndGameTime,
-                Treated = treated,
-                Activity = activity,
-            };
-            AddDeedParticipant(entry, entityId);
+            saveData.Deeds.Add(new NpcDeedEntry(NpcDeedKind.SevereWound, -1, NpcKnowledgeLevel.Lived, when));
+            _narrative.InvalidateDialogues(entityId);
+        }
+
+        /// <summary>
+        /// 공격받은 부상 Deed (D91 ③ — 항상 남기고 가해자를 기록한다). Kind·When + 가해자(EntityId·표시 이름)만, 본인은 넣지 않는다.
+        /// 발생 경로(NPC 간 결투·배신 P3, 플레이어 공격 P5)가 아직 없어 호출부가 없다. 회복 시간·치료 규칙은 그 단계에서 정한다.
+        /// 가해자 이름은 호출자가 넘긴다 (플레이어처럼 NPC 세이브에 없는 가해자, 나중에 죽은 가해자도 이름이 남게).
+        /// </summary>
+        public void AddAttackedWoundDeed(int entityId, int attackerId, string attackerDisplayName, float when)
+        {
+            if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
+                return;
+
+            NpcDeedEntry entry = new NpcDeedEntry(NpcDeedKind.AttackedWound, -1, NpcKnowledgeLevel.Lived, when);
+            entry.Participants.Add(attackerId);
+            entry.ParticipantSnapshots.Add(new NpcDeedParticipant(attackerId, attackerDisplayName ?? string.Empty));
             saveData.Deeds.Add(entry);
             _narrative.InvalidateDialogues(entityId);
         }

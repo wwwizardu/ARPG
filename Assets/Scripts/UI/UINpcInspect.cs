@@ -203,6 +203,12 @@ namespace ARPG.UI
                 NpcDeedKind.PartyAffinityChanged =>
                     $"{GetOtherParticipantName(entry)}와 함께 사냥 후 호감도 {FormatSignedValue(entry.AffinityDelta)}",
                 // Activity: P2c부터 Delve 부상만 DungeonDelve로 기록한다. None(구 기록 포함)은 사냥.
+                // 가벼운 부상은 Deed가 없고(D91) 활동 목록의 "부상" 한 줄로 요약된다. Wounded는 로드 때 합쳐져 보통 남아 있지 않다.
+                // 중상·공격받은 부상 Deed는 최소 정보(시각·가해자)만 가진다 (D91 후속).
+                NpcDeedKind.SevereWound =>
+                    $"중상 · {NpcRumorPhrasing.AgoPhrase(entry.When, AR.s.Time.CurrentGameTime)}",
+                NpcDeedKind.AttackedWound =>
+                    $"{GetOtherParticipantName(entry)}에게 공격받아 부상 · {NpcRumorPhrasing.AgoPhrase(entry.When, AR.s.Time.CurrentGameTime)}",
                 NpcDeedKind.Wounded => entry.Treated == true
                     ? $"{GetWoundedActivityLabel(entry)} 중 부상 · 치료받음 · {entry.RecoveryEndGameTime:F1}시간까지 회복"
                     : $"{GetWoundedActivityLabel(entry)} 중 부상 · {entry.RecoveryEndGameTime:F1}시간까지 회복",
@@ -289,6 +295,14 @@ namespace ARPG.UI
             {
                 float remainingHours = activity.PhaseEndGameTime - AR.s.Time.CurrentGameTime;
                 AddActivityRow("남은 시간", $"{remainingHours:F1}시간");
+            }
+
+            // 원정 부상 누적 요약 (D91): "N회 (최근: 어제, 던전 원정 중)". 중상은 행적 목록에 따로 나온다.
+            if (_saveData.WoundCount > 0)
+            {
+                string ago = NpcRumorPhrasing.AgoPhrase(_saveData.LastWoundGameTime, AR.s.Time.CurrentGameTime);
+                string where = _saveData.LastWoundActivity == NpcActivityKind.DungeonDelve ? "던전 원정 중" : "사냥 중";
+                AddActivityRow("부상", $"{_saveData.WoundCount}회 (최근: {ago}, {where})");
             }
 
             if (activity.LastHuntOutcome == NpcHuntOutcome.None)

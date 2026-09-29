@@ -429,14 +429,10 @@ namespace ARPG.Systems
 
                 if (outcomes[i] == NpcHuntOutcome.Wounded)
                 {
-                    memberActivity.Phase = NpcActivityPhase.Wounded;
-                    memberActivity.Kind = NpcActivityKind.None;
-                    // 부상 시점 1회 추상 치료 판정 — 치료받으면 24h → 8h (NPC_AMBITION_DESIGN D36)
-                    float recoveryHours = AR.s.Npc.ResolveWoundedTreatment(memberIds[i], member, party.PartyId,
+                    // 부상 시점 1회 중상·추상 치료 판정 + 상태 전이·기록 (NPC_AMBITION_DESIGN D36·D91)
+                    AR.s.Npc.ApplyExpeditionWound(memberIds[i], member, NpcActivityKind.Hunt, party.PartyId,
                         partyActivity.OutcomeSeedGameTime, worldSeed, NpcActivityResolver.PartyTreatmentSaltBase + i,
-                        out bool treated);
-                    memberActivity.PhaseEndGameTime = outcomeGameTime + recoveryHours;
-                    AR.s.Npc.AddWoundedDeed(memberIds[i], outcomeGameTime, memberActivity.PhaseEndGameTime, treated);
+                        NpcActivityResolver.PartySevereWoundHuntSaltBase + i, outcomeGameTime, out _, out _);
                 }
                 else if (outcomes[i] != NpcHuntOutcome.Dead)
                 {
@@ -544,12 +540,10 @@ namespace ARPG.Systems
             {
                 // 부상자는 회복 종료시각까지 다음 Hunt 선택에서 제외된다.
                 NotifyHuntOutcome(saveData, entityId, outcome, 0);
-                activity.Phase = NpcActivityPhase.Wounded;
-                // 부상 시점 1회 추상 치료 판정 — 치료받으면 24h → 8h (NPC_AMBITION_DESIGN D36)
-                float recoveryHours = AR.s.Npc.ResolveWoundedTreatment(entityId, saveData, entityId,
-                    outcomeSeedGameTime, worldSeed, NpcActivityResolver.TreatmentSalt, out bool treated);
-                activity.PhaseEndGameTime = outcomeGameTime + recoveryHours;
-                AR.s.Npc.AddWoundedDeed(entityId, outcomeGameTime, activity.PhaseEndGameTime, treated);
+                // 부상 시점 1회 중상·추상 치료 판정 + 상태 전이·기록 (NPC_AMBITION_DESIGN D36·D91)
+                AR.s.Npc.ApplyExpeditionWound(entityId, saveData, NpcActivityKind.Hunt, entityId, outcomeSeedGameTime,
+                    worldSeed, NpcActivityResolver.TreatmentSalt, NpcActivityResolver.SevereWoundHuntSalt, outcomeGameTime,
+                    out _, out _);
                 return;
             }
 

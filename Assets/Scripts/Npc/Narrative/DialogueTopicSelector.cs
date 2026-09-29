@@ -795,14 +795,17 @@ namespace ARPG.Npc.Narrative
         // ── 사연 (Personal — 개인 전기 Deeds·사별 기억. 난수 없이 최신순 = 결정론) ──
         // Fell은 사망자 본인 전기에만 남으므로 화자(생존자)의 상실은 DeceasedRelations가 접지.
         // Boast = NotableItemAcquired(업그레이드 장착, P2c 배선) 또는 DungeonCleared(NPC 던전 완료) 중 최신 1건.
-        // CacheVariant에 사건 식별자(Deeds 인덱스/사망자 id)를 실어 새 사건이면 캐시가 갈린다.
+        // 원정 부상(RecentHunt)은 Deed가 아니라 누적 부상 요약(WoundCount·LastWoundGameTime·LastWoundActivity, D91)으로 말한다.
+        // CacheVariant에 사건 식별자(사건 종류·시각 해시 / 사망자 id)를 실어 새 사건이면 캐시가 갈린다.
+        // Deeds 인덱스는 식별자로 쓰지 않는다 — D91 마이그레이션이 구 Wounded Deed를 지워 번호가 밀린다.
         private static void AddPersonal(List<DialogueTopic> topics, int npcId, NpcSaveData? save)
         {
             if (save == null)
                 return;
 
-            // Deeds 최신순 스캔 — 토픽 타입당 최신 1건, 합계 최대 2건 (Deeds는 append-only·불삭제라 인덱스가 안정 식별자)
-            bool hasHunt = false;
+            // Deeds 최신순 스캔 — 토픽 타입당 최신 1건, 합계 최대 2건.
+            // 마지막 원정 부상은 Deed 목록 밖에 있으므로 그 시각을 Deed 시각과 비교해 최신순 자리에 끼운다.
+            bool woundPending = save.WoundCount > 0 && save.LastWoundGameTime >= 0f;
             bool hasBond = false;
             bool hasBoast = false;
             int added = 0;
@@ -812,25 +815,21 @@ namespace ARPG.Npc.Narrative
                 if (deed == null)
                     continue;
 
-                if (deed.Kind == NpcDeedKind.Wounded && hasHunt == false)
+                if (woundPending == true && save.LastWoundGameTime >= deed.When)
                 {
-                    hasHunt = true;
+                    woundPending = false;
+                    topics.Add(BuildRecentWoundTopic(save));
                     added++;
-                    bool delve = deed.Activity == NpcActivityKind.DungeonDelve;
-                    DialogueTopic t = new()
-                    {
-                        Type = DialogueTopicType.RecentHunt,
-                        Category = DialogueTopicCategory.Personal,
-                        MinTier = AffinityTier.Stranger,
-                        BaseLine = delve
-                            ? "지난 던전 원정에서 호되게 당했소. 아직 몸이 뻐근하구려."
-                            : "지난 사냥에서 호되게 당했소. 아직 몸이 뻐근하구려.",
-                        CacheVariant = i,
-                    };
-                    t.Facts.Add($"게임 시간 {deed.When:F1}에 {(delve ? "던전 원정" : "사냥")}을 나갔다가 부상을 입었다 ({KnowledgeHint(deed.HowKnown)}).");
-                    topics.Add(t);
+                    if (added >= 2)
+                        break;
                 }
-                else if (deed.Kind == NpcDeedKind.PartyAffinityChanged && hasBond == false)
+
+                // 부상 Deed(중상·공격받은 부상·구 Wounded)는 부상 토픽이 요약으로 말한다 (공격받은 부상 토픽은 P3에서).
+                if (deed.Kind == NpcDeedKind.SevereWound || deed.Kind == NpcDeedKind.AttackedWound ||
+                    deed.Kind == NpcDeedKind.Wounded)
+                    continue;
+
+                if (deed.Kind == NpcDeedKind.PartyAffinityChanged && hasBond == false)
                 {
                     hasBond = true;
                     added++;
@@ -842,7 +841,7 @@ namespace ARPG.Npc.Narrative
                         Category = DialogueTopicCategory.Personal,
                         MinTier = AffinityTier.Acquaintance,
                         BaseLine = closer ? $"{other}와는 요즘 손발이 잘 맞소." : $"{other}와는 요즘 영 서먹하오.",
-                        CacheVariant = i,
+                        CacheVariant = DeedCacheVariant(deed),
                     };
                     t.Facts.Add($"게임 시간 {deed.When:F1}, {other}와 함께 사냥했고 사이가 {(closer ? "가까워졌다" : "서먹해졌다")} ({KnowledgeHint(deed.HowKnown)}).");
                     topics.Add(t);
@@ -858,7 +857,7 @@ namespace ARPG.Npc.Narrative
                         Category = DialogueTopicCategory.Personal,
                         MinTier = AffinityTier.Stranger,
                         BaseLine = $"{NpcRumorPhrasing.Josa(item, "을", "를")} 손에 넣었소. 보는 눈이 있다면 알아보겠지.",
-                        CacheVariant = i,
+                        CacheVariant = DeedCacheVariant(deed),
                     };
                     t.Facts.Add($"게임 시간 {deed.When:F1}에 {item}을(를) 손에 넣었다 ({KnowledgeHint(deed.HowKnown)}).");
                     topics.Add(t);
@@ -879,13 +878,20 @@ namespace ARPG.Npc.Narrative
                         BaseLine = string.IsNullOrEmpty(companions)
                             ? $"{ago} 이 마을 던전 하나를 내 손으로 끝장냈소. 그 자리엔 벌써 새 던전이 들어섰지."
                             : $"{ago} {NpcRumorPhrasing.Josa(companions, "과", "와")} 함께 이 마을 던전 하나를 끝장냈소. 그 자리엔 벌써 새 던전이 들어섰지.",
-                        CacheVariant = i,
+                        CacheVariant = DeedCacheVariant(deed),
                     };
                     t.Facts.Add($"게임 시간 {deed.When:F1}에 소속 마을의 던전 하나를 끝까지 공략했다" +
                                 (string.IsNullOrEmpty(companions) ? " (혼자)" : $" ({companions}와(과) 함께)") +
                                 $". 끝낸 던전은 사라지고 그 자리에 새 던전이 생겼다 ({KnowledgeHint(deed.HowKnown)}).");
                     topics.Add(t);
                 }
+            }
+
+            // Deed가 다 떨어졌는데 부상 토픽이 아직이면 (부상이 가장 오래된 사건이거나 Deed가 없음) 마지막 자리에 넣는다.
+            if (woundPending == true && added < 2)
+            {
+                topics.Add(BuildRecentWoundTopic(save));
+                added++;
             }
 
             // 사별 기억 → LostCompanion (최신 1건, 사적인 이야기라 Acquaintance+)
@@ -904,6 +910,59 @@ namespace ARPG.Npc.Narrative
                 t.Facts.Add($"{label}인 {memory.DeceasedNpcName}이(가) 게임 시간 {memory.DeathGameTime:F1}에 세상을 떠났다 (본인이 겪은 상실).");
                 topics.Add(t);
             }
+        }
+
+        /// <summary>
+        /// 원정 부상 토픽 (D91). 누적 부상 요약으로 말한다. 마지막 부상이 중상이면(같은 시각의 SevereWound Deed) 더 무거운 문구.
+        /// </summary>
+        private static DialogueTopic BuildRecentWoundTopic(NpcSaveData save)
+        {
+            bool delve = save.LastWoundActivity == NpcActivityKind.DungeonDelve;
+            bool severe = IsLastWoundSevere(save);
+            string where = delve ? "던전 원정" : "사냥";
+            DialogueTopic t = new()
+            {
+                Type = DialogueTopicType.RecentHunt,
+                Category = DialogueTopicCategory.Personal,
+                MinTier = AffinityTier.Stranger,
+                BaseLine = severe
+                    ? $"지난 {where}에서 죽다 살아났소. 이만하길 천만다행이지."
+                    : $"지난 {where}에서 호되게 당했소. 아직 몸이 뻐근하구려.",
+                CacheVariant = StableHash(StableHash((int)(save.LastWoundGameTime * 100f), severe == true ? 1 : 0),
+                    (int)save.LastWoundActivity),
+            };
+            t.Facts.Add(severe
+                ? $"게임 시간 {save.LastWoundGameTime:F1}에 {where}을 나갔다가 죽을 뻔한 중상을 입었다 ({KnowledgeHint(NpcKnowledgeLevel.Did)})."
+                : $"게임 시간 {save.LastWoundGameTime:F1}에 {where}을 나갔다가 부상을 입었다 ({KnowledgeHint(NpcKnowledgeLevel.Did)}).");
+            t.Facts.Add($"지금까지 원정에서 다친 횟수: {save.WoundCount}회.");
+            return t;
+        }
+
+        // 마지막 원정 부상이 중상인가 — 같은 시각에 기록된 SevereWound Deed가 있으면 중상 (D91: 중상만 Deed를 남긴다).
+        private static bool IsLastWoundSevere(NpcSaveData save)
+        {
+            for (int i = save.Deeds.Count - 1; i >= 0; i--)
+            {
+                NpcDeedEntry deed = save.Deeds[i];
+                if (deed == null)
+                    continue;
+                if (deed.When < save.LastWoundGameTime)
+                    return false;
+                if (deed.Kind == NpcDeedKind.SevereWound && deed.When == save.LastWoundGameTime)
+                    return true;
+            }
+            return false;
+        }
+
+        // Deed 토픽의 대화 캐시 구분자 — 목록 인덱스 대신 사건 내용(종류·시각·아이템·호감 변화·참가자)으로 만든다.
+        private static int DeedCacheVariant(NpcDeedEntry deed)
+        {
+            int h = StableHash((int)deed.Kind, (int)(deed.When * 100f));
+            h = StableHash(h, deed.ItemId);
+            h = StableHash(h, deed.AffinityDelta);
+            for (int i = 0; i < deed.Participants.Count; i++)
+                h = StableHash(h, deed.Participants[i]);
+            return h;
         }
 
         // ── 헬퍼 ──

@@ -16,6 +16,8 @@ namespace ARPG.Npc
         public readonly List<int> MemberIds = new();
         public readonly List<NpcHuntOutcome> Outcomes = new();
         public readonly List<bool> Treated = new();
+        // 판정별 중상 여부 (D91). 부상이 아니면 false.
+        public readonly List<bool> Severe = new();
         public int VillageId = -1;
         public string DungeonId = string.Empty;
         public bool IsParty;
@@ -142,22 +144,22 @@ namespace ARPG.Npc
             if (outcome == NpcHuntOutcome.Dead)
             {
                 report.Treated.Add(false);
+                report.Severe.Add(false);
                 return report;
             }
 
             if (outcome == NpcHuntOutcome.Wounded)
             {
-                activity.Phase = NpcActivityPhase.Wounded;
-                float recoveryHours = ResolveWoundedTreatment(entityId, saveData, entityId, seedGameTime, worldSeed,
-                    NpcActivityResolver.DelveTreatmentSalt, out treated);
-                activity.PhaseEndGameTime = outcomeGameTime + recoveryHours;
-                AddWoundedDeed(entityId, outcomeGameTime, activity.PhaseEndGameTime, treated,
-                    NpcActivityKind.DungeonDelve);
+                ApplyExpeditionWound(entityId, saveData, NpcActivityKind.DungeonDelve, entityId, seedGameTime, worldSeed,
+                    NpcActivityResolver.DelveTreatmentSalt, NpcActivityResolver.SevereWoundDelveSalt, outcomeGameTime,
+                    out treated, out bool severe);
                 report.Treated.Add(treated);
+                report.Severe.Add(severe);
                 return report;
             }
 
             report.Treated.Add(false);
+            report.Severe.Add(false);
             activity.Phase = NpcActivityPhase.Idle;
             activity.PhaseEndGameTime = 0f;
             if (outcome != NpcHuntOutcome.Success)
@@ -253,15 +255,12 @@ namespace ARPG.Npc
                 member.LastSimGameTime = outcomeGameTime;
 
                 bool treated = false;
+                bool severe = false;
                 if (report.Outcomes[i] == NpcHuntOutcome.Wounded)
                 {
-                    memberActivity.Phase = NpcActivityPhase.Wounded;
-                    memberActivity.Kind = NpcActivityKind.None;
-                    float recoveryHours = ResolveWoundedTreatment(report.MemberIds[i], member, party.PartyId,
-                        seedGameTime, worldSeed, NpcActivityResolver.PartyDelveTreatmentSaltBase + i, out treated);
-                    memberActivity.PhaseEndGameTime = outcomeGameTime + recoveryHours;
-                    AddWoundedDeed(report.MemberIds[i], outcomeGameTime, memberActivity.PhaseEndGameTime, treated,
-                        NpcActivityKind.DungeonDelve);
+                    ApplyExpeditionWound(report.MemberIds[i], member, NpcActivityKind.DungeonDelve, party.PartyId,
+                        seedGameTime, worldSeed, NpcActivityResolver.PartyDelveTreatmentSaltBase + i,
+                        NpcActivityResolver.PartySevereWoundDelveSaltBase + i, outcomeGameTime, out treated, out severe);
                 }
                 else if (report.Outcomes[i] != NpcHuntOutcome.Dead)
                 {
@@ -270,6 +269,7 @@ namespace ARPG.Npc
                     memberActivity.PhaseEndGameTime = 0f;
                 }
                 report.Treated.Add(treated);
+                report.Severe.Add(severe);
                 // 돌아온 파티원은 그 슬롯 소문을 확인한 것으로 표시한다 (D76)
                 if (report.Outcomes[i] != NpcHuntOutcome.Dead && hasSlotRef == true)
                     MarkDelveRumorsChecked(member, report.VillageId, slotIndex);

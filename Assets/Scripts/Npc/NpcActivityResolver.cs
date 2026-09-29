@@ -72,6 +72,19 @@ namespace ARPG.Npc
         // 치료 구매 RNG salt. 솔로는 5 (NPC EntityId 기준), 파티원은 40 + 파티 내 인덱스 (PartyId 기준).
         public const int TreatmentSalt = 5;
         public const int PartyTreatmentSaltBase = 40;
+
+        // 부상 등급 (NPC_AMBITION_DESIGN D91). 원정 부상이 날 때 별도 결정론 롤로 중상 여부를 정한다 (솔로·파티원, Hunt·Delve 공통).
+        // 가벼운 부상 = WoundedRecoveryHours / TreatedRecoveryHours (24h / 8h). 중상 = 72h / 치료 시 24h. 치료 판정·치료비는 같다.
+        public const float SevereWoundChance = 0.10f;
+        public const float SevereWoundRecoveryHours = 72f;
+        public const float SevereWoundTreatedRecoveryHours = 24f;
+        // 중상 RNG salt (140번대 이후 — 기존 결과·치료·전리품 난수열과 독립). 소유자·시각은 같은 원정의 치료 판정과 같다.
+        // 140 솔로 Hunt, 141 솔로 Delve (NPC EntityId 기준), 150+i 파티원 Hunt, 160+i 파티원 Delve (PartyId 기준, i = 파티 내 인덱스).
+        // 142~149는 부상 예비.
+        public const int SevereWoundHuntSalt = 140;
+        public const int SevereWoundDelveSalt = 141;
+        public const int PartySevereWoundHuntSaltBase = 150;
+        public const int PartySevereWoundDelveSaltBase = 160;
         // 살 수 있어도 성격에 따라 사지 않을 수 있다. P1b는 탐욕만으로 선형: 탐욕 0 → 95%, 탐욕 100 → 55% (관리 세션 결정).
         public const float TreatmentBuyChanceAtNoGreed = 0.95f;
         public const float TreatmentBuyChanceAtMaxGreed = 0.55f;
@@ -590,6 +603,23 @@ namespace ARPG.Npc
             return rng.NextDouble() < Mathf.Clamp01(buyChance);
         }
 
+        /// <summary>
+        /// 중상 결정론 판정 (D91 ②). 결과 판정과 따로 만든 RNG를 쓰므로 호출 순서와 무관하게 다른 판정의 난수열을 바꾸지 않는다.
+        /// </summary>
+        public static bool RollSevereWound(int rngOwnerId, float startGameTime, int worldSeed, int salt)
+        {
+            HistoryRng rng = CreateRng(rngOwnerId, startGameTime, worldSeed, salt);
+            return rng.NextDouble() < SevereWoundChance;
+        }
+
+        /// <summary>부상 등급·치료 여부에 따른 회복 시간 (D36·D91).</summary>
+        public static float GetWoundRecoveryHours(bool severe, bool treated)
+        {
+            if (severe == true)
+                return treated == true ? SevereWoundTreatedRecoveryHours : SevereWoundRecoveryHours;
+            return treated == true ? TreatedRecoveryHours : WoundedRecoveryHours;
+        }
+
         /// <summary>솔로 Delve 판정 확률. Hunt보다 성공은 낮고 부상은 많다. 사망은 솔로 Hunt와 같은 D48 곡선.</summary>
         public static void GetSoloDelveChances(float capability, out float deathChance, out float woundedChance,
             out float successChance)
@@ -753,7 +783,7 @@ namespace ARPG.Npc
 
         /// <summary>
         /// 활동 결정론 RNG. 같은 (소유자, 활동 시작시각, worldSeed, salt)는 세이브/로드 뒤에도 같은 난수열을 준다.
-        /// 소문 교환(NpcManager_Rumor)도 이 채널을 쓴다 (salt 120~125). 파티 모집(NpcManager_Party)은 130·131.
+        /// 소문 교환(NpcManager_Rumor)도 이 채널을 쓴다 (salt 120~125). 파티 모집(NpcManager_Party)은 130·131. 중상 판정은 140·141·150+i·160+i.
         /// </summary>
         internal static HistoryRng CreateRng(int entityId, float startGameTime, int worldSeed, int salt)
         {
@@ -766,7 +796,9 @@ namespace ARPG.Npc
             // 52·80+i는 폐기된 Delve 희귀 보너스 롤 번호 — reserved, 재사용 금지.
             // 120~125는 소문 교환(Rumor*Salt 상수). 126~129는 비워 둔 P2b 예비 번호 — 재사용 금지.
             // 130은 파티 모집 시도, 131은 파티 수락 난수열(리더 EntityId·리더 결정 시각 기준, PartyRecruit*/PartyAccept* 상수).
-            // 132~139는 파티 모집 예비.
+            // 132~139는 파티 모집 예비 — 재사용 금지.
+            // 140은 솔로 Hunt 중상, 141은 솔로 Delve 중상 (EntityId 기준), 150+i는 파티원 Hunt 중상, 160+i는 파티원 Delve 중상
+            // (PartyId 기준, SevereWound*Salt 상수, D91). 142~149는 부상 예비.
             int key = unchecked(worldSeed ^ (entityId * 486187739) ^ (startTick * 16777619) ^ salt);
             return new HistoryRng(DerivedSeed.Derive(key, DerivedSeed.ChannelNpcActivity));
         }

@@ -69,46 +69,79 @@ namespace ARPG.Npc
         }
 
         /// <summary>
+        /// 원정(Hunt·Delve) 부상 처리 — 솔로·파티원 공통 (NPC_AMBITION_DESIGN D36·D91).
+        /// ① 중상 판정(별도 salt, 10%) → ② 기존 치료 판정·치료비 → ③ Wounded 상태 전이(회복 24h/8h, 중상 72h/24h)
+        /// → ④ 누적 부상 요약 갱신, 중상이면 SevereWound Deed. 가벼운 부상은 Deed를 남기지 않는다.
+        /// 각 판정은 따로 만든 RNG를 써서 기존 결과·치료·전리품 난수열에 영향이 없다. 회복 시간을 돌려준다.
+        /// </summary>
+        /// <param name="expedition">Hunt 또는 DungeonDelve</param>
+        /// <param name="rngOwnerId">솔로 = NPC EntityId, 파티원 = PartyId</param>
+        public float ApplyExpeditionWound(int entityId, NpcSaveData saveData, NpcActivityKind expedition, int rngOwnerId,
+            float seedGameTime, int worldSeed, int treatmentSalt, int severeSalt, float outcomeGameTime,
+            out bool treated, out bool severe)
+        {
+            severe = NpcActivityResolver.RollSevereWound(rngOwnerId, seedGameTime, worldSeed, severeSalt);
+            float recoveryHours = ResolveWoundedTreatment(entityId, saveData, rngOwnerId, seedGameTime, worldSeed,
+                treatmentSalt, severe, out treated);
+
+            NpcActivityState activity = saveData.Activity;
+            activity.Phase = NpcActivityPhase.Wounded;
+            activity.Kind = NpcActivityKind.None;
+            activity.PhaseEndGameTime = outcomeGameTime + recoveryHours;
+
+            saveData.RecordExpeditionWound(outcomeGameTime, expedition);
+            if (severe == true)
+                AddSevereWoundDeed(entityId, outcomeGameTime);
+            else
+                _narrative.InvalidateDialogues(entityId);   // 부상 토픽(누적 요약)이 바뀐다
+            return recoveryHours;
+        }
+
+        /// <summary>
         /// 부상 상태가 되는 순간 1회 호출한다 (솔로·파티). 소속 마을이 있고 Gold ≥ 치료비이며 결정론 판정을 통과하면
-        /// 치료비를 소속 마을 Gold로 내고 8시간, 아니면 기존 24시간 회복 시간을 돌려준다 (D36).
+        /// 치료비를 소속 마을 Gold로 내고 치료 회복 시간, 아니면 기본 회복 시간을 돌려준다 (D36).
+        /// 가벼운 부상 24h / 치료 8h, 중상 72h / 치료 24h (D91). 치료 확률·치료비는 등급과 무관하다.
         /// </summary>
         public float ResolveWoundedTreatment(int entityId, NpcSaveData saveData, int rngOwnerId, float seedGameTime,
-            int worldSeed, int salt, out bool treated)
+            int worldSeed, int salt, bool severe, out bool treated)
         {
             treated = false;
             int fee = NpcActivityResolver.TreatmentFee;
+            float untreatedHours = NpcActivityResolver.GetWoundRecoveryHours(severe, false);
             if (saveData.VillageId < 0 || AR.s.Village.GetVillage(saveData.VillageId) == null)
             {
-                Debug.Log($"[NpcAmbition] Treatment npc={entityId} result=Skip reason=NoVillage gold={saveData.Gold}");
-                return NpcActivityResolver.WoundedRecoveryHours;
+                Debug.Log($"[NpcAmbition] Treatment npc={entityId} result=Skip reason=NoVillage gold={saveData.Gold} " +
+                          $"severe={severe}");
+                return untreatedHours;
             }
             if (saveData.Gold < fee)
             {
                 Debug.Log($"[NpcAmbition] Treatment npc={entityId} v={saveData.VillageId} result=Skip reason=NoGold " +
-                          $"gold={saveData.Gold} fee={fee}");
-                return NpcActivityResolver.WoundedRecoveryHours;
+                          $"gold={saveData.Gold} fee={fee} severe={severe}");
+                return untreatedHours;
             }
 
             float buyChance = NpcActivityResolver.GetTreatmentBuyChance(saveData);
             if (NpcActivityResolver.RollTreatmentPurchase(buyChance, rngOwnerId, seedGameTime, worldSeed, salt) == false)
             {
                 Debug.Log($"[NpcAmbition] Treatment npc={entityId} v={saveData.VillageId} result=Declined " +
-                          $"chance={buyChance:F2} gold={saveData.Gold}");
-                return NpcActivityResolver.WoundedRecoveryHours;
+                          $"chance={buyChance:F2} gold={saveData.Gold} severe={severe}");
+                return untreatedHours;
             }
 
             int villageGoldBefore = AR.s.Village.GetVillageGold(saveData.VillageId);
             if (AR.s.Village.DepositNpcGold(saveData.VillageId, fee) == false)
-                return NpcActivityResolver.WoundedRecoveryHours;
+                return untreatedHours;
 
             int npcGoldBefore = saveData.Gold;
             saveData.Gold -= fee;
             treated = true;
+            float treatedHours = NpcActivityResolver.GetWoundRecoveryHours(severe, true);
             Debug.Log($"[NpcAmbition] Treatment npc={entityId} v={saveData.VillageId} result=Treated chance={buyChance:F2} " +
                       $"fee={fee} npcGold={npcGoldBefore}->{saveData.Gold} " +
                       $"villageGold={villageGoldBefore}->{AR.s.Village.GetVillageGold(saveData.VillageId)} " +
-                      $"recovery={NpcActivityResolver.TreatedRecoveryHours:F0}h");
-            return NpcActivityResolver.TreatedRecoveryHours;
+                      $"recovery={treatedHours:F0}h severe={severe}");
+            return treatedHours;
         }
 
         private void SellInventoryToShop(int entityId, NpcSaveData saveData, int villageId, ref NpcTradeReport report)

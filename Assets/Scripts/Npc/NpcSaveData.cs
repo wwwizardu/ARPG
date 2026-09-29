@@ -79,6 +79,18 @@ namespace ARPG.Npc
         // 소문 (NPC_AMBITION_DESIGN §5.2·§7.4, P2b D70~D78). 최대 8개, 대상별 1개. 구 세이브는 필드가 없어 빈 리스트로 보정한다.
         // 유효성은 저장하지 않고 조회 시 NpcManager.IsRumorValid가 판정한다 (D72).
         public List<NpcRumor> Rumors = new();
+        // 원정 부상 요약 (NPC_AMBITION_DESIGN D91 ①). 가벼운 부상은 Deed 없이 여기만 갱신하고, 중상은 SevereWound Deed와 함께 갱신한다.
+        // 치료 여부는 저장하지 않는다. 기본값(부상 없음)은 저장하지 않아 부상 없는 NPC의 저장 크기는 늘지 않는다.
+        // 구 세이브의 Wounded Deed는 로드 때 MigrateLegacyWoundedDeeds가 여기로 합친다.
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public int WoundCount;
+        // 마지막 원정 부상 게임시각. -1 = 부상 기록 없음.
+        [System.ComponentModel.DefaultValue(-1f)]
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public float LastWoundGameTime = -1f;
+        // 마지막 원정 부상의 활동 (Hunt / DungeonDelve). None = 부상 기록 없음.
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public NpcActivityKind LastWoundActivity;
 
         [JsonIgnore]
         public Vector2 Position
@@ -155,6 +167,60 @@ namespace ARPG.Npc
                 if (Rumors[i] == null)
                     Rumors.RemoveAt(i);
             }
+            // 원정 부상 요약 보정 (D91). 횟수가 0이면 마지막 부상 정보도 비운다. 활동이 없으면 사냥으로 읽는다.
+            if (WoundCount <= 0)
+            {
+                WoundCount = 0;
+                LastWoundGameTime = -1f;
+                LastWoundActivity = NpcActivityKind.None;
+            }
+            else if (LastWoundActivity != NpcActivityKind.DungeonDelve)
+            {
+                LastWoundActivity = NpcActivityKind.Hunt;
+            }
+        }
+
+        /// <summary>
+        /// 원정 부상 1건을 누적 요약에 반영한다 (D91 ①·②, 가벼운 부상·중상 공통).
+        /// </summary>
+        public void RecordExpeditionWound(float when, NpcActivityKind activity)
+        {
+            WoundCount++;
+            if (when >= LastWoundGameTime)
+            {
+                LastWoundGameTime = when;
+                LastWoundActivity = activity == NpcActivityKind.DungeonDelve
+                    ? NpcActivityKind.DungeonDelve
+                    : NpcActivityKind.Hunt;
+            }
+        }
+
+        /// <summary>
+        /// 구 세이브의 Wounded Deed(D91 이전 원정 부상)를 가벼운 부상으로 보고 누적 요약에 합친 뒤 목록에서 지운다 (D91 ④).
+        /// 지운 뒤에는 대상이 없으므로 다시 불러도 결과가 같다. 스키마 버전은 그대로다. 합친 건수를 돌려준다.
+        /// </summary>
+        public int MigrateLegacyWoundedDeeds()
+        {
+            if (Deeds == null)
+                return 0;
+
+            int merged = 0;
+            int write = 0;
+            for (int read = 0; read < Deeds.Count; read++)
+            {
+                NpcDeedEntry deed = Deeds[read];
+                if (deed != null && deed.Kind == NpcDeedKind.Wounded)
+                {
+                    RecordExpeditionWound(deed.When, deed.Activity);
+                    merged++;
+                    continue;
+                }
+                Deeds[write] = deed!;
+                write++;
+            }
+            if (merged > 0)
+                Deeds.RemoveRange(write, Deeds.Count - write);
+            return merged;
         }
 
         /// <summary>
@@ -163,6 +229,7 @@ namespace ARPG.Npc
         public void OnLoadCompleted()
         {
             EnsureSlotsInitialized();
+            MigrateLegacyWoundedDeeds();
 
             for (int i = 0; i < InventoryEquip.Length; i++)
                 InventoryEquip[i]?.OnLoadCompleted();
