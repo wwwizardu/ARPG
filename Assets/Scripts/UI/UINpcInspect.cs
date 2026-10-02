@@ -200,8 +200,9 @@ namespace ARPG.UI
         {
             return entry.Kind switch
             {
+                // 변화량은 그 상대와의 원정 누적, 시각은 마지막 원정 (D108 — 상대별 1건)
                 NpcDeedKind.PartyAffinityChanged =>
-                    $"{GetOtherParticipantName(entry)}와 함께 사냥 후 호감도 {FormatSignedValue(entry.AffinityDelta)}",
+                    $"{GetOtherParticipantName(entry)}와 함께 원정하며 쌓인 호감도 {FormatSignedValue(entry.AffinityDelta)}",
                 // Activity: P2c부터 Delve 부상만 DungeonDelve로 기록한다. None(구 기록 포함)은 사냥.
                 // 가벼운 부상은 Deed가 없고(D91) 활동 목록의 "부상" 한 줄로 요약된다. Wounded는 로드 때 합쳐져 보통 남아 있지 않다.
                 // 중상·공격받은 부상 Deed는 최소 정보(시각·가해자)만 가진다 (D91 후속).
@@ -226,6 +227,19 @@ namespace ARPG.UI
                     1 => $"{NpcRumorPhrasing.Josa(GetOtherParticipantName(entry), "과", "와")} 함께 던전 공략 완료",
                     int n => $"{GetOtherParticipantName(entry)} 외 {n - 1}명과 함께 던전 공략 완료",
                 },
+                // 절도 (D106): 피해자 — 안 들킨 도난(범인 모름)·현장 적발, 도둑 — 현장 적발 (안 들킨 절도는 도둑 쪽 기록 없음)
+                NpcDeedKind.ItemStolen => $"누군가에게 {NpcRumorPhrasing.Josa(GetDeedItemName(entry), "을", "를")} 도둑맞음",
+                NpcDeedKind.CaughtThiefInAct =>
+                    $"{NpcRumorPhrasing.Josa(GetOtherParticipantName(entry), "이", "가")} " +
+                    $"{NpcRumorPhrasing.Josa(GetDeedItemName(entry), "을", "를")} 훔치려다 걸림",
+                NpcDeedKind.CaughtStealing =>
+                    $"{GetOtherParticipantName(entry)}의 {NpcRumorPhrasing.Josa(GetDeedItemName(entry), "을", "를")} 훔치려다 걸림",
+                // 늦은 발각 (D103·D106): 피해자 — 범인을 알게 됨, 도둑 — 들통남 (도둑 쪽 기록은 이때 처음 생김)
+                NpcDeedKind.TheftDiscovered =>
+                    $"{NpcRumorPhrasing.Josa(GetDeedItemName(entry), "을", "를")} 훔쳐 간 것이 " +
+                    $"{GetOtherParticipantName(entry)}{(EndsWithFinalConsonant(GetOtherParticipantName(entry)) ? "이었음" : "였음")}을 알게 됨",
+                NpcDeedKind.TheftExposed =>
+                    $"{GetOtherParticipantName(entry)}의 {NpcRumorPhrasing.Josa(GetDeedItemName(entry), "을", "를")} 훔친 것이 들통남",
                 _ => "알 수 없는 사건",
             };
         }
@@ -233,6 +247,17 @@ namespace ARPG.UI
         private static string GetWoundedActivityLabel(NpcDeedEntry entry)
         {
             return entry.Activity == NpcActivityKind.DungeonDelve ? "던전 원정" : "사냥";
+        }
+
+        private static string GetDeedItemName(NpcDeedEntry entry)
+        {
+            return string.IsNullOrEmpty(entry.ItemDisplayName) ? "물건" : entry.ItemDisplayName;
+        }
+
+        // "○○였음/○○이었음" 받침 판정 (NpcRumorPhrasing.Josa와 같은 규칙 — 한글이 아니면 받침 없음)
+        private static bool EndsWithFinalConsonant(string word)
+        {
+            return NpcRumorPhrasing.Josa(word, "1", "0").EndsWith("1");
         }
 
         private int CountOtherParticipants(NpcDeedEntry entry)
@@ -357,6 +382,17 @@ namespace ARPG.UI
                 string checkedMark = rumor.Checked == true ? " · 확인함" : string.Empty;
                 return $"{NpcRumorPhrasing.PlaceCore(place, bearing)} 던전[슬롯 {rumor.SlotIndex}·세대 {rumor.Generation}] · " +
                        $"{what} · {source} · {ago}{checkedMark}";
+            }
+
+            // P4b (D104·D105): 판매 소문은 검사 창에만, 배신 소문은 가해자·피해자·세부 종류. 아이템 이름은 소문에 남긴 테이블 Id로 읽는다.
+            if (rumor.Kind == NpcRumorKind.ItemSold)
+                return $"{NpcRumorPhrasing.Josa(subject, "이", "가")} " +
+                       $"{NpcRumorPhrasing.Josa(NpcRumorPhrasing.ItemName(rumor.ItemId), "을", "를")} 상점에 팔았다 · {source} · {ago}";
+            if (rumor.Kind == NpcRumorKind.Betrayal)
+            {
+                string what = rumor.BetrayalKind == NpcBetrayalKind.TheftCaughtInAct ? "훔치려다 걸림" : "훔친 것이 드러남";
+                return $"{NpcRumorPhrasing.Josa(subject, "이", "가")} {ResolveNpcName(rumor.VictimNpcId)}의 " +
+                       $"{NpcRumorPhrasing.Josa(NpcRumorPhrasing.ItemName(rumor.ItemId), "을", "를")} {what} · {source} · {ago}";
             }
 
             string itemName = "장비";

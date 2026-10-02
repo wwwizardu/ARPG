@@ -28,6 +28,8 @@ namespace ARPG.Npc.Narrative
         RecentHunt, LostCompanion, Boast, PartyBond,
         // 야망 소문 (NPC_AMBITION P2c, D60 — NpcSaveData.Rumors 접지, 노출 직전 IsRumorValid 검증). 끝에만 추가한다.
         DungeonRumor, ItemOwnerRumor,
+        // NPC 간 절도 (NPC_AMBITION P4b, D106): 피해자 도난 사연(Personal) / 배신 소문(Betrayal, 야망 소문 1개 규칙 D82에 포함)
+        TheftVictim, BetrayalRumor,
     }
 
     /// <summary>대화 토픽 1건 — 시스템이 상태·백본에서 산출. LLM 없으면 BaseLine, 있으면 이 토픽을 풍부하게 서술.</summary>

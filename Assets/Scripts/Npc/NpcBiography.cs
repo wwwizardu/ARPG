@@ -28,6 +28,17 @@ namespace ARPG.Npc
         // 공격받은 부상 (D91 ③, NPC 결투·배신·플레이어 공격). Kind·When + 가해자(Participants/ParticipantSnapshots 1명)만 남긴다.
         // 발생 경로는 P3·P5에서 연결한다.
         AttackedWound = 10,
+        // NPC 간 절도 (NPC_AMBITION_DESIGN §7.6, D106). Kind·When + 노린 아이템(ItemId·ItemDisplayName)만, 본인은 참가자에 넣지 않는다.
+        // 피해자 — 안 들킨 도난: 범인을 모르므로 참가자 없음.
+        ItemStolen = 11,
+        // 피해자 — 현장 적발 (물건은 옮겨지지 않음). 참가자 = 도둑 1명.
+        CaughtThiefInAct = 12,
+        // 도둑 — 현장 적발. 참가자 = 피해자 1명. 도둑 쪽 기록은 발각됐을 때만 만든다 (안 들킨 절도는 기록 없음).
+        CaughtStealing = 13,
+        // 늦은 발각 (D103·D106) — 피해자: 도둑맞은 물건의 범인을 소문으로 알게 됨. 참가자 = 도둑 1명. When = 발각 시각.
+        TheftDiscovered = 14,
+        // 늦은 발각 — 도둑: 훔친 것이 들통남 (도둑 쪽 기록은 이때 처음 생긴다). 참가자 = 피해자 1명.
+        TheftExposed = 15,
     }
 
     /// <summary>NPC가 사건을 알게 된 직접성 등급. 내러티브 지식 거리의 입력이다.</summary>

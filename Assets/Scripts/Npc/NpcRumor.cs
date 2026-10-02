@@ -1,11 +1,13 @@
 #nullable enable
 using System;
+using System.ComponentModel;
+using Newtonsoft.Json;
 
 namespace ARPG.Npc
 {
     /// <summary>
     /// NPC 소문 종류 (NPC_AMBITION_DESIGN §5.2, D50). 모든 소문은 사실이다 (D51) — 거짓 여부 필드가 없다.
-    /// 새 종류(P3 Betrayal 등)는 끝에만 추가한다 (세이브는 enum 이름으로 저장).
+    /// 새 종류는 끝에만 추가한다 (세이브는 enum 이름으로 저장).
     /// </summary>
     public enum NpcRumorKind
     {
@@ -14,6 +16,20 @@ namespace ARPG.Npc
         DungeonInfo = 1,
         // 어떤 NPC가 어떤 장비를 장착하고 있다는 사실 (업그레이드 장착 시 생성)
         ItemOwner = 2,
+        // 어떤 NPC가 어떤 아이템을 상점에 팔았다는 사실 (D104). 훔친 물건을 팔 때만 생긴다. 이미 일어난 판매라 뒤집히지 않는다.
+        ItemSold = 3,
+        // 배신 (D105, 공용). 세부 종류(BetrayalKind)로 구분한다 — P4 절도 현장 적발·늦은 발각, P3 배신 유형은 세부 종류 끝에 추가.
+        Betrayal = 4,
+    }
+
+    /// <summary>Betrayal 소문의 세부 종류 (D105). 끝에만 추가한다 (P3 배신 유형).</summary>
+    public enum NpcBetrayalKind
+    {
+        None = 0,
+        // 절도 현장 적발 — 물건은 옮겨지지 않았다
+        TheftCaughtInAct = 1,
+        // 절도 늦은 발각 — 물건이 옮겨진 뒤 범인이 드러났다
+        TheftDiscovered = 2,
     }
 
     /// <summary>
@@ -47,6 +63,19 @@ namespace ARPG.Npc
         public int Hops;
         // 확인 원정을 다녀옴 — 유망 판정에서 빠진다. 같은 사건을 다시 받아도 되살아나지 않는다.
         public bool Checked;
+        // ---- P4b (D104·D105). 아래 필드는 기본값이면 저장하지 않는다 — 기존 소문의 JSON 크기는 그대로다. ----
+        // Betrayal: 피해자 EntityId (가해자 = SubjectNpcId). -1 = 없음.
+        [DefaultValue(-1)]
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public int VictimNpcId = -1;
+        // Betrayal 세부 종류. None = Betrayal이 아님.
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public NpcBetrayalKind BetrayalKind;
+        // ItemSold·Betrayal: 표시용 아이템 테이블 Id (이름은 테이블에서 읽는다). 물건이 이미 주인을 떠났을 수 있어 인스턴스로는 못 찾는다.
+        // ItemOwner는 소유자 장비에서 읽으므로 쓰지 않는다. -1 = 없음.
+        [DefaultValue(-1)]
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public int ItemId = -1;
 
         public NpcRumor Clone()
         {
@@ -106,6 +135,10 @@ namespace ARPG.Npc
         public long CreatedDelve;
         public long CreatedCleared;
         public long CreatedItemOwner;
+        public long CreatedItemSold;                                   // 훔친 물건 판매 (D104)
+        public readonly long[] CreatedBetrayal = new long[3];          // NpcBetrayalKind 인덱스 (D105)
+        public long AcceptedItemSold;
+        public long AcceptedBetrayal;
         public long ConfirmationDelves;        // 유망 소문 대상 슬롯으로 출발한 원정 (솔로·파티 1회씩)
         public long FilteredInvalidAtUse;      // 사용 직전 검증에서 걸러진 무효 소문
         public long PrunedInvalid;             // 정리로 지운 무효 소문

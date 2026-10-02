@@ -9,6 +9,7 @@ using System.Text;
 using ARPG.Creature;
 using ARPG.Data;
 using ARPG.Dungeon;
+using ARPG.History;
 using ARPG.Npc;
 using ARPG.Npc.Narrative;
 using ARPG.Village;
@@ -23,8 +24,11 @@ namespace ARPG.EditorTools
     ///
     /// 현재 NPC·상점·마을·파티 상태를 JSON으로 복제하고, NpcManager/VillageManager/TimeManager의 원장 필드를
     /// 한 번의 동기 호출 동안만 복제본으로 바꿔 끼운 채 N게임일을 오프스크린으로 시뮬레이션한 뒤 CSV로 출력한다.
-    /// - 활동 선택(SelectNextActivity)·Trade 기회·거래(TradeAtShop)·치료·전리품·자동 장착·파티 구성은 실제 매니저 코드를 그대로 호출한다.
-    /// - System_NpcSim의 상태 전이 루프는 여기서 같은 순서로 재현한다 (1게임시간 해상도). 사망 정리(관계·연대기·Deed),
+    /// - 활동 선택(SelectNextActivity)·Trade 기회·거래(TradeAtShop)·치료·전리품·자동 장착·파티 구성·파티 호감도 변화
+    ///   (ApplyPartyRelationshipOutcome)·Rest 종료 처리(ResolveRestEnd — 소문 교환·절도 P4a)는 실제 매니저 코드를 그대로 호출한다.
+    ///   절도는 적용 직전 관찰자로 상태를 찍고 끝난 뒤 복제본을 직접 읽어 독립 감사한다 (VerifyTheftRules는 강제 검증).
+    /// - NPC 호감도·유형 관계도 복제본으로 바꿔 끼우고 라이브 해시에 포함한다 (D107).
+    /// - System_NpcSim의 상태 전이 루프는 여기서 같은 순서로 재현한다 (1게임시간 해상도). 사망 정리 중 연대기·Deed·고인 기억,
     ///   화면 안 연출, 전역 인구 보충(TryReplenishGlobalPopulation), 마을 건설 소비는 시뮬레이션하지 않는다.
     ///   마을 인구 자원 생산(VillageResourceSimulation.AdvanceWholeHours)은 모든 마을에 시간당 1회 적용한다.
     /// - 시뮬레이션은 한 프레임 안에서 끝나므로 그 사이 다른 시스템·저장이 돌지 않는다. 끝나면 모든 필드를 되돌리고
@@ -37,7 +41,8 @@ namespace ARPG.EditorTools
         private const float CowardFraction = 0.10f;
         private const int MaxExampleCases = 5;
         private const int MaxPhaseTransitionsPerNpc = 4;
-        private const int DeedKindCount = (int)NpcDeedKind.AttackedWound + 1;
+        private const int DeedKindCount = (int)NpcDeedKind.TheftExposed + 1;
+        private const int MaxTheftAuditFailures = 8;
         private const int MaxTopicExamplesPerKind = 4;
 
         [MenuItem("ARPG/Npc/Diagnostics/Ambition Sim (30 days)", false, 431)]
@@ -49,8 +54,32 @@ namespace ARPG.EditorTools
         [MenuItem("ARPG/Npc/Diagnostics/Verify Rumor Rules", false, 434)]
         public static void RunVerifyRumorRules() => VerifyRumorRules();
 
+        [MenuItem("ARPG/Npc/Diagnostics/Verify Theft Rules", false, 435)]
+        public static void RunVerifyTheftRules() => VerifyTheftRules();
+
         // 전파 곡선 측정 시점 (사건 뒤 게임시간)
         private static readonly float[] PropagationCheckpointHours = { 12f, 24f, 48f, 72f };
+        // 전파 곡선 분류: 0 원정 성공, 1 완료 새 세대, 2 장비 소유, 3 판매(P4b), 4 배신(P4b)
+        private const int RumorCategoryCount = 5;
+        private static readonly string[] RumorCategoryNames = { "원정 성공", "완료 새 세대", "장비 소유", "판매", "배신" };
+
+        // P4-0 절도 조건 깔때기 (D99·D100) — 실제 절도 판정 직전 상태에서 조건 충족 수만 잰다 (P4a 이후에도 비교용으로 유지).
+        // 가상 시도에 쓸 기본 시도 확률 후보 (D100 "기본 약 25%"의 튜닝 범위 추정용)
+        private static readonly float[] TheftBaseChances = { 0.05f, 0.10f, 0.15f, 0.20f, 0.25f, 0.35f, 0.50f };
+        // D100 쿨다운: 도둑 168h(시도 기준), 같은 마을 72h. 깔때기의 가정 쿨다운은 게임 필드와 별개의 진단 표로 센다.
+        private const float TheftThiefCooldownHours = NpcManager.TheftThiefCooldownHours;
+        private const float TheftVillageCooldownHours = NpcManager.TheftVillageCooldownHours;
+        // D100 절도 시도 salt 170. 가상 시도는 같은 RNG 채널로 굴리기만 하고 상태는 바꾸지 않는다.
+        private const int TheftAttemptSalt = NpcActivityResolver.TheftAttemptSalt;
+        // 가방 아이템 가치(BasePrice × 수량) 분포 구간 상한: 0 / 1-9 / 10-19 / 20-49 / 50-99 / 100-199 / 200+
+        private static readonly int[] BagValueBucketUpper = { 0, 9, 19, 49, 99, 199, int.MaxValue };
+        private static readonly string[] BagValueBucketLabels = { "0", "1-9", "10-19", "20-49", "50-99", "100-199", "200+" };
+        // 관계 지표에 적는 유형 관계 종류 (순서 = 출력 순서)
+        private static readonly NpcRelationType[] ReportedRelationTypes =
+        {
+            NpcRelationType.GrudgeAgainst, NpcRelationType.Rival, NpcRelationType.Friend, NpcRelationType.Spouse,
+            NpcRelationType.Sibling, NpcRelationType.ParentOf, NpcRelationType.MentorOf,
+        };
 
         private sealed class DayRow
         {
@@ -134,6 +163,99 @@ namespace ARPG.EditorTools
             public int NpcCompletions;
         }
 
+        /// <summary>NPC 가방 통계 (P4-0). 생존 NPC의 개인 인벤토리만 본다 (장착품 제외).</summary>
+        private sealed class BagSnapshot
+        {
+            public bool Captured;
+            public int Living;
+            public readonly int[] UsedSlotHistogram = new int[GlobalEnum.NPC_INVENTORY_SLOTCOUNT_MAX + 1];
+            public int Items;
+            public int Stealable;            // 비스택·인스턴스 있음 = 훔칠 수 있는 물건 (D99)
+            public int StealableSellable;    // 그중 소속 마을 상점이 매입하는 것 (장물 판매 경로)
+            public int Sellable;             // GetNpcSellPrice ≥ 0
+            public int Unsellable;           // 매각 불가 (BasePrice 0·SellRatio 0 등)
+            public int NoVillage;            // 소속 마을 없음 (매각 판정 불가)
+            public int NpcsWithStealable;
+            public int NpcsWithFreeSlot;
+            public long ValueSum;
+            public long StealableValueSum;
+            public int MaxValue;
+            public readonly int[] ValueBuckets = new int[BagValueBucketUpper.Length];
+            public readonly List<int> Values = new();
+        }
+
+        /// <summary>NPC 관계 지표 (P4-0). 두 NPC가 모두 살아 있는 호감도 쌍·유형 관계만 센다.</summary>
+        private sealed class SocialSnapshot
+        {
+            public bool Captured;
+            public int AffinityPairs;
+            public long AffinitySum;
+            public int AffinityLowPairs;     // ≤ −50
+            public int AffinityHighPairs;    // ≥ +50
+            public int AffinityMin;
+            public int AffinityMax;
+            public readonly int[] RelationCounts = new int[ReportedRelationTypes.Length];
+        }
+
+        /// <summary>
+        /// 절도 조건 깔때기 (P4-0, D99·D100). 판정·실행 없이 조건 충족 수만 센다. 인덱스 0 = 기회 주 야망, 1 = 보조 야망.
+        /// </summary>
+        private sealed class TheftFunnel
+        {
+            public long RestEnds;                                // Rest 정상 종료 (절도 판정 자리 — 파티 합류 경로 제외)
+            public readonly long[] Thieves = new long[2];        // 도둑 후보 (야망 배율 > 0)
+            public readonly long[] FreeSlot = new long[2];       // 도둑 가방 빈칸 있음
+            public readonly long[] WithVictim = new long[2];     // 훔칠 물건이 있는 피해자 후보 ≥ 1 (쿨다운 없을 때)
+            public readonly long[] VictimSum = new long[2];      // 그때 피해자 후보 수 합
+            public readonly long[] SameVillageItemSum = new long[2];   // 빈칸 단계에서 같은 마을 생존 NPC 중 훔칠 물건 보유 수 합 (대기·관계 조건 전)
+            public readonly long[] CooldownPass = new long[2];   // 통과마다 시도한다고 가정할 때 도둑 168h·마을 72h 쿨다운 통과
+            public readonly long[,] VirtualAttempts = new long[TheftBaseChances.Length, 2];   // 기본 확률별 가상 시도 (쿨다운 포함)
+        }
+
+        /// <summary>
+        /// 절도 1건의 적용 직전 상태 (P4a 독립 감사). 게임 관찰자(TheftDecidedObserver)가 적용 직전에 찍고,
+        /// Rest 종료 처리가 끝난 뒤 복제본 상태를 직접 읽어 결과를 대조한다 (게임 판정 결과를 그대로 믿지 않는다).
+        /// </summary>
+        private sealed class TheftAuditSnapshot
+        {
+            public NpcTheftDecision Decision;
+            public float GameTime;
+            public int Day;
+            public int ItemId;
+            public int ItemValue;
+            public int VictimThiefAffinityBefore;
+            public bool GrudgeExistedBefore;           // 피해자 → 도둑 원한
+            public readonly List<int> KinIds = new();   // 독립 계산한 피해자 가족·친구 (생존, 도둑 제외, 중복 없음)
+            public readonly List<int> KinAffinityBefore = new();
+            public int VictimRelationsBefore, ThiefRelationsBefore;
+            public int ThiefDeedsBefore, ThiefTheftDeedsBefore, ThiefNotableBefore, VictimDeedsBefore;
+            public readonly List<int> ThiefItemIdsBefore = new();   // 도둑 가방·장비 인스턴스 (버림 없음 확인)
+        }
+
+        /// <summary>절도 1건 기록 (P4a 지표). 감사가 복제본 상태로 판정한 결과를 담는다.</summary>
+        private sealed class TheftRecord
+        {
+            public int Day;
+            public bool Primary;
+            public bool Detected;
+            public bool Equipped;
+            public int Value;
+            public bool NewGrudge;
+            public int KinCount;
+            public int ThiefId, VictimId, ItemInstanceId;   // P4b 깔때기 (안 들킨 절도 → 장착/판매 → 늦은 발각)
+        }
+
+        /// <summary>늦은 발각 1건의 적용 직전 상태 (P4b 독립 감사, D103). 관찰자 직전 호출에서 찍고 직후 호출에서 대조한다.</summary>
+        private sealed class TheftDiscoverySnapshot
+        {
+            public NpcTheftDiscovery Discovery;
+            public int AffinityBefore;
+            public bool GrudgeExistedBefore;
+            public readonly List<int> KinIds = new();
+            public readonly List<int> KinAffinityBefore = new();
+            public int VictimDeedsBefore, ThiefDeedsBefore;
+        }
+
         private sealed class NpcStats
         {
             public int Rest;
@@ -179,9 +301,9 @@ namespace ARPG.EditorTools
             public readonly Dictionary<string, RumorEventTrack> RumorEventIndex = new();
             public readonly List<RumorEventTrack> RumorEvents = new();
             // [분류, 측정 시점] → 비율 합·최대·표본 수
-            public readonly double[,] PropagationSum = new double[3, 4];
-            public readonly double[,] PropagationMax = new double[3, 4];
-            public readonly int[,] PropagationSamples = new int[3, 4];
+            public readonly double[,] PropagationSum = new double[RumorCategoryCount, 4];
+            public readonly double[,] PropagationMax = new double[RumorCategoryCount, 4];
+            public readonly int[,] PropagationSamples = new int[RumorCategoryCount, 4];
             // 선택 시점 "유망한 소문" 보유 여부별 활동 선택 수
             public long HolderSelections, HolderDelve, NonHolderSelections, NonHolderDelve;
             // 확인 원정 추적 (진단 전용 — 게임 상태에는 저장하지 않는다)
@@ -212,6 +334,52 @@ namespace ARPG.EditorTools
             // 매 시간 생존 NPC 상태 표본: StateRest..StateIdle 인덱스
             public readonly long[] StateHours = new long[StateSlotCount];
             public long TotalFoodInflow;
+
+            // D107: NPC 호감도·유형 관계 복제본 (라이브 대신 바꿔 끼운다)
+            public Dictionary<NpcPairKey, int> Affinity = new();
+            public readonly Dictionary<int, List<NpcRelationEntry>> Relations = new();
+            // P4-0: 가방·관계 지표(시작/끝), 절도 조건 깔때기(전 구간/마지막 15일), 시작 생존 집단의 끝 전투력
+            public int CurrentDay;
+            public int TheftLateStartDay;
+            public BagSnapshot BagStart = new BagSnapshot();
+            public BagSnapshot BagEnd = new BagSnapshot();
+            public SocialSnapshot SocialStart = new SocialSnapshot();
+            public SocialSnapshot SocialEnd = new SocialSnapshot();
+            public readonly TheftFunnel TheftAll = new TheftFunnel();
+            public readonly TheftFunnel TheftLate = new TheftFunnel();
+            // 가정 쿨다운의 최근 시도 시각: [0] = 통과마다 시도, [1 + c] = TheftBaseChances[c]의 가상 시도
+            public readonly Dictionary<int, float>[] TheftLastThiefAttempt = CreateTheftCooldownTables();
+            public readonly Dictionary<int, float>[] TheftLastVillageAttempt = CreateTheftCooldownTables();
+            // NpcActivityResolver.CreateRng (internal — 리플렉션 델리게이트). 가상 시도 롤에만 쓴다.
+            public Func<int, float, int, int, HistoryRng>? CreateActivityRng;
+            public readonly Dictionary<int, float> EndPower = new();
+
+            // P4a: 절도 카운터(게임 매니저 인스턴스 소유 — 바꿔 끼움)와 독립 감사
+            public NpcTheftCounters TheftCounters = new NpcTheftCounters();
+            public TheftAuditSnapshot? PendingTheft;
+            public readonly List<TheftRecord> TheftRecords = new();
+            public readonly List<string> TheftAuditFailures = new();
+            public readonly Dictionary<int, float> AuditLastThiefAttempt = new();
+            public readonly Dictionary<int, float> AuditLastVillageAttempt = new();
+            public int TheftObserved, TheftAuditFailCount, TheftEligibilityFails, TheftThiefCooldownViolations,
+                TheftVillageCooldownViolations, TheftCapExceed, TheftCaughtOk, TheftStolenOk, TheftUnaudited,
+                TheftThiefNotable;
+            // P4b: 늦은 발각 독립 감사·깔때기 (경로 인덱스 0 장착 소문, 1 판매 소문)
+            public TheftDiscoverySnapshot? PendingDiscovery;
+            public readonly HashSet<int> SoldStolenInstances = new();
+            public readonly HashSet<int> DiscoveredInstances = new();
+            public readonly int[] DiscoveryCount = new int[2];
+            public readonly int[] DiscoveryOk = new int[2];
+            public int DiscoveryTriggerFails, DiscoveryUnaudited, DiscoveryNewGrudges, DiscoveryKinTotal;
+            public readonly List<string> DiscoveryAuditFailures = new();
+        }
+
+        private static Dictionary<int, float>[] CreateTheftCooldownTables()
+        {
+            Dictionary<int, float>[] tables = new Dictionary<int, float>[TheftBaseChances.Length + 1];
+            for (int i = 0; i < tables.Length; i++)
+                tables[i] = new Dictionary<int, float>();
+            return tables;
         }
 
         private const int StateRest = 0, StateSoloHunt = 1, StatePartyHunt = 2, StateTrade = 3, StateSoloDelve = 4,
@@ -243,6 +411,15 @@ namespace ARPG.EditorTools
             public readonly int[] BoastRepertoireIn = new int[2];
             public readonly int[] BoastRepertoireBase = new int[2];
             public long ElapsedMs;
+            // P4b: 배신 소문 토픽, 피해자 도난 사연, 도둑 침묵, 판매 소문 토픽 없음 (D104·D106)
+            public long BetrayalTopics;
+            public int CollectBetrayalTopicNpcs;
+            public int TheftVictimDeedNpcs, TheftVictimTopicNpcs, TheftTopicNamed, TheftTopicAnonymous, TheftTopicLineFail;
+            public int ThiefOnlyNpcs, ThiefSilenceViolations;
+            public long ItemSoldTopics;
+            public readonly int[] TheftRepertoireIn = new int[2];
+            public readonly int[] TheftRepertoireBase = new int[2];
+            public readonly List<string> TheftExamples = new();
         }
 
         /// <summary>한 번에 바꿔 끼운 private 필드. 끝나면 역순으로 되돌린다.</summary>
@@ -324,6 +501,13 @@ namespace ARPG.EditorTools
                 if (probePlayerEntered == true)
                     InjectPlayerEnteredProbe(sim);
                 sim.WorldSeed = AR.s.Map.mapSeed;
+                sim.TheftLateStartDay = Mathf.Max(1, days - 14);
+                MethodInfo? createRng = typeof(NpcActivityResolver).GetMethod("CreateRng",
+                    BindingFlags.NonPublic | BindingFlags.Static);
+                if (createRng == null)
+                    throw new MissingMethodException(nameof(NpcActivityResolver), "CreateRng");
+                sim.CreateActivityRng = (Func<int, float, int, int, HistoryRng>)Delegate.CreateDelegate(
+                    typeof(Func<int, float, int, int, HistoryRng>), createRng);
                 CollectStartPopulation(sim, cowardIds, out cowardCourageMax, ambitionCounts);
 
                 sim.NpcJsonBytesStart = MeasureNpcJsonBytes(sim, out _, out _);
@@ -333,6 +517,9 @@ namespace ARPG.EditorTools
                 Debug.unityLogger.logHandler = capture;
                 SwapInClones(sim, swaps);
                 AttachRumorProbes(sim, swaps);
+                // P4-0: 시작 가방·관계 지표 (매각 판정이 마을 복제본을 보므로 교체 뒤에 잰다)
+                sim.BagStart = MeasureBags(sim);
+                sim.SocialStart = MeasureSocial(sim);
 
                 rows.Add(RecordDay(sim, 0, startGameTime));
                 sim.Today = new DayRow();
@@ -340,6 +527,7 @@ namespace ARPG.EditorTools
                 for (int hour = 1; hour <= totalHours; hour++)
                 {
                     float now = startGameTime + hour;
+                    sim.CurrentDay = (hour - 1) / 24 + 1;
                     elapsedField.SetValue(AR.s.Time, now);
                     accumulatorField.SetValue(AR.s.Time, 0f);
 
@@ -356,6 +544,9 @@ namespace ARPG.EditorTools
                         sim.Today = new DayRow();
                     }
                 }
+
+                // P4-0: 끝 가방·관계 지표, 시작 생존 집단의 끝 전투력 (복제본이 끼워진 동안 잰다)
+                CaptureEndState(sim);
 
                 // P2c: 복제본이 끼워진 채로(시각 = 시뮬 마지막) 대화 토픽을 실제 selector 코드로 만들어 검증한다.
                 AuditDialogueTopics(sim);
@@ -709,6 +900,32 @@ namespace ARPG.EditorTools
                     sim.Parties.Add(pair.Key, clone);
                 }
             }
+
+            // D107: NPC 호감도·유형 관계. 파티 호감도 변화(ApplyPartyRelationshipOutcome)·사망 정리가 복제본만 바꾸게 한다.
+            if (GetField(AR.s.Npc, "_npcAffinity").GetValue(AR.s.Npc) is Dictionary<NpcPairKey, int> liveAffinity)
+                sim.Affinity = new Dictionary<NpcPairKey, int>(liveAffinity);
+            if (GetField(AR.s.Npc, "_npcRelations").GetValue(AR.s.Npc) is Dictionary<int, List<NpcRelationEntry>> liveRelations)
+            {
+                // 유형 관계 엔트리는 From·To 두 인덱스에 같은 인스턴스로 들어 있고 RemoveAllRelationsInvolving이 참조로 지운다.
+                // 엔트리마다 복제본 1개를 만들어(키 = 원본 참조, Equals 재정의 없음) 두 인덱스가 같은 복제 인스턴스를 공유하게 한다.
+                Dictionary<NpcRelationEntry, NpcRelationEntry> copies = new Dictionary<NpcRelationEntry, NpcRelationEntry>();
+                foreach (KeyValuePair<int, List<NpcRelationEntry>> pair in liveRelations)
+                {
+                    List<NpcRelationEntry> liveList = pair.Value;
+                    List<NpcRelationEntry> list = new List<NpcRelationEntry>(liveList.Count);
+                    for (int i = 0; i < liveList.Count; i++)
+                    {
+                        NpcRelationEntry entry = liveList[i];
+                        if (copies.TryGetValue(entry, out NpcRelationEntry? copy) == false)
+                        {
+                            copy = new NpcRelationEntry(entry.FromEntityId, entry.ToEntityId, entry.Type, entry.OriginEventId);
+                            copies.Add(entry, copy);
+                        }
+                        list.Add(copy);
+                    }
+                    sim.Relations.Add(pair.Key, list);
+                }
+            }
         }
 
         private static void SwapInClones(SimContext sim, List<FieldSwap> swaps)
@@ -726,6 +943,9 @@ namespace ARPG.EditorTools
             Swap(swaps, npc, "_simulationPartyIds", partyIds);
             Swap(swaps, npc, "_simulationWorkCursor", 0);
             Swap(swaps, npc, "_nextPartyId", nextPartyId);
+            // D107: NPC 호감도·유형 관계 (호감도·관계는 런타임 매니저가 정본이고 WorldData 쪽 목록은 저장·로드 때만 쓰인다 — 저장 dirty 플래그 없음)
+            Swap(swaps, npc, "_npcAffinity", sim.Affinity);
+            Swap(swaps, npc, "_npcRelations", sim.Relations);
             // P2c: 시뮬 중 Deed·소문 변경이 라이브 대화 캐시를 지우지 않게 (InvalidateDialogues) 빈 서사 런타임으로 바꿔 끼운다.
             Swap(swaps, npc, "_narrative", new NpcNarrativeRuntime());
             Swap(swaps, village, "_villages", sim.Villages);
@@ -858,9 +1078,14 @@ namespace ARPG.EditorTools
                 }
                 if (activity.Kind == NpcActivityKind.Rest)
                 {
-                    // System_NpcSim과 같이 Rest 종료 시점에 소문 교환 (D74). RNG는 Rest 시작 시각 기준.
-                    AR.s.Npc.ExchangeRumorsOnRestEnd(entityId, saveData, activity.PhaseStartedGameTime, transitionTime,
-                        sim.WorldSeed);
+                    float restStartGameTime = activity.PhaseStartedGameTime;
+                    // P4-0: 절도 조건 깔때기 — 실제 판정 직전 상태로 잰다 (소문 교환은 가방·관계·활동을 바꾸지 않으므로 앞에서 재도 같다)
+                    MeasureTheftFunnel(sim, entityId, saveData, restStartGameTime, transitionTime);
+                    // System_NpcSim과 같은 Rest 종료 공용 진입점 (D107) — 소문 교환 다음 절도 판정(P4a)까지 게임 코드 그대로.
+                    // RNG는 Rest 시작 시각 기준이라 상태 전이 전에 부른다.
+                    AR.s.Npc.ResolveRestEnd(entityId, saveData, restStartGameTime, transitionTime, sim.WorldSeed, true);
+                    // P4a: 방금 절도가 있었으면 적용 직전 상태와 지금 상태를 대조한다
+                    AuditPendingTheft(sim);
                     SetIdle(saveData, transitionTime);
                     continue;
                 }
@@ -1083,6 +1308,9 @@ namespace ARPG.EditorTools
             NpcDelveReport? report = AR.s.Npc.ResolvePartyDelve(party, outcomeGameTime, sim.WorldSeed);
             if (report == null)
                 return;
+            // System_NpcSim.ResolvePartyDelve와 같은 시점의 파티 호감도 변화 (D107)
+            AR.s.Npc.ApplyPartyRelationshipOutcome(report.MemberIds, report.Outcomes, report.SuccessCount > 0,
+                outcomeGameTime);
             CountDelveReport(sim, report);
             if (confirmation == true)
             {
@@ -1355,6 +1583,8 @@ namespace ARPG.EditorTools
                     GrantLoot(sim, members[i], memberIds[i], party.PartyId, seedGameTime,
                         NpcActivityResolver.PartyHuntLootSaltBase + i, outcomeGameTime);
             }
+            // System_NpcSim.ResolvePartyHunt와 같은 시점(전리품 뒤, 사망 처리 전)의 파티 호감도 변화 (D107)
+            AR.s.Npc.ApplyPartyRelationshipOutcome(memberIds, outcomes, successCount > 0, outcomeGameTime);
             for (int i = 0; i < members.Count; i++)
             {
                 if (outcomes[i] == NpcHuntOutcome.Dead)
@@ -1388,7 +1618,10 @@ namespace ARPG.EditorTools
                 stats.FoodInflow += produced;
         }
 
-        /// <summary>사망 정리 축약판: 순회·마을 명단에서 빼고 소지 Gold는 소멸 (D46). 관계·연대기·Deed는 다루지 않는다.</summary>
+        /// <summary>
+        /// 사망 정리 축약판: 순회·마을 명단에서 빼고 소지 Gold는 소멸 (D46). 소문·호감도·유형 관계는 실제 MarkNpcDead와 같은
+        /// 메서드로 정리한다(복제본이 끼워져 있다, D107). 연대기·Deed·고인 기억(DeceasedRelations)은 다루지 않는다.
+        /// </summary>
         private static void MarkDead(SimContext sim, NpcSaveData saveData, int entityId, float when)
         {
             if (saveData.Condition == CharacterConditions.Dead)
@@ -1403,6 +1636,8 @@ namespace ARPG.EditorTools
             saveData.LastSimGameTime = when;
             // 실제 MarkNpcDead와 같은 소문 정리 (D72) — 명단 제거 전
             AR.s.Npc.PurgeRumorsOnNpcDeath(entityId, saveData);
+            AR.s.Npc.RemoveAllAffinityInvolving(entityId);
+            AR.s.Npc.RemoveAllRelationsInvolving(entityId);
             if (sim.Villages.TryGetValue(saveData.VillageId, out VillageData? village))
                 village.NpcEntityIds.Remove(entityId);
             AR.s.Npc.InvalidateNpcPower(entityId);
@@ -1790,10 +2025,13 @@ namespace ARPG.EditorTools
             AppendRumorSummary(sb, sim, rows, days);
             AppendTopicSummary(sb, sim, days);
             AppendPartySummary(sb, sim, days, first.Living);
+            AppendTheftPrepSummary(sb, sim, days);
+            AppendTheftSummary(sb, sim, days);
+            AppendTheftLateSummary(sb, sim, days);
 
             // ---- P2 완료 기준 체크리스트 (§13, §10.1 기조 — 30일 실행 기준) ----
             TopicAudit ta = sim.Topics;
-            long rumorTopics = ta.DungeonTopics + ta.ItemTopics;
+            long rumorTopics = ta.DungeonTopics + ta.ItemTopics + ta.BetrayalTopics;
             float delvePct = Pct(delve, selections);
             float huntPct = Pct(hunt, selections);
             float completionsPerVillage = villagesWithSlots > 0 ? completions / (float)villagesWithSlots : 0f;
@@ -1960,6 +2198,1107 @@ namespace ARPG.EditorTools
             }
         }
 
+        // ================= P4-0 절도 준비 (D99·D100·D107) =================
+
+        /// <summary>
+        /// 절도 조건 깔때기 (P4-0, D99·D100). Rest 정상 종료 직후(ResolveRestEnd 다음, 상태 전이 전) — P4a가 절도를 판정할 자리 —
+        /// 에서 판정·실행 없이 조건 충족 수만 센다: 도둑 후보(기회 야망) → 가방 빈칸 → 훔칠 물건이 있는 피해자 후보 ≥ 1.
+        /// 피해자·물건·빈칸 판정은 P4a가 쓸 공용 메서드(NpcManager.IsTheftVictimCandidate·HasStealableBagItem·HasFreeBagSlot)를 부른다.
+        /// 쿨다운(도둑 168h·같은 마을 72h)은 아직 게임 필드가 없어 여기서 가정해 따로 세고, 기본 확률별 가상 시도도 같이 센다
+        /// (확률 = 기본 × 야망 배율, 성향 배율 제외, salt 170 롤 — 상태는 바꾸지 않는다).
+        /// </summary>
+        private static void MeasureTheftFunnel(SimContext sim, int thiefId, NpcSaveData thief, float restStartGameTime,
+            float gameTime)
+        {
+            TheftFunnel all = sim.TheftAll;
+            TheftFunnel? late = sim.CurrentDay >= sim.TheftLateStartDay ? sim.TheftLate : null;
+            all.RestEnds++;
+            if (late != null)
+                late.RestEnds++;
+
+            float multiplier = NpcManager.GetTheftAmbitionMultiplier(thief.NpcStat);
+            if (multiplier <= 0f)
+                return;
+            int k = multiplier >= NpcManager.TheftPrimaryAmbitionMultiplier ? 0 : 1;
+            all.Thieves[k]++;
+            if (late != null)
+                late.Thieves[k]++;
+
+            if (NpcManager.HasFreeBagSlot(thief) == false)
+                return;
+            all.FreeSlot[k]++;
+            if (late != null)
+                late.FreeSlot[k]++;
+
+            if (sim.Villages.TryGetValue(thief.VillageId, out VillageData? village) == false)
+                return;
+            int sameVillageWithItem = 0;
+            int victims = 0;
+            List<int> roster = village.NpcEntityIds;
+            for (int i = 0; i < roster.Count; i++)
+            {
+                int candidateId = roster[i];
+                if (candidateId == thiefId || sim.Npcs.TryGetValue(candidateId, out NpcSaveData? candidate) == false ||
+                    candidate.Condition == CharacterConditions.Dead || NpcManager.HasStealableBagItem(candidate) == false)
+                    continue;
+                sameVillageWithItem++;
+                if (AR.s.Npc.IsTheftVictimCandidate(thiefId, thief, candidateId) == true)
+                    victims++;
+            }
+            all.SameVillageItemSum[k] += sameVillageWithItem;
+            if (late != null)
+                late.SameVillageItemSum[k] += sameVillageWithItem;
+            if (victims == 0)
+                return;
+            all.WithVictim[k]++;
+            all.VictimSum[k] += victims;
+            if (late != null)
+            {
+                late.WithVictim[k]++;
+                late.VictimSum[k] += victims;
+            }
+
+            // 가정 쿨다운: [0] = 통과마다 시도한다고 볼 때
+            int villageId = thief.VillageId;
+            if (IsTheftCooldownReady(sim, 0, thiefId, villageId, gameTime) == true)
+            {
+                RecordTheftAttempt(sim, 0, thiefId, villageId, gameTime);
+                all.CooldownPass[k]++;
+                if (late != null)
+                    late.CooldownPass[k]++;
+            }
+
+            // 기본 확률별 가상 시도: 같은 롤 값(공통 난수)을 확률 후보마다 비교한다
+            if (sim.CreateActivityRng == null)
+                return;
+            double roll = sim.CreateActivityRng(thiefId, restStartGameTime, sim.WorldSeed, TheftAttemptSalt).NextDouble();
+            for (int c = 0; c < TheftBaseChances.Length; c++)
+            {
+                if (IsTheftCooldownReady(sim, c + 1, thiefId, villageId, gameTime) == false ||
+                    roll >= TheftBaseChances[c] * multiplier)
+                    continue;
+                RecordTheftAttempt(sim, c + 1, thiefId, villageId, gameTime);
+                all.VirtualAttempts[c, k]++;
+                if (late != null)
+                    late.VirtualAttempts[c, k]++;
+            }
+        }
+
+        private static bool IsTheftCooldownReady(SimContext sim, int table, int thiefId, int villageId, float gameTime)
+        {
+            if (sim.TheftLastThiefAttempt[table].TryGetValue(thiefId, out float thiefTime) == true &&
+                gameTime - thiefTime < TheftThiefCooldownHours)
+                return false;
+            return sim.TheftLastVillageAttempt[table].TryGetValue(villageId, out float villageTime) == false ||
+                   gameTime - villageTime >= TheftVillageCooldownHours;
+        }
+
+        private static void RecordTheftAttempt(SimContext sim, int table, int thiefId, int villageId, float gameTime)
+        {
+            sim.TheftLastThiefAttempt[table][thiefId] = gameTime;
+            sim.TheftLastVillageAttempt[table][villageId] = gameTime;
+        }
+
+        // ================= P4a 절도 독립 감사 (D99~D102·D106) =================
+
+        /// <summary>
+        /// 게임 관찰자(TheftDecidedObserver): 시도가 확정돼 적용하기 직전. 자격·쿨다운을 게임 판정과 다른 경로(복제본 원장 직접 조회,
+        /// 진단 자체 쿨다운 표)로 다시 보고, 결과 대조에 쓸 적용 전 상태를 찍어 둔다. 상태는 바꾸지 않는다.
+        /// </summary>
+        private static void CaptureTheftSnapshot(SimContext sim, NpcTheftDecision decision, float gameTime)
+        {
+            sim.TheftObserved++;
+            if (sim.PendingTheft != null)
+                sim.TheftUnaudited++;
+            sim.PendingTheft = null;
+            if (sim.Npcs.TryGetValue(decision.ThiefId, out NpcSaveData? thief) == false ||
+                sim.Npcs.TryGetValue(decision.VictimId, out NpcSaveData? victim) == false)
+            {
+                sim.TheftEligibilityFails++;
+                AddTheftAuditFailure(sim, $"t={gameTime:F2} 도둑 {decision.ThiefId} 피해자 {decision.VictimId}: 복제본에 NPC 없음");
+                return;
+            }
+
+            ItemData? item = decision.ItemSlot >= 0 && decision.ItemSlot < victim.Inventory.Count
+                ? victim.Inventory[decision.ItemSlot]
+                : null;
+            string? ineligible = CheckTheftEligibility(sim, decision, thief, victim, item);
+            if (ineligible != null)
+            {
+                sim.TheftEligibilityFails++;
+                AddTheftAuditFailure(sim, $"t={gameTime:F2} 도둑 {decision.ThiefId} 피해자 {decision.VictimId}: 자격 {ineligible}");
+            }
+
+            // 쿨다운: 진단 자체 표 (게임의 LastTheftGameTime·마을 명단과 독립). 순회 순서로 시각이 조금 앞설 수 있어 절댓값으로 본다.
+            if (sim.AuditLastThiefAttempt.TryGetValue(decision.ThiefId, out float thiefLast) == true &&
+                Mathf.Abs(gameTime - thiefLast) < NpcManager.TheftThiefCooldownHours)
+            {
+                sim.TheftThiefCooldownViolations++;
+                AddTheftAuditFailure(sim, $"t={gameTime:F2} 도둑 {decision.ThiefId}: 직전 시도 {thiefLast:F2}와 168h 미만");
+            }
+            if (sim.AuditLastVillageAttempt.TryGetValue(thief.VillageId, out float villageLast) == true &&
+                Mathf.Abs(gameTime - villageLast) < NpcManager.TheftVillageCooldownHours)
+            {
+                sim.TheftVillageCooldownViolations++;
+                AddTheftAuditFailure(sim, $"t={gameTime:F2} 마을 {thief.VillageId}: 직전 시도 {villageLast:F2}와 72h 미만");
+            }
+            sim.AuditLastThiefAttempt[decision.ThiefId] = gameTime;
+            sim.AuditLastVillageAttempt[thief.VillageId] = gameTime;
+
+            TheftAuditSnapshot snapshot = new TheftAuditSnapshot
+            {
+                Decision = decision,
+                GameTime = gameTime,
+                Day = sim.CurrentDay,
+                ItemId = item != null ? item.Id : -1,
+                ItemValue = item != null ? NpcManager.GetItemValue(item) : 0,
+                VictimThiefAffinityBefore = ReadSimAffinity(sim, decision.VictimId, decision.ThiefId),
+                GrudgeExistedBefore = CountDirectedRelation(sim, decision.VictimId, decision.VictimId, decision.ThiefId,
+                    NpcRelationType.GrudgeAgainst) > 0,
+                VictimRelationsBefore = CountSimRelations(sim, decision.VictimId),
+                ThiefRelationsBefore = CountSimRelations(sim, decision.ThiefId),
+                ThiefDeedsBefore = thief.Deeds.Count,
+                ThiefTheftDeedsBefore = CountTheftDeeds(thief),
+                ThiefNotableBefore = CountDeeds(thief, NpcDeedKind.NotableItemAcquired),
+                VictimDeedsBefore = victim.Deeds.Count,
+            };
+            CollectSimKin(sim, decision.VictimId, decision.ThiefId, snapshot.KinIds);
+            for (int i = 0; i < snapshot.KinIds.Count; i++)
+                snapshot.KinAffinityBefore.Add(ReadSimAffinity(sim, snapshot.KinIds[i], decision.ThiefId));
+            CollectHeldInstances(thief, snapshot.ThiefItemIdsBefore);
+            sim.PendingTheft = snapshot;
+        }
+
+        /// <summary>
+        /// 자격 독립 검사 (D99·D100): 게임의 IsTheftVictimCandidate·GetTheftThiefBlock을 부르지 않고 복제본 원장을 직접 본다.
+        /// 문제가 없으면 null, 있으면 사유. 쿨다운은 CaptureTheftSnapshot이 진단 자체 표로 따로 본다.
+        /// </summary>
+        private static string? CheckTheftEligibility(SimContext sim, NpcTheftDecision d, NpcSaveData thief, NpcSaveData victim,
+            ItemData? item)
+        {
+            if (IsSimLiving(sim, d.ThiefId) == false)
+                return "도둑 사망";
+            if (thief.VillageId < 0 || sim.Villages.TryGetValue(thief.VillageId, out VillageData? village) == false)
+                return "도둑 소속 마을 없음";
+            NpcAmbitionProfile ambition = NpcAmbitionEvaluator.Evaluate(thief.NpcStat);
+            float expected = ambition.Primary == NpcAmbitionKind.Opportunist ? 1f
+                : ambition.Secondary == NpcAmbitionKind.Opportunist ? 0.5f : 0f;
+            if (expected <= 0f || Mathf.Approximately(expected, d.AmbitionMultiplier) == false)
+                return $"야망 배율 {d.AmbitionMultiplier:F2} (기대 {expected:F2})";
+            int freeSlots = 0;
+            for (int i = 0; i < thief.Inventory.Count; i++)
+            {
+                if (thief.Inventory[i] == null)
+                    freeSlots++;
+            }
+            if (freeSlots == 0)
+                return "도둑 가방 빈칸 없음";
+
+            if (IsSimLiving(sim, d.VictimId) == false)
+                return "피해자 사망";
+            if (victim.VillageId != thief.VillageId || village.NpcEntityIds.Contains(d.VictimId) == false)
+                return "다른 마을";
+            NpcActivityState activity = victim.Activity;
+            if (activity.Phase != NpcActivityPhase.Idle || activity.PartyId >= 0 ||
+                (activity.Kind != NpcActivityKind.None && activity.Kind != NpcActivityKind.Rest &&
+                 activity.Kind != NpcActivityKind.Trade))
+                return $"대기 아님 ({activity.Phase}/{activity.Kind}/파티 {activity.PartyId})";
+            if (AR.s.Npc.IsCompanionInDungeon(d.VictimId) == true || AR.s.Npc.IsInPlayerDuel(d.VictimId) == true)
+                return "동행·결투 중";
+            for (int i = 0; i < TheftExcludedRelationTypes.Length; i++)
+            {
+                if (HasSimRelationBetween(sim, d.ThiefId, d.VictimId, TheftExcludedRelationTypes[i]) == true)
+                    return $"제외 관계 {TheftExcludedRelationTypes[i]}";
+            }
+            int affinity = ReadSimAffinity(sim, d.ThiefId, d.VictimId);
+            if (affinity >= NpcManager.TheftVictimAffinityExclusion)
+                return $"호감도 {affinity}";
+            if (item == null || item.ItemInstanceId == 0 || item.ItemInstanceId != d.ItemInstanceId)
+                return "물건 불일치";
+            Tables.ItemTable? table = AR.s.Data.GetItem(item.Id);
+            if (table == null || table.Stackable == true)
+                return "스택 아이템";
+            return null;
+        }
+
+        // 피해자 제외 관계 (D99): 원한(방향 무관)·배우자·형제·부모자식(방향 무관)·친구
+        private static readonly NpcRelationType[] TheftExcludedRelationTypes =
+        {
+            NpcRelationType.GrudgeAgainst, NpcRelationType.Spouse, NpcRelationType.Sibling, NpcRelationType.ParentOf,
+            NpcRelationType.Friend,
+        };
+
+        /// <summary>
+        /// Rest 종료 처리 직후: 적용 전 상태(CaptureTheftSnapshot)와 지금 복제본 상태를 대조한다 (현장 적발 / 안 들킴 규칙 100%).
+        /// </summary>
+        private static void AuditPendingTheft(SimContext sim)
+        {
+            TheftAuditSnapshot? snapshot = sim.PendingTheft;
+            if (snapshot == null)
+                return;
+            sim.PendingTheft = null;
+
+            NpcTheftDecision d = snapshot.Decision;
+            NpcSaveData thief = sim.Npcs[d.ThiefId];
+            NpcSaveData victim = sim.Npcs[d.VictimId];
+            List<string> problems = new List<string>();
+            if (thief.LastTheftGameTime != snapshot.GameTime)
+                problems.Add($"도둑 LastTheftGameTime {thief.LastTheftGameTime:F2} (기대 {snapshot.GameTime:F2})");
+
+            bool stayedInSlot = d.ItemSlot >= 0 && d.ItemSlot < victim.Inventory.Count &&
+                                victim.Inventory[d.ItemSlot] != null &&
+                                victim.Inventory[d.ItemSlot]!.ItemInstanceId == d.ItemInstanceId;
+            bool victimHolds = HoldsInstance(victim, d.ItemInstanceId, out _);
+            bool thiefHolds = HoldsInstance(thief, d.ItemInstanceId, out bool thiefEquipped);
+            int affinityNow = ReadSimAffinity(sim, d.VictimId, d.ThiefId);
+            TheftRecord record = new TheftRecord
+            {
+                Day = snapshot.Day,
+                Primary = d.AmbitionMultiplier >= NpcManager.TheftPrimaryAmbitionMultiplier,
+                Detected = d.Detected,
+                Value = snapshot.ItemValue,
+                KinCount = snapshot.KinIds.Count,
+                ThiefId = d.ThiefId,
+                VictimId = d.VictimId,
+                ItemInstanceId = d.ItemInstanceId,
+            };
+
+            if (d.Detected == true)
+            {
+                if (stayedInSlot == false)
+                    problems.Add("물건이 피해자 칸에 없음");
+                if (thiefHolds == true)
+                    problems.Add("도둑이 물건을 가짐");
+                int expected = Mathf.Clamp(snapshot.VictimThiefAffinityBefore + NpcManager.TheftVictimAffinityPenalty,
+                    NpcManager.AFFINITY_MIN, NpcManager.AFFINITY_MAX);
+                if (affinityNow != expected)
+                    problems.Add($"피해자↔도둑 호감도 {snapshot.VictimThiefAffinityBefore}→{affinityNow} (기대 {expected})");
+                int grudgeAtVictim = CountDirectedRelation(sim, d.VictimId, d.VictimId, d.ThiefId, NpcRelationType.GrudgeAgainst);
+                int grudgeAtThief = CountDirectedRelation(sim, d.ThiefId, d.VictimId, d.ThiefId, NpcRelationType.GrudgeAgainst);
+                if (grudgeAtVictim != 1 || grudgeAtThief != 1)
+                    problems.Add($"원한(피해자→도둑) 인덱스 {grudgeAtVictim}/{grudgeAtThief}건 (1/1이어야 함)");
+                for (int i = 0; i < snapshot.KinIds.Count; i++)
+                {
+                    int kinExpected = Mathf.Clamp(snapshot.KinAffinityBefore[i] + NpcManager.TheftKinAffinityPenalty,
+                        NpcManager.AFFINITY_MIN, NpcManager.AFFINITY_MAX);
+                    int kinNow = ReadSimAffinity(sim, snapshot.KinIds[i], d.ThiefId);
+                    if (kinNow != kinExpected)
+                        problems.Add($"가족·친구 {snapshot.KinIds[i]}↔도둑 {snapshot.KinAffinityBefore[i]}→{kinNow} (기대 {kinExpected})");
+                }
+                CheckTheftDeed(problems, "피해자", victim, snapshot.VictimDeedsBefore, NpcDeedKind.CaughtThiefInAct, d.ThiefId,
+                    snapshot.ItemId);
+                CheckTheftDeed(problems, "도둑", thief, snapshot.ThiefDeedsBefore, NpcDeedKind.CaughtStealing, d.VictimId,
+                    snapshot.ItemId);
+                // P4b (D105): 피해자 직접 Betrayal 소문(현장 적발, 사건 시각 = 지금)
+                if (HasBetrayalRumorOrCapDrop(victim, d.ThiefId, d.VictimId, NpcBetrayalKind.TheftCaughtInAct, snapshot.GameTime) == false)
+                    problems.Add("피해자 Betrayal(현장 적발) 소문 없음");
+                record.NewGrudge = snapshot.GrudgeExistedBefore == false;
+                if (problems.Count == 0)
+                    sim.TheftCaughtOk++;
+            }
+            else
+            {
+                if (victimHolds == true)
+                    problems.Add("물건이 피해자에게 남음");
+                if (thiefHolds == false)
+                    problems.Add("도둑에게 물건 없음");
+                record.Equipped = thiefEquipped;
+                if (affinityNow != snapshot.VictimThiefAffinityBefore)
+                    problems.Add($"피해자↔도둑 호감도 변화 {snapshot.VictimThiefAffinityBefore}→{affinityNow}");
+                if (CountSimRelations(sim, d.VictimId) != snapshot.VictimRelationsBefore ||
+                    CountSimRelations(sim, d.ThiefId) != snapshot.ThiefRelationsBefore)
+                    problems.Add("유형 관계 수 변화");
+                for (int i = 0; i < snapshot.KinIds.Count; i++)
+                {
+                    if (ReadSimAffinity(sim, snapshot.KinIds[i], d.ThiefId) != snapshot.KinAffinityBefore[i])
+                        problems.Add($"가족·친구 {snapshot.KinIds[i]}↔도둑 호감도 변화");
+                }
+                // 도둑 쪽: 절도 Deed 없음. 새 Deed는 훔친 장비를 장착했을 때의 NotableItemAcquired(D83 기존 경로) 1건뿐이다.
+                int notableAdded = CountDeeds(thief, NpcDeedKind.NotableItemAcquired) - snapshot.ThiefNotableBefore;
+                if (CountTheftDeeds(thief) != snapshot.ThiefTheftDeedsBefore)
+                    problems.Add("도둑 쪽 절도 Deed 생김");
+                if (thief.Deeds.Count - snapshot.ThiefDeedsBefore != notableAdded || notableAdded != (thiefEquipped ? 1 : 0))
+                    problems.Add($"도둑 Deed +{thief.Deeds.Count - snapshot.ThiefDeedsBefore} (NotableItemAcquired +{notableAdded}, 장착 {thiefEquipped})");
+                if (thiefEquipped == true && notableAdded == 1)
+                    sim.TheftThiefNotable++;
+                CheckTheftDeed(problems, "피해자", victim, snapshot.VictimDeedsBefore, NpcDeedKind.ItemStolen, -1, snapshot.ItemId);
+                // P4b (D103): 피해자 단서 {인스턴스, 실제 범인, 시각}
+                bool clueFound = false;
+                for (int i = 0; i < victim.TheftClues.Count; i++)
+                {
+                    NpcTheftClue clue = victim.TheftClues[i];
+                    clueFound |= clue.ItemInstanceId == d.ItemInstanceId && clue.ThiefId == d.ThiefId &&
+                                 clue.When == snapshot.GameTime;
+                }
+                if (clueFound == false || victim.TheftClues.Count > NpcSaveData.MaxTheftClues)
+                    problems.Add($"피해자 단서 없음/상한 초과 ({victim.TheftClues.Count}건)");
+                for (int i = 0; i < snapshot.ThiefItemIdsBefore.Count; i++)
+                {
+                    if (HoldsInstance(thief, snapshot.ThiefItemIdsBefore[i], out _) == false)
+                        problems.Add($"도둑 기존 아이템 #{snapshot.ThiefItemIdsBefore[i]} 사라짐(버림)");
+                }
+                if (thiefEquipped == true)
+                {
+                    float power = NpcPowerEvaluator.Evaluate(thief);
+                    float cap = NpcManager.GetNpcPowerCap(thief);
+                    if (power > cap + PowerEpsilon)
+                    {
+                        sim.TheftCapExceed++;
+                        problems.Add($"개인 상한 초과 {power:F3} > {cap:F3}");
+                    }
+                }
+                if (problems.Count == 0)
+                    sim.TheftStolenOk++;
+            }
+
+            if (problems.Count > 0)
+            {
+                sim.TheftAuditFailCount++;
+                AddTheftAuditFailure(sim, $"t={snapshot.GameTime:F2} 도둑 {d.ThiefId} 피해자 {d.VictimId} " +
+                                          $"{(d.Detected ? "현장 적발" : "안 들킴")}: {string.Join(", ", problems)}");
+            }
+            sim.TheftRecords.Add(record);
+        }
+
+        /// <summary>새 절도 Deed 1건: 목록이 1건 늘었고 마지막이 그 종류·아이템이며, 참가자는 상대 1명(otherId -1이면 없음)이다.</summary>
+        private static void CheckTheftDeed(List<string> problems, string label, NpcSaveData owner, int deedsBefore,
+            NpcDeedKind kind, int otherId, int itemId)
+        {
+            if (owner.Deeds.Count != deedsBefore + 1)
+            {
+                problems.Add($"{label} Deed {deedsBefore}→{owner.Deeds.Count}건 (+1이어야 함)");
+                return;
+            }
+            NpcDeedEntry deed = owner.Deeds[owner.Deeds.Count - 1];
+            bool participantsOk = otherId < 0
+                ? deed.Participants.Count == 0 && deed.ParticipantSnapshots.Count == 0
+                : deed.Participants.Count == 1 && deed.Participants[0] == otherId && deed.ParticipantSnapshots.Count == 1;
+            if (deed.Kind != kind || deed.ItemId != itemId || participantsOk == false)
+                problems.Add($"{label} Deed {deed.Kind}/아이템 {deed.ItemId}/참가자 {deed.Participants.Count} (기대 {kind}/{itemId}/{(otherId < 0 ? 0 : 1)})");
+        }
+
+        /// <summary>
+        /// 피해자가 그 사건의 Betrayal 소문(가해자·피해자·세부 종류·사건 시각)을 가졌는가. 상한 8이 모두 유망 소문이라
+        /// 새 소문이 버려진 경우(DroppedByCap)는 규칙대로이므로 통과로 본다.
+        /// </summary>
+        private static bool HasBetrayalRumorOrCapDrop(NpcSaveData victim, int thiefId, int victimId, NpcBetrayalKind kind,
+            float eventGameTime)
+        {
+            for (int i = 0; i < victim.Rumors.Count; i++)
+            {
+                NpcRumor rumor = victim.Rumors[i];
+                if (rumor.Kind == NpcRumorKind.Betrayal && rumor.SubjectNpcId == thiefId && rumor.VictimNpcId == victimId &&
+                    rumor.BetrayalKind == kind && rumor.EventGameTime == eventGameTime && rumor.SourceNpcId < 0)
+                    return true;
+            }
+            if (victim.Rumors.Count < NpcManager.MaxRumorsPerNpc)
+                return false;
+            float now = AR.s.Time.CurrentGameTime;
+            for (int i = 0; i < victim.Rumors.Count; i++)
+            {
+                if (AR.s.Npc.IsPromisingRumor(victim, victim.Rumors[i], now) == false)
+                    return false;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// 늦은 발각 직전 (관찰자 applied == false, D103). 발각 조건을 게임 판정과 다른 경로로 다시 본다: 피해자에게 그 인스턴스·범인의
+        /// 단서가 있고(범인 생존, 14일 이내), 방금 받아들인 그 인스턴스의 ItemOwner/ItemSold 소문(주체 = 범인)을 갖고 있다. 대조용 상태를 찍는다.
+        /// </summary>
+        private static void CaptureDiscoverySnapshot(SimContext sim, NpcTheftDiscovery discovery)
+        {
+            if (sim.PendingDiscovery != null)
+                sim.DiscoveryUnaudited++;
+            sim.PendingDiscovery = null;
+            if (sim.Npcs.TryGetValue(discovery.VictimId, out NpcSaveData? victim) == false ||
+                sim.Npcs.TryGetValue(discovery.ThiefId, out NpcSaveData? thief) == false)
+            {
+                sim.DiscoveryTriggerFails++;
+                AddDiscoveryAuditFailure(sim, $"t={discovery.GameTime:F2} 피해자 {discovery.VictimId} 도둑 {discovery.ThiefId}: 복제본에 NPC 없음");
+                return;
+            }
+
+            bool clueOk = false;
+            for (int i = 0; i < victim.TheftClues.Count; i++)
+            {
+                NpcTheftClue clue = victim.TheftClues[i];
+                clueOk |= clue.ItemInstanceId == discovery.ItemInstanceId && clue.ThiefId == discovery.ThiefId &&
+                          clue.When == discovery.TheftGameTime && IsSimLiving(sim, clue.ThiefId) == true &&
+                          discovery.GameTime - clue.When < NpcManager.TheftClueLifetimeHours;
+            }
+            NpcRumorKind expectedKind = discovery.Path == NpcManager.TheftDiscoveryPathItemSold
+                ? NpcRumorKind.ItemSold
+                : NpcRumorKind.ItemOwner;
+            bool rumorOk = false;
+            for (int i = 0; i < victim.Rumors.Count; i++)
+            {
+                NpcRumor rumor = victim.Rumors[i];
+                rumorOk |= rumor.Kind == expectedKind && rumor.SubjectNpcId == discovery.ThiefId &&
+                           rumor.ItemInstanceId == discovery.ItemInstanceId && rumor.SourceNpcId >= 0;
+            }
+            if (clueOk == false || rumorOk == false)
+            {
+                sim.DiscoveryTriggerFails++;
+                AddDiscoveryAuditFailure(sim, $"t={discovery.GameTime:F2} 피해자 {discovery.VictimId} 도둑 {discovery.ThiefId}: " +
+                                              $"발각 조건 (단서 {clueOk}, 받은 {expectedKind} 소문 {rumorOk})");
+            }
+
+            TheftDiscoverySnapshot snapshot = new TheftDiscoverySnapshot
+            {
+                Discovery = discovery,
+                AffinityBefore = ReadSimAffinity(sim, discovery.VictimId, discovery.ThiefId),
+                GrudgeExistedBefore = CountDirectedRelation(sim, discovery.VictimId, discovery.VictimId, discovery.ThiefId,
+                    NpcRelationType.GrudgeAgainst) > 0,
+                VictimDeedsBefore = victim.Deeds.Count,
+                ThiefDeedsBefore = thief.Deeds.Count,
+            };
+            CollectSimKin(sim, discovery.VictimId, discovery.ThiefId, snapshot.KinIds);
+            for (int i = 0; i < snapshot.KinIds.Count; i++)
+                snapshot.KinAffinityBefore.Add(ReadSimAffinity(sim, snapshot.KinIds[i], discovery.ThiefId));
+            sim.PendingDiscovery = snapshot;
+        }
+
+        /// <summary>
+        /// 늦은 발각 직후 (관찰자 applied == true): D102 관계(−40·원한 1건·가족친구 −10) + 단서 제거 + Deed 2종 + Betrayal(늦은 발각) 100% 대조.
+        /// </summary>
+        private static void AuditDiscovery(SimContext sim, NpcTheftDiscovery discovery)
+        {
+            TheftDiscoverySnapshot? snapshot = sim.PendingDiscovery;
+            sim.PendingDiscovery = null;
+            int path = Mathf.Clamp(discovery.Path, 0, 1);
+            sim.DiscoveryCount[path]++;
+            sim.DiscoveredInstances.Add(discovery.ItemInstanceId);
+            if (snapshot == null || snapshot.Discovery.VictimId != discovery.VictimId ||
+                snapshot.Discovery.ItemInstanceId != discovery.ItemInstanceId)
+            {
+                AddDiscoveryAuditFailure(sim, $"t={discovery.GameTime:F2} 피해자 {discovery.VictimId}: 직전 상태 없음");
+                return;
+            }
+
+            NpcSaveData victim = sim.Npcs[discovery.VictimId];
+            NpcSaveData thief = sim.Npcs[discovery.ThiefId];
+            List<string> problems = new List<string>();
+            int expected = Mathf.Clamp(snapshot.AffinityBefore + NpcManager.TheftVictimAffinityPenalty, NpcManager.AFFINITY_MIN,
+                NpcManager.AFFINITY_MAX);
+            int affinityNow = ReadSimAffinity(sim, discovery.VictimId, discovery.ThiefId);
+            if (affinityNow != expected)
+                problems.Add($"피해자↔도둑 호감도 {snapshot.AffinityBefore}→{affinityNow} (기대 {expected})");
+            if (CountDirectedRelation(sim, discovery.VictimId, discovery.VictimId, discovery.ThiefId, NpcRelationType.GrudgeAgainst) != 1 ||
+                CountDirectedRelation(sim, discovery.ThiefId, discovery.VictimId, discovery.ThiefId, NpcRelationType.GrudgeAgainst) != 1)
+                problems.Add("원한(피해자→도둑) 1/1건 아님");
+            for (int i = 0; i < snapshot.KinIds.Count; i++)
+            {
+                int kinExpected = Mathf.Clamp(snapshot.KinAffinityBefore[i] + NpcManager.TheftKinAffinityPenalty,
+                    NpcManager.AFFINITY_MIN, NpcManager.AFFINITY_MAX);
+                if (ReadSimAffinity(sim, snapshot.KinIds[i], discovery.ThiefId) != kinExpected)
+                    problems.Add($"가족·친구 {snapshot.KinIds[i]} −10 아님");
+            }
+            for (int i = 0; i < victim.TheftClues.Count; i++)
+            {
+                if (victim.TheftClues[i].ItemInstanceId == discovery.ItemInstanceId &&
+                    victim.TheftClues[i].ThiefId == discovery.ThiefId)
+                    problems.Add("단서가 남음");
+            }
+            CheckTheftDeed(problems, "피해자", victim, snapshot.VictimDeedsBefore, NpcDeedKind.TheftDiscovered, discovery.ThiefId,
+                discovery.ItemId);
+            CheckTheftDeed(problems, "도둑", thief, snapshot.ThiefDeedsBefore, NpcDeedKind.TheftExposed, discovery.VictimId,
+                discovery.ItemId);
+            if (HasBetrayalRumorOrCapDrop(victim, discovery.ThiefId, discovery.VictimId, NpcBetrayalKind.TheftDiscovered,
+                    discovery.TheftGameTime) == false)
+                problems.Add("피해자 Betrayal(늦은 발각) 소문 없음");
+
+            if (problems.Count == 0)
+                sim.DiscoveryOk[path]++;
+            else
+                AddDiscoveryAuditFailure(sim, $"t={discovery.GameTime:F2} 피해자 {discovery.VictimId} 도둑 {discovery.ThiefId} " +
+                                              $"경로 {path}: {string.Join(", ", problems)}");
+            if (snapshot.GrudgeExistedBefore == false)
+                sim.DiscoveryNewGrudges++;
+            sim.DiscoveryKinTotal += snapshot.KinIds.Count;
+        }
+
+        private static void AddDiscoveryAuditFailure(SimContext sim, string message)
+        {
+            if (sim.DiscoveryAuditFailures.Count < MaxTheftAuditFailures)
+                sim.DiscoveryAuditFailures.Add(message);
+        }
+
+        private static void AddTheftAuditFailure(SimContext sim, string message)
+        {
+            if (sim.TheftAuditFailures.Count < MaxTheftAuditFailures)
+                sim.TheftAuditFailures.Add(message);
+        }
+
+        private static int ReadSimAffinity(SimContext sim, int a, int b)
+        {
+            if (a == b)
+                return 0;
+            return sim.Affinity.TryGetValue(new NpcPairKey(a, b), out int value) ? value : 0;
+        }
+
+        private static int CountSimRelations(SimContext sim, int entityId)
+        {
+            return sim.Relations.TryGetValue(entityId, out List<NpcRelationEntry>? list) ? list.Count : 0;
+        }
+
+        /// <summary>indexKey의 관계 인덱스에서 정확히 from → to 방향의 type 엔트리 수.</summary>
+        private static int CountDirectedRelation(SimContext sim, int indexKey, int from, int to, NpcRelationType type)
+        {
+            if (sim.Relations.TryGetValue(indexKey, out List<NpcRelationEntry>? list) == false)
+                return 0;
+            int count = 0;
+            for (int i = 0; i < list.Count; i++)
+            {
+                NpcRelationEntry entry = list[i];
+                if (entry.Type == type && entry.FromEntityId == from && entry.ToEntityId == to)
+                    count++;
+            }
+            return count;
+        }
+
+        private static bool HasSimRelationBetween(SimContext sim, int a, int b, NpcRelationType type)
+        {
+            return CountDirectedRelation(sim, a, a, b, type) > 0 || CountDirectedRelation(sim, a, b, a, type) > 0;
+        }
+
+        /// <summary>피해자의 가족(배우자·형제·부모자식 양방향)·친구 중 생존·도둑 아닌 NPC (중복 없음, D102) — 복제본 원장 직접 조회.</summary>
+        private static void CollectSimKin(SimContext sim, int victimId, int thiefId, List<int> result)
+        {
+            result.Clear();
+            if (sim.Relations.TryGetValue(victimId, out List<NpcRelationEntry>? list) == false)
+                return;
+            for (int i = 0; i < list.Count; i++)
+            {
+                NpcRelationEntry entry = list[i];
+                if (entry.Type != NpcRelationType.Spouse && entry.Type != NpcRelationType.Sibling &&
+                    entry.Type != NpcRelationType.ParentOf && entry.Type != NpcRelationType.Friend)
+                    continue;
+                int otherId = entry.FromEntityId == victimId ? entry.ToEntityId : entry.FromEntityId;
+                if (otherId == thiefId || otherId == victimId || result.Contains(otherId) == true ||
+                    IsSimLiving(sim, otherId) == false)
+                    continue;
+                result.Add(otherId);
+            }
+        }
+
+        private static void CollectHeldInstances(NpcSaveData saveData, List<int> result)
+        {
+            result.Clear();
+            for (int i = 0; i < saveData.Inventory.Count; i++)
+            {
+                ItemData? item = saveData.Inventory[i];
+                if (item != null && item.ItemInstanceId != 0)
+                    result.Add(item.ItemInstanceId);
+            }
+            for (int i = 0; i < saveData.InventoryEquip.Length; i++)
+            {
+                ItemData? item = saveData.InventoryEquip[i];
+                if (item != null && item.ItemInstanceId != 0)
+                    result.Add(item.ItemInstanceId);
+            }
+        }
+
+        private static bool HoldsInstance(NpcSaveData saveData, int itemInstanceId, out bool equipped)
+        {
+            equipped = false;
+            for (int i = 0; i < saveData.InventoryEquip.Length; i++)
+            {
+                if (saveData.InventoryEquip[i] != null && saveData.InventoryEquip[i]!.ItemInstanceId == itemInstanceId)
+                {
+                    equipped = true;
+                    return true;
+                }
+            }
+            for (int i = 0; i < saveData.Inventory.Count; i++)
+            {
+                if (saveData.Inventory[i] != null && saveData.Inventory[i]!.ItemInstanceId == itemInstanceId)
+                    return true;
+            }
+            return false;
+        }
+
+        private static bool IsTheftDeedKind(NpcDeedKind kind)
+        {
+            return kind == NpcDeedKind.ItemStolen || kind == NpcDeedKind.CaughtThiefInAct || kind == NpcDeedKind.CaughtStealing ||
+                   kind == NpcDeedKind.TheftDiscovered || kind == NpcDeedKind.TheftExposed;
+        }
+
+        private static int CountTheftDeeds(NpcSaveData saveData)
+        {
+            int count = 0;
+            for (int i = 0; i < saveData.Deeds.Count; i++)
+            {
+                if (saveData.Deeds[i] != null && IsTheftDeedKind(saveData.Deeds[i].Kind) == true)
+                    count++;
+            }
+            return count;
+        }
+
+        private static int CountDeeds(NpcSaveData saveData, NpcDeedKind kind)
+        {
+            int count = 0;
+            for (int i = 0; i < saveData.Deeds.Count; i++)
+            {
+                if (saveData.Deeds[i] != null && saveData.Deeds[i].Kind == kind)
+                    count++;
+            }
+            return count;
+        }
+
+        /// <summary>P4b 요약 (D103~D106): 단서·늦은 발각 경로별·깔때기·판매/배신 소문 + 독립 감사.</summary>
+        private static void AppendTheftLateSummary(StringBuilder sb, SimContext sim, int days)
+        {
+            NpcTheftCounters c = sim.TheftCounters;
+            NpcRumorCounters r = sim.RumorCounters;
+            sb.AppendLine("==== P4b 늦은 발각 · 판매 소문 · 배신 소문 (D103~D106) ====");
+            int cluesHeld = 0, clueHolders = 0, clueCapViolations = 0, soldHeld = 0, betrayalHeld = 0;
+            for (int i = 0; i < sim.NpcIds.Count; i++)
+            {
+                if (IsSimLiving(sim, sim.NpcIds[i]) == false)
+                    continue;
+                NpcSaveData npc = sim.Npcs[sim.NpcIds[i]];
+                cluesHeld += npc.TheftClues.Count;
+                if (npc.TheftClues.Count > 0)
+                    clueHolders++;
+                if (npc.TheftClues.Count > NpcSaveData.MaxTheftClues)
+                    clueCapViolations++;
+                for (int k = 0; k < npc.Rumors.Count; k++)
+                {
+                    if (npc.Rumors[k].Kind == NpcRumorKind.ItemSold)
+                        soldHeld++;
+                    else if (npc.Rumors[k].Kind == NpcRumorKind.Betrayal)
+                        betrayalHeld++;
+                }
+            }
+            sb.AppendLine($"단서: 생성 {c.CluesCreated} / 상한(3) 교체 {c.CluesEvicted} / 14일 만료 정리 {c.CluesExpired} / 범인 사망 정리 {c.CluesThiefDead} | " +
+                          $"끝 보유 {cluesHeld}건(NPC {clueHolders}명, 상한 초과 {clueCapViolations})");
+            long late = c.LateDiscoveries[0] + c.LateDiscoveries[1];
+            sb.AppendLine($"늦은 발각 {late}건 (30일 환산 {late * 30f / Mathf.Max(1, days):F0}) = 장착 소문 {c.LateDiscoveries[0]} / 판매 소문 {c.LateDiscoveries[1]} | " +
+                          $"맞는 소문이 왔지만 단서 만료·범인 사망이라 발각 없음 {c.LateMatchInvalidClue}건");
+
+            // 깔때기: 안 들킨 절도 → (도둑 장착 | 판매 소문 생성 | 그 밖: 도둑 가방에 보유·매입 거절) → 늦은 발각
+            int stolen = 0, equipped = 0, equippedFound = 0, sold = 0, soldFound = 0, other = 0, otherFound = 0;
+            for (int i = 0; i < sim.TheftRecords.Count; i++)
+            {
+                TheftRecord record = sim.TheftRecords[i];
+                if (record.Detected == true)
+                    continue;
+                stolen++;
+                bool found = sim.DiscoveredInstances.Contains(record.ItemInstanceId);
+                if (record.Equipped == true)
+                {
+                    equipped++;
+                    if (found == true)
+                        equippedFound++;
+                }
+                else if (sim.SoldStolenInstances.Contains(record.ItemInstanceId) == true)
+                {
+                    sold++;
+                    if (found == true)
+                        soldFound++;
+                }
+                else
+                {
+                    other++;
+                    if (found == true)
+                        otherFound++;
+                }
+            }
+            sb.AppendLine($"깔때기(이번 실행의 안 들킨 절도 {stolen}건): 도둑 장착 {equipped}(→ 발각 {equippedFound}) / 훔친 물건 판매 소문 {sold}(→ 발각 {soldFound}) / " +
+                          $"그 밖(가방 보유·매입 거절·되도둑맞음) {other}(→ 발각 {otherFound})");
+            sb.AppendLine($"소문: 판매(훔친 물건) 생성 {r.CreatedItemSold} · 교환 수용 {r.AcceptedItemSold} · 끝 보유 {soldHeld} | " +
+                          $"배신 생성 현장 적발 {r.CreatedBetrayal[(int)NpcBetrayalKind.TheftCaughtInAct]} / 늦은 발각 " +
+                          $"{r.CreatedBetrayal[(int)NpcBetrayalKind.TheftDiscovered]} · 교환 수용 {r.AcceptedBetrayal} · 끝 보유 {betrayalHeld}");
+            sb.AppendLine($"늦은 발각의 관계 파장: 새 원한 쌍 {sim.DiscoveryNewGrudges} / 가족·친구 −10 {sim.DiscoveryKinTotal}명");
+
+            TopicAudit ta = sim.Topics;
+            int passCount = 0, failCount = 0;
+            StringBuilder check = new StringBuilder();
+            void Item(bool pass, string label, string value)
+            {
+                if (pass == true)
+                    passCount++;
+                else
+                    failCount++;
+                check.AppendLine($"  [{(pass ? "PASS" : "FAIL")}] {label}: {value}");
+            }
+            Item(sim.DiscoveryTriggerFails == 0, "늦은 발각 조건 독립 검사 실패 0 (유효 단서 + 받은 소문 주체 = 실제 범인)",
+                $"{sim.DiscoveryTriggerFails}");
+            Item(sim.DiscoveryOk[0] == sim.DiscoveryCount[0] && sim.DiscoveryOk[1] == sim.DiscoveryCount[1],
+                "늦은 발각 결과: 호감도 −40·원한 1건·가족친구 −10·단서 제거·Deed 2종·Betrayal(늦은 발각)",
+                $"장착 {sim.DiscoveryOk[0]}/{sim.DiscoveryCount[0]} · 판매 {sim.DiscoveryOk[1]}/{sim.DiscoveryCount[1]}");
+            Item(c.LateDiscoveries[0] == sim.DiscoveryCount[0] && c.LateDiscoveries[1] == sim.DiscoveryCount[1] &&
+                 sim.DiscoveryUnaudited == 0, "늦은 발각 수 일치 (게임 카운터 = 감사, 미감사 0)",
+                $"{c.LateDiscoveries[0]}/{c.LateDiscoveries[1]} = {sim.DiscoveryCount[0]}/{sim.DiscoveryCount[1]}");
+            Item(clueCapViolations == 0, "단서 상한 3 초과 0", $"{clueCapViolations}");
+            Item(ta.ItemSoldTopics == 0 && ta.ThiefSilenceViolations == 0 && ta.TheftTopicLineFail == 0,
+                "대화: 판매 소문 토픽 0 · 도둑 침묵 · 도난 토픽 문구(범인 이름/\"누가\")",
+                $"판매 토픽 {ta.ItemSoldTopics} / 도둑 위반 {ta.ThiefSilenceViolations} / 문구 불일치 {ta.TheftTopicLineFail}");
+            sb.AppendLine($"==== P4b 독립 감사: PASS {passCount} / FAIL {failCount} ====");
+            sb.Append(check);
+            for (int i = 0; i < sim.DiscoveryAuditFailures.Count; i++)
+                sb.AppendLine($"    ! {sim.DiscoveryAuditFailures[i]}");
+        }
+
+        private static void AppendTheftSummary(StringBuilder sb, SimContext sim, int days)
+        {
+            NpcTheftCounters c = sim.TheftCounters;
+            sb.AppendLine("==== P4a 절도 (D99~D102·D106) ====");
+            sb.AppendLine($"판정한 Rest 종료 {c.RestEnds}회 (파티 합류 경로 제외) | 자격 없음(사망·마을 없음) " +
+                          $"{c.Unqualified[(int)NpcTheftCheck.NotEligible]} / 기회 야망 아님 {c.Unqualified[(int)NpcTheftCheck.NoAmbition]}");
+            string[] names = { "기회 주 야망", "기회 보조 야망" };
+            long attempts = 0, caught = 0, equipped = 0, toBag = 0, invalid = 0;
+            for (int k = 0; k < 2; k++)
+            {
+                long kAttempts = c.Checks[k, (int)NpcTheftCheck.Attempt];
+                attempts += kAttempts;
+                caught += c.Outcomes[k, (int)NpcTheftOutcome.CaughtInAct];
+                equipped += c.Outcomes[k, (int)NpcTheftOutcome.StolenEquipped];
+                toBag += c.Outcomes[k, (int)NpcTheftOutcome.StolenToBag];
+                invalid += c.Outcomes[k, (int)NpcTheftOutcome.Invalid];
+                sb.AppendLine($"  {names[k]}: 도둑 쿨다운 {c.Checks[k, (int)NpcTheftCheck.ThiefCooldown]} / 마을 쿨다운 " +
+                              $"{c.Checks[k, (int)NpcTheftCheck.VillageCooldown]} / 빈칸 없음 {c.Checks[k, (int)NpcTheftCheck.NoFreeSlot]} / " +
+                              $"시도 롤 실패 {c.Checks[k, (int)NpcTheftCheck.RollFailed]} / 후보 없음 {c.Checks[k, (int)NpcTheftCheck.NoVictim]} → " +
+                              $"시도 {kAttempts} (현장 적발 {c.Outcomes[k, (int)NpcTheftOutcome.CaughtInAct]} / 안 들킴 장착 " +
+                              $"{c.Outcomes[k, (int)NpcTheftOutcome.StolenEquipped]} · 가방 {c.Outcomes[k, (int)NpcTheftOutcome.StolenToBag]})");
+            }
+
+            int villagesWithNpcs = 0;
+            foreach (VillageStats v in sim.VillageStats.Values)
+            {
+                if (v.NpcStart > 0)
+                    villagesWithNpcs++;
+            }
+            int lateDays = days - sim.TheftLateStartDay + 1;
+            int lateAttempts = 0;
+            for (int i = 0; i < sim.TheftRecords.Count; i++)
+            {
+                if (sim.TheftRecords[i].Day >= sim.TheftLateStartDay)
+                    lateAttempts++;
+            }
+            float attempts30 = attempts * 30f / Mathf.Max(1, days);
+            float late30 = lateAttempts * 30f / Mathf.Max(1, lateDays);
+            sb.AppendLine($"시도 합계 {attempts}건 → 30일 환산 {attempts30:F0}건 | 마지막 {lateDays}일(일 {sim.TheftLateStartDay}~{days}, " +
+                          $"가방이 찬 정상 상태) {lateAttempts}건 → 30일 환산 {late30:F0}건 (목표 30일 60~120건, D100 · 초반 과다는 D109 ②)");
+            sb.AppendLine($"  마을당 30일 환산(NPC 있는 마을 {villagesWithNpcs}곳): 전체 {(villagesWithNpcs > 0 ? attempts30 / villagesWithNpcs : 0f):F2}회 / " +
+                          $"정상 상태 {(villagesWithNpcs > 0 ? late30 / villagesWithNpcs : 0f):F2}회 (목표 약 0.2~0.4회)");
+            sb.AppendLine($"현장 적발 {caught}건 ({Pct(caught, attempts):F1}%) / 안 들킴 {equipped + toBag}건 (도둑 장착 {equipped} / 가방 {toBag}) | " +
+                          $"시도 때 평균 피해자 후보 {(attempts > 0 ? c.VictimCandidateSum / (double)attempts : 0d):F2}명");
+
+            List<int> targetValues = new List<int>(sim.TheftRecords.Count);
+            for (int i = 0; i < sim.TheftRecords.Count; i++)
+                targetValues.Add(sim.TheftRecords[i].Value);
+            targetValues.Sort();
+            long targetSum = 0;
+            for (int i = 0; i < targetValues.Count; i++)
+                targetSum += targetValues[i];
+            sb.Append($"노린 물건 가치: 평균 {(targetValues.Count > 0 ? targetSum / (double)targetValues.Count : 0d):F1} / 중앙 " +
+                      $"{(targetValues.Count > 0 ? targetValues[targetValues.Count / 2] : 0)} / 최대 {(targetValues.Count > 0 ? targetValues[targetValues.Count - 1] : 0)} | " +
+                      $"훔친 물건(안 들킴) {c.StolenCount}개 평균 {(c.StolenCount > 0 ? c.StolenValueSum / (double)c.StolenCount : 0d):F1} / 최대 {c.StolenValueMax} | 분포");
+            for (int b = 0; b < NpcTheftCounters.ValueBucketUpper.Length && b < BagValueBucketLabels.Length; b++)
+                sb.Append($" {BagValueBucketLabels[b]}={c.StolenValueBuckets[b]}");
+            sb.AppendLine();
+
+            int newGrudges = 0, kinTotal = 0;
+            for (int i = 0; i < sim.TheftRecords.Count; i++)
+            {
+                TheftRecord r = sim.TheftRecords[i];
+                if (r.NewGrudge == true)
+                    newGrudges++;
+                if (r.Detected == true)
+                    kinTotal += r.KinCount;
+            }
+            int grudgeIndex = Array.IndexOf(ReportedRelationTypes, NpcRelationType.GrudgeAgainst);
+            sb.AppendLine($"새 원한 쌍(피해자→도둑) {newGrudges}쌍 | 원한 관계 수(둘 다 생존) {sim.SocialStart.RelationCounts[grudgeIndex]} → " +
+                          $"{sim.SocialEnd.RelationCounts[grudgeIndex]} | 발각 파장 가족·친구 −10: {kinTotal}명 " +
+                          $"(현장 적발 1건당 {(caught > 0 ? kinTotal / (double)caught : 0d):F2}명)");
+            long hostile = sim.PartyCounters.Rejections[(int)NpcPartyRejectReason.Hostile];
+            long hostileGrudge = sim.PartyCounters.HostileGrudge;
+            sb.AppendLine($"적대 관계로 파티 후보 탈락: 합계 {hostile} = 원한 포함 {hostileGrudge} / 라이벌만 {hostile - hostileGrudge}");
+            sb.AppendLine($"훔친 장비 장착 → 도둑 NotableItemAcquired(D83 기존 업그레이드 경로) {sim.TheftThiefNotable}건 — 절도 Deed가 아니라 자랑 기록");
+
+            long[] bytesEnd = new long[DeedKindCount];
+            int[] countEnd = new int[DeedKindCount];
+            MeasureDeedJsonBytes(sim, bytesEnd, countEnd);
+            sb.Append("Deed 종류별 건수 시작→끝(증가, KB):");
+            for (int k = 0; k < DeedKindCount; k++)
+            {
+                if (sim.DeedCountStart[k] == 0 && countEnd[k] == 0)
+                    continue;
+                sb.Append($" {(NpcDeedKind)k} {sim.DeedCountStart[k]}→{countEnd[k]}(+{countEnd[k] - sim.DeedCountStart[k]}, " +
+                          $"+{(bytesEnd[k] - sim.DeedBytesStart[k]) / 1024f:F1}KB)");
+            }
+            sb.AppendLine();
+
+            // ---- 독립 감사 (게임 카운터와 별개로 복제본 상태로 판정) ----
+            int auditCaught = 0, auditEquipped = 0, auditBag = 0;
+            for (int i = 0; i < sim.TheftRecords.Count; i++)
+            {
+                TheftRecord r = sim.TheftRecords[i];
+                if (r.Detected == true)
+                    auditCaught++;
+                else if (r.Equipped == true)
+                    auditEquipped++;
+                else
+                    auditBag++;
+            }
+            int passCount = 0, failCount = 0;
+            StringBuilder check = new StringBuilder();
+            void Item(bool pass, string label, string value)
+            {
+                if (pass == true)
+                    passCount++;
+                else
+                    failCount++;
+                check.AppendLine($"  [{(pass ? "PASS" : "FAIL")}] {label}: {value}");
+            }
+            Item(attempts == sim.TheftObserved && sim.TheftObserved == sim.TheftRecords.Count && sim.TheftUnaudited == 0 &&
+                 invalid == 0, "시도 수 일치 (게임 카운터 = 관찰 = 감사 기록, 적용 실패 0)",
+                $"{attempts} / {sim.TheftObserved} / {sim.TheftRecords.Count}, 미감사 {sim.TheftUnaudited}, Invalid {invalid}");
+            Item(sim.TheftEligibilityFails == 0, "도둑·피해자·물건 자격 독립 검사 실패 0", $"{sim.TheftEligibilityFails}");
+            Item(sim.TheftThiefCooldownViolations == 0 && sim.TheftVillageCooldownViolations == 0,
+                "쿨다운 위반 0 (같은 도둑 168h / 같은 마을 72h)",
+                $"도둑 {sim.TheftThiefCooldownViolations} / 마을 {sim.TheftVillageCooldownViolations}");
+            Item(sim.TheftCaughtOk == auditCaught, "현장 적발: 물건 그대로·호감도 −40·원한(피해자→도둑) 1건·가족친구 −10·양쪽 Deed",
+                $"{sim.TheftCaughtOk}/{auditCaught} ({(auditCaught > 0 ? Pct(sim.TheftCaughtOk, auditCaught) : 100f):F1}%)");
+            Item(sim.TheftStolenOk == auditEquipped + auditBag,
+                "안 들킨 절도: 물건 이동·관계 불변·도둑 절도 Deed 없음·버림 없음·피해자 Deed",
+                $"{sim.TheftStolenOk}/{auditEquipped + auditBag} ({(auditEquipped + auditBag > 0 ? Pct(sim.TheftStolenOk, auditEquipped + auditBag) : 100f):F1}%)");
+            Item(sim.TheftCapExceed == 0, "훔친 장비 장착 시 개인 상한 초과 0", $"{sim.TheftCapExceed}");
+            Item(caught == auditCaught && equipped == auditEquipped && toBag == auditBag,
+                "결과 분류 일치 (게임 카운터 적발/장착/가방 = 감사)",
+                $"{caught}/{equipped}/{toBag} = {auditCaught}/{auditEquipped}/{auditBag}");
+            sb.AppendLine($"==== P4a 절도 독립 감사: PASS {passCount} / FAIL {failCount} ====");
+            sb.Append(check);
+            for (int i = 0; i < sim.TheftAuditFailures.Count; i++)
+                sb.AppendLine($"    ! {sim.TheftAuditFailures[i]}");
+        }
+
+        /// <summary>끝 상태 측정 (복제본이 끼워진 동안): 가방·관계 지표, 시작 생존 집단의 끝 전투력(사망자는 마지막 장비).</summary>
+        private static void CaptureEndState(SimContext sim)
+        {
+            sim.BagEnd = MeasureBags(sim);
+            sim.SocialEnd = MeasureSocial(sim);
+            for (int i = 0; i < sim.CohortIds.Count; i++)
+                sim.EndPower[sim.CohortIds[i]] = AR.s.Npc.GetNpcPower(sim.CohortIds[i]);
+        }
+
+        private static bool IsSimLiving(SimContext sim, int entityId)
+        {
+            return sim.Npcs.TryGetValue(entityId, out NpcSaveData? npc) == true &&
+                   npc.Condition != CharacterConditions.Dead && npc.Activity.Phase != NpcActivityPhase.Dead;
+        }
+
+        /// <summary>생존 NPC 가방 통계. 매각 판정은 실제 매입가(VillageManager.GetNpcSellPrice)로 본다 — 마을 복제본이 끼워진 동안 부른다.</summary>
+        private static BagSnapshot MeasureBags(SimContext sim)
+        {
+            BagSnapshot bag = new BagSnapshot { Captured = true };
+            for (int n = 0; n < sim.NpcIds.Count; n++)
+            {
+                int entityId = sim.NpcIds[n];
+                if (IsSimLiving(sim, entityId) == false)
+                    continue;
+                NpcSaveData npc = sim.Npcs[entityId];
+                bag.Living++;
+                int used = 0;
+                bool hasStealable = false;
+                List<ItemData?> inventory = npc.Inventory;
+                for (int i = 0; i < inventory.Count; i++)
+                {
+                    ItemData? item = inventory[i];
+                    if (item == null)
+                        continue;
+                    used++;
+                    bag.Items++;
+                    int value = NpcManager.GetItemValue(item);
+                    bag.ValueSum += value;
+                    bag.Values.Add(value);
+                    if (value > bag.MaxValue)
+                        bag.MaxValue = value;
+                    for (int b = 0; b < BagValueBucketUpper.Length; b++)
+                    {
+                        if (value <= BagValueBucketUpper[b])
+                        {
+                            bag.ValueBuckets[b]++;
+                            break;
+                        }
+                    }
+
+                    bool sellable = false;
+                    if (npc.VillageId < 0)
+                        bag.NoVillage++;
+                    else if (AR.s.Village.GetNpcSellPrice(npc.VillageId, item) >= 0)
+                    {
+                        bag.Sellable++;
+                        sellable = true;
+                    }
+                    else
+                        bag.Unsellable++;
+
+                    if (NpcManager.IsStealableBagItem(item) == true)
+                    {
+                        hasStealable = true;
+                        bag.Stealable++;
+                        bag.StealableValueSum += value;
+                        if (sellable == true)
+                            bag.StealableSellable++;
+                    }
+                }
+                bag.UsedSlotHistogram[Mathf.Clamp(used, 0, bag.UsedSlotHistogram.Length - 1)]++;
+                if (hasStealable == true)
+                    bag.NpcsWithStealable++;
+                if (NpcManager.HasFreeBagSlot(npc) == true)
+                    bag.NpcsWithFreeSlot++;
+            }
+            bag.Values.Sort();
+            return bag;
+        }
+
+        /// <summary>관계 지표: 두 NPC가 모두 살아 있는 호감도 쌍(분포)과 유형 관계 수(엔트리 1건 = From 인덱스에서 1회).</summary>
+        private static SocialSnapshot MeasureSocial(SimContext sim)
+        {
+            SocialSnapshot social = new SocialSnapshot { Captured = true, AffinityMin = int.MaxValue, AffinityMax = int.MinValue };
+            foreach (KeyValuePair<NpcPairKey, int> pair in sim.Affinity)
+            {
+                if (IsSimLiving(sim, pair.Key.Lo) == false || IsSimLiving(sim, pair.Key.Hi) == false)
+                    continue;
+                int affinity = pair.Value;
+                social.AffinityPairs++;
+                social.AffinitySum += affinity;
+                if (affinity <= -50)
+                    social.AffinityLowPairs++;
+                if (affinity >= 50)
+                    social.AffinityHighPairs++;
+                if (affinity < social.AffinityMin)
+                    social.AffinityMin = affinity;
+                if (affinity > social.AffinityMax)
+                    social.AffinityMax = affinity;
+            }
+            if (social.AffinityPairs == 0)
+            {
+                social.AffinityMin = 0;
+                social.AffinityMax = 0;
+            }
+
+            foreach (KeyValuePair<int, List<NpcRelationEntry>> pair in sim.Relations)
+            {
+                List<NpcRelationEntry> list = pair.Value;
+                for (int i = 0; i < list.Count; i++)
+                {
+                    NpcRelationEntry entry = list[i];
+                    if (entry.FromEntityId != pair.Key || IsSimLiving(sim, entry.FromEntityId) == false ||
+                        IsSimLiving(sim, entry.ToEntityId) == false)
+                        continue;
+                    int index = Array.IndexOf(ReportedRelationTypes, entry.Type);
+                    if (index >= 0)
+                        social.RelationCounts[index]++;
+                }
+            }
+            return social;
+        }
+
+        private static void AppendTheftPrepSummary(StringBuilder sb, SimContext sim, int days)
+        {
+            sb.AppendLine("==== P4-0 절도 준비 (D99·D100·D107) ====");
+            AppendBagLine(sb, "가방(시작)", sim.BagStart);
+            AppendBagLine(sb, "가방(끝)", sim.BagEnd);
+
+            int lateDays = days - sim.TheftLateStartDay + 1;
+            AppendTheftFunnel(sb, $"절도 조건 깔때기 전 구간 {days}일", sim.TheftAll, days);
+            AppendTheftFunnel(sb, $"절도 조건 깔때기 마지막 {lateDays}일(일 {sim.TheftLateStartDay}~{days})", sim.TheftLate,
+                lateDays);
+
+            // 야망별(주 야망) 평균 전투력 변화: 시작 생존 고정 집단(사망자는 마지막 장비) / 끝 생존자만
+            int kinds = (int)NpcAmbitionKind.Cautious + 1;
+            double[] startSum = new double[kinds], endSum = new double[kinds];
+            double[] survivorStartSum = new double[kinds], survivorEndSum = new double[kinds];
+            int[] count = new int[kinds], survivorCount = new int[kinds];
+            for (int i = 0; i < sim.CohortIds.Count; i++)
+            {
+                int entityId = sim.CohortIds[i];
+                if (sim.StartPower.TryGetValue(entityId, out float start) == false ||
+                    sim.EndPower.TryGetValue(entityId, out float end) == false)
+                    continue;
+                int kind = (int)NpcAmbitionEvaluator.Evaluate(sim.Npcs[entityId].NpcStat).Primary;
+                startSum[kind] += start;
+                endSum[kind] += end;
+                count[kind]++;
+                if (IsSimLiving(sim, entityId) == true)
+                {
+                    survivorStartSum[kind] += start;
+                    survivorEndSum[kind] += end;
+                    survivorCount[kind]++;
+                }
+            }
+            sb.Append("주 야망별 평균 전투력 변화 (고정 집단 — 사망자는 마지막 장비 / 끝 생존자만):");
+            for (int k = (int)NpcAmbitionKind.Explorer; k < kinds; k++)
+            {
+                double cohortPct = startSum[k] > 0d ? (endSum[k] / startSum[k] - 1d) * 100d : 0d;
+                double survivorPct = survivorStartSum[k] > 0d ? (survivorEndSum[k] / survivorStartSum[k] - 1d) * 100d : 0d;
+                sb.Append($" {(NpcAmbitionKind)k} {cohortPct:+0.00;-0.00}% / {survivorPct:+0.00;-0.00}% (n={count[k]}) |");
+            }
+            sb.AppendLine();
+
+            SocialSnapshot s0 = sim.SocialStart, s1 = sim.SocialEnd;
+            sb.Append("유형 관계 수 시작 → 끝 (둘 다 생존):");
+            for (int i = 0; i < ReportedRelationTypes.Length; i++)
+                sb.Append($" {ReportedRelationTypes[i]} {s0.RelationCounts[i]}→{s1.RelationCounts[i]}");
+            sb.AppendLine($" | 적대(Rival·Grudge)로 파티 후보 탈락 {sim.PartyCounters.Rejections[(int)NpcPartyRejectReason.Hostile]}건");
+            sb.AppendLine($"호감도 쌍(둘 다 생존) 시작 → 끝: {s0.AffinityPairs} → {s1.AffinityPairs}, 평균 " +
+                          $"{(s0.AffinityPairs > 0 ? s0.AffinitySum / (double)s0.AffinityPairs : 0d):F2} → " +
+                          $"{(s1.AffinityPairs > 0 ? s1.AffinitySum / (double)s1.AffinityPairs : 0d):F2}, " +
+                          $"−50 이하 {s0.AffinityLowPairs} → {s1.AffinityLowPairs}, +50 이상 {s0.AffinityHighPairs} → {s1.AffinityHighPairs}, " +
+                          $"최소/최대 {s0.AffinityMin}/{s0.AffinityMax} → {s1.AffinityMin}/{s1.AffinityMax}");
+        }
+
+        private static void AppendBagLine(StringBuilder sb, string label, BagSnapshot bag)
+        {
+            if (bag.Captured == false)
+            {
+                sb.AppendLine($"{label}: 측정 안 됨");
+                return;
+            }
+            sb.Append($"{label}: 생존 {bag.Living}명, 사용 칸 분포 0~{bag.UsedSlotHistogram.Length - 1}:");
+            for (int i = 0; i < bag.UsedSlotHistogram.Length; i++)
+                sb.Append($" {Pct(bag.UsedSlotHistogram[i], bag.Living):F1}%");
+            int median = bag.Values.Count > 0 ? bag.Values[bag.Values.Count / 2] : 0;
+            sb.AppendLine($" | 훔칠 물건 보유 NPC {bag.NpcsWithStealable}명({Pct(bag.NpcsWithStealable, bag.Living):F1}%), " +
+                          $"빈칸 있는 NPC {bag.NpcsWithFreeSlot}명({Pct(bag.NpcsWithFreeSlot, bag.Living):F1}%)");
+            sb.AppendLine($"  아이템 {bag.Items}개: 비스택·인스턴스(훔칠 수 있음) {bag.Stealable} / 그 밖 {bag.Items - bag.Stealable} | " +
+                          $"매각 가능 {bag.Sellable} / 불가 {bag.Unsellable} / 소속 마을 없음 {bag.NoVillage} | " +
+                          $"훔칠 수 있는 것 중 매각 가능 {bag.StealableSellable}");
+            sb.Append($"  가치(BasePrice×수량): 평균 {(bag.Items > 0 ? bag.ValueSum / (double)bag.Items : 0d):F1} / 중앙 {median} / " +
+                      $"최대 {bag.MaxValue} / 훔칠 수 있는 것 평균 {(bag.Stealable > 0 ? bag.StealableValueSum / (double)bag.Stealable : 0d):F1} | 분포");
+            for (int b = 0; b < BagValueBucketLabels.Length; b++)
+                sb.Append($" {BagValueBucketLabels[b]}={bag.ValueBuckets[b]}");
+            sb.AppendLine();
+        }
+
+        private static void AppendTheftFunnel(StringBuilder sb, string label, TheftFunnel f, int windowDays)
+        {
+            float scale30 = 30f / Mathf.Max(1, windowDays);
+            sb.AppendLine($"{label} (P4-0 깔때기 — 실제 판정 직전 상태, 가정 쿨다운은 진단 별도 표): Rest 정상 종료 {f.RestEnds}회 (파티 합류 경로 제외)");
+            string[] names = { "기회 주 야망", "기회 보조 야망" };
+            for (int k = 0; k < 2; k++)
+            {
+                sb.AppendLine($"  {names[k]}: 도둑 후보 {f.Thieves[k]} → 빈칸 {f.FreeSlot[k]} ({Pct(f.FreeSlot[k], f.Thieves[k]):F1}%) → " +
+                              $"피해자 ≥ 1 {f.WithVictim[k]} ({Pct(f.WithVictim[k], f.FreeSlot[k]):F1}%, 평균 피해자 " +
+                              $"{(f.WithVictim[k] > 0 ? f.VictimSum[k] / (double)f.WithVictim[k] : 0d):F2}명 / 같은 마을 물건 보유 생존 NPC 평균 " +
+                              $"{(f.FreeSlot[k] > 0 ? f.SameVillageItemSum[k] / (double)f.FreeSlot[k] : 0d):F2}명) → " +
+                              $"쿨다운 가정(도둑 {TheftThiefCooldownHours:F0}h·마을 {TheftVillageCooldownHours:F0}h, 통과 = 시도) {f.CooldownPass[k]}");
+            }
+            long passTotal = f.CooldownPass[0] + f.CooldownPass[1];
+            sb.AppendLine($"  쿨다운 가정 통과 합계 {passTotal} (30일 환산 {passTotal * scale30:F0}) — 기본 확률 100%일 때의 상한");
+            sb.Append("  가상 시도(쿨다운 포함, 확률 = 기본 × 야망 배율 1.0/0.5, 성향 배율 제외), 주+보조=합(30일 환산):");
+            for (int c = 0; c < TheftBaseChances.Length; c++)
+            {
+                long total = f.VirtualAttempts[c, 0] + f.VirtualAttempts[c, 1];
+                sb.Append($" {TheftBaseChances[c] * 100f:F0}% {f.VirtualAttempts[c, 0]}+{f.VirtualAttempts[c, 1]}={total}({total * scale30:F0}) |");
+            }
+            sb.AppendLine();
+        }
+
         private static float Pct(long part, long total)
         {
             return total > 0 ? part * 100f / total : 0f;
@@ -1987,7 +3326,7 @@ namespace ARPG.EditorTools
                 BindingFlags.NonPublic | BindingFlags.Static);
             List<DialogueTopic> scratch = new List<DialogueTopic>();
             List<DialogueTopic> applicable = new List<DialogueTopic>();
-            int[] examplesPerKind = new int[3];
+            int[] examplesPerKind = new int[4];
             AffinityTier[] tiers = { AffinityTier.Stranger, AffinityTier.Friend };
 
             for (int n = 0; n < sim.NpcIds.Count; n++)
@@ -2015,23 +3354,33 @@ namespace ARPG.EditorTools
                 if (ctx == null)
                     continue;
                 List<DialogueTopic> topics = DialogueTopicSelector.Collect(npcId, ctx, default);
-                int dungeonCount = 0, itemCount = 0;
+                int dungeonCount = 0, itemCount = 0, betrayalCount = 0;
                 DialogueTopic? boast = null;
+                DialogueTopic? theftTopic = null;
                 for (int t = 0; t < topics.Count; t++)
                 {
                     if (topics[t].Type == DialogueTopicType.DungeonRumor)
                         dungeonCount++;
                     else if (topics[t].Type == DialogueTopicType.ItemOwnerRumor)
                         itemCount++;
+                    else if (topics[t].Type == DialogueTopicType.BetrayalRumor)
+                        betrayalCount++;
                     else if (topics[t].Type == DialogueTopicType.Boast)
                         boast = topics[t];
+                    else if (topics[t].Type == DialogueTopicType.TheftVictim)
+                        theftTopic = topics[t];
+                    if (topics[t].Rumor != null && topics[t].Rumor!.Kind == NpcRumorKind.ItemSold)
+                        a.ItemSoldTopics++;
                 }
                 if (dungeonCount > 0)
                     a.CollectDungeonTopicNpcs++;
                 if (itemCount > 0)
                     a.CollectItemTopicNpcs++;
-                if (dungeonCount + itemCount > 1)
+                if (betrayalCount > 0)
+                    a.CollectBetrayalTopicNpcs++;
+                if (dungeonCount + itemCount + betrayalCount > 1)
                     a.CollectMultiplePerType++;
+                AuditTheftVictimTopic(a, npcId, save, ctx.NpcName, theftTopic);
 
                 bool hasNotable = false, hasCleared = false;
                 // 자랑 토픽은 두 종류 중 가장 최근 Deed를 말한다 — 목록 인덱스(CacheVariant) 대신 여기서 같은 규칙으로 찾는다 (D91)
@@ -2063,7 +3412,7 @@ namespace ARPG.EditorTools
                 }
 
                 // 레퍼토리 포함률 (Select와 같은 티어 필터 → 실제 BuildRepertoire)
-                if (buildRepertoire == null || (dungeonCount + itemCount == 0 && boast == null))
+                if (buildRepertoire == null || (dungeonCount + itemCount + betrayalCount == 0 && boast == null && theftTopic == null))
                     continue;
                 for (int k = 0; k < tiers.Length; k++)
                 {
@@ -2077,14 +3426,22 @@ namespace ARPG.EditorTools
                         new object[] { npcId, applicable, tiers[k] }) as List<DialogueTopic>;
                     if (repertoire == null)
                         continue;
-                    bool rumorIn = false, boastIn = false;
+                    bool rumorIn = false, boastIn = false, theftIn = false;
                     for (int t = 0; t < repertoire.Count; t++)
                     {
                         rumorIn |= repertoire[t].Type == DialogueTopicType.DungeonRumor ||
-                                   repertoire[t].Type == DialogueTopicType.ItemOwnerRumor;
+                                   repertoire[t].Type == DialogueTopicType.ItemOwnerRumor ||
+                                   repertoire[t].Type == DialogueTopicType.BetrayalRumor;
                         boastIn |= repertoire[t].Type == DialogueTopicType.Boast;
+                        theftIn |= repertoire[t].Type == DialogueTopicType.TheftVictim;
                     }
-                    if (dungeonCount + itemCount > 0)
+                    if (theftTopic != null)
+                    {
+                        a.TheftRepertoireBase[k]++;
+                        if (theftIn == true)
+                            a.TheftRepertoireIn[k]++;
+                    }
+                    if (dungeonCount + itemCount + betrayalCount > 0)
                     {
                         a.RumorRepertoireBase[k]++;
                         if (rumorIn == true)
@@ -2100,6 +3457,58 @@ namespace ARPG.EditorTools
             }
             watch.Stop();
             a.ElapsedMs = watch.ElapsedMilliseconds;
+        }
+
+        /// <summary>
+        /// 피해자 도난 사연 (P4b, D106): 피해자 Deed가 있는 NPC 수, 실제 대화 1회분에 도난 토픽이 나온 수, 문구(범인을 알면 이름, 모르면 "누가"),
+        /// 도둑 쪽 Deed만 있는 NPC에게 도난 토픽이 나오지 않는지(도둑은 침묵).
+        /// </summary>
+        private static void AuditTheftVictimTopic(TopicAudit a, int npcId, NpcSaveData save, string npcName, DialogueTopic? topic)
+        {
+            NpcDeedEntry? latestVictimDeed = null;
+            bool hasThiefDeed = false;
+            for (int d = 0; d < save.Deeds.Count; d++)
+            {
+                NpcDeedEntry deed = save.Deeds[d];
+                if (deed == null)
+                    continue;
+                if (deed.Kind == NpcDeedKind.ItemStolen || deed.Kind == NpcDeedKind.CaughtThiefInAct ||
+                    deed.Kind == NpcDeedKind.TheftDiscovered)
+                    latestVictimDeed = deed;
+                else if (deed.Kind == NpcDeedKind.CaughtStealing || deed.Kind == NpcDeedKind.TheftExposed)
+                    hasThiefDeed = true;
+            }
+            if (latestVictimDeed != null)
+                a.TheftVictimDeedNpcs++;
+            else if (hasThiefDeed == true)
+            {
+                a.ThiefOnlyNpcs++;
+                if (topic != null)
+                    a.ThiefSilenceViolations++;
+            }
+            if (topic == null || latestVictimDeed == null)
+                return;
+
+            a.TheftVictimTopicNpcs++;
+            string item = string.IsNullOrEmpty(latestVictimDeed.ItemDisplayName) ? "물건" : latestVictimDeed.ItemDisplayName;
+            bool lineOk = topic.BaseLine.Contains(item);
+            if (latestVictimDeed.Kind == NpcDeedKind.ItemStolen)
+            {
+                a.TheftTopicAnonymous++;
+                lineOk &= topic.BaseLine.StartsWith("누가", StringComparison.Ordinal);
+            }
+            else
+            {
+                a.TheftTopicNamed++;
+                string thiefName = latestVictimDeed.ParticipantSnapshots.Count > 0
+                    ? latestVictimDeed.ParticipantSnapshots[0].DisplayName
+                    : NpcRumorPhrasing.NpcName(latestVictimDeed.Participants.Count > 0 ? latestVictimDeed.Participants[0] : -1);
+                lineOk &= string.IsNullOrEmpty(thiefName) == false && topic.BaseLine.Contains(thiefName);
+            }
+            if (lineOk == false)
+                a.TheftTopicLineFail++;
+            if (a.TheftExamples.Count < MaxTopicExamplesPerKind)
+                a.TheftExamples.Add($"[{latestVictimDeed.Kind}] {npcName}(#{npcId}): {topic.BaseLine}");
         }
 
         /// <summary>보유 소문 분류: 무효(토픽이 되면 안 됨) / 유효하지만 토픽에서 빠지는 것(자기 장비·다른 마을).</summary>
@@ -2195,6 +3604,28 @@ namespace ARPG.EditorTools
                     }
                 }
             }
+            else if (rumor.Kind == NpcRumorKind.Betrayal)
+            {
+                // P4b (D105·D106): 가해자·피해자 생존, 말하는 NPC는 둘 중 누구도 아님, 문구에 피해자·아이템 이름
+                a.BetrayalTopics++;
+                kindIndex = 3;
+                if (rumor.SubjectNpcId == npcId || rumor.VictimNpcId == npcId)
+                    failure ??= "가해자·피해자 본인이 배신 소문 토픽을 말함";
+                if (IsSimLiving(sim, rumor.SubjectNpcId) == false || IsSimLiving(sim, rumor.VictimNpcId) == false)
+                    failure ??= "가해자·피해자 없음/사망";
+                string victimName = NpcRumorPhrasing.NpcName(rumor.VictimNpcId);
+                if (topic.BaseLine.Contains(victimName) == false)
+                    failure ??= $"문구에 피해자 이름({victimName}) 없음";
+                string itemName = NpcRumorPhrasing.ItemName(rumor.ItemId);
+                if (topic.BaseLine.Contains(itemName) == false)
+                    failure ??= $"문구에 아이템 이름({itemName}) 없음";
+            }
+            else if (rumor.Kind != NpcRumorKind.ItemOwner)
+            {
+                a.ItemTopics++;
+                kindIndex = 2;
+                failure ??= $"토픽이 되면 안 되는 종류({rumor.Kind})";
+            }
             else
             {
                 a.ItemTopics++;
@@ -2230,7 +3661,9 @@ namespace ARPG.EditorTools
                 string place = topic.Type == DialogueTopicType.DungeonRumor
                     ? $" 장소={topic.RumorPlace}{(topic.RumorPlace == NpcRumorPlace.Bearing ? "/" + NpcRumorPhrasing.BearingName(topic.RumorBearing) : string.Empty)}" +
                       $" 대상=마을{rumor.VillageId}·슬롯{rumor.SlotIndex}·세대{rumor.Generation}"
-                    : $" 대상=소유자#{rumor.SubjectNpcId}·슬롯{rumor.EquipSlot}·인스턴스{rumor.ItemInstanceId}";
+                    : rumor.Kind == NpcRumorKind.Betrayal
+                        ? $" 대상=가해자#{rumor.SubjectNpcId}·피해자#{rumor.VictimNpcId}·{rumor.BetrayalKind}"
+                        : $" 대상=소유자#{rumor.SubjectNpcId}·슬롯{rumor.EquipSlot}·인스턴스{rumor.ItemInstanceId}";
                 a.Examples.Add($"[{topic.Type}{(rumor.Cleared ? "/Cleared" : string.Empty)}] {NpcRumorPhrasing.NpcName(npcId)}(#{npcId}, 마을 {save.VillageId}):" +
                                $" \"{topic.BaseLine}\" —{place} Hops={rumor.Hops}");
             }
@@ -2299,8 +3732,9 @@ namespace ARPG.EditorTools
                           $"({a.ElapsedMs}ms)");
             sb.AppendLine($"보유 소문 {a.HeldRumors}개: 유효 {a.HeldValid} / 무효 {a.HeldInvalid}(토픽 제외) | 유효하지만 제외: 자기 장비 {a.ExcludedOwnItem}, " +
                           $"다른 마을 던전 {a.ExcludedOtherVillage}");
-            long topics = a.DungeonTopics + a.ItemTopics;
-            sb.AppendLine($"소문 토픽 {topics}개: 던전 {a.DungeonTopics}(그중 완료 새 세대 {a.ClearedTopics}) / 장비 소유 {a.ItemTopics}");
+            long topics = a.DungeonTopics + a.ItemTopics + a.BetrayalTopics;
+            sb.AppendLine($"소문 토픽 {topics}개: 던전 {a.DungeonTopics}(그중 완료 새 세대 {a.ClearedTopics}) / 장비 소유 {a.ItemTopics} / " +
+                          $"배신 {a.BetrayalTopics}");
             sb.AppendLine($"  대상 실제 존재(독립 대조: 슬롯·세대 / 소유자 생존·장비 인스턴스 / 문구의 이름·아이템·방향): {a.TargetOk}/{topics} = " +
                           $"{Pct(a.TargetOk, topics):F2}% (실패 {a.TargetFail})");
             for (int i = 0; i < a.Failures.Count; i++)
@@ -2313,7 +3747,8 @@ namespace ARPG.EditorTools
             sb.AppendLine($"  당사자 NPC가 세이브에 있음 {a.SubjectKnown} / 없음(\"어떤 모험가\") {a.SubjectUnknown} | 문구에 이름 누락 {a.NameMissingInLine}");
             sb.AppendLine($"  말투(출처): 직접 겪음 {a.FirsthandTopics} / \"○○에게 들었는데\" {a.NamedSourceTopics} / \"누가 그러던데\" {a.AnonymousSourceTopics}");
             sb.AppendLine($"  실제 대화 1회분(Collect): 던전 소문 토픽 NPC {a.CollectDungeonTopicNpcs}명, 장비 소문 토픽 NPC {a.CollectItemTopicNpcs}명, " +
-                          $"야망 소문 토픽 2개 이상 {a.CollectMultiplePerType}명(0이어야 함 — 대화 1회분 최대 1개)");
+                          $"배신 소문 토픽 NPC {a.CollectBetrayalTopicNpcs}명, " +
+                          $"야망 소문 토픽 2개 이상 {a.CollectMultiplePerType}명(0이어야 함 — 대화 1회분 최대 1개) | 판매 소문 토픽 {a.ItemSoldTopics}개(0이어야 함)");
             sb.AppendLine($"  레퍼토리 포함률(소문 토픽이 있는 NPC 중): 낯선 사이 {Pct(a.RumorRepertoireIn[0], a.RumorRepertoireBase[0]):F1}% " +
                           $"(n={a.RumorRepertoireBase[0]}) / 친구 {Pct(a.RumorRepertoireIn[1], a.RumorRepertoireBase[1]):F1}% (n={a.RumorRepertoireBase[1]})");
             sb.AppendLine("  예시:");
@@ -2326,6 +3761,13 @@ namespace ARPG.EditorTools
                           $"(n={a.BoastRepertoireBase[0]}) / 친구 {Pct(a.BoastRepertoireIn[1], a.BoastRepertoireBase[1]):F1}% (n={a.BoastRepertoireBase[1]})");
             for (int i = 0; i < a.BoastExamples.Count; i++)
                 sb.AppendLine($"    - {a.BoastExamples[i]}");
+            sb.AppendLine($"도난 사연(TheftVictim, P4b): 피해자 Deed 보유 {a.TheftVictimDeedNpcs}명 → 대화 1회분에 나옴 {a.TheftVictimTopicNpcs}명 " +
+                          $"(범인 이름 {a.TheftTopicNamed} / \"누가\" {a.TheftTopicAnonymous}, 문구 불일치 {a.TheftTopicLineFail}) | " +
+                          $"도둑 Deed만 있는 NPC {a.ThiefOnlyNpcs}명 중 도난 토픽 {a.ThiefSilenceViolations}명(0이어야 함)");
+            sb.AppendLine($"  레퍼토리 포함률(도난 토픽이 있는 NPC 중): 낯선 사이 {Pct(a.TheftRepertoireIn[0], a.TheftRepertoireBase[0]):F1}% " +
+                          $"(n={a.TheftRepertoireBase[0]}) / 친구 {Pct(a.TheftRepertoireIn[1], a.TheftRepertoireBase[1]):F1}% (n={a.TheftRepertoireBase[1]})");
+            for (int i = 0; i < a.TheftExamples.Count; i++)
+                sb.AppendLine($"    - {a.TheftExamples[i]}");
 
             long[] bytesEnd = new long[DeedKindCount];
             int[] countEnd = new int[DeedKindCount];
@@ -2359,6 +3801,67 @@ namespace ARPG.EditorTools
                 sb.Append($" {(NpcDeedKind)k} {countEnd[k]}건/{bytesEnd[k] / (float)countEnd[k]:F0}B");
             }
             sb.AppendLine();
+
+            // D108: 파티 호감도 Deed는 같은 상대와 NPC마다 1건 (게임 코드와 독립 계산)
+            int party = (int)NpcDeedKind.PartyAffinityChanged;
+            CountPartyAffinityDuplicates(sim, out int violatingNpcs, out int duplicatePairs, out int extraDeeds,
+                out int unresolvedPartners);
+            sb.AppendLine($"  파티 호감도 Deed(D108 상대별 1건): {sim.DeedCountStart[party]}→{countEnd[party]}건 " +
+                          $"(+{(bytesEnd[party] - sim.DeedBytesStart[party]) / 1024f:F1}KB) | 위반 NPC {violatingNpcs}명 · " +
+                          $"중복 쌍 {duplicatePairs} · 초과 {extraDeeds}건 (모두 0이어야 함) | 상대 미확인 {unresolvedPartners}건");
+        }
+
+        /// <summary>
+        /// D108 불변식 검사: 같은 NPC에 같은 상대의 PartyAffinityChanged가 2건 이상이면 위반. 상대 = 참가자 중 본인이 아닌 Id.
+        /// unresolvedPartners = 본인 또는 상대를 참가자에서 찾지 못한 Deed (합치기 대상에서 빠지는 형식).
+        /// </summary>
+        private static void CountPartyAffinityDuplicates(SimContext sim, out int violatingNpcs, out int duplicatePairs,
+            out int extraDeeds, out int unresolvedPartners)
+        {
+            violatingNpcs = 0;
+            duplicatePairs = 0;
+            extraDeeds = 0;
+            unresolvedPartners = 0;
+            Dictionary<int, int> countByPartner = new Dictionary<int, int>();
+            for (int i = 0; i < sim.NpcIds.Count; i++)
+            {
+                int ownerId = sim.NpcIds[i];
+                List<NpcDeedEntry> deeds = sim.Npcs[ownerId].Deeds;
+                countByPartner.Clear();
+                bool violated = false;
+                for (int d = 0; d < deeds.Count; d++)
+                {
+                    NpcDeedEntry deed = deeds[d];
+                    if (deed == null || deed.Kind != NpcDeedKind.PartyAffinityChanged)
+                        continue;
+                    int partnerId = -1;
+                    bool hasOwner = false;
+                    for (int p = 0; p < deed.Participants.Count; p++)
+                    {
+                        if (deed.Participants[p] == ownerId)
+                            hasOwner = true;
+                        else if (partnerId < 0)
+                            partnerId = deed.Participants[p];
+                    }
+                    if (hasOwner == false || partnerId < 0)
+                    {
+                        unresolvedPartners++;
+                        continue;
+                    }
+                    countByPartner.TryGetValue(partnerId, out int count);
+                    countByPartner[partnerId] = count + 1;
+                    if (count >= 1)
+                    {
+                        violated = true;
+                        extraDeeds++;
+                        if (count == 1)
+                            duplicatePairs++;
+                    }
+                }
+
+                if (violated == true)
+                    violatingNpcs++;
+            }
         }
 
         // ================= 소문 (P2b) =================
@@ -2367,6 +3870,7 @@ namespace ARPG.EditorTools
         {
             Swap(swaps, AR.s.Npc, "_rumorCounters", sim.RumorCounters);
             Swap(swaps, AR.s.Npc, "_partyCounters", sim.PartyCounters);
+            Swap(swaps, AR.s.Npc, "_theftCounters", sim.TheftCounters);
             AR.s.Npc.RumorExposureAudit = rumor =>
             {
                 bool valid = AuditRumorValidity(sim, rumor, out _);
@@ -2375,6 +3879,14 @@ namespace ARPG.EditorTools
                 return valid;
             };
             AR.s.Npc.RumorCreatedObserver = (holderId, rumor) => TrackRumorEvent(sim, holderId, rumor);
+            AR.s.Npc.TheftDecidedObserver = (decision, gameTime) => CaptureTheftSnapshot(sim, decision, gameTime);
+            AR.s.Npc.TheftDiscoveryObserver = (discovery, applied) =>
+            {
+                if (applied == false)
+                    CaptureDiscoverySnapshot(sim, discovery);
+                else
+                    AuditDiscovery(sim, discovery);
+            };
         }
 
         private static void DetachRumorProbes()
@@ -2383,6 +3895,8 @@ namespace ARPG.EditorTools
                 return;
             AR.s.Npc.RumorExposureAudit = null;
             AR.s.Npc.RumorCreatedObserver = null;
+            AR.s.Npc.TheftDecidedObserver = null;
+            AR.s.Npc.TheftDiscoveryObserver = null;
         }
 
         /// <summary>
@@ -2428,6 +3942,20 @@ namespace ARPG.EditorTools
                 reason = ok ? 0 : 3;
                 return ok;
             }
+            // P4b: 판매 = 판매자 생존 (D104), 배신 = 가해자·피해자 둘 다 생존 (D105) — 복제본 원장을 직접 본다
+            if (rumor.Kind == NpcRumorKind.ItemSold)
+            {
+                bool ok = IsSimLiving(sim, rumor.SubjectNpcId);
+                reason = ok ? 0 : 2;
+                return ok;
+            }
+            if (rumor.Kind == NpcRumorKind.Betrayal)
+            {
+                bool ok = rumor.BetrayalKind != NpcBetrayalKind.None && IsSimLiving(sim, rumor.SubjectNpcId) &&
+                          IsSimLiving(sim, rumor.VictimNpcId);
+                reason = ok ? 0 : 2;
+                return ok;
+            }
             reason = 1;
             return false;
         }
@@ -2440,7 +3968,7 @@ namespace ARPG.EditorTools
             if (villageId < 0)
                 return;
             string key = (int)rumor.Kind + ":" + rumor.VillageId + ":" + rumor.SlotIndex + ":" + rumor.Generation + ":" +
-                         rumor.SubjectNpcId + ":" + rumor.EquipSlot + ":" + rumor.ItemInstanceId + ":" +
+                         rumor.SubjectNpcId + ":" + rumor.EquipSlot + ":" + rumor.ItemInstanceId + ":" + rumor.VictimNpcId + ":" +
                          rumor.EventGameTime.ToString("R", CultureInfo.InvariantCulture);
             if (sim.RumorEventIndex.ContainsKey(key) == true)
                 return;   // 파티원 여럿이 같은 사건의 직접 소문을 받는다 — 사건 1건으로 센다
@@ -2448,8 +3976,16 @@ namespace ARPG.EditorTools
             {
                 Template = rumor.Clone(),
                 VillageId = villageId,
-                Category = rumor.Kind == NpcRumorKind.ItemOwner ? 2 : rumor.Cleared == true ? 1 : 0,
+                Category = rumor.Kind switch
+                {
+                    NpcRumorKind.ItemOwner => 2,
+                    NpcRumorKind.ItemSold => 3,
+                    NpcRumorKind.Betrayal => 4,
+                    _ => rumor.Cleared == true ? 1 : 0,
+                },
             };
+            if (rumor.Kind == NpcRumorKind.ItemSold)
+                sim.SoldStolenInstances.Add(rumor.ItemInstanceId);
             sim.RumorEventIndex.Add(key, track);
             sim.RumorEvents.Add(track);
             if (track.Category == 0)
@@ -2568,8 +4104,10 @@ namespace ARPG.EditorTools
         {
             NpcRumorCounters c = sim.RumorCounters;
             sb.AppendLine("---- 소문 (P2b) ----");
-            sb.AppendLine($"생성(직접): 원정 성공 {c.CreatedDelve} / 완료 새 세대 {c.CreatedCleared} / 장비 소유 {c.CreatedItemOwner} " +
-                          $"| 추적 사건 {sim.RumorEvents.Count}건");
+            sb.AppendLine($"생성(직접): 원정 성공 {c.CreatedDelve} / 완료 새 세대 {c.CreatedCleared} / 장비 소유 {c.CreatedItemOwner} / " +
+                          $"판매(훔친 물건) {c.CreatedItemSold} / 배신 {c.CreatedBetrayal[(int)NpcBetrayalKind.TheftCaughtInAct]}(현장 적발)+" +
+                          $"{c.CreatedBetrayal[(int)NpcBetrayalKind.TheftDiscovered]}(늦은 발각) | 추적 사건 {sim.RumorEvents.Count}건 | " +
+                          $"교환 수용 중 판매 {c.AcceptedItemSold} / 배신 {c.AcceptedBetrayal}");
             sb.AppendLine($"원정 성공 사건 {sim.DelveEvents}건 중 가치 ≥ {NpcManager.PromisingRumorValueMin}(유망 기준): " +
                           $"{sim.DelveEventsAboveValueMin}건 ({Pct(sim.DelveEventsAboveValueMin, sim.DelveEvents):F1}%)");
             sb.AppendLine($"교환: Rest 종료 {c.RestEnds}회, 교환 롤 통과 {c.ExchangeRollsPassed}회 ({Pct(c.ExchangeRollsPassed, c.RestEnds):F1}%), " +
@@ -2585,7 +4123,7 @@ namespace ARPG.EditorTools
 
             // 보유 분포 (마지막 날)
             int living = 0;
-            long held = 0, dungeonHeld = 0, itemHeld = 0;
+            long held = 0, dungeonHeld = 0, itemHeld = 0, soldHeld = 0, betrayalHeld = 0;
             int[] histogram = new int[NpcManager.MaxRumorsPerNpc + 1];
             long[] hops = new long[4];
             for (int i = 0; i < sim.NpcIds.Count; i++)
@@ -2601,21 +4139,25 @@ namespace ARPG.EditorTools
                     NpcRumor rumor = npc.Rumors[r];
                     if (rumor.Kind == NpcRumorKind.DungeonInfo)
                         dungeonHeld++;
+                    else if (rumor.Kind == NpcRumorKind.ItemSold)
+                        soldHeld++;
+                    else if (rumor.Kind == NpcRumorKind.Betrayal)
+                        betrayalHeld++;
                     else
                         itemHeld++;
                     hops[Mathf.Clamp(rumor.Hops, 0, 3)]++;
                 }
             }
-            sb.Append($"보유(마지막 날): NPC당 평균 {(living > 0 ? held / (float)living : 0f):F2}개 (던전 {dungeonHeld} / 장비 {itemHeld}) | 분포 0~8:");
+            sb.Append($"보유(마지막 날): NPC당 평균 {(living > 0 ? held / (float)living : 0f):F2}개 (던전 {dungeonHeld} / 장비 {itemHeld} / " +
+                      $"판매 {soldHeld} / 배신 {betrayalHeld}) | 분포 0~8:");
             for (int k = 0; k < histogram.Length; k++)
                 sb.Append(' ').Append(Pct(histogram[k], living).ToString("F1", CultureInfo.InvariantCulture)).Append('%');
             sb.AppendLine();
             sb.AppendLine($"  보유 Hops: 0={Pct(hops[0], held):F1}% 1={Pct(hops[1], held):F1}% 2={Pct(hops[2], held):F1}% 3+={Pct(hops[3], held):F1}%");
 
-            string[] categoryNames = { "원정 성공", "완료 새 세대", "장비 소유" };
-            for (int cat = 0; cat < 3; cat++)
+            for (int cat = 0; cat < RumorCategoryCount; cat++)
             {
-                sb.Append($"전파 곡선 [{categoryNames[cat]}] (마을 생존 NPC 중 아는 비율 평균/최대):");
+                sb.Append($"전파 곡선 [{RumorCategoryNames[cat]}] (마을 생존 NPC 중 아는 비율 평균/최대):");
                 for (int k = 0; k < PropagationCheckpointHours.Length; k++)
                 {
                     int n = sim.PropagationSamples[cat, k];
@@ -2983,11 +4525,1141 @@ namespace ARPG.EditorTools
             return result;
         }
 
+        // ================= 절도 강제 검증 (P4a) =================
+
+        /// <summary>
+        /// 절도 규칙 강제 검증 (P4a, D99~D102·D106). 현재 상태를 복제해 그 안에서만 실행하고 전후 라이브 해시가 같아야 한다.
+        /// 게임 판정 코드를 복제하지 않는다 — 조건(GetTheftThiefBlock·IsTheftVictimCandidate·CollectTheftVictims)·결정(DecideTheft)·
+        /// 적용(ApplyTheft)·Rest 종료 진입점(ResolveRestEnd)을 그대로 부르고, RNG 결과(발각 여부·피해자·물건)만 결정 값을 직접 만들어 강제한다.
+        /// </summary>
+        public static string VerifyTheftRules()
+        {
+            if (EditorApplication.isPlaying == false || AR.s == null || AR.s.Npc == null || AR.s.Village == null ||
+                AR.s.Item == null || AR.s.Time == null || AR.s.Map == null)
+            {
+                const string notReady = "[TheftRules] 플레이 모드에서 GameScene이 로드된 뒤 실행하세요.";
+                Debug.LogError(notReady);
+                return notReady;
+            }
+
+            string hashBefore = ComputeLiveStateHash();
+            UnityEngine.Random.State randomState = UnityEngine.Random.state;
+            FieldInfo itemCounterField = GetField(AR.s.Item, "_instanceIdCounter");
+            object? itemCounter = itemCounterField.GetValue(AR.s.Item);
+            List<FieldSwap> swaps = new List<FieldSwap>();
+            StringBuilder log = new StringBuilder();
+            int failures = 0;
+            string? error = null;
+
+            void Check(bool condition, string label)
+            {
+                if (condition == false)
+                    failures++;
+                log.AppendLine((condition ? "  PASS " : "  FAIL ") + label);
+            }
+
+            SimContext sim = new SimContext();
+            try
+            {
+                BuildClones(sim);
+                sim.WorldSeed = AR.s.Map.mapSeed;
+                MethodInfo? createRng = typeof(NpcActivityResolver).GetMethod("CreateRng",
+                    BindingFlags.NonPublic | BindingFlags.Static);
+                if (createRng == null)
+                    throw new MissingMethodException(nameof(NpcActivityResolver), "CreateRng");
+                sim.CreateActivityRng = (Func<int, float, int, int, HistoryRng>)Delegate.CreateDelegate(
+                    typeof(Func<int, float, int, int, HistoryRng>), createRng);
+                SwapInClones(sim, swaps);
+                AttachRumorProbes(sim, swaps);
+                NpcManager npc = AR.s.Npc;
+                float t0 = AR.s.Time.CurrentGameTime;
+                int seed = sim.WorldSeed;
+
+                // 생존 NPC(동행·결투 아님)가 가장 많은 마을 — 상점이 있는 마을을 먼저 본다(P4b 판매 경로를 실제 TradeAtShop으로 검증).
+                // 가족·친구 역할 등은 다른 마을 NPC도 쓴다.
+                VillageData? village = null;
+                List<int> villagers = new List<int>();
+                bool villageHasShop = false;
+                for (int v = 0; v < sim.VillageList.Count; v++)
+                {
+                    List<int> living = new List<int>();
+                    List<int> roster = sim.VillageList[v].NpcEntityIds;
+                    for (int i = 0; i < roster.Count; i++)
+                    {
+                        if (IsSimLiving(sim, roster[i]) == true && npc.IsCompanionInDungeon(roster[i]) == false &&
+                            npc.IsInPlayerDuel(roster[i]) == false)
+                            living.Add(roster[i]);
+                    }
+                    bool hasShop = sim.VillageStats.TryGetValue(sim.VillageList[v].VillageId, out VillageStats? stats) == true &&
+                                   stats.HasShop == true;
+                    bool better = (hasShop == true && villageHasShop == false && living.Count >= 4) ||
+                                  (hasShop == villageHasShop && living.Count > villagers.Count);
+                    if (better == true)
+                    {
+                        village = sim.VillageList[v];
+                        villagers = living;
+                        villageHasShop = hasShop;
+                    }
+                }
+                if (village == null || villagers.Count < 4)
+                    throw new InvalidOperationException("생존 NPC 4명 이상인 마을을 찾지 못했습니다.");
+                List<int> extras = new List<int>();
+                for (int i = 4; i < villagers.Count; i++)
+                    extras.Add(villagers[i]);
+                for (int i = 0; i < sim.NpcIds.Count; i++)
+                {
+                    int id = sim.NpcIds[i];
+                    if (IsSimLiving(sim, id) == true && sim.Npcs[id].VillageId != village.VillageId &&
+                        npc.IsCompanionInDungeon(id) == false && npc.IsInPlayerDuel(id) == false)
+                        extras.Add(id);
+                }
+                if (extras.Count < 15)
+                    throw new InvalidOperationException("검증용 NPC가 부족합니다 (마을 밖 포함 19명 필요).");
+
+                int thiefId = villagers[0], candidateId = villagers[1], caughtVictimId = villagers[2], bagVictimId = villagers[3];
+                int directionVictimId = extras[0], equipVictimId = extras[1];
+                int friendId = extras[2], siblingId = extras[3], childId = extras[4], parentId = extras[5],
+                    deadSpouseId = extras[6], mentorId = extras[7];
+                NpcSaveData thief = sim.Npcs[thiefId];
+                log.AppendLine($"  마을 {village.VillageId} (생존 {villagers.Count}명), 도둑 {thiefId}, 후보 {candidateId}, " +
+                               $"적발 피해자 {caughtVictimId}, 가방 피해자 {bagVictimId}, 방향 피해자 {directionVictimId}, 장착 피해자 {equipVictimId}");
+
+                // 도둑 준비: 기회 주 야망(탐욕 100·정직 0), 시도 기록 없음, 가방 빈칸 1개 이상. 마을 명단 시도 기록도 비운다.
+                thief.NpcStat = MakeTheftTestStat(100, 0, 0, 0);
+                List<int> villageRoster = village.NpcEntityIds;
+                for (int i = 0; i < villageRoster.Count; i++)
+                {
+                    if (sim.Npcs.TryGetValue(villageRoster[i], out NpcSaveData? member) == true)
+                        member.LastTheftGameTime = -1f;
+                }
+                thief.EnsureSlotsInitialized();
+                thief.Inventory[0] = null;
+
+                // 훔칠 물건 견본: 장착 장비(인스턴스 있음, 비스택)의 복제본. 인스턴스 ID는 라이브와 겹치지 않는 대역을 쓴다.
+                ItemData? template = null;
+                for (int i = 0; i < sim.NpcIds.Count && template == null; i++)
+                {
+                    ItemData?[] equip = sim.Npcs[sim.NpcIds[i]].InventoryEquip;
+                    for (int s = 0; s < equip.Length && template == null; s++)
+                    {
+                        if (equip[s] != null && equip[s]!.Equipment != null && equip[s]!.ItemInstanceId != 0)
+                            template = equip[s];
+                    }
+                }
+                if (template == null)
+                    throw new InvalidOperationException("견본 장비를 찾지 못했습니다.");
+                ItemData MakeCopy(ItemData source, int serial)
+                {
+                    ItemData copy = CloneJson(source);
+                    copy.OnLoadCompleted();
+                    copy.ItemInstanceId = 71000000 + serial;
+                    return copy;
+                }
+                void PrepareVictim(int victimId, ItemData item)
+                {
+                    NpcSaveData victim = sim.Npcs[victimId];
+                    victim.EnsureSlotsInitialized();
+                    victim.Activity.Phase = NpcActivityPhase.Idle;
+                    victim.Activity.Kind = NpcActivityKind.Rest;
+                    victim.Activity.PartyId = -1;
+                    RemoveSimRelationsBetween(sim, thiefId, victimId);
+                    sim.Affinity.Remove(new NpcPairKey(thiefId, victimId));
+                    victim.Inventory[0] = item;
+                }
+                void EnsureThiefFreeSlot()
+                {
+                    if (NpcManager.HasFreeBagSlot(thief) == false)
+                        thief.Inventory[0] = null;
+                }
+                List<int> found = new List<int>();
+
+                // ① 피해자 제외 규칙 (D99)
+                NpcSaveData candidate = sim.Npcs[candidateId];
+                PrepareVictim(candidateId, MakeCopy(template, 1));
+                npc.CollectTheftVictims(thiefId, thief, found);
+                Check(npc.IsTheftVictimCandidate(thiefId, thief, candidateId) == true && found.Contains(candidateId) == true,
+                    "기본: 같은 마을 대기(Rest)·관계 없음·호감 0·훔칠 물건 있음 → 피해자 후보");
+                (string Label, int From, int To, NpcRelationType Type)[] excluded =
+                {
+                    ("친구", thiefId, candidateId, NpcRelationType.Friend),
+                    ("배우자", thiefId, candidateId, NpcRelationType.Spouse),
+                    ("형제", candidateId, thiefId, NpcRelationType.Sibling),
+                    ("부모(도둑→후보)", thiefId, candidateId, NpcRelationType.ParentOf),
+                    ("자식(후보→도둑)", candidateId, thiefId, NpcRelationType.ParentOf),
+                    ("원한(도둑→후보)", thiefId, candidateId, NpcRelationType.GrudgeAgainst),
+                    ("원한(후보→도둑)", candidateId, thiefId, NpcRelationType.GrudgeAgainst),
+                };
+                for (int i = 0; i < excluded.Length; i++)
+                {
+                    npc.AddRelation(excluded[i].From, excluded[i].To, excluded[i].Type);
+                    npc.CollectTheftVictims(thiefId, thief, found);
+                    Check(npc.IsTheftVictimCandidate(thiefId, thief, candidateId) == false && found.Contains(candidateId) == false,
+                        $"제외: {excluded[i].Label}");
+                    RemoveSimRelationsBetween(sim, thiefId, candidateId);
+                }
+                npc.AddRelation(thiefId, candidateId, NpcRelationType.Rival);
+                Check(npc.IsTheftVictimCandidate(thiefId, thief, candidateId) == true, "라이벌은 제외 대상이 아님 (D99 목록 밖)");
+                RemoveSimRelationsBetween(sim, thiefId, candidateId);
+                npc.SetAffinity(thiefId, candidateId, NpcManager.TheftVictimAffinityExclusion);
+                bool atFifty = npc.IsTheftVictimCandidate(thiefId, thief, candidateId);
+                npc.SetAffinity(thiefId, candidateId, NpcManager.TheftVictimAffinityExclusion - 1);
+                bool atFortyNine = npc.IsTheftVictimCandidate(thiefId, thief, candidateId);
+                sim.Affinity.Remove(new NpcPairKey(thiefId, candidateId));
+                Check(atFifty == false && atFortyNine == true, "호감도 50 이상 제외, 49는 후보");
+                candidate.Activity.Phase = NpcActivityPhase.Wounded;
+                Check(npc.IsTheftVictimCandidate(thiefId, thief, candidateId) == false, "제외: 부상 중 (Phase Wounded)");
+                candidate.Activity.Phase = NpcActivityPhase.Venturing;
+                candidate.Activity.Kind = NpcActivityKind.Hunt;
+                Check(npc.IsTheftVictimCandidate(thiefId, thief, candidateId) == false, "제외: 원정 중");
+                candidate.Activity.Phase = NpcActivityPhase.Idle;
+                candidate.Activity.Kind = NpcActivityKind.Trade;
+                bool trade = npc.IsTheftVictimCandidate(thiefId, thief, candidateId);
+                candidate.Activity.Kind = NpcActivityKind.None;
+                bool none = npc.IsTheftVictimCandidate(thiefId, thief, candidateId);
+                candidate.Activity.Kind = NpcActivityKind.Rest;
+                Check(trade == true && none == true, "대기 Kind Trade·None도 후보");
+                candidate.Activity.PartyId = 987654;
+                Check(npc.IsTheftVictimCandidate(thiefId, thief, candidateId) == false, "제외: 파티 중");
+                candidate.Activity.PartyId = -1;
+                int candidateVillage = candidate.VillageId;
+                candidate.VillageId = sim.Npcs[extras[extras.Count - 1]].VillageId != village.VillageId
+                    ? sim.Npcs[extras[extras.Count - 1]].VillageId
+                    : village.VillageId + 100000;
+                Check(npc.IsTheftVictimCandidate(thiefId, thief, candidateId) == false, "제외: 다른 마을");
+                candidate.VillageId = candidateVillage;
+                CharacterConditions candidateCondition = candidate.Condition;
+                candidate.Condition = CharacterConditions.Dead;
+                Check(npc.IsTheftVictimCandidate(thiefId, thief, candidateId) == false, "제외: 사망");
+                candidate.Condition = candidateCondition;
+                List<ItemData?> candidateBag = new List<ItemData?>(candidate.Inventory);
+                for (int i = 0; i < candidate.Inventory.Count; i++)
+                    candidate.Inventory[i] = null;
+                npc.CollectTheftVictims(thiefId, thief, found);
+                Check(npc.IsTheftVictimCandidate(thiefId, thief, candidateId) == true && found.Contains(candidateId) == false,
+                    "훔칠 물건이 없으면 피해자 목록에서 빠짐");
+                for (int i = 0; i < candidateBag.Count; i++)
+                    candidate.Inventory[i] = candidateBag[i];
+
+                // ② 도둑 조건·확률 (D100·D101). 게임 시간이 짧은 세이브에서도 "몇 시간 전 시도" 시각이 음수(= 기록 없음)가 되지 않게 띄운다.
+                float gameNow = t0 + 500f;
+                Check(npc.GetTheftThiefBlock(thiefId, thief, gameNow, out float primaryMultiplier) == NpcTheftCheck.Attempt &&
+                      Mathf.Approximately(primaryMultiplier, 1f), "도둑 조건 통과: 기회 주 야망 배율 1.0");
+                global::ARPG.Component.NpcStatComponent thiefStat = thief.NpcStat;
+                thief.NpcStat = MakeTheftTestStat(90, 10, 100, 100);
+                Check(npc.GetTheftThiefBlock(thiefId, thief, gameNow, out float secondaryMultiplier) == NpcTheftCheck.Attempt &&
+                      Mathf.Approximately(secondaryMultiplier, 0.5f), "기회 보조 야망 배율 0.5");
+                thief.NpcStat = MakeTheftTestStat(0, 100, 100, 100);
+                Check(npc.GetTheftThiefBlock(thiefId, thief, gameNow, out float noMultiplier) == NpcTheftCheck.NoAmbition &&
+                      noMultiplier <= 0f, "기회 야망이 아니면 시도 없음");
+                thief.NpcStat = thiefStat;
+                thief.LastTheftGameTime = gameNow - 100f;
+                NpcTheftCheck thiefRecent = npc.GetTheftThiefBlock(thiefId, thief, gameNow, out _);
+                thief.LastTheftGameTime = gameNow - NpcManager.TheftThiefCooldownHours;
+                NpcTheftCheck thiefElapsed = npc.GetTheftThiefBlock(thiefId, thief, gameNow, out _);
+                thief.LastTheftGameTime = -1f;
+                Check(thiefRecent == NpcTheftCheck.ThiefCooldown && thiefElapsed == NpcTheftCheck.Attempt,
+                    "도둑 쿨다운: 100h 전 시도 → 차단, 168h 경과 → 통과");
+                candidate.LastTheftGameTime = gameNow - 50f;
+                NpcTheftCheck villageRecent = npc.GetTheftThiefBlock(thiefId, thief, gameNow, out _);
+                candidate.LastTheftGameTime = gameNow - NpcManager.TheftVillageCooldownHours;
+                NpcTheftCheck villageElapsed = npc.GetTheftThiefBlock(thiefId, thief, gameNow, out _);
+                candidate.LastTheftGameTime = -1f;
+                Check(villageRecent == NpcTheftCheck.VillageCooldown && villageElapsed == NpcTheftCheck.Attempt,
+                    "같은 마을 쿨다운(명단 최근 시도): 50h 전 → 차단, 72h 경과 → 통과");
+                List<ItemData?> thiefBag = new List<ItemData?>(thief.Inventory);
+                for (int i = 0; i < thief.Inventory.Count; i++)
+                {
+                    if (thief.Inventory[i] == null)
+                        thief.Inventory[i] = MakeCopy(template, 10 + i);
+                }
+                Check(npc.GetTheftThiefBlock(thiefId, thief, gameNow, out _) == NpcTheftCheck.NoFreeSlot,
+                    "도둑 가방에 빈칸이 없으면 시도 없음");
+                for (int i = 0; i < thiefBag.Count; i++)
+                    thief.Inventory[i] = thiefBag[i];
+                CharacterConditions thiefCondition = thief.Condition;
+                thief.Condition = CharacterConditions.Dead;
+                NpcTheftCheck deadCheck = npc.GetTheftThiefBlock(thiefId, thief, gameNow, out _);
+                thief.Condition = thiefCondition;
+                int thiefVillage = thief.VillageId;
+                thief.VillageId = -1;
+                NpcTheftCheck noVillageCheck = npc.GetTheftThiefBlock(thiefId, thief, gameNow, out _);
+                thief.VillageId = thiefVillage;
+                Check(deadCheck == NpcTheftCheck.NotEligible && noVillageCheck == NpcTheftCheck.NotEligible,
+                    "사망·소속 마을 없음 → 자격 없음");
+                Check(Mathf.Approximately(NpcManager.GetTheftAttemptChance(MakeTheftTestStat(100, 0, 0, 0), 1f), 0.30f) &&
+                      Mathf.Approximately(NpcManager.GetTheftAttemptChance(MakeTheftTestStat(0, 100, 0, 0), 0.5f), 0.10f) &&
+                      Mathf.Approximately(NpcManager.GetTheftAttemptChance(MakeTheftTestStat(50, 50, 0, 0), 1f), 0.25f),
+                    "시도 확률 = 25% × 야망 × (1 + 0.2 × (탐욕 − 정직)/100): 30% / 10% / 25%");
+                global::ARPG.Component.NpcStatComponent lowWatch = default;
+                global::ARPG.Component.NpcStatComponent highWatch = new global::ARPG.Component.NpcStatComponent
+                    { Curiosity = 100, Patience = 100 };
+                Check(Mathf.Approximately(NpcManager.GetTheftDetectionChance(lowWatch), 0.25f) &&
+                      Mathf.Approximately(NpcManager.GetTheftDetectionChance(highWatch), 0.75f),
+                    "발각 확률 = 25% + 30% × 호기심 + 20% × 인내: 25% ~ 75%");
+
+                // ③ 결정 (DecideTheft): 결정론·무상태, 같은 RNG 계약 (salt 170 시도 → 피해자 → 물건, 171 발각)
+                int attemptCount = 0, rollFailedCount = 0, otherCount = 0;
+                float attemptRestStart = float.NaN;
+                const int decisionSamples = 400;
+                for (int k = 0; k < decisionSamples; k++)
+                {
+                    float restStart = t0 - 4f - k * 0.37f;
+                    NpcTheftCheck decisionResult = npc.DecideTheft(thiefId, thief, restStart, gameNow, seed, out _);
+                    if (decisionResult == NpcTheftCheck.Attempt)
+                    {
+                        attemptCount++;
+                        if (float.IsNaN(attemptRestStart) == true)
+                            attemptRestStart = restStart;
+                    }
+                    else if (decisionResult == NpcTheftCheck.RollFailed)
+                        rollFailedCount++;
+                    else
+                        otherCount++;
+                }
+                float expectedRate = NpcManager.GetTheftAttemptChance(thief.NpcStat, 1f);
+                float attemptRate = attemptCount / (float)decisionSamples;
+                Check(attemptCount > 0 && rollFailedCount > 0 && otherCount == 0 && Mathf.Abs(attemptRate - expectedRate) < 0.08f,
+                    $"시도 롤: {decisionSamples}회 중 시도 {attemptCount} ({attemptRate:P1}, 기대 {expectedRate:P0}) / 롤 실패 {rollFailedCount}");
+                if (float.IsNaN(attemptRestStart) == false)
+                {
+                    float lastBefore = thief.LastTheftGameTime;
+                    npc.DecideTheft(thiefId, thief, attemptRestStart, gameNow, seed, out NpcTheftDecision first);
+                    npc.DecideTheft(thiefId, thief, attemptRestStart, gameNow, seed, out NpcTheftDecision second);
+                    NpcSaveData decidedVictim = sim.Npcs[first.VictimId];
+                    npc.CollectTheftVictims(thiefId, thief, found);
+                    Check(first.VictimId == second.VictimId && first.ItemSlot == second.ItemSlot &&
+                          first.ItemInstanceId == second.ItemInstanceId && first.Detected == second.Detected &&
+                          thief.LastTheftGameTime == lastBefore && decidedVictim.Inventory[first.ItemSlot] != null &&
+                          decidedVictim.Inventory[first.ItemSlot]!.ItemInstanceId == first.ItemInstanceId,
+                        "결정은 결정론적이고 상태를 바꾸지 않음");
+                    bool detectedByContract = sim.CreateActivityRng!(thiefId, attemptRestStart, seed,
+                        NpcActivityResolver.TheftDetectionSalt).NextDouble() < NpcManager.GetTheftDetectionChance(decidedVictim.NpcStat);
+                    Check(found.Contains(first.VictimId) == true &&
+                          NpcManager.IsStealableBagItem(decidedVictim.Inventory[first.ItemSlot]) == true &&
+                          first.VictimCandidateCount == found.Count && first.Detected == detectedByContract,
+                        $"결정 내용: 피해자 ∈ 후보({found.Count}명), 물건 훔칠 수 있음, 발각 = salt 171 롤 < 피해자 발각 확률 ({first.Detected})");
+
+                    // Rest 종료 진입점: 파티 합류 경로(allowTheft false)는 절도 없음, 정상 종료는 결정 그대로 적용 + 독립 감사
+                    int observedBefore = sim.TheftObserved;
+                    npc.ResolveRestEnd(thiefId, thief, attemptRestStart, gameNow, seed, false);
+                    Check(thief.LastTheftGameTime == lastBefore && sim.TheftObserved == observedBefore,
+                        "ResolveRestEnd(allowTheft false — 파티 합류 경로)는 절도를 판정하지 않음");
+                    int okBefore = sim.TheftCaughtOk + sim.TheftStolenOk;
+                    npc.ResolveRestEnd(thiefId, thief, attemptRestStart, gameNow, seed, true);
+                    AuditPendingTheft(sim);
+                    bool appliedAsDecided = first.Detected == true
+                        ? decidedVictim.Inventory[first.ItemSlot] != null &&
+                          decidedVictim.Inventory[first.ItemSlot]!.ItemInstanceId == first.ItemInstanceId
+                        : HoldsInstance(thief, first.ItemInstanceId, out _) == true;
+                    Check(thief.LastTheftGameTime == gameNow && sim.TheftObserved == observedBefore + 1 &&
+                          sim.TheftCaughtOk + sim.TheftStolenOk == okBefore + 1 && sim.TheftAuditFailCount == 0 &&
+                          sim.TheftEligibilityFails == 0 && appliedAsDecided == true,
+                        $"ResolveRestEnd(allowTheft true): 결정대로 적용({(first.Detected ? "현장 적발" : "안 들킴")}), 시도 시각 기록, 독립 감사 통과");
+                    Check(npc.DecideTheft(thiefId, thief, attemptRestStart, gameNow + 1f, seed, out _) == NpcTheftCheck.ThiefCooldown,
+                        "시도 직후 같은 도둑은 쿨다운");
+                }
+                else
+                    Check(false, "시도 결정 표본을 찾지 못함");
+
+                // 후보 없음 → 시도 아님, 쿨다운 기록 안 함 (명단을 도둑 1명으로 잠시 바꾼다)
+                thief.LastTheftGameTime = -1f;
+                village.NpcEntityIds = new List<int> { thiefId };
+                float noVictimRestStart = float.NaN;
+                for (int k = 0; k < decisionSamples && float.IsNaN(noVictimRestStart) == true; k++)
+                {
+                    float restStart = t0 - 4f - k * 0.37f;
+                    if (npc.DecideTheft(thiefId, thief, restStart, gameNow, seed, out _) == NpcTheftCheck.NoVictim)
+                        noVictimRestStart = restStart;
+                }
+                if (float.IsNaN(noVictimRestStart) == false)
+                    npc.ResolveRestEnd(thiefId, thief, noVictimRestStart, gameNow, seed, true);
+                village.NpcEntityIds = villageRoster;
+                Check(float.IsNaN(noVictimRestStart) == false && thief.LastTheftGameTime < 0f && sim.PendingTheft == null,
+                    "시도 롤을 통과해도 피해자 후보가 없으면 시도 아님 — 쿨다운 기록 안 함");
+
+                // ④ 현장 적발 강제 (D101·D102·D106)
+                NpcSaveData caughtVictim = sim.Npcs[caughtVictimId];
+                ItemData caughtItem = MakeCopy(template, 100);
+                PrepareVictim(caughtVictimId, caughtItem);
+                int[] kinIds = { friendId, siblingId, childId, parentId, deadSpouseId, mentorId };
+                for (int i = 0; i < kinIds.Length; i++)
+                    RemoveSimRelationsBetween(sim, caughtVictimId, kinIds[i]);
+                npc.AddRelation(caughtVictimId, friendId, NpcRelationType.Friend);
+                npc.AddRelation(caughtVictimId, siblingId, NpcRelationType.Sibling);
+                npc.AddRelation(siblingId, caughtVictimId, NpcRelationType.Friend);
+                npc.AddRelation(caughtVictimId, childId, NpcRelationType.ParentOf);
+                npc.AddRelation(parentId, caughtVictimId, NpcRelationType.ParentOf);
+                npc.AddRelation(caughtVictimId, deadSpouseId, NpcRelationType.Spouse);
+                npc.AddRelation(caughtVictimId, mentorId, NpcRelationType.MentorOf);
+                npc.SetAffinity(friendId, thiefId, -95);
+                npc.SetAffinity(siblingId, thiefId, 10);
+                sim.Affinity.Remove(new NpcPairKey(childId, thiefId));
+                npc.SetAffinity(parentId, thiefId, 0);
+                npc.SetAffinity(deadSpouseId, thiefId, 5);
+                npc.SetAffinity(mentorId, thiefId, 7);
+                NpcSaveData deadSpouse = sim.Npcs[deadSpouseId];
+                CharacterConditions deadSpouseCondition = deadSpouse.Condition;
+                deadSpouse.Condition = CharacterConditions.Dead;
+                List<int> kin = new List<int>();
+                CollectSimKin(sim, caughtVictimId, thiefId, kin);
+                List<int> kinBefore = new List<int>();
+                for (int i = 0; i < kin.Count; i++)
+                    kinBefore.Add(ReadSimAffinity(sim, kin[i], thiefId));
+                int victimDeeds = caughtVictim.Deeds.Count, thiefDeeds = thief.Deeds.Count;
+                NpcTheftDecision caughtDecision = new NpcTheftDecision
+                {
+                    ThiefId = thiefId, VictimId = caughtVictimId, ItemSlot = 0, ItemInstanceId = caughtItem.ItemInstanceId,
+                    AmbitionMultiplier = 1f, VictimCandidateCount = 1, Detected = true,
+                };
+                float caughtTime = t0 + 20f;
+                NpcTheftOutcome caughtOutcome = npc.ApplyTheft(caughtDecision, caughtTime);
+                Check(caughtOutcome == NpcTheftOutcome.CaughtInAct && ReferenceEquals(caughtVictim.Inventory[0], caughtItem) &&
+                      HoldsInstance(thief, caughtItem.ItemInstanceId, out _) == false,
+                    "현장 적발: 물건은 피해자 가방 그 칸에 그대로, 도둑은 갖지 않음");
+                Check(npc.GetAffinity(caughtVictimId, thiefId) == -40 && ReadSimAffinity(sim, caughtVictimId, thiefId) == -40,
+                    "피해자↔도둑 호감도 0 → −40");
+                Check(CountDirectedRelation(sim, caughtVictimId, caughtVictimId, thiefId, NpcRelationType.GrudgeAgainst) == 1 &&
+                      CountDirectedRelation(sim, thiefId, caughtVictimId, thiefId, NpcRelationType.GrudgeAgainst) == 1 &&
+                      CountDirectedRelation(sim, thiefId, thiefId, caughtVictimId, NpcRelationType.GrudgeAgainst) == 0,
+                    "원한(피해자→도둑) 1건이 양쪽 인덱스에, 반대 방향 원한은 없음");
+                Check(ReadSimAffinity(sim, friendId, thiefId) == NpcManager.AFFINITY_MIN, "친구: −95 → −100 (하한 클램프)");
+                Check(ReadSimAffinity(sim, siblingId, thiefId) == 0, "형제이자 친구: 한 번만 −10 (10 → 0)");
+                Check(ReadSimAffinity(sim, childId, thiefId) == -10 && ReadSimAffinity(sim, parentId, thiefId) == -10,
+                    "부모자식 양방향(피해자가 부모 / 피해자가 자식) 모두 −10");
+                Check(ReadSimAffinity(sim, deadSpouseId, thiefId) == 5, "사망한 배우자는 제외");
+                Check(ReadSimAffinity(sim, mentorId, thiefId) == 7, "가족·친구가 아닌 관계(MentorOf)는 제외");
+                bool kinExact = true;
+                for (int i = 0; i < kin.Count; i++)
+                {
+                    int expected = Mathf.Clamp(kinBefore[i] + NpcManager.TheftKinAffinityPenalty, NpcManager.AFFINITY_MIN,
+                        NpcManager.AFFINITY_MAX);
+                    kinExact &= ReadSimAffinity(sim, kin[i], thiefId) == expected;
+                }
+                Check(kinExact == true && kin.Contains(deadSpouseId) == false && kin.Contains(mentorId) == false,
+                    $"독립 계산한 피해자 가족·친구 {kin.Count}명 모두 정확히 −10 (기존 관계 포함)");
+                NpcDeedEntry? victimDeed = caughtVictim.Deeds.Count > 0 ? caughtVictim.Deeds[caughtVictim.Deeds.Count - 1] : null;
+                NpcDeedEntry? thiefDeed = thief.Deeds.Count > 0 ? thief.Deeds[thief.Deeds.Count - 1] : null;
+                string itemName = caughtItem.Table != null ? caughtItem.Table.Name : string.Empty;
+                Check(caughtVictim.Deeds.Count == victimDeeds + 1 && victimDeed != null &&
+                      victimDeed.Kind == NpcDeedKind.CaughtThiefInAct && victimDeed.Participants.Count == 1 &&
+                      victimDeed.Participants[0] == thiefId && victimDeed.ItemId == caughtItem.Id &&
+                      victimDeed.ItemDisplayName == itemName && Mathf.Approximately(victimDeed.When, caughtTime),
+                    "피해자 Deed CaughtThiefInAct (참가자 = 도둑, 아이템 표시)");
+                Check(thief.Deeds.Count == thiefDeeds + 1 && thiefDeed != null && thiefDeed.Kind == NpcDeedKind.CaughtStealing &&
+                      thiefDeed.Participants.Count == 1 && thiefDeed.Participants[0] == caughtVictimId &&
+                      thiefDeed.ItemId == caughtItem.Id,
+                    "도둑 Deed CaughtStealing (참가자 = 피해자) — 발각 때만");
+                Check(thief.LastTheftGameTime == caughtTime, "시도 시각 기록 (LastTheftGameTime)");
+                NpcTheftOutcome caughtAgain = npc.ApplyTheft(caughtDecision, caughtTime + 1f);
+                Check(caughtAgain == NpcTheftOutcome.CaughtInAct &&
+                      CountDirectedRelation(sim, caughtVictimId, caughtVictimId, thiefId, NpcRelationType.GrudgeAgainst) == 1 &&
+                      npc.GetAffinity(caughtVictimId, thiefId) == -80,
+                    "같은 쌍 두 번째 적발: 원한 중복 없음, 호감도 −80");
+                NpcTheftDecision staleDecision = caughtDecision;
+                staleDecision.ItemInstanceId = caughtItem.ItemInstanceId + 1;
+                float lastTheft = thief.LastTheftGameTime;
+                int victimDeedsNow = caughtVictim.Deeds.Count;
+                Check(npc.ApplyTheft(staleDecision, caughtTime + 2f) == NpcTheftOutcome.Invalid &&
+                      thief.LastTheftGameTime == lastTheft && caughtVictim.Deeds.Count == victimDeedsNow,
+                    "결정이 지금 상태와 맞지 않으면 Invalid — 아무것도 바꾸지 않음");
+                deadSpouse.Condition = deadSpouseCondition;
+
+                // ⑤ 원한 방향 구분 (D102): 도둑→피해자 원한이 이미 있어도 피해자→도둑 원한이 따로 추가된다
+                ItemData directionItem = MakeCopy(template, 200);
+                PrepareVictim(directionVictimId, directionItem);
+                npc.AddRelation(thiefId, directionVictimId, NpcRelationType.GrudgeAgainst);
+                Check(npc.IsTheftVictimCandidate(thiefId, thief, directionVictimId) == false,
+                    "사전: 도둑→피해자 원한 (원한은 방향 무관하게 피해자 제외)");
+                npc.ApplyTheft(new NpcTheftDecision
+                {
+                    ThiefId = thiefId, VictimId = directionVictimId, ItemSlot = 0, ItemInstanceId = directionItem.ItemInstanceId,
+                    AmbitionMultiplier = 1f, VictimCandidateCount = 1, Detected = true,
+                }, t0 + 30f);
+                Check(CountDirectedRelation(sim, directionVictimId, directionVictimId, thiefId, NpcRelationType.GrudgeAgainst) == 1 &&
+                      CountDirectedRelation(sim, directionVictimId, thiefId, directionVictimId, NpcRelationType.GrudgeAgainst) == 1,
+                    "원한 방향 구분: 피해자→도둑 원한 추가, 도둑→피해자 원한 유지 (2건)");
+                RemoveSimRelationsBetween(sim, friendId, mentorId);
+                npc.AddRelation(friendId, mentorId, NpcRelationType.Friend);
+                npc.AddRelation(mentorId, friendId, NpcRelationType.Friend);
+                Check(CountDirectedRelation(sim, friendId, friendId, mentorId, NpcRelationType.Friend) +
+                      CountDirectedRelation(sim, friendId, mentorId, friendId, NpcRelationType.Friend) == 1,
+                    "다른 관계 종류(Friend)는 기존대로 방향 무관 중복 검사");
+
+                // ⑥ 안 들킴 — 장착 불가(개인 상한) → 도둑 가방 (D101·D45)
+                NpcSaveData bagVictim = sim.Npcs[bagVictimId];
+                ItemData bagItem = MakeCopy(template, 300);
+                PrepareVictim(bagVictimId, bagItem);
+                EnsureThiefFreeSlot();
+                float thiefInitialPower = thief.InitialPower;
+                thief.InitialPower = 0.001f;   // 개인 상한을 아주 낮춰 업그레이드 장착을 막는다 (상한 규칙)
+                npc.InvalidateNpcPower(thiefId);
+                List<int> heldBefore = new List<int>();
+                CollectHeldInstances(thief, heldBefore);
+                List<int> bagKin = new List<int>();
+                CollectSimKin(sim, bagVictimId, thiefId, bagKin);
+                List<int> bagKinBefore = new List<int>();
+                for (int i = 0; i < bagKin.Count; i++)
+                    bagKinBefore.Add(ReadSimAffinity(sim, bagKin[i], thiefId));
+                int bagAffinityBefore = ReadSimAffinity(sim, bagVictimId, thiefId);
+                int bagVictimRelations = CountSimRelations(sim, bagVictimId), thiefRelations = CountSimRelations(sim, thiefId);
+                int bagVictimDeeds = bagVictim.Deeds.Count, thiefDeedsBefore = thief.Deeds.Count;
+                NpcTheftOutcome bagOutcome = npc.ApplyTheft(new NpcTheftDecision
+                {
+                    ThiefId = thiefId, VictimId = bagVictimId, ItemSlot = 0, ItemInstanceId = bagItem.ItemInstanceId,
+                    AmbitionMultiplier = 1f, VictimCandidateCount = 1, Detected = false,
+                }, t0 + 40f);
+                bool inThiefBag = HoldsInstance(thief, bagItem.ItemInstanceId, out bool bagEquipped);
+                Check(bagOutcome == NpcTheftOutcome.StolenToBag && HoldsInstance(bagVictim, bagItem.ItemInstanceId, out _) == false &&
+                      inThiefBag == true && bagEquipped == false,
+                    "안 들킴(개인 상한 초과라 장착 안 함): 물건이 피해자 가방에서 도둑 가방으로 이동");
+                bool keptAll = true;
+                for (int i = 0; i < heldBefore.Count; i++)
+                    keptAll &= HoldsInstance(thief, heldBefore[i], out _);
+                Check(keptAll == true, "도둑 가방 빈칸이 있으므로 버림 없음");
+                bool bagKinSame = true;
+                for (int i = 0; i < bagKin.Count; i++)
+                    bagKinSame &= ReadSimAffinity(sim, bagKin[i], thiefId) == bagKinBefore[i];
+                Check(ReadSimAffinity(sim, bagVictimId, thiefId) == bagAffinityBefore && bagKinSame == true &&
+                      CountSimRelations(sim, bagVictimId) == bagVictimRelations && CountSimRelations(sim, thiefId) == thiefRelations,
+                    "안 들킴: 호감도·유형 관계 변화 없음 (피해자·가족·친구)");
+                NpcDeedEntry? stolenDeed = bagVictim.Deeds.Count > 0 ? bagVictim.Deeds[bagVictim.Deeds.Count - 1] : null;
+                Check(thief.Deeds.Count == thiefDeedsBefore && bagVictim.Deeds.Count == bagVictimDeeds + 1 && stolenDeed != null &&
+                      stolenDeed.Kind == NpcDeedKind.ItemStolen && stolenDeed.Participants.Count == 0 &&
+                      stolenDeed.ParticipantSnapshots.Count == 0 && stolenDeed.ItemId == bagItem.Id,
+                    "안 들킴: 피해자 Deed ItemStolen(참가자 없음), 도둑 쪽 Deed 없음");
+                thief.InitialPower = thiefInitialPower;
+                npc.InvalidateNpcPower(thiefId);
+
+                // ⑦ 안 들킴 — 업그레이드 → 바로 장착 (D45 문턱·상한, 출처 Theft). 장비를 모두 벗긴 뒤 원래 가장 강한 장비의 복제본을 훔친다.
+                NpcSaveData equipVictim = sim.Npcs[equipVictimId];
+                ItemData?[] scratch = new ItemData?[thief.InventoryEquip.Length];
+                int bestSlot = -1;
+                float bestPower = 0f;
+                for (int s = 0; s < thief.InventoryEquip.Length; s++)
+                {
+                    ItemData? equipped = thief.InventoryEquip[s];
+                    if (equipped == null || equipped.Equipment == null)
+                        continue;
+                    Array.Clear(scratch, 0, scratch.Length);
+                    scratch[s] = equipped;
+                    float power = NpcPowerEvaluator.EvaluateBreakdown(scratch, thief.SkillLevel).Total;
+                    if (bestSlot < 0 || power > bestPower)
+                    {
+                        bestSlot = s;
+                        bestPower = power;
+                    }
+                }
+                ItemData? stolenEquipItem = null;
+                if (bestSlot < 0)
+                    Check(false, "도둑에게 장착 장비가 없어 장착 경로를 검증하지 못함");
+                else
+                {
+                    ItemData equipItem = MakeCopy(thief.InventoryEquip[bestSlot]!, 400);
+                    stolenEquipItem = equipItem;
+                    for (int s = 0; s < thief.InventoryEquip.Length; s++)
+                        thief.InventoryEquip[s] = null;
+                    npc.InvalidateNpcPower(thiefId);
+                    float strippedPower = NpcPowerEvaluator.Evaluate(thief);
+                    thief.InitialPower = Mathf.Max(bestPower, 0.01f);
+                    float cap = NpcManager.GetNpcPowerCap(thief);
+                    float requiredRatio = strippedPower > cap * 0.8f ? 1.30f : 1.15f;   // D45: 상한 80% 초과면 +30%
+                    Check(bestPower >= strippedPower * requiredRatio && bestPower <= cap,
+                        $"사전: 문턱(×{requiredRatio:F2})·상한 충족 ({strippedPower:F3} → {bestPower:F3}, 상한 {cap:F3})");
+                    EnsureThiefFreeSlot();
+                    PrepareVictim(equipVictimId, equipItem);
+                    int notableBefore = CountDeeds(thief, NpcDeedKind.NotableItemAcquired);
+                    int theftDeedsBefore = CountTheftDeeds(thief);
+                    NpcTheftOutcome equipOutcome = npc.ApplyTheft(new NpcTheftDecision
+                    {
+                        ThiefId = thiefId, VictimId = equipVictimId, ItemSlot = 0, ItemInstanceId = equipItem.ItemInstanceId,
+                        AmbitionMultiplier = 1f, VictimCandidateCount = 1, Detected = false,
+                    }, t0 + 50f);
+                    bool held = HoldsInstance(thief, equipItem.ItemInstanceId, out bool equippedNow);
+                    Check(equipOutcome == NpcTheftOutcome.StolenEquipped && held == true && equippedNow == true &&
+                          HoldsInstance(equipVictim, equipItem.ItemInstanceId, out _) == false,
+                        "안 들킴 + 업그레이드: 도둑이 바로 장착 (전리품 장착 규칙 D45)");
+                    Check(NpcPowerEvaluator.Evaluate(thief) <= NpcManager.GetNpcPowerCap(thief) + PowerEpsilon,
+                        "장착 후 개인 상한 이하");
+                    bool hasOwnerRumor = false;
+                    for (int i = 0; i < thief.Rumors.Count; i++)
+                    {
+                        NpcRumor rumor = thief.Rumors[i];
+                        hasOwnerRumor |= rumor.Kind == NpcRumorKind.ItemOwner && rumor.SubjectNpcId == thiefId &&
+                                         rumor.ItemInstanceId == equipItem.ItemInstanceId;
+                    }
+                    Check(hasOwnerRumor == true, "기존 업그레이드 경로가 ItemOwner 소문을 만듦 (D71)");
+                    Check(CountDeeds(thief, NpcDeedKind.NotableItemAcquired) == notableBefore + 1 &&
+                          CountTheftDeeds(thief) == theftDeedsBefore,
+                        "기존 업그레이드 경로의 NotableItemAcquired 1건(D83), 도둑 쪽 절도 Deed 없음");
+                    NpcDeedEntry? equipDeed = equipVictim.Deeds.Count > 0 ? equipVictim.Deeds[equipVictim.Deeds.Count - 1] : null;
+                    Check(equipDeed != null && equipDeed.Kind == NpcDeedKind.ItemStolen && equipDeed.Participants.Count == 0,
+                        "피해자 Deed ItemStolen");
+                }
+
+                // ================= P4b: 단서 · 늦은 발각 · 판매/배신 소문 · 대화 (D103~D106) =================
+                float p4bTime = t0 + 60f;
+                float realNow = AR.s.Time.CurrentGameTime;
+                NpcTheftCounters theftCounters = npc.TheftCounters;
+                float p4bInitialPower = thief.InitialPower;
+
+                // ⑧-1 단서 (D103): 안 들킨 절도 → 피해자 단서, 상한 3 (가장 오래된 것부터 지움)
+                Check(HasTestClue(bagVictim, bagItem.ItemInstanceId, thiefId, t0 + 40f) == true &&
+                      (stolenEquipItem == null || HasTestClue(equipVictim, stolenEquipItem.ItemInstanceId, thiefId, t0 + 50f) == true),
+                    "단서: 안 들킨 절도마다 피해자에게 {인스턴스, 실제 범인, 시각} (가방행·장착 모두)");
+                thief.InitialPower = 0.001f;   // 훔친 물건이 장착되지 않고 가방에 남게 (판매 검증용)
+                npc.InvalidateNpcPower(thiefId);
+                for (int i = 0; i < thief.Inventory.Count; i++)
+                    thief.Inventory[i] = null;
+                List<ItemData> capItems = new List<ItemData>();
+                for (int n = 0; n < NpcSaveData.MaxTheftClues; n++)
+                {
+                    ItemData capItem = MakeCopy(template, 500 + n);
+                    bagVictim.Inventory[0] = capItem;
+                    npc.ApplyTheft(new NpcTheftDecision
+                    {
+                        ThiefId = thiefId, VictimId = bagVictimId, ItemSlot = 0, ItemInstanceId = capItem.ItemInstanceId,
+                        AmbitionMultiplier = 1f, VictimCandidateCount = 1, Detected = false,
+                    }, p4bTime + n);
+                    capItems.Add(capItem);
+                }
+                bool capKept = bagVictim.TheftClues.Count == NpcSaveData.MaxTheftClues &&
+                               HasTestClue(bagVictim, bagItem.ItemInstanceId, thiefId, t0 + 40f) == false;
+                for (int n = 0; n < capItems.Count; n++)
+                    capKept &= HasTestClue(bagVictim, capItems[n].ItemInstanceId, thiefId, p4bTime + n);
+                Check(capKept == true, "단서 상한 3: 네 번째 도난에서 가장 오래된 단서(첫 도난)가 지워짐");
+
+                // ⑧-2 늦은 발각 — 장착 경로: 도둑이 훔친 장비를 장착 → ItemOwner 소문 → 피해자가 받아들임 → 발각
+                if (stolenEquipItem != null)
+                {
+                    NpcRumor? ownerRumor = null;
+                    for (int i = 0; i < thief.Rumors.Count; i++)
+                    {
+                        NpcRumor rumor = thief.Rumors[i];
+                        if (rumor.Kind == NpcRumorKind.ItemOwner && rumor.SubjectNpcId == thiefId &&
+                            rumor.ItemInstanceId == stolenEquipItem.ItemInstanceId)
+                            ownerRumor = rumor;
+                    }
+                    if (ownerRumor == null)
+                        Check(false, "장착 경로: 도둑의 ItemOwner 소문을 찾지 못함");
+                    else
+                    {
+                        RemoveSameTargetRumors(equipVictim, ownerRumor);
+                        int discoveredOkBefore = sim.DiscoveryOk[0];
+                        List<int> equipKin = new List<int>();
+                        CollectSimKin(sim, equipVictimId, thiefId, equipKin);
+                        List<int> equipKinBefore = new List<int>();
+                        for (int i = 0; i < equipKin.Count; i++)
+                            equipKinBefore.Add(ReadSimAffinity(sim, equipKin[i], thiefId));
+                        int equipAffinityBefore = ReadSimAffinity(sim, equipVictimId, thiefId);
+                        int equipVictimDeeds = equipVictim.Deeds.Count, thiefDeedsNow = thief.Deeds.Count;
+                        long lateOwnerBefore = theftCounters.LateDiscoveries[NpcManager.TheftDiscoveryPathItemOwner];
+                        bool accepted = npc.ReceiveRumor(equipVictim, ownerRumor, thiefId, p4bTime + 10f);
+                        bool kinOk = true;
+                        for (int i = 0; i < equipKin.Count; i++)
+                            kinOk &= ReadSimAffinity(sim, equipKin[i], thiefId) ==
+                                     Mathf.Clamp(equipKinBefore[i] - 10, NpcManager.AFFINITY_MIN, NpcManager.AFFINITY_MAX);
+                        Check(accepted == true && theftCounters.LateDiscoveries[NpcManager.TheftDiscoveryPathItemOwner] == lateOwnerBefore + 1 &&
+                              ReadSimAffinity(sim, equipVictimId, thiefId) == Mathf.Clamp(equipAffinityBefore - 40, NpcManager.AFFINITY_MIN, NpcManager.AFFINITY_MAX) &&
+                              CountDirectedRelation(sim, equipVictimId, equipVictimId, thiefId, NpcRelationType.GrudgeAgainst) == 1 &&
+                              kinOk == true && HasTestClue(equipVictim, stolenEquipItem.ItemInstanceId, thiefId, t0 + 50f) == false,
+                            $"늦은 발각(장착 소문): 받아들이는 순간 −40·원한·가족친구 −10({equipKin.Count}명)·단서 제거");
+                        NpcDeedEntry? victimLate = equipVictim.Deeds.Count > 0 ? equipVictim.Deeds[equipVictim.Deeds.Count - 1] : null;
+                        NpcDeedEntry? thiefLate = thief.Deeds.Count > 0 ? thief.Deeds[thief.Deeds.Count - 1] : null;
+                        Check(equipVictim.Deeds.Count == equipVictimDeeds + 1 && victimLate != null &&
+                              victimLate.Kind == NpcDeedKind.TheftDiscovered && victimLate.Participants.Count == 1 &&
+                              victimLate.Participants[0] == thiefId && victimLate.ItemId == stolenEquipItem.Id &&
+                              thief.Deeds.Count == thiefDeedsNow + 1 && thiefLate != null && thiefLate.Kind == NpcDeedKind.TheftExposed &&
+                              thiefLate.Participants.Count == 1 && thiefLate.Participants[0] == equipVictimId,
+                            "늦은 발각 Deed: 피해자 TheftDiscovered(참가자 = 도둑) / 도둑 TheftExposed(참가자 = 피해자, 도둑 쪽 첫 기록)");
+                        Check(HasBetrayalRumorOrCapDrop(equipVictim, thiefId, equipVictimId, NpcBetrayalKind.TheftDiscovered, t0 + 50f) == true &&
+                              sim.DiscoveryOk[0] == discoveredOkBefore + 1,
+                            "늦은 발각: 피해자 직접 Betrayal 소문(늦은 발각, 사건 시각 = 절도 시각) + 독립 감사 통과");
+                    }
+                }
+
+                // ⑧-3 판매 소문 (D104): 훔친 물건 판매만 ItemSold. 판매 마을 명단의 유효 단서 (인스턴스, 판매자 = 범인)로 판별
+                ItemData normalItem = MakeCopy(template, 600);
+                thief.Inventory[NpcSaveData.MaxTheftClues] = normalItem;
+                long soldBefore = sim.RumorCounters.CreatedItemSold;
+                bool viaShop = false;
+                if (villageHasShop == true)
+                {
+                    AR.s.Village.DepositNpcGold(village.VillageId, 100000);   // 복제본 마을 — 매입 거절 없이 실제 판매 경로를 태운다
+                    NpcTradeReport report = npc.TradeAtShop(thiefId, village.VillageId);
+                    viaShop = report.SoldCount > 0;
+                }
+                for (int i = 0; i < thief.Inventory.Count; i++)
+                {
+                    // 상점이 없거나 팔리지 않은 것: 판매 확정 뒤 부르는 같은 진입점을 직접 부른다
+                    ItemData? left = thief.Inventory[i];
+                    if (left == null)
+                        continue;
+                    thief.Inventory[i] = null;
+                    npc.NotifyNpcItemSold(thiefId, thief, village.VillageId, left, realNow);
+                }
+                NpcRumor? soldRumor = null;
+                bool normalSold = false;
+                int stolenSold = 0;
+                for (int i = 0; i < thief.Rumors.Count; i++)
+                {
+                    NpcRumor rumor = thief.Rumors[i];
+                    if (rumor.Kind != NpcRumorKind.ItemSold || rumor.SubjectNpcId != thiefId)
+                        continue;
+                    if (rumor.ItemInstanceId == normalItem.ItemInstanceId)
+                        normalSold = true;
+                    for (int n = 0; n < capItems.Count; n++)
+                    {
+                        if (rumor.ItemInstanceId == capItems[n].ItemInstanceId)
+                        {
+                            stolenSold++;
+                            if (n == capItems.Count - 1)
+                                soldRumor = rumor;
+                        }
+                    }
+                }
+                Check(stolenSold == capItems.Count && normalSold == false &&
+                      sim.RumorCounters.CreatedItemSold == soldBefore + capItems.Count && soldRumor != null &&
+                      soldRumor.SourceNpcId < 0 && soldRumor.ItemId == capItems[capItems.Count - 1].Id && npc.IsRumorValid(soldRumor) == true,
+                    $"판매 소문: 훔친 물건 {capItems.Count}개만 ItemSold(판매자 본인이 처음 보유), 일반 판매는 없음 ({(viaShop ? "실제 TradeAtShop" : "판매 진입점 직접 호출")})");
+                if (soldRumor != null)
+                {
+                    RemoveSameTargetRumors(bagVictim, soldRumor);
+                    long lateSoldBefore = theftCounters.LateDiscoveries[NpcManager.TheftDiscoveryPathItemSold];
+                    int soldOkBefore = sim.DiscoveryOk[1];
+                    int bagAffinityNow = ReadSimAffinity(sim, bagVictimId, thiefId);
+                    bool soldAccepted = npc.ReceiveRumor(bagVictim, soldRumor, thiefId, realNow);
+                    Check(soldAccepted == true &&
+                          theftCounters.LateDiscoveries[NpcManager.TheftDiscoveryPathItemSold] == lateSoldBefore + 1 &&
+                          sim.DiscoveryOk[1] == soldOkBefore + 1 &&
+                          ReadSimAffinity(sim, bagVictimId, thiefId) == Mathf.Clamp(bagAffinityNow - 40, NpcManager.AFFINITY_MIN, NpcManager.AFFINITY_MAX) &&
+                          HasTestClue(bagVictim, capItems[capItems.Count - 1].ItemInstanceId, thiefId, p4bTime + capItems.Count - 1) == false &&
+                          bagVictim.TheftClues.Count == NpcSaveData.MaxTheftClues - 1 &&
+                          HasBetrayalRumorOrCapDrop(bagVictim, thiefId, bagVictimId, NpcBetrayalKind.TheftDiscovered,
+                              p4bTime + capItems.Count - 1) == true,
+                        "늦은 발각(판매 소문): 판 물건의 단서만 제거(나머지 2건 유지)·−40·Betrayal·독립 감사 통과");
+                    Check(npc.IsStolenItemSale(thiefId, village.VillageId, normalItem.ItemInstanceId, realNow) == false &&
+                          npc.IsStolenItemSale(thiefId, village.VillageId, capItems[0].ItemInstanceId, realNow) == true,
+                        "훔친 물건 판별: 단서 없는 물건 false / 유효 단서가 있는 물건 true");
+                }
+
+                // ⑧-4 소문 주체가 실제 범인이 아니면 발각 없음 (도둑의 도둑): V5 → 도둑(T) → 두 번째 도둑(B)이 같은 물건을 다시 훔쳐 판다
+                int chainVictimId = extras[8];
+                NpcSaveData chainVictim = sim.Npcs[chainVictimId];
+                int secondThiefId = candidateId;
+                NpcSaveData secondThief = candidate;
+                ItemData chainItem = MakeCopy(template, 700);
+                PrepareVictim(chainVictimId, chainItem);
+                npc.ApplyTheft(new NpcTheftDecision
+                {
+                    ThiefId = thiefId, VictimId = chainVictimId, ItemSlot = 0, ItemInstanceId = chainItem.ItemInstanceId,
+                    AmbitionMultiplier = 1f, VictimCandidateCount = 1, Detected = false,
+                }, p4bTime + 20f);
+                float secondInitialPower = secondThief.InitialPower;
+                secondThief.InitialPower = 0.001f;
+                npc.InvalidateNpcPower(secondThiefId);
+                secondThief.EnsureSlotsInitialized();
+                secondThief.Inventory[0] = null;
+                int chainSlot = -1;
+                for (int i = 0; i < thief.Inventory.Count; i++)
+                {
+                    if (thief.Inventory[i] != null && thief.Inventory[i]!.ItemInstanceId == chainItem.ItemInstanceId)
+                        chainSlot = i;
+                }
+                NpcTheftOutcome rethief = npc.ApplyTheft(new NpcTheftDecision
+                {
+                    ThiefId = secondThiefId, VictimId = thiefId, ItemSlot = chainSlot, ItemInstanceId = chainItem.ItemInstanceId,
+                    AmbitionMultiplier = 1f, VictimCandidateCount = 1, Detected = false,
+                }, p4bTime + 21f);
+                for (int i = 0; i < secondThief.Inventory.Count; i++)
+                {
+                    if (secondThief.Inventory[i] != null && secondThief.Inventory[i]!.ItemInstanceId == chainItem.ItemInstanceId)
+                        secondThief.Inventory[i] = null;
+                }
+                npc.NotifyNpcItemSold(secondThiefId, secondThief, village.VillageId, chainItem, realNow);
+                NpcRumor? soldBySecond = null;
+                for (int i = 0; i < secondThief.Rumors.Count; i++)
+                {
+                    if (secondThief.Rumors[i].Kind == NpcRumorKind.ItemSold &&
+                        secondThief.Rumors[i].ItemInstanceId == chainItem.ItemInstanceId)
+                        soldBySecond = secondThief.Rumors[i];
+                }
+                Check(rethief == NpcTheftOutcome.StolenToBag && soldBySecond != null && soldBySecond.SubjectNpcId == secondThiefId &&
+                      HasTestClue(chainVictim, chainItem.ItemInstanceId, thiefId, p4bTime + 20f) == true &&
+                      HasTestClue(thief, chainItem.ItemInstanceId, secondThiefId, p4bTime + 21f) == true,
+                    "사전: V5 단서(범인 = T), T 단서(범인 = B), B가 판매 → ItemSold(주체 B)");
+                if (soldBySecond != null)
+                {
+                    long lateTotal = theftCounters.LateDiscoveries[0] + theftCounters.LateDiscoveries[1];
+                    int chainAffinityT = ReadSimAffinity(sim, chainVictimId, thiefId);
+                    int chainAffinityB = ReadSimAffinity(sim, chainVictimId, secondThiefId);
+                    bool chainAccepted = npc.ReceiveRumor(chainVictim, soldBySecond, secondThiefId, realNow);
+                    Check(chainAccepted == true && theftCounters.LateDiscoveries[0] + theftCounters.LateDiscoveries[1] == lateTotal &&
+                          HasTestClue(chainVictim, chainItem.ItemInstanceId, thiefId, p4bTime + 20f) == true &&
+                          ReadSimAffinity(sim, chainVictimId, thiefId) == chainAffinityT &&
+                          ReadSimAffinity(sim, chainVictimId, secondThiefId) == chainAffinityB,
+                        "소문 주체(B)가 단서의 실제 범인(T)이 아니면 발각 없음 — 단서·관계 그대로");
+                    RemoveSameTargetRumors(thief, soldBySecond);
+                    npc.ReceiveRumor(thief, soldBySecond, secondThiefId, realNow);
+                    Check(theftCounters.LateDiscoveries[0] + theftCounters.LateDiscoveries[1] == lateTotal + 1 &&
+                          CountDirectedRelation(sim, thiefId, thiefId, secondThiefId, NpcRelationType.GrudgeAgainst) == 1,
+                        "같은 판매 소문을 T가 받으면 T의 단서(범인 = B)로 발각 → 원한(T→B)");
+                }
+                secondThief.InitialPower = secondInitialPower;
+                npc.InvalidateNpcPower(secondThiefId);
+
+                // ⑧-5 단서 만료(14일)·범인 사망 → 발각 없음, 피해자 Rest 종료 때 정리
+                int expiryVictimId = extras[11];
+                NpcSaveData expiryVictim = sim.Npcs[expiryVictimId];
+                expiryVictim.TheftClues.Clear();
+                const int expiredInstance = 72000001;
+                npc.AddTheftClue(expiryVictim, expiredInstance, thiefId, realNow - NpcManager.TheftClueLifetimeHours - 1f);
+                NpcRumor expiredSale = new NpcRumor
+                {
+                    Kind = NpcRumorKind.ItemSold, SubjectNpcId = thiefId, ItemInstanceId = expiredInstance, ItemId = template.Id,
+                    Value = 10, EventGameTime = realNow,
+                };
+                long lateBeforeExpiry = theftCounters.LateDiscoveries[0] + theftCounters.LateDiscoveries[1];
+                long invalidMatchBefore = theftCounters.LateMatchInvalidClue;
+                bool expiredStolen = npc.IsStolenItemSale(thiefId, expiryVictim.VillageId, expiredInstance, realNow);
+                npc.ReceiveRumor(expiryVictim, expiredSale, thiefId, realNow);
+                Check(theftCounters.LateDiscoveries[0] + theftCounters.LateDiscoveries[1] == lateBeforeExpiry &&
+                      theftCounters.LateMatchInvalidClue == invalidMatchBefore + 1 && expiryVictim.TheftClues.Count == 1 &&
+                      expiredStolen == false,
+                    "14일 지난 단서: 맞는 소문이 와도 발각 없음, 판매 소문 판별도 false (정리 전까지 단서는 남음)");
+                long expiredBefore = theftCounters.CluesExpired;
+                npc.ResolveRestEnd(expiryVictimId, expiryVictim, realNow - 4f, realNow, seed, false);
+                Check(expiryVictim.TheftClues.Count == 0 && theftCounters.CluesExpired == expiredBefore + 1,
+                    "피해자 Rest 종료 때 14일 지난 단서 정리");
+                int deathVictimId = extras[12], deadThiefId = extras[13];
+                NpcSaveData deathVictim = sim.Npcs[deathVictimId];
+                NpcSaveData deadThief = sim.Npcs[deadThiefId];
+                deathVictim.TheftClues.Clear();
+                const int deadThiefInstance = 72000002;
+                npc.AddTheftClue(deathVictim, deadThiefInstance, deadThiefId, realNow - 10f);
+                CharacterConditions deadThiefCondition = deadThief.Condition;
+                deadThief.Condition = CharacterConditions.Dead;
+                NpcRumor deadSale = expiredSale.Clone();
+                deadSale.SubjectNpcId = deadThiefId;
+                deadSale.ItemInstanceId = deadThiefInstance;
+                long lateBeforeDeath = theftCounters.LateDiscoveries[0] + theftCounters.LateDiscoveries[1];
+                npc.ReceiveRumor(deathVictim, deadSale, deadThiefId, realNow);
+                long thiefDeadBefore = theftCounters.CluesThiefDead;
+                bool lateUnchanged = theftCounters.LateDiscoveries[0] + theftCounters.LateDiscoveries[1] == lateBeforeDeath;
+                npc.ResolveRestEnd(deathVictimId, deathVictim, realNow - 4f, realNow, seed, false);
+                Check(lateUnchanged == true && deathVictim.TheftClues.Count == 0 && theftCounters.CluesThiefDead == thiefDeadBefore + 1,
+                    "범인 사망: 발각 없음, Rest 종료 때 단서 정리");
+                deadThief.Condition = deadThiefCondition;
+
+                // ⑧-6 Betrayal 유효성·같은 대상 중복 방지·현장 적발 Betrayal (D105)
+                Check(HasBetrayalRumorOrCapDrop(caughtVictim, thiefId, caughtVictimId, NpcBetrayalKind.TheftCaughtInAct, caughtTime) == true,
+                    "현장 적발도 발각 순간 피해자 직접 Betrayal 소문(현장 적발)을 만듦");
+                NpcRumor? betrayal = null;
+                for (int i = 0; i < caughtVictim.Rumors.Count; i++)
+                {
+                    if (caughtVictim.Rumors[i].Kind == NpcRumorKind.Betrayal && caughtVictim.Rumors[i].SubjectNpcId == thiefId)
+                        betrayal = caughtVictim.Rumors[i];
+                }
+                int witnessId = -1;
+                if (sim.Villages.TryGetValue(caughtVictim.VillageId, out VillageData? caughtVillage) == true)
+                {
+                    for (int i = 0; i < caughtVillage.NpcEntityIds.Count && witnessId < 0; i++)
+                    {
+                        int id = caughtVillage.NpcEntityIds[i];
+                        if (id != caughtVictimId && id != thiefId && IsSimLiving(sim, id) == true)
+                            witnessId = id;
+                    }
+                }
+                if (witnessId < 0)
+                    witnessId = extras[9];
+                NpcSaveData witness = sim.Npcs[witnessId];
+                if (betrayal == null)
+                    Check(false, "현장 적발 Betrayal 소문을 찾지 못함");
+                else
+                {
+                    CharacterConditions thiefCond = thief.Condition, victimCond = caughtVictim.Condition;
+                    bool validBoth = npc.IsRumorValid(betrayal);
+                    thief.Condition = CharacterConditions.Dead;
+                    bool validThiefDead = npc.IsRumorValid(betrayal);
+                    thief.Condition = thiefCond;
+                    caughtVictim.Condition = CharacterConditions.Dead;
+                    bool validVictimDead = npc.IsRumorValid(betrayal);
+                    caughtVictim.Condition = victimCond;
+                    Check(validBoth == true && validThiefDead == false && validVictimDead == false,
+                        "Betrayal 유효 = 가해자·피해자 둘 다 생존 (어느 쪽이 죽어도 무효)");
+                    witness.Rumors.Clear();
+                    bool firstReceive = npc.ReceiveRumor(witness, betrayal, caughtVictimId, realNow);
+                    bool secondReceive = npc.ReceiveRumor(witness, betrayal, caughtVictimId, realNow);
+                    NpcRumor later = betrayal.Clone();
+                    later.EventGameTime = betrayal.EventGameTime + 1f;
+                    int witnessBetrayals = 0;
+                    for (int i = 0; i < witness.Rumors.Count; i++)
+                    {
+                        if (witness.Rumors[i].Kind == NpcRumorKind.Betrayal)
+                            witnessBetrayals++;
+                    }
+                    Check(firstReceive == true && secondReceive == false && witnessBetrayals == 1 &&
+                          NpcManager.IsSameRumorTarget(betrayal, betrayal.Clone()) == true &&
+                          NpcManager.IsSameRumorTarget(betrayal, later) == false,
+                        "Betrayal 같은 대상 = (가해자, 피해자, 사건 시각): 재수신 Duplicate, 다른 사건 시각은 다른 대상");
+                }
+                if (soldRumor != null)
+                    npc.ReceiveRumor(witness, soldRumor, thiefId, realNow);
+
+                // ⑧-7 대화 (D106): 도난 사연(범인 이름 / "누가"), 도둑 침묵, 배신 소문 토픽, 판매 소문 토픽 없음
+                if (stolenEquipItem != null)
+                {
+                    DialogueTopic? namedTopic = FindTopic(equipVictimId, DialogueTopicType.TheftVictim);
+                    string thiefName = npc.GetDisplayName(thiefId);
+                    Check(namedTopic != null && namedTopic.BaseLine.Contains(thiefName) &&
+                          namedTopic.BaseLine.Contains(stolenEquipItem.Table != null ? stolenEquipItem.Table.Name : "물건") &&
+                          namedTopic.BaseLine.Contains("훔쳐 갔소"),
+                        $"도난 사연(늦은 발각): 범인 이름으로 말함 — \"{namedTopic?.BaseLine}\"");
+                }
+                DialogueTopic? anonymousTopic = FindTopic(chainVictimId, DialogueTopicType.TheftVictim);
+                Check(anonymousTopic != null && anonymousTopic.BaseLine.StartsWith("누가", StringComparison.Ordinal),
+                    $"도난 사연(범인 모름): \"누가\" — \"{anonymousTopic?.BaseLine}\"");
+                DialogueTopic? caughtTopic = FindTopic(caughtVictimId, DialogueTopicType.TheftVictim);
+                Check(caughtTopic != null && caughtTopic.BaseLine.Contains("훔치려다 걸렸소") &&
+                      caughtTopic.BaseLine.Contains(npc.GetDisplayName(thiefId)),
+                    $"도난 사연(현장 적발): \"{caughtTopic?.BaseLine}\"");
+                int pureThiefId = -1;
+                for (int i = 10; i < extras.Count && pureThiefId < 0; i++)
+                {
+                    int id = extras[i];
+                    if (id == expiryVictimId || id == deathVictimId || id == deadThiefId || id == witnessId)
+                        continue;
+                    if (CountTheftDeeds(sim.Npcs[id]) == 0)
+                        pureThiefId = id;
+                }
+                if (pureThiefId < 0)
+                    throw new InvalidOperationException("절도 Deed가 없는 검증용 NPC를 찾지 못했습니다.");
+                int pureVictimId = extras[14] != pureThiefId ? extras[14] : extras[extras.Count - 1];
+                ItemData pureItem = MakeCopy(template, 800);
+                sim.Npcs[pureVictimId].EnsureSlotsInitialized();
+                sim.Npcs[pureVictimId].Inventory[0] = pureItem;
+                npc.ApplyTheft(new NpcTheftDecision
+                {
+                    ThiefId = pureThiefId, VictimId = pureVictimId, ItemSlot = 0, ItemInstanceId = pureItem.ItemInstanceId,
+                    AmbitionMultiplier = 1f, VictimCandidateCount = 1, Detected = true,
+                }, p4bTime + 30f);
+                Check(CountDeeds(sim.Npcs[pureThiefId], NpcDeedKind.CaughtStealing) == 1 &&
+                      FindTopic(pureThiefId, DialogueTopicType.TheftVictim) == null,
+                    "도둑은 침묵: 도둑 쪽 Deed(CaughtStealing·TheftExposed)로는 도난 토픽이 생기지 않음");
+                List<DialogueTopic> rumorTopics = new List<DialogueTopic>();
+                DialogueTopicSelector.CollectAmbitionRumorTopics(witnessId, rumorTopics);
+                DialogueTopic? betrayalTopic = null;
+                bool soldTopic = false;
+                for (int i = 0; i < rumorTopics.Count; i++)
+                {
+                    if (rumorTopics[i].Type == DialogueTopicType.BetrayalRumor)
+                        betrayalTopic = rumorTopics[i];
+                    if (rumorTopics[i].Rumor != null && rumorTopics[i].Rumor!.Kind == NpcRumorKind.ItemSold)
+                        soldTopic = true;
+                }
+                Check(betrayalTopic != null && betrayalTopic.BaseLine.Contains(npc.GetDisplayName(thiefId)) &&
+                      betrayalTopic.BaseLine.Contains(npc.GetDisplayName(caughtVictimId)) &&
+                      betrayalTopic.BaseLine.Contains("훔치려다 걸렸다"),
+                    $"배신 소문 토픽(제3자, 피해자에게 직접 들음): \"{betrayalTopic?.BaseLine}\"");
+                Check(soldTopic == false && (soldRumor == null || HoldsRumorKind(witness, NpcRumorKind.ItemSold) == true),
+                    "판매 소문(ItemSold)은 보유해도 대화 토픽이 없음 (검사 창 전용)");
+                rumorTopics.Clear();
+                DialogueTopicSelector.CollectAmbitionRumorTopics(caughtVictimId, rumorTopics);
+                bool victimOwnBetrayal = false;
+                for (int i = 0; i < rumorTopics.Count; i++)
+                {
+                    if (rumorTopics[i].Type == DialogueTopicType.BetrayalRumor && rumorTopics[i].Rumor != null &&
+                        (rumorTopics[i].Rumor!.VictimNpcId == caughtVictimId || rumorTopics[i].Rumor!.SubjectNpcId == caughtVictimId))
+                        victimOwnBetrayal = true;
+                }
+                Check(victimOwnBetrayal == false, "피해자 본인의 배신 소문은 소문 토픽에서 빠짐 (도난 사연이 말함)");
+                NpcDialogueContext? witnessContext = NpcDialogueContextBuilder.Build(witnessId, default);
+                int ambitionTopics = 0;
+                if (witnessContext != null)
+                {
+                    List<DialogueTopic> collected = DialogueTopicSelector.Collect(witnessId, witnessContext, default);
+                    for (int i = 0; i < collected.Count; i++)
+                    {
+                        DialogueTopicType type = collected[i].Type;
+                        if (type == DialogueTopicType.DungeonRumor || type == DialogueTopicType.ItemOwnerRumor ||
+                            type == DialogueTopicType.BetrayalRumor)
+                            ambitionTopics++;
+                    }
+                }
+                Check(witnessContext != null && ambitionTopics <= 1, $"대화 1회분 야망 소문 토픽 최대 1개 (D82): {ambitionTopics}개");
+
+                // ⑧-8 검사 창 문구 (새 Deed 2종·판매/배신 소문) — "알 수 없는" 없음
+                Type? inspectType = Type.GetType("ARPG.UI.UINpcInspect, Assembly-CSharp");
+                if (inspectType == null)
+                    Check(false, "검사 창 타입을 찾지 못함");
+                else
+                {
+                    object inspect = System.Runtime.Serialization.FormatterServices.GetUninitializedObject(inspectType);
+                    MethodInfo? history = inspectType.GetMethod("GetHistoryDescription", BindingFlags.NonPublic | BindingFlags.Instance);
+                    MethodInfo? describe = inspectType.GetMethod("DescribeRumor", BindingFlags.NonPublic | BindingFlags.Instance);
+                    FieldInfo? entityField = inspectType.GetField("_entityId", BindingFlags.NonPublic | BindingFlags.Instance);
+                    entityField?.SetValue(inspect, equipVictimId);
+                    StringBuilder texts = new StringBuilder();
+                    bool textsOk = history != null && describe != null;
+                    if (textsOk == true)
+                    {
+                        NpcSaveData discoveredVictim = stolenEquipItem != null ? equipVictim : bagVictim;
+                        entityField?.SetValue(inspect, discoveredVictim.EntityId);
+                        for (int i = 0; i < discoveredVictim.Deeds.Count; i++)
+                        {
+                            if (discoveredVictim.Deeds[i].Kind == NpcDeedKind.TheftDiscovered)
+                                texts.Append((string)history!.Invoke(inspect, new object[] { discoveredVictim.Deeds[i] })).Append(" | ");
+                        }
+                        entityField?.SetValue(inspect, thiefId);
+                        for (int i = 0; i < thief.Deeds.Count; i++)
+                        {
+                            if (thief.Deeds[i].Kind == NpcDeedKind.TheftExposed)
+                            {
+                                texts.Append((string)history!.Invoke(inspect, new object[] { thief.Deeds[i] })).Append(" | ");
+                                break;
+                            }
+                        }
+                        if (betrayal != null)
+                            texts.Append((string)describe!.Invoke(inspect, new object[] { betrayal })).Append(" | ");
+                        if (soldRumor != null)
+                            texts.Append((string)describe!.Invoke(inspect, new object[] { soldRumor })).Append(" | ");
+                        string all = texts.ToString();
+                        textsOk = all.Contains("알 수 없는") == false &&
+                                  (all.Contains("였음을 알게 됨") == true || all.Contains("이었음을 알게 됨") == true);
+                        textsOk &= all.Contains("들통남") && all.Contains("상점에 팔았다") && all.Contains("훔치려다 걸림");
+                    }
+                    Check(textsOk == true, $"검사 창 문구: {texts}");
+                }
+                thief.InitialPower = p4bInitialPower;
+                npc.InvalidateNpcPower(thiefId);
+
+                // Betrayal 사망 정리 (D72): 피해자가 죽으면 같은 마을 명단의 그 Betrayal 소문이 지워진다 (마지막에 — 피해자 상태를 바꾼다)
+                if (betrayal != null && witness.VillageId == caughtVictim.VillageId)
+                {
+                    caughtVictim.Condition = CharacterConditions.Dead;
+                    caughtVictim.Activity.Phase = NpcActivityPhase.Dead;
+                    npc.PurgeRumorsOnNpcDeath(caughtVictimId, caughtVictim);
+                    Check(HoldsRumorKind(witness, NpcRumorKind.Betrayal) == false,
+                        "피해자 사망 → 같은 마을 명단의 그 Betrayal 소문 정리 (D72)");
+                }
+
+                Check(sim.DiscoveryTriggerFails == 0 && sim.DiscoveryAuditFailures.Count == 0 && sim.DiscoveryUnaudited == 0,
+                    $"늦은 발각 독립 감사 실패 0 (장착 {sim.DiscoveryOk[0]}/{sim.DiscoveryCount[0]}, 판매 {sim.DiscoveryOk[1]}/{sim.DiscoveryCount[1]})");
+                for (int i = 0; i < sim.DiscoveryAuditFailures.Count; i++)
+                    log.AppendLine($"    ! {sim.DiscoveryAuditFailures[i]}");
+
+                Check(sim.TheftAuditFailCount == 0 && sim.TheftEligibilityFails == 0 && sim.TheftThiefCooldownViolations == 0 &&
+                      sim.TheftVillageCooldownViolations == 0,
+                    $"진입점 경로 독립 감사 실패 0 (관찰 {sim.TheftObserved}건)");
+                for (int i = 0; i < sim.TheftAuditFailures.Count; i++)
+                    log.AppendLine($"    ! {sim.TheftAuditFailures[i]}");
+            }
+            catch (Exception exception)
+            {
+                error = exception.ToString();
+            }
+            finally
+            {
+                DetachRumorProbes();
+                for (int i = swaps.Count - 1; i >= 0; i--)
+                    swaps[i].Field.SetValue(swaps[i].Target, swaps[i].Original);
+                itemCounterField.SetValue(AR.s.Item, itemCounter);
+                UnityEngine.Random.state = randomState;
+            }
+
+            string hashAfter = ComputeLiveStateHash();
+            bool liveUnchanged = hashBefore == hashAfter;
+            string result = $"[TheftRules] 실패 {failures}건, 라이브 상태 해시 전후 동일: {liveUnchanged}\n" + log +
+                            (error != null ? "  ERROR " + error + "\n" : string.Empty);
+            if (failures == 0 && liveUnchanged == true && error == null)
+                Debug.Log(result);
+            else
+                Debug.LogError(result);
+            return result;
+        }
+
+        private static bool HasTestClue(NpcSaveData victim, int itemInstanceId, int thiefId, float when)
+        {
+            for (int i = 0; i < victim.TheftClues.Count; i++)
+            {
+                NpcTheftClue clue = victim.TheftClues[i];
+                if (clue.ItemInstanceId == itemInstanceId && clue.ThiefId == thiefId && clue.When == when)
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>검증 준비: 받는 쪽이 같은 대상 소문을 이미 가져 Duplicate가 되지 않게 지운다.</summary>
+        private static void RemoveSameTargetRumors(NpcSaveData holder, NpcRumor rumor)
+        {
+            for (int i = holder.Rumors.Count - 1; i >= 0; i--)
+            {
+                if (NpcManager.IsSameRumorTarget(holder.Rumors[i], rumor) == true)
+                    holder.Rumors.RemoveAt(i);
+            }
+        }
+
+        private static bool HoldsRumorKind(NpcSaveData holder, NpcRumorKind kind)
+        {
+            for (int i = 0; i < holder.Rumors.Count; i++)
+            {
+                if (holder.Rumors[i].Kind == kind)
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>실제 대화 1회분(Collect)에서 그 종류의 토픽. 없으면 null.</summary>
+        private static DialogueTopic? FindTopic(int npcId, DialogueTopicType type)
+        {
+            NpcDialogueContext? context = NpcDialogueContextBuilder.Build(npcId, default);
+            if (context == null)
+                return null;
+            List<DialogueTopic> topics = DialogueTopicSelector.Collect(npcId, context, default);
+            for (int i = 0; i < topics.Count; i++)
+            {
+                if (topics[i].Type == type)
+                    return topics[i];
+            }
+            return null;
+        }
+
+        /// <summary>절도 검증용 성향: 탐욕·정직·호기심·용기만 주고 나머지는 0 (야망 도출 §4.2로 주/보조/없음을 만든다).</summary>
+        private static global::ARPG.Component.NpcStatComponent MakeTheftTestStat(int greed, int honesty, int curiosity, int courage)
+        {
+            return new global::ARPG.Component.NpcStatComponent
+            {
+                Greed = greed,
+                Honesty = honesty,
+                Curiosity = curiosity,
+                Courage = courage,
+            };
+        }
+
+        /// <summary>복제본 관계 원장에서 a·b 사이의 모든 유형 관계를 지운다 (검증 준비용 — 양쪽 인덱스).</summary>
+        private static void RemoveSimRelationsBetween(SimContext sim, int a, int b)
+        {
+            RemoveFromIndex(a);
+            RemoveFromIndex(b);
+
+            void RemoveFromIndex(int key)
+            {
+                if (sim.Relations.TryGetValue(key, out List<NpcRelationEntry>? list) == false)
+                    return;
+                for (int i = list.Count - 1; i >= 0; i--)
+                {
+                    NpcRelationEntry entry = list[i];
+                    if ((entry.FromEntityId == a && entry.ToEntityId == b) || (entry.FromEntityId == b && entry.ToEntityId == a))
+                        list.RemoveAt(i);
+                }
+            }
+        }
+
         // ================= 라이브 상태 해시 =================
 
         /// <summary>
         /// 실행 전후 비교용 라이브 상태 해시: NPC 세이브 전부, 마을 데이터(명단·엔티티 ID 포함), 파티, 파티/순회 커서,
-        /// 전투력 캐시·장착 지연 목록, 게임 시간, 아이템 인스턴스 카운터, UnityEngine.Random 상태, 교체한 필드의 참조 동일성.
+        /// 전투력 캐시·장착 지연 목록, NPC 호감도·유형 관계 내용(D107), 게임 시간, 아이템 인스턴스 카운터, UnityEngine.Random 상태,
+        /// 교체한 필드의 참조 동일성.
         /// </summary>
         private static string ComputeLiveStateHash()
         {
@@ -3009,12 +5681,16 @@ namespace ARPG.EditorTools
             object npc = AR.s.Npc;
             object village = AR.s.Village;
             string[] npcFields = { "_npcSaveDict", "_npcPowerCache", "_deferredLootUpgradeItemIds", "_npcPartyDict",
-                "_simulationPartyIds", "_simulationWorkCursor", "_nextPartyId", "_simulationNpcIds", "_simulationCursor", "_narrative" };
+                "_simulationPartyIds", "_simulationWorkCursor", "_nextPartyId", "_simulationNpcIds", "_simulationCursor", "_narrative",
+                "_npcAffinity", "_npcRelations" };
             for (int i = 0; i < npcFields.Length; i++)
             {
                 object? value = GetField(npc, npcFields[i]).GetValue(npc);
                 sb.Append(npcFields[i]).Append('=').Append(DescribeFieldValue(value)).Append('\n');
             }
+            // D107: 호감도·유형 관계 내용 (참조 동일성은 위 줄, 내용은 Dictionary 열거 순서와 무관하게 정렬해 본다)
+            sb.Append("affinity=").Append(DescribeAffinity(GetField(npc, "_npcAffinity").GetValue(npc))).Append('\n');
+            sb.Append("relations=").Append(DescribeRelations(GetField(npc, "_npcRelations").GetValue(npc))).Append('\n');
             string[] villageFields = { "_villages", "_villageList" };
             for (int i = 0; i < villageFields.Length; i++)
             {
@@ -3047,6 +5723,44 @@ namespace ARPG.EditorTools
             for (int i = 0; i < hash.Length; i++)
                 hex.Append(hash[i].ToString("x2", CultureInfo.InvariantCulture));
             return hex.ToString();
+        }
+
+        /// <summary>호감도 내용: (Lo, Hi) 순으로 정렬한 "Lo:Hi=값" 목록.</summary>
+        private static string DescribeAffinity(object? value)
+        {
+            Dictionary<NpcPairKey, int>? affinity = value as Dictionary<NpcPairKey, int>;
+            if (affinity == null)
+                return "null";
+            List<KeyValuePair<NpcPairKey, int>> pairs = new List<KeyValuePair<NpcPairKey, int>>(affinity);
+            pairs.Sort((a, b) => a.Key.Lo != b.Key.Lo ? a.Key.Lo.CompareTo(b.Key.Lo) : a.Key.Hi.CompareTo(b.Key.Hi));
+            StringBuilder sb = new StringBuilder(pairs.Count * 16);
+            for (int i = 0; i < pairs.Count; i++)
+                sb.Append(pairs[i].Key.Lo).Append(':').Append(pairs[i].Key.Hi).Append('=').Append(pairs[i].Value).Append(',');
+            return sb.ToString();
+        }
+
+        /// <summary>유형 관계 내용: 키(EntityId) 순으로, 각 인덱스 목록은 원래 순서대로 "From>To:Type:OriginEventId".</summary>
+        private static string DescribeRelations(object? value)
+        {
+            Dictionary<int, List<NpcRelationEntry>>? relations = value as Dictionary<int, List<NpcRelationEntry>>;
+            if (relations == null)
+                return "null";
+            List<int> keys = new List<int>(relations.Keys);
+            keys.Sort();
+            StringBuilder sb = new StringBuilder(keys.Count * 32);
+            for (int i = 0; i < keys.Count; i++)
+            {
+                sb.Append(keys[i]).Append('[');
+                List<NpcRelationEntry> list = relations[keys[i]];
+                for (int j = 0; j < list.Count; j++)
+                {
+                    NpcRelationEntry entry = list[j];
+                    sb.Append(entry.FromEntityId).Append('>').Append(entry.ToEntityId).Append(':').Append((int)entry.Type)
+                      .Append(':').Append(entry.OriginEventId).Append(',');
+                }
+                sb.Append(']');
+            }
+            return sb.ToString();
         }
 
         private static string DescribeFieldValue(object? value)

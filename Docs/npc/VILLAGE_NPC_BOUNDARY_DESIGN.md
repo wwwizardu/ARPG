@@ -65,6 +65,8 @@ carry는 `VillageData`가 소유한다. 실체화 경로의 `VillageStorageCompo
 
 NPC_AMBITION P2(2026-09-29)의 **DungeonDelve·NPC 던전 완료·소문**은 새 경로를 만들지 않는다. Delve와 NPC 완료는 골드·Food를 주지 않고(AMBITION D55·D66) 마을 자원·Population·Tier에 입력하지 않는다. NPC 완료는 던전 슬롯(`WorldData.Dungeons`)만 바꾸며 그 규칙은 [DUNGEON_RUNTIME_DESIGN.md](../map/DUNGEON_RUNTIME_DESIGN.md) §3.3이 정한다. 소문은 NPC 개인 데이터다.
 
+NPC_AMBITION P4(2026-10-02)의 **NPC 간 절도**도 새 경로를 만들지 않는다. NPC 가방 사이에서 아이템만 옮겨지고 골드는 생기지도 이동하지도 않는다(AMBITION D101). 훔친 물건은 기존 판매 경로(위 2번)로만 마을에 팔린다. 플레이어 인벤토리는 대상이 아니다(AMBITION D2).
+
 §8의 금지 항목은 이 예외와 무관하게 그대로 유지한다.
 
 ---

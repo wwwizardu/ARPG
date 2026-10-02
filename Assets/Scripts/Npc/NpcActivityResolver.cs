@@ -215,6 +215,11 @@ namespace ARPG.Npc
         public const int PartyRecruitAttemptSalt = 130;
         public const int PartyAcceptSalt = 131;
 
+        // NPC 간 절도 RNG salt (NPC_AMBITION_DESIGN D100). 소유자 = 도둑 EntityId, 시각 = 도둑의 Rest 시작 시각.
+        // 170 시도 난수열(시도 확률 → 피해자 선택 → 물건 선택 순서로 같은 열에서 뽑는다), 171 발각. 172~179는 절도 예비.
+        public const int TheftAttemptSalt = 170;
+        public const int TheftDetectionSalt = 171;
+
         /// <summary>원정형 활동(Venturing + 왕복 경로 표현)인가. Hunt와 DungeonDelve.</summary>
         public static bool IsExpedition(NpcActivityKind kind)
         {
@@ -784,6 +789,7 @@ namespace ARPG.Npc
         /// <summary>
         /// 활동 결정론 RNG. 같은 (소유자, 활동 시작시각, worldSeed, salt)는 세이브/로드 뒤에도 같은 난수열을 준다.
         /// 소문 교환(NpcManager_Rumor)도 이 채널을 쓴다 (salt 120~125). 파티 모집(NpcManager_Party)은 130·131. 중상 판정은 140·141·150+i·160+i.
+        /// NPC 간 절도(NpcManager_Theft)는 170·171.
         /// </summary>
         internal static HistoryRng CreateRng(int entityId, float startGameTime, int worldSeed, int salt)
         {
@@ -799,6 +805,8 @@ namespace ARPG.Npc
             // 132~139는 파티 모집 예비 — 재사용 금지.
             // 140은 솔로 Hunt 중상, 141은 솔로 Delve 중상 (EntityId 기준), 150+i는 파티원 Hunt 중상, 160+i는 파티원 Delve 중상
             // (PartyId 기준, SevereWound*Salt 상수, D91). 142~149는 부상 예비.
+            // 170은 절도 시도 난수열(시도 확률 → 피해자 → 물건), 171은 절도 발각 (도둑 EntityId·도둑의 Rest 시작 시각 기준,
+            // Theft*Salt 상수, D100). 172~179는 절도 예비 — 재사용 금지.
             int key = unchecked(worldSeed ^ (entityId * 486187739) ^ (startTick * 16777619) ^ salt);
             return new HistoryRng(DerivedSeed.Derive(key, DerivedSeed.ChannelNpcActivity));
         }

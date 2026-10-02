@@ -21,7 +21,7 @@ namespace ARPG.Npc.Narrative
         private const int DefaultResourceCap = 50;
         private const float ImmediateRepeatHours = 1f;
         private const float LongAbsentHours = 48f;
-        // 야망 소문 토픽(DungeonRumor·ItemOwnerRumor)의 레퍼토리 우선순위 (P2c). 낮은 관계 단계의 잡담(Flavor)과 같다.
+        // 야망 소문 토픽(DungeonRumor·ItemOwnerRumor·BetrayalRumor)의 레퍼토리 우선순위 (P2c). 낮은 관계 단계의 잡담(Flavor)과 같다.
         private const int AmbitionRumorPriority = 4;
 
         private enum GreetingEncounter
@@ -200,7 +200,8 @@ namespace ARPG.Npc.Narrative
             if (topic.Type == DialogueTopicType.ClearThreat)
                 return 2;
             // 야망 소문은 지금 확인할 수 있는 실제 사건(유효 검증 통과)이라 연대기 소문보다 앞세운다 (P2c) — 낯선 사이에서도 일상 화제와 겨룬다.
-            if (topic.Type == DialogueTopicType.DungeonRumor || topic.Type == DialogueTopicType.ItemOwnerRumor)
+            if (topic.Type == DialogueTopicType.DungeonRumor || topic.Type == DialogueTopicType.ItemOwnerRumor ||
+                topic.Type == DialogueTopicType.BetrayalRumor)
                 return AmbitionRumorPriority;
 
             return topic.Category switch
@@ -235,6 +236,9 @@ namespace ARPG.Npc.Narrative
                 DialogueTopicType.PartyBond => (save.NpcStat.Loyalty + save.NpcStat.Friendliness) / 10,
                 DialogueTopicType.DungeonRumor => (save.NpcStat.Curiosity + save.NpcStat.Courage) / 10,
                 DialogueTopicType.ItemOwnerRumor => (save.NpcStat.Curiosity + save.NpcStat.Greed) / 10,
+                // P4b: 배신 소문은 수다(Gossip)와 같은 성향, 도난 사연은 자존심이 세고 참을성이 없을수록 꺼낸다
+                DialogueTopicType.BetrayalRumor => (save.NpcStat.Friendliness + save.NpcStat.Curiosity) / 10,
+                DialogueTopicType.TheftVictim => (save.NpcStat.Pride + (100 - save.NpcStat.Patience)) / 10,
                 _ => 0,
             };
         }
@@ -617,38 +621,52 @@ namespace ARPG.Npc.Narrative
             float now = AR.s.Time != null ? AR.s.Time.CurrentGameTime : 0f;
             List<DialogueTopic> dungeon = new();
             List<DialogueTopic> item = new();
+            List<DialogueTopic> betrayal = new();
             List<NpcRumor> rumors = save.Rumors;
             for (int i = 0; i < rumors.Count; i++)
             {
                 NpcRumor rumor = rumors[i];
                 if (AR.s.Npc.IsRumorValid(rumor) == false)
                     continue;
+                // 판매 소문(ItemSold)은 검사 창에만 보이고 대화 토픽이 없다 (D104).
                 DialogueTopic? t = rumor.Kind switch
                 {
                     NpcRumorKind.DungeonInfo => BuildDungeonRumorTopic(npcId, save, rumor, now),
                     NpcRumorKind.ItemOwner => BuildItemOwnerRumorTopic(npcId, rumor, now),
+                    NpcRumorKind.Betrayal => BuildBetrayalRumorTopic(npcId, rumor, now),
                     _ => null,
                 };
                 if (t == null)
                     continue;
                 if (t.Type == DialogueTopicType.DungeonRumor)
                     dungeon.Add(t);
-                else
+                else if (t.Type == DialogueTopicType.ItemOwnerRumor)
                     item.Add(t);
+                else
+                    betrayal.Add(t);
             }
 
             if (pickAll == true)
             {
                 AddAllRumorTopics(topics, dungeon);
                 AddAllRumorTopics(topics, item);
+                AddAllRumorTopics(topics, betrayal);
                 return;
             }
 
-            // 대화 1회분에는 야망 소문 토픽을 최대 1개만 넣는다 — 소문을 가진 NPC가 대부분이라 둘 다 넣으면
-            // 낮은 관계 단계의 좁은 레퍼토리(2~3)를 소문이 모두 차지한다. 종류를 먼저 고르고(둘 다 있으면 반반) 그 안에서 1개.
-            List<DialogueTopic> kind = dungeon.Count > 0 && (item.Count == 0 || Random.value < 0.5f) ? dungeon : item;
-            if (kind.Count == 0)
+            // 대화 1회분에는 야망 소문 토픽을 최대 1개만 넣는다 (D82) — 소문을 가진 NPC가 대부분이라 여럿 넣으면
+            // 낮은 관계 단계의 좁은 레퍼토리(2~3)를 소문이 모두 차지한다. 후보가 있는 종류(던전·장비·배신) 중 균등하게 고르고 그 안에서 1개.
+            int kindCount = (dungeon.Count > 0 ? 1 : 0) + (item.Count > 0 ? 1 : 0) + (betrayal.Count > 0 ? 1 : 0);
+            if (kindCount == 0)
                 return;
+            int kindPick = kindCount > 1 ? Random.Range(0, kindCount) : 0;
+            List<DialogueTopic> kind = dungeon;
+            if (dungeon.Count == 0 || kindPick > 0)
+            {
+                if (dungeon.Count > 0)
+                    kindPick--;
+                kind = item.Count > 0 && kindPick == 0 ? item : betrayal;
+            }
             DialogueTopic picked = kind[Random.Range(0, kind.Count)];
             AR.s.Npc.RecordRumorExposure(picked.Rumor!);
             topics.Add(picked);
@@ -753,6 +771,49 @@ namespace ARPG.Npc.Narrative
             return t;
         }
 
+        /// <summary>
+        /// 배신 소문 토픽 (P4b, D105·D106): "○○가 △△의 □□을 훔치려다 걸렸다더군 / 훔쳤다더군". 말투는 다른 소문처럼 출처·Hops별.
+        /// 피해자 본인은 도난 사연(TheftVictim)이 말하고, 가해자는 자기 절도를 말하지 않으므로 둘 다 뺀다 (자기 장비 소문을 빼는 것과 같은 관례).
+        /// 사건 시각은 절도 시각이다 (늦은 발각도 "N일 전 훔쳤다").
+        /// </summary>
+        private static DialogueTopic? BuildBetrayalRumorTopic(int npcId, NpcRumor rumor, float now)
+        {
+            if (rumor.VictimNpcId == npcId || rumor.SubjectNpcId == npcId)
+                return null;
+
+            string thief = NpcRumorPhrasing.NpcName(rumor.SubjectNpcId);
+            string victim = NpcRumorPhrasing.NpcName(rumor.VictimNpcId);
+            string itemName = NpcRumorPhrasing.ItemName(rumor.ItemId);
+            string itemObject = NpcRumorPhrasing.Josa(itemName, "을", "를");
+            string ago = NpcRumorPhrasing.AgoPhrase(rumor.EventGameTime, now);
+            bool caught = rumor.BetrayalKind == NpcBetrayalKind.TheftCaughtInAct;
+            string line;
+            if (rumor.SourceNpcId == rumor.VictimNpcId && rumor.Hops == 1)
+                line = caught
+                    ? $"{NpcRumorPhrasing.Josa(thief, "이", "가")} {ago} 자기 {itemObject} 훔치려다 걸렸다고 " +
+                      $"{NpcRumorPhrasing.Josa(victim, "이", "가")} 내게 직접 그러더군."
+                    : $"{NpcRumorPhrasing.Josa(thief, "이", "가")} {ago} 자기 {itemObject} 훔쳐 간 걸 알아냈다고 " +
+                      $"{NpcRumorPhrasing.Josa(victim, "이", "가")} 내게 직접 그러더군.";
+            else
+                line = $"{NpcRumorPhrasing.HeardPrefix(rumor)}{NpcRumorPhrasing.Josa(thief, "이", "가")} {ago} " +
+                       $"{victim}의 {itemObject} {(caught ? "훔치려다 걸렸다더군." : "훔쳤다더군.")}";
+
+            DialogueTopic t = new()
+            {
+                Type = DialogueTopicType.BetrayalRumor,
+                Category = DialogueTopicCategory.Rumor,
+                MinTier = AffinityTier.Stranger,
+                BaseLine = line,
+                CacheVariant = RumorCacheVariant(rumor),
+                Rumor = rumor,
+            };
+            t.Facts.Add(caught
+                ? $"{thief}이(가) {victim}의 {itemName}을(를) 훔치려다 현장에서 걸렸다. 물건은 주인에게 남았다."
+                : $"{thief}이(가) {victim}의 {itemName}을(를) 몰래 훔쳤고, 나중에 소문으로 범인이 드러났다.");
+            t.Facts.Add($"사건 시점: {ago} (게임 시간 {rumor.EventGameTime:F1}). 출처: {NpcRumorPhrasing.SourceNote(rumor)}.");
+            return t;
+        }
+
         // 소문 내용·출처가 바뀌면 다른 값 → 다른 대화 캐시 항목 (같은 토픽 타입 안의 구분자)
         private static int RumorCacheVariant(NpcRumor rumor)
         {
@@ -764,6 +825,13 @@ namespace ARPG.Npc.Narrative
             h = StableHash(h, rumor.SubjectNpcId);
             h = StableHash(h, (int)(rumor.EventGameTime * 100f));
             h = StableHash(h, rumor.SourceNpcId);
+            // P4b 종류만 피해자·세부 종류·아이템을 더한다 (기존 종류의 캐시 키는 그대로)
+            if (rumor.Kind == NpcRumorKind.ItemSold || rumor.Kind == NpcRumorKind.Betrayal)
+            {
+                h = StableHash(h, rumor.VictimNpcId);
+                h = StableHash(h, (int)rumor.BetrayalKind);
+                h = StableHash(h, rumor.ItemId);
+            }
             return StableHash(h, rumor.Hops);
         }
 
@@ -808,6 +876,7 @@ namespace ARPG.Npc.Narrative
             bool woundPending = save.WoundCount > 0 && save.LastWoundGameTime >= 0f;
             bool hasBond = false;
             bool hasBoast = false;
+            bool hasTheft = false;
             int added = 0;
             for (int i = save.Deeds.Count - 1; i >= 0 && added < 2; i--)
             {
@@ -829,7 +898,21 @@ namespace ARPG.Npc.Narrative
                     deed.Kind == NpcDeedKind.Wounded)
                     continue;
 
-                if (deed.Kind == NpcDeedKind.PartyAffinityChanged && hasBond == false)
+                // 도둑 쪽 절도 Deed(현장 적발·늦은 발각, D106): 도둑은 자기 절도를 말하지 않는다.
+                if (deed.Kind == NpcDeedKind.CaughtStealing || deed.Kind == NpcDeedKind.TheftExposed)
+                    continue;
+
+                if (IsTheftVictimDeed(deed.Kind) == true)
+                {
+                    // 피해자 도난 사연 (P4b, D106): 안 들킨 도난·현장 적발·늦은 발각 중 가장 최근 1건
+                    if (hasTheft == false)
+                    {
+                        hasTheft = true;
+                        added++;
+                        topics.Add(BuildTheftVictimTopic(npcId, deed));
+                    }
+                }
+                else if (deed.Kind == NpcDeedKind.PartyAffinityChanged && hasBond == false)
                 {
                     hasBond = true;
                     added++;
@@ -935,6 +1018,51 @@ namespace ARPG.Npc.Narrative
                 ? $"게임 시간 {save.LastWoundGameTime:F1}에 {where}을 나갔다가 죽을 뻔한 중상을 입었다 ({KnowledgeHint(NpcKnowledgeLevel.Did)})."
                 : $"게임 시간 {save.LastWoundGameTime:F1}에 {where}을 나갔다가 부상을 입었다 ({KnowledgeHint(NpcKnowledgeLevel.Did)}).");
             t.Facts.Add($"지금까지 원정에서 다친 횟수: {save.WoundCount}회.");
+            return t;
+        }
+
+        private static bool IsTheftVictimDeed(NpcDeedKind kind)
+        {
+            return kind == NpcDeedKind.ItemStolen || kind == NpcDeedKind.CaughtThiefInAct || kind == NpcDeedKind.TheftDiscovered;
+        }
+
+        /// <summary>
+        /// 피해자 도난 사연 (P4b, D106). 범인을 알면 이름으로("○○가 내 △△을 훔쳐 갔소 / 훔치려다 걸렸소"), 모르면 "누가".
+        /// 참가자(범인)는 Deed 스냅샷 이름을 쓴다 — 범인이 죽거나 세이브에서 빠져도 이름이 남는다.
+        /// </summary>
+        private static DialogueTopic BuildTheftVictimTopic(int npcId, NpcDeedEntry deed)
+        {
+            string item = string.IsNullOrEmpty(deed.ItemDisplayName) ? "물건" : deed.ItemDisplayName;
+            string itemObject = NpcRumorPhrasing.Josa(item, "을", "를");
+            bool knowsThief = deed.Kind != NpcDeedKind.ItemStolen && deed.Participants.Count > 0;
+            string thief = knowsThief == true ? OtherParticipantName(deed, npcId) : string.Empty;
+            string line;
+            string fact;
+            if (knowsThief == false)
+            {
+                line = $"누가 내 {itemObject} 훔쳐 갔소.";
+                fact = $"게임 시간 {deed.When:F1}에 {item}을(를) 도둑맞았다. 범인은 모른다";
+            }
+            else if (deed.Kind == NpcDeedKind.CaughtThiefInAct)
+            {
+                line = $"{NpcRumorPhrasing.Josa(thief, "이", "가")} 내 {itemObject} 훔치려다 걸렸소.";
+                fact = $"게임 시간 {deed.When:F1}에 {thief}이(가) {item}을(를) 훔치려다 현장에서 걸렸다. 물건은 지켰다";
+            }
+            else
+            {
+                line = $"{NpcRumorPhrasing.Josa(thief, "이", "가")} 내 {itemObject} 훔쳐 갔소.";
+                fact = $"게임 시간 {deed.When:F1}에 도둑맞은 {item}의 범인이 {thief}였다는 것을 소문으로 알게 됐다";
+            }
+
+            DialogueTopic t = new()
+            {
+                Type = DialogueTopicType.TheftVictim,
+                Category = DialogueTopicCategory.Personal,
+                MinTier = AffinityTier.Stranger,
+                BaseLine = line,
+                CacheVariant = DeedCacheVariant(deed),
+            };
+            t.Facts.Add($"{fact} ({KnowledgeHint(deed.HowKnown)}).");
             return t;
         }
 

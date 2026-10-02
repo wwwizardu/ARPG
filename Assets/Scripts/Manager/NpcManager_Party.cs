@@ -72,6 +72,10 @@ namespace ARPG.Npc
                 if (reason != NpcPartyRejectReason.None)
                 {
                     _partyCounters.Rejections[(int)reason]++;
+                    // 진단용: 적대 탈락 중 원한(GrudgeAgainst, 방향 무관)이 있는 경우 — 나머지는 라이벌만 (P4a 절도 원한 누적 확인)
+                    if (reason == NpcPartyRejectReason.Hostile &&
+                        GetRelation(leaderId, candidateId, NpcRelationType.GrudgeAgainst) != null)
+                        _partyCounters.HostileGrudge++;
                     continue;
                 }
                 _partyCandidateScratch.Add(candidateId);
@@ -237,7 +241,8 @@ namespace ARPG.Npc
                     ? startGameTime
                     : activity.PhaseEndGameTime;
                 _partyCounters.RestCompletedBeforeJoin++;
-                ExchangeRumorsOnRestEnd(entityId, saveData, activity.PhaseStartedGameTime, endTime, worldSeed);
+                // Rest 종료 공용 진입점 (D107). 파티 합류로 정리하는 휴식에서는 절도를 판정하지 않는다 (D100).
+                ResolveRestEnd(entityId, saveData, activity.PhaseStartedGameTime, endTime, worldSeed, false);
             }
             else
             {
@@ -255,6 +260,30 @@ namespace ARPG.Npc
             activity.PhaseStartedGameTime = endTime;
             activity.PhaseEndGameTime = 0f;
             saveData.LastSimGameTime = startGameTime;
+        }
+
+        /// <summary>
+        /// 파티 원정(Hunt·Delve) 결과의 호감도 변화 (§7.5). 생존한 파티원 쌍마다 성공이 하나라도 있으면 +4, 아니면 +1을 주고
+        /// 양쪽에 PartyAffinityChanged Deed를 남긴다(상대별 1건에 누적, D108). 게임(System_NpcSim)과 진단이 같은 시점에 이 메서드를 부른다 (D107).
+        /// </summary>
+        public void ApplyPartyRelationshipOutcome(IReadOnlyList<int> memberIds, IReadOnlyList<NpcHuntOutcome> outcomes,
+            bool hasSuccess, float outcomeGameTime)
+        {
+            int affinityDelta = hasSuccess ? 4 : 1;
+            for (int i = 0; i < memberIds.Count; i++)
+            {
+                if (outcomes[i] == NpcHuntOutcome.Dead)
+                    continue;
+
+                for (int j = i + 1; j < memberIds.Count; j++)
+                {
+                    if (outcomes[j] == NpcHuntOutcome.Dead)
+                        continue;
+                    ModifyAffinity(memberIds[i], memberIds[j], affinityDelta);
+                    AddPartyAffinityDeed(memberIds[i], memberIds[j], affinityDelta, outcomeGameTime);
+                    AddPartyAffinityDeed(memberIds[j], memberIds[i], affinityDelta, outcomeGameTime);
+                }
+            }
         }
 
         private bool IsHostilePartyRelation(int leaderId, int candidateId)
@@ -331,6 +360,7 @@ namespace ARPG.Npc
         public long RestInterrupted;
         public long RestCompletedBeforeJoin;
         public long RumorExchangesSkipped;   // 끊긴 휴식 중 교환 확률 롤이 통과했을 수
+        public long HostileGrudge;           // Hostile 탈락 중 원한이 있는 수 (나머지 = 라이벌만)
         // 수락 롤 구간: 0 = 친구·형제·배우자(호감도 무관), 1 = 호감도 < 0, 2 = 0~49, 3 = 50 이상 (관계 없는 후보)
         public const int AcceptBucketCount = 4;
         public readonly long[] AcceptRolls = new long[AcceptBucketCount];

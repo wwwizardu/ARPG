@@ -91,6 +91,14 @@ namespace ARPG.Npc
         // 마지막 원정 부상의 활동 (Hunt / DungeonDelve). None = 부상 기록 없음.
         [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
         public NpcActivityKind LastWoundActivity;
+        // 마지막 절도 시도 게임시각 (NPC_AMBITION_DESIGN D100 — 도둑 쿨다운 168h, 시도 기준). -1 = 시도 없음.
+        // 같은 마을 쿨다운(72h)은 새 필드 없이 마을 명단의 이 값 최댓값으로 계산한다. 기본값은 저장하지 않는다.
+        [System.ComponentModel.DefaultValue(-1f)]
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public float LastTheftGameTime = -1f;
+        // 도난 단서 (D103): 안 들킨 절도의 피해자에게 남는 {아이템 인스턴스, 실제 범인, 시각}. 최대 3건(넘치면 가장 오래된 것부터 지움).
+        // 범인 사망·14일 경과 때 지운다(Rest 종료 때 정리, 매칭 때도 같은 조건을 본다). 검사 창에 표시하지 않는다. 빈 목록은 저장하지 않는다.
+        public List<NpcTheftClue> TheftClues = new();
 
         [JsonIgnore]
         public Vector2 Position
@@ -178,7 +186,27 @@ namespace ARPG.Npc
             {
                 LastWoundActivity = NpcActivityKind.Hunt;
             }
+            // 절도 시도 시각 보정 (D100). 음수·NaN은 "시도 없음"(-1)으로 본다.
+            if (float.IsNaN(LastTheftGameTime) == true || LastTheftGameTime < 0f)
+                LastTheftGameTime = -1f;
+            // 도난 단서 보정 (D103): 인스턴스 없음·범인 없음은 지우고, 상한(3)을 넘으면 오래된 것(앞쪽)부터 자른다.
+            if (TheftClues == null)
+                TheftClues = new List<NpcTheftClue>();
+            for (int i = TheftClues.Count - 1; i >= 0; i--)
+            {
+                NpcTheftClue clue = TheftClues[i];
+                if (clue == null || clue.ItemInstanceId == 0 || clue.ThiefId < 0)
+                    TheftClues.RemoveAt(i);
+            }
+            if (TheftClues.Count > MaxTheftClues)
+                TheftClues.RemoveRange(0, TheftClues.Count - MaxTheftClues);
         }
+
+        // 도난 단서 상한 (D103)
+        public const int MaxTheftClues = 3;
+
+        // Newtonsoft 조건부 직렬화 규약: 빈 단서 목록은 저장하지 않는다 (로드 때 필드 초기값 = 빈 목록).
+        public bool ShouldSerializeTheftClues() => TheftClues != null && TheftClues.Count > 0;
 
         /// <summary>
         /// 원정 부상 1건을 누적 요약에 반영한다 (D91 ①·②, 가벼운 부상·중상 공통).
@@ -224,12 +252,119 @@ namespace ARPG.Npc
         }
 
         /// <summary>
+        /// 파티 호감도 Deed를 같은 상대와의 기존 Deed에 누적한다 (D108 — 상대별 1건). 있으면 변화량을 더하고 시각을 최근으로 바꾼 뒤
+        /// 목록 끝으로 옮긴다(대화 사연·검사 창은 목록 끝을 가장 최근 사건으로 읽는다). 없으면 false — 호출자가 새 Deed를 추가한다.
+        /// </summary>
+        public bool TryAccumulatePartyAffinityDeed(int otherEntityId, int affinityDelta, float when)
+        {
+            for (int i = Deeds.Count - 1; i >= 0; i--)
+            {
+                NpcDeedEntry deed = Deeds[i];
+                if (deed == null || deed.Kind != NpcDeedKind.PartyAffinityChanged)
+                    continue;
+                if (GetPartyAffinityPartnerId(deed, EntityId) != otherEntityId)
+                    continue;
+
+                deed.AffinityDelta += affinityDelta;
+                if (when > deed.When)
+                    deed.When = when;
+                if (i != Deeds.Count - 1)
+                {
+                    Deeds.RemoveAt(i);
+                    Deeds.Add(deed);
+                }
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 구 세이브의 같은 상대 PartyAffinityChanged Deed 중복을 상대별 1건으로 합친다 (D108). 시각 = 가장 최근, 변화량 = 합.
+        /// 남는 1건은 그 상대의 목록상 마지막 Deed 자리에 있어 "최근 Deed" 순서가 유지된다. 합친 뒤에는 중복이 없으므로
+        /// 다시 불러도 결과가 같다. 스키마 버전은 그대로다. 합쳐서 지운 건수를 돌려준다.
+        /// </summary>
+        public int MergeDuplicatePartyAffinityDeeds()
+        {
+            if (Deeds == null)
+                return 0;
+
+            int partyDeedCount = 0;
+            for (int i = 0; i < Deeds.Count; i++)
+            {
+                if (Deeds[i] != null && Deeds[i].Kind == NpcDeedKind.PartyAffinityChanged)
+                    partyDeedCount++;
+            }
+            if (partyDeedCount < 2)
+                return 0;
+
+            // 뒤에서부터: 상대별로 처음 만나는 Deed(목록상 마지막)를 남기고, 앞쪽 중복의 변화량·시각을 거기에 합친다.
+            Dictionary<int, NpcDeedEntry> keptByPartner = new Dictionary<int, NpcDeedEntry>();
+            int merged = 0;
+            for (int i = Deeds.Count - 1; i >= 0; i--)
+            {
+                NpcDeedEntry deed = Deeds[i];
+                if (deed == null || deed.Kind != NpcDeedKind.PartyAffinityChanged)
+                    continue;
+                int partnerId = GetPartyAffinityPartnerId(deed, EntityId);
+                if (partnerId < 0)
+                    continue;
+                if (keptByPartner.TryGetValue(partnerId, out NpcDeedEntry? kept) == false)
+                {
+                    keptByPartner.Add(partnerId, deed);
+                    continue;
+                }
+                kept.AffinityDelta += deed.AffinityDelta;
+                if (deed.When > kept.When)
+                    kept.When = deed.When;
+                merged++;
+            }
+            if (merged == 0)
+                return 0;
+
+            int write = 0;
+            for (int read = 0; read < Deeds.Count; read++)
+            {
+                NpcDeedEntry deed = Deeds[read];
+                if (deed != null && deed.Kind == NpcDeedKind.PartyAffinityChanged)
+                {
+                    int partnerId = GetPartyAffinityPartnerId(deed, EntityId);
+                    if (partnerId >= 0 && ReferenceEquals(keptByPartner[partnerId], deed) == false)
+                        continue;
+                }
+                Deeds[write] = deed!;
+                write++;
+            }
+            Deeds.RemoveRange(write, Deeds.Count - write);
+            return merged;
+        }
+
+        /// <summary>
+        /// PartyAffinityChanged Deed의 상대 EntityId. 참가자 = 본인 + 상대 (NpcManager.AddPartyAffinityDeed).
+        /// 본인이 참가자에 없거나 상대가 없으면 -1 — 합치기·누적 대상에서 빠진다.
+        /// </summary>
+        private static int GetPartyAffinityPartnerId(NpcDeedEntry deed, int ownerEntityId)
+        {
+            int partnerId = -1;
+            bool hasOwner = false;
+            for (int i = 0; i < deed.Participants.Count; i++)
+            {
+                int participantId = deed.Participants[i];
+                if (participantId == ownerEntityId)
+                    hasOwner = true;
+                else if (partnerId < 0)
+                    partnerId = participantId;
+            }
+            return hasOwner == true ? partnerId : -1;
+        }
+
+        /// <summary>
         /// 로드 직후 ItemData 내부 테이블 참조 복원. PlayerData.LoadCompleted와 동일 패턴.
         /// </summary>
         public void OnLoadCompleted()
         {
             EnsureSlotsInitialized();
             MigrateLegacyWoundedDeeds();
+            MergeDuplicatePartyAffinityDeeds();
 
             for (int i = 0; i < InventoryEquip.Length; i++)
                 InventoryEquip[i]?.OnLoadCompleted();
@@ -269,6 +404,28 @@ namespace ARPG.Npc
             unequippedItem = InventoryEquip[(int)slot];
             InventoryEquip[(int)slot] = null;
             return true;
+        }
+    }
+
+    /// <summary>
+    /// 도난 단서 1건 (NPC_AMBITION_DESIGN D103). 안 들킨 절도의 피해자가 가진다 — 피해자는 범인을 모르지만, 그 인스턴스를 가리키는
+    /// ItemOwner·ItemSold 소문을 받아들였고 소문 주체가 이 범인이면 그때 발각된다. 세 필드 모두 항상 값이 있다.
+    /// </summary>
+    [Serializable]
+    public class NpcTheftClue
+    {
+        public int ItemInstanceId;
+        public int ThiefId = -1;
+        // 절도 시각 (14일 경과 판정·Betrayal 소문의 사건 시각)
+        public float When;
+
+        public NpcTheftClue() { }
+
+        public NpcTheftClue(int itemInstanceId, int thiefId, float when)
+        {
+            ItemInstanceId = itemInstanceId;
+            ThiefId = thiefId;
+            When = when;
         }
     }
 

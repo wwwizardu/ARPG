@@ -14,6 +14,7 @@ namespace ARPG.Npc
     /// - 모든 소문은 사실이다. 대상이 사라진 소문은 저장된 채 남을 수 있지만, 노출·사용 직전 IsRumorValid가 항상 걸러낸다 (D72).
     ///   NPC 쪽 사건(NPC 던전 완료·사망·장비 교체)은 그 마을 명단의 소문을 즉시 정리하고, Rest 종료 때 자기 목록을 정리한다.
     /// - 소문은 소속 마을 안에서만 퍼진다 (D75). 그래서 사건 정리는 그 마을 명단만 훑는다.
+    /// - P4b: 판매(ItemSold)·배신(Betrayal) 소문의 생성과 늦은 발각은 NpcManager_Theft가 맡고, 여기서는 유효성·같은 대상·교환만 다룬다.
     /// - 상태는 전부 NpcSaveData.Rumors에 있다. 이 파일이 가진 인스턴스 필드는 휘발성 진단 카운터와 매번 비우는 스크래치 버퍼뿐이다.
     /// </summary>
     public partial class NpcManager
@@ -47,7 +48,8 @@ namespace ARPG.Npc
 
         /// <summary>
         /// 소문의 대상이 지금도 존재하는가 (D51·D72 정본). DungeonInfo = 슬롯 현재 세대가 같음,
-        /// ItemOwner = 소유자가 살아 있고 그 장비 슬롯에 같은 아이템 인스턴스가 있음.
+        /// ItemOwner = 소유자가 살아 있고 그 장비 슬롯에 같은 아이템 인스턴스가 있음,
+        /// ItemSold = 판매자가 살아 있음(이미 일어난 판매라 뒤집히지 않음, D104), Betrayal = 가해자·피해자 둘 다 살아 있음(D105).
         /// </summary>
         public bool IsRumorValid(NpcRumor? rumor)
         {
@@ -62,9 +64,19 @@ namespace ARPG.Npc
                            generation == rumor.Generation;
                 case NpcRumorKind.ItemOwner:
                     return TryGetRumorItem(rumor, out _) == true;
+                case NpcRumorKind.ItemSold:
+                    return IsLivingRumorNpc(rumor.SubjectNpcId) == true;
+                case NpcRumorKind.Betrayal:
+                    return IsLivingRumorNpc(rumor.SubjectNpcId) == true && IsLivingRumorNpc(rumor.VictimNpcId) == true;
                 default:
                     return false;
             }
+        }
+
+        private bool IsLivingRumorNpc(int entityId)
+        {
+            return entityId >= 0 && _npcSaveDict.TryGetValue(entityId, out NpcSaveData? npc) == true &&
+                   npc.Condition != CharacterConditions.Dead && npc.Activity.Phase != NpcActivityPhase.Dead;
         }
 
         /// <summary>ItemOwner 소문이 가리키는 아이템(유효할 때만). 표시용 이름·ItemId는 여기서 읽는다.</summary>
@@ -282,8 +294,8 @@ namespace ARPG.Npc
             RumorCreatedObserver?.Invoke(entityId, rumor);
         }
 
-        /// <summary>사망 뒤처리 (D72): 본인 소문을 비우고, 이 NPC가 소유자인 ItemOwner 소문을 마을 명단에서 지운다.
-        /// Condition을 Dead로 바꾼 뒤 호출해야 한다.</summary>
+        /// <summary>사망 뒤처리 (D72): 본인 소문을 비우고, 이 NPC 때문에 무효가 된 소문(소유자인 ItemOwner, 판매자인 ItemSold,
+        /// 가해자 또는 피해자인 Betrayal — D104·D105)을 마을 명단에서 지운다. Condition을 Dead로 바꾼 뒤 호출해야 한다.</summary>
         public void PurgeRumorsOnNpcDeath(int entityId, NpcSaveData saveData)
         {
             saveData.Rumors.Clear();
@@ -350,7 +362,10 @@ namespace ARPG.Npc
             return NpcRumorAddResult.AddedWithEviction;
         }
 
-        /// <summary>같은 대상인가: DungeonInfo = (마을, 슬롯), ItemOwner = (소유자, 장비 슬롯).</summary>
+        /// <summary>
+        /// 같은 대상인가: DungeonInfo = (마을, 슬롯), ItemOwner = (소유자, 장비 슬롯), ItemSold = (판매자, 인스턴스),
+        /// Betrayal = (가해자, 피해자, 사건 시각).
+        /// </summary>
         public static bool IsSameRumorTarget(NpcRumor a, NpcRumor b)
         {
             if (a.Kind != b.Kind)
@@ -359,8 +374,29 @@ namespace ARPG.Npc
             {
                 NpcRumorKind.DungeonInfo => a.VillageId == b.VillageId && a.SlotIndex == b.SlotIndex,
                 NpcRumorKind.ItemOwner => a.SubjectNpcId == b.SubjectNpcId && a.EquipSlot == b.EquipSlot,
+                NpcRumorKind.ItemSold => a.SubjectNpcId == b.SubjectNpcId && a.ItemInstanceId == b.ItemInstanceId,
+                NpcRumorKind.Betrayal => a.SubjectNpcId == b.SubjectNpcId && a.VictimNpcId == b.VictimNpcId &&
+                                         a.EventGameTime == b.EventGameTime,
                 _ => false,
             };
+        }
+
+        // ================= Rest 종료 공용 진입점 (D107) =================
+
+        /// <summary>
+        /// Rest 정상 종료 처리의 공용 진입점 (D107). 게임(System_NpcSim)·파티 합류 경로(D90 ①)·진단이 모두 이것을 부른다.
+        /// 자기 도난 단서 정리(D103) → 소문 교환(D74, 받아들인 소문이 단서와 맞으면 늦은 발각) → 절도 판정(D100, NpcManager_Theft) 1회.
+        /// allowTheft가 false면(파티 합류 경로) 절도는 하지 않는다 (단서 정리·교환은 한다).
+        /// 상태 전이(Kind None 등)는 호출자가 이어서 한다 — RNG가 Rest 시작 시각 기준이라 상태를 바꾸기 전에 불러야 한다.
+        /// </summary>
+        public void ResolveRestEnd(int entityId, NpcSaveData saveData, float restStartGameTime, float gameTime,
+            int worldSeed, bool allowTheft)
+        {
+            if (saveData.TheftClues.Count > 0)
+                PruneTheftClues(saveData, gameTime);
+            ExchangeRumorsOnRestEnd(entityId, saveData, restStartGameTime, gameTime, worldSeed);
+            if (allowTheft == true)
+                ResolveTheftOnRestEnd(entityId, saveData, restStartGameTime, gameTime, worldSeed);
         }
 
         // ================= 교환 (Rest 종료, §7.4, D74) =================
@@ -368,9 +404,9 @@ namespace ARPG.Npc
         /// <summary>
         /// Rest 종료 시점 1회 (D74): 자기 목록 정리 → 친화력 확률로 교환 여부 → 같은 마을 대기 NPC 1명(친화력이 높으면 가끔 2명)과
         /// 소문을 1개씩 주고받는다. 받을지는 받는 쪽 호기심으로 굴린다. 호감도·관계는 바꾸지 않는다.
-        /// 결정론 RNG(Rest 중이던 NPC, Rest 시작 시각, worldSeed, salt 120~125).
+        /// 결정론 RNG(Rest 중이던 NPC, Rest 시작 시각, worldSeed, salt 120~125). ResolveRestEnd를 거쳐서만 부른다.
         /// </summary>
-        public void ExchangeRumorsOnRestEnd(int entityId, NpcSaveData saveData, float restStartGameTime, float gameTime,
+        private void ExchangeRumorsOnRestEnd(int entityId, NpcSaveData saveData, float restStartGameTime, float gameTime,
             int worldSeed)
         {
             _rumorCounters.RestEnds++;
@@ -462,7 +498,11 @@ namespace ARPG.Npc
             return best;
         }
 
-        /// <summary>건네받은 소문을 복사해 보관한다 (출처 = 준 NPC, Hops + 1, 확인 표시 해제). 받아들였으면 true.</summary>
+        /// <summary>
+        /// 건네받은 소문을 복사해 보관한다 (출처 = 준 NPC, Hops + 1, 확인 표시 해제). 받아들였으면 true.
+        /// 받아들인 소문이 ItemOwner·ItemSold이고 받는 쪽의 도난 단서와 맞으면(같은 인스턴스, 주체 = 실제 범인) 그 자리에서 늦은 발각이다
+        /// (D103 — 소문 교환 도중 관계가 바뀌는 D74의 예외. RNG 없음).
+        /// </summary>
         public bool ReceiveRumor(NpcSaveData receiver, NpcRumor source, int giverId, float now)
         {
             NpcRumor copy = source.Clone();
@@ -477,6 +517,13 @@ namespace ARPG.Npc
             _rumorCounters.Accepted++;
             int hopIndex = copy.Hops >= 4 ? 3 : Math.Max(0, copy.Hops - 1);
             _rumorCounters.ReceivedByHops[hopIndex]++;
+            if (copy.Kind == NpcRumorKind.ItemSold)
+                _rumorCounters.AcceptedItemSold++;
+            else if (copy.Kind == NpcRumorKind.Betrayal)
+                _rumorCounters.AcceptedBetrayal++;
+
+            if ((copy.Kind == NpcRumorKind.ItemOwner || copy.Kind == NpcRumorKind.ItemSold) && receiver.TheftClues.Count > 0)
+                TryDiscoverTheftFromRumor(receiver, copy, now);
             return true;
         }
 

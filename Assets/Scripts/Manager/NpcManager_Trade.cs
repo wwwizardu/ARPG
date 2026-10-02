@@ -183,6 +183,8 @@ namespace ARPG.Npc
                 Debug.Log($"[NpcAmbition] Trade Sell npc={entityId} v={villageId} item={DescribeItem(item)} price={price} " +
                           $"npcGold={npcGoldBefore}->{saveData.Gold} " +
                           $"villageGold={villageGoldBefore}->{AR.s.Village.GetVillageGold(villageId)} consigned={consigned}");
+                // 훔친 물건이면 판매 소문 (D104, NpcManager_Theft). 일반 판매는 아무것도 하지 않는다.
+                NotifyNpcItemSold(entityId, saveData, villageId, item, AR.s.Time.CurrentGameTime);
             }
         }
 

@@ -106,10 +106,10 @@ namespace ARPG.Systems
 
                 if (activity.Kind == NpcActivityKind.Rest)
                 {
-                    // Rest는 보상 없는 시간 소모 활동이다. 종료 시점에 같은 마을 대기 NPC와 소문을 확률적으로 교환한다
-                    // (NPC_AMBITION_DESIGN §7.4, D74). RNG는 Rest 시작 시각 기준이라 상태를 바꾸기 전에 부른다.
-                    AR.s.Npc.ExchangeRumorsOnRestEnd(entityId, saveData, activity.PhaseStartedGameTime, transitionTime,
-                        worldSeed);
+                    // Rest는 보상 없는 시간 소모 활동이다. 종료 처리(소문 교환 D74 등)는 공용 진입점이 맡는다 (D107).
+                    // RNG는 Rest 시작 시각 기준이라 상태를 바꾸기 전에 부른다.
+                    AR.s.Npc.ResolveRestEnd(entityId, saveData, activity.PhaseStartedGameTime, transitionTime,
+                        worldSeed, true);
                     activity.Kind = NpcActivityKind.None;
                     activity.TargetKey = string.Empty;
                     activity.PhaseStartedGameTime = transitionTime;
@@ -456,7 +456,7 @@ namespace ARPG.Systems
                     NpcActivityResolver.PartyHuntLootSaltBase + i, outcomeGameTime);
             }
 
-            ApplyPartyRelationshipOutcome(memberIds, outcomes, successCount > 0, outcomeGameTime);
+            AR.s.Npc.ApplyPartyRelationshipOutcome(memberIds, outcomes, successCount > 0, outcomeGameTime);
             for (int i = 0; i < members.Count; i++)
             {
                 int memberId = memberIds[i];
@@ -467,26 +467,6 @@ namespace ARPG.Systems
             }
 
             NotifyPartyHuntOutcome(party, successCount, survivorCount, foodYield);
-        }
-
-        private static void ApplyPartyRelationshipOutcome(IReadOnlyList<int> memberIds,
-            IReadOnlyList<NpcHuntOutcome> outcomes, bool hasSuccess, float outcomeGameTime)
-        {
-            int affinityDelta = hasSuccess ? 4 : 1;
-            for (int i = 0; i < memberIds.Count; i++)
-            {
-                if (outcomes[i] == NpcHuntOutcome.Dead)
-                    continue;
-
-                for (int j = i + 1; j < memberIds.Count; j++)
-                {
-                    if (outcomes[j] == NpcHuntOutcome.Dead)
-                        continue;
-                    AR.s.Npc.ModifyAffinity(memberIds[i], memberIds[j], affinityDelta);
-                    AR.s.Npc.AddPartyAffinityDeed(memberIds[i], memberIds[j], affinityDelta, outcomeGameTime);
-                    AR.s.Npc.AddPartyAffinityDeed(memberIds[j], memberIds[i], affinityDelta, outcomeGameTime);
-                }
-            }
         }
 
         private static void NotifyPartyHuntOutcome(NpcPartyState party, int successCount, int survivorCount,
@@ -591,8 +571,9 @@ namespace ARPG.Systems
             if (report == null)
                 return;
 
-            // 파티 호감도 변화는 Hunt와 같은 규칙
-            ApplyPartyRelationshipOutcome(report.MemberIds, report.Outcomes, report.SuccessCount > 0, outcomeGameTime);
+            // 파티 호감도 변화는 Hunt와 같은 규칙 (진단과 같은 공용 메서드, D107)
+            AR.s.Npc.ApplyPartyRelationshipOutcome(report.MemberIds, report.Outcomes, report.SuccessCount > 0,
+                outcomeGameTime);
             int survivorCount = 0;
             for (int i = 0; i < report.MemberIds.Count; i++)
             {

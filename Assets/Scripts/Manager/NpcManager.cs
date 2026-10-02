@@ -98,6 +98,7 @@ namespace ARPG.Npc
             ResetAmbitionRuntime();
             ResetRumorRuntime();
             ResetPartyRuntime();
+            ResetTheftRuntime();
             _nameBag.Clear();
             _nameBagCursor = 0;
             _usedNames.Clear();
@@ -1387,13 +1388,19 @@ namespace ARPG.Npc
 
         /// <summary>
         /// 관계 추가. 같은 엔트리를 From/To 양쪽 인덱스에 등록(양방향 조회). 정본은 매니저+WorldData.
-        /// 같은 (From,To,Type) 중복은 무시. self 관계(a==b)는 무시.
+        /// 두 NPC 사이에 같은 유형이 이미 있으면(방향 무관) 무시. self 관계(a==b)는 무시.
+        /// 예외: 원한(GrudgeAgainst)은 방향까지 비교한다 (D102) — B→A 원한이 있어도 A→B 원한은 따로 생긴다.
         /// </summary>
         public void AddRelation(int fromEntityId, int toEntityId, NpcRelationType type, int originEventId = -1)
         {
             if (fromEntityId == toEntityId)
                 return;
-            if (GetRelation(fromEntityId, toEntityId, type) != null)
+            if (type == NpcRelationType.GrudgeAgainst)
+            {
+                if (HasDirectedRelation(fromEntityId, toEntityId, type) == true)
+                    return;
+            }
+            else if (GetRelation(fromEntityId, toEntityId, type) != null)
                 return;
 
             NpcRelationEntry entry = new NpcRelationEntry(fromEntityId, toEntityId, type, originEventId);
@@ -1431,6 +1438,21 @@ namespace ARPG.Npc
                     return e;
             }
             return null;
+        }
+
+        /// <summary>정확히 From → To 방향의 특정 유형 관계가 있는가. 원한 중복 검사(AddRelation, D102)용.</summary>
+        public bool HasDirectedRelation(int fromEntityId, int toEntityId, NpcRelationType type)
+        {
+            if (fromEntityId == toEntityId || _npcRelations.TryGetValue(fromEntityId, out var list) == false)
+                return false;
+
+            for (int i = 0; i < list.Count; i++)
+            {
+                NpcRelationEntry e = list[i];
+                if (e.Type == type && e.FromEntityId == fromEntityId && e.ToEntityId == toEntityId)
+                    return true;
+            }
+            return false;
         }
 
         /// <summary>
@@ -1748,7 +1770,8 @@ namespace ARPG.Npc
 
         /// <summary>
         /// NPC 주요 사건 이력에 항목을 추가한다. 이력은 NPC별로 영속한다.
-        /// 예외: D91 이전의 원정 부상(Wounded) Deed는 로드 때 누적 부상 요약으로 합치고 지운다 — 목록 인덱스를 식별자로 쓰지 말 것.
+        /// 예외: D91 이전의 원정 부상(Wounded) Deed는 로드 때 누적 부상 요약으로 합치고 지운다. 파티 호감도 Deed는 상대별 1건으로
+        /// 갱신·이동하고 로드 때 중복을 합친다(D108) — 목록 인덱스를 식별자로 쓰지 말 것.
         /// </summary>
         public void AddDeed(int entityId, NpcDeedKind kind, int refEventId,
             NpcKnowledgeLevel howKnown, float when, int participantId)
@@ -1762,10 +1785,20 @@ namespace ARPG.Npc
             _narrative.InvalidateDialogues(entityId);   // 새 사건 → 낡은 대화 캐시 폐기 (NARRATIVE_DIALOGUE_VARIETY §5 P1-4)
         }
 
+        /// <summary>
+        /// 파티 원정 호감도 Deed (D108 — 같은 상대와는 NPC마다 1건). 기존 Deed가 있으면 변화량을 그 상대와의 누적으로 더하고
+        /// 시각을 최근으로 바꿔 목록 끝으로 옮긴다. 없으면 새로 추가한다. 시각이 바뀌므로 대화 캐시(사건 해시)도 함께 폐기한다.
+        /// </summary>
         public void AddPartyAffinityDeed(int entityId, int otherEntityId, int affinityDelta, float when)
         {
             if (affinityDelta == 0 || _npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
                 return;
+
+            if (saveData.TryAccumulatePartyAffinityDeed(otherEntityId, affinityDelta, when) == true)
+            {
+                _narrative.InvalidateDialogues(entityId);
+                return;
+            }
 
             NpcDeedEntry entry = new NpcDeedEntry(NpcDeedKind.PartyAffinityChanged, -1,
                 NpcKnowledgeLevel.Did, when)

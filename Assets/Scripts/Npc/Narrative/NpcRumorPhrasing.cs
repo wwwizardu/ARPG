@@ -53,6 +53,16 @@ namespace ARPG.Npc.Narrative
             return AR.s.Npc.GetDisplayName(entityId);
         }
 
+        /// <summary>
+        /// 판매·배신 소문의 아이템 이름 (P4b, D104·D105): 소문에 남긴 테이블 Id로 읽는다 (물건이 이미 주인을 떠났을 수 있다).
+        /// 없으면 "물건".
+        /// </summary>
+        public static string ItemName(int itemId)
+        {
+            string? name = itemId >= 0 ? AR.s.Data?.GetItem(itemId)?.Name : null;
+            return string.IsNullOrEmpty(name) == false ? name! : "물건";
+        }
+
         /// <summary>이 소문을 말하는 쪽이 이름을 댈 수 있는 출처인가: 한 다리(Hops 1)로 들었고 출처 NPC가 아직 세이브에 있음.</summary>
         public static bool HasNamedSource(NpcRumor rumor)
         {

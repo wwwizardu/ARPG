@@ -119,38 +119,49 @@ namespace ARPG.Npc
         }
 
         /// <summary>
-        /// Hunt 성공 전리품을 NPC 개인 인벤토리에 넣는다 (D35). 장비면 먼저 자동 장착을 평가한다.
-        /// 실체화 중이면 장착은 비실체화 시점으로 미루고 인벤토리에만 넣는다.
+        /// Hunt·Delve 성공 전리품을 NPC 개인 인벤토리에 넣는다 (D35). 규칙은 GrantAcquiredItem과 같다 (장착 출처 "Loot").
         /// </summary>
         public void GrantHuntLoot(int entityId, NpcSaveData saveData, ItemData loot, float gameTime)
         {
-            if (loot == null)
-                return;
+            GrantAcquiredItem(entityId, saveData, loot, gameTime, "Loot");
+        }
+
+        /// <summary>
+        /// 새로 얻은 아이템을 전리품 장착 규칙(D45 문턱·개인 상한)으로 받는다. 전리품(Hunt·Delve)과 절도(D101)가 같이 쓴다.
+        /// 장비면 먼저 자동 장착을 평가하고, 장착하지 않으면 개인 인벤토리에 넣는다(가득 차면 가치 최저 버림, D35).
+        /// 실체화 중이면 장착은 비실체화 시점으로 미루고 인벤토리에만 넣는다(지연 장착은 출처 "Loot"로 기록된다).
+        /// source는 진단 로그 구분용("Loot"·"Theft"). 지금 장착했으면 true.
+        /// </summary>
+        public bool GrantAcquiredItem(int entityId, NpcSaveData saveData, ItemData item, float gameTime, string source)
+        {
+            if (item == null)
+                return false;
 
             saveData.EnsureSlotsInitialized();
             EnsureAmbitionInitialized(entityId, saveData);
 
             if (_logAmbitionLoot == true)
-                Debug.Log($"[NpcAmbition] Loot npc={entityId} item={DescribeItem(loot)} t={gameTime:F2}");
+                Debug.Log($"[NpcAmbition] {source} npc={entityId} item={DescribeItem(item)} t={gameTime:F2}");
 
             bool isMaterialized = saveData.IsActive == true || saveData.IsSpawning == true;
-            if (isMaterialized == false && TryAutoEquipLoot(entityId, saveData, loot, gameTime) == true)
-                return;
+            if (isMaterialized == false && TryAutoEquipLoot(entityId, saveData, item, gameTime, source) == true)
+                return true;
 
-            StoreInInventory(entityId, saveData, loot);
+            StoreInInventory(entityId, saveData, item);
 
-            if (isMaterialized == true && loot.Equipment != null &&
-                EvaluateBestUpgrade(entityId, saveData, loot, out _, out _, out _) == true &&
-                ContainsInventoryItem(saveData, loot.ItemInstanceId) == true)
+            if (isMaterialized == true && item.Equipment != null &&
+                EvaluateBestUpgrade(entityId, saveData, item, out _, out _, out _) == true &&
+                ContainsInventoryItem(saveData, item.ItemInstanceId) == true)
             {
                 if (_deferredLootUpgradeItemIds.TryGetValue(entityId, out List<int>? pending) == false)
                 {
                     pending = new List<int>();
                     _deferredLootUpgradeItemIds.Add(entityId, pending);
                 }
-                pending.Add(loot.ItemInstanceId);
-                Debug.Log($"[NpcAmbition] UpgradeDeferred npc={entityId} item={DescribeItem(loot)} (materialized)");
+                pending.Add(item.ItemInstanceId);
+                Debug.Log($"[NpcAmbition] UpgradeDeferred npc={entityId} item={DescribeItem(item)} (materialized)");
             }
+            return false;
         }
 
         /// <summary>
@@ -218,7 +229,7 @@ namespace ARPG.Npc
 
                 // 인벤토리에서 먼저 꺼낸 뒤 장착을 시도한다. 실패하면 같은 칸에 되돌린다.
                 saveData.Inventory[slotIndex] = null;
-                if (TryAutoEquipLoot(entityId, saveData, item, now) == false)
+                if (TryAutoEquipLoot(entityId, saveData, item, now, "Loot") == false)
                     saveData.Inventory[slotIndex] = item;
             }
         }
@@ -226,14 +237,14 @@ namespace ARPG.Npc
         /// <summary>
         /// 장비 전리품을 문턱·상한 규칙으로 평가해 장착한다. 장착하면 벗은 장비는 인벤토리로 간다.
         /// </summary>
-        private bool TryAutoEquipLoot(int entityId, NpcSaveData saveData, ItemData loot, float gameTime)
+        private bool TryAutoEquipLoot(int entityId, NpcSaveData saveData, ItemData loot, float gameTime, string source)
         {
             if (loot.Equipment == null)
                 return false;
             if (EvaluateBestUpgrade(entityId, saveData, loot, out GE.EquipSlotType slot, out float currentPower,
                     out float newPower) == false)
                 return false;
-            return ApplyUpgrade(entityId, saveData, loot, slot, currentPower, newPower, gameTime, "Loot");
+            return ApplyUpgrade(entityId, saveData, loot, slot, currentPower, newPower, gameTime, source);
         }
 
         /// <summary>
@@ -350,7 +361,8 @@ namespace ARPG.Npc
                           $"(replaced by {DescribeItem(item)})");
         }
 
-        private static int GetItemValue(ItemData item)
+        /// <summary>아이템 가치 = BasePrice × 수량 (가방 버림 D35·소문 가치·절도 가중치 D99가 같은 값을 쓴다).</summary>
+        public static int GetItemValue(ItemData item)
         {
             ItemTable? table = item.Table ?? AR.s.Data.GetItem(item.Id);
             int basePrice = table != null ? table.BasePrice : 0;
