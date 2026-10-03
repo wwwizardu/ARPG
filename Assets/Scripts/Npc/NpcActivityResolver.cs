@@ -227,10 +227,23 @@ namespace ARPG.Npc
         // 180 소멸액 소수 부분의 확률 반올림 1회. 181~189는 골드 흐름 예비.
         public const int LivingExpenseBurnSalt = 180;
 
+        // 이주 RNG salt (NPC_AMBITION_DESIGN D140). 소유자 = NPC EntityId, 시각 = 이주 시작 시각.
+        // 190 목적지 마을 안 도착 좌표(각도 → 거리). 191~199는 이주 예비.
+        public const int RelocationArrivalSalt = 190;
+
         /// <summary>원정형 활동(Venturing + 왕복 경로 표현)인가. Hunt와 DungeonDelve.</summary>
         public static bool IsExpedition(NpcActivityKind kind)
         {
             return kind == NpcActivityKind.Hunt || kind == NpcActivityKind.DungeonDelve;
+        }
+
+        /// <summary>
+        /// analytic 이동 경로를 쓰는 활동인가. 원정 + 이주(편도). 위치 갱신·화면 안 일시정지·경로 재계산이 이것을 본다.
+        /// 파티·원정 판정은 IsExpedition을 쓴다 (이주는 파티를 만들지 않는다).
+        /// </summary>
+        public static bool HasTravelPath(NpcActivityKind kind)
+        {
+            return IsExpedition(kind) || kind == NpcActivityKind.Relocate;
         }
 
         /// <summary>

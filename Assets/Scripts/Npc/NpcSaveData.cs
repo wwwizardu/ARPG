@@ -99,6 +99,11 @@ namespace ARPG.Npc
         // 도난 단서 (D103): 안 들킨 절도의 피해자에게 남는 {아이템 인스턴스, 실제 범인, 시각}. 최대 3건(넘치면 가장 오래된 것부터 지움).
         // 범인 사망·14일 경과 때 지운다(Rest 종료 때 정리, 매칭 때도 같은 조건을 본다). 검사 창에 표시하지 않는다. 빈 목록은 저장하지 않는다.
         public List<NpcTheftClue> TheftClues = new();
+        // 사라진 터(폐허·합병) 소속으로 처음 확인된 게임시각 (NPC_AMBITION_DESIGN D139 — 체류 기한 72h의 기준).
+        // -1 = 터 소속 아님/아직 확인 전. 기존 세이브는 로드 뒤 첫 활동 선택 때 그 시각으로 정한다. 이주 도착 때 -1로 되돌린다.
+        [System.ComponentModel.DefaultValue(-1f)]
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public float AbandonedSiteSinceGameTime = -1f;
 
         [JsonIgnore]
         public Vector2 Position
@@ -189,6 +194,9 @@ namespace ARPG.Npc
             // 절도 시도 시각 보정 (D100). 음수·NaN은 "시도 없음"(-1)으로 본다.
             if (float.IsNaN(LastTheftGameTime) == true || LastTheftGameTime < 0f)
                 LastTheftGameTime = -1f;
+            // 터 체류 시작 시각 보정 (D139). 음수·NaN은 "확인 전"(-1)으로 본다.
+            if (float.IsNaN(AbandonedSiteSinceGameTime) == true || AbandonedSiteSinceGameTime < 0f)
+                AbandonedSiteSinceGameTime = -1f;
             // 도난 단서 보정 (D103): 인스턴스 없음·범인 없음은 지우고, 상한(3)을 넘으면 오래된 것(앞쪽)부터 자른다.
             if (TheftClues == null)
                 TheftClues = new List<NpcTheftClue>();

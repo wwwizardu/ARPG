@@ -428,13 +428,13 @@ namespace ARPG.Npc
         /// </summary>
         public void EnsureAllVillagesPopulated()
         {
-            List<VillageData> candidates = CollectPopulationCandidates();
+            List<VillageData> candidates = CollectPopulationCandidates(out int targetVillageCount);
             if (candidates.Count == 0)
                 return;
 
             NpcPopulationState population = AR.s.Data.NpcPopulation;
             if (population.TargetNpcCount < 0)
-                population.TargetNpcCount = DetermineGlobalNpcTarget(candidates.Count);
+                population.TargetNpcCount = DetermineGlobalNpcTarget(targetVillageCount);
 
             bool topUpExistingVillages = population.NeedsImmediateTargetTopUp;
             int[] allocations = AllocateInitialNpcCounts(candidates,
@@ -477,7 +477,7 @@ namespace ARPG.Npc
             if (GetLivingNpcCount() >= population.TargetNpcCount)
                 return;
 
-            List<VillageData> candidates = CollectPopulationCandidates();
+            List<VillageData> candidates = CollectPopulationCandidates(out _);
             if (candidates.Count == 0)
                 return;
 
@@ -518,15 +518,23 @@ namespace ARPG.Npc
             return Mathf.Max(mapSizeTarget, villageDensityTarget);
         }
 
-        private List<VillageData> CollectPopulationCandidates()
+        /// <summary>
+        /// 최초 배분·보충 후보 마을. 사라진 터(폐허·합병)는 빼서 새 NPC가 터에서 태어나지 않게 한다 (NPC_AMBITION_DESIGN D138).
+        /// 전역 목표 인원은 터를 포함한 마을 수로 계산한다 — 골드 밸런스를 맞춘 마을당 밀도를 유지한다 (targetVillageCount).
+        /// </summary>
+        private List<VillageData> CollectPopulationCandidates(out int targetVillageCount)
         {
             List<VillageData> result = new();
+            targetVillageCount = 0;
             IReadOnlyList<VillageData> allVillages = AR.s.Village.GetAllVillages();
             for (int i = 0; i < allVillages.Count; i++)
             {
                 VillageData village = allVillages[i];
                 VillageTable? table = AR.s.Data.GetVillageTable(village.TableId);
                 if (table == null || table.DefaultNpcIds.Count == 0)
+                    continue;
+                targetVillageCount++;
+                if (AR.s.Village.IsAbandonedSite(village) == true)
                     continue;
                 result.Add(village);
             }
@@ -858,8 +866,8 @@ namespace ARPG.Npc
                 AIStateHelper.StopMovement(entityId);
                 return;
             }
-            // 원정(Hunt·DungeonDelve)만 조우 대기로 멈춘다 — Delve도 Hunt와 같은 왕복 경로 표현을 쓴다 (NPC_AMBITION §7.1)
-            if (NpcActivityResolver.IsExpedition(activity.Kind) == false || activity.HasMovementPath == false)
+            // 이동 경로가 있는 활동(원정 Hunt·DungeonDelve, 이주)만 조우 대기로 멈춘다 — 같은 analytic 경로 표현을 쓴다 (NPC_AMBITION §7.1, D140)
+            if (NpcActivityResolver.HasTravelPath(activity.Kind) == false || activity.HasMovementPath == false)
                 return;
             if (activity.PhaseEndGameTime <= AR.s.Time.CurrentGameTime)
                 return;
@@ -872,7 +880,7 @@ namespace ARPG.Npc
         private static void ResumeHuntPathFromCurrentPosition(NpcSaveData saveData, float now)
         {
             NpcActivityState activity = saveData.Activity;
-            if (NpcActivityResolver.IsExpedition(activity.Kind) == false || activity.HasMovementPath == false)
+            if (NpcActivityResolver.HasTravelPath(activity.Kind) == false || activity.HasMovementPath == false)
                 return;
             if (activity.PhaseEndGameTime <= now)
                 return;

@@ -432,6 +432,8 @@ namespace ARPG.UI
                 return "거래 중";
             if (activity.Kind == NpcActivityKind.DungeonDelve)
                 return "던전 원정 중";
+            if (activity.Kind == NpcActivityKind.Relocate)
+                return "이주 중";
             return "대기";
         }
 

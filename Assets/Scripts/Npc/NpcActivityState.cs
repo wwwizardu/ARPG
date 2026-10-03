@@ -31,6 +31,9 @@ namespace ARPG.Npc
         // 던전 원정 (NPC_AMBITION_DESIGN §7.1, D55). 12시간 뒤 종료 시점에 1회 판정. 소속 마을 던전 슬롯을 추상 대상으로만 참조하고
         // 던전 내부 저장 상태(처치·상자)는 바꾸지 않는다. Hunt처럼 Phase=Venturing이며 같은 왕복 경로 표현을 쓴다.
         DungeonDelve = 4,
+        // 사라진 터(폐허·합병)를 떠나 가장 가까운 상점 마을로 옮겨 가는 편도 이동 (NPC_AMBITION_DESIGN D138~D141).
+        // Phase=Venturing, 경로는 Origin→Target(= Return) 편도. TargetKey = 목적지 VillageId. 도착하면 소속이 바뀐다.
+        Relocate = 5,
     }
 
     /// <summary>오프스크린 Hunt 종료 시 단 한 번 결정되는 결과.</summary>

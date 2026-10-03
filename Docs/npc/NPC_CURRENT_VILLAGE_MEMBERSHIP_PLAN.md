@@ -17,6 +17,10 @@
 
 ### 1.1 `VillageId`의 의미
 
+> **개정 (2026-10-03, [NPC_AMBITION_DESIGN.md](NPC_AMBITION_DESIGN.md) D141)**: 이 절의 정의("현재 좌표가 포함된 마을")는 폐기됐다.
+> `VillageId`는 **소속 마을**(상점·치료비·생활비·소문·절도·파티의 기준)이고, 위치 이동으로는 바뀌지 않으며 이주(D138~D140)로만 바뀐다.
+> "지금 서 있는 마을"이 필요한 기능은 위치로 계산한다(별도 저장 필드 없음). 아래 원문과 §1.2·§2.1·§5는 이 개정 전의 계획이다.
+
 `NpcSaveData.VillageId`와 `NpcVillageComponent.VillageId`는 **NPC의 현재 좌표가 포함된 마을 ID**다.
 
 - NPC가 마을 Bounds 안에 있으면 해당 `VillageId`.

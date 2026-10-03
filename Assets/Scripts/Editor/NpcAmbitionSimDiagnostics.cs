@@ -349,6 +349,10 @@ namespace ARPG.EditorTools
             public NpcPartyCounters PartyCounters = new NpcPartyCounters();
             public long SoloHuntJudgments, PartyHuntJudgments, SoloDelveJudgments, PartyDelveJudgments;
             public long SoloHuntStarts, PartyHuntStarts, SoloDelveStarts, PartyDelveStarts;
+            // 사라진 터 강제 이주 (NPC_AMBITION D138~D141): 시작·도착 수, 시작 시점 터 소속 생존 NPC 수
+            public long RelocationStarts, RelocationArrivals;
+            public int AbandonedResidentsAtStart;
+            public float RelocationTravelHours;
             // 매 시간 생존 NPC 상태 표본: StateRest..StateIdle 인덱스
             public readonly long[] StateHours = new long[StateSlotCount];
             public long TotalFoodInflow;
@@ -901,6 +905,7 @@ namespace ARPG.EditorTools
                     GoldStart = VillageResourceSimulation.GetAmount(clone, GlobalEnum.ItemType.Gold),
                 };
             }
+            sim.AbandonedResidentsAtStart = CountAbandonedSiteResidents(sim);
 
             // GOLD_BALANCE: 세계 물가 지수 상태 (라이브 기준값이 없으면 시뮬 시작 세계 Gold가 기준이 된다)
             sim.GoldPrice = CloneJson(AR.s.Data.GoldPrice);
@@ -1160,6 +1165,13 @@ namespace ARPG.EditorTools
                     ResolveSoloDelve(sim, saveData, entityId, transitionTime);
                     continue;
                 }
+                if (activity.Kind == NpcActivityKind.Relocate)
+                {
+                    // System_NpcSim과 같은 이주 도착 공용 메서드 (D140)
+                    sim.RelocationArrivals++;
+                    AR.s.Npc.CompleteRelocation(entityId, saveData, transitionTime);
+                    continue;
+                }
                 SetIdle(saveData, transitionTime);
             }
         }
@@ -1179,6 +1191,13 @@ namespace ARPG.EditorTools
         private static void StartNextActivity(SimContext sim, NpcSaveData saveData, int entityId, float startGameTime)
         {
             bool reserved = AR.s.Npc.IsCompanionReserved(entityId);
+            // System_NpcSim과 같은 순서: 사라진 터 체류 기한이 지났으면 효용 선택 전에 이주를 시작한다 (D139·D140). 선택 비중에는 넣지 않는다.
+            if (reserved == false && AR.s.Npc.TryStartRelocation(entityId, saveData, startGameTime, sim.WorldSeed) == true)
+            {
+                sim.RelocationStarts++;
+                sim.RelocationTravelHours += saveData.Activity.PhaseEndGameTime - startGameTime;
+                return;
+            }
             // 선택 시점의 "유망한 소문" 보유 여부 (Delve 비중 비교용). 같은 입력으로 SelectNextActivity 안에서도 다시 계산된다.
             bool promisingHolder = reserved == false &&
                                    AR.s.Npc.BuildActivityChoiceContext(entityId, saveData, startGameTime).HasPromisingRumor;
@@ -1848,6 +1867,35 @@ namespace ARPG.EditorTools
             sim.LivingBurnAtDayStart = flow.LivingSpendBurned;
         }
 
+        /// <summary>사라진 터(폐허·합병)를 소속 마을로 가진 생존 NPC 수 (NPC_AMBITION D138~D141).</summary>
+        private static int CountAbandonedSiteResidents(SimContext sim)
+        {
+            int count = 0;
+            for (int i = 0; i < sim.NpcIds.Count; i++)
+            {
+                NpcSaveData saveData = sim.Npcs[sim.NpcIds[i]];
+                if (saveData.Condition == CharacterConditions.Dead)
+                    continue;
+                if (sim.Villages.TryGetValue(saveData.VillageId, out VillageData? village) == true &&
+                    AR.s.Village.IsAbandonedSite(village) == true)
+                    count++;
+            }
+            return count;
+        }
+
+        /// <summary>
+        /// 사라진 터 강제 이주 요약 (D139·D140). 체류 기한 72h + 이동(최대 약 9h)이 지나면 터 소속 생존 NPC는 0이어야 한다
+        /// (4일 이상 실행 기준. 화면 안 NPC는 진단에서 모두 화면 밖으로 본다).
+        /// </summary>
+        private static void AppendRelocationSummary(StringBuilder sb, SimContext sim, int days)
+        {
+            int residentsEnd = CountAbandonedSiteResidents(sim);
+            float averageHours = sim.RelocationStarts > 0 ? sim.RelocationTravelHours / sim.RelocationStarts : 0f;
+            string expectation = days >= 4 ? " (4일 이상 실행 — 끝 0이어야 함)" : string.Empty;
+            sb.AppendLine($"이주(사라진 터 → 가장 가까운 상점 마을): 시작 {sim.RelocationStarts} · 도착 {sim.RelocationArrivals} · " +
+                          $"평균 이동 {averageHours:F1}h | 터 소속 생존 NPC 시작 {sim.AbandonedResidentsAtStart} → 끝 {residentsEnd}{expectation}");
+        }
+
         private static int CountLivingInVillage(SimContext sim, VillageData village)
         {
             int count = 0;
@@ -2110,6 +2158,7 @@ namespace ARPG.EditorTools
             AppendRumorSummary(sb, sim, rows, days);
             AppendTopicSummary(sb, sim, days);
             AppendPartySummary(sb, sim, days, first.Living);
+            AppendRelocationSummary(sb, sim, days);
             AppendTheftPrepSummary(sb, sim, days);
             AppendTheftSummary(sb, sim, days);
             AppendTheftLateSummary(sb, sim, days);

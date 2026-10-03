@@ -139,6 +139,13 @@ namespace ARPG.Systems
                     continue;
                 }
 
+                if (activity.Kind == NpcActivityKind.Relocate)
+                {
+                    // 이주 도착 (D140): 소속·마을 명단을 목적지로 옮긴다. 진단과 같은 공용 메서드.
+                    AR.s.Npc.CompleteRelocation(entityId, saveData, transitionTime);
+                    continue;
+                }
+
                 activity.Phase = NpcActivityPhase.Idle;
                 activity.Kind = NpcActivityKind.None;
                 activity.TargetKey = string.Empty;
@@ -151,9 +158,14 @@ namespace ARPG.Systems
         private static void StartNextActivity(NpcSaveData saveData, int entityId, float startGameTime, int worldSeed)
         {
             NpcActivityState activity = saveData.Activity;
+            bool companionReserved = AR.s.Npc.IsCompanionReserved(entityId);
+            // 사라진 터 소속이고 체류 기한(72h)이 지났으면 효용 선택 대신 가장 가까운 상점 마을로 이주한다 (D139·D140).
+            if (companionReserved == false &&
+                AR.s.Npc.TryStartRelocation(entityId, saveData, startGameTime, worldSeed) == true)
+                return;
             // 동행 예약 NPC는 원정(Hunt)을 떠나지 않도록 Rest만 고른다 (NPC_COMBAT_DESIGN §4.5)
             // 그 밖에는 필요·야망·성향·기회로 Rest/Hunt/Trade 중 하나를 고른다 (NPC_AMBITION_DESIGN §6)
-            NpcActivityKind kind = AR.s.Npc.IsCompanionReserved(entityId) == true
+            NpcActivityKind kind = companionReserved == true
                 ? NpcActivityKind.Rest
                 : AR.s.Npc.SelectNextActivity(entityId, saveData, startGameTime, worldSeed);
 
@@ -357,7 +369,7 @@ namespace ARPG.Systems
         private static void UpdateAnalyticPosition(NpcSaveData saveData, int entityId, float now)
         {
             NpcActivityState activity = saveData.Activity;
-            if (NpcActivityResolver.IsExpedition(activity.Kind) == false || activity.HasMovementPath == false)
+            if (NpcActivityResolver.HasTravelPath(activity.Kind) == false || activity.HasMovementPath == false)
                 return;
 
             float evaluationTime = now < activity.PhaseEndGameTime ? now : activity.PhaseEndGameTime;

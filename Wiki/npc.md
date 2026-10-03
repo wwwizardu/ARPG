@@ -88,6 +88,7 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 | 소문·DungeonDelve·NPC 던전 완료(P2) | AMBITION §5.2·§7.1·§7.4 | `NpcManager_Delve`, `DungeonManager_NpcCompletion`, 소문 교환 | ✅ 구현 [src: Assets/Scripts/Manager/NpcManager_Delve.cs, Assets/Scripts/Dungeon/DungeonManager_NpcCompletion.cs] |
 | 파티 자동 구성 개정·부상 등급 | AMBITION D85~D96 | 모집·수락 확률, 중상 10%·부상 요약 | ✅ 구현 [src: Docs/npc/NPC_AMBITION_DESIGN.md §2] |
 | NPC 간 절도(P4) | AMBITION §7.6, D98~D115 | `NpcManager_Theft` — 현장 적발·단서·판매 소문 늦은 발각 | ✅ 구현. 훔친 장비는 장착하지 않음(D119) [src: Assets/Scripts/Manager/NpcManager_Theft.cs] |
+| 사라진 터 강제 이주(NS4 일부) | AMBITION D138~D141 | `NpcManager_Relocation` — 터(폐허·합병) 소속 NPC가 72h 뒤 가장 가까운 상점 마을로 `Relocate`, 배분·보충에서 터 제외. `VillageId` = 소속 마을 | ✅ 구현(2026-10-03). 자발적 이주·거주 이력은 후속 [src: Assets/Scripts/Manager/NpcManager_Relocation.cs] |
 | 협력·배신(P3) | AMBITION §7.5–7.6·§14 | — | ⏸ 보류 [src: Docs/npc/NPC_AMBITION_DESIGN.md §14] |
 | 실전투·동행(던전 전용)·드랍 줍기·결투 | NPC_COMBAT B1~B5 | `System_AI_Perception` 조건부 인식, `NpcManager_Companion`·`NpcManager_Duel`·`NpcManager_Pickup`, `System_Duel` | ✅ 구현(드랍 줍기는 디버그 호출만). 도주·NPC 간 결투 화면 장면은 보류 [src: Docs/npc/NPC_COMBAT_DESIGN.md 상태, Assets/Scripts/Manager/NpcManager_Duel.cs] |
 | 전역 NPC 총량·점진 보충 | NPC_SIMULATION D9 | `NpcPopulationState`, `NpcManager.EnsureAllVillagesPopulated`/`TryReplenishGlobalPopulation` — 대형 맵 최소 1,200명, 마을당 8명 목표·최소 5명 | ✅ 구현. 300개 마을 기준 2,400명 [src: Docs/npc/NPC_SIMULATION_DESIGN.md D9, Assets/Scripts/Npc/NpcPopulationState.cs, Assets/Scripts/Manager/NpcManager.cs] |

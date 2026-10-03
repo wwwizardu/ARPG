@@ -29,6 +29,44 @@ namespace ARPG.Village
         public const int MaxAdventurerConsignmentSlots = 2;
 
         /// <summary>
+        /// 사라진 터인가 — 연결된 연대기 정착지가 폐허·합병(운영하지 않는 Fate)인 마을 (NPC_AMBITION_DESIGN D138).
+        /// 손제작 마을(SettlementId &lt; 0, BaseTown)은 정착지가 아니므로 터가 아니다.
+        /// </summary>
+        public bool IsAbandonedSite(VillageData village)
+        {
+            if (village.SettlementId < 0)
+                return false;
+            if (AR.s.History.TryGetLiveSettlement(village.SettlementId, out ARPG.History.SettlementLiveState settlement) == false)
+                return false;
+            return VillageDevelopmentBootstrap.IsOperationalFate(settlement.Fate) == false;
+        }
+
+        /// <summary>
+        /// 이주 목적지 (D140): from에서 가장 가까운, 사라진 터가 아니고 상점(Shop 서비스)이 있는 마을.
+        /// 거리가 같으면 VillageId가 작은 쪽. 같은 터 출신은 같은 기준점(터 위치)으로 고르므로 함께 간다. 없으면 null.
+        /// </summary>
+        public VillageData? FindNearestLivingShopVillage(Vector2 from, int excludeVillageId)
+        {
+            VillageData? best = null;
+            float bestSqr = float.MaxValue;
+            for (int i = 0; i < _villageList.Count; i++)
+            {
+                VillageData candidate = _villageList[i];
+                if (candidate.VillageId == excludeVillageId || IsAbandonedSite(candidate) == true)
+                    continue;
+                if (CountByService(candidate.VillageId, ProvidedService.Shop) <= 0)
+                    continue;
+                float sqr = Vector2.SqrMagnitude(candidate.Position - from);
+                if (sqr < bestSqr || (sqr == bestSqr && best != null && candidate.VillageId < best.VillageId))
+                {
+                    best = candidate;
+                    bestSqr = sqr;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>
         /// NPC 거래·치료 대금을 마을 Gold에 넣는다 (D41). 상한 없이 더하고 알림을 띄우지 않는다.
         /// 마을이 없으면 false — 호출자는 NPC Gold를 빼지 않아야 한다.
         /// </summary>
