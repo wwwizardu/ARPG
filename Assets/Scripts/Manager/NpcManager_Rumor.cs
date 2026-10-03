@@ -385,8 +385,9 @@ namespace ARPG.Npc
 
         /// <summary>
         /// Rest 정상 종료 처리의 공용 진입점 (D107). 게임(System_NpcSim)·파티 합류 경로(D90 ①)·진단이 모두 이것을 부른다.
-        /// 자기 도난 단서 정리(D103) → 소문 교환(D74, 받아들인 소문이 단서와 맞으면 늦은 발각) → 절도 판정(D100, NpcManager_Theft) 1회.
-        /// allowTheft가 false면(파티 합류 경로) 절도는 하지 않는다 (단서 정리·교환은 한다).
+        /// 자기 도난 단서 정리(D103) → 소문 교환(D74, 받아들인 소문이 단서와 맞으면 늦은 발각) → 절도 판정(D100, NpcManager_Theft) 1회
+        /// → 생활비(GOLD_BALANCE D131·D132, NpcManager_LivingExpense).
+        /// allowTheft가 false면(파티 합류 경로) 절도와 생활비는 하지 않는다 (단서 정리·교환은 한다).
         /// 상태 전이(Kind None 등)는 호출자가 이어서 한다 — RNG가 Rest 시작 시각 기준이라 상태를 바꾸기 전에 불러야 한다.
         /// </summary>
         public void ResolveRestEnd(int entityId, NpcSaveData saveData, float restStartGameTime, float gameTime,
@@ -396,7 +397,10 @@ namespace ARPG.Npc
                 PruneTheftClues(saveData, gameTime);
             ExchangeRumorsOnRestEnd(entityId, saveData, restStartGameTime, gameTime, worldSeed);
             if (allowTheft == true)
+            {
                 ResolveTheftOnRestEnd(entityId, saveData, restStartGameTime, gameTime, worldSeed);
+                ResolveLivingExpenseOnRestEnd(entityId, saveData, restStartGameTime, worldSeed);
+            }
         }
 
         // ================= 교환 (Rest 종료, §7.4, D74) =================

@@ -33,6 +33,8 @@ namespace ARPG.Data
         public NpcPopulationState NpcPopulation = new();
         // NPC_COMBAT_DESIGN §4.5 — 임시 동행 예약·진행 상태 (World 파티션)
         public NpcCompanionState NpcCompanion = new();
+        // GOLD_BALANCE_DESIGN D126·D130 — 세계 물가 지수 (World 파티션). 기준값 0 = 아직 정하지 않음.
+        public GoldPriceIndexState GoldPrice = new();
 
         // PROCEDURAL_HISTORY §0 런타임 LOD — 게임 중 변동하는 정착지 라이브 추상 층.
         // Chronicle(정지 스냅샷)과 분리. 최초/구세이브는 HistoryManager가 Chronicle에서 초기화.
@@ -73,6 +75,9 @@ namespace ARPG.Data
                 NpcPopulation = new();
             if (NpcCompanion == null)
                 NpcCompanion = new();
+            if (GoldPrice == null)
+                GoldPrice = new();
+            GoldPrice.Sanitize();
             if (Chronicle == null)
                 Chronicle = new();
             if (Chronicle.Events == null)

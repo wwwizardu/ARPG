@@ -39,6 +39,11 @@ namespace ARPG.Village
         public float StoneCarry;
         public float IronCarry;
         public float GoldCarry;
+        // GOLD_BALANCE_DESIGN D132 B-보조: 금고 유지비(기준선을 넘은 Gold의 하루 5%)의 소수 누적분 (0 이상 1 미만).
+        // 구 세이브는 필드가 없어 0으로 로드된다. 기본값 0은 저장하지 않는다.
+        [System.ComponentModel.DefaultValue(0f)]
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public float VaultUpkeepCarry;
 
         // 추상 건설 clock 및 절차적 역사 초기 발전 1회 적용 플래그.
         public float LastConstructionSimGameTime;

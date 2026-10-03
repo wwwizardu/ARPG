@@ -71,7 +71,7 @@ sources:
 ## 3. 권장 재개 순서
 
 1. **커밋 정리**: NPC 상점 기본 장비·저장 축소·관련 문서 변경이 미커밋이다. 측정용 `[SaveTiming]` 로그를 남길지 함께 정한다. [src: Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §11, Assets/Scripts/Manager/DataManager_PartitionedSave.cs]
-2. **데이터 정리**: `AiTable` 4번(SwampToad)이 SkillTable에서 빠진 SkillId 205를 아직 참조해, 해당 몬스터가 스폰될 때 "Skill table not found" 오류가 난다. 빌드 검증기(`AttackTelegraphBuildValidator`)도 이 참조로 빌드를 멈출 수 있다 [추론: 검증기 실행은 확인하지 않음]. [src: Assets/_BinaryData/TableData/AiTable.bytes, Assets/_BinaryData/TableData/SkillTable.bytes, Assets/Scripts/Factory/EntityFactory.cs, Docs/combat/SKILL_DESIGN.md §2, Assets/Scripts/Editor/AttackTelegraphBuildValidator.cs]
+2. ~~**데이터 정리**: `AiTable` 4번(SwampToad)이 SkillTable에서 빠진 SkillId 205를 참조~~ → 2026-10-03 205번 행 복구, 빌드 검증기 통과. [src: Docs/combat/SKILL_DESIGN.md §2, Assets/_BinaryData/TableData/SkillTable.bytes, Assets/Scripts/Editor/AttackTelegraphBuildValidator.cs]
 3. **마을 골드 밸런스** (D109 ②): 매입 거절로 NPC 가방이 차는 문제, 가방 전리품에 따른 세이브 증가, 절도 빈도, 첫 며칠에 몰리는 NPC 구매를 함께 본다. [src: Docs/npc/NPC_AMBITION_DESIGN.md D109, Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §7·§11.2]
 4. **대화 사연 밸런스** (D109 ①): 자랑 토픽이 사연 자리에서 밀리는 문제. [src: Docs/npc/NPC_AMBITION_DESIGN.md D109]
 5. **PlayMode 검증 묶음**: 던전 Profiler·입구 배치 실패율, 마법부여 Tier·저장 왕복, 마을 V7 A~F, 스킬 조준·전파 대표 스킬, 공격 예고 가독성. [src: Docs/map/DUNGEON_RUNTIME_DESIGN.md §7, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §12, Docs/village/VILLAGE_REWORK_PLAN.md §V7, Docs/combat/POE2_CURSOR_TRACKING_PLAN.md, Docs/combat/MONSTER_ATTACK_TELEGRAPH_DESIGN.md]

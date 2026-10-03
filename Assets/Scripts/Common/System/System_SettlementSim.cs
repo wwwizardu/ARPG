@@ -64,6 +64,11 @@ namespace ARPG.Systems
             // 4) v.Population 동기화 — 마을 경제 인구를 §0 추상 인구에서 소싱 (VILLAGE_NPC_BOUNDARY_DESIGN §2).
             //    per-village 시스템(생산 52, Tier 60, 건설 66)보다 먼저(Priority 50) 갱신되어 항상 최신 값 사용.
             AR.s.Village.RefreshAllPopulationsFromAbstract();
+
+            // 5) 세계 물가 지수 — 게임일 경계를 지났을 때만 갱신한다 (GOLD_BALANCE_DESIGN D126·D130).
+            //    기준값이 0이면(새 게임·구 세이브) 첫 갱신 때 그 순간의 세계 Gold로 정한다.
+            if (GoldPriceRules.IndexEnabled == true)
+                AR.s.Village.UpdateGoldPriceIndex(now);
         }
 
         private static bool ShouldVisitConstruction(VillageData village)

@@ -98,6 +98,10 @@ namespace ARPG.Village
 
             if (options.IsOperational == false)
             {
+                // GOLD_BALANCE D135: 운영하지 않는 사라진 터(폐허·합병)도 금고 유지비는 돈다 — 생산·건설 없이 지난 정수 시간만큼.
+                int upkeepHours = Mathf.FloorToInt(now + EPSILON)
+                    - Mathf.FloorToInt(village.LastConstructionSimGameTime + EPSILON);
+                VillageResourceSimulation.AdvanceVaultUpkeepHours(village, upkeepHours);
                 village.LastConstructionSimGameTime = now;
                 village.LastConstructionTierCheckGameTime = now;
                 result.Status = VillageAbstractAdvanceStatus.NotOperational;

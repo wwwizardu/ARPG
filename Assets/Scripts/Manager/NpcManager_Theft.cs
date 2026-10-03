@@ -31,7 +31,8 @@ namespace ARPG.Npc
         public const float TheftSecondaryAmbitionMultiplier = 0.5f;
         // 시도 확률 (D100) = 기본 × 야망 배율 × 성향 배율. 성향 배율 = 1 + 0.2 × (탐욕 − 정직)/100 → 0.8~1.2.
         // 튜닝 목표 세계 30일 시도 60~120건 (빈도는 가방이 찬 정상 상태 구간으로 본다, D109 ②).
-        public const float TheftBaseChance = 0.25f;
+        // GOLD_BALANCE D136: 생활비로 가방 빈칸이 늘어 0.25 → 0.015. 2% 실측은 Run(30) 144건으로 상한을 넘어 1.5%로 내렸다.
+        public const float TheftBaseChance = 0.015f;
         public const float TheftDispositionWeight = 0.20f;
         // 쿨다운 (D100): 도둑 168h(LastTheftGameTime, 시도 기준), 같은 마을 72h(마을 명단의 최근 시도 시각). 세계 상한은 없다.
         public const float TheftThiefCooldownHours = 168f;

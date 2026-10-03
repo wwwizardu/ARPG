@@ -339,7 +339,50 @@ namespace ARPG.EditorTools
                 int gold = VillageResourceSimulation.GetAmount(goldRealtime, GlobalEnum.ItemType.Gold);
                 int goldCap = VillageResourceSimulation.GetCap(goldRealtime, GlobalEnum.ItemType.Gold);
                 report.AppendLine($"  - npcGold={npcGold} {npcGoldDifferences} gold={gold} (cap {goldCap}, uncapped={gold > goldCap})");
+
+                // GOLD_BALANCE D132 B-보조·D135: 금고가 유지비 기준선을 넘은 채 시작해도 두 경로가 같은지 (운영 마을 + 비운영 터).
+                VillageData upkeepHourly = CreateVillageWithGold(population, UpkeepParityStartGold);
+                bool upkeep = VillageSimulationParity.AdvanceAndCompare(upkeepHourly,
+                    CreateVillageWithGold(population, UpkeepParityStartGold), targetHours, unlimited,
+                    out string upkeepDifferences);
+                int upkeepGold = VillageResourceSimulation.GetAmount(upkeepHourly, GlobalEnum.ItemType.Gold);
+                bool notOperational = CompareNotOperationalUpkeep(targetHours, out int ruinGold,
+                    out string ruinDifferences);
+                report.AppendLine($"  - upkeep={upkeep} {upkeepDifferences} gold {UpkeepParityStartGold}->{upkeepGold}, " +
+                                  $"notOperational={notOperational} {ruinDifferences} gold {UpkeepParityStartGold}->{ruinGold}");
             }
+        }
+
+        private const int UpkeepParityStartGold = 5000;
+
+        /// <summary>
+        /// 비운영 터(인구 0)의 유지비: 1시간씩 진행한 결과와 한 번에 진행한 결과가 같은지 (D135).
+        /// 비운영 진행은 상태가 NotOperational이라 AdvanceAndCompare(CaughtUp 요구) 대신 여기서 직접 돌린다.
+        /// </summary>
+        private static bool CompareNotOperationalUpkeep(float targetHours, out int hourlyGold,
+            out string differences)
+        {
+            VillageAbstractAdvanceOptions options = new VillageAbstractAdvanceOptions { IsOperational = false };
+            VillageData hourly = CreateVillageWithGold(0, UpkeepParityStartGold);
+            VillageData fast = CreateVillageWithGold(0, UpkeepParityStartGold);
+            for (float t = 1f; t <= targetHours + 0.0001f; t += 1f)
+                VillageAbstractConstruction.AdvanceAbstractConstruction(hourly, t, options);
+            VillageAbstractConstruction.AdvanceAbstractConstruction(fast, targetHours, options);
+            hourlyGold = VillageResourceSimulation.GetAmount(hourly, GlobalEnum.ItemType.Gold);
+            bool same = VillageSimulationParity.Compare(hourly, fast, out differences);
+            if (hourlyGold >= UpkeepParityStartGold)
+            {
+                differences += "no upkeep burned; ";
+                same = false;
+            }
+            return same;
+        }
+
+        private static VillageData CreateVillageWithGold(int population, int gold)
+        {
+            VillageData village = CreateVillage(population);
+            village.Resources[GlobalEnum.ItemType.Gold] = gold;
+            return village;
         }
 
         private static VillageAbstractAdvanceOptions CreateOptions(VillageStage maxStage,

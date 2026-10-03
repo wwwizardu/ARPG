@@ -103,7 +103,7 @@ namespace ARPG.Npc
             bool delveAvailable = HasDelveOpportunity(saveData);
             return new NpcActivityChoiceContext
             {
-                GoldShort = saveData.Gold < NpcActivityResolver.TreatmentFee,
+                GoldShort = saveData.Gold < GetTreatmentFee(),
                 BagFull = freeSlots <= NpcActivityResolver.BagFullFreeSlotThreshold,
                 RecentlyRecovered = NpcActivityResolver.IsRecentlyRecovered(saveData.Activity, gameTime),
                 TradeAvailable = HasTradeOpportunity(entityId, saveData),
@@ -188,7 +188,17 @@ namespace ARPG.Npc
             float greed = Mathf.Clamp01(saveData.NpcStat.Greed / 100f);
             float patience = Mathf.Clamp01(saveData.NpcStat.Patience / 100f);
             float goldFactor = Mathf.Clamp01((float)goldRoll * 0.5f + greed * 0.25f + patience * 0.25f);
-            saveData.Gold = StartGoldMin + Mathf.RoundToInt((StartGoldMax - StartGoldMin) * goldFactor);
+            int startGold = StartGoldMin + Mathf.RoundToInt((StartGoldMax - StartGoldMin) * goldFactor);
+            // GOLD_BALANCE D128: 시작 Gold(보충 NPC 포함)는 서비스 물가를 따른다 — 닫힌 경제 밖의 생성처로 문서화돼 있다.
+            saveData.Gold = AR.s.Village != null ? AR.s.Village.GetServicePrice(startGold) : startGold;
+        }
+
+        /// <summary>치료비 = 기본 10G × 서비스 물가 배율 (D36·GOLD_BALANCE D128). 치료 판정·구매 예산·골드 부족 필요가 같은 값을 쓴다.</summary>
+        public static int GetTreatmentFee()
+        {
+            return AR.s.Village != null
+                ? AR.s.Village.GetServicePrice(NpcActivityResolver.TreatmentFee)
+                : NpcActivityResolver.TreatmentFee;
         }
 
         /// <summary>

@@ -103,6 +103,7 @@ namespace ARPG.Npc
         // 활동별 기본값. 세계 평균 Hunt 선택 비중 ≈ 43%(교체 전 식의 평균)가 되도록 맞춘 개발 튜닝 상수다 (D40).
         // 실행 중 자동 보정은 없다. 진단 메뉴 ARPG/Npc/Diagnostics/Ambition Sim으로 확인한다.
         // P2a (D56): Delve 몫을 주로 Rest에서 가져오도록 1.0 → 0.9. Hunt 비중 43% ±5%p 유지를 진단으로 확인한다.
+        // GOLD_BALANCE 본체(2026-10-03): 마을 금고에 Gold가 돌며 Trade 기회가 늘어(6% → 14%) Hunt 기준을 38% ±5%p로 개정했다 (상수는 그대로).
         public const float RestBaseScore = 0.90f;
         public const float HuntBaseScore = 0.85f;
         public const float TradeBaseScore = 0.50f;
@@ -221,6 +222,10 @@ namespace ARPG.Npc
         // 170 시도 난수열(시도 확률 → 피해자 선택 → 물건 선택 순서로 같은 열에서 뽑는다), 171 발각. 172~179는 절도 예비.
         public const int TheftAttemptSalt = 170;
         public const int TheftDetectionSalt = 171;
+
+        // 생활비 소멸 RNG salt (GOLD_BALANCE_DESIGN D132 B-주). 소유자 = NPC EntityId, 시각 = Rest 시작 시각.
+        // 180 소멸액 소수 부분의 확률 반올림 1회. 181~189는 골드 흐름 예비.
+        public const int LivingExpenseBurnSalt = 180;
 
         /// <summary>원정형 활동(Venturing + 왕복 경로 표현)인가. Hunt와 DungeonDelve.</summary>
         public static bool IsExpedition(NpcActivityKind kind)

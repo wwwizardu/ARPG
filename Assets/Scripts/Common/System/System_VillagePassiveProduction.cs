@@ -39,7 +39,8 @@ namespace ARPG.Systems
             for (int i = 0; i < villages.Count; i++)
             {
                 VillageData village = villages[i];
-                if (village.EntityId < 0 || village.Population <= 0)
+                // 인구 0 마을도 부른다 — AdvanceWholeHours가 생산 없이 금고 유지비만 적용한다 (GOLD_BALANCE D135).
+                if (village.EntityId < 0)
                     continue;
                 if (AR.s.Component.TryGetComponent<VillageStorageComponent>(village.EntityId, out _) == false)
                     continue;

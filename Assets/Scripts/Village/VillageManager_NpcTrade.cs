@@ -239,7 +239,7 @@ namespace ARPG.Village
             {
                 Item = item,
                 RemainingCount = 1,
-                UnitPrice = VillageTradeStockRoller.GetPlayerBuyPrice(trade, info),
+                UnitPrice = ApplyItemPriceIndex(VillageTradeStockRoller.GetPlayerBuyPrice(trade, info), table, 1),
                 RestockCycle = GetCurrentRestockCycle(v),
                 TradeProfileId = trade.TradeProfileId,
                 SlotKind = TradeStockSlotKind.AdventurerConsignment,

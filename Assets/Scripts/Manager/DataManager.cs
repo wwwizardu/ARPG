@@ -60,6 +60,8 @@ namespace ARPG.Data
         public List<NpcPartyState> NpcPartyStates => _worldData.NpcPartyStates;
         public NpcPopulationState NpcPopulation => _worldData.NpcPopulation;
         public NpcCompanionState NpcCompanion => _worldData.NpcCompanion;
+        // GOLD_BALANCE_DESIGN D126 — 세계 물가 지수 (World 파티션)
+        public GoldPriceIndexState GoldPrice => _worldData.GoldPrice;
         public Dictionary<int, BuildingSaveData> BuildingSaveDatas => _worldData.BuildingSaveDatas;
         // R1: 정착지 연대기 (New Game 1회 생성 후 저장이 정본)
         public ChronicleSaveData Chronicle { get => _worldData.Chronicle; set => _worldData.Chronicle = value; }

@@ -1624,8 +1624,9 @@ namespace ARPG.Village
             if (_villages.TryGetValue(villageId, out VillageData? v) == false) return -1;
 
             VillageTradeProfile trade = ResolveTradeProfile(v);
-            return VillageTradeStockRoller.GetMerchantBuyPrice(trade,
-                CreateTradeItemInfo(item));
+            int price = VillageTradeStockRoller.GetMerchantBuyPrice(trade, CreateTradeItemInfo(item));
+            // GOLD_BALANCE D128: 매입가는 그날 물가 지수를 따른다 (하한 0은 원래 가격 함수와 같다).
+            return ApplyItemPriceIndex(price, item, 0);
         }
 
         /// <summary>
@@ -1781,7 +1782,8 @@ namespace ARPG.Village
                 {
                     Item = rolled,
                     RemainingCount = planned.Count,
-                    UnitPrice = planned.UnitBuyPrice,
+                    // GOLD_BALANCE D128: 판매가는 재입고 롤 때 그날 물가 지수로 굳힌다 (회차 안에서는 변하지 않음).
+                    UnitPrice = ApplyItemPriceIndex(planned.UnitBuyPrice, AR.s.Data.GetItem(planned.ItemId), 1),
                     RestockCycle = cycle,
                     TradeProfileId = trade.TradeProfileId,
                     SlotKind = planned.SlotKind,
@@ -1809,7 +1811,7 @@ namespace ARPG.Village
                 {
                     Item = basicItem,
                     RemainingCount = planned.Count,
-                    UnitPrice = planned.UnitBuyPrice,
+                    UnitPrice = ApplyItemPriceIndex(planned.UnitBuyPrice, AR.s.Data.GetItem(planned.ItemId), 1),
                     RestockCycle = cycle,
                     TradeProfileId = trade.TradeProfileId,
                     SlotKind = planned.SlotKind,
@@ -1922,7 +1924,7 @@ namespace ARPG.Village
                 if (trade == null)
                     trade = ResolveTradeProfile(data);
                 TradeItemInfo info = CreateTradeItemInfo(table);
-                entry.UnitPrice = VillageTradeStockRoller.GetPlayerBuyPrice(trade, info);
+                entry.UnitPrice = ApplyItemPriceIndex(VillageTradeStockRoller.GetPlayerBuyPrice(trade, info), table, 1);
                 entry.TradeProfileId = trade.TradeProfileId;
                 entry.SlotKind = TradeStockSlotKind.Guaranteed;
                 entry.PriceReason = VillageTradeStockRoller.GetPriceReason(trade, info,

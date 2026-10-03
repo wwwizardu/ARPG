@@ -334,6 +334,7 @@ namespace ARPG.Data
                 NpcPartyStates = snapshot.NpcParties.Parties ?? new(),
                 NpcPopulation = snapshot.NpcMeta.Population ?? new(),
                 NpcCompanion = snapshot.World.NpcCompanion ?? new(),
+                GoldPrice = snapshot.World.GoldPrice ?? new(),
                 WorldSim = snapshot.WorldSim.WorldSim ?? new(),
             };
 
@@ -671,6 +672,7 @@ namespace ARPG.Data
                     WorldSeed = _worldData.WorldSeed,
                     ElapsedWorldGameHours = _worldData.ElapsedWorldGameHours,
                     NpcCompanion = _worldData.NpcCompanion,
+                    GoldPrice = _worldData.GoldPrice,
                 };
                 AddPendingPart(pending, PART_WORLD, root);
             }

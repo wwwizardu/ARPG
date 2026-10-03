@@ -107,7 +107,7 @@ namespace ARPG.Npc
             int worldSeed, int salt, bool severe, out bool treated)
         {
             treated = false;
-            int fee = NpcActivityResolver.TreatmentFee;
+            int fee = GetTreatmentFee();
             float untreatedHours = NpcActivityResolver.GetWoundRecoveryHours(severe, false);
             if (saveData.VillageId < 0 || AR.s.Village.GetVillage(saveData.VillageId) == null)
             {
@@ -294,7 +294,7 @@ namespace ARPG.Npc
         private int FindBestShopUpgrade(int entityId, NpcSaveData saveData, VillageData village, out int bestPrice,
             out float bestPower, out GE.EquipSlotType bestSlot, out int eligibleCount, out int overBudgetCount)
         {
-            int budget = saveData.Gold - NpcActivityResolver.TreatmentFee;
+            int budget = saveData.Gold - GetTreatmentFee();
             int bestIndex = -1;
             bestPrice = int.MaxValue;
             bestPower = 0f;
@@ -372,7 +372,7 @@ namespace ARPG.Npc
         private bool HasPurchasableUpgrade(int entityId, NpcSaveData saveData, VillageData village)
         {
             // 싼 조건부터 거른다. 재고 순회(업그레이드 평가)는 마지막에만 한다.
-            if (saveData.Gold - NpcActivityResolver.TreatmentFee <= 0)
+            if (saveData.Gold - GetTreatmentFee() <= 0)
                 return false;
             float now = AR.s.Time.CurrentGameTime;
             if (saveData.LastTradeGameTime >= 0f && now - saveData.LastTradeGameTime < TradeCooldownHours)

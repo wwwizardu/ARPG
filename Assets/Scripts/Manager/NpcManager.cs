@@ -99,6 +99,7 @@ namespace ARPG.Npc
             ResetRumorRuntime();
             ResetPartyRuntime();
             ResetTheftRuntime();
+            ResetLivingExpenseRuntime();
             _nameBag.Clear();
             _nameBagCursor = 0;
             _usedNames.Clear();

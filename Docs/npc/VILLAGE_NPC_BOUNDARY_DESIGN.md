@@ -53,15 +53,23 @@ carry는 `VillageData`가 소유한다. 실체화 경로의 `VillageStorageCompo
 
 `JobBonusTable`이 데이터 로더에 남아 있더라도 현행 마을 생산에는 사용하지 않는다. 새 경제 기능이 이 테이블을 다시 사용하려면 별도 설계 결정이 필요하다.
 
+**Gold 금고 유지비** ([GOLD_BALANCE_DESIGN.md](../economy/GOLD_BALANCE_DESIGN.md) D132 B-보조·D135, 2026-10-03) — 마을 금고 Gold가 기준선(300G × 서비스 물가 배율)을 넘으면 넘은 만큼을 하루 5%씩 지운다. 모험가 경로가 아니라 마을 자원 규칙이다.
+- 생산과 같은 `VillageResourceSimulation.AdvanceWholeHours`가 시간마다 "Gold 생산 → 유지비" 순서로 적용한다. 소수 누적분은 `VillageData.VaultUpkeepCarry`가 소유한다.
+- 인구 0인 마을은 생산 없이 유지비만 돈다. 운영하지 않는 사라진 터(폐허·합병)는 추상 진행의 비운영 분기가 지난 정수 시간만큼 유지비만 적용한다(`AdvanceVaultUpkeepHours`) — 상점 없는 터에 소속된 NPC의 생활비가 쌓이기만 하지 않게 하는 임시 대응이다(D135).
+- 기준선은 물가 지수(아래 §3.1 3번)를 따른다. Population·Tier·건설에는 입력하지 않는다.
+
 ### 3.1 예외 — 모험가 활동이 마을 자원에 닿는 경로
 
-위 생산식과 별개로, 물리 NPC의 활동 결과가 마을 자원에 들어가는 경로는 아래 두 가지뿐이다. 둘 다 생산식(`Population` 기반)을 바꾸지 않고 결과 자원만 더하거나 옮긴다.
+위 생산식과 별개로, 물리 NPC의 활동 결과가 마을 자원에 들어가는 경로는 아래 두 가지뿐이다. 둘 다 생산식(`Population` 기반)을 바꾸지 않고 결과 자원만 더하거나 옮긴다. 3번은 NPC 쪽 데이터가 마을 서비스 가격에 닿는 읽기 전용 연결이다.
 
 1. **Hunt 성공 시 Food 유입** — 성공한 솔로·파티 Hunt가 소속 마을 Food를 추가한다. 정본은 [NPC_SIMULATION_DESIGN.md](NPC_SIMULATION_DESIGN.md)이며, 수치는 [NPC_AMBITION_DESIGN.md](NPC_AMBITION_DESIGN.md) §5.1(D31)에 따라 장비 반영 전투력으로 판정한다.
 2. **모험가 거래·치료의 Gold 이동** (NPC_AMBITION D34·D41) — 물리 NPC가 마을 상점에서 전리품을 팔거나 장비를 사고, 부상 치료비를 낼 때 `VillageData.Resources[Gold]`와 NPC 개인 Gold 사이에서 골드가 이동한다. 이 경제는 닫혀 있어 새 골드를 만들지 않는다. NPC 구매는 `MerchantStock`의 재고를 줄이고, NPC가 판 전리품 일부는 그 회차의 모험가 매입품 슬롯에 진열된다.
    - 이 이동은 Gold 자원과 상점 재고에만 닿는다. Population, Tier, 건설 후보, 다른 자원에는 입력하지 않으며, NPC 판매는 자원 환원(`ReturnResourceType`)을 하지 않는다.
    - 추상 경로와 실시간 경로가 같은 함수(`VillageResourceSimulation.DepositNpcGold`/`TryWithdrawNpcGold`)를 쓰고, `VillageSimulationParity`로 검사한다.
    - 상점 서비스 제공 여부는 여전히 시설이 판정한다(§5). Shop 시설이 없는 마을에서는 NPC가 거래하지 않는다.
+   - **생활비** ([GOLD_BALANCE_DESIGN.md](../economy/GOLD_BALANCE_DESIGN.md) D131·D132 B-주, 2026-10-03) — Rest 정상 종료 때 NPC가 예비금(치료비 × 3)을 넘은 Gold의 70%를 소속 마을에서 쓴다. 그중 1.8%는 사라지고(**생활비 소멸**, 1G 미만은 결정론 확률 반올림) 나머지는 `DepositNpcGold`로 마을 금고에 들어간다. 파티 합류 정리 경로는 내지 않는다. 시설 판정 없이 소속 마을이면 낸다(상점 없는 마을 포함, D135).
+   - 매입가·NPC 판매가·치료비·예비금에는 세계 물가 배율(3번)이 붙는다.
+3. **세계 물가 지수가 NPC Gold 합계를 읽는다** (GOLD_BALANCE D126~D130) — 하루 1회 세계 Gold(모든 마을 금고 + 살아 있는 NPC Gold, 플레이어 제외)를 기준값과 비교해 지수를 갱신하고(`System_SettlementSim` 5단계), 상점 판매가·매입가·서비스 가격(치료비·예비금·보충 NPC 시작 Gold·금고 유지비 기준선)에 등급별 배율을 곱한다. NPC 쪽 데이터가 마을 상점 가격에 영향을 주는 유일한 경로이고, 자원·Population·Tier·건설에는 입력하지 않는다. 지수 상태는 `WorldData.GoldPrice`가 소유한다.
 
 NPC_AMBITION P2(2026-09-29)의 **DungeonDelve·NPC 던전 완료·소문**은 새 경로를 만들지 않는다. Delve와 NPC 완료는 골드·Food를 주지 않고(AMBITION D55·D66) 마을 자원·Population·Tier에 입력하지 않는다. NPC 완료는 던전 슬롯(`WorldData.Dungeons`)만 바꾸며 그 규칙은 [DUNGEON_RUNTIME_DESIGN.md](../map/DUNGEON_RUNTIME_DESIGN.md) §3.3이 정한다. 소문은 NPC 개인 데이터다.
 

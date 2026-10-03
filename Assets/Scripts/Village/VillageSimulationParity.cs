@@ -249,6 +249,8 @@ namespace ARPG.Village
                 floatTolerance);
             CompareFloat(builder, "GoldCarry", realtime.GoldCarry, abstracted.GoldCarry,
                 floatTolerance);
+            CompareFloat(builder, "VaultUpkeepCarry", realtime.VaultUpkeepCarry,
+                abstracted.VaultUpkeepCarry, floatTolerance);
             CompareFloat(builder, "LastConstructionSimGameTime",
                 realtime.LastConstructionSimGameTime,
                 abstracted.LastConstructionSimGameTime, floatTolerance);

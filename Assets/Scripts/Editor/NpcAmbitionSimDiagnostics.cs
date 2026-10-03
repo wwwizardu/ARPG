@@ -30,7 +30,8 @@ namespace ARPG.EditorTools
     /// - NPC 호감도·유형 관계도 복제본으로 바꿔 끼우고 라이브 해시에 포함한다 (D107).
     /// - System_NpcSim의 상태 전이 루프는 여기서 같은 순서로 재현한다 (1게임시간 해상도). 사망 정리 중 연대기·Deed·고인 기억,
     ///   화면 안 연출, 전역 인구 보충(TryReplenishGlobalPopulation), 마을 건설 소비는 시뮬레이션하지 않는다.
-    ///   마을 인구 자원 생산(VillageResourceSimulation.AdvanceWholeHours)은 모든 마을에 시간당 1회 적용한다.
+    ///   마을 인구 자원 생산(VillageResourceSimulation.AdvanceWholeHours)은 모든 마을에 시간당 1회 적용한다
+    ///   (금고 유지비 포함 — 인구 0인 사라진 터는 유지비만, GOLD_BALANCE D132·D135).
     /// - 시뮬레이션은 한 프레임 안에서 끝나므로 그 사이 다른 시스템·저장이 돌지 않는다. 끝나면 모든 필드를 되돌리고
     ///   실행 전후 라이브 상태 해시가 같은지 검증한다. 시간·아이템 인스턴스 카운터·UnityEngine.Random 상태도 되돌린다.
     /// 출력: {프로젝트}/Logs/NpcAmbitionSim/ (.gitignore의 /Logs/ — git에 잡히지 않음)
@@ -65,7 +66,8 @@ namespace ARPG.EditorTools
 
         // P4-0 절도 조건 깔때기 (D99·D100) — 실제 절도 판정 직전 상태에서 조건 충족 수만 잰다 (P4a 이후에도 비교용으로 유지).
         // 가상 시도에 쓸 기본 시도 확률 후보 (D100 "기본 약 25%"의 튜닝 범위 추정용)
-        private static readonly float[] TheftBaseChances = { 0.05f, 0.10f, 0.15f, 0.20f, 0.25f, 0.35f, 0.50f };
+        // GOLD_BALANCE D136: 생활비로 가방 빈칸이 늘어 5% 아래도 필요해 1~4%를 더했다.
+        private static readonly float[] TheftBaseChances = { 0.01f, 0.02f, 0.03f, 0.04f, 0.05f, 0.10f, 0.15f, 0.20f, 0.25f, 0.35f, 0.50f };
         // D100 쿨다운: 도둑 168h(시도 기준), 같은 마을 72h. 깔때기의 가정 쿨다운은 게임 필드와 별개의 진단 표로 센다.
         private const float TheftThiefCooldownHours = NpcManager.TheftThiefCooldownHours;
         private const float TheftVillageCooldownHours = NpcManager.TheftVillageCooldownHours;
@@ -131,6 +133,13 @@ namespace ARPG.EditorTools
             public int PromisingHolders;
             public int StoredInvalid;
             public int ConfirmationDelves;
+            // GOLD_BALANCE: 물가 지수(기록 시각)·생활비·금고 유지비 (D126·D131·D132)
+            public float GoldPriceTarget;
+            public float GoldPriceIndex;
+            public long LivingSpendCount;
+            public long LivingSpendDeposit;
+            public long LivingSpendBurn;
+            public long VaultUpkeepBurn;
         }
 
         /// <summary>전파 곡선 추적용 사건 1건 (직접 소문이 처음 생긴 사건).</summary>
@@ -180,6 +189,7 @@ namespace ARPG.EditorTools
             public long ValueSum;
             public long StealableValueSum;
             public int MaxValue;
+            public long JsonBytes;           // 생존 NPC 가방(Inventory) JSON 합계 (JsonConvert 기준 — 세이브 크기 비교용)
             public readonly int[] ValueBuckets = new int[BagValueBucketUpper.Length];
             public readonly List<int> Values = new();
         }
@@ -292,6 +302,10 @@ namespace ARPG.EditorTools
             public DayRow Today = new DayRow();
             public long TotalGoldBurned;
             public long TotalPopulationGold;
+            // GOLD_BALANCE: 세계 물가 지수 복제본(WorldData.GoldPrice 대신 바꿔 끼움)·NPC 골드 흐름 카운터·일 시작 값
+            public GoldPriceIndexState GoldPrice = new GoldPriceIndexState();
+            public NpcGoldFlowCounters GoldFlow = new NpcGoldFlowCounters();
+            public long LivingCountAtDayStart, LivingDepositAtDayStart, LivingBurnAtDayStart;
             // NPC_SHOP_EQUIPMENT (D118·D119): 기본 아이템이 아닌 구매 수, 시작 시점 생존 NPC 장착 장비 중 기본 아이템 아님/전체
             public int NonBasicPurchases;
             public int NonBasicEquippedAtStart;
@@ -475,7 +489,8 @@ namespace ARPG.EditorTools
                 Debug.LogError(notReady);
                 return notReady;
             }
-            days = Mathf.Clamp(days, 1, 120);
+            // GOLD_BALANCE G2: 물가 안정(420게임일 = 현실 168시간) 확인용으로 상한을 840일로 둔다.
+            days = Mathf.Clamp(days, 1, 840);
 
             string hashBefore = ComputeLiveStateHash();
             UnityEngine.Random.State randomState = UnityEngine.Random.state;
@@ -524,6 +539,8 @@ namespace ARPG.EditorTools
                 // P4-0: 시작 가방·관계 지표 (매각 판정이 마을 복제본을 보므로 교체 뒤에 잰다)
                 sim.BagStart = MeasureBags(sim);
                 sim.SocialStart = MeasureSocial(sim);
+                // GOLD_BALANCE: 게임과 같은 지수 갱신 메서드 (기준값이 없으면 시작 세계 Gold로 정한다)
+                AR.s.Village.UpdateGoldPriceIndex(startGameTime);
 
                 rows.Add(RecordDay(sim, 0, startGameTime));
                 sim.Today = new DayRow();
@@ -541,6 +558,7 @@ namespace ARPG.EditorTools
                         AdvanceNpc(sim, sim.NpcIds[i], now);
                     UpdateRumorPropagation(sim, now);
                     SampleActivityStates(sim);
+                    AR.s.Village.UpdateGoldPriceIndex(now);
 
                     if (hour % 24 == 0)
                     {
@@ -884,6 +902,9 @@ namespace ARPG.EditorTools
                 };
             }
 
+            // GOLD_BALANCE: 세계 물가 지수 상태 (라이브 기준값이 없으면 시뮬 시작 세계 Gold가 기준이 된다)
+            sim.GoldPrice = CloneJson(AR.s.Data.GoldPrice);
+
             // 던전 저장 상태: NPC 던전 완료가 슬롯 세대를 넘기므로 복제본을 바꿔 끼운다 (라이브 던전은 절대 바꾸지 않는다).
             sim.Dungeons = CloneJson(AR.s.Data.Dungeons);
             for (int i = 0; i < sim.Dungeons.Villages.Count; i++)
@@ -955,11 +976,15 @@ namespace ARPG.EditorTools
             Swap(swaps, npc, "_narrative", new NpcNarrativeRuntime());
             Swap(swaps, village, "_villages", sim.Villages);
             Swap(swaps, village, "_villageList", sim.VillageList);
+            // GOLD_BALANCE: NPC 골드 흐름 카운터 (생활비 입금·소멸)
+            Swap(swaps, npc, "_goldFlowCounters", sim.GoldFlow);
 
             // 던전: DataManager의 WorldData.Dungeons와 DungeonManager의 마을 슬롯 색인·NPC 완료 런타임 플래그.
             // 시뮬은 한 프레임 안의 동기 실행이라 진행 중인 입구 배치 저장(_busy)이 끼어들 수 없다 — 그동안만 false로 본다.
             object worldData = GetField(AR.s.Data, "_worldData").GetValue(AR.s.Data)!;
             Swap(swaps, worldData, "Dungeons", sim.Dungeons);
+            // GOLD_BALANCE: 세계 물가 지수 상태 — 가격 함수(VillageManager)와 지수 갱신이 복제본만 읽고 바꾼다.
+            Swap(swaps, worldData, "GoldPrice", sim.GoldPrice);
             object dungeon = AR.s.Dungeon;
             Swap(swaps, dungeon, "_villageSlots", sim.DungeonVillageSlots);
             Swap(swaps, dungeon, "_entranceIndexDirty", false);
@@ -1024,8 +1049,11 @@ namespace ARPG.EditorTools
             {
                 VillageData village = sim.VillageList[i];
                 int goldBefore = VillageResourceSimulation.GetAmount(village, GlobalEnum.ItemType.Gold);
-                VillageResourceSimulation.AdvanceWholeHours(village, 1);
-                int produced = VillageResourceSimulation.GetAmount(village, GlobalEnum.ItemType.Gold) - goldBefore;
+                int upkeepBurned = VillageResourceSimulation.AdvanceWholeHours(village, 1);
+                // 같은 시간에 생산과 금고 유지비(D132 B-보조)가 섞이므로 생산 = 금고 변화 + 유지비로 지운 양, 소멸은 따로 센다.
+                sim.Today.VaultUpkeepBurn += upkeepBurned;
+                int produced = VillageResourceSimulation.GetAmount(village, GlobalEnum.ItemType.Gold) - goldBefore
+                               + upkeepBurned;
                 if (produced == 0)
                     continue;
                 sim.Today.PopulationGold += produced;
@@ -1742,6 +1770,7 @@ namespace ARPG.EditorTools
             row.Day = day;
             row.GameTime = gameTime;
             RecordRumorDay(sim, row, gameTime);
+            RecordGoldDay(sim, row);
 
             List<float> powers = new List<float>();
             double powerSum = 0d;
@@ -1805,6 +1834,20 @@ namespace ARPG.EditorTools
             return row;
         }
 
+        /// <summary>GOLD_BALANCE 일별 기록: 기록 시각의 통화량 비율·물가 지수, 그날의 생활비 카운터 증가분.</summary>
+        private static void RecordGoldDay(SimContext sim, DayRow row)
+        {
+            row.GoldPriceTarget = GoldPriceRules.GetTarget(sim.GoldPrice, AR.s.Village.ComputeWorldGold());
+            row.GoldPriceIndex = sim.GoldPrice.Index;
+            NpcGoldFlowCounters flow = sim.GoldFlow;
+            row.LivingSpendCount = flow.LivingSpendCount - sim.LivingCountAtDayStart;
+            row.LivingSpendDeposit = flow.LivingSpendDeposited - sim.LivingDepositAtDayStart;
+            row.LivingSpendBurn = flow.LivingSpendBurned - sim.LivingBurnAtDayStart;
+            sim.LivingCountAtDayStart = flow.LivingSpendCount;
+            sim.LivingDepositAtDayStart = flow.LivingSpendDeposited;
+            sim.LivingBurnAtDayStart = flow.LivingSpendBurned;
+        }
+
         private static int CountLivingInVillage(SimContext sim, VillageData village)
         {
             int count = 0;
@@ -1826,7 +1869,8 @@ namespace ARPG.EditorTools
                           "hunt_outcomes,hunt_success_pct,delve_outcomes,delve_success_pct,delve_completion_rolls,delve_dungeon_changed_failures,npc_completions,wounded,severe_wounds,treatments,deaths,expected_deaths,gold_burned,world_gold,village_gold,npc_gold," +
                           "population_gold_produced,world_gold_conservation_error,food_inflow,food_yield_raw,trades_executed," +
                           "npc_sold,npc_sold_gold,npc_sell_rejected,npc_bought,npc_bought_gold," +
-                          "rumor_exchange_attempts,rumor_transfers,rumors_held,rumor_holders,promising_holders,rumor_stored_invalid,confirmation_delves");
+                          "rumor_exchange_attempts,rumor_transfers,rumors_held,rumor_holders,promising_holders,rumor_stored_invalid,confirmation_delves," +
+                          "gold_price_target,gold_price_index,living_spend_count,living_spend_deposit,living_spend_burn,vault_upkeep_burn");
             float baseAvg = rows.Count > 0 ? rows[0].AvgPower : 0f;
             float baseCohort = rows.Count > 0 ? rows[0].CohortAvgPower : 0f;
             long baseWorld = rows.Count > 0 ? rows[0].VillageGold + rows[0].NpcGold : 0;
@@ -1837,12 +1881,13 @@ namespace ARPG.EditorTools
                 DayRow r = rows[i];
                 if (i > 0)
                 {
-                    cumulativeBurned += r.GoldBurned;
+                    cumulativeBurned += r.GoldBurned + r.LivingSpendBurn + r.VaultUpkeepBurn;
                     cumulativePopulation += r.PopulationGold;
                 }
                 int selections = r.SelectRest + r.SelectHunt + r.SelectTrade + r.SelectDelve;
                 long world = r.VillageGold + r.NpcGold;
-                // 닫힌 경제 검산: 오늘 세계 Gold = 시작 + 인구 생산 누계 − 사망 소멸 누계. 0이 아니면 새는 경로가 있다.
+                // 닫힌 경제 검산: 오늘 세계 Gold = 시작 + 인구 생산 누계 − 소멸 누계(사망 + 생활비 소멸 + 금고 유지비).
+                // 0이 아니면 새는 경로가 있다.
                 long conservationError = world - (baseWorld + cumulativePopulation - cumulativeBurned);
                 sb.Append(r.Day).Append(',')
                   .Append(F(r.GameTime, 1)).Append(',')
@@ -1900,7 +1945,13 @@ namespace ARPG.EditorTools
                   .Append(r.RumorHolders).Append(',')
                   .Append(r.PromisingHolders).Append(',')
                   .Append(r.StoredInvalid).Append(',')
-                  .Append(r.ConfirmationDelves).AppendLine();
+                  .Append(r.ConfirmationDelves).Append(',')
+                  .Append(F(r.GoldPriceTarget, 4)).Append(',')
+                  .Append(F(r.GoldPriceIndex, 4)).Append(',')
+                  .Append(r.LivingSpendCount).Append(',')
+                  .Append(r.LivingSpendDeposit).Append(',')
+                  .Append(r.LivingSpendBurn).Append(',')
+                  .Append(r.VaultUpkeepBurn).AppendLine();
             }
             return sb.ToString();
         }
@@ -2049,12 +2100,13 @@ namespace ARPG.EditorTools
             for (int i = 1; i < rows.Count; i++)
             {
                 cumulativePopulation += rows[i].PopulationGold;
-                cumulativeBurned += rows[i].GoldBurned;
+                cumulativeBurned += rows[i].GoldBurned + rows[i].LivingSpendBurn + rows[i].VaultUpkeepBurn;
                 long error = rows[i].VillageGold + rows[i].NpcGold - (baseWorld + cumulativePopulation - cumulativeBurned);
                 if (Math.Abs(error) > Math.Abs(maxConservationError))
                     maxConservationError = error;
             }
-            sb.AppendLine($"닫힌 경제 검산 오차(일별 최대): {maxConservationError}");
+            sb.AppendLine($"닫힌 경제 검산 오차(일별 최대, 소멸 = 사망 + 생활비 소멸 + 금고 유지비): {maxConservationError}");
+            AppendGoldBalanceSummary(sb, sim, rows);
             AppendRumorSummary(sb, sim, rows, days);
             AppendTopicSummary(sb, sim, days);
             AppendPartySummary(sb, sim, days, first.Living);
@@ -2099,7 +2151,8 @@ namespace ARPG.EditorTools
             Item(Mathf.Abs(avgPowerPct) <= 10f && Mathf.Abs(cohortPowerPct) <= 10f, "평균 전투력 평탄 (±10% 이내)",
                 $"생존 {avgPowerPct:+0.00;-0.00}% / 고정 집단 {cohortPowerPct:+0.00;-0.00}%");
             Item(maxCapExceed == 0, "개인 상한 초과 0", $"{maxCapExceed}");
-            Item(huntPct >= 38f && huntPct <= 48f, "Hunt 선택 비중 43% ±5%p", $"{huntPct:F2}%");
+            // GOLD_BALANCE 본체(2026-10-03): 금고 Gold가 돌며 Trade가 늘어 기준을 43% → 38%로 개정했다.
+            Item(huntPct >= 33f && huntPct <= 43f, "Hunt 선택 비중 38% ±5%p", $"{huntPct:F2}%");
             // 사망률은 참고치(§10.1)라 PASS/FAIL에 넣지 않는다 — 실제 사망 수는 표본이 작아(30일 약 10~20명) 흔들리므로 기대값을 같이 본다.
             double expectedDeathPct = first.Living > 0 ? expectedDeaths * 100d / first.Living : 0d;
             string deathNote = $"실제 {deathPct:F2}% / 기대값 {expectedDeathPct:F2}% (30일 0.5~1% 참고, 기간 비례 " +
@@ -3134,6 +3187,8 @@ namespace ARPG.EditorTools
                     continue;
                 NpcSaveData npc = sim.Npcs[entityId];
                 bag.Living++;
+                bag.JsonBytes += Encoding.UTF8.GetByteCount(JsonConvert.SerializeObject(npc.Inventory, Formatting.None,
+                    JsonSettings.Default));
                 int used = 0;
                 bool hasStealable = false;
                 List<ItemData?> inventory = npc.Inventory;
@@ -3300,7 +3355,7 @@ namespace ARPG.EditorTools
                           $"빈칸 있는 NPC {bag.NpcsWithFreeSlot}명({Pct(bag.NpcsWithFreeSlot, bag.Living):F1}%)");
             sb.AppendLine($"  아이템 {bag.Items}개: 비스택·인스턴스(훔칠 수 있음) {bag.Stealable} / 그 밖 {bag.Items - bag.Stealable} | " +
                           $"매각 가능 {bag.Sellable} / 불가 {bag.Unsellable} / 소속 마을 없음 {bag.NoVillage} | " +
-                          $"훔칠 수 있는 것 중 매각 가능 {bag.StealableSellable}");
+                          $"훔칠 수 있는 것 중 매각 가능 {bag.StealableSellable} | 가방 JSON {bag.JsonBytes / 1024}KB");
             sb.Append($"  가치(BasePrice×수량): 평균 {(bag.Items > 0 ? bag.ValueSum / (double)bag.Items : 0d):F1} / 중앙 {median} / " +
                       $"최대 {bag.MaxValue} / 훔칠 수 있는 것 평균 {(bag.Stealable > 0 ? bag.StealableValueSum / (double)bag.Stealable : 0d):F1} | 분포");
             for (int b = 0; b < BagValueBucketLabels.Length; b++)
@@ -4133,6 +4188,48 @@ namespace ARPG.EditorTools
             return total;
         }
 
+        /// <summary>GOLD_BALANCE 요약: 물가 지수 곡선·등급 배율·안정 확인(G2), 새 흐름(생활비·금고 유지비) 합계.</summary>
+        private static void AppendGoldBalanceSummary(StringBuilder sb, SimContext sim, List<DayRow> rows)
+        {
+            if (rows.Count == 0)
+                return;
+            DayRow first = rows[0];
+            DayRow last = rows[rows.Count - 1];
+            long livingCount = 0, deposit = 0, burn = 0, vault = 0;
+            for (int i = 1; i < rows.Count; i++)
+            {
+                livingCount += rows[i].LivingSpendCount;
+                deposit += rows[i].LivingSpendDeposit;
+                burn += rows[i].LivingSpendBurn;
+                vault += rows[i].VaultUpkeepBurn;
+            }
+            float index = last.GoldPriceIndex;
+            sb.AppendLine("---- 골드 밸런스 (GOLD_BALANCE) ----");
+            sb.AppendLine($"물가 지수: {(GoldPriceRules.IndexEnabled ? "가격에 적용 중" : "측정만 (가격 배율 1 — 지수 꺼짐)")} | " +
+                          $"기준 세계 Gold {sim.GoldPrice.BaselineWorldGold} | 통화량 비율 {first.GoldPriceTarget:F3} → {last.GoldPriceTarget:F3} | " +
+                          $"지수(지연 {GoldPriceRules.IndexLagDays:F0}일) {first.GoldPriceIndex:F3} → {index:F3}");
+            sb.AppendLine($"  끝 지수의 등급 배율: 흔함 ×{GoldPriceRules.GetMultiplier(index, GoldPriceClass.Common):F3} / " +
+                          $"중간 ×{GoldPriceRules.GetMultiplier(index, GoldPriceClass.Mid):F3} / " +
+                          $"희귀 ×{GoldPriceRules.GetMultiplier(index, GoldPriceClass.Rare):F3} / " +
+                          $"서비스 ×{GoldPriceRules.GetMultiplier(index, GoldPriceClass.Service):F3}");
+            int[] checkpoints = { 7, 30, 60, 120, 180, 240, 300, 360, 390, 420, 450, 600, 840 };
+            sb.Append("  지수 곡선 (일: 지수 / 통화량 비율):");
+            for (int i = 0; i < checkpoints.Length; i++)
+            {
+                int day = checkpoints[i];
+                if (day < rows.Count)
+                    sb.Append($" {day}일 {rows[day].GoldPriceIndex:F3}/{rows[day].GoldPriceTarget:F3}");
+            }
+            sb.AppendLine();
+            if (rows.Count > 450 && rows[420].GoldPriceIndex > 0f)
+            {
+                float change = (rows[450].GoldPriceIndex / rows[420].GoldPriceIndex - 1f) * 100f;
+                sb.AppendLine($"  안정 확인 (G2): 420일 지수 {rows[420].GoldPriceIndex:F3}, 420→450일 변화 {change:+0.00;-0.00}%");
+            }
+            sb.AppendLine($"  생활비: {livingCount}회, 마을 금고 입금 {deposit}, 소멸 {burn} | 금고 유지비 소멸 {vault} | " +
+                          $"사망 소멸 {sim.TotalGoldBurned}");
+        }
+
         private static void AppendRumorSummary(StringBuilder sb, SimContext sim, List<DayRow> rows, int days)
         {
             NpcRumorCounters c = sim.RumorCounters;
@@ -4819,10 +4916,12 @@ namespace ARPG.EditorTools
                 thief.VillageId = thiefVillage;
                 Check(deadCheck == NpcTheftCheck.NotEligible && noVillageCheck == NpcTheftCheck.NotEligible,
                     "사망·소속 마을 없음 → 자격 없음");
-                Check(Mathf.Approximately(NpcManager.GetTheftAttemptChance(MakeTheftTestStat(100, 0, 0, 0), 1f), 0.30f) &&
-                      Mathf.Approximately(NpcManager.GetTheftAttemptChance(MakeTheftTestStat(0, 100, 0, 0), 0.5f), 0.10f) &&
-                      Mathf.Approximately(NpcManager.GetTheftAttemptChance(MakeTheftTestStat(50, 50, 0, 0), 1f), 0.25f),
-                    "시도 확률 = 25% × 야망 × (1 + 0.2 × (탐욕 − 정직)/100): 30% / 10% / 25%");
+                // 기대값은 기본 확률 상수에서 계산한다 (D136에서 25% → 2%로 재조정).
+                float theftBase = NpcManager.TheftBaseChance;
+                Check(Mathf.Approximately(NpcManager.GetTheftAttemptChance(MakeTheftTestStat(100, 0, 0, 0), 1f), theftBase * 1.2f) &&
+                      Mathf.Approximately(NpcManager.GetTheftAttemptChance(MakeTheftTestStat(0, 100, 0, 0), 0.5f), theftBase * 0.4f) &&
+                      Mathf.Approximately(NpcManager.GetTheftAttemptChance(MakeTheftTestStat(50, 50, 0, 0), 1f), theftBase),
+                    $"시도 확률 = {theftBase * 100f:0.#}% × 야망 × (1 + 0.2 × (탐욕 − 정직)/100): ×1.2 / ×0.4 / ×1");
                 global::ARPG.Component.NpcStatComponent lowWatch = default;
                 global::ARPG.Component.NpcStatComponent highWatch = new global::ARPG.Component.NpcStatComponent
                     { Curiosity = 100, Patience = 100 };
@@ -4852,7 +4951,7 @@ namespace ARPG.EditorTools
                 float expectedRate = NpcManager.GetTheftAttemptChance(thief.NpcStat, 1f);
                 float attemptRate = attemptCount / (float)decisionSamples;
                 Check(attemptCount > 0 && rollFailedCount > 0 && otherCount == 0 && Mathf.Abs(attemptRate - expectedRate) < 0.08f,
-                    $"시도 롤: {decisionSamples}회 중 시도 {attemptCount} ({attemptRate:P1}, 기대 {expectedRate:P0}) / 롤 실패 {rollFailedCount}");
+                    $"시도 롤: {decisionSamples}회 중 시도 {attemptCount} ({attemptRate:P1}, 기대 {expectedRate:P1}) / 롤 실패 {rollFailedCount}");
                 if (float.IsNaN(attemptRestStart) == false)
                 {
                     float lastBefore = thief.LastTheftGameTime;
@@ -5724,7 +5823,7 @@ namespace ARPG.EditorTools
             object village = AR.s.Village;
             string[] npcFields = { "_npcSaveDict", "_npcPowerCache", "_deferredPurchaseUpgradeItemIds", "_npcPartyDict",
                 "_simulationPartyIds", "_simulationWorkCursor", "_nextPartyId", "_simulationNpcIds", "_simulationCursor", "_narrative",
-                "_npcAffinity", "_npcRelations" };
+                "_npcAffinity", "_npcRelations", "_goldFlowCounters" };
             for (int i = 0; i < npcFields.Length; i++)
             {
                 object? value = GetField(npc, npcFields[i]).GetValue(npc);
@@ -5753,6 +5852,9 @@ namespace ARPG.EditorTools
             object worldData = GetField(AR.s.Data, "_worldData").GetValue(AR.s.Data)!;
             sb.Append("worldData.Dungeons=").Append(DescribeFieldValue(GetField(worldData, "Dungeons").GetValue(worldData)))
               .Append('\n');
+            // GOLD_BALANCE: 세계 물가 지수 상태 (참조 + 내용)
+            sb.Append("worldData.GoldPrice=").Append(DescribeFieldValue(GetField(worldData, "GoldPrice").GetValue(worldData)))
+              .Append('|').Append(JsonConvert.SerializeObject(AR.s.Data.GoldPrice, JsonSettings.Default)).Append('\n');
 
             sb.Append("time=").Append(GetField(AR.s.Time, "_elapsedGameTime").GetValue(AR.s.Time)).Append('/')
               .Append(GetField(AR.s.Time, "_accumulator").GetValue(AR.s.Time)).Append('\n');

@@ -54,7 +54,9 @@
 
 ## 4. 자원과 자가 건설
 
-자원 생산은 `VillageResourceSimulation`이 담당한다. 추상 인구를 제한된 생산 인구로 압축하고 Food/Wood/Stone/Iron/Gold를 시간 경계 단위로 계산한다. carry는 `VillageData`에만 저장하며 `VillageStorageComponent`는 표시용 미러다.
+자원 생산은 `VillageResourceSimulation`이 담당한다. 추상 인구를 제한된 생산 인구로 압축하고 Food/Wood/Stone/Iron/Gold를 시간 경계 단위로 계산한다. carry는 `VillageData`에만 저장하며 `VillageStorageComponent`는 표시용 미러다. Gold 생산은 생산 인구 1당 시간당 0.13이다([GOLD_BALANCE_DESIGN.md](../economy/GOLD_BALANCE_DESIGN.md) D134, 0.05 → 0.13).
+
+**Gold 금고 유지비** (GOLD_BALANCE D132 B-보조·D135) — 금고 Gold가 기준선(300G × 서비스 물가 배율)을 넘으면 넘은 만큼을 하루 5%씩 지운다(시간당 비율 1 − 0.95^(1/24), 소수분은 `VillageData.VaultUpkeepCarry`). `AdvanceWholeHours`가 시간마다 "Gold 생산 → 유지비" 순서로 돌려 여러 시간을 한 번에 진행해도 1시간씩 진행한 결과와 같다(`VillageSimulationParity`). 인구 0인 마을은 유지비만, 운영하지 않는 사라진 터는 추상 진행의 비운영 분기에서 유지비만 적용한다. 함수는 지운 양을 돌려주고, 진단은 생산과 소멸을 따로 센다.
 
 건물과 벽은 NPC 배정 없이 게임시간으로 진행한다. 자원 비용은 건설 결정을 제한하는 경제 게이트이므로 유지한다. 실시간과 추상 경로 모두 진행 중 task를 `VillageData.ActiveBuildTasks`에 즉시 반영하며, 전체 동시 task는 현재 1개로 제한한다.
 

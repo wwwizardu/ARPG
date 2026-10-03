@@ -85,7 +85,7 @@
 
 `SkillTable`에는 이 카탈로그 외에도 몬스터 전용 `StrikeMonster`, `GoblinFirebolt`과 추가 스킬 `FireRing`이 있다. 이들은 카탈로그 구현 수에 포함하지 않는다.
 
-> 2026-10-03 확인: 몬스터 전용 `SwampToadPoisonSpit`(SkillId 205)은 2026-09-24 커밋 "연쇄 스킬 추가"(c87d5de)에서 `SkillTable.bytes`에서 빠졌다. 그런데 `AiTable` Id 4(SwampToad, `MonsterTable` 1010의 AI)는 아직 `SkillId1=205`를 참조한다. 의도한 삭제인지 확인되지 않았으며, 시트 행을 복구하든 AI 참조를 바꾸든 데이터 정리가 필요하다. 이 상태에서는 `AttackTelegraphBuildValidator`가 "SkillId 205가 SkillTable에 없습니다"로 빌드를 중단할 것으로 보인다(실행 확인 안 함).
+> 2026-10-03 확인: 몬스터 전용 `SwampToadPoisonSpit`(SkillId 205)은 2026-09-24 커밋 "연쇄 스킬 추가"(c87d5de)에서 `SkillTable.bytes`에서 빠졌다. 그런데 `AiTable` Id 4(SwampToad, `MonsterTable` 1010의 AI)는 아직 `SkillId1=205`를 참조한다. 의도한 삭제인지 확인되지 않았으며, 시트 행을 복구하든 AI 참조를 바꾸든 데이터 정리가 필요하다. 이 상태에서는 `AttackTelegraphBuildValidator`가 "AI 4의 SkillId 205가 SkillTable에 없습니다"로 빌드를 중단했다(메뉴 실행으로 확인). → **2026-10-03 복구**: 삭제 직전 커밋의 205번 행을 시트 `Skill` 탭에 다시 넣고 다운로드했다. 값은 그대로이고 `MoveSpeedWhileUsingMul`만 같은 커밋의 일괄 변경(30 → 75)에 맞췄다. 빌드 검증기 통과.
 
 과거 삭제한 S3 Chain Lightning은 `SingleEntity`를 복원하지 않고 Position 커밋과 공용 연쇄·분열 런타임으로 다시 도입했다(2026-09-24, c87d5de). 구현 계약은 [SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md](SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md)를 따른다. 런타임과 데이터 행(SkillId 202)이 추가되어 2026-10-03 카탈로그 §6 S3로 다시 포함했다.
 
@@ -227,7 +227,7 @@
 ### S6. Frost Bolt — 단발 냉기 발사체 *(런타임 준비 완료, 콘텐츠 미등록)*
 - `ProjectileId`: 202, `DamageType`: Ice
 - 적중 시 `Chill` 부여 (§6.7)
-- 현행: Spell 투사체와 `ApplyBuff` OnHit, 냉동 `BuffTable` 행이 존재한다. 기존 예약 ID 205는 현재 `SwampToadPoisonSpit`이 사용 중이므로 새 ID가 필요하다. (2026-10-03 확인: 205 행은 `SkillTable`에서 빠졌지만 `AiTable` Id 4가 아직 참조하므로 §2의 데이터 정리 전에는 재사용하지 않는다.)
+- 현행: Spell 투사체와 `ApplyBuff` OnHit, 냉동 `BuffTable` 행이 존재한다. 기존 예약 ID 205는 현재 `SwampToadPoisonSpit`이 사용 중이므로 새 ID가 필요하다. (2026-10-03: 한때 `SkillTable`에서 빠졌다가 복구됐다 — §2.)
 
 ---
 
@@ -413,7 +413,7 @@ SkillEffectTable                         // 새 테이블
 
 ProjectileId 대역도 동일 규칙 권장: 화살 100번대, 마법 200번대.
 
-기존 제안 ID 204와 205는 각각 몬스터 전용 `GoblinFirebolt`, `SwampToadPoisonSpit`이 사용 중이다. S5 Lightning Strike와 S6 Frost Bolt를 추가할 때 충돌하지 않는 새 ID를 배정한다. (2026-10-03 확인: 205 행은 `SkillTable`에 없지만 `AiTable` Id 4가 참조 중이다 — §2 참고. 206은 `FireRing`이 사용 중이다.)
+기존 제안 ID 204와 205는 각각 몬스터 전용 `GoblinFirebolt`, `SwampToadPoisonSpit`이 사용 중이다. S5 Lightning Strike와 S6 Frost Bolt를 추가할 때 충돌하지 않는 새 ID를 배정한다. (2026-10-03: 205 행은 한때 `SkillTable`에서 빠졌다가 복구됐다 — §2. 206은 `FireRing`이 사용 중이다.)
 
 ---
 
@@ -443,4 +443,4 @@ ProjectileId 대역도 동일 규칙 권장: 화살 100번대, 마법 200번대.
 - 2026-05-16: `LifeSteal` 효과 경로 단일화. 기존 `LifeStealOnHit` (EffectAction)을 폐기하고 `SkillEffectKind.StatBonus + EffectType.LifeSteal`로 통합. `SkillStatBonusOnHitComponent.LifeStealBonus` 필드 추가 → `SkillAttackProfileComponent.LifeStealRatio`에서 캐릭터 stat과 합산 캐시. SkillEffectExecutor의 `LifeStealOnHit` 케이스 제거, `DownloadTables.InferSkillEffectKindFromEffectType`에서 `LifeSteal` 분기 제거(이제 default StatBonus로 추론). 매 적중마다 트리거 디스패치 없이 `DamageCalculator`가 단일 비율로 흡혈 처리. SkillEffect 1001 행 `Kind=StatBonus` 확정.
 - 2026-08-28: `SkillTargetType.SingleEntity` 폐기. 네임락(대상 ID 고정) 방식을 사용하지 않기로 결정하여 enum 멤버와 관련 런타임 경로(`FindClosestEntity`, `SkillTargetComponent.TargetId`/`TargetType`/`SetEntityTarget`/`HasTarget`)를 모두 제거. 이에 의존한 S3 Chain Lightning / B1 War Cry / B4 Curse of Weakness / C3 Drain Life 4종과, 유일 의존 스킬이 사라진 §6.5(연쇄 메커니즘)를 카탈로그에서 삭제 — 25종 → 21종. 문서와 실제 테이블이 어긋나 있던 A1 Strike / M1 QuickHop의 타겟 타입을 실제 값(`Direction`)으로 정정. 아울러 `SkillUsePolicyResolver.RequiresDirectionalAim`이 명시된 `AimTrackingMode`보다 먼저 검사되어 명시값을 무시하던 문제를 수정 — 이제 이 판정은 `Default` 해석 규칙과 화살표 표시 판단에만 쓰인다(명시값 우선).
 - 2026-09-20: 코드·바이너리 테이블 재대조. 구현 판정을 `공용 런타임`과 `개별 콘텐츠 등록`으로 분리하고 21종을 구현 6종·런타임 준비 9종·코드 보강 필요 6종으로 재분류했다. 마나 소비, Position 즉발, Jump 착지 커밋, 관통, AreaEffect, ApplyBuff, 토템 위임의 완료 상태를 반영하고 로드맵을 남은 작업 기준으로 교체했다. S5/S6의 기존 예약 ID 204/205 충돌도 기록했다.
-- 2026-10-03: 코드·바이너리 테이블 재대조. S3 Chain Lightning을 구현됨으로 카탈로그에 다시 포함했다(SkillId 202 / SkillEffect 1020 / SkillPropagation 1, 2026-09-24 c87d5de) — 22종 중 구현 7종. §6.8에 `SkillTrigger.OnSkillCommit`(9종), `SkillPropagation` EffectAction, 효과 1020, `SkillEffectContext` 전파 필드를 반영했다. §1.3 `SkillTargetRange2`를 반각(180 이상=원)으로 정정했다. `SwampToadPoisonSpit`(205)이 `SkillTable`에서 빠졌는데 `AiTable` Id 4가 아직 참조한다는 데이터 정리 필요 사항을 §2에 기록했다. R2 분산 각도 상수의 정본 위치를 갱신했다.
+- 2026-10-03: 코드·바이너리 테이블 재대조. S3 Chain Lightning을 구현됨으로 카탈로그에 다시 포함했다(SkillId 202 / SkillEffect 1020 / SkillPropagation 1, 2026-09-24 c87d5de) — 22종 중 구현 7종. §6.8에 `SkillTrigger.OnSkillCommit`(9종), `SkillPropagation` EffectAction, 효과 1020, `SkillEffectContext` 전파 필드를 반영했다. §1.3 `SkillTargetRange2`를 반각(180 이상=원)으로 정정했다. `SwampToadPoisonSpit`(205)이 `SkillTable`에서 빠졌는데 `AiTable` Id 4가 아직 참조해 빌드가 막히던 문제를 §2에 기록하고, 같은 날 205번 행을 복구했다. R2 분산 각도 상수의 정본 위치를 갱신했다.

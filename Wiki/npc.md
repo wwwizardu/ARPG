@@ -28,7 +28,7 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 
 **현재 구현**: 모든 생존 NPC는 `System_NpcSim`의 시간분할 처리 대상이며, 활동은 Rest·Hunt(솔로/파티)·Trade(마을 상점)·DungeonDelve(던전 추상 원정)다. 다음 활동은 성격에서 나온 **야망**과 필요(Gold·가방·부상 회복)로 효용 선택한다. Hunt는 Food·부상·사망·`Fell` 연대기·주요 사건 이력에 결과를 남기고, 활동 중 LOD 전환도 이어진다. 플레이어 관계 4축은 `NpcManager`가 저장하며 Talk/Gift가 Affinity·Intimacy를 실제로 바꾼다. [src: Docs/npc/NPC_SIMULATION_DESIGN.md §11.1, Docs/npc/NPC_AMBITION_DESIGN.md §4·§6, Assets/Scripts/Common/System/System_NpcSim.cs, Assets/Scripts/Manager/NpcManager.cs, Assets/Scripts/Common/Utility/InteractionHelper.cs]
 
-**모험가 경제(야망 P1·P2·P4)**: NPC는 전리품을 상점에 팔아 Gold를 얻고(Hunt는 골드를 주지 않음), 그 Gold로 상점의 **기본 장비**를 사서 강해진다. 대금은 마을 Gold와 NPC Gold 사이에서만 움직이는 닫힌 경제다. 전투력은 장착 장비로 계산하고, 개인 상한(시작 전투력 +20%, 강자 +35~50%)과 +15% 문턱 때문에 성장은 거의 평탄하다. 소문 교환·NPC 던전 완료(낮은 확률)·파티 자동 구성·부상 등급·NPC 간 절도까지 구현됐고, 협력·배신(P3)은 보류다. [src: Docs/npc/NPC_AMBITION_DESIGN.md §2·§5·§7·§9·§10.1, Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §2]
+**모험가 경제(야망 P1·P2·P4)**: NPC는 전리품을 상점에 팔아 Gold를 얻고(Hunt는 골드를 주지 않음), 그 Gold로 상점의 **기본 장비**를 사서 강해진다. 대금은 마을 Gold와 NPC Gold 사이에서만 움직이는 닫힌 경제다. Rest가 끝나면 예비금(치료비 × 3)을 넘은 Gold의 70%를 생활비로 소속 마을에 내고(1.8% 소멸), 세계 물가 지수가 가격에 배율을 붙인다(GOLD_BALANCE D124~D137). 전투력은 장착 장비로 계산하고, 개인 상한(시작 전투력 +20%, 강자 +35~50%)과 +15% 문턱 때문에 성장은 거의 평탄하다. 소문 교환·NPC 던전 완료(낮은 확률)·파티 자동 구성·부상 등급·NPC 간 절도까지 구현됐고, 협력·배신(P3)은 보류다. [src: Docs/npc/NPC_AMBITION_DESIGN.md §2·§5·§7·§9·§10.1, Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §2]
 
 **장비(2026-10-03)**: 일반 NPC 장비는 무작위 옵션이 아닌 **상점용 기본 아이템**(고정 옵션 1개)이다. 시작 장비도 기본 아이템이고, 전리품·장물은 장착하지 않고 판다. 기존 세이브는 로드 때 일괄 교체된다(WorldDataVersion 17). [src: Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md D116~D123·§11, Docs/npc/NPC_EQUIPMENT_DESIGN.md §3.3·§4.2]
 
@@ -55,7 +55,7 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 | NPC=모험가·경제 분리·자가 건설 | [VILLAGE_NPC_BOUNDARY_DESIGN](../Docs/npc/VILLAGE_NPC_BOUNDARY_DESIGN.md) | 현행 정본 |
 | 동료(파티 영입·명령·성장) | [companionSystem](../Docs/npc/companionSystem.md) | 최구식 문서 — §3 주의 필수 |
 | NPC 장비 12슬롯·검사 UI(UINpcInspect)·시작 장비 시드 | [NPC_EQUIPMENT_DESIGN](../Docs/npc/NPC_EQUIPMENT_DESIGN.md) | 구현 완료. 시작 장비는 기본 아이템(§3.3) |
-| NPC 동기(야망)·효용 선택·모험가 경제(Gold·상점 거래·닫힌 경제)·전투력·성장 곡선·소문·NPC 던전 완료·파티·부상·절도 | [NPC_AMBITION_DESIGN](../Docs/npc/NPC_AMBITION_DESIGN.md) — 규칙 정본은 §2 결정표(D1~D123) | 결정 번호는 AMBITION·COMBAT·SHOP_EQUIPMENT 공용 연번 |
+| NPC 동기(야망)·효용 선택·모험가 경제(Gold·상점 거래·닫힌 경제)·전투력·성장 곡선·소문·NPC 던전 완료·파티·부상·절도 | [NPC_AMBITION_DESIGN](../Docs/npc/NPC_AMBITION_DESIGN.md) — 규칙 정본은 §2 결정표(D1~D137, 골드 밸런스 D124~D137의 상세는 [GOLD_BALANCE_DESIGN](../Docs/economy/GOLD_BALANCE_DESIGN.md)) | 결정 번호는 AMBITION·COMBAT·SHOP_EQUIPMENT 공용 연번 |
 | NPC 실전투 런타임(진영·인식·동행·드랍 줍기·결투) | [NPC_COMBAT_DESIGN](../Docs/npc/NPC_COMBAT_DESIGN.md) | 화면 안 전투를 소유. 사회 규칙은 AMBITION이 결과 훅으로 공급 |
 | NPC 장비 출처(상점 기본 아이템)·기본 장비 칸·장비 저장 표현·기존 세이브 일괄 교체 | [NPC_SHOP_EQUIPMENT_DESIGN](../Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md) | D116~D123, 구현 결과·검증은 §11 |
 | 플레이어 상태 관찰→Trust·대사·보상 | [PLAYER_RECOGNITION_DESIGN](../Docs/npc/PLAYER_RECOGNITION_DESIGN.md) | 전리품 식별 배관만 구현, 반응 본체 미구현 [src: Docs/npc/PLAYER_RECOGNITION_DESIGN.md §제약·전제·§구현 계획, Assets/Scripts/Common/Utility/MonsterTrophyIdentifier.cs] |
@@ -84,7 +84,7 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 | 관찰 반응 — 몬스터 전리품 1호 신호 | PLAYER_RECOGNITION | `ItemTable.SourceMonsterId` + `MonsterTrophyIdentifier` 존재. 현행 ItemTable 데이터에는 연결된 전리품 없음 | 🟡 식별 배관만 구현, 감지·Trust·영속화·대사·보상 미구현 [src: Assets/Scripts/Common/Tables.cs, Assets/Scripts/Common/Utility/MonsterTrophyIdentifier.cs, Assets/_BinaryData/TableData/ItemTable.bytes] |
 | 개인 활동 시뮬 | NPC_SIMULATION §11.1 | `System_NpcSim`, `NpcActivityState`, `NpcActivityResolver` — Rest/솔로·파티 Hunt/Trade/DungeonDelve, 결정론 결과, analytic 경로 | ✅ 구현 [src: Assets/Scripts/Common/System/System_NpcSim.cs, Assets/Scripts/Npc/NpcActivityResolver.cs] |
 | 야망·효용 선택·장비 전투력(P1) | AMBITION §4–6·§10.1 | `NpcPowerEvaluator`, `NpcManager_Ambition`, Hunt 기준 전투력 10.75(2026-10-03 재정규화) | ✅ 구현 [src: Docs/npc/NPC_AMBITION_DESIGN.md §5.1, Assets/Scripts/Npc/NpcPowerEvaluator.cs, Assets/Scripts/Npc/NpcActivityResolver.cs] |
-| 상점 거래·닫힌 경제·기본 장비 구매 | AMBITION §7.2·§9, SHOP_EQUIPMENT §4–5 | `NpcManager_Trade`, `VillageManager_NpcTrade`, `VillageTradeStockRoller.RollBasicEquipmentPlan` | ✅ 구현. 마을 골드 밸런스는 후속(D109 ②) [src: Assets/Scripts/Manager/NpcManager_Trade.cs, Assets/Scripts/Village/VillageManager_NpcTrade.cs] |
+| 상점 거래·닫힌 경제·기본 장비 구매 | AMBITION §7.2·§9, SHOP_EQUIPMENT §4–5 | `NpcManager_Trade`, `VillageManager_NpcTrade`, `VillageTradeStockRoller.RollBasicEquipmentPlan` | ✅ 구현. 마을 골드 밸런스(생활비·물가 지수·금고 유지비) 2026-10-03 구현 [src: Assets/Scripts/Manager/NpcManager_Trade.cs, Assets/Scripts/Village/VillageManager_NpcTrade.cs, Assets/Scripts/Manager/NpcManager_LivingExpense.cs, Assets/Scripts/Village/VillageManager_GoldPrice.cs] |
 | 소문·DungeonDelve·NPC 던전 완료(P2) | AMBITION §5.2·§7.1·§7.4 | `NpcManager_Delve`, `DungeonManager_NpcCompletion`, 소문 교환 | ✅ 구현 [src: Assets/Scripts/Manager/NpcManager_Delve.cs, Assets/Scripts/Dungeon/DungeonManager_NpcCompletion.cs] |
 | 파티 자동 구성 개정·부상 등급 | AMBITION D85~D96 | 모집·수락 확률, 중상 10%·부상 요약 | ✅ 구현 [src: Docs/npc/NPC_AMBITION_DESIGN.md §2] |
 | NPC 간 절도(P4) | AMBITION §7.6, D98~D115 | `NpcManager_Theft` — 현장 적발·단서·판매 소문 늦은 발각 | ✅ 구현. 훔친 장비는 장착하지 않음(D119) [src: Assets/Scripts/Manager/NpcManager_Theft.cs] |
