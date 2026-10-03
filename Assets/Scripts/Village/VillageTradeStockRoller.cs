@@ -166,6 +166,43 @@ namespace ARPG.Village
             return plan;
         }
 
+        /// <summary>
+        /// 기본 장비 칸 계획 (NPC_SHOP_EQUIPMENT_DESIGN §4, D117). basicEquipmentItems는 기본 아이템 변형이 있는 장비만
+        /// ItemId 오름차순으로 넘긴다. 상점 Tier 게이트 안에서 같은 확률로, 칸끼리 중복 없이 뽑는다.
+        /// 기존 칸(RollStockPlan)과 품목이 겹쳐도 된다. 호출자는 RollStockPlan 뒤에 같은 rng로 이어 부른다.
+        /// </summary>
+        public static List<TradeStockPlanEntry> RollBasicEquipmentPlan(VillageTradeProfile profile,
+            int shopTier, IReadOnlyList<TradeItemInfo> basicEquipmentItems, HistoryRng rng)
+        {
+            List<TradeStockPlanEntry> plan = new List<TradeStockPlanEntry>();
+            if (basicEquipmentItems == null || basicEquipmentItems.Count == 0)
+                return plan;
+
+            int slotCount = profile.GetBasicEquipmentSlotCount(shopTier);
+            int maxItemTier = profile.GetMaxItemTier(shopTier);
+            List<TradeItemInfo> candidates = new List<TradeItemInfo>();
+            List<int> weights = new List<int>();
+            for (int i = 0; i < basicEquipmentItems.Count; i++)
+            {
+                TradeItemInfo item = basicEquipmentItems[i];
+                if (item.BasePrice <= 0 || item.Tier > maxItemTier)
+                    continue;
+                candidates.Add(item);
+                weights.Add(1);
+            }
+
+            for (int slot = 0; slot < slotCount; slot++)
+            {
+                if (TryPickWeighted(candidates, weights, rng, out TradeItemInfo picked) == false)
+                    break;
+                int index = IndexOfItem(candidates, picked.Id);
+                candidates.RemoveAt(index);
+                weights.RemoveAt(index);
+                plan.Add(CreateEntry(profile, picked, TradeStockSlotKind.BasicEquipment, rng));
+            }
+            return plan;
+        }
+
         private static TradeStockPlanEntry CreateEntry(VillageTradeProfile profile,
             TradeItemInfo item, TradeStockSlotKind slotKind, HistoryRng rng)
         {

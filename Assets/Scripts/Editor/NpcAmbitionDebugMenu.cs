@@ -201,15 +201,14 @@ namespace ARPG.EditorTools
                 .Append($"shops={AR.s.Village.CountByService(villageId, ProvidedService.Shop)} ")
                 .Append($"restockCycle={v.MerchantRestockCycle} npcPurchase={v.NpcPurchaseCount}/")
                 .Append($"{AR.s.Village.GetNpcPurchaseLimitPerCycle(v)} (cycle {v.NpcPurchaseCycle}) ")
-                .Append($"lastNpcTrade={v.LastNpcTradeGameTime:F2} now={now:F2} ")
-                .Append($"rareUnlocked={AR.s.Village.IsRareSlotUnlockedForNpc(v)}");
+                .Append($"lastNpcTrade={v.LastNpcTradeGameTime:F2} now={now:F2}");
             for (int i = 0; i < v.MerchantStock.Count; i++)
             {
                 MerchantStockEntry entry = v.MerchantStock[i];
                 string item = entry.Item != null ? DescribeItem(entry.Item) : "(null)";
                 builder.Append($"\n  [{i}] {item} x{entry.RemainingCount} {entry.UnitPrice}G {entry.SlotKind}");
                 if (entry.Item?.Equipment != null)
-                    builder.Append($" mods={entry.Item.Equipment.Mods.Count}");
+                    builder.Append($" mods={entry.Item.Equipment.Mods.Count} basic={entry.Item.Equipment.BasicItemId}");
                 if (entry.NpcBuyerEntityId >= 0)
                     builder.Append($" boughtBy={entry.NpcBuyerName}({entry.NpcBuyerEntityId})");
             }

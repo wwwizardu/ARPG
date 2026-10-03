@@ -537,6 +537,78 @@ namespace ARPG.Item
             };
         }
 
+        // ========== 상점 기본 아이템 (NPC_SHOP_EQUIPMENT_DESIGN.md §3.2, D116) ==========
+
+        /// <summary>
+        /// 기본 아이템 행 번호로 장비를 만든다: Base·Implicit(기존 테이블) + 고정 옵션 1개, 품질 고정, 무작위 롤 없음.
+        /// 상점 진열(보장·특산 칸)·NPC 시작 장비가 이 진입점을 쓴다. 행이 없거나 잘못됐으면 null.
+        /// </summary>
+        public ItemData? CreateBasicItem(int basicItemId)
+        {
+            BasicItemTable? row = AR.s.Data.GetBasicItem(basicItemId);
+            if (row == null)
+            {
+                Debug.LogError($"[ItemManager] CreateBasicItem - BasicItemTable not found or invalid, basicItemId({basicItemId})");
+                return null;
+            }
+
+            ItemTable? itemTable = AR.s.Data.GetItem(row.ItemId);
+            if (itemTable == null)
+            {
+                Debug.LogError($"[ItemManager] CreateBasicItem - ItemTable not found, itemId({row.ItemId})");
+                return null;
+            }
+
+            return new ItemData
+            {
+                Id = row.ItemId,
+                ItemInstanceId = _instanceIdCounter++,
+                Quantity = 1,
+                Table = itemTable,
+                Equipment = CreateBasicEquipmentData(row, itemTable),
+            };
+        }
+
+        /// <summary>
+        /// 기본 아이템 행으로 장비 데이터만 만든다. 기존 ItemData의 장비를 바꿔 끼울 때(인스턴스 번호 유지) 쓴다.
+        /// </summary>
+        public EquipmentData CreateBasicEquipmentData(BasicItemTable row, ItemTable itemTable)
+        {
+            EquipmentData equipmentData = new EquipmentData
+            {
+                Id = row.ItemId,
+                EquipType = Utils.CategoryToEquipmentTypeMask(itemTable.Category),
+            };
+            equipmentData.ApplyBasicItemTemplate(row);
+            return equipmentData;
+        }
+
+        /// <summary>
+        /// 장비 아이템의 기본 아이템 변형 하나를 가중치로 고른다. roll01은 [0, 1) 값으로,
+        /// 상점은 회차 RNG, NPC는 해시에서 만들어 결정론을 유지한다. 변형이 없으면 null.
+        /// </summary>
+        public BasicItemTable? PickBasicItemVariant(int itemId, double roll01)
+        {
+            IReadOnlyList<BasicItemTable> variants = AR.s.Data.GetBasicItemVariants(itemId);
+            if (variants.Count == 0)
+                return null;
+
+            int totalWeight = 0;
+            for (int i = 0; i < variants.Count; i++)
+                totalWeight += variants[i].Weight;
+
+            if (roll01 < 0d) roll01 = 0d;
+            int target = (int)(roll01 * totalWeight);
+            if (target >= totalWeight) target = totalWeight - 1;
+            for (int i = 0; i < variants.Count; i++)
+            {
+                target -= variants[i].Weight;
+                if (target < 0)
+                    return variants[i];
+            }
+            return variants[variants.Count - 1];
+        }
+
         /// <summary>
         /// 지정 슬롯에 랜덤 Mod를 롤링하여 추가
         /// </summary>

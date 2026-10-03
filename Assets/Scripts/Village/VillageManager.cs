@@ -1789,9 +1789,50 @@ namespace ARPG.Village
                 });
             }
 
-            Debug.Log($"[Shop] v{v.VillageId} 매물 재롤: {v.MerchantStock.Count}건 " +
+            // NPC_SHOP_EQUIPMENT §4, D117: 기본 장비 칸은 기존 재고 뒤에 같은 rng를 이어 롤한다 — 기존 칸의 결과는 그대로다.
+            // 변형 선택도 같은 rng를 써서 (마을, 회차) 결정론에 포함된다.
+            List<TradeStockPlanEntry> basicPlan = VillageTradeStockRoller.RollBasicEquipmentPlan(
+                trade, v.ShopTier, BuildBasicEquipmentTradeItemInfos(items), rng);
+            int basicCount = 0;
+            for (int i = 0; i < basicPlan.Count; i++)
+            {
+                TradeStockPlanEntry planned = basicPlan[i];
+                Tables.BasicItemTable? variant = AR.s.Item.PickBasicItemVariant(planned.ItemId, rng.NextDouble());
+                ARPG.Data.ItemData? basicItem = variant != null ? AR.s.Item.CreateBasicItem(variant.Id) : null;
+                if (basicItem == null)
+                {
+                    Debug.LogWarning($"[Shop] ItemId({planned.ItemId}) 기본 장비 매물 생성 실패 — 슬롯 스킵");
+                    continue;
+                }
+
+                v.MerchantStock.Add(new MerchantStockEntry
+                {
+                    Item = basicItem,
+                    RemainingCount = planned.Count,
+                    UnitPrice = planned.UnitBuyPrice,
+                    RestockCycle = cycle,
+                    TradeProfileId = trade.TradeProfileId,
+                    SlotKind = planned.SlotKind,
+                    PriceReason = planned.Reason,
+                });
+                basicCount++;
+            }
+
+            Debug.Log($"[Shop] v{v.VillageId} 매물 재롤: {v.MerchantStock.Count}건 (기본 장비 {basicCount}) " +
                 $"(trade={trade.TradeProfileId}, cycle={cycle}, shopTier={v.ShopTier}, " +
                 $"facilityTier={facilityTier})");
+        }
+
+        /// <summary>기본 장비 칸 후보 — 거래 품목 중 기본 아이템 변형이 있는 장비 (입력 순서 = ItemId 오름차순 유지).</summary>
+        private static List<TradeItemInfo> BuildBasicEquipmentTradeItemInfos(List<TradeItemInfo> items)
+        {
+            List<TradeItemInfo> result = new List<TradeItemInfo>();
+            for (int i = 0; i < items.Count; i++)
+            {
+                if (AR.s.Data.GetBasicItemVariants(items[i].Id).Count > 0)
+                    result.Add(items[i]);
+            }
+            return result;
         }
 
         /// <summary>

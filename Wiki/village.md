@@ -2,7 +2,7 @@
 name: village
 description: 마을 경제·건설·Tier·벽·서비스와 실시간/추상 LOD의 정본을 연결한다.
 type: topic
-last_updated: 2026-09-01
+last_updated: 2026-10-03
 sources:
   - Docs/village/VILLAGE_RUNTIME_DESIGN.md
   - Docs/village/ABSTRACT_CONSTRUCTION_DESIGN.md
@@ -11,6 +11,8 @@ sources:
   - Docs/combat/ITEM_ENCHANTMENT_DESIGN.md
   - Docs/npc/VILLAGE_NPC_BOUNDARY_DESIGN.md
   - Docs/village/VILLAGE_GROWTH_STAGES.md
+  - Docs/npc/NPC_AMBITION_DESIGN.md
+  - Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md
   - Assets/Scripts/Village/
   - Assets/Scripts/Common/System/
   - Assets/Scripts/History/HistoryManager.cs
@@ -28,6 +30,8 @@ sources:
 - 마을 정체성은 저장 `VillageProfileId`로 고정하고, Growth/Layout/Trade 프로필이 성장 계획·슬롯 배치·지역 상권(결정론 재고·가격)을 연결한다. [src: Docs/village/VILLAGE_RUNTIME_DESIGN.md §5]
 - 손제작 마을(BaseTown 등)은 절차 정착지 연대기에 연결되지 않아 `SettlementId=-1`로 남고 항상 실체화 상태를 유지한다. 세이브 로드에서는 데이터 등록 단계가 아니라 Map·Building·Component가 준비된 `VillageManager.Initialize()`에서 실체화한다. 이 경우 물리 NPC 배분 1명 하한과 대화 홈 종족 정체성을 `VillageProfile.Race`가 대체한다(상세는 [npc.md](npc.md) §5). [src: Assets/Scripts/Village/VillageManager.cs, Assets/Scripts/Manager/NpcManager.cs]
 - Shop·Forge·Inn·Shrine은 NPC가 아니라 배치 건물의 `ProvidedService`가 제공한다. [src: Docs/village/VILLAGE_RUNTIME_DESIGN.md §7, Docs/npc/VILLAGE_NPC_BOUNDARY_DESIGN.md §5]
+- 모험가 NPC는 마을 상점과 **닫힌 경제**로 거래한다. NPC 전리품 매입 대금은 마을 Gold에서 나가고(부족하면 매입 거절), NPC의 장비 구매·치료비는 마을 Gold로 들어온다. 골드 생성처는 마을 인구 생산 하나다. 이 경로는 마을–NPC 경계의 예외로 명시돼 있다(D44). [src: Docs/npc/NPC_AMBITION_DESIGN.md §7.2·§9·§11, Docs/npc/VILLAGE_NPC_BOUNDARY_DESIGN.md §3.1]
+- 상점 재고는 기존 결정론 칸(보장·특산·희귀·특수, 무작위 옵션 장비) 뒤에 **기본 장비 칸**(상점 Tier 1~2는 3칸, 3~4는 4칸, 고정 옵션)을 같은 회차 RNG로 이어 롤한다. 플레이어도 사고, NPC는 기본 장비만 산다. 회차당 NPC 구매 한도는 기본 장비 칸을 빼고 센다. [src: Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §4·§5.3, Docs/village/VILLAGE_REWORK_PLAN.md §8.4–8.5, Assets/Scripts/Village/VillageManager.cs, Assets/Scripts/Village/VillageTradeStockRoller.cs]
 
 ## 2. 정본 읽기 순서
 
@@ -39,6 +43,8 @@ sources:
 | 경제 인구와 물리 NPC의 경계 | [VILLAGE_NPC_BOUNDARY_DESIGN](../Docs/npc/VILLAGE_NPC_BOUNDARY_DESIGN.md) [src: Docs/npc/VILLAGE_NPC_BOUNDARY_DESIGN.md] |
 | Stage별 장기 콘텐츠 목표 | [VILLAGE_GROWTH_STAGES](../Docs/village/VILLAGE_GROWTH_STAGES.md) [src: Docs/village/VILLAGE_GROWTH_STAGES.md] |
 | 모든 신규 마을의 Forge 접근성과 마법부여 계약 | [ITEM_ENCHANTMENT_DESIGN](../Docs/combat/ITEM_ENCHANTMENT_DESIGN.md) §5 [src: Docs/combat/ITEM_ENCHANTMENT_DESIGN.md] |
+| 상점의 NPC 거래·상점 보호·Gold 순환 | [NPC_AMBITION_DESIGN](../Docs/npc/NPC_AMBITION_DESIGN.md) §7.2·§9 [src: Docs/npc/NPC_AMBITION_DESIGN.md] |
+| 기본 장비 칸·기본 아이템 테이블·저장 표현 | [NPC_SHOP_EQUIPMENT_DESIGN](../Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md) §3–6 [src: Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md] |
 
 `VILLAGE_GROWTH_STAGES`는 미래 콘텐츠 방향이며 현재 런타임 계약을 재정의하지 않는다. [src: Docs/village/VILLAGE_GROWTH_STAGES.md]
 
@@ -59,4 +65,5 @@ sources:
 - 기존 V7 통합 검증은 정적 하니스 기준을 갖추고 있으나, 이번 공통 Forge 후조건·로드 시 손제작 마을 실체화·벽 바깥 Gate 탐색까지 포함한 실제 청크 materialize와 상호작용은 PlayMode에서 다시 실측해야 한다. 마법부여 전용 Editor 진단 코드도 추가됐지만 실행 결과 아티팩트는 저장소에 없다. [src: Docs/village/VILLAGE_REWORK_PLAN.md §V7, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §12, Assets/Scripts/Editor/ItemEnchantmentDiagnostics.cs] [추론: 저장소에 진단 실행 결과 파일이 없음]
 - `VILLAGE_REWORK_PLAN.md`의 2026-08-30 메모는 공통 Forge 보장을 아직 미구현이라고 기록하지만, 더 최신 마법부여 정본과 현재 코드는 신규 게임 부트스트랩에 이를 연결한다. 원본 메모가 정리되기 전까지 해당 문장은 구현 전 이력으로만 읽고 현행 동작은 코드와 `ITEM_ENCHANTMENT_DESIGN.md`를 우선한다. [src: Docs/village/VILLAGE_REWORK_PLAN.md §후속 사용자 결정, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §상태·§5.1, Assets/Scripts/History/HistoryManager.cs, Assets/Scripts/Village/VillageInitialDevelopment.cs]
 - 런타임 마을 발전(인구 증감·Stage 승격·자동 건설)은 V8 후속으로 보류돼 있고 게이트는 비활성이다. [src: Docs/village/VILLAGE_REWORK_PLAN.md §9]
+- 마을 골드 밸런스: 마을 Gold 부족으로 NPC 전리품 매입이 거절돼 30일 뒤 NPC 가방이 약 90% 찬다. 가방 전리품(무작위 옵션 장비)은 세이브 장기 증가의 주원인이기도 하다. 다음 작업 후보로 남아 있다. [src: Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §7·§11.3, Docs/npc/NPC_AMBITION_DESIGN.md D109] [추론: 다음 작업 우선순위는 사용자 결정 대기]
 - 런타임 폐허 전환은 Fate·Pop·task·건설 중 Building·materialize 차단·clock을 함께 바꾸는 원자적 진입점으로 구현해야 한다. [src: Docs/village/ABSTRACT_CONSTRUCTION_DESIGN.md §12]

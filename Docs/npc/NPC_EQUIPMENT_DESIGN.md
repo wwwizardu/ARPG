@@ -4,7 +4,9 @@
 > 여관 고용/방문자 시스템 제거로 본 문서의 **방문자 관련 서술은 구식**이 됐다 —
 > §4.1의 `SpawnVisitorNpc` 시드 경로(현행 장비 시드는 2경로), §8.4의 진입 경로 2(Inn 방문자 카드 "장비" 버튼 · `UINpcInspect.BindSaveData`)는 **삭제된 코드**다. 해당 지점에 취소선으로 표시했다.
 >
-> **후속 계획**: 현행 고정 세트 구조를 유지하면서 NPC 5종의 시작 장비를 다양화하는 작업 순서와 데이터 기준은 [NPC_EQUIPMENT_SET_PLAN.md](NPC_EQUIPMENT_SET_PLAN.md)를 따른다. 해당 계획은 아직 구현 전이며, 구현 완료 전까지 본 문서의 현행 동작 설명이 우선한다.
+> **세트 다양화**: NPC 5종의 시작 장비 세트(NpcEquipTable 1~5, 슬롯별 장착 확률)는 [NPC_EQUIPMENT_SET_PLAN.md](NPC_EQUIPMENT_SET_PLAN.md)대로 구현됐다(2026-08-23). 플레이 모드 검증 기록은 없다.
+>
+> **2026-10-03**: 장비 인스턴스는 상점용 기본 아이템이다(§3.3, [NPC_SHOP_EQUIPMENT_DESIGN.md](NPC_SHOP_EQUIPMENT_DESIGN.md) D118·D121).
 
 ## 1. 목표
 
@@ -45,18 +47,22 @@ public const int NPC_INVENTORY_SLOTCOUNT_MAX = 5;
 ### 3.2 NpcEquipTable (신규, Option A — 고정 세트)
 
 ```
-Id | WeaponRight | WeaponLeft | Helmet | Armor | Gloves | Boots | Necklace | RingRight | RingLeft | Belt | EarringRight | EarringLeft
+Id | Desc | WeaponRight | WeaponRightChance | WeaponLeft | WeaponLeftChance | … | EarringLeft | EarringLeftChance
 ```
 
-12개 슬롯 각각에 `ItemTable.Id` 명시. 슬롯이 0이면 비움.
+12개 슬롯마다 `ItemTable.Id`와 장착 확률(0~100)을 쌍으로 둔다(시트 A:Z, `Desc`는 세트 설명). 슬롯 ItemId가 0이면 비움, 확률 0이면 장착하지 않음. 확률은 NPC를 처음 만들 때 한 번만 판정한다. [src: Assets/Scripts/Common/Tables.cs `NpcEquipTable`]
 
-`GetItemId(EquipSlotType slot)` 메서드로 슬롯 → ItemId 조회.
+`GetItemId(EquipSlotType slot)`·`GetEquipChance(EquipSlotType slot)`로 슬롯 → ItemId·확률 조회.
 
 ### 3.3 인스턴스 생성 정책
 
-NPC 신규 생성 시 슬롯별 ItemId로 `ItemManager.CreateInventoryItemData(itemId)`를 호출 — **Base + Implicit + Prefix(최대 3) + Postfix(최대 3)** 가 모두 굴려진 인스턴스가 만들어진다. 같은 슬롯 안에서는 동일 Group을 중복 선택하지 않으므로 후보 Group이 부족하면 실제 옵션 수는 더 적을 수 있다. NPC마다 같은 EquipTableId라도 옵션이 다르게 굴려진다.
+> **2026-10-03 변경** ([NPC_SHOP_EQUIPMENT_DESIGN](NPC_SHOP_EQUIPMENT_DESIGN.md) D118): 일반 NPC의 장비는 **상점용 기본 아이템**(고정 옵션)이다. 아래가 현행 정책이고, 무작위 옵션 롤 정책은 폐기됐다.
 
-`CreateBaseEquipment`(=Prefix/Postfix 없는 깔끔한 장비) 아니라 `CreateInventoryItemData` 쪽을 쓰는 이유: 일반 드랍/상점과 동일한 톤을 유지하고, NpcStatComponent의 인스턴스 다양성 철학과 일관.
+NPC 신규 생성 시 슬롯별 ItemId마다 `BasicItemTable`의 변형 하나를 **entityId·슬롯 해시**(`NpcEquipHelper.PickBasicVariant`, `DerivedSeed.ChannelNpcBasicEquipment`)로 골라 `ItemManager.CreateBasicItem(basicItemId)`로 만든다. 결과는 **Base·Implicit(기존 테이블) + 고정 옵션 1개, 품질 1**이고 무작위 롤이 없다. 같은 NPC·슬롯은 언제 계산해도 같은 변형이 나온다. 변형이 없는 장비면 경고를 남기고 `CreateBaseEquipment`(Base만)로 대신한다.
+
+- 저장은 행 번호(`EquipmentData.BasicItemId`)만 하고, 로드 때 테이블에서 옵션을 다시 만든다 (D122).
+- NPC는 전리품·장물을 장착하지 않고 상점의 기본 장비 칸에서만 사서 강해진다 (D119). 그래서 NPC 장비는 항상 기본 아이템으로 남는다.
+- (폐기된 이전 정책) `CreateInventoryItemData`로 Prefix·Postfix 1~3개씩 무작위로 굴려 NPC마다 옵션이 달랐다. 옵션이 제각각인 일반 NPC 장비는 게임에서 의미가 작고, 세이브의 NPC 상태 79%를 차지해 바꿨다.
 
 ## 4. 시드 흐름
 
@@ -71,14 +77,16 @@ NPC 신규 생성 시 슬롯별 ItemId로 `ItemManager.CreateInventoryItemData(i
 모든 경로에서 `new NpcSaveData(...)` 직후 `SeedNpcEquipment(saveData)` 호출.
 
 `SeedNpcEquipment` → `NpcEquipHelper.SeedInitialEquipment(saveData, npcTable.EquipTableId)`:
-- `NpcEquipTable` 조회 → 슬롯별 ItemId → `CreateInventoryItemData(itemId)` → `saveData.InventoryEquip[slot]`에 채움.
+- `NpcEquipTable` 조회 → 슬롯별 ItemId·장착 확률 → 기본 아이템 변형(entityId·슬롯 해시) → `CreateBasicItem` → `saveData.InventoryEquip[slot]`에 채움 (§3.3).
 - 이미 슬롯에 데이터가 있으면 덮어쓰지 않음(재호출 안전).
 
 ### 4.2 Load 경로
 
-`NpcManager.Load`에서 saveData 복원 시 `saveData.OnLoadCompleted()` 호출 — `ItemData.Table`/`Equipment.Mods[i].Table` 등 `[NonSerialized]` 테이블 참조를 다시 잇는다.
+`NpcManager.Load`에서 saveData 복원 시 `saveData.OnLoadCompleted()` 호출 — `ItemData.Table`/`Equipment.Mods[i].Table` 등 `[NonSerialized]` 테이블 참조를 다시 잇고, 행 번호만 저장된 기본 아이템은 옵션을 다시 만든다.
 
 **Load 경로에서는 SeedNpcEquipment를 호출하지 않는다** — 기존 장비 그대로 보존.
+
+- **예외 — WorldDataVersion 17 마이그레이션 (D121)**: 버전 16 이하 세이브는 로드 때 한 번 `ReplaceEquipmentWithBasicItems`가 NPC 장착 장비를 같은 ItemId의 기본 아이템(시드와 같은 해시)으로 바꾼다. `ItemData` 객체·`ItemInstanceId`는 유지해 장비 소문(ItemOwner)이 계속 유효하고, 개인 상한 기준(`InitialPower`)만 다시 계산한다. 가방·플레이어·상점은 그대로다.
 
 ## 5. ECS 적용
 
@@ -107,7 +115,9 @@ var (createdId, entity) = await EntityFactory.CreateNpc(
     saveData.NpcTableId, spawnPos3D, _npcParent, entityId, saveData);
 ```
 
-## 6. 시트 작업 (외부 — 이 코드 작업에서 처리 안 됨)
+## 6. 시트 작업 (완료 — 아래는 당시 작업 기록)
+
+> ✅ 완료: NpcTable `EquipTableId` 컬럼, NpcEquip 탭(gid 1566085089, `Desc` + 슬롯별 ItemId·Chance 쌍, A:Z)이 `DownloadTables.cs`에 등록돼 있다. 아래 1~3은 처음 도입할 때의 작업 목록이며 열 구성은 §3.2가 현행이다. [src: Assets/Scripts/Editor/DownloadTables.cs]
 
 이번 코드는 시트가 준비되지 않은 상태에서도 안전하게 컴파일/실행되도록 했다 (`AR.s.Data.GetNpcEquipTable`이 `null` 반환하면 시드 skip). 실제 사용을 위해 사용자가 시트 측에서 다음 작업 필요:
 
@@ -180,15 +190,18 @@ var (createdId, entity) = await EntityFactory.CreateNpc(
 - **무기 시각 반영**: 플레이어의 무기 SpriteLibrary 갱신 경로를 NPC에도 적용해야 무기가 시각적으로 보임. 1차 패스에선 스탯 적용까지만.
 - **NPC 사망 시 드랍**: 보유 장비를 떨어뜨릴지 여부는 별도 결정 필요 (현재는 `DropComponent` 기반 드랍만).
 - **NPC 장비 변경 UI**: 현재 읽기 전용. 플레이어가 NPC 장비를 갈아입히는 기능은 별도 패스.
-- **세이브 용량**: 과거 200명 기준 추정은 현재 2,400명 목표와 맞지 않는다. NPC 상태는 32개 샤드로 분할 저장하며, 장비 compact DTO/시드 재구성은 실제 분할 저장 결과를 본 뒤 후속으로 판단한다. ([SAVE_PARTITION_DESIGN](../tech/SAVE_PARTITION_DESIGN.md))
+- **세이브 용량**: 장비 compact 표현은 2026-10-03 기본 아이템 행 번호 저장(D122)으로 해결됐다. 남은 증가 요인은 가방 전리품(무작위 옵션 장비)과 소문이다 (§9). ([SAVE_PARTITION_DESIGN](../tech/SAVE_PARTITION_DESIGN.md))
 
 ## 9. 저장 공간 추정
 
-| 시나리오 | NPC 1명 | 2,400명 minified 단순 환산 | 비고 |
-|---|---|---|---|
-| Worst (전 슬롯/인벤 가득) | ~7.5 KB | ~18 MB | 실제 장비·Mod 분포에 따라 달라짐 |
-| 평균 (무기+방어구 4~5 + 인벤 절반) | ~4 KB | ~9.6 MB | 과거 1명당 추정치의 단순 환산 |
-| 최소 (무기 1개) | ~0.5 KB | ~1.2 MB | 과거 1명당 추정치의 단순 환산 |
+> **2026-10-03 실측으로 대체** ([NPC_SHOP_EQUIPMENT_DESIGN](NPC_SHOP_EQUIPMENT_DESIGN.md) §11). 아래 과거 추정 표는 무작위 옵션 장비 기준이라 폐기한다.
 
-현행 세이브는 NPC 개별 상태를 `EntityId & 31` 기준 32개 파일로 나눈다. 장비 표현 자체는
-변경하지 않았으며, compact DTO/압축은 분할 저장만으로 부족하다고 확인될 때 후속 진행한다.
+| 항목 | 아이템 1개 | 실측 (생존 약 2,390명, 약 57게임시간 세이브) |
+|---|---|---|
+| 무작위 옵션 장비 (교체 전 장착, 지금도 가방 전리품) | 약 560B (계산 캐시 제외 뒤 약 500B) | 장착 10,892개 = 7.9MB |
+| 기본 아이템 (현행 장착) | 62B — `{"Id","ItemInstanceId","Equipment":{"BasicItemId"}}` | 장착 약 10,900개 ≈ 0.7MB |
+| NPC 상태 전체 (32샤드) | — | 10.71MB → 2.85MB |
+
+- 저장하지 않는 것: 기본 아이템의 옵션·품질, 모든 장비의 `WeaponStats`·`EquipType`(계산값), null 인스턴스 데이터·Quantity 1·장비 안의 중복 Id·빈 고유 강화 목록, 활동 상태의 기본값 필드.
+- 현행 세이브는 NPC 개별 상태를 `EntityId & 31` 기준 32개 파일로 나눈다.
+- 장기 증가: 30일 시뮬 끝 NPC 데이터 약 11MB — 대부분 가방 전리품(매입 거절로 가방이 참)과 소문이다. 마을 골드 밸런스에서 다룬다.

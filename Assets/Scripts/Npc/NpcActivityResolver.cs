@@ -38,7 +38,9 @@ namespace ARPG.Npc
         // 기준 전투력에서 capability가 교체 전 식의 평균(0.20 + 용기 평균 0.5 × 0.55 = 0.475)이 되도록 맞춰
         // 평균 성공·부상·사망률을 유지한다. 판정 곡선이 capability에 선형이라 평균 capability가 같으면 평균 확률도 같다.
         // 진단 메뉴 ARPG/Npc/Diagnostics/Hunt Power Normalization으로 교체 전/후 평균을 비교한다.
-        public const float HuntReferencePower = 26f;
+        // NPC_SHOP_EQUIPMENT(2026-10-03): NPC 장비가 고정 옵션 기본 아이템으로 바뀌어 세이브 생존 2,387명 평균이 25.96 → 10.75가 됐다.
+        // 기준을 새 평균으로 옮겨 평균 capability 0.475를 유지한다 (솔로 성공 61.8%·부상 25.3%·Food/Hunt 1.38, Food 문턱 그대로).
+        public const float HuntReferencePower = 10.75f;
         public const float HuntCapabilityAtReference = 0.475f;
         // 기준 전투력의 2배 차이가 capability 0.5 차이. 개인 상한 +20%를 다 채우면 capability +0.10.
         public const float HuntCapabilityPerPowerRatio = 0.5f;

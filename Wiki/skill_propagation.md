@@ -15,11 +15,14 @@ sources:
   - Assets/Scripts/Common/Component/SkillPropagationBranchComponent.cs
   - Assets/Scripts/Common/Component/InstantSkillDeliveryComponent.cs
   - Assets/Scripts/Common/Component/SkillPropagationTargetIds.cs
+  - Assets/Scripts/Common/Component/SkillPropagationWorkCompletedTag.cs
   - Assets/Scripts/Common/Utility/SkillStatBonusHelper.cs
+  - Assets/Scripts/Common/Utility/FactionHelper.cs
   - Assets/Scripts/Manager/EffectManager.cs
+  - Assets/Scripts/Manager/ComponentManager.cs
   - Assets/Scripts/Editor/DownloadTables.cs
   - Assets/_BinaryData/TableData/SkillPropagationTable.bytes
-last_synced: 2026-09-23
+last_synced: 2026-10-03
 status: draft
 ---
 
@@ -31,7 +34,7 @@ status: draft
 
 ## 문서 정본
 
-구현 계약·데이터 스키마·런타임 흐름·검증 계획의 정본은 `SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md`다. 2026-09-23 코드 리뷰로 바뀐 계약은 같은 문서 §13에 요약돼 있다. `SKILL_DESIGN.md`는 Chain Lightning의 카탈로그 재도입 방침과 이 계획서로의 포인터만 가진다. [src: Docs/combat/SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md §0·§13, Docs/combat/SKILL_DESIGN.md]
+구현 계약·데이터 스키마·런타임 흐름·검증 계획의 정본은 `SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md`다. 2026-09-23 코드 리뷰로 바뀐 계약은 같은 문서 §13에 요약돼 있다. `SKILL_DESIGN.md`는 카탈로그 S3 항목(SkillId 202 / SkillEffect 1020 / SkillPropagation 1, 구현됨)과 이 계획서로의 포인터만 가진다. [src: Docs/combat/SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md §0·§13, Docs/combat/SKILL_DESIGN.md §2·§6 S3]
 
 ## 왜 이렇게 설계했나
 
@@ -61,6 +64,7 @@ status: draft
 
 1. A가 적중하면 요청이 생긴다. 요청의 Transform은 A 위치에서 시작하고, A에 붙어 따라간다. [src: Assets/Scripts/Skill/Propagation/SkillPropagationRuntime.cs:L115-156]
 2. `HopInterval`이 끝나면 요청 Transform 위치에서 가장 가까운 적대 대상을 고른다. 이미 방문한 대상, 각도 제한 밖의 대상은 제외한다. [src: Assets/Scripts/Common/System/System_SkillPropagation.cs:L77-129, Assets/Scripts/Skill/Propagation/SkillPropagationTargetSelector.cs]
+   - 적대 판정은 진영 비교가 아니라 엔티티 단위 `FactionHelper.IsEntityHostile`이다. 결투 규칙을 진영보다 먼저 적용하고, 결투가 없으면 기존 진영 판정과 같다. 2026-09-27 결투 도입 때 스킬 직접 타격·투사체와 함께 바뀌었다. [src: Assets/Scripts/Skill/Propagation/SkillPropagationTargetSelector.cs:L109, Assets/Scripts/Common/Utility/FactionHelper.cs:L24-40, Docs/combat/SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md §1.2]
 3. `SkillDeliveryFactory`가 전달을 만들고, 같은 FixedUpdate 220에서 Instant 적중을 처리한다. 적중 처리는 `SkillHitProcessor`를 거쳐 피해 판정과 OnHit/OnCrit/OnKill 발화까지 한다. [src: Assets/Scripts/Skill/Propagation/SkillDeliveryFactory.cs, Assets/Scripts/Common/System/System_InstantSkillDelivery.cs, Assets/Scripts/Skill/Combat/SkillHitProcessor.cs]
 4. 남은 깊이가 있으면 B 기준으로 1번부터 반복한다.
 
@@ -74,6 +78,7 @@ status: draft
 - **전파 프로필 중복:** 같은 트리거에 활성 전파 프로필이 2개 이상이면, 스킬 생성 시 에러를 1회 기록하고 그 트리거의 전파를 모두 제외한다. [src: Assets/Scripts/Common/Utility/SkillStatBonusHelper.cs:L111]
 - **`SkillHitRequest` 필수 값:** 피해 배율 등 필수 값은 생성자로만 받는다. 값이 빠져서 피해가 1로 조용히 붕괴하는 것을 막는다. [src: Assets/Scripts/Skill/Combat/SkillHitProcessor.cs:L31]
 - **외부 파괴:** 요청이나 전달이 정상 경로 밖에서 파괴되면 `System_EntityDestroy`가 작업 수를 대신 해제한다. [src: Assets/Scripts/Common/System/System_EntityDestroy.cs:L51-65]
+- **이중 차감 방지 태그:** 정상 완료 경로(`CompleteWork`)는 작업 엔티티에 빈 태그 `SkillPropagationWorkCompletedTag`를 붙인 뒤 작업 수를 줄이고, 태그가 이미 있으면 건너뛴다. `System_EntityDestroy`는 태그가 없는 엔티티만 대신 해제하므로 같은 작업이 두 번 차감되지 않는다. 풀 초기 용량은 384다. [src: Assets/Scripts/Skill/Propagation/SkillPropagationRuntime.cs:L158-169, Assets/Scripts/Common/System/System_EntityDestroy.cs:L51, Assets/Scripts/Common/Component/SkillPropagationWorkCompletedTag.cs, Assets/Scripts/Manager/ComponentManager.cs:L89, Docs/combat/SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md §5.3]
 
 ### 연출
 
@@ -91,6 +96,7 @@ status: draft
 
 - `HopInterval=0.2`의 연쇄감은 플레이 테스트로 확인해야 한다. [src: Docs/combat/SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md §3.4]
 - 현행 데이터는 Instant 행 하나뿐이다. Projectile 연쇄·분열, Instant 분열, OnHit 시작 경로는 컴파일만 확인했고 PlayMode 검증이 없다. [src: Assets/_BinaryData/TableData/SkillPropagationTable.bytes, Docs/combat/SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md §10.2]
+- 계획서 단계 기준으로 P0~P4는 완료, P5·P6는 코드만 있고, P7(EditMode 선택 테스트·PlayMode·Profiler)은 미완이다. [src: Docs/combat/SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md §9]
 - 2026-09-23 리뷰 반영분(주문 추적, 허공 연출 보완, 방문 대상 통과 등)은 플레이 테스트 전이다. [추론: 리뷰 세션에서 Unity 컴파일·콘솔 확인만 수행]
 - [추론] 번개 프리팹의 `EffectInstance` 자동 수명이 약 4.8초로 계산된다. 보이는 시간(약 0.4초)보다 길게 풀을 점유하므로 `_overrideDuration` 조정을 검토한다. [src: Docs/combat/SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md §8]
 - 요청 엔티티가 Transform 풀에 들어가도 투사체 충돌·대상 탐색·`FactionHelper`·`System_Render` 루프는 진영/스탯/EntityBase로 먼저 걸러낸다. 나중에 Transform 풀을 "생명체 목록"으로 가정하는 새 루프를 만들면 주문 엔티티가 섞인다는 점에 주의한다. [추론]

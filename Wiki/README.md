@@ -2,7 +2,7 @@
 name: wiki-map
 description: Docs/ 전체 주제를 얕고 넓게 조망하는 지도 페이지. 주제별 상세 위키 페이지의 진입점.
 type: map
-last_updated: 2026-09-01
+last_updated: 2026-10-03
 sources:
   - Wiki/current_status.md
   - Wiki/combat.md
@@ -16,6 +16,12 @@ sources:
   - Docs/village/ABSTRACT_CONSTRUCTION_DESIGN.md
   - Docs/village/BUILD_PRIORITY_DESIGN.md
   - Docs/npc/VILLAGE_NPC_BOUNDARY_DESIGN.md
+  - Docs/npc/NPC_AMBITION_DESIGN.md
+  - Docs/npc/NPC_COMBAT_DESIGN.md
+  - Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md
+  - Docs/map/DUNGEON_RUNTIME_DESIGN.md
+  - Wiki/npc.md
+  - Wiki/monster_spawn_runtime.md
   - Docs/
   - Assets/Scripts/
 ---
@@ -32,18 +38,18 @@ sources:
 
 | 주제 | 한 줄 요약 | 문서 위치 | 흩어짐 | 코드 연결도 |
 |------|-----------|----------|:------:|:----------:|
-| **current_status** → [current_status.md](current_status.md) | 2026-09-01 기준 구현 현황·미검증 항목·권장 재개 순서 [src: Wiki/current_status.md] | 최신 관련 Docs + 코드·테이블 대조 | — | 상 |
+| **current_status** → [current_status.md](current_status.md) | 2026-10-03 기준 구현 현황·미검증 항목·권장 재개 순서 [src: Wiki/current_status.md] | 최신 관련 Docs + 코드·테이블 대조 | — | 상 |
 | **overview** | 게임 컨셉(3대 축)과 시스템별 구현 현황·로드맵 | `Docs/overview/` 2장 (gameOverview, implementationStatus) + `Docs/README.md`(대시보드) | 하 | 하 |
 | **combat** → [combat.md](combat.md) | 장비 옵션 글로벌화, 일반 장비 마법부여, 무기 Base/고유 강화 경계와 공격 프로필 [src: Wiki/combat.md] | `Docs/combat/` + 마법부여·전투 코드와 테이블 [src: Docs/combat/, Assets/Scripts/Item/] | 상 | 상 |
 | **skill_aim** → [skill_aim.md](skill_aim.md) | 커서 조준 추적·효과 커밋, 플레이어 방향 화살표 View, 스킬 사용 중 이동 감속 [src: Wiki/skill_aim.md] | `Docs/combat/POE2_CURSOR_TRACKING_PLAN.md` + 조준·스킬·이동 코드 | 중 | 상 |
 | **skill_propagation** → [skill_propagation.md](skill_propagation.md) | 연쇄·분열 공용 전파 런타임, 대상에 붙는 대기 주문, Chain Lightning 수직 슬라이스 [src: Wiki/skill_propagation.md] | `Docs/combat/SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md` + `Skill/Propagation/`·전파 시스템 코드 | 하 | 상 |
-| **ai_monster** → [monster_spawn_runtime.md](monster_spawn_runtime.md) | 몬스터 AI·데이터 주도 종 풀과 거리 기반 스폰/Warm 청크 캐시 구현 전 제안 [src: Wiki/monster_spawn_runtime.md] | `Docs/ai_monster/` 2장 + 런타임 스폰 제안 | 중 | 상 |
-| **map** | 청크 기반 오픈월드 맵 생성·바이옴 타일셋·충돌/길찾기 | `Docs/map/` 3장 (MAP_DESIGN, COLLISION_PATHFINDING_DESIGN, THEME_TILESET_REFACTOR) | 중 | 중 |
+| **ai_monster** → [monster_spawn_runtime.md](monster_spawn_runtime.md) | 몬스터 AI·데이터 주도 종 풀, 거리 기반 스폰/Warm 청크 캐시(구현·대조 완료), 공격 예고(Phase 0~2 구현) [src: Wiki/monster_spawn_runtime.md, Docs/combat/MONSTER_ATTACK_TELEGRAPH_DESIGN.md 상태] | `Docs/ai_monster/` 2장 + 런타임 스폰 제안 | 중 | 상 |
+| **map** | 청크 기반 오픈월드 맵 생성·바이옴 타일셋·충돌/길찾기, 절차 던전 런타임(구현), 던전 중 월드 시뮬(초안) [src: Docs/map/DUNGEON_RUNTIME_DESIGN.md 상태, Docs/map/DUNGEON_WORLD_SIM_DESIGN.md 상태] | `Docs/map/` (MAP_DESIGN, COLLISION_PATHFINDING_DESIGN, THEME_TILESET_REFACTOR, DUNGEON_RUNTIME_DESIGN, DUNGEON_WORLD_SIM_DESIGN 등) | 중 | 중 |
 | **village** → [village.md](village.md) | 마을 자가성장 LOD·서비스와 신규 게임 전 마을 Forge Tier 1 접근성 [src: Wiki/village.md] | `Docs/village/` + 마법부여 Forge 접근성 계약 [src: Docs/village/, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md] | 중 | 상 |
-| **npc** → [npc.md](npc.md) | NPC 관계·상호작용·소망(퀘스트)·자율 활동·동료·장비 | `Docs/npc/` (VILLAGE_NPC_BOUNDARY_DESIGN 포함) | 상 | 중 |
+| **npc** → [npc.md](npc.md) | NPC 관계·상호작용·소망(퀘스트)·자율 활동, 야망·모험가 경제(구현 P1·P2·P4), 실전투·동행·결투(B1~B5), 장비(상점 기본 아이템) [src: Wiki/npc.md] | `Docs/npc/` (VILLAGE_NPC_BOUNDARY, NPC_AMBITION, NPC_COMBAT, NPC_SHOP_EQUIPMENT 포함) | 상 | 상 |
 | **world_history** → [world_history.md](world_history.md) | 절차적 역사 생성(정착지 연대기)과 LLM 내러티브 엔진(대화·소망 생성) | `Docs/world_history/` 5장 (PROCEDURAL_HISTORY_DESIGN, WORLD_HISTORY_PLAN, WORLD_EVENT_DESIGN, NARRATIVE_ENGINE_DESIGN, NARRATIVE_ENGINE_SPIKE) | 상 | 중 |
-| **tech** | ECS SparseSet 최적화와 2,400 NPC 대응 파티션 세이브·32샤드·원자 커밋 [src: Docs/tech/SAVE_PARTITION_DESIGN.md] | `Docs/tech/` 2장 (ECS_PERFORMANCE_OPTIMIZATION_PLAN, SAVE_PARTITION_DESIGN) | 하 | 중 |
-| **economy** | 지역 상권·결정론 상점은 구현, 월드 공유 물물교환 경매장은 설계 확정·미착수 [src: Docs/village/VILLAGE_REWORK_PLAN.md §V5–V6, Docs/economy/AUCTION_HOUSE_DESIGN.md] | `Docs/economy/AUCTION_HOUSE_DESIGN.md` + Village Trade 코드 | 하 | 중 |
+| **tech** | ECS SparseSet 최적화와 2,400 NPC 대응 파티션 세이브·32샤드·원자 커밋, 2026-10-03 저장 크기 축소(13.3MB → 6.3MB) [src: Docs/tech/SAVE_PARTITION_DESIGN.md, Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §11.3] | `Docs/tech/` 2장 (ECS_PERFORMANCE_OPTIMIZATION_PLAN, SAVE_PARTITION_DESIGN) | 하 | 중 |
+| **economy** | 지역 상권·결정론 상점, NPC 닫힌 경제(전리품 판매·기본 장비 구매)는 구현, 월드 공유 물물교환 경매장은 설계 확정·미착수 [src: Docs/village/VILLAGE_REWORK_PLAN.md §V5–V6, Docs/npc/NPC_AMBITION_DESIGN.md §9, Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §4, Docs/economy/AUCTION_HOUSE_DESIGN.md] | `Docs/economy/AUCTION_HOUSE_DESIGN.md` + Village Trade 코드 | 하 | 중 |
 | **_archive** | 보류·폐기된 과거 계획 (던전, Phase A 초기안, 역사 백본) | `Docs/_archive/` 5장 | — | — |
 
 **판정 근거 (얕은 스캔 수준):**
@@ -54,7 +60,7 @@ sources:
 - **코드 연결도**: `Assets/Scripts/` 폴더·파일명 수준 확인.
   - combat: `Common/System/`의 System_Skill·System_SkillAttackProfileCalculation·System_StatCalculation·System_BuffUpdate·System_Projectile·System_AreaEffect + `Skill/`(DamageCalculator) + `AI/` 공격 핸들러 등 광범위. [src: Assets/Scripts/Common/System/, Assets/Scripts/Skill/]
   - village: `Village/`의 공통 시뮬레이션 코어·원장·배치 코드와 `System_Village*` 런타임 시스템이 연결된다. [src: Assets/Scripts/Village/, Assets/Scripts/Common/System/]
-  - npc: `Npc/` 10개 파일(NpcRelationEntry, DialogueTopicSelector, NpcNarrative* 등) — 구현 진행률 25~35%로 코드가 아직 성장 중. [src: Assets/Scripts/Npc/, Docs/README.md]
+  - npc: `Npc/`(활동·전투력·장비 시드·관계·소문·내러티브)와 `Manager/NpcManager_*.cs`(Ambition·Trade·Delve·Party·Theft·Companion·Duel·Pickup 등 partial), `System_NpcSim`이 연결된다. 관계·선물·소망 본 루프는 아직 미구현이다. [src: Assets/Scripts/Npc/, Assets/Scripts/Manager/, Assets/Scripts/Common/System/System_NpcSim.cs, Wiki/npc.md §4]
   - world_history: 문서상 "보류"이지만 `History/` 15개 파일(HistoryManager, SettlementChronicleSimulator 등)과 System_SettlementSim이 이미 존재. [src: Assets/Scripts/History/]
 
 ## 상세 위키 페이지 우선순위 (종합 이득 큰 순)
@@ -70,9 +76,9 @@ sources:
 ## 위키 종합 필요성이 낮은 주제
 
 - **overview** — 게임 컨셉 지도 역할은 `Docs/README.md`가 유지하지만 구현 현황은 2026-07-13 이후 드리프트됐다. 별도 장기 주제 페이지 대신 [current_status.md](current_status.md)가 최신 코드·테이블 대조를 보완한다. [src: Docs/README.md, Docs/overview/implementationStatus.md, Wiki/current_status.md]
-- **tech** — ECS 성능과 세이브 파티션 문서가 각각 자기완결적이며, 세이브 현황은 current_status와 npc 위키가 연결한다. [src: Docs/tech/ECS_PERFORMANCE_OPTIMIZATION_PLAN.md, Docs/tech/SAVE_PARTITION_DESIGN.md, Wiki/current_status.md, Wiki/npc.md]
+- **tech** — ECS 성능과 세이브 파티션 문서가 각각 자기완결적이며, 세이브 현황(저장 표현·크기)은 current_status와 npc 위키가 연결한다. [src: Docs/tech/ECS_PERFORMANCE_OPTIMIZATION_PLAN.md, Docs/tech/SAVE_PARTITION_DESIGN.md, Wiki/current_status.md, Wiki/npc.md]
 - **economy** — 현행 추가 문서는 경매장 1장이고 구현 전 코드 앵커까지 한 문서에 모여 있다. 지역 상권 구현 현황은 village 위키와 current_status가 연결한다. [src: Docs/economy/AUCTION_HOUSE_DESIGN.md, Wiki/village.md, Wiki/current_status.md]
-- **ai_monster** — 원본 2장의 상호 의존은 얕지만, 거리 기반 스폰·Warm 청크 캐시는 맵 풀링과 몬스터 생명주기를 함께 바꾸므로 별도 구현 전 제안 페이지를 둔다. [src: Wiki/monster_spawn_runtime.md]
+- **ai_monster** — 원본 2장의 상호 의존은 얕지만, 거리 기반 스폰·Warm 청크 캐시는 맵 풀링과 몬스터 생명주기를 함께 바꾸므로 별도 구현 계약 페이지를 둔다(구현·대조 완료). [src: Wiki/monster_spawn_runtime.md]
 - **map** — 3장이지만 MAP_DESIGN.md(1,031행) 한 장에 대부분이 집중돼 있어 이미 사실상 단일 정본. [추론]
 - **_archive** — 보류/폐기 문서로 위키 종합 대상에서 제외.
 

@@ -844,8 +844,8 @@ namespace ARPG.Npc
 
             saveData.IsActive = false;
 
-            // 실체화 중 미뤄 둔 전리품 자동 장착을 ECS가 없어진 지금 적용한다 (NPC_AMBITION_DESIGN §7.1)
-            ApplyDeferredLootUpgrades(entityId, saveData);
+            // 실체화 중에 산 업그레이드 장비를 ECS가 없어진 지금 장착한다 (NPC_AMBITION_DESIGN §7.2, NPC_SHOP_EQUIPMENT D119)
+            ApplyDeferredPurchaseUpgrades(entityId, saveData);
         }
 
         private static void PauseMaterializedActivity(int entityId, NpcSaveData saveData)
@@ -1020,6 +1020,12 @@ namespace ARPG.Npc
 
             _chunkSize = chunkSize;
 
+            // WorldDataVersion 17 마이그레이션 (NPC_SHOP_EQUIPMENT D121): 장착 장비를 기본 아이템으로 일괄 교체한다.
+            bool replaceBasicEquipment = AR.s.Data.ConsumeNpcBasicEquipmentReplacement();
+            int basicReplacedItems = 0;
+            int basicReplacedNpcs = 0;
+            int basicSkippedItems = 0;
+
             foreach (var kvp in npcSaveDatas)
             {
                 NpcSaveData saveData = kvp.Value;
@@ -1035,6 +1041,13 @@ namespace ARPG.Npc
 
                 // 장비/인벤토리 ItemData의 ItemTable 참조 복원 (PlayerData.LoadCompleted와 동일 패턴)
                 saveData.OnLoadCompleted();
+                if (replaceBasicEquipment == true)
+                {
+                    int replaced = ReplaceEquipmentWithBasicItems(entityId, saveData, ref basicSkippedItems);
+                    basicReplacedItems += replaced;
+                    if (replaced > 0)
+                        basicReplacedNpcs++;
+                }
                 // 구 세이브(InitialPower 필드 없음 = 0)는 현재 장비로 개인 상한 기준값·시작 Gold를 1회 기록한다 (D38)
                 EnsureAmbitionInitialized(entityId, saveData);
 
@@ -1069,6 +1082,9 @@ namespace ARPG.Npc
             }
 
             _isInitialLoaded = true;
+            if (replaceBasicEquipment == true)
+                Debug.Log($"[NpcManager] D121 basic equipment replacement: npcs={basicReplacedNpcs} items={basicReplacedItems} " +
+                          $"skipped(no variant)={basicSkippedItems}");
             Debug.Log($"[NpcManager] Loaded {_npcSaveDict.Count} NPCs from save data");
         }
 
@@ -1713,7 +1729,7 @@ namespace ARPG.Npc
             // 소문 (P2b, D72): 본인 소문을 비우고 이 NPC가 소유자인 ItemOwner 소문을 마을 명단에서 지운다 (명단 제거 전).
             PurgeRumorsOnNpcDeath(entityId, saveData);
             _npcPowerCache.Remove(entityId);
-            _deferredLootUpgradeItemIds.Remove(entityId);
+            _deferredPurchaseUpgradeItemIds.Remove(entityId);
             RemoveAllAffinityInvolving(entityId);
             RemovePlayerRelation(entityId);
             RecordDeceasedRelationMemories(entityId, ResolveNpcDisplayName(saveData), eventId, when);

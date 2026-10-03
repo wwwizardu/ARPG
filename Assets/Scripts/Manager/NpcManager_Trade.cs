@@ -20,6 +20,7 @@ namespace ARPG.Npc
         public bool Bought;
         public bool BuyDeferred;          // 실체화 중이라 장착을 비실체화 시점으로 미룸
         public int BoughtItemId;
+        public int BoughtBasicItemId;     // 산 장비의 BasicItemId (D119 — 0이면 기본 아이템이 아닌 구매, 진단이 0건을 확인)
         public int BoughtPrice;
         public string BuySkipReason;
     }
@@ -39,7 +40,7 @@ namespace ARPG.Npc
         /// 지정 마을 상점에서 판매 → 구매 순으로 1회 거래한다.
         /// 판매: 매각 가능한 인벤토리 아이템을 플레이어와 같은 매입가로 판다. 마을 Gold가 모자라면 그 아이템은 매입 거절.
         /// 구매: D45 문턱(전체 전투력 +15%, 상한 80% 초과 시 +30%)·개인 상한·치료비 예비금·48h 쿨다운·상점 보호를
-        /// 모두 통과한 장비 매물 중 교체 후 전투력이 가장 높은 1개만 산다.
+        /// 모두 통과한 기본 아이템 장비 매물(D119) 중 교체 후 전투력이 가장 높은 1개만 산다.
         /// </summary>
         public NpcTradeReport TradeAtShop(int entityId, int villageId)
         {
@@ -147,7 +148,7 @@ namespace ARPG.Npc
         private void SellInventoryToShop(int entityId, NpcSaveData saveData, int villageId, ref NpcTradeReport report)
         {
             // 실체화 중 장착을 미뤄 둔 업그레이드 후보는 팔지 않는다.
-            _deferredLootUpgradeItemIds.TryGetValue(entityId, out List<int>? deferred);
+            _deferredPurchaseUpgradeItemIds.TryGetValue(entityId, out List<int>? deferred);
 
             for (int i = 0; i < saveData.Inventory.Count; i++)
             {
@@ -257,6 +258,7 @@ namespace ARPG.Npc
             saveData.LastTradeGameTime = now;
             report.Bought = true;
             report.BoughtItemId = bought.Id;
+            report.BoughtBasicItemId = bought.Equipment != null ? bought.Equipment.BasicItemId : 0;
             report.BoughtPrice = bestPrice;
 
             Debug.Log($"[NpcAmbition] Trade Buy npc={entityId} v={villageId} item={DescribeItem(bought)} price={bestPrice} " +
@@ -272,12 +274,12 @@ namespace ARPG.Npc
                 return;
             }
 
-            // 실체화 중: 전리품과 같은 방식으로 비실체화 시점에 다시 평가해 장착한다 (D45).
+            // 실체화 중: 비실체화 시점에 다시 평가해 장착한다 (D45). 전리품은 장착하지 않으므로(D119) 지연 장착은 구매뿐이다.
             saveData.Inventory[emptySlot] = bought;
-            if (_deferredLootUpgradeItemIds.TryGetValue(entityId, out List<int>? pending) == false)
+            if (_deferredPurchaseUpgradeItemIds.TryGetValue(entityId, out List<int>? pending) == false)
             {
                 pending = new List<int>();
-                _deferredLootUpgradeItemIds.Add(entityId, pending);
+                _deferredPurchaseUpgradeItemIds.Add(entityId, pending);
             }
             pending.Add(bought.ItemInstanceId);
             report.BuyDeferred = true;
@@ -350,7 +352,7 @@ namespace ARPG.Npc
 
         private bool HasSellableForShop(int entityId, NpcSaveData saveData, int villageId)
         {
-            _deferredLootUpgradeItemIds.TryGetValue(entityId, out List<int>? deferred);
+            _deferredPurchaseUpgradeItemIds.TryGetValue(entityId, out List<int>? deferred);
             int villageGold = AR.s.Village.GetVillageGold(villageId);
             for (int i = 0; i < saveData.Inventory.Count; i++)
             {

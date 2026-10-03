@@ -39,6 +39,9 @@ namespace ARPG.History
         // VILLAGE_REWORK_PLAN V5 §8.5 — 상점 재입고 롤용 (SettlementId + RestockCycle 혼합)
         public const ulong ChannelMerchantStock = 0x4D_45_52_43_53_54_4F_43UL; // "MERCSTOC"
 
+        // NPC_SHOP_EQUIPMENT D118·D121 — NPC 기본 장비 변형 선택 (entityId·장비 슬롯 해시, worldSeed 비의존)
+        public const ulong ChannelNpcBasicEquipment = 0x4E_50_43_42_53_45_51_50UL; // "NPCBSEQP"
+
         public static ulong Derive(int worldSeed, ulong channel)
         {
             ulong x = unchecked((ulong)worldSeed * 0x9E3779B97F4A7C15UL) ^ channel;

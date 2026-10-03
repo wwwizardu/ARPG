@@ -68,6 +68,8 @@ namespace ARPG.Editor
             Register<ModTable>(list, "1571193978&range=A:J");
             Register<ModTierTable>(list, "1782637736&range=A:J");
             Register<ItemImplicitTable>(list, "547967325&range=A:D");
+            // BasicItem — 상점용 기본 아이템 (NPC_SHOP_EQUIPMENT_DESIGN §3.1). A~F 데이터, G~H는 보조 컬럼(다운로드 제외).
+            Register<BasicItemTable>(list, "786446863&range=A:F");
             // EquipmentBaseStat: A~N가 실제 데이터, O~S는 시트 가독성용 보조 컬럼(다운로드 제외).
             // 슬롯당 3컬럼(ModId, Value1, Value2) × 4 슬롯 = 12컬럼 + Id + ItemId = 14컬럼.
             Register<EquipmentBaseStatTable>(list, "972309111&range=A:N");
@@ -211,6 +213,9 @@ namespace ARPG.Editor
 
         [MenuItem("ARPG/Download Table/AreaEffectTable", false, 100)]
         private static async void DownloadAreaEffectTable() => await DownloadSingleTable<AreaEffectTable>();
+
+        [MenuItem("ARPG/Download Table/BasicItemTable", false, 100)]
+        private static async void DownloadBasicItemTable() => await DownloadSingleTable<BasicItemTable>();
 
         [MenuItem("ARPG/Download Table/BuffTable", false, 100)]
         private static async void DownloadBuffTable() => await DownloadSingleTable<BuffTable>();
@@ -695,6 +700,10 @@ namespace ARPG.Editor
                 else if (table is ItemImplicitTable itemImplicitTable)
                 {
                     ParseItemImplicitTable(itemImplicitTable, values);
+                }
+                else if (table is BasicItemTable basicItemTable)
+                {
+                    ParseBasicItemTable(basicItemTable, values);
                 }
                 else if (table is EquipmentBaseStatTable equipmentBaseStatTable)
                 {
@@ -1814,6 +1823,22 @@ namespace ARPG.Editor
             table.ItemId = int.Parse(values[1]);
             table.ModId = int.Parse(values[2]);
             table.Tier = int.Parse(values[3]);
+        }
+
+        private static void ParseBasicItemTable(BasicItemTable table, string[] values)
+        {
+            // 컬럼: Id, ItemId, ModTableId, Value1, Value2, Weight (G열부터는 시트 가독성용 보조 컬럼)
+            if (values.Length < 6)
+            {
+                Debug.LogError($"[ParseBasicItemTable] Invalid data length. Expected at least 6, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            table.ItemId = int.Parse(values[1]);
+            table.ModTableId = int.Parse(values[2]);
+            table.Value1 = ParseIntSafe(values, 3);
+            table.Value2 = ParseIntSafe(values, 4);
+            table.Weight = ParseIntSafe(values, 5);
         }
 
         private static void ParseEquipmentBaseStatTable(EquipmentBaseStatTable table, string[] values)

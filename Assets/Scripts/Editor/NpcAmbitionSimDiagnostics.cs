@@ -292,6 +292,10 @@ namespace ARPG.EditorTools
             public DayRow Today = new DayRow();
             public long TotalGoldBurned;
             public long TotalPopulationGold;
+            // NPC_SHOP_EQUIPMENT (D118·D119): 기본 아이템이 아닌 구매 수, 시작 시점 생존 NPC 장착 장비 중 기본 아이템 아님/전체
+            public int NonBasicPurchases;
+            public int NonBasicEquippedAtStart;
+            public int EquippedAtStart;
 
             // 소문 (P2b)
             public NpcRumorCounters RumorCounters = new NpcRumorCounters();
@@ -857,6 +861,7 @@ namespace ARPG.EditorTools
                 sim.NpcIds.Add(ids[i]);
                 sim.NpcStats.Add(ids[i], new NpcStats());
             }
+            CountEquippedBasic(sim, out sim.EquippedAtStart, out sim.NonBasicEquippedAtStart);
 
             IReadOnlyList<VillageData> villages = AR.s.Village.GetAllVillages();
             for (int i = 0; i < villages.Count; i++)
@@ -938,7 +943,7 @@ namespace ARPG.EditorTools
 
             Swap(swaps, npc, "_npcSaveDict", sim.Npcs);
             Swap(swaps, npc, "_npcPowerCache", new Dictionary<int, float>());
-            Swap(swaps, npc, "_deferredLootUpgradeItemIds", new Dictionary<int, List<int>>());
+            Swap(swaps, npc, "_deferredPurchaseUpgradeItemIds", new Dictionary<int, List<int>>());
             Swap(swaps, npc, "_npcPartyDict", sim.Parties);
             Swap(swaps, npc, "_simulationPartyIds", partyIds);
             Swap(swaps, npc, "_simulationWorkCursor", 0);
@@ -978,6 +983,28 @@ namespace ARPG.EditorTools
             if (field == null)
                 throw new MissingFieldException(target.GetType().Name, fieldName);
             return field;
+        }
+
+        /// <summary>생존 NPC 장착 장비 수와 그중 온전한 기본 아이템이 아닌 수 (NPC_SHOP_EQUIPMENT D118·D119).</summary>
+        private static void CountEquippedBasic(SimContext sim, out int equipped, out int nonBasic)
+        {
+            equipped = 0;
+            nonBasic = 0;
+            for (int i = 0; i < sim.NpcIds.Count; i++)
+            {
+                NpcSaveData npc = sim.Npcs[sim.NpcIds[i]];
+                if (npc.Condition == CharacterConditions.Dead || npc.Activity.Phase == NpcActivityPhase.Dead)
+                    continue;
+                for (int s = 0; s < npc.InventoryEquip.Length; s++)
+                {
+                    ItemData? item = npc.InventoryEquip[s];
+                    if (item?.Equipment == null)
+                        continue;
+                    equipped++;
+                    if (item.Equipment.IsIntactBasicItem() == false)
+                        nonBasic++;
+                }
+            }
         }
 
         private static T CloneJson<T>(T source)
@@ -1415,6 +1442,8 @@ namespace ARPG.EditorTools
             {
                 today.Bought++;
                 today.BoughtGold += report.BoughtPrice;
+                if (report.BoughtBasicItemId <= 0)
+                    sim.NonBasicPurchases++;
             }
 
             if (sim.VillageStats.TryGetValue(saveData.VillageId, out VillageStats? villageStats))
@@ -1968,6 +1997,10 @@ namespace ARPG.EditorTools
             int totalUpgrades = lootUpgrades + tradeUpgrades + delveUpgrades;
             sb.AppendLine($"업그레이드 사건: Loot {lootUpgrades} + Trade {tradeUpgrades} + Delve {delveUpgrades} = {totalUpgrades} " +
                           $"(NPC당 {(first.Living > 0 ? totalUpgrades / (float)first.Living : 0f):F4})");
+            CountEquippedBasic(sim, out int equippedEnd, out int nonBasicEnd);
+            sb.AppendLine($"기본 장비(NPC_SHOP_EQUIPMENT): 기본 아이템 아닌 구매 {sim.NonBasicPurchases}건 | " +
+                          $"생존 NPC 장착 장비 중 기본 아이템 아님: 시작 {sim.NonBasicEquippedAtStart}/{sim.EquippedAtStart} → " +
+                          $"끝 {nonBasicEnd}/{equippedEnd} (모두 0이어야 함)");
             sb.AppendLine($"개인 상한 초과 NPC(일별 최대): {maxCapExceed} | 최대 전투력/상한 비율: {maxCapRatio:F4}");
             sb.AppendLine($"활동 선택 {selections}회: Rest {Pct(rest, selections):F2}% / Hunt {Pct(hunt, selections):F2}% / " +
                           $"Trade {Pct(trade, selections):F2}% / Delve {Pct(delve, selections):F2}%");
@@ -3065,7 +3098,7 @@ namespace ARPG.EditorTools
             Item(sim.TheftStolenOk == auditEquipped + auditBag,
                 "안 들킨 절도: 물건 이동·관계 불변·도둑 절도 Deed 없음·버림 없음·피해자 Deed",
                 $"{sim.TheftStolenOk}/{auditEquipped + auditBag} ({(auditEquipped + auditBag > 0 ? Pct(sim.TheftStolenOk, auditEquipped + auditBag) : 100f):F1}%)");
-            Item(sim.TheftCapExceed == 0, "훔친 장비 장착 시 개인 상한 초과 0", $"{sim.TheftCapExceed}");
+            Item(sim.TheftCapExceed == 0, "훔친 장비 장착 시 개인 상한 초과 0 (D119 이후 장착 자체가 없음)", $"{sim.TheftCapExceed}");
             Item(caught == auditCaught && equipped == auditEquipped && toBag == auditBag,
                 "결과 분류 일치 (게임 카운터 적발/장착/가방 = 감사)",
                 $"{caught}/{equipped}/{toBag} = {auditCaught}/{auditEquipped}/{auditBag}");
@@ -5011,7 +5044,7 @@ namespace ARPG.EditorTools
                 bool inThiefBag = HoldsInstance(thief, bagItem.ItemInstanceId, out bool bagEquipped);
                 Check(bagOutcome == NpcTheftOutcome.StolenToBag && HoldsInstance(bagVictim, bagItem.ItemInstanceId, out _) == false &&
                       inThiefBag == true && bagEquipped == false,
-                    "안 들킴(개인 상한 초과라 장착 안 함): 물건이 피해자 가방에서 도둑 가방으로 이동");
+                    "안 들킴: 물건이 피해자 가방에서 도둑 가방으로 이동 (훔친 장비는 장착하지 않음, D119)");
                 bool keptAll = true;
                 for (int i = 0; i < heldBefore.Count; i++)
                     keptAll &= HoldsInstance(thief, heldBefore[i], out _);
@@ -5075,11 +5108,10 @@ namespace ARPG.EditorTools
                         AmbitionMultiplier = 1f, VictimCandidateCount = 1, Detected = false,
                     }, t0 + 50f);
                     bool held = HoldsInstance(thief, equipItem.ItemInstanceId, out bool equippedNow);
-                    Check(equipOutcome == NpcTheftOutcome.StolenEquipped && held == true && equippedNow == true &&
-                          HoldsInstance(equipVictim, equipItem.ItemInstanceId, out _) == false,
-                        "안 들킴 + 업그레이드: 도둑이 바로 장착 (전리품 장착 규칙 D45)");
-                    Check(NpcPowerEvaluator.Evaluate(thief) <= NpcManager.GetNpcPowerCap(thief) + PowerEpsilon,
-                        "장착 후 개인 상한 이하");
+                    Check(equipOutcome == NpcTheftOutcome.StolenToBag && held == true && equippedNow == false &&
+                          HoldsInstance(equipVictim, equipItem.ItemInstanceId, out _) == false &&
+                          Mathf.Abs(NpcPowerEvaluator.Evaluate(thief) - strippedPower) <= PowerEpsilon,
+                        "안 들킴 + 업그레이드 후보여도 가방행, 장착하지 않음 (NPC_SHOP_EQUIPMENT D119)");
                     bool hasOwnerRumor = false;
                     for (int i = 0; i < thief.Rumors.Count; i++)
                     {
@@ -5087,13 +5119,23 @@ namespace ARPG.EditorTools
                         hasOwnerRumor |= rumor.Kind == NpcRumorKind.ItemOwner && rumor.SubjectNpcId == thiefId &&
                                          rumor.ItemInstanceId == equipItem.ItemInstanceId;
                     }
-                    Check(hasOwnerRumor == true, "기존 업그레이드 경로가 ItemOwner 소문을 만듦 (D71)");
-                    Check(CountDeeds(thief, NpcDeedKind.NotableItemAcquired) == notableBefore + 1 &&
+                    Check(hasOwnerRumor == false && CountDeeds(thief, NpcDeedKind.NotableItemAcquired) == notableBefore &&
                           CountTheftDeeds(thief) == theftDeedsBefore,
-                        "기존 업그레이드 경로의 NotableItemAcquired 1건(D83), 도둑 쪽 절도 Deed 없음");
+                        "훔친 장비로는 ItemOwner 소문·NotableItemAcquired가 생기지 않음, 도둑 쪽 절도 Deed 없음");
                     NpcDeedEntry? equipDeed = equipVictim.Deeds.Count > 0 ? equipVictim.Deeds[equipVictim.Deeds.Count - 1] : null;
                     Check(equipDeed != null && equipDeed.Kind == NpcDeedKind.ItemStolen && equipDeed.Participants.Count == 0,
                         "피해자 Deed ItemStolen");
+
+                    // 게임에서는 훔친 장비를 장착하지 않지만(D119) 장착 소문(ItemOwner)으로 늦게 발각되는 경로는 방어 코드로 남아 있다.
+                    // ⑧-2 검증용으로 진단에서만 직접 장착해 소유자 본인의 ItemOwner 소문을 만든다.
+                    for (int i = 0; i < thief.Inventory.Count; i++)
+                    {
+                        if (thief.Inventory[i] != null && thief.Inventory[i]!.ItemInstanceId == equipItem.ItemInstanceId)
+                            thief.Inventory[i] = null;
+                    }
+                    thief.EquipItem((GlobalEnum.EquipSlotType)bestSlot, equipItem, out _);
+                    npc.InvalidateNpcPower(thiefId);
+                    npc.NotifyNpcEquipmentChanged(thiefId, thief, (GlobalEnum.EquipSlotType)bestSlot, equipItem, t0 + 50f);
                 }
 
                 // ================= P4b: 단서 · 늦은 발각 · 판매/배신 소문 · 대화 (D103~D106) =================
@@ -5105,8 +5147,8 @@ namespace ARPG.EditorTools
                 // ⑧-1 단서 (D103): 안 들킨 절도 → 피해자 단서, 상한 3 (가장 오래된 것부터 지움)
                 Check(HasTestClue(bagVictim, bagItem.ItemInstanceId, thiefId, t0 + 40f) == true &&
                       (stolenEquipItem == null || HasTestClue(equipVictim, stolenEquipItem.ItemInstanceId, thiefId, t0 + 50f) == true),
-                    "단서: 안 들킨 절도마다 피해자에게 {인스턴스, 실제 범인, 시각} (가방행·장착 모두)");
-                thief.InitialPower = 0.001f;   // 훔친 물건이 장착되지 않고 가방에 남게 (판매 검증용)
+                    "단서: 안 들킨 절도마다 피해자에게 {인스턴스, 실제 범인, 시각}");
+                thief.InitialPower = 0.001f;   // 판매 검증용 (훔친 물건은 원래 장착되지 않는다, D119)
                 npc.InvalidateNpcPower(thiefId);
                 for (int i = 0; i < thief.Inventory.Count; i++)
                     thief.Inventory[i] = null;
@@ -5128,7 +5170,7 @@ namespace ARPG.EditorTools
                     capKept &= HasTestClue(bagVictim, capItems[n].ItemInstanceId, thiefId, p4bTime + n);
                 Check(capKept == true, "단서 상한 3: 네 번째 도난에서 가장 오래된 단서(첫 도난)가 지워짐");
 
-                // ⑧-2 늦은 발각 — 장착 경로: 도둑이 훔친 장비를 장착 → ItemOwner 소문 → 피해자가 받아들임 → 발각
+                // ⑧-2 늦은 발각 — 장착 경로(방어 코드): 훔친 장비 장착(진단이 직접) → ItemOwner 소문 → 피해자가 받아들임 → 발각
                 if (stolenEquipItem != null)
                 {
                     NpcRumor? ownerRumor = null;
@@ -5680,7 +5722,7 @@ namespace ARPG.EditorTools
 
             object npc = AR.s.Npc;
             object village = AR.s.Village;
-            string[] npcFields = { "_npcSaveDict", "_npcPowerCache", "_deferredLootUpgradeItemIds", "_npcPartyDict",
+            string[] npcFields = { "_npcSaveDict", "_npcPowerCache", "_deferredPurchaseUpgradeItemIds", "_npcPartyDict",
                 "_simulationPartyIds", "_simulationWorkCursor", "_nextPartyId", "_simulationNpcIds", "_simulationCursor", "_narrative",
                 "_npcAffinity", "_npcRelations" };
             for (int i = 0; i < npcFields.Length; i++)

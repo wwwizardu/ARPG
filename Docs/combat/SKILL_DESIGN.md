@@ -2,7 +2,7 @@
 
 현재 `System_Skill` / `SkillTable` / `DamageCalculator` 위에서 바로 또는 약간의 보강으로 구현 가능한 스킬 카탈로그.
 
-> **현행 판정 기준 (2026-09-20)**: "구현됨"은 해당 스킬의 `SkillTable` 행과 필요한 공용 런타임 경로가 모두 존재한다는 뜻이다. "런타임 준비 완료"는 공용 메커니즘은 존재하지만 해당 스킬의 테이블·효과·프리팹 콘텐츠가 아직 등록되지 않았다는 뜻이다. 이름이 같은 테이블 행이 없다는 사실만으로 시스템 미구현으로 판정하지 않는다.
+> **현행 판정 기준 (2026-10-03, 이전 2026-09-20)**: "구현됨"은 해당 스킬의 `SkillTable` 행과 필요한 공용 런타임 경로가 모두 존재한다는 뜻이다. "런타임 준비 완료"는 공용 메커니즘은 존재하지만 해당 스킬의 테이블·효과·프리팹 콘텐츠가 아직 등록되지 않았다는 뜻이다. 이름이 같은 테이블 행이 없다는 사실만으로 시스템 미구현으로 판정하지 않는다.
 
 ---
 
@@ -45,7 +45,7 @@
 | `SkillTargetType` | `Direction` / `Position` |
 | `SkillRangeMin` / `SkillRangeMax` | 시전 가능 사거리 (AI/UI용) |
 | `SkillTargetRange1` | 히트 판정 거리 (즉발) |
-| `SkillTargetRange2` | 히트 판정 각도 (360=원, 그 외=부채꼴) |
+| `SkillTargetRange2` | 히트 판정 **반각**(forward 기준 한쪽 각도, 전체 각 = 2배). 180 이상이면 원(각도 검사 생략), 그 외=부채꼴. 기존 행의 `360`도 원으로 동작한다 (2026-10-03 정정: `HitboxMath.PointInSector`의 `halfAngleDeg`) |
 
 ### 1.4 데미지 컬럼
 
@@ -77,15 +77,17 @@
 | 근접 평타·광역 | A1·A3·A5 | A2·A4 | — |
 | 이동/돌진 | M1 | M2 | M3 라인 히트 |
 | 원거리 발사체 | R2 | R1·R3 | R4 투사체 포물선 |
-| 원소 스펠 | S4 | S1·S2·S5·S6 | — |
+| 원소 스펠 | S3·S4 | S1·S2·S5·S6 | — |
 | 버프/디버프 | — | — | B2 토글 자기 버프·B3 아군 범위 버프 |
 | 채널링/차징 | — | — | C1 라인 히트·C2 차지 해제 발동 |
 
-총 **21종 초안** 중 현재 테이블과 런타임이 함께 존재하는 스킬은 A1·A3·A5·M1·R2·S4의 6종이다. A2·A4·M2·R1·R3·S1·S2·S5·S6의 9종은 공용 메커니즘이 이미 있어 콘텐츠 데이터 작성이 주 작업이다. 실제 코드 보강이 필요한 스킬은 M3·R4·B2·B3·C1·C2의 6종이다. 한 캐릭터/직업이 모두 가지는 것은 아니며, 상위 시스템(스킬 트리/장비 그란트 등)이 슬롯에 매핑한다.
+총 **22종 초안**(2026-10-03 S3 재포함) 중 현재 테이블과 런타임이 함께 존재하는 스킬은 A1·A3·A5·M1·R2·S3·S4의 7종이다. A2·A4·M2·R1·R3·S1·S2·S5·S6의 9종은 공용 메커니즘이 이미 있어 콘텐츠 데이터 작성이 주 작업이다. 실제 코드 보강이 필요한 스킬은 M3·R4·B2·B3·C1·C2의 6종이다. 한 캐릭터/직업이 모두 가지는 것은 아니며, 상위 시스템(스킬 트리/장비 그란트 등)이 슬롯에 매핑한다.
 
-`SkillTable`에는 이 카탈로그 외에도 몬스터 전용 `StrikeMonster`, `GoblinFirebolt`, `SwampToadPoisonSpit`과 추가 스킬 `FireRing`이 있다. 이들은 카탈로그 구현 수에 포함하지 않는다.
+`SkillTable`에는 이 카탈로그 외에도 몬스터 전용 `StrikeMonster`, `GoblinFirebolt`과 추가 스킬 `FireRing`이 있다. 이들은 카탈로그 구현 수에 포함하지 않는다.
 
-과거 삭제한 S3 Chain Lightning은 `SingleEntity`를 복원하지 않고 Position 커밋과 공용 연쇄·분열 런타임으로 다시 도입할 계획이다. 구현 계약은 [SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md](SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md)를 따른다. 실제 런타임과 데이터 행이 추가될 때 이 카탈로그에도 다시 포함한다.
+> 2026-10-03 확인: 몬스터 전용 `SwampToadPoisonSpit`(SkillId 205)은 2026-09-24 커밋 "연쇄 스킬 추가"(c87d5de)에서 `SkillTable.bytes`에서 빠졌다. 그런데 `AiTable` Id 4(SwampToad, `MonsterTable` 1010의 AI)는 아직 `SkillId1=205`를 참조한다. 의도한 삭제인지 확인되지 않았으며, 시트 행을 복구하든 AI 참조를 바꾸든 데이터 정리가 필요하다. 이 상태에서는 `AttackTelegraphBuildValidator`가 "SkillId 205가 SkillTable에 없습니다"로 빌드를 중단할 것으로 보인다(실행 확인 안 함).
+
+과거 삭제한 S3 Chain Lightning은 `SingleEntity`를 복원하지 않고 Position 커밋과 공용 연쇄·분열 런타임으로 다시 도입했다(2026-09-24, c87d5de). 구현 계약은 [SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md](SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md)를 따른다. 런타임과 데이터 행(SkillId 202)이 추가되어 2026-10-03 카탈로그 §6 S3로 다시 포함했다.
 
 ---
 
@@ -169,7 +171,7 @@
 - Skill 시트 Id=101, **ProjectileId=1(임시, Test 발사체 재사용)**, **BaseProjectileCount=3**, SkillEffectIds=null
 - 일반 발사체 경로(`System_Skill.ProcessSkillHit`의 `if(ProjectileId>0)` 분기)가 `BaseProjectileCount + Stat.ProjectileCountAdd`만큼 부채꼴로 발사하도록 확장됨.
 - **SkillEffect 사용 안 함**: "스킬 자체의 발사체 개수"는 SkillTable 컬럼이 책임. SkillEffect.SpawnProjectile은 "스킬과 다른 종류의 발사체 스폰"(예: 폭발의 파편) 용도로만 사용.
-- 분산 각도는 현재 `System_Skill`의 `SPREAD_ANGLE_PER_SHOT=15°` 상수로 고정. 추후 Stat 합산이나 SkillTable 컬럼으로 교체 예정.
+- 분산 각도는 현재 `System_Skill`의 `SPREAD_ANGLE_PER_SHOT=15°` 상수로 고정. 추후 Stat 합산이나 SkillTable 컬럼으로 교체 예정. (2026-10-03 확인: 값은 여전히 15°이지만 정본은 `AttackTelegraphGeometryResolver.DefaultProjectileSpreadAngleDeg`이며 `System_Skill`의 지역 상수가 이를 참조한다. 공격 예고의 ProjectileFan도 같은 값을 쓴다.)
 - **장비 mod/버프 효과 자동 적용**: `Stat.ProjectileCountAdd`가 캐스터에 부여되면 R1·R2·S1 등 모든 발사체 스킬이 자동으로 +N발 발사. 발사체 개수 조절은 SkillTable에 분기 없이 동작.
 - 정식 화살 프리팹/Projectile 행이 마련되면 ProjectileId를 1→101로 갱신.
 - `Cooltime`: 4
@@ -203,6 +205,14 @@
 - `Cooltime`: 5
 - 현행: 자기 중심 360도 피해와 `ApplyBuff` OnHit, 냉동 `BuffTable` 행이 존재한다. 스킬·효과 데이터와 연출을 추가하면 된다.
 
+### S3. Chain Lightning — 위치 지정 연쇄 번개 *(구현됨, SkillId=202 / SkillEffect 1020 / SkillPropagation 1, 2026-09-24)*
+- `Tags`: Spell, Lightning / `SkillType`: Range / `ExecutionType`: Single
+- `SkillTargetType`: Position, `SkillRangeMax`: 6
+- `DamageType`: Lightning, `DamageMin~Max`: 10~15, `Mana`: 20, `Cooltime`: 0.5
+- `SkillEffectIds`: [1020 `ChainLightningPropagation`] — `EffectType=SkillPropagation`, `Trigger=OnSkillCommit`, `Param1=1`
+- `SkillPropagationTable` 1 `ChainLightning_4Hits`: Instant 전달, `ChildCount=1`, `MaxDepth=3`(최대 4명), `HopInterval=0.2`, `MaxTurnAngleDeg=60`, 연출 `Effects/ChainLightningSegment`
+- 현행: `OnSkillCommit`에서 기본 Position 원형 타격을 억제하고 공용 전파 런타임이 커밋 위치 주변 첫 적부터 연쇄한다. `SingleEntity`는 복원하지 않았다. 계약·검증 현황은 [SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md](SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md).
+
 ### S4. Poison Cloud — 위치 지정 장판 *(구현됨, SkillId=203 / AreaEffectId=1)*
 - `SkillTargetType`: Position
 - 장판 지속 시간 동안 진입 적에게 Poison DoT
@@ -217,7 +227,7 @@
 ### S6. Frost Bolt — 단발 냉기 발사체 *(런타임 준비 완료, 콘텐츠 미등록)*
 - `ProjectileId`: 202, `DamageType`: Ice
 - 적중 시 `Chill` 부여 (§6.7)
-- 현행: Spell 투사체와 `ApplyBuff` OnHit, 냉동 `BuffTable` 행이 존재한다. 기존 예약 ID 205는 현재 `SwampToadPoisonSpit`이 사용 중이므로 새 ID가 필요하다.
+- 현행: Spell 투사체와 `ApplyBuff` OnHit, 냉동 `BuffTable` 행이 존재한다. 기존 예약 ID 205는 현재 `SwampToadPoisonSpit`이 사용 중이므로 새 ID가 필요하다. (2026-10-03 확인: 205 행은 `SkillTable`에서 빠졌지만 `AiTable` Id 4가 아직 참조하므로 §2의 데이터 정리 전에는 재사용하지 않는다.)
 
 ---
 
@@ -306,13 +316,13 @@
 **목적**: "명중 시 HP 흡수", "투사체 분리", "치명타 시 추가 발사체" 등의 옵션을 코드 분기 없이 데이터로 합성한다. PoE 보조 젬과 본질적으로 같은 모델.
 
 **구현 위치**:
-- `GlobalEnum.SkillTrigger` (8종 전체 정의)
+- `GlobalEnum.SkillTrigger` (9종 전체 정의 — 2026-09-24 `OnSkillCommit` 추가)
 - `SkillEffectTable.Kind` 컬럼 (`StatBonus` / `EffectAction`)로 처리 경로 분기:
   - **StatBonus** — `SkillStatBonusHelper.Rebuild`가 트리거별 `SkillStatBonusOn*Component`로 사전 합산. 매 적중마다 디스패치 없이 `SkillAttackProfileComponent`에 캐시되어 `DamageCalculator`가 일괄 소비. 예: `LifeSteal`, `ProjectileCountAdd`.
-  - **EffectAction** — `SkillEffectExecutor.Trigger(...)` 단일 진입점이 EffectType별 switch로 분기. 예: `ApplyBuff`, `DelegateToTotem`.
-- `SkillEffectContext` (OwnerId/TargetId/SkillId/TargetPos/DamageResult/IsCrit/CancelOriginalCast)
+  - **EffectAction** — `SkillEffectExecutor.Trigger(...)` 단일 진입점이 EffectType별 switch로 분기. 예: `ApplyBuff`, `DelegateToTotem`, `SkillPropagation`.
+- `SkillEffectContext` (OwnerId/TargetId/SkillId/TargetPos/DamageResult/IsCrit/CancelOriginalCast, 2026-09-24 `PropagationRootEntityId`/`SuppressDefaultImpact` 추가)
 - `SkillTable.SkillEffectIds: List<int>` 컬럼 + 구글 시트 SkillEffect 시트
-- 등록된 효과: 1001 LifeSteal_15% (StatBonus), 1002 OnHit_Bleed (EffectAction), 1010 Delegate_Totem_8s (EffectAction), 2003 MultiShot_3 (StatBonus, R2)
+- 등록된 효과: 1001 LifeSteal_15% (StatBonus), 1002 OnHit_Bleed (EffectAction), 1010 Delegate_Totem_8s (EffectAction), 1020 ChainLightningPropagation (EffectAction, `SkillPropagation`·`OnSkillCommit`, S3), 2003 MultiShot_3 (StatBonus, R2)
 
 **옵션 합산 컨벤션**: 옵션은 두 종류로 나뉨.
 - **(1) 스킬 고유 속성**: `SkillTable` 컬럼으로 표현 (예: `ProjectileId`, `BaseProjectileCount`). 발사체 개수처럼 "스킬마다 다를 수 있지만 하나의 스킬 내에선 base 값"인 항목.
@@ -321,7 +331,7 @@
 
 **SkillEffect.SpawnProjectile은 별도 용도**: "스킬과 다른 종류의 발사체 스폰"(폭발 파편, 시체 폭발 등). 일반 Multi Shot에는 사용 안 함.
 
-**남은 작업**: SpawnProjectileOnHit(분리) / SpawnAreaEffectOnKill / ManaRestoreOnKill / KnockbackOnHit / DelegateToMine·Trap 등 `SkillEffectType` enum 추가 + Executor case 추가. 연쇄·분열은 투사체 전용 Stat을 개별 추가하기 전에 [공용 스킬 전파 계획](SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md)의 `SkillPropagation` 모델로 구현한다.
+**남은 작업**: SpawnProjectileOnHit(분리) / SpawnAreaEffectOnKill / ManaRestoreOnKill / KnockbackOnHit / DelegateToMine·Trap 등 `SkillEffectType` enum 추가 + Executor case 추가. 연쇄·분열은 투사체 전용 Stat을 개별 추가하기 전에 [공용 스킬 전파 계획](SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md)의 `SkillPropagation` 모델로 구현한다. (2026-10-03 확인: `SkillPropagation` EffectAction 구현됨. Instant 연쇄는 S3로 사용 중이고, Projectile 연쇄·분열과 Instant 분열은 코드 경로만 있고 데이터·PlayMode 검증이 없다.)
 
 **문제 의식**: 현재는 새 옵션 1개 = `SkillTable` 컬럼 1개 + `System_Skill` 분기 1개. 옵션 N × 스킬 M 조합 폭발. `ApplySkillEffectToEntity`의 TODO 주석들이 이 한계를 드러냄.
 
@@ -334,7 +344,7 @@ SkillEffectTable                         // 새 테이블
 ├─ Id
 ├─ EffectType: GE.Stat                   // ApplyBuff/DelegateToTotem(EffectAction), LifeSteal/ProjectileCountAdd/...(StatBonus)
 ├─ Kind: GE.SkillEffectKind              // StatBonus(Helper가 컴포넌트로 흡수) / EffectAction(Executor가 트리거 시점 실행)
-├─ Trigger: GE.SkillTrigger              // OnSkillStart/OnHit/OnCrit/OnKill/OnProjectileSpawn/OnProjectileHit/OnSkillEnd/OnSkillCommand
+├─ Trigger: GE.SkillTrigger              // OnSkillCommand/OnSkillStart/OnSkillCommit/OnHit/OnCrit/OnKill/OnProjectileSpawn/OnProjectileHit/OnSkillEnd
 ├─ Param1, Param2, Param3: float
 └─ Probability: int
 ```
@@ -344,6 +354,7 @@ SkillEffectTable                         // 새 테이블
 |---|---|---|
 | `OnSkillCommand` | `ProcessSkillCommands` 진입 직후 (캔슬·위임 가능) | Owner, SkillId, TargetPos |
 | `OnSkillStart` | Process 진입 직후 | Owner |
+| `OnSkillCommit` | 실제 `DamageTime` 커밋 직후, Projectile/Area/직접 타격 분기 전 (`SuppressDefaultImpact`로 기본 전달 억제 가능, 2026-09-24 추가) | Owner, SkillEntity, 커밋 TargetPos |
 | `OnHit` | 적중한 적마다 1회 | Owner, Target, DamageResult |
 | `OnCrit` | 치명타 적중 | 위 + IsCrit |
 | `OnKill` | 적중으로 적이 사망 | Owner, KilledTarget |
@@ -365,6 +376,7 @@ SkillEffectTable                         // 새 테이블
 | 명중 시 넉백 | KnockbackOnHit | EffectAction | OnHit | Force |
 | **토템 시전 위임** (§6.9) | DelegateToTotem | EffectAction | OnSkillCommand | TotemTableId, Duration |
 | **지뢰 시전 위임** (§6.9) | DelegateToMine | EffectAction | OnSkillCommand | MineTableId, MaxMines |
+| **연쇄·분열 전파** (구현됨, S3) | SkillPropagation | EffectAction | OnSkillCommit / OnHit | SkillPropagationTableId |
 
 **영향**: §6.2(버프 적용)·§6.7·§6.9 모두 EffectType으로 흡수됨. 새 옵션 추가 시 EffectType enum 1줄 + 디스패처 case 1개 + 테이블 행 1개. 기존 SkillTable 행 변경 0.
 
@@ -395,13 +407,13 @@ SkillEffectTable                         // 새 테이블
 | 1 ~ 49 | 근접 (A) | A1=1 (기존), A2=10, A3=11, A4=12, A5=13 |
 | 50 ~ 99 | 이동 (M) | M1=5 (기존, QuickHop), M2=50, M3=51 |
 | 100 ~ 199 | 원거리 (R) | R1=100, R2=101, R3=102, R4=103 |
-| 200 ~ 299 | 스펠 (S) | S1=200, S2=201, S4=203 (기존), S5/S6=미정 |
+| 200 ~ 299 | 스펠 (S) | S1=200, S2=201, S3=202 (기존, ChainLightning), S4=203 (기존), S5/S6=미정 |
 | 300 ~ 399 | 버프 (B) | B2=301, B3=302 |
 | 400 ~ 499 | 채널/차징 (C) | C1=400, C2=401 |
 
 ProjectileId 대역도 동일 규칙 권장: 화살 100번대, 마법 200번대.
 
-기존 제안 ID 204와 205는 각각 몬스터 전용 `GoblinFirebolt`, `SwampToadPoisonSpit`이 사용 중이다. S5 Lightning Strike와 S6 Frost Bolt를 추가할 때 충돌하지 않는 새 ID를 배정한다.
+기존 제안 ID 204와 205는 각각 몬스터 전용 `GoblinFirebolt`, `SwampToadPoisonSpit`이 사용 중이다. S5 Lightning Strike와 S6 Frost Bolt를 추가할 때 충돌하지 않는 새 ID를 배정한다. (2026-10-03 확인: 205 행은 `SkillTable`에 없지만 `AiTable` Id 4가 참조 중이다 — §2 참고. 206은 `FireRing`이 사용 중이다.)
 
 ---
 
@@ -431,3 +443,4 @@ ProjectileId 대역도 동일 규칙 권장: 화살 100번대, 마법 200번대.
 - 2026-05-16: `LifeSteal` 효과 경로 단일화. 기존 `LifeStealOnHit` (EffectAction)을 폐기하고 `SkillEffectKind.StatBonus + EffectType.LifeSteal`로 통합. `SkillStatBonusOnHitComponent.LifeStealBonus` 필드 추가 → `SkillAttackProfileComponent.LifeStealRatio`에서 캐릭터 stat과 합산 캐시. SkillEffectExecutor의 `LifeStealOnHit` 케이스 제거, `DownloadTables.InferSkillEffectKindFromEffectType`에서 `LifeSteal` 분기 제거(이제 default StatBonus로 추론). 매 적중마다 트리거 디스패치 없이 `DamageCalculator`가 단일 비율로 흡혈 처리. SkillEffect 1001 행 `Kind=StatBonus` 확정.
 - 2026-08-28: `SkillTargetType.SingleEntity` 폐기. 네임락(대상 ID 고정) 방식을 사용하지 않기로 결정하여 enum 멤버와 관련 런타임 경로(`FindClosestEntity`, `SkillTargetComponent.TargetId`/`TargetType`/`SetEntityTarget`/`HasTarget`)를 모두 제거. 이에 의존한 S3 Chain Lightning / B1 War Cry / B4 Curse of Weakness / C3 Drain Life 4종과, 유일 의존 스킬이 사라진 §6.5(연쇄 메커니즘)를 카탈로그에서 삭제 — 25종 → 21종. 문서와 실제 테이블이 어긋나 있던 A1 Strike / M1 QuickHop의 타겟 타입을 실제 값(`Direction`)으로 정정. 아울러 `SkillUsePolicyResolver.RequiresDirectionalAim`이 명시된 `AimTrackingMode`보다 먼저 검사되어 명시값을 무시하던 문제를 수정 — 이제 이 판정은 `Default` 해석 규칙과 화살표 표시 판단에만 쓰인다(명시값 우선).
 - 2026-09-20: 코드·바이너리 테이블 재대조. 구현 판정을 `공용 런타임`과 `개별 콘텐츠 등록`으로 분리하고 21종을 구현 6종·런타임 준비 9종·코드 보강 필요 6종으로 재분류했다. 마나 소비, Position 즉발, Jump 착지 커밋, 관통, AreaEffect, ApplyBuff, 토템 위임의 완료 상태를 반영하고 로드맵을 남은 작업 기준으로 교체했다. S5/S6의 기존 예약 ID 204/205 충돌도 기록했다.
+- 2026-10-03: 코드·바이너리 테이블 재대조. S3 Chain Lightning을 구현됨으로 카탈로그에 다시 포함했다(SkillId 202 / SkillEffect 1020 / SkillPropagation 1, 2026-09-24 c87d5de) — 22종 중 구현 7종. §6.8에 `SkillTrigger.OnSkillCommit`(9종), `SkillPropagation` EffectAction, 효과 1020, `SkillEffectContext` 전파 필드를 반영했다. §1.3 `SkillTargetRange2`를 반각(180 이상=원)으로 정정했다. `SwampToadPoisonSpit`(205)이 `SkillTable`에서 빠졌는데 `AiTable` Id 4가 아직 참조한다는 데이터 정리 필요 사항을 §2에 기록했다. R2 분산 각도 상수의 정본 위치를 갱신했다.

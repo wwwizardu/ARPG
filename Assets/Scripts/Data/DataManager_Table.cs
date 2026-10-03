@@ -47,6 +47,10 @@ namespace ARPG.Data
         private ImmutableDictionary<int, Tables.ModTable> _modTable = null!;
         private ImmutableDictionary<int, Tables.ModTierTable> _modTierTable = null!;
         private ImmutableDictionary<int, Tables.ItemImplicitTable> _itemImplicitTable = null!;
+        // 상점용 기본 아이템 (NPC_SHOP_EQUIPMENT_DESIGN §3, D116). 검증 통과 행만 ItemId 인덱스에 들어간다.
+        private ImmutableDictionary<int, Tables.BasicItemTable> _basicItemTable = null!;
+        // ItemId → 기본 아이템 변형 목록 (Id 오름차순, 결정론 선택용)
+        private Dictionary<int, List<Tables.BasicItemTable>> _basicItemVariantsByItemId = new();
         private ImmutableDictionary<int, Tables.ItemEnchantmentCostTable> _itemEnchantmentCostTable = null!;
         private Dictionary<GlobalEnum.ItemEnchantmentOperation, Tables.ItemEnchantmentCostTable>
             _itemEnchantmentCostByOperation = new();
@@ -93,6 +97,7 @@ namespace ARPG.Data
                 LoadTable<Tables.ModTable>("ModTable.bytes", tables => _modTable = tables),
                 LoadTable<Tables.ModTierTable>("ModTierTable.bytes", tables => _modTierTable = tables),
                 LoadTable<Tables.ItemImplicitTable>("ItemImplicitTable.bytes", tables => _itemImplicitTable = tables),
+                LoadTable<Tables.BasicItemTable>("BasicItemTable.bytes", tables => _basicItemTable = tables),
                 LoadTable<Tables.ItemEnchantmentCostTable>("ItemEnchantmentCostTable.bytes", tables => _itemEnchantmentCostTable = tables),
                 LoadTable<Tables.VillageTable>("VillageTable.bytes", tables => _villageTable = tables),
                 LoadTable<Tables.DungeonTable>("DungeonTable.bytes", tables => _dungeonTable = tables),
@@ -279,7 +284,90 @@ namespace ARPG.Data
 
             Debug.Log($"<color=yellow>[ZoneTable] Loaded rows={_zoneTable.Count} ids=[{string.Join(",", _zoneTableSortedIds)}]</color>");
 
+            // 기본 아이템은 Item·Mod·ModTier·EquipmentBaseStat·ItemImplicit 연결이 모두 끝난 뒤 검증·원형 생성한다.
+            BuildBasicItemIndex();
+
             Debug.Log("Data Tables Loaded");
+        }
+
+        /// <summary>
+        /// 기본 아이템 행 검증 + 옵션 원형 생성 + ItemId 인덱스 구축.
+        /// 잘못된 행은 오류를 남기고 제외한다 (그 행을 가리키는 저장 아이템은 로드 때 같은 장비의 첫 변형으로 대체된다).
+        /// </summary>
+        private void BuildBasicItemIndex()
+        {
+            _basicItemVariantsByItemId.Clear();
+            List<Tables.BasicItemTable> rows = new List<Tables.BasicItemTable>(_basicItemTable.Values);
+            rows.Sort((a, b) => a.Id.CompareTo(b.Id));
+
+            int validCount = 0;
+            for (int i = 0; i < rows.Count; i++)
+            {
+                Tables.BasicItemTable row = rows[i];
+                row.LoadLate();
+                row.IsValid = false;
+                row.TemplateMods = System.Array.Empty<Tables.ModInstance>();
+
+                string? error = ValidateBasicItemRow(row, out int fixedModTier);
+                if (error != null)
+                {
+                    Debug.LogError($"[BasicItemTable] Id={row.Id} ItemId={row.ItemId} ModTableId={row.ModTableId}: {error} — 행 제외");
+                    continue;
+                }
+
+                row.TemplateMods = EquipmentData.BuildBasicItemTemplate(row, fixedModTier);
+                row.IsValid = true;
+                validCount++;
+                if (_basicItemVariantsByItemId.TryGetValue(row.ItemId, out List<Tables.BasicItemTable>? variants) == false)
+                {
+                    variants = new List<Tables.BasicItemTable>();
+                    _basicItemVariantsByItemId.Add(row.ItemId, variants);
+                }
+                variants.Add(row);
+            }
+
+            Debug.Log($"[BasicItemTable] Loaded rows={rows.Count} valid={validCount} items={_basicItemVariantsByItemId.Count}");
+        }
+
+        /// <summary>오류 문구를 돌려준다. 정상이면 null이고, 고정 옵션의 Tier(값이 들어가는 가장 낮은 Tier)를 함께 준다.</summary>
+        private string? ValidateBasicItemRow(Tables.BasicItemTable row, out int fixedModTier)
+        {
+            fixedModTier = 0;
+            Tables.ItemTable? item = GetItem(row.ItemId);
+            if (item == null || item.ItemType != GlobalEnum.ItemType.Equipment)
+                return "장비 아이템이 아님";
+            if (GetEquipmentBaseStat(row.ItemId) == null && GetItemImplicits(row.ItemId).Count == 0)
+                return "Base·Implicit 데이터가 없어 장비 데이터를 만들 수 없음";
+            GlobalEnum.EquipmentTypeMask equipType = Utils.CategoryToEquipmentTypeMask(item.Category);
+            if (Utils.IsSingleEquipmentTypeMask(equipType) == false)
+                return $"장비 종류를 정할 수 없음 (Category={item.Category})";
+
+            Tables.ModTable? mod = row.Mod;
+            if (mod == null)
+                return "ModTable 없음";
+            if (mod.Slot != GlobalEnum.ModSlot.Prefix && mod.Slot != GlobalEnum.ModSlot.Postfix)
+                return $"고정 옵션은 Prefix/Postfix만 허용 (Slot={mod.Slot})";
+            if (Utils.ContainsEquipmentType(mod.AllowedEquipTypes, equipType) == false)
+                return $"{equipType}에 허용되지 않은 옵션 (Allowed={mod.AllowedEquipTypes})";
+            if (row.Value1 < 0 || row.Value1 > ushort.MaxValue || row.Value2 < 0 || row.Value2 > ushort.MaxValue)
+                return $"값 범위 밖 (Value1={row.Value1}, Value2={row.Value2})";
+            if (row.Weight <= 0)
+                return $"가중치는 1 이상 (Weight={row.Weight})";
+
+            List<Tables.ModTierTable> tiers = GetModTiers(row.ModTableId);
+            if (tiers.Count == 0)
+                return "ModTier 행 없음";
+            tiers.Sort((a, b) => a.Tier.CompareTo(b.Tier));
+            fixedModTier = tiers[0].Tier;
+            for (int i = 0; i < tiers.Count; i++)
+            {
+                if (row.Value1 >= tiers[i].Min1 && row.Value1 <= tiers[i].Max1)
+                {
+                    fixedModTier = tiers[i].Tier;
+                    break;
+                }
+            }
+            return null;
         }
 
         public Tables.CreatureTable? GetPlayer(int id)
@@ -729,6 +817,22 @@ namespace ARPG.Data
                     result.Add(table);
             }
             return result;
+        }
+
+        /// <summary>검증을 통과한 기본 아이템 행. 없거나 잘못된 행이면 null.</summary>
+        public Tables.BasicItemTable? GetBasicItem(int basicItemId)
+        {
+            if (_basicItemTable != null && _basicItemTable.TryGetValue(basicItemId, out var table) && table.IsValid == true)
+                return table;
+            return null;
+        }
+
+        /// <summary>장비 아이템의 기본 아이템 변형 목록 (Id 오름차순). 없으면 빈 목록.</summary>
+        public IReadOnlyList<Tables.BasicItemTable> GetBasicItemVariants(int itemId)
+        {
+            if (_basicItemVariantsByItemId.TryGetValue(itemId, out List<Tables.BasicItemTable>? variants))
+                return variants;
+            return System.Array.Empty<Tables.BasicItemTable>();
         }
 
         /// <summary>

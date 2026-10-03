@@ -3,7 +3,7 @@ name: monster-spawn-runtime
 description: 청크 난이도 기반 스폰 슬롯, 플레이어 거리 기반 생성, 슬롯 쿨타임, Active/Warm/Expired 청크 캐시의 구현 계약.
 type: topic
 status: verified
-last_updated: 2026-09-03
+last_updated: 2026-10-03
 sources:
   - Docs/ai_monster/MONSTER_SPAWN_DESIGN.md
   - Docs/map/MAP_DESIGN.md
@@ -16,6 +16,8 @@ sources:
   - Assets/Scripts/Factory/EntityFactory.cs
   - Assets/Scripts/Common/System/System_EntityActivation.cs
   - Assets/Scripts/Common/System/System_EntityDestroy.cs
+  - Assets/Scripts/Common/Interface/IWorldMapSystem.cs
+  - Assets/Scripts/Manager/SystemManager.cs
 ---
 
 # 몬스터 런타임 스폰과 Warm 청크 캐시
@@ -66,6 +68,13 @@ biome의 `Any ∪ biome 전용` 풀에서 그룹마다 균등 샘플링한다.
 앵커 최소 간격을 검사해 별도 슬롯 배열을 만든다. `MonsterSpawn` 타일 비트는 후보 정본으로 쓰지
 않는다. [src: Assets/Scripts/Map/MapManager_Generator.cs, Assets/Scripts/Map/Biome/BiomeTable.cs]
 
+마을 주변은 스폰을 막는다. 마을 청사진(`MapType.Village`) 직사각형을 사방으로
+`_villageSpawnExclusionMargin`(기본 5타일)만큼 넓힌 영역을 청크별 `villageSpawnExclusion` 배열에
+표시한다. 마을 본체가 옆 청크에 있어도 여유 영역이 걸치면 이 청크에도 표시된다. 표시된 타일은 후보
+수집에서 빠지고, 실제 생성 직전 위치 검사(`IsMonsterSpawnLocalPositionValid`)에서도 거부된다. 풀에서
+재사용한 청크는 생성 시 배열을 비운 뒤 다시 채운다. 2026-09-24 커밋에서 추가됐다.
+[src: Assets/Scripts/Manager/MapManager.cs:L33·L414-430, Assets/Scripts/Map/MapManager_Generator.cs:L255-257·L351·L444-450·L489-506, Assets/Scripts/Map/MapChunkData.cs:L119-126]
+
 먼 청크는 Warm으로 전환되어 타일맵에서만 제거되고, 슬롯 배열과 세대 상태를 보존한다. TTL 300초
 또는 Warm 20개 상한의 LRU 축출 때 Expired가 되어 슬롯을 버리고 청크 풀로 반환된다.
 [src: Assets/Scripts/Map/MapChunkData.cs, Assets/Scripts/Map/MapManager_Generator.cs]
@@ -75,6 +84,15 @@ biome의 `Any ∪ biome 전용` 풀에서 그룹마다 균등 샘플링한다.
 청크 이탈 시 몬스터 GameObject와 활성화 컴포넌트만 비활성화하고 EntityId, 출신 슬롯, 생존 수와
 쿨다운은 유지한다. Expired 때 ECS·렌더·애니메이션·GameObject와 양방향 추적을 함께 제거한다.
 [src: Assets/Scripts/Manager/MonsterManager.cs, Assets/Scripts/Common/System/System_EntityActivation.cs]
+
+### 2.4 던전 실내에서는 정지
+
+`System_MonsterSpawn`은 `IWorldMapSystem`이다. `SystemManager.CanRun`은 플레이어가 던전 안에 있으면
+(`AR.s.Dungeon.IsInside`) 이 계열 시스템을 실행하지 않으므로, 던전 안에서는 월드 거리 링 스폰 검사가
+멈춘다. 던전 맵 컨텍스트의 청크는 던전 전용 생성으로 일찍 끝나 월드 스폰 슬롯을 만들지 않는다.
+청크 Expired 시 몬스터 정리(`ExpireChunkMonsters`)도 월드 컨텍스트에서만 호출한다. 2026-09-19
+던전 시스템 도입 때 바뀌었다. 던전 안의 몬스터 배치는 이 페이지 범위 밖이다.
+[src: Assets/Scripts/Common/System/System_MonsterSpawn.cs:L7, Assets/Scripts/Common/Interface/IWorldMapSystem.cs, Assets/Scripts/Manager/SystemManager.cs:L418-421, Assets/Scripts/Map/MapManager_Generator.cs:L259-264·L555-558]
 
 ## 3. 목표 생명주기
 
@@ -394,6 +412,8 @@ Expired 처리는 다음 순서를 보장한다.
 - 개체 겹침 최소 거리: 두 몬스터의 `MoveRadius` 합.
 - ZoneTable의 Main/Sub 그룹 수 범위. 이 값이 슬롯 수 범위로도 사용된다.
 - biome 슬롯 밀도 배율.
+- 마을 스폰 금지 여유 거리: 5타일 (`MapManager._villageSpawnExclusionMargin` 코드 기본값. 프리팹에서
+  덮어쓰지 않음, 2026-09-24 추가). [src: Assets/Scripts/Manager/MapManager.cs:L33, Assets/Prefabs/Manager/MapManager.prefab]
 [src: Assets/Prefabs/Manager/MonsterManager.prefab,
 Assets/Prefabs/Manager/MapManager.prefab,
 Assets/Scripts/Common/System/System_MonsterSpawn.cs,

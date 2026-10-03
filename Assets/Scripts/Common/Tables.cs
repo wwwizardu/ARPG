@@ -892,6 +892,33 @@ namespace ARPG.Tables
     }
 
     /// <summary>
+    /// 상점용 기본 아이템 (NPC_SHOP_EQUIPMENT_DESIGN.md §3, D116). 한 행 = 장비 1종의 고정 옵션 변형 1개.
+    /// Base·Implicit은 기존 테이블 그대로 붙고, 고정 옵션은 Prefix 또는 Postfix 1개다. 무작위 롤은 없다.
+    /// Id가 저장 식별자(EquipmentData.BasicItemId)이므로 기존 행의 Id를 바꾸거나 다른 변형에 재사용하지 않는다.
+    /// </summary>
+    [Serializable]
+    public class BasicItemTable : TableBase
+    {
+        [JsonProperty("ItemId")] public int ItemId;
+        [JsonProperty("ModTableId")] public int ModTableId;
+        [JsonProperty("Value1")] public int Value1;
+        [JsonProperty("Value2")] public int Value2;
+        [JsonProperty("Weight")] public int Weight;              // 같은 ItemId 변형 사이의 진열 가중치
+
+        [JsonIgnore] public ModTable? Mod;
+        // DataManager 로드 검증 통과 여부. 실패 행은 조회 인덱스에서 빠진다.
+        [JsonIgnore] public bool IsValid;
+        // 이 행으로 만든 장비의 전체 옵션 원형(Base + Implicit + 고정 옵션). 검증 통과 시 DataManager가 채운다.
+        // 생성은 복사, 저장 생략 판정은 비교에만 쓰며 직접 수정하지 않는다.
+        [JsonIgnore] public IReadOnlyList<ModInstance> TemplateMods = Array.Empty<ModInstance>();
+
+        public override void LoadLate()
+        {
+            Mod = AR.s.Data?.GetMod(ModTableId);
+        }
+    }
+
+    /// <summary>
     /// 아이템에 실제로 부여된 Mod 인스턴스 (저장 대상)
     /// </summary>
     [Serializable]

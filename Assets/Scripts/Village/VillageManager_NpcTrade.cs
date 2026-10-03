@@ -25,8 +25,6 @@ namespace ARPG.Village
         public const int NpcPurchaseMinPerCycle = 1;
         public const int NpcPurchaseMaxPerCycle = 3;
         public const float NpcPurchaseIntervalHours = 6f;
-        // 희귀·특수 슬롯(RareImport/FacilityPool)은 재입고 간격의 50%가 지난 뒤에만 NPC가 살 수 있다.
-        public const float NpcRareSlotUnlockFraction = 0.5f;
         // 모험가 매입품 슬롯 (D42). 회차당 최대 2개.
         public const int MaxAdventurerConsignmentSlots = 2;
 
@@ -97,13 +95,17 @@ namespace ARPG.Village
             return NpcShopPurchaseBlock.None;
         }
 
-        /// <summary>회차당 NPC 구매 한도 = 롤된 매물 종류 수 × 25% (내림), 최소 1·최대 3. 모험가 매입품은 세지 않는다.</summary>
+        /// <summary>
+        /// 회차당 NPC 구매 한도 = 롤된 매물 종류 수 × 25% (내림), 최소 1·최대 3.
+        /// 모험가 매입품과 기본 장비 칸은 세지 않는다 — 기본 장비 칸 추가(D117) 전과 같은 한도를 유지한다.
+        /// </summary>
         public int GetNpcPurchaseLimitPerCycle(VillageData v)
         {
             int kinds = 0;
             for (int i = 0; i < v.MerchantStock.Count; i++)
             {
-                if (v.MerchantStock[i].SlotKind != TradeStockSlotKind.AdventurerConsignment)
+                TradeStockSlotKind slotKind = v.MerchantStock[i].SlotKind;
+                if (slotKind != TradeStockSlotKind.AdventurerConsignment && slotKind != TradeStockSlotKind.BasicEquipment)
                     kinds++;
             }
             int limit = Mathf.FloorToInt(kinds * NpcPurchaseStockShare);
@@ -111,8 +113,9 @@ namespace ARPG.Village
         }
 
         /// <summary>
-        /// NPC가 살 수 있는 매물인지 (재고 쪽 조건만). 장비 매물만, 모험가 매입품은 제외하고 (NPC가 판 물건을
-        /// 되사지 않게 해 플레이어 몫으로 남긴다), 희귀·특수 슬롯은 재입고 간격의 50%가 지난 뒤에만.
+        /// NPC가 살 수 있는 매물인지 (재고 쪽 조건만). 기본 아이템 장비만 산다 (NPC_SHOP_EQUIPMENT D119) —
+        /// 칸 종류가 아니라 아이템으로 걸러 무작위 옵션 장비는 어느 칸에 있어도 빠진다.
+        /// 모험가 매입품은 기본 아이템이어도 제외한다 (NPC가 판 물건을 되사지 않게 해 플레이어 몫으로 남긴다).
         /// </summary>
         public bool IsNpcPurchasableEntry(VillageData v, MerchantStockEntry entry)
         {
@@ -120,29 +123,13 @@ namespace ARPG.Village
                 return false;
             if (entry.Item == null || entry.Item.Table == null || entry.Item.Equipment == null)
                 return false;
+            if (entry.Item.Equipment.BasicItemId <= 0)
+                return false;
             if (entry.Item.Table.BasePrice <= 0)
                 return false;
             if (entry.SlotKind == TradeStockSlotKind.AdventurerConsignment)
                 return false;
-            if (IsRareStockSlot(entry.SlotKind) == true && IsRareSlotUnlockedForNpc(v) == false)
-                return false;
             return true;
-        }
-
-        /// <summary>희귀·특수 슬롯 판별. 롤러가 쓰는 RareImport(희귀 수입)와 FacilityPool(특수 시설 풀)을 뜻한다.</summary>
-        public static bool IsRareStockSlot(TradeStockSlotKind slotKind)
-        {
-            return slotKind == TradeStockSlotKind.RareImport || slotKind == TradeStockSlotKind.FacilityPool;
-        }
-
-        /// <summary>현재 회차 시작 후 재입고 간격의 50%가 지났는지.</summary>
-        public bool IsRareSlotUnlockedForNpc(VillageData v)
-        {
-            VillageTradeProfile trade = ResolveTradeProfile(v);
-            float now = AR.s.Time.CurrentGameTime;
-            int cycle = VillageTradeStockRoller.GetRestockCycle(now, trade);
-            float elapsedInCycle = now - cycle * trade.RestockIntervalHours;
-            return elapsedInCycle >= trade.RestockIntervalHours * NpcRareSlotUnlockFraction;
         }
 
         /// <summary>NPC 구매가 = 플레이어와 같은 매물 확정가 스냅샷 (0이면 BasePrice).</summary>

@@ -13,7 +13,7 @@ namespace ARPG.Data
 {
     public partial class DataManager : MonoBehaviour
     {
-        private const ushort CURRENT_WORLD_DATA_VERSION = 16;
+        private const ushort CURRENT_WORLD_DATA_VERSION = 17;
         private const ushort CURRENT_PLAYER_DATA_VERSION = 2;
         private WorldData _worldData = new();
         public int WorldSeed => _worldData.WorldSeed;
@@ -22,6 +22,8 @@ namespace ARPG.Data
         public List<WorldDropItemData> WorldDrops => _worldData.WorldDropItemDatas;
         private List<PlayerData> _playerDataList = new();
         private int _currentPlayerEntityId = 0; // 현재 활성화된 플레이어 ID
+        // WorldDataVersion 17 마이그레이션 표시 (D121). NpcManager.Load가 ConsumeNpcBasicEquipmentReplacement로 가져간다.
+        private bool _needsNpcBasicEquipmentReplacement;
         
         private bool _isSaving = false;
         private bool _needsInitialWorldSave = false;
@@ -633,6 +635,23 @@ namespace ARPG.Data
             {
                 _worldData.ElapsedWorldGameHours = 0f;
             }
+
+            // 버전 16 -> 17: NPC 장착 장비를 상점 기본 아이템으로 일괄 교체 (NPC_SHOP_EQUIPMENT D121).
+            // 교체에는 테이블 연결이 끝난 NPC 데이터와 전투력 평가가 필요해 NpcManager.Load가 처리한다 — 여기서는 표시만 한다.
+            if (fromVersion < 17 && toVersion >= 17)
+            {
+                _needsNpcBasicEquipmentReplacement = true;
+            }
+        }
+
+        /// <summary>
+        /// D121 일괄 교체가 필요한지 돌려주고 표시를 지운다. NpcManager.Load가 NPC 로드 때 한 번 부른다.
+        /// </summary>
+        public bool ConsumeNpcBasicEquipmentReplacement()
+        {
+            bool needs = _needsNpcBasicEquipmentReplacement;
+            _needsNpcBasicEquipmentReplacement = false;
+            return needs;
         }
 
         // 버전 9 -> 10: 생존 NPC의 사망 관계 기억(DeceasedRelations) 추가.

@@ -245,6 +245,9 @@ namespace ARPG.UI
                 // NPC_AMBITION D42: NPC가 판 전리품 진열 슬롯 표기.
                 if (entry.SlotKind == TradeStockSlotKind.AdventurerConsignment)
                     reasonLabel = reasonLabel.Length > 0 ? $"모험가 매입품 · {reasonLabel}" : "모험가 매입품";
+                // NPC_SHOP_EQUIPMENT D117: 고정 옵션 기본 장비 칸 표기.
+                else if (entry.SlotKind == TradeStockSlotKind.BasicEquipment)
+                    reasonLabel = reasonLabel.Length > 0 ? $"기본 장비 · {reasonLabel}" : "기본 장비";
                 Text priceText = new()
                 {
                     text = reasonLabel.Length > 0

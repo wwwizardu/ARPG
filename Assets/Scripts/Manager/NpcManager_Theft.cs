@@ -43,7 +43,7 @@ namespace ARPG.Npc
         // 발각 결과 호감도 (D102): 피해자↔도둑 −40, 피해자의 가족·친구(1단계, 생존, 도둑 제외)↔도둑 −10
         public const int TheftVictimAffinityPenalty = -40;
         public const int TheftKinAffinityPenalty = -10;
-        // 절도로 얻은 장비의 장착 출처 (진단 로그 구분용, ApplyUpgrade source)
+        // 절도로 얻은 물건의 획득 출처 (진단 로그 구분용, GrantAcquiredItem source)
         private const string TheftEquipSource = "Theft";
         // 도난 단서 수명 (D103): 14일. 범인 사망 때도 지운다. 물건을 더 갖고 있지 않은 것은 삭제 조건이 아니다(판매 소문으로 발각 가능).
         public const float TheftClueLifetimeHours = 336f;
@@ -344,13 +344,13 @@ namespace ARPG.Npc
             }
 
             victim.Inventory[decision.ItemSlot] = null;
-            // 도둑 가방에 빈칸이 있으므로(D99) 버림 없이 들어간다. 업그레이드 장착이면 기존 경로가 ItemOwner 소문(D71)·
-            // NotableItemAcquired(D83, D110 그대로 둠)를 만든다.
-            bool equipped = GrantAcquiredItem(decision.ThiefId, thief, item, gameTime, TheftEquipSource);
+            // 도둑 가방에 빈칸이 있으므로(D99) 버림 없이 들어간다. 훔친 장비는 장착하지 않고 팔기만 한다
+            // (NPC_SHOP_EQUIPMENT D119 — D110의 장착 경로는 없어졌다). StolenEquipped 결과는 더 이상 나오지 않는다.
+            GrantAcquiredItem(decision.ThiefId, thief, item, gameTime, TheftEquipSource);
             AddTheftDeed(decision.VictimId, NpcDeedKind.ItemStolen, NpcKnowledgeLevel.Lived, -1, item.Id, itemName, gameTime);
-            // 피해자는 범인을 모르지만 단서가 남는다 (D103) — 그 인스턴스의 장착·판매 소문이 닿으면 늦게 발각된다.
+            // 피해자는 범인을 모르지만 단서가 남는다 (D103) — 그 인스턴스의 판매 소문이 닿으면 늦게 발각된다.
             AddTheftClue(victim, item.ItemInstanceId, decision.ThiefId, gameTime);
-            return equipped == true ? NpcTheftOutcome.StolenEquipped : NpcTheftOutcome.StolenToBag;
+            return NpcTheftOutcome.StolenToBag;
         }
 
         // ================= 단서 · 늦은 발각 (D103) =================

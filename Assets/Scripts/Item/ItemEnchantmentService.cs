@@ -300,6 +300,8 @@ namespace ARPG.Item
                 return false;
             }
 
+            // 기본 아이템은 옵션이 바뀌는 순간 일반 아이템이 된다 — 이후 전체 옵션이 저장된다 (D122 안전망).
+            equipment.BasicItemId = 0;
             if (operation == GlobalEnum.ItemEnchantmentOperation.ReplaceAffix)
                 equipment.Mods[replacementIndex] = appliedMod;
             else

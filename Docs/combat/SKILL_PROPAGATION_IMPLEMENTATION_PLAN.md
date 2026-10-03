@@ -13,6 +13,8 @@
 
 현재 공용 전파 런타임과 첫 수직 슬라이스인 Chain Lightning이 구현되어 있다. Position 조준, 진영 판정, 투사체, 피해 계산, SkillEffect 트리거, Addressable 풀을 재사용하며 후속 전파는 직전 전달 방향의 데이터 기반 각도 제한도 적용한다. 2026-09-23 코드 리뷰 반영 내용은 §13에 정리했다. 현행 데이터는 Instant 행 하나뿐이라 Projectile 전파 경로는 컴파일만 확인했고 PlayMode 검증은 남아 있다.
 
+> 2026-10-03 코드 대조: 위 상태가 그대로 유효하다. 단계별 진행은 §9에 표시했다(P0~P4 완료, P5·P6 코드만 존재·PlayMode 미검증, P7 미완). 2026-09-27 결투 도입으로 대상 진영 판정이 `FactionHelper.IsEntityHostile`로 바뀌었고(§1.2), 외부 파괴 이중 차감 방지용 `SkillPropagationWorkCompletedTag`가 계획 외로 추가되어 있다(§4.5·§5.3·§11).
+
 관련 기준 문서와 코드:
 
 - [SKILL_DESIGN.md](SKILL_DESIGN.md)
@@ -49,7 +51,7 @@
 - 최초 `OnSkillCommit` 대상은 이전 진행 방향이 없으므로 각도 제한을 적용하지 않는다.
 - 이후 대상은 직전 전달 방향에서 `MaxTurnAngleDeg` 이내에 있는 후보만 허용한다. `180`은 기존과 같은 무제한이다.
 - `OnHit` 시작은 투사체 진행 방향을 우선 사용하고, 직접 타격은 시전자에서 피격 대상으로 향하는 방향을 사용한다.
-- 시전자와 적대인 `FactionComponent` 대상만 허용한다.
+- 시전자와 적대인 `FactionComponent` 대상만 허용한다. (2026-10-03 확인: 2026-09-27 "엔피씨와 결투 추가"(d662b98)부터 진영 비교가 아니라 엔티티 단위 `FactionHelper.IsEntityHostile`로 판정한다. 결투 규칙(NPC_COMBAT_DESIGN §3.3)을 진영보다 먼저 적용하며, 결투가 없으면 기존 진영 판정과 같다 — `SkillPropagationTargetSelector.cs`)
 - HP가 0 이하이거나 `DestroyTag`가 있거나 점프 무적 높이 이상인 대상은 제외한다.
 - 같은 전파 루트에서 이미 적중했거나 같은 세대에 예약된 대상은 다시 선택하지 않는다.
 - 거리가 가까운 순서로 선택하고, 제곱 거리가 같으면 Entity ID가 작은 대상을 먼저 선택한다.
@@ -314,6 +316,7 @@ SkillPropagationComponent          32
 SkillPropagationBranchComponent  256
 SkillPropagationRequestComponent 128
 InstantSkillDeliveryComponent    128
+SkillPropagationWorkCompletedTag 384   (2026-10-03 확인: 계획 외 추가, §5.3)
 ```
 
 ## 5. 런타임 흐름
@@ -364,6 +367,8 @@ public bool SuppressDefaultImpact;
 - 카운트가 0이 되면 루트에 `DestroyTag` 부착
 
 외부 파괴나 씬 정리에서도 카운트가 누수되지 않도록 Projectile/Instant 정상 종료 경로와 `System_EntityDestroy`의 예외 종료 경로를 함께 갱신한다.
+
+(2026-10-03 확인: 두 경로가 같은 작업을 이중 차감하지 않도록 빈 태그 `SkillPropagationWorkCompletedTag`를 쓴다. 정상 완료 경로 `SkillPropagationRuntime.CompleteWork`가 작업 엔티티에 태그를 붙인 뒤 카운트를 1 줄이고, 이미 태그가 있으면 건너뛴다. `System_EntityDestroy`는 태그가 없는 요청·Instant·branch 엔티티에 대해서만 카운트를 대신 해제한다.)
 
 ### 5.4 대기 중 요청과 타이밍
 
@@ -523,42 +528,50 @@ new SkillHitRequest(skillEntityId, ownerId, targetId, 1f) { IsProjectileDelivery
 
 ## 9. 구현 단계
 
-### Phase P0 — 문서와 기준선
+> 2026-10-03 코드 대조 기준 진행 표시: ✅ 완료 / ◐ 코드만 존재(데이터·PlayMode 미검증) / ❌ 미완. P0~P4는 2026-09-24 커밋 "연쇄 스킬 추가"(c87d5de)로 들어왔다.
+
+### Phase P0 — 문서와 기준선 ✅
 
 - 이 문서와 현재 코드를 다시 대조
 - Google Sheet의 Skill/SkillEffect ID 충돌 확인
 - `SKILL_DESIGN.md`의 `OnProjectileSpawn` 상태를 실제 코드에 맞게 정정
 - 기존 Strike, Lacerate, MultiShot, PoisonCloud의 정적 기준선 확인
 
-### Phase P1 — 적중 처리 단일화
+### Phase P1 — 적중 처리 단일화 ✅
+
+(2026-10-03 확인: `System_Skill` 직접 타격, `System_Projectile`, `System_InstantSkillDelivery`가 모두 `SkillHitProcessor.Process`를 호출한다.)
 
 - `SkillHitProcessor` 추가
 - `System_Skill` 직접 타격을 새 처리기로 전환
 - `System_Projectile` 적중을 새 처리기로 전환
 - 기존 피해·트리거·HitEffect 동작이 변하지 않았는지 검증
 
-### Phase P2 — 데이터와 컴포넌트
+### Phase P2 — 데이터와 컴포넌트 ✅
 
 - enum, `SkillPropagationTable`, DataManager, DownloadTables 추가
 - 전파 루트·분기·요청·Instant 컴포넌트 추가
 - 인라인 방문 목록과 풀 크기 추가
 - 파서 범위·상한·참조 검증 추가
 
-### Phase P3 — 공용 전파 런타임
+### Phase P3 — 공용 전파 런타임 ✅
 
 - `OnSkillCommit` 훅과 기본 타격 억제 구현
 - `SkillPropagationTargetSelector` 구현
 - `System_SkillPropagation`과 `System_InstantSkillDelivery` 등록
 - 루트 Outstanding 카운트와 정상/예외 정리 구현
 
-### Phase P4 — Chain Lightning 수직 슬라이스
+### Phase P4 — Chain Lightning 수직 슬라이스 ✅
+
+(2026-10-03 확인: SkillId 202 `ChainLightning`, SkillEffect 1020, SkillPropagation 1 `ChainLightning_4Hits` 행과 `Effects/ChainLightningSegment` 프리팹이 존재한다. 2026-09-23 리뷰 반영분의 플레이 테스트 기록은 없다.)
 
 - 제안 Skill/SkillEffect/Propagation 행 추가
 - Position 커밋 → 첫 적 탐색 → 최대 4명 연쇄 구현
 - Segment VFX와 Addressable 등록
 - 기본 Position 광역 타격이 중복되지 않는지 확인
 
-### Phase P5 — Projectile 연쇄와 분열
+### Phase P5 — Projectile 연쇄와 분열 ◐
+
+(2026-10-03 확인: `SkillDeliveryFactory`의 Projectile 전달, `SkillPropagationRuntime.TryStartOnHit`, `System_Projectile`의 branch·방문 대상 통과·관통 우선순위 코드는 있다. Projectile/OnHit 전파 데이터 행이 없어 PlayMode 검증은 하지 않았다.)
 
 - Projectile 자식 전달 생성
 - 원본 OnHit에서 전파 루트 시작
@@ -566,14 +579,18 @@ new SkillHitRequest(skillEntityId, ownerId, targetId, 1f) { IsProjectileDelivery
 - Projectile 만료·외부 파괴 시 Outstanding 정리
 - 기존 관통과 전파 정책의 우선순위 검증
 
-### Phase P6 — Instant 주문 분열
+### Phase P6 — Instant 주문 분열 ◐
+
+(2026-10-03 확인: `ChildCount`만큼 전달을 만들고 같은 세대 대상을 예약하는 코드는 있다. `ChildCount > 1` 데이터 행이 없어 검증하지 않았다.)
 
 - `ChildCount > 1`, `MaxDepth=1` 데이터 추가
 - 한 세대에서 서로 다른 대상 예약
 - 분기끼리 같은 대상에 합류하지 않는지 검증
 - 재귀 분열은 안전 상한 검증 후에만 활성화
 
-### Phase P7 — 통합 검증과 문서 갱신
+### Phase P7 — 통합 검증과 문서 갱신 ❌
+
+(2026-10-03 확인: Unity 컴파일만 확인됐다(§0). EditMode 선택 테스트는 없고(`Assets/Tests` 폴더 없음), PlayMode 대표 시나리오와 Profiler 검증 기록도 없다. `SKILL_DESIGN.md`의 S3 재포함은 2026-10-03 문서 갱신에서 반영했다. Wiki `skill_propagation.md`는 존재한다.)
 
 - Unity 컴파일
 - EditMode 순수 선택 테스트
@@ -647,6 +664,14 @@ Assets/_BinaryData/TableData/SkillPropagationTable.bytes
 Assets/Prefabs/Game/Effect/Skill/ChainLightningSegment.prefab
 ```
 
+2026-10-03 확인 — 계획 외로 실제 추가된 신규 파일:
+
+```text
+Assets/Scripts/Common/Component/SkillPropagationWorkCompletedTag.cs   (외부 파괴 이중 차감 방지, §5.3)
+Assets/Scripts/Skill/Propagation/SkillPropagationRuntime.cs           (루트·요청 생성, 작업 완료, 피해 배율, 허공 연출)
+Assets/Scripts/Editor/ChainLightningSegmentEffectBuilder.cs           (Segment 프리팹 생성 에디터 도구)
+```
+
 ### 수정
 
 ```text
@@ -667,6 +692,8 @@ Assets/Scripts/Skill/Combat/DamageCalculator.cs
 Docs/combat/SKILL_DESIGN.md
 Docs/README.md
 ```
+
+2026-10-03 확인 — 위 목록 외에 실제로 수정된 관련 파일: `Assets/Scripts/Common/Utility/SkillStatBonusHelper.cs`(같은 트리거 전파 프로필 중복 제외, §1.5). `Assets/Scripts/Common/Utility/FactionHelper.cs`의 `IsEntityHostile`은 이후 결투 작업(d662b98)에서 추가됐다(§1.2).
 
 파일은 책임이 실제로 분리될 때만 신규 생성한다. 이미 적절한 책임을 가진 파일이 있으면 해당 위치를 확장하고, `*Util`, `*Helper`, 범용 `*Manager`는 새로 만들지 않는다.
 
@@ -690,3 +717,4 @@ Docs/README.md
   - **검증 위치:** 필드 범위 검증을 파서로 일원화하고 런타임 `IsRuntimeValid`를 제거했다. 활성 전파 프로필 중복 검사는 피격마다 하지 않고 스킬 생성 시 1회로 옮겼다.
   - **연출:** 최초 요청이 대상을 잃었을 때 허공 연출을 추가했다(§5.1). 임시 fallback 연출과 참조 없는 머티리얼은 제거했다(§8).
   - **데이터:** `ChainLightning_4Hits`의 `HopInterval`을 0.08에서 0.2로 변경했다(§3.4).
+- 2026-10-03: 코드 대조 문서 갱신. §9 단계별 진행 표시(P0~P4 완료, P5·P6 코드만 존재, P7 미완), 결투 반영 진영 판정 `FactionHelper.IsEntityHostile`(§1.2), `SkillPropagationWorkCompletedTag`(풀 384, 이중 차감 방지 — §4.5·§5.3·§11), 계획 외 추가 파일(§11)을 기록했다.

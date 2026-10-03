@@ -437,6 +437,8 @@ ItemId 직접 나열은 초기 예외 또는 보장 품목에만 사용한다.
 
 상점 Tier가 오르면 슬롯 수뿐 아니라 보장 품목의 Tier와 특수 시설 풀을 확장한다.
 
+**기본 장비 칸 (2026-10-03 추가, [NPC_SHOP_EQUIPMENT_DESIGN](../npc/NPC_SHOP_EQUIPMENT_DESIGN.md) D117)**: 위 슬롯과 **별도로** 고정 옵션 기본 장비를 상점 Tier 1~2는 3칸, 3~4는 4칸 진열한다(`TradeStockSlotKind.BasicEquipment`). 후보는 상점 Tier가 여는 아이템 Tier 이하에 기본 아이템 변형이 있는 장비이고, 같은 확률로 칸끼리 중복 없이 뽑는다. 기존 슬롯의 품목·인스턴스(무작위 옵션)는 바뀌지 않는다. 플레이어도 살 수 있고, NPC는 이 칸의 기본 아이템만 산다.
+
 ### 8.5 재현성과 저장
 
 - 재입고 난수는 `SettlementId + RestockCycle + DerivedSeed 채널`로 결정한다.
@@ -444,6 +446,7 @@ ItemId 직접 나열은 초기 예외 또는 보장 품목에만 사용한다.
 - `MerchantStockEntry`에 확정 구매가 또는 가격 산출에 필요한 Profile/회차를 저장한다.
 - 상점 UI에는 가격과 함께 `지역 특산`, `현지 부족`, `희귀 수입` 같은 이유를 표시한다.
 - 상점 재롤 직후 세이브되지 않아도 같은 결과를 재현해야 한다.
+- 기본 장비 칸(2026-10-03)은 기존 슬롯을 다 롤한 뒤 **같은 회차 RNG를 이어** 롤하고 변형 선택도 같은 RNG를 쓴다. 그래서 기존 슬롯의 결과는 그대로이고 (마을, 회차) 결정론도 유지된다. 기본 아이템 매물은 행 번호만 저장된다(D122).
 
 ### 8.6 교역 밸런스
 
@@ -824,6 +827,7 @@ Stage 입력을 경제 인구와 분리한 후보를 검증하기 위해 실제 
 - 구 세이브(§11.5): WorldData 버전 증가 없음(V7 범위 준수). `VillageManager.Load`의 `BackfillLegacyStockPriceSnapshots`가 가격 필드 없는 매물의 진열품을 유지한 채 가격·사유만 Profile로 스냅샷한다 — **유실 없음**. Item=null 구구(V2) 포맷 폐기·24h 경과 재롤은 기존 정책 그대로다.
 - 검증: `Assembly-CSharp`/`Assembly-CSharp-Editor` 컴파일 오류 0건(dotnet msbuild). Unity 외부 정적 하니스(`Temp/V5StaticHarness`, 실제 `ItemTable.bytes` 파싱 + 컴파일된 Assembly-CSharp 참조) **27개 assertion 통과** — 카탈로그 66 해석·보장 품목 유효·회차 계산·100회 결정론·회차/정착지 분리(각 20/20 고유)·보장 슬롯·ShopTier별 슬롯 수와 Tier 게이트·분포 구분·가격 스냅샷 재계산 일치·사유 규칙·왕복/운송 차익 불변식·TradeGood 차익과 규모 제한·특수 시설 풀 게이트(제련소 T2 개방 63/100회차·T1 닫힘)·첫 재입고 개방·BaseTown 아키타입 공유·JSON 신규/구 포맷 왕복. 참고: V2~V4 하니스 폴더는 Unity의 Temp 정리로 소실되어 재실행하지 못했고, 회귀는 전체 컴파일과 기존 `ARPG/Village/Run V2~V4` Editor 진단으로 확인한다.
 - Editor 진단: `ARPG/Village/Run V5 Trade Diagnostics`가 위 검증 전체 + 분포/가격 표본을 `Temp/VILLAGE_V5_TRADE_DUMP.md`로 덤프한다(V0~V4 진단과 같은 패턴, 메뉴 425).
+- **2026-10-03 후속 (NPC 상점 기본 장비)**: `RollMerchantStock`이 기존 계획 뒤에 `VillageTradeStockRoller.RollBasicEquipmentPlan`으로 기본 장비 칸을 이어 롤하고 `ItemManager.CreateBasicItem`으로 인스턴스를 만든다(§8.4). 이번 회차를 옛 코드로 롤한 라이브 재고 37개 마을과 기존 슬롯 결과가 같음을 확인했다. NPC 구매 필터·회차 한도는 [NPC_AMBITION_DESIGN](../npc/NPC_AMBITION_DESIGN.md) §7.2.
 - Editor 진단 실행 결과 (2026-07-15, Unity 6000.4.2f1, 메뉴 실행): **8/8 통과**. 분포 표본(Town ShopTier3, 200회차)에서 Dwarf는 보장 철·구리 200/200 + 중장구 9종이 상위를 채우고 비-Dwarf는 보장 페이지·북 200/200 + 희귀 풀 상위 페이지·북·마법서로 상위 품목이 완전히 갈렸다(일반 장비는 미태그 풀 ~40종에 분산). 가격 표본 검산 — 철 Dwarf 구매 8G→비-Dwarf 매입 13G(+5G/개), 구리 4G→6G(+2G), 철 갑옷 Dwarf 특산 51G/매입 24G(왕복·운송 손해), 마법사 로브 103G·스킬 북 230G(Dwarf 현지 부족 프리미엄), 가죽 조끼 30/12G(표준) — 전부 bp 규칙과 일치.
 - 플레이 모드 검증 절차(V7 통합 검증 연계, V4 미체크 항목과 별개로 상점 항목만 추가): ① Dwarf 마을 시장에서 상점 UI를 열어 스냅샷 가격·사유 표기(광물 지역 특산 할인, 스킬 북 현지 부족 프리미엄, 희귀 슬롯 표기)와 구매 차감액 일치 확인 ② 재롤 직후 세이브 없이 종료→재로드→같은 회차 재진입 시 같은 진열(품목·수량·가격·장비 Mod) 확인 ③ 구 세이브 로드 시 기존 진열 유지 + 가격 보정 로그 확인 ④ Dwarf 광산촌에서 철/구리 구매 → 비-Dwarf 마을 매각으로 양수 차익, 일반 장비 왕복은 손해 확인 ⑤ Town/City 첫 방문 상점에서 T2/T3 품목·특수 시설 풀 등장 확인.
 

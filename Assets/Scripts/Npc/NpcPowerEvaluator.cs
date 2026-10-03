@@ -32,13 +32,14 @@ namespace ARPG.Npc
     {
         // 가중치는 생성 규칙 그대로의 평범한 NPC에서 공격 ≈ 50%, 방어 ≈ 25%, 생명력 ≈ 25%가 되도록 맞춘 값이다
         // (2026-09-27 세이브 생존 2,387명 평균: Attack 12.9, Defense 54.6, Life 65.3 → NpcPower 평균 약 26).
+        // 기본 아이템 장비(NPC_SHOP_EQUIPMENT, 2026-10-03) 뒤 평균: Attack 6.06, Defense 21.2, Life 21.5 → NpcPower 약 10.75.
         // 진단 메뉴 ARPG/Npc/Diagnostics/Hunt Power Normalization으로 분포를 확인한다.
         public const float AttackWeight = 1.0f;
         public const float DefenseWeight = 0.12f;
         public const float LifeWeight = 0.10f;
         // SkillLevel 1당 전투력. 기존 식에서 SkillLevel 10이 capability +0.25였던 비중을 유지한다
-        // (NpcActivityResolver.HuntReferencePower 26 × 0.05).
-        public const float SkillScorePerLevel = 1.3f;
+        // (HuntReferencePower × 0.05 — 기준 전투력이 바뀌면 같이 따라간다).
+        public const float SkillScorePerLevel = NpcActivityResolver.HuntReferencePower * 0.05f;
 
         // 실체화 전투 기준값 (System_SkillAttackProfileCalculation: CritMultiplier = 1.5 + CriDamage/100)
         private const float BaseCritMultiplier = 1.5f;

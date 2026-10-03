@@ -14,7 +14,8 @@ namespace ARPG.Npc
     /// NPC 야망·모험가 경제 P1a (NPC_AMBITION_DESIGN §5, §7.1, §10.1).
     /// - 장비 반영 전투력 런타임 캐시 (저장하지 않음, 장비가 바뀔 때만 다시 계산)
     /// - 개인 상한 기준값(InitialPower/PowerCapBonus)과 시작 Gold의 1회 결정론 초기화 (D37, D38)
-    /// - Hunt 성공 전리품의 개인 인벤토리 적재, 가득 차면 가치 최저 버림 (D35), 문턱·상한을 지키는 자동 장착
+    /// - Hunt 성공 전리품·장물의 개인 인벤토리 적재, 가득 차면 가치 최저 버림 (D35). 장착은 하지 않는다 (NPC_SHOP_EQUIPMENT D119)
+    /// - 문턱·상한을 지키는 업그레이드 장착 (상점 구매 전용), 기존 세이브 장비의 기본 아이템 일괄 교체 (D121)
     /// </summary>
     public partial class NpcManager
     {
@@ -28,16 +29,16 @@ namespace ARPG.Npc
         // 시작 Gold (D37). entityId 해시 절반 + 탐욕·인내 각 1/4 비중으로 30~90G.
         private const int StartGoldMin = 30;
         private const int StartGoldMax = 90;
-        // 전리품 자동 장착 문턱 (§7.2·§10.1 문턱을 전리품에 동일 적용 — 관리 세션 결정).
+        // 업그레이드 장착 문턱 (§7.2·§10.1). 전리품은 장착하지 않으므로(NPC_SHOP_EQUIPMENT D119) 상점 구매에만 쓴다.
         private const float UpgradeMinGainRatio = 0.15f;
         private const float NearCapUpgradeMinGainRatio = 0.30f;
         private const float NearCapPowerRatio = 0.80f;
 
         // 장비 전투력 캐시 (EntityId → NpcPower). 휘발성 — 세이브 대상 아님. Reset/Load에서 비운다.
         private readonly Dictionary<int, float> _npcPowerCache = new();
-        // 실체화(또는 스폰 대기) 중에 들어온 업그레이드 후보 전리품의 ItemInstanceId.
+        // 실체화(또는 스폰 대기) 중에 산 업그레이드 장비의 ItemInstanceId.
         // 실체화 중 장비를 바꾸면 ECS 스탯 재적용이 필요하므로 비실체화 시점까지 장착을 미룬다. 휘발성.
-        private readonly Dictionary<int, List<int>> _deferredLootUpgradeItemIds = new();
+        private readonly Dictionary<int, List<int>> _deferredPurchaseUpgradeItemIds = new();
         // 업그레이드 평가용 스크래치 버퍼. 사용 전에 매번 현재 장비로 덮어쓰므로 호출 사이에 상태를 남기지 않는다.
         private readonly ItemData?[] _upgradeScratchEquip = new ItemData?[(int)GE.EquipSlotType.Max];
 
@@ -119,7 +120,7 @@ namespace ARPG.Npc
         }
 
         /// <summary>
-        /// Hunt·Delve 성공 전리품을 NPC 개인 인벤토리에 넣는다 (D35). 규칙은 GrantAcquiredItem과 같다 (장착 출처 "Loot").
+        /// Hunt·Delve 성공 전리품을 NPC 개인 인벤토리에 넣는다 (D35). 규칙은 GrantAcquiredItem과 같다.
         /// </summary>
         public void GrantHuntLoot(int entityId, NpcSaveData saveData, ItemData loot, float gameTime)
         {
@@ -127,15 +128,14 @@ namespace ARPG.Npc
         }
 
         /// <summary>
-        /// 새로 얻은 아이템을 전리품 장착 규칙(D45 문턱·개인 상한)으로 받는다. 전리품(Hunt·Delve)과 절도(D101)가 같이 쓴다.
-        /// 장비면 먼저 자동 장착을 평가하고, 장착하지 않으면 개인 인벤토리에 넣는다(가득 차면 가치 최저 버림, D35).
-        /// 실체화 중이면 장착은 비실체화 시점으로 미루고 인벤토리에만 넣는다(지연 장착은 출처 "Loot"로 기록된다).
-        /// source는 진단 로그 구분용("Loot"·"Theft"). 지금 장착했으면 true.
+        /// 새로 얻은 아이템을 개인 인벤토리에 넣는다(가득 차면 가치 최저 버림, D35). 전리품(Hunt·Delve)과 절도(D101)가 같이 쓴다.
+        /// 장비여도 장착하지 않는다 — 가방에 두었다가 Trade에서 판다. NPC가 강해지는 경로는 상점의 기본 아이템 구매뿐이다
+        /// (NPC_SHOP_EQUIPMENT D119). source는 진단 로그 구분용("Loot"·"Theft").
         /// </summary>
-        public bool GrantAcquiredItem(int entityId, NpcSaveData saveData, ItemData item, float gameTime, string source)
+        public void GrantAcquiredItem(int entityId, NpcSaveData saveData, ItemData item, float gameTime, string source)
         {
             if (item == null)
-                return false;
+                return;
 
             saveData.EnsureSlotsInitialized();
             EnsureAmbitionInitialized(entityId, saveData);
@@ -143,25 +143,7 @@ namespace ARPG.Npc
             if (_logAmbitionLoot == true)
                 Debug.Log($"[NpcAmbition] {source} npc={entityId} item={DescribeItem(item)} t={gameTime:F2}");
 
-            bool isMaterialized = saveData.IsActive == true || saveData.IsSpawning == true;
-            if (isMaterialized == false && TryAutoEquipLoot(entityId, saveData, item, gameTime, source) == true)
-                return true;
-
             StoreInInventory(entityId, saveData, item);
-
-            if (isMaterialized == true && item.Equipment != null &&
-                EvaluateBestUpgrade(entityId, saveData, item, out _, out _, out _) == true &&
-                ContainsInventoryItem(saveData, item.ItemInstanceId) == true)
-            {
-                if (_deferredLootUpgradeItemIds.TryGetValue(entityId, out List<int>? pending) == false)
-                {
-                    pending = new List<int>();
-                    _deferredLootUpgradeItemIds.Add(entityId, pending);
-                }
-                pending.Add(item.ItemInstanceId);
-                Debug.Log($"[NpcAmbition] UpgradeDeferred npc={entityId} item={DescribeItem(item)} (materialized)");
-            }
-            return false;
         }
 
         /// <summary>
@@ -209,12 +191,61 @@ namespace ARPG.Npc
             saveData.Gold = StartGoldMin + Mathf.RoundToInt((StartGoldMax - StartGoldMin) * goldFactor);
         }
 
-        /// <summary>비실체화 직후 호출. 실체화 중 미뤄 둔 업그레이드 후보를 다시 평가해 장착한다.</summary>
-        private void ApplyDeferredLootUpgrades(int entityId, NpcSaveData saveData)
+        /// <summary>
+        /// 기존 세이브 일괄 교체 (NPC_SHOP_EQUIPMENT D121, WorldDataVersion 17). 장착 장비를 같은 ItemId의 기본 아이템 변형
+        /// (시작 장비와 같은 entityId·슬롯 해시)으로 바꾼다. ItemData 객체와 ItemInstanceId는 그대로 두어 장비 소문(ItemOwner)이
+        /// 계속 유효하다. 가방·플레이어·상점 재고는 건드리지 않는다. 이미 기본 아이템인 장비는 건너뛴다.
+        /// 교체했으면 개인 상한 기준(InitialPower)만 새 장비로 다시 계산한다 — 시작 Gold·상한 편차는 그대로다
+        /// (EnsureAmbitionInitialized는 Gold도 다시 정하므로 쓰지 않는다). 교체한 장비 수를 돌려준다.
+        /// </summary>
+        private int ReplaceEquipmentWithBasicItems(int entityId, NpcSaveData saveData, ref int skippedItems)
         {
-            if (_deferredLootUpgradeItemIds.TryGetValue(entityId, out List<int>? pending) == false)
+            saveData.EnsureSlotsInitialized();
+            int replaced = 0;
+            int slotMax = (int)GE.EquipSlotType.Max;
+            for (int s = 0; s < slotMax; s++)
+            {
+                ItemData? item = saveData.InventoryEquip[s];
+                if (item == null || item.Equipment == null)
+                    continue;
+                if (item.Equipment.IsIntactBasicItem() == true)
+                    continue;
+
+                ItemTable? table = item.Table ?? AR.s.Data.GetItem(item.Id);
+                BasicItemTable? row = table != null
+                    ? NpcEquipHelper.PickBasicVariant(entityId, (GE.EquipSlotType)s, item.Id)
+                    : null;
+                if (table == null || row == null)
+                {
+                    skippedItems++;
+                    Debug.LogWarning($"[NpcAmbition] D121 replacement skipped npc={entityId} slot={(GE.EquipSlotType)s} " +
+                                     $"item={DescribeItem(item)} (no basic variant)");
+                    continue;
+                }
+
+                item.Equipment = AR.s.Item.CreateBasicEquipmentData(row, table);
+                replaced++;
+            }
+
+            if (replaced > 0)
+            {
+                InvalidateNpcPower(entityId);
+                if (saveData.InitialPower > 0f)
+                {
+                    float power = NpcPowerEvaluator.Evaluate(saveData);
+                    _npcPowerCache[entityId] = power;
+                    saveData.InitialPower = Mathf.Max(power, MinInitialPower);
+                }
+            }
+            return replaced;
+        }
+
+        /// <summary>비실체화 직후 호출. 실체화 중에 사서 미뤄 둔 업그레이드 장비를 다시 평가해 장착한다.</summary>
+        private void ApplyDeferredPurchaseUpgrades(int entityId, NpcSaveData saveData)
+        {
+            if (_deferredPurchaseUpgradeItemIds.TryGetValue(entityId, out List<int>? pending) == false)
                 return;
-            _deferredLootUpgradeItemIds.Remove(entityId);
+            _deferredPurchaseUpgradeItemIds.Remove(entityId);
 
             float now = AR.s.Time.CurrentGameTime;
             for (int i = 0; i < pending.Count; i++)
@@ -229,27 +260,27 @@ namespace ARPG.Npc
 
                 // 인벤토리에서 먼저 꺼낸 뒤 장착을 시도한다. 실패하면 같은 칸에 되돌린다.
                 saveData.Inventory[slotIndex] = null;
-                if (TryAutoEquipLoot(entityId, saveData, item, now, "Loot") == false)
+                if (TryEquipUpgrade(entityId, saveData, item, now, "Trade") == false)
                     saveData.Inventory[slotIndex] = item;
             }
         }
 
         /// <summary>
-        /// 장비 전리품을 문턱·상한 규칙으로 평가해 장착한다. 장착하면 벗은 장비는 인벤토리로 간다.
+        /// 장비를 문턱·상한 규칙으로 다시 평가해 장착한다. 장착하면 벗은 장비는 인벤토리로 간다.
         /// </summary>
-        private bool TryAutoEquipLoot(int entityId, NpcSaveData saveData, ItemData loot, float gameTime, string source)
+        private bool TryEquipUpgrade(int entityId, NpcSaveData saveData, ItemData item, float gameTime, string source)
         {
-            if (loot.Equipment == null)
+            if (item.Equipment == null)
                 return false;
-            if (EvaluateBestUpgrade(entityId, saveData, loot, out GE.EquipSlotType slot, out float currentPower,
+            if (EvaluateBestUpgrade(entityId, saveData, item, out GE.EquipSlotType slot, out float currentPower,
                     out float newPower) == false)
                 return false;
-            return ApplyUpgrade(entityId, saveData, loot, slot, currentPower, newPower, gameTime, source);
+            return ApplyUpgrade(entityId, saveData, item, slot, currentPower, newPower, gameTime, source);
         }
 
         /// <summary>
         /// 평가를 통과한 장비를 슬롯에 장착하고 전투력 캐시를 무효화한다. 벗은 장비는 인벤토리로 간다.
-        /// 전리품 자동 장착(P1a)과 상점 구매 장착(P1b)이 같이 쓴다. source는 진단 로그 구분용.
+        /// 상점 구매 장착(P1b)과 실체화 중 구매의 지연 장착이 쓴다. source는 진단 로그 구분용.
         /// </summary>
         private bool ApplyUpgrade(int entityId, NpcSaveData saveData, ItemData item, GE.EquipSlotType slot,
             float currentPower, float newPower, float gameTime, string source)
@@ -380,11 +411,6 @@ namespace ARPG.Npc
             return -1;
         }
 
-        private static bool ContainsInventoryItem(NpcSaveData saveData, int itemInstanceId)
-        {
-            return FindInventorySlot(saveData, itemInstanceId) >= 0;
-        }
-
         private static string DescribeItem(ItemData item)
         {
             string name = item.Table != null ? item.Table.Name : $"Item {item.Id}";
@@ -394,7 +420,7 @@ namespace ARPG.Npc
         private void ResetAmbitionRuntime()
         {
             _npcPowerCache.Clear();
-            _deferredLootUpgradeItemIds.Clear();
+            _deferredPurchaseUpgradeItemIds.Clear();
             for (int i = 0; i < _upgradeScratchEquip.Length; i++)
                 _upgradeScratchEquip[i] = null;
         }

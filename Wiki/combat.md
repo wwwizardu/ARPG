@@ -4,6 +4,7 @@ sources:
   - Docs/combat/combatSystem.md
   - Docs/combat/ModSystem_Changelog.md
   - Docs/combat/ITEM_ENCHANTMENT_DESIGN.md
+  - Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md
   - Assets/Scripts/Common/Component/SkillAttackProfileComponent.cs
   - Assets/Scripts/Common/Component/StatComponent.cs
   - Assets/Scripts/Common/Component/StatModifierBuffer.cs
@@ -72,7 +73,7 @@ status: implemented-contract-active-validation-pending
 
 | 구분 | 저장·정의 | 런타임 책임 |
 | --- | --- | --- |
-| 무기 기본 능력 | `EquipmentBaseStatTable`에서 생성된 `ModSlot.Base` | `EquipmentData.WeaponStats`가 Base만 읽는다. 무기 Base는 글로벌 Modifier로 등록하지 않는다. [src: Assets/Scripts/Data/ItemData.cs:L299-400, Assets/Scripts/Common/Utility/EquipHelper.cs:L127-137] |
+| 무기 기본 능력 | `EquipmentBaseStatTable`에서 생성된 `ModSlot.Base` | `EquipmentData.WeaponStats`(저장하지 않는 계산 캐시, 2026-10-03 D122)가 Base만 읽는다. 무기 Base는 글로벌 Modifier로 등록하지 않는다. [src: Assets/Scripts/Data/ItemData.cs:L299-400, Assets/Scripts/Common/Utility/EquipHelper.cs:L127-137] |
 | 무기 고유 강화 | `WeaponLocalEnhancementInstance` 목록. 피해 5속성·치명타·공격속도 증가율을 일반 `ModInstance`와 분리 저장 | 종류별 증가율을 합산한 뒤 해당 무기 Base에 한 번 적용한다. [src: Assets/Scripts/Common/GlobalEnum.cs:L487-506, Assets/Scripts/Data/ItemData.cs:L156-184, Assets/Scripts/Data/ItemData.cs:L299-400] |
 | 글로벌 장비 옵션 | 모든 Implicit/Prefix/Postfix | 장착 부위와 무관하게 `StatModifier` 또는 `ModPoolComponent`로 등록한다. `Tags=None`은 모든 스킬, 태그가 있으면 그 태그를 모두 가진 스킬에만 적용한다. [src: Docs/combat/combatSystem.md §장비 옵션 책임 경계, Assets/Scripts/Common/Utility/EquipHelper.cs:L127-241, Assets/Scripts/Skill/Combat/SkillOffensiveStatResolver.cs:L42-128] |
 
@@ -84,6 +85,7 @@ status: implemented-contract-active-validation-pending
 
 - 대상은 플레이어 인벤토리의 수량 1인 미장착 장비다. Base·Implicit·`WeaponLocalEnhancements`는 바꾸지 않으며 Prefix/Postfix만 슬롯별 최대 3개까지 다룬다. 요청은 인벤토리 슬롯과 `ItemInstanceId`를 함께 재검증한다. [src: Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §3·§7, Assets/Scripts/Item/ItemEnchantmentService.cs, Assets/Scripts/UI/UIForge.cs]
 - `ReplaceAffix`는 교체 가능한 기존 Prefix/Postfix 하나를 균등 선택하고 같은 슬롯의 다른 유효 Mod로 교체한다. 비용은 변화의 오브 1개와 25 Gold다. `AddAffix`는 빈 Prefix/Postfix 전체 후보에서 Mod 하나를 균등 선택하며 엑잘티드 오브 1개와 40 Gold를 소비한다. [src: Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §3.1·§3.4·§3.6, Assets/Scripts/Item/ItemEnchantmentService.cs, Assets/_BinaryData/TableData/ItemEnchantmentCostTable.bytes]
+- 상점 기본 아이템(`EquipmentData.BasicItemId > 0`, 고정 옵션)도 대상이 될 수 있다. 커밋 트랜잭션은 옵션을 바꾸기 직전에 `BasicItemId`를 지워 일반 아이템으로 만들고, 이후 옵션 전체가 저장된다. NPC는 기본 아이템만 사므로 마법부여한 장비는 NPC 구매 후보에서 빠진다. [src: Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §6.1·D122, Assets/Scripts/Item/ItemEnchantmentService.cs `ItemEnchantmentTransaction.TryCommit`]
 - Basic·Standard·Premium은 MVP의 두 작업과 비용이 같다. 서비스는 실제 Forge Entity의 `FacilityTier`를 다시 읽고, Tier 0 구 배치만 ObjectSet으로 보완한다. UI나 요청이 넘긴 숫자만으로 생산 경로를 승인하지 않는다. [src: Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §5, Assets/Scripts/Item/ItemEnchantmentService.cs, Assets/Scripts/UI/UIForge.cs]
 
 ### 후보와 트랜잭션

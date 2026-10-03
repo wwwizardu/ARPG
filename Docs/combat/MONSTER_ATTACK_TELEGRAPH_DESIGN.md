@@ -1,6 +1,9 @@
 # 몬스터 공격 예고 표시 설계
 
-> 상태: 구현 전 설계안  
+> 상태: Phase 0~2 구현, Phase 3 일부 구현, Phase 4 미착수 (2026-10-03 코드 대조)  
+> - 구현: 2026-09-19 커밋 "몬스터 공격 예고 시스템 추가"(3d85ce7). 커밋 정본화(Resolver·장판 첫 커밋·착지 커밋·발사체 논리/View 분리), `AttackTelegraphComponent`·`System_AttackTelegraph`(900)·`AttackTelegraphBatchView`·셰이더, Owner Circle/Sector·Landing·Projectile Lane/Fan, 다단·채널 재진행, 카메라 여백 Bounds 컬링, 빌드 검증기(`AttackTelegraphBuildValidator`)  
+> - 부분: 마지막 펄스는 셰이더에 있으나 경고음 없음(§4.1), LOD enum만 있고 항상 `Full`(§11.3)  
+> - 미구현: 취소 페이드(§4.1), 최소 가독 시간 진단(§7.5), EditMode 테스트(§13.1, 빌드 검증기가 대체), Phase 4 프로파일  
 > 작성일: 2026-09-14  
 > 범위: 몬스터 스킬 시작부터 첫 피해 또는 발사 커밋까지의 바닥 공격 예고, 공통 배치 렌더링, 취소·다단히트·지속 장판 처리
 
@@ -66,17 +69,17 @@ nextHitOffset = firstHitOffset + CurrentHitIndex × HitInterval
 
 ### 3.2 현재 효과 종류별 커밋 차이
 
-현재 모든 효과가 `DamageTime`을 같은 방식으로 사용하지는 않는다.
+예고 구현 전에는 모든 효과가 `DamageTime`을 같은 방식으로 사용하지 않았다. 아래 "구현 전 커밋/피해 시점" 열은 설계 당시 기준선이며, 마지막 열이 2026-10-03 확인한 현행이다.
 
-| 종류 | 현행 커밋/피해 시점 | 예고 구현 전 조치 |
-|---|---|---|
-| 직접·다단 타격 | `DamageTime × ProcessDuration`, 이후 `HitInterval` | 공통 Resolver로 계산 추출 |
-| 발사체 | 직접 타격 스케줄 시점에 발사체 생성 요청 | 발사 커밋을 예고 진행률 100% 지점으로 사용 |
-| 채널링 | `ChannelingInterval`마다 타격, 첫 틱도 이 값 기준 | 첫 틱 정책을 공통 Resolver에서 명시 |
-| 지속 장판 | Process 진입 즉시 생성, `NextTickIn=0`으로 같은 FixedUpdate에 첫 틱 | `DamageTime` 기반 장판 활성 커밋으로 이동 |
-| 점프 공격 | 이동은 Process 진입에 시작하며 타격은 일반 다단 경로를 사용 | 착지형 공격은 별도 Landing 커밋 계약 필요 |
+| 종류 | 구현 전 커밋/피해 시점 | 예고 구현 전 조치 | 현행 (2026-10-03 확인) |
+|---|---|---|---|
+| 직접·다단 타격 | `DamageTime × ProcessDuration`, 이후 `HitInterval` | 공통 Resolver로 계산 추출 | 반영됨 — `SkillImpactTimingResolver.Resolve` |
+| 발사체 | 직접 타격 스케줄 시점에 발사체 생성 요청 | 발사 커밋을 예고 진행률 100% 지점으로 사용 | 반영됨 — `ProjectileRelease` |
+| 채널링 | `ChannelingInterval`마다 타격, 첫 틱도 이 값 기준 | 첫 틱 정책을 공통 Resolver에서 명시 | 반영됨 — 첫 틱 `DamageTime × ProcessDuration`, 이후 `ChannelingInterval` (§7.3) |
+| 지속 장판 | Process 진입 즉시 생성, `NextTickIn=0`으로 같은 FixedUpdate에 첫 틱 | `DamageTime` 기반 장판 활성 커밋으로 이동 | 반영됨 — 첫 커밋에서 1회 생성 (§12.1) |
+| 점프 공격 | 이동은 Process 진입에 시작하며 타격은 일반 다단 경로를 사용 | 착지형 공격은 별도 Landing 커밋 계약 필요 | 반영됨 — `SkillLandingCommitComponent` (§12.3) |
 
-예고 표시만 먼저 만들면 특히 지속 장판과 점프 공격에서 실제 피해와 표시가 어긋난다. Phase 0에서 커밋 시점을 정리한 뒤 시각 시스템을 연결한다.
+예고 표시만 먼저 만들면 특히 지속 장판과 점프 공격에서 실제 피해와 표시가 어긋난다. Phase 0에서 커밋 시점을 정리한 뒤 시각 시스템을 연결한다. (2026-10-03 확인: Phase 0 완료 후 연결됨)
 
 ### 3.3 현재 몬스터 공격의 기본 리드 타임 예시
 
@@ -112,11 +115,13 @@ nextHitOffset = firstHitOffset + CurrentHitIndex × HitInterval
 - **선명한 외곽선**: 실제 판정 경계.
 - **밝은 진행 면**: 중심에서 외곽으로 확장한다. 외곽선에 닿는 순간 커밋한다.
 - **마지막 10~15%**: 외곽선 밝기 펄스와 짧은 공통 경고음을 재생할 수 있다.
+  (2026-10-03 확인: 펄스는 셰이더에서 진행률 0.85 이후 적용된다(`AttackTelegraphUnlit.shader`의 `finalPulse`). 경고음은 미구현.)
 - **커밋 순간**: 진행 면이 외곽선에 닿는다. 여기서 표시를 지우지 않고 100% 상태로 고정한다.
   진행 면이 더 이상 움직이지 않는 것이 "이 커밋은 이미 지나갔다"는 신호이며, 다음 커밋이 있으면
   곧바로 다시 확장하기 시작한다. 남은 후딜(End) 구간에도 위험 영역이 보이므로 플레이어가
   "표시가 사라졌으니 안전하다"는 잘못된 학습을 하지 않는다.
 - **취소**: 즉시 흐려지며 짧게 사라진다. 100% 플래시는 재생하지 않는다.
+  (2026-10-03 확인: 취소 페이드는 미구현. 현행은 `System_Skill.OnSkillComplete`가 컴포넌트를 제거하면 다음 프레임 배치에서 즉시 빠진다.)
 
 전체 위험 면과 외곽선이 항상 보이므로 플레이어가 현재 밝게 채워진 부분만 안전하지 않다고 오해하지 않게 한다.
 
@@ -306,6 +311,8 @@ public static class SkillImpactTimingResolver
 
 이 클래스는 ECS 조회, `Time`, Renderer, GameObject에 접근하지 않는다. `System_Skill`은 이 결과로 실제 커밋을 실행하고, 예고 시스템은 같은 결과로 진행률을 계산한다.
 
+(2026-10-03 확인: 실제 시그니처는 `Resolve(in SkillImpactTimingInput input)`이다. 입력 struct가 실행 모드·Start/Process 시간·`DamageTime`·간격·`HitCount`·직접 타격/발사체/장판/착지 여부를 받고, `SkillImpactSchedule`은 `StartDuration`·`FirstProcessCommitOffset`도 보관한다. FixedUpdate 양자화는 `GetQuantizedCommitOffset`/`GetQuantizedRemainingDelay`가 담당한다 — `Assets/Scripts/Skill/Telegraph/SkillImpactTimingResolver.cs`)
+
 ### 7.3 유형별 기본 스케줄
 
 | 유형 | 첫 커밋 | 반복 |
@@ -328,6 +335,8 @@ Landing 커밋은 Single/MultiHit에만 적용한다(`SkillTable.UsesLandingComm
 
 채널링은 현행 첫 틱이 `ChannelingInterval` 기준이므로 공통 계약 적용 시 동작 변경이 발생한다. 마이그레이션 시 기존 콘텐츠가 의도한 첫 틱을 유지하려면 `DamageTime` 값을 조정하고 대표 스킬을 PlayMode에서 재측정한다.
 
+(2026-10-03 확인: 채널 첫 틱은 `DamageTime` 기준으로 확정되어 코드에 반영됐다 — `SkillImpactTimingResolver.Resolve`가 Channeling에 `damageOffset`을 첫 커밋, `ChannelingInterval`을 반복, `CommitCount=-1`(무한)로 반환. 기존 채널 콘텐츠(Whirlwind 등)의 `DamageTime` 조정·PlayMode 재측정 여부는 확인되지 않았다.)
+
 ### 7.4 FixedUpdate 양자화
 
 - 게임플레이 커밋 판정은 FixedUpdate에서만 한다.
@@ -345,6 +354,8 @@ Landing 커밋은 Single/MultiHit에만 적용한다(`SkillTable.UsesLandingComm
 - 공격속도 상한에서 커밋 시간이 최소 가독 시간 아래로 내려감.
 
 최소 가독 시간 수치는 실제 플레이 테스트 후 확정하며, 부족하면 `StartTime`, `ProcessTime`, `DamageTime`, 공격속도 또는 투사체 속도를 수정한다.
+
+(2026-10-03 확인: 위 진단은 미구현. `AttackTelegraphBuildValidator`는 Resolver 정본 계약과 몬스터 스킬 테이블의 참조·범위·스케줄/도형 생성 가능 여부만 검사하며, 최소 가독 시간 경고는 없다.)
 
 ---
 
@@ -402,6 +413,8 @@ public struct AttackTelegraphComponent
 
 `bool` 필드는 구현 과정에서 상태 enum 하나로 치환할 수 있다. 중요한 계약은 렌더링 객체나 풀 핸들을 컴포넌트에 저장하지 않는 것이다.
 
+(2026-10-03 확인: 실제 `AttackTelegraphComponent`에는 `IsCommitted`/`WasCancelled`가 없다 — 취소·완료는 컴포넌트 제거로만 표현한다. 대신 `ProjectileCount`, `ProjectileSpreadAngleDeg`가 추가되어 ProjectileFan을 그린다. 나머지 필드는 위와 같다 — `Assets/Scripts/Common/Component/AttackTelegraphComponent.cs`)
+
 ### 8.2 생성과 제거 지점
 
 생성:
@@ -434,6 +447,8 @@ public struct AttackTelegraphComponent
 ### 8.3 컴포넌트 풀
 
 `ComponentManager`에 `AttackTelegraphComponent` 초기 용량을 명시한다. 전체 몬스터 수가 아니라 동시에 시전 중인 공격 수를 기준으로 시작 용량을 잡고, 대표 부하 테스트 결과로 조정한다. 초기 후보는 128이며 SparseSet 확장 여부와 GC를 Profiler로 확인한다.
+
+(2026-10-03 확인: 128로 등록됨 — `Assets/Scripts/Manager/ComponentManager.cs`. Profiler 확인은 미실시.)
 
 ---
 
@@ -472,6 +487,8 @@ Priority 900은 `System_Jump` 800 이후의 착지 위치를 읽고 `System_Rend
 - 게임플레이 컴포넌트나 테이블을 직접 조회하지 않는다.
 - Reset 시 Mesh와 활성 슬롯을 모두 비운다.
 - 보스 복합 VFX를 관리하지 않는다.
+
+(2026-10-03 확인: Scene/Bootstrap에 배치하지 않는다. `System_AttackTelegraph.OnCreate`가 `AR.s.System` GameObject에서 View를 찾고 없으면 `AddComponent`로 붙인다. View는 MeshFilter/MeshRenderer 없이 `Graphics.DrawMesh`로 메인 카메라에 제출하고, Material은 `Resources.Load("AttackTelegraphMaterial")`(`Assets/Resources/AttackTelegraphMaterial.mat`)로 얻는다. 정점은 `Mesh.SetVertices` 등 List 기반 API로 갱신한다(§10.1의 `SetVertexBufferData` 아님). 전용 Sorting Layer는 지정하지 않으며, 코드 주석상 Z 오프셋(`GROUND_OVERLAY_Z = -0.001`)과 Material 렌더 큐로 지형(sorting order 0) 위·엔티티(sorting order 1) 아래에 둔다 — `Assets/Scripts/Common/Visual/AttackTelegraphBatchView.cs`)
 
 ### 9.4 두 시스템이 공유하는 정본
 
@@ -576,6 +593,8 @@ AND 카메라 확장 경계와 도형 Bounds가 교차
 
 초기 프로파일 기준은 25/50/100 동시 예고이며 실제 몬스터 밀도와 보스 소환 패턴으로 다시 측정한다.
 
+(2026-10-03 확인: LOD는 미적용. `AttackTelegraphRenderDetail`(`Full`/`SurfaceAndOutline`/`OutlineOnly`) enum과 정점 전달 경로는 있으나 `System_AttackTelegraph`가 항상 `Full`로 제출한다. 4번 "렌더 제외"에 해당하는 카메라 확장 경계(여백 2) 대 도형 Bounds 원 교차 컬링만 구현됐다 — `Assets/Scripts/Common/System/System_AttackTelegraph.cs`)
+
 ---
 
 ## 12. 선행 수정 사항
@@ -598,6 +617,8 @@ AND 카메라 확장 경계와 도형 Bounds가 교차
 
 AreaEffect 생성은 한 실행에서 한 번만 보장해야 한다. MultiHit 데이터가 잘못 조합되어도 장판 엔티티를 매 히트 생성하지 않도록 별도 적용 플래그 또는 효과 실행 계약을 둔다.
 
+(2026-10-03 확인: 반영됨. `OnEnterProcessState`의 즉시 생성 경로는 없어졌고, 공통 스케줄의 커밋 처리에서 `SkillComponent.IsAreaEffectCreated`가 false일 때만 `EntityFactory.CreateAreaEffect`를 호출한 뒤 플래그를 세운다. 플래그는 스킬 명령 처리(`ProcessSkillCommands`) 시 false로 되돌린다 — `Assets/Scripts/Common/System/System_Skill.cs`)
+
 ### 12.2 발사체 로직과 시각 로딩 분리
 
 현행 `ProjectileHelper.SpawnProjectile`은 AddressablePool의 GameObject를 기다린 다음 ECS 발사체를 만든다. 풀 미예열 또는 로드 지연이 Release 이후 실제 이동 시작 시간을 바꿀 수 있다.
@@ -609,11 +630,15 @@ AreaEffect 생성은 한 실행에서 한 번만 보장해야 한다. MultiHit �
 
 게임플레이 타이밍은 Addressable 로딩 시간과 독립적이어야 한다.
 
+(2026-10-03 확인: 권장안 2로 반영됨. `ProjectileHelper.SpawnProjectile`이 Release FixedUpdate에 논리 엔티티를 먼저 만들고, `AttachProjectileViewAsync`가 GameObject를 비동기로 붙인다. 늦게 도착한 View는 `DestroyTag`·Owner·ProjectileTableId·`VisualRequestToken`이 일치할 때만 등록하고 아니면 풀에 반환한다 — `Assets/Scripts/Common/Utility/ProjectileHelper.cs`)
+
 ### 12.3 점프 피해 커밋
 
 착지 공격은 `System_Jump`의 착지 완료와 `System_Skill`의 피해 커밋 사이에 명시적인 연결이 필요하다. 현재 Process 시간 비율만으로 타격하면 프레임·충돌 보정에 따라 실제 착지 위치와 피해 중심이 어긋날 수 있다.
 
 Landing 이벤트 또는 컴포넌트 상태를 게임플레이 정본으로 사용하고 예고도 같은 착지 위치를 소비한다.
+
+(2026-10-03 확인: 반영됨. `System_Jump`가 착지 시 보정된 위치를 `SkillLandingCommitComponent.LandingPosition`으로 스킬 엔티티에 붙이고, 예고의 `TargetPosition`/`NextCommitFixedTime`도 함께 갱신한다. `System_Skill`은 이 컴포넌트가 있을 때 착지 커밋을 한 번 실행한 뒤 제거한다. 적용 대상은 `SkillTable.UsesLandingCommit`(Jump·`ArcHeight > 0`·비채널·직접 타격)이다 — `Assets/Scripts/Common/System/System_Jump.cs`, `Assets/Scripts/Common/System/System_Skill.cs`, `Assets/Scripts/Common/Component/SkillLandingCommitComponent.cs`)
 
 ---
 
@@ -636,6 +661,8 @@ Landing 이벤트 또는 컴포넌트 상태를 게임플레이 정본으로 사
 
 파일 경로는 실제 asmdef와 테스트 구조 확인 후 조정할 수 있지만 각 책임은 합치지 않는다. `*Helper`, 범용 `*Manager` 같은 grab-bag 클래스를 만들지 않는다.
 
+(2026-10-03 확인: 테스트 2종을 제외한 신규 파일은 모두 존재한다. `Assets/Tests` 폴더와 EditMode 테스트는 없다. 대신 `Assets/Scripts/Editor/AttackTelegraphBuildValidator.cs`(`IPreprocessBuildWithReport`, 메뉴 `ARPG/Validation/Attack Telegraph Build Contract`)가 빌드 직전에 Resolver 정본 계약(`ValidateCanonicalResolverContracts`)과 몬스터 AI가 참조하는 스킬 테이블(`ValidateMonsterSkillTables`)을 검사하고, 실패하면 빌드를 중단한다. 계획에 없던 추가 파일: `SkillLandingCommitComponent.cs`, `Assets/Resources/AttackTelegraphMaterial.mat`.)
+
 ### 13.2 수정 파일
 
 | 파일 | 변경 |
@@ -645,7 +672,7 @@ Landing 이벤트 또는 컴포넌트 상태를 게임플레이 정본으로 사
 | `ProjectileHelper.cs` / `EntityFactory.cs` | 발사체 로직 엔티티와 비동기 View 로드 분리 |
 | `SystemManager.cs` | `System_AttackTelegraph` priority 900 등록 |
 | `ComponentManager.cs` | Telegraph 컴포넌트 풀 크기 등록 |
-| Scene/Bootstrap 또는 전용 Prefab | `AttackTelegraphBatchView` 단일 인스턴스 연결 |
+| Scene/Bootstrap 또는 전용 Prefab | `AttackTelegraphBatchView` 단일 인스턴스 연결 (2026-10-03 확인: 미사용 — `System_AttackTelegraph.OnCreate`가 런타임에 `AR.s.System`에 붙인다, §9.3) |
 
 복합 도형을 데이터로 지정해야 할 때만 `Tables.cs`, `DownloadTables.cs`, Skill 시트를 후속 수정한다. MVP 자동 형태만으로 기존 몬스터 스킬을 먼저 검증한다.
 
@@ -653,45 +680,47 @@ Landing 이벤트 또는 컴포넌트 상태를 게임플레이 정본으로 사
 
 ## 14. 구현 순서
 
-### Phase 0 — 게임플레이 커밋 정본화
+> 2026-10-03 코드 대조 기준 진행 표시: ✅ 구현 / ◐ 부분 / ❌ 미구현. 각 Phase "완료 조건"의 PlayMode 일치 검증 기록은 없다.
 
-1. `SkillImpactTimingResolver` 추가.
-2. 직접/다단 타격이 Resolver를 사용하도록 변경.
-3. 채널 첫 틱 정책 확정과 대표 콘텐츠 마이그레이션.
-4. AreaEffect 생성을 첫 커밋으로 이동.
-5. 착지 공격 커밋 연결.
-6. 발사체 게임플레이 생성과 비동기 View 로드 분리 또는 사전 로드 보장.
+### Phase 0 — 게임플레이 커밋 정본화 ✅ *(3d85ce7, 2026-09-19)*
 
-완료 조건: 표시가 없어도 기존 공격들의 실제 효과 발생 시점을 자동 테스트로 설명할 수 있다.
+1. ✅ `SkillImpactTimingResolver` 추가.
+2. ✅ 직접/다단 타격이 Resolver를 사용하도록 변경.
+3. ◐ 채널 첫 틱 정책 확정과 대표 콘텐츠 마이그레이션. — 정책(`DamageTime` 기준)은 코드 반영, 콘텐츠 재측정은 미확인 (§7.3)
+4. ✅ AreaEffect 생성을 첫 커밋으로 이동. (§12.1)
+5. ✅ 착지 공격 커밋 연결. (§12.3)
+6. ✅ 발사체 게임플레이 생성과 비동기 View 로드 분리 또는 사전 로드 보장. (§12.2)
 
-### Phase 1 — 예고 데이터와 기본 View
+완료 조건: 표시가 없어도 기존 공격들의 실제 효과 발생 시점을 자동 테스트로 설명할 수 있다. (2026-10-03 확인: 자동 테스트 대신 빌드 검증기가 Resolver 계약을 검사한다, §13.1)
 
-1. `AttackTelegraphComponent` 추가와 풀 크기 등록.
-2. 스킬 시작/취소/완료/커밋 생명주기 연결.
-3. 단일 Circle/Sector 동적 Mesh View 구현.
-4. 위험 면·외곽선·진행 면 셰이더 구현.
-5. `System_AttackTelegraph` priority 900 등록.
+### Phase 1 — 예고 데이터와 기본 View ✅
+
+1. ✅ `AttackTelegraphComponent` 추가와 풀 크기 등록.
+2. ✅ 스킬 시작/취소/완료/커밋 생명주기 연결.
+3. ✅ 단일 Circle/Sector 동적 Mesh View 구현.
+4. ✅ 위험 면·외곽선·진행 면 셰이더 구현.
+5. ✅ `System_AttackTelegraph` priority 900 등록.
 
 완료 조건: `StrikeMonster`와 자폭 공격의 표시 100%가 실제 피해 FixedUpdate와 일치한다.
 
-### Phase 2 — 발사체·장판·반복 공격
+### Phase 2 — 발사체·장판·반복 공격 ✅
 
-1. ProjectileLane/ProjectileFan.
-2. TargetCircle과 활성 장판 전환.
-3. MultiHit 다음 타격 펄스.
-4. Channeling 반복 펄스와 연속 방향 갱신.
+1. ✅ ProjectileLane/ProjectileFan.
+2. ✅ TargetCircle과 활성 장판 전환. — 정책 변경으로 대체: 장판은 예고 `None`, TargetCircle은 준비 시간 장판용으로 예약만 함 (§5.3)
+3. ✅ MultiHit 다음 타격 펄스. — 커밋마다 `AdvanceAttackTelegraph`가 다음 커밋으로 진행률을 재시작
+4. ✅ Channeling 반복 펄스와 연속 방향 갱신.
 
 완료 조건: 모든 현행 몬스터 공격 스킬이 누락 없이 올바른 예고 정책을 갖는다.
 
-### Phase 3 — 혼잡도·접근성·콘텐츠 검증
+### Phase 3 — 혼잡도·접근성·콘텐츠 검증 ◐
 
-1. 화면 여백/도형 Bounds 컬링.
-2. 거리별 outline-only LOD.
-3. 겹침 알파와 Sorting Layer 튜닝.
-4. 마지막 경고 음향과 취소 연출.
-5. 최소 가독 시간 Editor 진단.
+1. ✅ 화면 여백/도형 Bounds 컬링. — 카메라 여백 2, Bounds 원 대 확장 사각형 교차
+2. ❌ 거리별 outline-only LOD. — enum만 있고 항상 `Full` (§11.3)
+3. ◐ 겹침 알파와 Sorting Layer 튜닝. — Z 오프셋·렌더 큐로 지형 위 배치(§9.3). 겹침 알파 튜닝 여부는 미확인
+4. ◐ 마지막 경고 음향과 취소 연출. — 셰이더 마지막 펄스만 있고 음향·취소 페이드 없음 (§4.1)
+5. ❌ 최소 가독 시간 Editor 진단. (§7.5)
 
-### Phase 4 — 프로파일과 필요 시 렌더러 교체
+### Phase 4 — 프로파일과 필요 시 렌더러 교체 ❌
 
 1. 25/50/100 동시 예고 테스트 씬 또는 진단 메뉴.
 2. CPU, Render Thread, Batches, SetPass, GC Alloc, GPU Overdraw 측정.

@@ -35,6 +35,8 @@ namespace ARPG.Village
         FacilityPool = 3,
         // NPC_AMBITION_DESIGN §7.2, D42 — NPC가 판 전리품 진열 슬롯 (회차당 최대 2개, 롤 대상 아님).
         AdventurerConsignment = 4,
+        // NPC_SHOP_EQUIPMENT_DESIGN §4, D117 — 고정 옵션 기본 장비 칸. 기존 칸 뒤에 따로 롤하며 NPC 구매 후보는 이 칸뿐이다.
+        BasicEquipment = 5,
     }
 
     /// <summary>상점 UI에 표시할 지역 가격 사유 (§8.5).</summary>
@@ -263,6 +265,14 @@ namespace ARPG.Village
                 case 3: return new TradeSlotPlan(2, 3, 2);
                 default: return new TradeSlotPlan(3, 3, 2);
             }
+        }
+
+        /// <summary>
+        /// ShopTier별 기본 장비 칸 수 (NPC_SHOP_EQUIPMENT_DESIGN §4, D117). 기존 슬롯(TradeSlotPlan)과 별도다.
+        /// </summary>
+        public int GetBasicEquipmentSlotCount(int shopTier)
+        {
+            return ClampShopTier(shopTier) <= 2 ? 3 : 4;
         }
 
         /// <summary>ShopTier가 여는 최대 아이템 Tier (품질 해금, §8.4).</summary>

@@ -8,6 +8,10 @@ using GE = GlobalEnum;
 
 namespace ARPG.Data
 {
+    /// <summary>
+    /// 인벤토리·장착·상점·드랍 아이템 1개. 저장 크기: 없는 인스턴스 데이터(null)와 Quantity 1은 저장하지 않는다
+    /// (NPC_SHOP_EQUIPMENT 후속, 2026-10-03). 구 세이브(모든 필드 저장)도 그대로 읽힌다.
+    /// </summary>
     [Serializable]
     public class ItemData
     {
@@ -15,14 +19,20 @@ namespace ARPG.Data
 
         public int ItemInstanceId;
 
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
         public EquipmentData? Equipment;
 
         // 스킬북 시스템 (SKILLBOOK_DESIGN.md §3.2) — Table.ItemType==SkillBook 일 때만 셋
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
         public SkillBookData? SkillBook;
 
         // 스킬 페이지 시스템 (SKILL_RUNE_DESIGN.md) — Table.ItemType==SkillPage 일 때만 셋
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
         public SkillPageData? SkillPage;
 
+        // 저장에서 빠진 경우(1)만 로드 때 1로 채운다. 코드에서 만든 아이템의 필드 기본값(0)은 바꾸지 않는다.
+        [System.ComponentModel.DefaultValue(1)]
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.IgnoreAndPopulate)]
         public int Quantity;
 
         [NonSerialized] public ItemTable? Table;
@@ -33,6 +43,10 @@ namespace ARPG.Data
             {
                 Table = AR.s.Data.GetItem(Id);
             }
+
+            // 장비 데이터의 Id는 아이템 Id와 같아 저장하지 않는다 — 로드 때 채운다.
+            if (Equipment != null && Equipment.Id == 0)
+                Equipment.Id = Id;
 
 #if UNITY_EDITOR
             if (Equipment == null && Table != null && Table.ItemType == GlobalEnum.ItemType.Equipment)
@@ -167,6 +181,9 @@ namespace ARPG.Data
     [Serializable]
     public class EquipmentData
     {
+        /// <summary>상점 기본 아이템의 고정 품질. 품질은 생성 때 롤만 되고 게임 로직에서 쓰이지 않는다.</summary>
+        public const int BasicItemQuality = 1;
+
         public int Id;
 
         public int Quality;
@@ -182,7 +199,15 @@ namespace ARPG.Data
         /// </summary>
         public List<WeaponLocalEnhancementInstance> WeaponLocalEnhancements = new();
 
-        public GE.EquipmentTypeMask EquipType { get; set; }
+        /// <summary>
+        /// 상점 기본 아이템 행 번호 (BasicItemTable.Id, D116·D122). 0 = 일반 아이템.
+        /// 테이블 행과 옵션이 같으면 Mods·Quality를 저장하지 않고 로드할 때 행에서 다시 만든다.
+        /// 옵션을 바꾸는 경로(ItemEnchantmentService)는 옵션을 바꾸기 전에 0으로 지운다.
+        /// </summary>
+        public int BasicItemId;
+
+        // 테이블 분류(Category)에서 정해지는 계산값 — 저장하지 않고 OnLoadCompleted에서 다시 계산한다 (D122).
+        [JsonIgnore] public GE.EquipmentTypeMask EquipType { get; set; }
 
         // ========== 무기 스탯 캐시 (NonSerialized) ==========
         [NonSerialized] private WeaponStatCache _weaponStats;
@@ -190,8 +215,9 @@ namespace ARPG.Data
 
         /// <summary>
         /// Base와 무기 고유 강화가 반영된 최종 무기 기본 능력.
-        /// 관련 데이터 변경 시 InvalidateWeaponStats() 호출 필요.
+        /// 관련 데이터 변경 시 InvalidateWeaponStats() 호출 필요. 계산 캐시라 저장하지 않는다 (D122).
         /// </summary>
+        [JsonIgnore]
         public WeaponStatCache WeaponStats
         {
             get
@@ -211,6 +237,130 @@ namespace ARPG.Data
         public void InvalidateWeaponStats()
         {
             _weaponStatsDirty = true;
+        }
+
+        // ========== 상점 기본 아이템 (NPC_SHOP_EQUIPMENT_DESIGN.md §3.2·§6.1) ==========
+
+        // Newtonsoft 조건부 저장 — SaveDtoSnapshot도 같은 규칙을 따른다.
+        // 온전한 기본 아이템은 행 번호만, 그 밖의 장비(옵션이 행과 달라진 기본 아이템 포함)는 전체 옵션을 저장한다.
+        public bool ShouldSerializeBasicItemId() => IsIntactBasicItem();
+        public bool ShouldSerializeMods() => IsIntactBasicItem() == false;
+        public bool ShouldSerializeQuality() => IsIntactBasicItem() == false;
+        // Id는 소유 ItemData.Id와 같다 (ItemData.OnLoadCompleted가 채운다). 빈 고유 강화 목록도 저장하지 않는다.
+        public bool ShouldSerializeId() => false;
+        public bool ShouldSerializeWeaponLocalEnhancements() => WeaponLocalEnhancements != null && WeaponLocalEnhancements.Count > 0;
+
+        /// <summary>BasicItemId가 있고, 옵션·품질이 지금 테이블 행과 정확히 같은지 (저장 생략 조건).</summary>
+        public bool IsIntactBasicItem()
+        {
+            if (BasicItemId <= 0)
+                return false;
+            BasicItemTable? row = AR.s.Data?.GetBasicItem(BasicItemId);
+            if (row == null || row.ItemId != Id || Quality != BasicItemQuality)
+                return false;
+            return MatchesMods(row.TemplateMods);
+        }
+
+        /// <summary>
+        /// 기본 아이템 행의 옵션 원형으로 옵션을 통째로 바꾼다. 품질은 고정값, BasicItemId는 행 번호가 된다.
+        /// 기본 아이템 생성(ItemManager)과 로드 재구성이 같이 쓴다. 무기 고유 강화는 건드리지 않는다.
+        /// </summary>
+        public void ApplyBasicItemTemplate(BasicItemTable row)
+        {
+            Mods.Clear();
+            IReadOnlyList<ModInstance> template = row.TemplateMods;
+            for (int i = 0; i < template.Count; i++)
+            {
+                ModInstance source = template[i];
+                Mods.Add(new ModInstance
+                {
+                    ModTableId = source.ModTableId,
+                    Slot = source.Slot,
+                    Tier = source.Tier,
+                    Value1 = source.Value1,
+                    Value2 = source.Value2,
+                    Table = source.Table,
+                });
+            }
+            Quality = BasicItemQuality;
+            BasicItemId = row.Id;
+            InvalidateWeaponStats();
+        }
+
+        /// <summary>
+        /// 기본 아이템 행의 옵션 원형을 만든다: 기존 Base·Implicit 테이블(Implicit은 최소값 고정) + 고정 옵션 1개.
+        /// DataManager가 검증을 통과한 행마다 한 번 호출한다.
+        /// </summary>
+        public static List<ModInstance> BuildBasicItemTemplate(BasicItemTable row, int fixedModTier)
+        {
+            EquipmentData temp = new EquipmentData { Id = row.ItemId };
+            temp.InitBaseMods(row.ItemId);
+            temp.InitImplicitMods(row.ItemId, inUseMinimumValues: true);
+            temp.Mods.Add(new ModInstance
+            {
+                ModTableId = row.ModTableId,
+                Slot = row.Mod != null ? row.Mod.Slot : GE.ModSlot.Prefix,
+                Tier = fixedModTier,
+                Value1 = (ushort)row.Value1,
+                Value2 = (ushort)row.Value2,
+            });
+
+            for (int i = 0; i < temp.Mods.Count; i++)
+                temp.Mods[i].OnLoadCompleted();
+            return temp.Mods;
+        }
+
+        private bool MatchesMods(IReadOnlyList<ModInstance> template)
+        {
+            if (Mods == null || Mods.Count != template.Count)
+                return false;
+
+            for (int i = 0; i < template.Count; i++)
+            {
+                ModInstance mod = Mods[i];
+                ModInstance expected = template[i];
+                if (mod == null || mod.ModTableId != expected.ModTableId || mod.Slot != expected.Slot ||
+                    mod.Tier != expected.Tier || mod.Value1 != expected.Value1 || mod.Value2 != expected.Value2)
+                    return false;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// 로드 보정. 옵션 없이 저장된 기본 아이템은 행에서 옵션을 다시 만든다.
+        /// 옵션이 함께 있으면 저장된 옵션을 쓰고, 행과 다르면 일반 아이템으로 돌린다(안전망).
+        /// 행이 사라졌으면 같은 장비의 첫 변형으로 대신하고, 변형이 하나도 없으면 Base·Implicit만 남긴 일반 아이템이 된다.
+        /// </summary>
+        private void ResolveBasicItemOnLoad()
+        {
+            BasicItemTable? row = AR.s.Data?.GetBasicItem(BasicItemId);
+            if (Mods.Count > 0)
+            {
+                if (row == null || row.ItemId != Id || Quality != BasicItemQuality || MatchesMods(row.TemplateMods) == false)
+                    BasicItemId = 0;
+                return;
+            }
+
+            if (row == null || row.ItemId != Id)
+            {
+                IReadOnlyList<BasicItemTable>? variants = AR.s.Data?.GetBasicItemVariants(Id);
+                BasicItemTable? fallback = variants != null && variants.Count > 0 ? variants[0] : null;
+                Debug.LogWarning($"[EquipmentData] BasicItem row missing - ItemId: {Id}, BasicItemId: {BasicItemId}, " +
+                                 $"fallback: {(fallback != null ? fallback.Id : 0)}");
+                if (fallback == null)
+                {
+                    BasicItemId = 0;
+                    Quality = BasicItemQuality;
+                    InitBaseMods(Id);
+                    InitImplicitMods(Id, inUseMinimumValues: true);
+                    for (int i = 0; i < Mods.Count; i++)
+                        Mods[i].OnLoadCompleted();
+                    return;
+                }
+                row = fallback;
+            }
+
+            ApplyBasicItemTemplate(row);
         }
 
         /// <summary>
@@ -288,6 +438,9 @@ namespace ARPG.Data
             {
                 Mods[i].OnLoadCompleted();
             }
+
+            if (BasicItemId > 0)
+                ResolveBasicItemOnLoad();
 
             PurgeIncompatibleMods();
 
@@ -508,8 +661,9 @@ namespace ARPG.Data
 
         /// <summary>
         /// ItemImplicitTable 기반으로 Implicit Mod 초기화 (유니크/특수 아이템의 추가 옵션).
+        /// inUseMinimumValues면 Tier 범위의 최소값으로 고정한다 — 테이블에서 다시 만들어야 하는 기본 아이템용.
         /// </summary>
-        public void InitImplicitMods(int itemId)
+        public void InitImplicitMods(int itemId, bool inUseMinimumValues = false)
         {
             var implicits = AR.s.Data.GetItemImplicits(itemId);
 
@@ -525,8 +679,12 @@ namespace ARPG.Data
                     continue;
                 }
 
-                ushort value1 = (ushort)UnityEngine.Random.Range(imp.TierData.Min1, imp.TierData.Max1 + 1);
-                ushort value2 = (ushort)UnityEngine.Random.Range(imp.TierData.Min2, imp.TierData.Max2 + 1);
+                ushort value1 = inUseMinimumValues == true
+                    ? (ushort)imp.TierData.Min1
+                    : (ushort)UnityEngine.Random.Range(imp.TierData.Min1, imp.TierData.Max1 + 1);
+                ushort value2 = inUseMinimumValues == true
+                    ? (ushort)imp.TierData.Min2
+                    : (ushort)UnityEngine.Random.Range(imp.TierData.Min2, imp.TierData.Max2 + 1);
 
                 Mods.Add(new ModInstance
                 {

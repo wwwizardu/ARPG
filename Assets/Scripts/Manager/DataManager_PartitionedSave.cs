@@ -35,11 +35,14 @@ namespace ARPG.Data
         private const string PART_NPC_META = "npc_meta";
         private const string PART_NPC_SOCIAL = "npc_social";
         private const string PART_NPC_PARTIES = "npc_parties";
+        private const string PART_NPC_STATE_PREFIX = "npc_state_";
 
         private SaveManifest? _activeSaveManifest;
         // One lane owns disk preparation, manifest replacement and maintenance, across Reset.
         private readonly SemaphoreSlim _saveIoGate = new(1, 1);
         private readonly SaveDtoSnapshot _saveSnapshots = new();
+        // 저장 1회의 깊은 복사 누적 시간 ([SaveTiming] 로그). 캡처 시작마다 Reset — 저장 사이에 값을 들고 있지 않는다.
+        private readonly System.Diagnostics.Stopwatch _deepCopyTimer = new();
         private Task _saveMaintenanceTask = Task.CompletedTask;
         private bool _isLoading;
         private int _saveLifetime;
@@ -107,6 +110,7 @@ namespace ARPG.Data
             _queuedSaveScope = SaveScope.None;
             _nextItemInstanceId = 1;
             _needsFullSaveAfterMigration = false;
+            _needsNpcBasicEquipmentReplacement = false;
         }
 
         private static string GetSlotPath(string savePath)
@@ -500,6 +504,9 @@ namespace ARPG.Data
 #if UNITY_EDITOR
                 AssertEditorMainThread("save snapshot capture");
 #endif
+                var totalTimer = System.Diagnostics.Stopwatch.StartNew();
+                int gcCountBefore = GC.CollectionCount(0);
+                _deepCopyTimer.Reset();
                 var captureTimer = System.Diagnostics.Stopwatch.StartNew();
                 Dictionary<string, PendingSavePart> pending = new();
                 CapturePendingParts(scope, captureRuntimeManagers, pending);
@@ -547,6 +554,10 @@ namespace ARPG.Data
                 _saveMaintenanceTask = CleanupAfterSaveAsync(slotPath, next, previous, failurePoint, workerStage);
                 maintenanceOwnsGate = true;
                 Debug.Log($"[DataManager] Partitioned save completed. Revision: {next.Revision}, Scope: {scope}");
+                totalTimer.Stop();
+                LogSaveTiming(next, scope, pending, captureTimer.Elapsed.TotalMilliseconds,
+                    prepared.Milliseconds, commitTimer.Elapsed.TotalMilliseconds,
+                    totalTimer.Elapsed.TotalMilliseconds, GC.CollectionCount(0) - gcCountBefore);
                 return true;
             }
             catch (Exception ex)
@@ -764,7 +775,52 @@ namespace ARPG.Data
         private void AddPendingPart<T>(Dictionary<string, PendingSavePart> pending,
             string key, T root)
         {
-            pending[key] = new PendingSavePart(PARTITION_SCHEMA_VERSION, _saveSnapshots.Capture(root));
+            _deepCopyTimer.Start();
+            object? snapshot = _saveSnapshots.Capture(root);
+            _deepCopyTimer.Stop();
+            pending[key] = new PendingSavePart(PARTITION_SCHEMA_VERSION, snapshot);
+        }
+
+        /// <summary>
+        /// 저장 1회의 비용과 크기를 한 줄로 남긴다. 메인 스레드에서 도는 구간은 복사(매니저 저장 데이터 정리 + 깊은 복사)와
+        /// manifest 교체이고, JSON 변환·파일 쓰기는 백그라운드다. 복사가 짧은데도 경직이 있으면 GC 횟수를 본다.
+        /// </summary>
+        private void LogSaveTiming(SaveManifest next, SaveScope scope, Dictionary<string, PendingSavePart> pending,
+            double captureMs, double prepareMs, double commitMs, double totalMs, int gcCount)
+        {
+            double deepCopyMs = _deepCopyTimer.Elapsed.TotalMilliseconds;
+            long totalBytes = 0;
+            long npcStateBytes = 0;
+            int npcShardCount = 0;
+            StringBuilder parts = new StringBuilder();
+            List<string> keys = new List<string>(pending.Keys);
+            keys.Sort(StringComparer.Ordinal);
+            for (int i = 0; i < keys.Count; i++)
+            {
+                if (next.Parts.TryGetValue(keys[i], out SavePartReference? part) == false || part == null)
+                    continue;
+                totalBytes += part.Length;
+                if (keys[i].StartsWith(PART_NPC_STATE_PREFIX, StringComparison.Ordinal) == true)
+                {
+                    npcStateBytes += part.Length;
+                    npcShardCount++;
+                    continue;
+                }
+                parts.Append(", ").Append(keys[i]).Append('=').Append(FormatSaveBytes(part.Length));
+            }
+
+            Debug.Log($"[SaveTiming] rev={next.Revision} scope={scope} 메인복사={captureMs:F1}ms " +
+                      $"(매니저정리 등={captureMs - deepCopyMs:F1}ms, 깊은복사={deepCopyMs:F1}ms) " +
+                      $"백그라운드={prepareMs:F1}ms 교체={commitMs:F1}ms 메인합계={captureMs + commitMs:F1}ms " +
+                      $"전체={totalMs:F1}ms 크기={FormatSaveBytes(totalBytes)} " +
+                      $"(NPC상태 {npcShardCount}샤드={FormatSaveBytes(npcStateBytes)}{parts}) GC0=+{gcCount}");
+        }
+
+        private static string FormatSaveBytes(long bytes)
+        {
+            if (bytes >= 1024 * 1024)
+                return $"{bytes / (1024.0 * 1024.0):F2}MB";
+            return $"{bytes / 1024.0:F0}KB";
         }
 
         private static Dictionary<int, Npc.NpcSaveData>[] SplitNpcShards(
@@ -787,7 +843,7 @@ namespace ARPG.Data
 
         private static string GetNpcShardPartKey(int shardIndex)
         {
-            return $"npc_state_{shardIndex:D2}";
+            return $"{PART_NPC_STATE_PREFIX}{shardIndex:D2}";
         }
 
         private static SaveManifest CloneManifest(SaveManifest? source, long revision)

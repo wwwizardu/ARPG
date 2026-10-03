@@ -95,7 +95,7 @@ namespace ARPG.EditorTools
         }
 
         /// <summary>
-        /// NpcEquipHelper.SeedInitialEquipment와 같은 규칙(슬롯 확률 → CreateInventoryItemData → 슬롯 장착)을
+        /// NpcEquipHelper.SeedInitialEquipment와 같은 규칙(슬롯 확률 → 기본 아이템 변형 → 슬롯 장착)을
         /// 결정론 RNG로 반복해 새 NPC 집단을 만든다. NpcTableId 비율은 현재 세계의 비율을 따른다.
         /// </summary>
         private static List<PowerSample> GenerateFreshSamples(List<NpcSaveData> worldSaves)
@@ -128,7 +128,11 @@ namespace ARPG.EditorTools
                             continue;
                         if (chance < 100 && rng.Range(0, 100) >= chance)
                             continue;
-                        equip[s] = AR.s.Item.CreateInventoryItemData(itemId, 1, rng);
+                        // 시작 장비 = 기본 아이템 (NPC_SHOP_EQUIPMENT D118). 변형은 결정론 RNG로 고른다.
+                        BasicItemTable? variant = AR.s.Item.PickBasicItemVariant(itemId, rng.NextDouble());
+                        equip[s] = variant != null
+                            ? AR.s.Item.CreateBasicItem(variant.Id)
+                            : AR.s.Item.CreateBaseEquipment(itemId);
                     }
                 }
 

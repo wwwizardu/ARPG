@@ -1,10 +1,14 @@
 # NPC 고정 장비 세트 다양화 구현 계획
 
-> **상태 (2026-08-22): 원본 Google Sheets P1·P2 반영 완료 — 로컬 bytes 갱신, 코드 방어 강화, 진단 및 플레이 모드 검증 대기**
+> **상태 (2026-10-03 확인)**: 🟩 **P1~P4 구현 완료** — 커밋 `e8b88b0` "엔피씨 장비 다양화, 저장 분할"(2026-08-23). `NpcEquipTable.bytes` 세트 1~5, `NpcTable.bytes` NPC 3001~3005 → `EquipTableId` 1~5, `NpcEquipHelper` 슬롯 호환성 검증, `NpcEquipmentSetDiagnostics` 추가. **P5 플레이 모드 검증 기록은 없다.** 구현 때 계획에 없던 **슬롯별 장착 확률(`*Chance` 열)** 이 함께 들어갔다(§4.2).
+> ~~상태 (2026-08-22): 원본 Google Sheets P1·P2 반영 완료 — 로컬 bytes 갱신, 코드 방어 강화, 진단 및 플레이 모드 검증 대기~~
+>
+> **2026-10-03 개정** ([NPC_SHOP_EQUIPMENT_DESIGN.md](NPC_SHOP_EQUIPMENT_DESIGN.md) D118·D121): 세트의 장비는 이제 무작위 옵션 장비가 아니라 **상점용 기본 아이템**이다. 슬롯마다 `BasicItemTable` 변형 하나를 entityId·슬롯 해시로 골라 `ItemManager.CreateBasicItem`으로 만들고(고정 옵션 1개, 품질 1), 기존 세이브는 WorldDataVersion 17 로드 때 장착 장비를 같은 ItemId의 기본 아이템으로 일괄 교체한다. 이 문서의 `CreateInventoryItemData`·품질/Prefix/Postfix 랜덤 롤·"기존 세이브 비마이그레이션" 서술(§2.2·§2.3·§5.1·§5.3·§5.4·§6 P5·§9)은 구식이며 각 절에 표시했다. 현행 정책 정본은 [NPC_EQUIPMENT_DESIGN.md](NPC_EQUIPMENT_DESIGN.md) §3.3·§4.2다.
 >
 > **정본 관계**: NPC 장비 슬롯·저장·ECS 적용 계약은 [NPC_EQUIPMENT_DESIGN.md](NPC_EQUIPMENT_DESIGN.md)가 소유한다. 이 문서는 그 구조를 바꾸지 않고, 현행 `NpcEquipTable`을 이용해 신규 NPC의 시작 장비를 여러 고정 세트로 다양화하는 1차 작업 계획이다.
 >
 > **핵심 결정**: 1차에서는 NPC 인스턴스마다 장비를 독립 추첨하지 않는다. `NpcTable` 행마다 하나의 완성된 `NpcEquipTable` 세트를 지정하고, 같은 세트 안의 장비 품질·Prefix·Postfix만 기존 생성 경로에서 랜덤 롤한다.
+> → **2026-10-03 개정** (D118): 품질·Prefix·Postfix 랜덤 롤은 폐기됐다. 지금 NPC마다 달라지는 것은 기본 아이템 변형 선택(entityId·슬롯 해시)과 슬롯별 장착 확률 판정(§4.2)뿐이다.
 
 ---
 
@@ -32,7 +36,9 @@
 
 ## 2. 현재 기준선과 문제 원인
 
-### 2.1 현행 데이터
+### 2.1 현행 데이터 (구현 전 기준선, 2026-08-22)
+
+> 구현 뒤(`e8b88b0`, 2026-08-23) 데이터는 §4·§4.1·§4.2와 같다. 아래는 계획 수립 당시의 기준선이다.
 
 현재 `NpcTable.bytes`의 NPC 3001~3005는 모두 `EquipTableId=1`을 참조한다. `NpcEquipTable.bytes`에는 세트 1 한 행만 있고, `WeaponRight=1`이며 나머지 11슬롯은 모두 0이다. `ItemTable`의 ItemId 1은 `낡은 단검`이다.
 
@@ -60,9 +66,13 @@ NpcManager.RegisterNpcsFromMapFile 또는 SpawnNewNpc
     → NpcSaveData.InventoryEquip 저장
 ```
 
+> **2026-10-03 개정** (D118): 위 흐름의 `CreateInventoryItemData(itemId)` 단계는 폐기됐다. 지금은 슬롯마다 장착 확률(`*Chance`, §4.2)을 먼저 판정하고, 당첨된 슬롯은 `NpcEquipHelper.PickBasicVariant`(entityId·슬롯 해시, `DerivedSeed.ChannelNpcBasicEquipment`) → `ItemManager.CreateBasicItem(basicItemId)` → `NpcSaveData.EquipItem(slot, …)`으로 넣는다. 변형이 없는 장비는 경고를 남기고 `CreateBaseEquipment`로 대신한다. [src: Assets/Scripts/Npc/NpcEquipHelper.cs]
+
 실제 NPC 엔티티가 생성될 때는 `InventoryEquip`에 저장된 장비 Modifier가 `StatComponent`에 적용된다. 일반 `Inventory`는 이 흐름에 참여하지 않는다.
 
-### 2.3 현행 랜덤 범위
+### 2.3 현행 랜덤 범위 (구현 당시 — 2026-10-03 폐기)
+
+> **2026-10-03 개정** (D118): 아래 무작위 롤은 폐기됐다. 지금은 슬롯마다 `BasicItemTable` 변형(장비마다 3개) 하나를 entityId·슬롯 해시로 고르고, 결과는 Base·Implicit + 고정 옵션 1개, 품질 1이다. NPC마다 달라지는 것은 `ItemInstanceId`, 변형 선택, 장착 확률 판정(§4.2)뿐이며, 같은 NPC·슬롯은 언제 계산해도 같은 변형이 나온다. 2026-10-03 기준 세트에 쓰는 ItemId 13종은 모두 변형 3개씩을 가진다.
 
 고정 세트는 장비의 **기본 ItemId와 슬롯 조합**만 고정한다. 각 슬롯의 `ItemData`는 NPC 생성 시 새 인스턴스로 만들어지므로 다음 값은 NPC마다 달라진다.
 
@@ -114,6 +124,8 @@ NpcTable 한 행 ── EquipTableId 하나 ── NpcEquipTable 한 행
 
 ## 4. 고정 장비 세트 데이터 초안
 
+> **구현 결과 (2026-08-23 `e8b88b0`, 2026-10-03 bytes 확인)**: 아래 ItemId 배치가 그대로 `NpcEquipTable.bytes`에 들어갔다. 구현된 시트는 슬롯 열마다 `*Chance` 열이 붙은 **A:Z** 구성이다(§4.2).
+
 모든 세트는 현재 존재하며 `EquipmentBaseStatTable`이 연결된 Tier 1 아이템만 사용한다. 아래 값은 1차 구현 기준안이며, 플레이 모드 전투 실측에서 과도한 격차가 확인되면 슬롯 수를 줄이는 방향으로 조정한다.
 
 | EquipTableId | 세트 콘셉트 | WeaponRight | WeaponLeft | Helmet | Armor | Gloves | Boots | Necklace | RingRight | RingLeft | Belt | Earrings |
@@ -124,7 +136,7 @@ NpcTable 한 행 ── EquipTableId 하나 ── NpcEquipTable 한 행
 | 4 | 결투가형 | 4 샤브르 | 0 | 0 | 12 | 13 | 14 | 16 | 0 | 0 | 0 | 0 / 0 |
 | 5 | 중장 검사형 | 6 전쟁 검 | 0 | 11 | 12 | 13 | 14 | 16 | 17 | 0 | 15 | 0 / 0 |
 
-숫자만 모은 실제 시트 입력 형태:
+숫자만 모은 시트 입력 원안(ItemId만 — 구현된 시트는 `Desc`와 `*Chance` 열을 포함한다, §4.2):
 
 | Id | WeaponRight | WeaponLeft | Helmet | Armor | Gloves | Boots | Necklace | RingRight | RingLeft | Belt | EarringRight | EarringLeft | Note |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
@@ -146,6 +158,22 @@ NpcTable 한 행 ── EquipTableId 하나 ── NpcEquipTable 한 행
 
 `JobType`은 물리 NPC를 마을 생산자로 되돌리는 입력이 아니며, 이 배정에서는 세트 콘셉트를 구분하는 flavor로만 사용한다.
 
+> 구현 결과 (2026-08-23 `e8b88b0`, 2026-10-03 bytes 확인): `NpcTable.bytes`의 3001~3005가 위 표대로 `EquipTableId` 1~5를 참조한다.
+
+### 4.2 슬롯별 장착 확률 (구현 때 추가, 2026-08-23)
+
+계획에는 없었지만 구현 때 `NpcEquipTable`의 12슬롯마다 ItemId와 **장착 확률(0~100)** 을 쌍으로 두었다(`WeaponRight`·`WeaponRightChance` … `EarringLeft`·`EarringLeftChance`, 시트 A:Z, `Desc`는 세트 설명). 확률은 NPC를 처음 만들 때 슬롯마다 한 번만 판정하고, ItemId가 0이거나 확률이 0이면 비운다. 장비 *종류*를 추첨하지 않는다는 §3.1 원칙은 유지되지만, 슬롯을 채울지는 슬롯마다 따로 판정하므로 같은 세트라도 일부 슬롯이 빌 수 있다. [src: Assets/Scripts/Common/Tables.cs `NpcEquipTable.GetEquipChance`, Assets/Scripts/Npc/NpcEquipHelper.cs]
+
+| 슬롯 | 현행 확률 (2026-10-03 bytes) |
+|---|---|
+| WeaponRight | 100 (모든 세트) |
+| WeaponLeft | 100 (세트 2 목재 방패) |
+| Helmet·Armor·Gloves·Boots·Belt | 70 |
+| Necklace·RingRight | 35 |
+| ItemId 0인 슬롯 | 0 |
+
+진단(`NpcEquipmentSetDiagnostics`)은 확률 범위 0~100, ItemId 0이면 확률 0, 오른손 무기와 왼손 방패는 확률 100을 검사한다.
+
 ---
 
 ## 5. 생성·저장 계약
@@ -153,8 +181,8 @@ NpcTable 한 행 ── EquipTableId 하나 ── NpcEquipTable 한 행
 ### 5.1 신규 NPC
 
 - 맵 파일에서 처음 등록되는 NPC와 `SpawnNewNpc`로 생성되는 NPC에만 세트를 시드한다.
-- 장비 슬롯마다 `CreateInventoryItemData(itemId)`를 한 번 호출한다.
-- 같은 ItemId를 여러 슬롯에 사용하더라도 서로 다른 `ItemInstanceId`와 옵션을 가진 별도 인스턴스를 만든다.
+- ~~장비 슬롯마다 `CreateInventoryItemData(itemId)`를 한 번 호출한다.~~ → 2026-10-03 개정(D118): 장착 확률(§4.2)에 당첨된 슬롯마다 기본 아이템 변형을 entityId·슬롯 해시로 골라 `CreateBasicItem`을 한 번 호출한다(§2.2).
+- 같은 ItemId를 여러 슬롯에 사용하더라도 서로 다른 `ItemInstanceId`를 가진 별도 인스턴스를 만든다. ~~옵션도 서로 다르다~~ → 2026-10-03부터 옵션은 고른 변형의 고정 옵션 1개다.
 - 세트 일부 아이템 생성이 실패해도 나머지 슬롯 시드는 계속한다.
 
 ### 5.2 청크 재활성화
@@ -169,12 +197,13 @@ NpcTable 한 행 ── EquipTableId 하나 ── NpcEquipTable 한 행
 - Load 경로에서는 `SeedNpcEquipment`을 호출하지 않는다.
 - 테이블 변경 전에 저장된 NPC는 낡은 단검을 계속 보유할 수 있다.
 - 새 세트 적용 확인은 New Game 또는 변경 후 새로 보충된 NPC를 기준으로 한다.
+- **2026-10-03 예외** (D121): WorldDataVersion 16 이하 세이브는 로드 때 한 번 `ReplaceEquipmentWithBasicItems`가 NPC 장착 장비를 **같은 ItemId**의 기본 아이템(시드와 같은 해시)으로 바꾼다. `ItemData` 객체·`ItemInstanceId`는 유지한다. 세트(ItemId 조합)를 새로 시드하지는 않으므로, 세트 도입 전 세이브의 낡은 단검 NPC는 기본 아이템 낡은 단검을 갖게 된다. 정본은 [NPC_EQUIPMENT_DESIGN.md](NPC_EQUIPMENT_DESIGN.md) §4.2.
 
 ### 5.4 재호출 안전성
 
 - 이미 값이 있는 장비 슬롯은 덮어쓰지 않는다.
 - 빈 슬롯만 시드한다.
-- 향후 구 세이브 보정이 필요해도 기존 장비를 교체하는 암묵적 마이그레이션은 추가하지 않는다.
+- 향후 구 세이브 보정이 필요해도 기존 장비를 교체하는 암묵적 마이그레이션은 추가하지 않는다. → 2026-10-03 개정(D121): 기본 아이템 전환을 위해 WorldDataVersion 17 로드 때 1회 일괄 교체가 추가됐다(§5.3). ItemId는 바꾸지 않는다.
 
 ---
 
@@ -205,7 +234,8 @@ NpcTable 한 행 ── EquipTableId 하나 ── NpcEquipTable 한 행
 
 ### P1. NpcEquipTable 세트 5종 작성
 
-진행 상태 (2026-08-22): 원본 `ARPG Tables/NpcEquip!A2:N6` 반영 및 재조회·화면 검증 완료. Unity Download Table을 통한 로컬 bytes 갱신은 아직 수행하지 않았다.
+진행 상태: ✅ 2026-08-23 (`e8b88b0`) 로컬 bytes 갱신 완료 — 세트 1~5가 있고 12슬롯 ItemId가 §4와 일치한다(2026-10-03 bytes 확인). 시트는 구현 때 `*Chance` 열이 추가된 A:Z 구성이고(§4.2), 세트 설명 열 이름은 `Note`가 아니라 `Desc`다.
+~~진행 상태 (2026-08-22): 원본 `ARPG Tables/NpcEquip!A2:N6` 반영 및 재조회·화면 검증 완료. Unity Download Table을 통한 로컬 bytes 갱신은 아직 수행하지 않았다.~~
 
 대상:
 
@@ -226,7 +256,8 @@ NpcTable 한 행 ── EquipTableId 하나 ── NpcEquipTable 한 행
 
 ### P2. NpcTable에 세트 배정
 
-진행 상태 (2026-08-22): 원본 `ARPG Tables/Npc!K2:K6`에 NPC 3001~3005의 `EquipTableId=1~5` 반영 및 재조회·화면 검증 완료. Unity Download Table을 통한 로컬 bytes 갱신은 아직 수행하지 않았다.
+진행 상태: ✅ 2026-08-23 (`e8b88b0`) 로컬 bytes 갱신 완료 — NPC 3001~3005가 `EquipTableId` 1~5를 참조한다(2026-10-03 bytes 확인).
+~~진행 상태 (2026-08-22): 원본 `ARPG Tables/Npc!K2:K6`에 NPC 3001~3005의 `EquipTableId=1~5` 반영 및 재조회·화면 검증 완료. Unity Download Table을 통한 로컬 bytes 갱신은 아직 수행하지 않았다.~~
 
 대상:
 
@@ -245,11 +276,13 @@ NpcTable 한 행 ── EquipTableId 하나 ── NpcEquipTable 한 행
 
 ### P3. 슬롯 호환성 방어 강화
 
+진행 상태: ✅ 2026-08-23 (`e8b88b0`) 구현 — 빈 슬롯만 `NpcSaveData.EquipItem`으로 배치하고, 불일치 시 `equipTableId`·`slot`·`itemId`·`equipType` Warning을 남긴 뒤 아이템을 버린다. 같은 커밋에서 슬롯별 장착 확률 판정(§4.2)도 들어갔다. 런타임 Warning 0건 여부는 P5와 함께 미검증이다.
+
 대상:
 
 - `Assets/Scripts/Npc/NpcEquipHelper.cs`
 
-현행 문제:
+현행 문제 (구현 전):
 
 - `ItemData.Equipment != null`만 확인한 뒤 `InventoryEquip[i]`에 직접 대입한다.
 - Item Category가 해당 슬롯에 맞는지는 확인하지 않는다.
@@ -267,6 +300,8 @@ NpcTable 한 행 ── EquipTableId 하나 ── NpcEquipTable 한 행
 - 의도적으로 잘못된 테스트 조합은 해당 슬롯만 비워지고 Warning이 남는다.
 
 ### P4. 정적 진단 추가
+
+진행 상태: ✅ 2026-08-23 (`e8b88b0`) 추가 — 메뉴 `ARPG/Npc/Run Equipment Set Diagnostics`. 아래 항목 1~4·6에 더해 장착 확률 검사(§4.2), 중복 Id, NpcTable 행끼리 같은 세트를 공유하는지(1:1, §3.2)를 검사한다. **항목 5(원거리·마법 무기 검사)는 진단에 없다** — 현재 세트 무기 5종(20·19·21·4·6)은 근접 무기다(§3.3). 기본 아이템 변형 존재 여부(2026-10-03 D118)도 이 진단은 보지 않는다. 실행 결과 기록은 없다.
 
 대상 후보:
 
@@ -288,11 +323,13 @@ NpcTable 한 행 ── EquipTableId 하나 ── NpcEquipTable 한 행
 
 ### P5. 플레이 모드 검증
 
+진행 상태: ⬜ 검증 기록 없음 (2026-10-03 확인). 2026-10-03 기본 아이템 전환(D118) 뒤에는 3번을 아래 개정 문장으로 확인한다.
+
 검증 절차:
 
 1. 기존 세이브가 아닌 New Game에서 NPC를 생성한다.
 2. NPC 검사 UI로 NPC 3001~3005의 장비 슬롯을 확인한다.
-3. 같은 `NpcTableId` 인스턴스 두 명의 기본 세트는 같고 옵션·품질은 달라질 수 있음을 확인한다.
+3. ~~같은 `NpcTableId` 인스턴스 두 명의 기본 세트는 같고 옵션·품질은 달라질 수 있음을 확인한다.~~ → 2026-10-03 개정: 같은 `NpcTableId` 인스턴스 두 명의 ItemId 조합은 같은 세트 안에 있고(장착 확률로 일부 슬롯은 빌 수 있음, §4.2), 장비는 기본 아이템(품질 1, 고정 옵션 1개)이며 변형만 다를 수 있음을 확인한다.
 4. NPC 공격 시 무기 Base와 장비 Modifier가 전투 스탯에 반영되는지 확인한다.
 5. 검방 세트의 왼손 방패 Modifier가 적용되는지 확인한다.
 6. 청크 비활성화 후 재진입해 ItemId·ItemInstanceId·옵션이 유지되는지 확인한다.
@@ -308,6 +345,8 @@ NpcTable 한 행 ── EquipTableId 하나 ── NpcEquipTable 한 행
 ---
 
 ## 7. 변경 파일 예상
+
+> 실제 변경(2026-08-23 `e8b88b0`): 아래 앞 네 파일이 바뀌었고 `NpcEquipTable`에 `*Chance` 열(§4.2)이 함께 추가됐다. `Docs/npc/NPC_EQUIPMENT_DESIGN.md`에는 계획서 링크만 들어갔다.
 
 | 파일 | 변경 내용 |
 |---|---|
@@ -328,7 +367,7 @@ NpcTable 한 행 ── EquipTableId 하나 ── NpcEquipTable 한 행
 | 잘못된 슬롯 ItemId | 비정상 조합·Modifier 오적용 | P3 런타임 검증 + P4 정적 진단 |
 | 세트별 장비 수 차이 | NPC 전투력 편차 확대 | 1차는 Tier 1 한정, 플레이 모드에서 슬롯 수 조정 |
 | 원거리 무기와 근접 AI 혼용 | 공격 거리·외형 불일치 | 1차 근접 무기 한정 |
-| 기존 세이브가 계속 단검 사용 | 변경 확인 혼란 | New Game 기준 검증, 기존 세이브 비마이그레이션 명시 |
+| 기존 세이브가 계속 단검 사용 | 변경 확인 혼란 | New Game 기준 검증, 기존 세이브 비마이그레이션 명시 (2026-10-03: WorldDataVersion 17 로드 때 같은 ItemId의 기본 아이템으로 교체됨, D121 — 세트는 다시 시드하지 않음) |
 | 외형에 무기가 표시되지 않음 | 장비 데이터와 화면 외형 차이 | 현행 알려진 제약 유지, SpriteLibrary 연동은 별도 작업 |
 | 일반 Inventory가 비어 있음 | 검사 UI 소지품 다양성 없음 | 시작 소지품 시스템을 후속 계획으로 분리 |
 
@@ -336,15 +375,17 @@ NpcTable 한 행 ── EquipTableId 하나 ── NpcEquipTable 한 행
 
 ## 9. 최종 인수 기준
 
-- [ ] `NpcEquipTable`에 유효한 고정 세트 5종이 존재한다.
-- [ ] NPC 3001~3005가 각각 세트 1~5를 참조한다.
-- [ ] 모든 세트가 현재 근접 NPC AI와 호환되는 무기를 사용한다.
+> 2026-10-03 확인: 데이터·코드로 확인되는 항목만 체크했다. 진단 실행 결과와 플레이 모드 검증(P5) 기록은 없어 해당 항목은 비워 둔다.
+
+- [x] `NpcEquipTable`에 유효한 고정 세트 5종이 존재한다. (bytes 확인. 진단 실행 기록은 없음)
+- [x] NPC 3001~3005가 각각 세트 1~5를 참조한다.
+- [x] 모든 세트가 현재 근접 NPC AI와 호환되는 무기를 사용한다. (데이터 확인. 진단 항목 5는 없음, §6 P4)
 - [ ] 모든 0이 아닌 ItemId가 존재하고 장비 인스턴스를 생성할 수 있다.
 - [ ] 모든 아이템 Category가 배치 슬롯과 호환된다.
-- [ ] 신규 NPC 생성 시 세트 전체가 `InventoryEquip`에 저장된다.
-- [ ] 같은 세트라도 아이템 옵션은 인스턴스별로 롤된다.
+- [ ] 신규 NPC 생성 시 세트 전체가 `InventoryEquip`에 저장된다. → 장착 확률(§4.2)에 당첨된 슬롯만 저장된다.
+- [ ] ~~같은 세트라도 아이템 옵션은 인스턴스별로 롤된다.~~ → 2026-10-03 폐기(D118): 옵션은 기본 아이템 변형의 고정 옵션이고 변형은 entityId·슬롯 해시로 고른다.
 - [ ] 청크 왕복과 세이브 왕복에서 장비가 재추첨되지 않는다.
-- [ ] 기존 세이브의 장비를 암묵적으로 덮어쓰지 않는다.
+- [ ] ~~기존 세이브의 장비를 암묵적으로 덮어쓰지 않는다.~~ → 2026-10-03 개정(D121): WorldDataVersion 16 이하 세이브는 로드 때 1회 같은 ItemId의 기본 아이템으로 교체한다(`ItemInstanceId` 유지, 세트 재시드 없음).
 - [ ] 정적 진단 오류 및 런타임 장비 시드 Warning이 0건이다.
 
 ---
