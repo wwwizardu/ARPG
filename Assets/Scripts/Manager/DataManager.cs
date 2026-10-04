@@ -13,7 +13,7 @@ namespace ARPG.Data
 {
     public partial class DataManager : MonoBehaviour
     {
-        private const ushort CURRENT_WORLD_DATA_VERSION = 17;
+        private const ushort CURRENT_WORLD_DATA_VERSION = 19;
         private const ushort CURRENT_PLAYER_DATA_VERSION = 2;
         private WorldData _worldData = new();
         public int WorldSeed => _worldData.WorldSeed;
@@ -645,6 +645,9 @@ namespace ARPG.Data
                 _needsNpcBasicEquipmentReplacement = true;
             }
         }
+
+        /// <summary>NPC 통계·최신 사연 이관은 상태와 호감도 파티션을 함께 다음 저장에 커밋한다.</summary>
+        public void RequireNpcMemoryMigrationSave() => _needsFullSaveAfterMigration = true;
 
         /// <summary>
         /// D121 일괄 교체가 필요한지 돌려주고 표시를 지운다. NpcManager.Load가 NPC 로드 때 한 번 부른다.

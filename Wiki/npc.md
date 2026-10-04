@@ -4,7 +4,7 @@
 name: npc
 description: NPC 도메인 종합 — 정본 매핑, 코드 구현 현황, 마을 경제와의 경계.
 type: topic
-last_updated: 2026-10-03
+last_updated: 2026-10-04
 sources:
   - Docs/npc/VILLAGE_NPC_BOUNDARY_DESIGN.md
   - Docs/npc/NPC_SIMULATION_DESIGN.md
@@ -17,6 +17,10 @@ sources:
   - Docs/world_history/NARRATIVE_DIALOGUE_VARIETY_DESIGN.md
   - Docs/npc/ 관계·활동·장비 문서
   - Assets/Scripts/Npc/, Assets/Scripts/Manager/NpcManager.cs (심볼 수준)
+  - Assets/Scripts/Npc/NpcSaveData_PersonalStories.cs
+  - Assets/Scripts/Manager/NpcManager_SharedActivities.cs
+  - Assets/Scripts/Editor/NpcAmbitionSimDiagnostics_PersonalStories.cs
+  - Assets/Scripts/Editor/NpcAmbitionSimDiagnostics_SharedActivities.cs
   - Assets/Scripts/Common/System/System_NpcSim.cs, Assets/Scripts/Npc/NpcActivityResolver.cs
 ---
 
@@ -34,9 +38,9 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 
 **실전투(NPC_COMBAT B1~B5)**: 화면 안 NPC는 조건부로 적을 인식해 싸우고, 동행은 던전 전용이며(D97), 플레이어–NPC 결투가 있다(HP 1로 끝남). 드랍 줍기 런타임은 있지만 지금은 디버그 메뉴로만 호출된다. 도주(D25)와 NPC 간 결투의 화면 장면(D24)은 보류다. [src: Docs/npc/NPC_COMBAT_DESIGN.md 상태·§4.6·§6.1·§7.6, Assets/Scripts/Manager/NpcManager_Duel.cs, Assets/Scripts/Manager/NpcManager_Pickup.cs]
 
-**현행 인원 기준**은 `max(맵 규모 최소값, 마을 수×8)`이며 대형 맵 최소값은 1,200명이다. 마을당 최소 5명을 먼저 보장하므로 300개 마을에서는 목표가 2,400명이다. 모든 NPC를 한 프레임에 처리하지 않고 라운드로빈 시간분할하며, 저장은 개별 상태를 영구 `EntityId` 기준 32개 샤드로 나눈다. 장비 compact 표현은 기본 아이템 행 번호 저장으로 해결됐고(아이템 1개 약 560B → 62B), 활동 상태 기본값도 생략해 NPC 상태가 10.7MB → 2.85MB가 됐다(57게임시간 세이브 실측). 장기 증가분은 가방 전리품과 소문이다. [src: Docs/npc/NPC_SIMULATION_DESIGN.md D9·§11.1, Docs/tech/SAVE_PARTITION_DESIGN.md §3–5, Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §11.3, Docs/npc/NPC_EQUIPMENT_DESIGN.md §9]
+**현행 인원 기준**은 `max(맵 규모 최소값, 마을 수×8)`이며 대형 맵 최소값은 1,200명이다. 마을당 최소 5명을 먼저 보장하므로 300개 마을에서는 목표가 2,400명이다. 모든 NPC를 한 프레임에 처리하지 않고 라운드로빈 시간분할하며, 저장은 개별 상태를 영구 `EntityId` 기준 32개 샤드로 나눈다. 장비 compact 표현은 기본 아이템 행 번호 저장으로 해결됐고(아이템 1개 약 560B → 62B), 활동 상태 기본값도 생략해 NPC 상태가 10.7MB → 2.85MB가 됐다(57게임시간 세이브 실측). 가방 전리품·소문 외에도 중요 사건 이력·사망 기억은 계속 보존된다. 반복 파티 활동과 절도 피해의 보존 방식은 아래 기억 저장 개정을 따른다. [src: Docs/npc/NPC_SIMULATION_DESIGN.md D9·§11.1, Docs/tech/SAVE_PARTITION_DESIGN.md §3–5, Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §11.3, Docs/npc/NPC_EQUIPMENT_DESIGN.md §9]
 
-대화 다양성 Phase 1도 구현돼 Deed·사망 기억을 사연 토픽으로 만들고 해당 NPC의 대화 캐시를 무효화한다. 플레이 검증은 아직 남아 있다. [src: Docs/world_history/NARRATIVE_DIALOGUE_VARIETY_DESIGN.md §5 Phase 1, Assets/Scripts/Npc/Narrative/NpcNarrativeRuntime.cs]
+**개인 기억·대화(2026-10-04)**: 중요 사건 이력은 보존하고, 반복 파티 활동은 상대별 사냥·던전 원정·공동 클리어·누적 호감도 변화로 집계한다. 대화는 부상·동료·아이템·던전 완료·절도 피해·사별 **6종의 최신 요약/참조**를 직접 읽으며, 절도 피해는 3종 중 최신 1건으로 교체한다. 생성된 대사·소망 텍스트와 최근 화제는 메모리 캐시다. 최신 사연 30 PASS·공동 활동 27 PASS를 확인했으며 실제 플레이 대화 품질 검증은 후속이다. [src: Docs/npc/NPC_AMBITION_DESIGN.md §12.1–12.2, Docs/world_history/NARRATIVE_DIALOGUE_VARIETY_DESIGN.md §5, Assets/Scripts/Npc/NpcSaveData_PersonalStories.cs, Assets/Scripts/Npc/Narrative/NpcNarrativeRuntime.cs]
 
 ## 2. 정본 매핑 — "이걸 물으면 이 문서의 이 절"
 
@@ -48,7 +52,7 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 | 소망(Wish) 데이터 모델·상태머신·추적·완료·보상·영속화 | [QUEST_SYSTEM_DESIGN §2–6](../Docs/npc/QUEST_SYSTEM_DESIGN.md) | 소망 *떠오름*은 interactionSystem §4.7 |
 | 소망·대화·선호의 **LLM 생성** | [NARRATIVE_ENGINE_DESIGN](../Docs/world_history/NARRATIVE_ENGINE_DESIGN.md) (world_history 소속) | 후보 어휘는 QUEST_SYSTEM §8과 공유 |
 | NPC↔NPC 관계(가족/원한/Sentiment)·backfill | [NPC_RELATION_HISTORY_DESIGN §4](../Docs/npc/NPC_RELATION_HISTORY_DESIGN.md) | 연대기(L1)는 PROCEDURAL_HISTORY 소관 |
-| NPC 전기 로그(거주 이력·겪은 일)·지식 거리 | **상세 스키마 = [NPC_SIMULATION §5.1](../Docs/npc/NPC_SIMULATION_DESIGN.md)** / 개념·지식거리 = [NARRATIVE_ENGINE §4.8](../Docs/world_history/NARRATIVE_ENGINE_DESIGN.md) / 채널 = [RELATION_HISTORY §4.2](../Docs/npc/NPC_RELATION_HISTORY_DESIGN.md) | `Deeds`는 무제한 누적 주요 사건 이력이다. 사망(`Fell`)·Hunt 부상·파티 Hunt 후 호감도 변화를 기록하며, 주요 아이템 획득은 보상 경로 추가 때 연결한다. [src: Assets/Scripts/Npc/NpcBiography.cs, Assets/Scripts/Manager/NpcManager.cs, Assets/Scripts/Common/System/System_NpcSim.cs] |
+| NPC 전기·최신 개인 사연·공동 활동 통계 | **기록 개념 = [NPC_SIMULATION §5.1](../Docs/npc/NPC_SIMULATION_DESIGN.md)** / **현행 필드·이관 = [NPC_AMBITION §12.1–12.2](../Docs/npc/NPC_AMBITION_DESIGN.md)** / 대화 선택 = [DIALOGUE_VARIETY §5](../Docs/world_history/NARRATIVE_DIALOGUE_VARIETY_DESIGN.md) | 중요 Deeds·사망 기억 보존 + 쌍별 활동 통계 + 6종 최신 참조. 주요 아이템 기록은 기본 장비 구매 업그레이드에 연결됐다. [src: Assets/Scripts/Npc/NpcSaveData_PersonalStories.cs, Assets/Scripts/Manager/NpcManager_SharedActivities.cs, Assets/Scripts/Manager/NpcManager_Trade.cs] |
 | NPC↔NPC 호감도 **런타임 변동** | [NPC_ACTIVITY_DESIGN §8.3](../Docs/npc/NPC_ACTIVITY_DESIGN.md) | **활동 기반**. 패시브 근접 drift(구 System_NpcRelationship)는 폐기 [src: NPC_RELATION_HISTORY §5.2] |
 | 모험가 자율 활동/원정(Venture)·부상·죽음 — 활동 *내용* | [NPC_ACTIVITY_DESIGN §4–10](../Docs/npc/NPC_ACTIVITY_DESIGN.md) | 활동 내용 설계. 시뮬 프레임은 아래 문서가 소유 |
 | NPC 시뮬 *기반*(개별 LOD·오프스크린 상태·로밍·월드영향) | [NPC_SIMULATION_DESIGN](../Docs/npc/NPC_SIMULATION_DESIGN.md) | MVP 구현 완료: Rest/솔로·파티 Hunt, 개인 LOD 전환, 결과 반영, `max(맵 최소값, 마을 수×8)` 총량/점진 보충. 300개 마을 기준 목표 2,400명. 이주·WORLD_EVENT 유발은 후속. [src: Docs/npc/NPC_SIMULATION_DESIGN.md D9·§11, Assets/Scripts/Common/System/System_NpcSim.cs, Assets/Scripts/Manager/NpcManager.cs] |
@@ -78,7 +82,9 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 |----|------|------|------|
 | NPC↔NPC 호감도 채널 | RELATION_HISTORY §3 | `NpcManager` GetAffinity/ModifyAffinity/SaveAffinity ([NpcManager.cs:588-669](../Assets/Scripts/Manager/NpcManager.cs)) | ✅ 구현 |
 | NPC↔NPC 관계(유형) + backfill | RELATION_HISTORY §4 | `NpcRelationEntry`, `NpcSentiment`, [NpcRelationBackfill.cs](../Assets/Scripts/Npc/Relation/NpcRelationBackfill.cs), NpcManager AddRelation/GetRelations | ✅ 구현 |
-| 대화 토픽 선택·내러티브 런타임 | NARRATIVE_ENGINE(+SPIKE) | [Scripts/Npc/Narrative/](../Assets/Scripts/Npc/Narrative/) — DialogueTopicSelector, NpcNarrativeService(`Llm/Cache/Fallback`), `AffinityTier`, `NpcWish`/`WishState` 타입 | 🚧 부분 구현 — 타입·선택 로직 존재 |
+| 공동 활동 통계·과거 동료 기억 | AMBITION §12.1 | `NpcAffinityEntry.SharedActivities`, `NpcSaveData.SharedActivityMemories`, [NpcManager_SharedActivities.cs](../Assets/Scripts/Manager/NpcManager_SharedActivities.cs) | ✅ 쌍당 1회 집계·사망 시 기억 보존. 구 기록의 과거 횟수는 추정하지 않고 미집계 표시 [src: Assets/Scripts/Manager/NpcManager_SharedActivities.cs, Assets/Scripts/Manager/NpcManager_Party.cs] |
+| 종류별 최신 개인 사연 | AMBITION §12.1, DIALOGUE_VARIETY §5 | [NpcSaveData_PersonalStories.cs](../Assets/Scripts/Npc/NpcSaveData_PersonalStories.cs) — 기록 시 갱신·로드 시 참조 복구 | ✅ 6종 최신 소스 → 기존 개인 대화 5종. 부상/동료/피해/자랑 중 최신 2개 + 사별 별도 1개; 티어·레퍼토리 선택 적용 [src: Assets/Scripts/Npc/NpcSaveData_PersonalStories.cs, Assets/Scripts/Npc/Narrative/DialogueTopicSelector.cs] |
+| 대화 토픽 선택·내러티브 런타임 | NARRATIVE_ENGINE(+SPIKE), DIALOGUE_VARIETY §5 | [Scripts/Npc/Narrative/](../Assets/Scripts/Npc/Narrative/) — 최신 개인 사연 직접 조회·Facts·variant·NPC 단위 캐시 무효화 | 🟨 사연 선택 구현·진단 통과, 생성 텍스트는 메모리 캐시·실제 플레이 품질 검증 후속 [src: Assets/Scripts/Npc/Narrative/DialogueTopicSelector.cs, Assets/Scripts/Npc/Narrative/NpcNarrativeRuntime.cs, Docs/npc/NPC_AMBITION_DESIGN.md §12.2] |
 | 플레이어↔NPC 관계 4축(`PlayerRelation`) | interactionSystem §3 | `NpcManager.GetPlayerRelation`/`SetPlayerRelation`/`ModifyPlayerRelation`/Save/Load, `InteractionHelper` Talk/Gift 반영 | ✅ 구현 [src: Assets/Scripts/Manager/NpcManager.cs, Assets/Scripts/Common/Utility/InteractionHelper.cs, Assets/Scripts/Npc/NpcSaveData.cs] |
 | 선물·선호 판정(`GiftReaction`) / 소망 추적·보상 | interactionSystem §4 / QUEST_SYSTEM | 타입 골격(`NpcWish`, `WishKind`)만 Narrative에 존재 | ❌ 미구현 (문서상 0%) |
 | 관찰 반응 — 몬스터 전리품 1호 신호 | PLAYER_RECOGNITION | `ItemTable.SourceMonsterId` + `MonsterTrophyIdentifier` 존재. 현행 ItemTable 데이터에는 연결된 전리품 없음 | 🟡 식별 배관만 구현, 감지·Trust·영속화·대사·보상 미구현 [src: Assets/Scripts/Common/Tables.cs, Assets/Scripts/Common/Utility/MonsterTrophyIdentifier.cs, Assets/_BinaryData/TableData/ItemTable.bytes] |
@@ -92,7 +98,7 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 | 협력·배신(P3) | AMBITION §7.5–7.6·§14 | — | ⏸ 보류 [src: Docs/npc/NPC_AMBITION_DESIGN.md §14] |
 | 실전투·동행(던전 전용)·드랍 줍기·결투 | NPC_COMBAT B1~B5 | `System_AI_Perception` 조건부 인식, `NpcManager_Companion`·`NpcManager_Duel`·`NpcManager_Pickup`, `System_Duel` | ✅ 구현(드랍 줍기는 디버그 호출만). 도주·NPC 간 결투 화면 장면은 보류 [src: Docs/npc/NPC_COMBAT_DESIGN.md 상태, Assets/Scripts/Manager/NpcManager_Duel.cs] |
 | 전역 NPC 총량·점진 보충 | NPC_SIMULATION D9 | `NpcPopulationState`, `NpcManager.EnsureAllVillagesPopulated`/`TryReplenishGlobalPopulation` — 대형 맵 최소 1,200명, 마을당 8명 목표·최소 5명 | ✅ 구현. 300개 마을 기준 2,400명 [src: Docs/npc/NPC_SIMULATION_DESIGN.md D9, Assets/Scripts/Npc/NpcPopulationState.cs, Assets/Scripts/Manager/NpcManager.cs] |
-| NPC 저장 분할 | SAVE_PARTITION_DESIGN | Player/World/Map/Village 등 책임 파티션 + NPC 상태 32샤드 + manifest 원자 커밋 | ✅ 구현. 장비 compact 표현은 기본 아이템 행 번호 저장(D122)으로 해결, 저장 복사기가 `DefaultValueHandling.Ignore`를 따르게 수정(2026-10-03). 전체 저장 13.3MB → 6.3MB [src: Docs/tech/SAVE_PARTITION_DESIGN.md §2–9, Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §11.3, Assets/Scripts/Manager/DataManager_PartitionedSave.cs, Assets/Scripts/Data/SaveDtoSnapshot.cs] |
+| NPC 저장 분할 | SAVE_PARTITION_DESIGN §3·§5·§8 | 책임 파티션 + NPC 상태 32샤드 + manifest 원자 커밋 | ✅ 현재 WorldDataVersion 19. State·Social은 부분 저장도 함께 커밋하며 기억 이관 후 다음 저장은 전체로 승격. 장비 기본 행 번호·저장 복사기 기본값 생략은 이전 개정 유지 [src: Docs/tech/SAVE_PARTITION_DESIGN.md, Assets/Scripts/Manager/DataManager.cs, Assets/Scripts/Manager/DataManager_PartitionedSave.cs, Assets/Scripts/Data/SaveDtoSnapshot.cs] |
 | 사망 관계 기억 | NPC_SIMULATION §9-10 | `DeceasedRelationMemory`, `NpcManager.MarkNpcDead`, `UINpcInspect` | ✅ 구현 [src: Assets/Scripts/Npc/NpcRelationEntry.cs, Assets/Scripts/Manager/NpcManager.cs, Assets/Scripts/UI/UINpcInspect.cs] |
 | 파티 원정·이주·WORLD_EVENT 유발 | NPC_SIMULATION NS4 | Hunt 파티는 구현. 이주·WORLD_EVENT 유발은 MVP 범위 밖 | 🟡 부분 구현 [src: Docs/npc/NPC_SIMULATION_DESIGN.md §11, Assets/Scripts/Common/System/System_NpcSim.cs] |
 | 동료 시스템 | companionSystem | 없음 | ❌ 미구현 |
@@ -120,6 +126,7 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 | NPC 화면 안 전투·동행·결투 | NPC_COMBAT 상태·§4–7 |
 | 파티·이주·WORLD_EVENT 확장 | NPC_SIMULATION NS4 → NPC_ACTIVITY(참고 범위) → WORLD_EVENT |
 | NPC 관계 데이터 다루기 | NPC_RELATION_HISTORY → NpcManager 관계 region 코드 |
-| 대화 시스템 | NARRATIVE_ENGINE(+SPIKE) → Scripts/Npc/Narrative/ 현행 코드 |
+| 사연 저장·공동 활동 집계 변경 | AMBITION §12.1–12.2 → SAVE_PARTITION §5·§8 → `NpcSaveData_PersonalStories`·`NpcManager_SharedActivities` → 진단 `ARPG/Npc/Diagnostics/Ambition Sim/Validate Personal Stories`·`Validate Shared Activities` [src: Docs/npc/NPC_AMBITION_DESIGN.md, Assets/Scripts/Editor/NpcAmbitionSimDiagnostics_PersonalStories.cs, Assets/Scripts/Editor/NpcAmbitionSimDiagnostics_SharedActivities.cs] |
+| 대화 시스템 | NARRATIVE_ENGINE §6.3(현재 메모리 캐시와 목표 영속화 구분) → DIALOGUE_VARIETY §5 → Scripts/Npc/Narrative/ 현행 코드 [src: Docs/world_history/NARRATIVE_ENGINE_DESIGN.md, Docs/world_history/NARRATIVE_DIALOGUE_VARIETY_DESIGN.md] |
 | 관찰 반응 구현 | PLAYER_RECOGNITION_DESIGN → interactionSystem §3 → InteractionHelper/UINpcInspect → Narrative 현행 코드 [src: Docs/npc/PLAYER_RECOGNITION_DESIGN.md §코드 앵커] |
 | 동료 시스템 | companionSystem — 단 §3의 충돌 지점 확인 후 착수 |

@@ -28,7 +28,7 @@ namespace ARPG.Npc
         private int _simulationWorkCursor;
         private int _nextPartyId = 1;
         // NPC 간 호감도 (양방향 대칭, sparse — 만난 적 있는 페어만 등록)
-        private Dictionary<NpcPairKey, int> _npcAffinity = new();
+        private Dictionary<NpcPairKey, NpcAffinityEntry> _npcAffinity = new();
         // 플레이어↔NPC 관계. NPC ID가 키이며, 청크 unload와 무관하게 유지한다.
         private Dictionary<int, PlayerRelation> _playerRelations = new();
         // 호감도 clamp 범위 (drift 누적 폭주 방지)
@@ -60,7 +60,8 @@ namespace ARPG.Npc
                 Load(savedNpcs, AR.s.Map.chunkSize);
             }
 
-            LoadAffinity(AR.s.Data.NpcAffinityList);
+            if (LoadAffinity(AR.s.Data.NpcAffinityList) == true)
+                AR.s.Data.RequireNpcMemoryMigrationSave();
             LoadPlayerRelations(AR.s.Data.PlayerNpcRelationList);
             LoadRelations(AR.s.Data.NpcRelationList);
             LoadParties(AR.s.Data.NpcPartyStates);
@@ -1174,7 +1175,7 @@ namespace ARPG.Npc
         {
             if (npcA == npcB)
                 return 0;
-            return _npcAffinity.TryGetValue(new NpcPairKey(npcA, npcB), out int value) ? value : 0;
+            return _npcAffinity.TryGetValue(new NpcPairKey(npcA, npcB), out NpcAffinityEntry value) ? value.Affinity : 0;
         }
 
         /// <summary>
@@ -1194,7 +1195,7 @@ namespace ARPG.Npc
         {
             if (npcA == npcB)
                 return;
-            _npcAffinity[new NpcPairKey(npcA, npcB)] = value;
+            GetOrCreateAffinity(npcA, npcB).Affinity = value;
         }
 
         /// <summary>
@@ -1202,20 +1203,12 @@ namespace ARPG.Npc
         /// </summary>
         public void ModifyAffinity(int npcA, int npcB, int delta)
         {
-            if (npcA == npcB || delta == 0)
-            {
-                if (npcA != npcB)
-                {
-                    NpcPairKey key0 = new NpcPairKey(npcA, npcB);
-                    if (_npcAffinity.ContainsKey(key0) == false)
-                        _npcAffinity[key0] = 0;
-                }
+            if (npcA == npcB)
                 return;
-            }
 
-            NpcPairKey key = new NpcPairKey(npcA, npcB);
-            _npcAffinity.TryGetValue(key, out int current);
-            _npcAffinity[key] = Mathf.Clamp(current + delta, AFFINITY_MIN, AFFINITY_MAX);
+            NpcAffinityEntry entry = GetOrCreateAffinity(npcA, npcB);
+            if (delta != 0)
+                entry.Affinity = Mathf.Clamp(entry.Affinity + delta, AFFINITY_MIN, AFFINITY_MAX);
         }
 
         /// <summary>
@@ -1234,7 +1227,13 @@ namespace ARPG.Npc
                     toRemove.Add(kvp.Key);
             }
             for (int i = 0; i < toRemove.Count; i++)
-                _npcAffinity.Remove(toRemove[i]);
+            {
+                NpcPairKey key = toRemove[i];
+                NpcAffinityEntry entry = _npcAffinity[key];
+                if (entry.SharedActivities != null)
+                    ArchiveSharedActivities(key, entry.SharedActivities, entry.Affinity);
+                _npcAffinity.Remove(key);
+            }
         }
 
         /// <summary>
@@ -1244,24 +1243,23 @@ namespace ARPG.Npc
         {
             List<NpcAffinityEntry> result = new List<NpcAffinityEntry>(_npcAffinity.Count);
             foreach (var kvp in _npcAffinity)
-                result.Add(new NpcAffinityEntry(kvp.Key.Lo, kvp.Key.Hi, kvp.Value));
+                result.Add(kvp.Value.Copy());
             return result;
         }
 
         /// <summary>
         /// 직렬화 List → Dictionary 복원. NpcManager.Initialize에서 호출.
         /// </summary>
-        public void LoadAffinity(List<NpcAffinityEntry>? list)
+        public bool LoadAffinity(List<NpcAffinityEntry>? list)
         {
             _npcAffinity.Clear();
-            if (list == null)
-                return;
-
-            for (int i = 0; i < list.Count; i++)
+            for (int i = 0; i < (list?.Count ?? 0); i++)
             {
-                NpcAffinityEntry entry = list[i];
-                _npcAffinity[new NpcPairKey(entry.NpcA, entry.NpcB)] = entry.Affinity;
+                NpcAffinityEntry entry = list![i];
+                _npcAffinity[new NpcPairKey(entry.NpcA, entry.NpcB)] = entry.Copy();
             }
+            bool migrated = MigrateLegacyPartyActivities() > 0;
+            return RestorePersonalStories() || migrated;
         }
 
         #region Player-NPC Relationship
@@ -1779,7 +1777,7 @@ namespace ARPG.Npc
                     continue;
 
                 bool wasFromEntity = relation.FromEntityId == survivorEntityId;
-                survivor.DeceasedRelations.Add(new DeceasedRelationMemory(deceasedEntityId, deceasedName,
+                survivor.RecordDeceasedRelation(new DeceasedRelationMemory(deceasedEntityId, deceasedName,
                     relation.Type, wasFromEntity, fellEventId, deathGameTime));
                 _narrative.InvalidateDialogues(survivorEntityId);   // 상실 발생 → 생존자 대화 캐시 폐기 (LostCompanion 반영)
             }
@@ -1795,8 +1793,9 @@ namespace ARPG.Npc
 
         /// <summary>
         /// NPC 주요 사건 이력에 항목을 추가한다. 이력은 NPC별로 영속한다.
-        /// 예외: D91 이전의 원정 부상(Wounded) Deed는 로드 때 누적 부상 요약으로 합치고 지운다. 파티 호감도 Deed는 상대별 1건으로
-        /// 갱신·이동하고 로드 때 중복을 합친다(D108) — 목록 인덱스를 식별자로 쓰지 말 것.
+        /// 예외: D91 이전의 원정 부상(Wounded) Deed는 로드 때 누적 부상 요약으로 합치고 지운다. 파티 호감도 Deed는 구 세이브 전용이며 공동 활동 통계로
+        /// 이관한다 — 목록 인덱스를 식별자로 쓰지 말 것.
+        /// 반복 절도 피해는 최신 개인 사연만 교체하고 그 외 주요 사건은 이력을 보존한다.
         /// </summary>
         public void AddDeed(int entityId, NpcDeedKind kind, int refEventId,
             NpcKnowledgeLevel howKnown, float when, int participantId)
@@ -1806,34 +1805,8 @@ namespace ARPG.Npc
 
             NpcDeedEntry entry = new NpcDeedEntry(kind, refEventId, howKnown, when);
             AddDeedParticipant(entry, participantId);
-            saveData.Deeds.Add(entry);
+            saveData.RecordDeed(entry);
             _narrative.InvalidateDialogues(entityId);   // 새 사건 → 낡은 대화 캐시 폐기 (NARRATIVE_DIALOGUE_VARIETY §5 P1-4)
-        }
-
-        /// <summary>
-        /// 파티 원정 호감도 Deed (D108 — 같은 상대와는 NPC마다 1건). 기존 Deed가 있으면 변화량을 그 상대와의 누적으로 더하고
-        /// 시각을 최근으로 바꿔 목록 끝으로 옮긴다. 없으면 새로 추가한다. 시각이 바뀌므로 대화 캐시(사건 해시)도 함께 폐기한다.
-        /// </summary>
-        public void AddPartyAffinityDeed(int entityId, int otherEntityId, int affinityDelta, float when)
-        {
-            if (affinityDelta == 0 || _npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
-                return;
-
-            if (saveData.TryAccumulatePartyAffinityDeed(otherEntityId, affinityDelta, when) == true)
-            {
-                _narrative.InvalidateDialogues(entityId);
-                return;
-            }
-
-            NpcDeedEntry entry = new NpcDeedEntry(NpcDeedKind.PartyAffinityChanged, -1,
-                NpcKnowledgeLevel.Did, when)
-            {
-                AffinityDelta = affinityDelta,
-            };
-            AddDeedParticipant(entry, entityId);
-            AddDeedParticipant(entry, otherEntityId);
-            saveData.Deeds.Add(entry);
-            _narrative.InvalidateDialogues(entityId);
         }
 
         /// <summary>
@@ -1845,7 +1818,7 @@ namespace ARPG.Npc
             if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
                 return;
 
-            saveData.Deeds.Add(new NpcDeedEntry(NpcDeedKind.SevereWound, -1, NpcKnowledgeLevel.Lived, when));
+            saveData.RecordDeed(new NpcDeedEntry(NpcDeedKind.SevereWound, -1, NpcKnowledgeLevel.Lived, when));
             _narrative.InvalidateDialogues(entityId);
         }
 
@@ -1862,7 +1835,7 @@ namespace ARPG.Npc
             NpcDeedEntry entry = new NpcDeedEntry(NpcDeedKind.AttackedWound, -1, NpcKnowledgeLevel.Lived, when);
             entry.Participants.Add(attackerId);
             entry.ParticipantSnapshots.Add(new NpcDeedParticipant(attackerId, attackerDisplayName ?? string.Empty));
-            saveData.Deeds.Add(entry);
+            saveData.RecordDeed(entry);
             _narrative.InvalidateDialogues(entityId);
         }
 
@@ -1878,7 +1851,7 @@ namespace ARPG.Npc
                 ItemDisplayName = itemDisplayName ?? string.Empty,
             };
             AddDeedParticipant(entry, entityId);
-            saveData.Deeds.Add(entry);
+            saveData.RecordDeed(entry);
             _narrative.InvalidateDialogues(entityId);
         }
 

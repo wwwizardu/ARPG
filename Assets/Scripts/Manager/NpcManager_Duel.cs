@@ -304,7 +304,7 @@ namespace ARPG.Npc
             AddDeedParticipant(entry, outcome.NpcId);
             entry.Participants.Add(outcome.PlayerId);
             entry.ParticipantSnapshots.Add(new NpcDeedParticipant(outcome.PlayerId, DUEL_PLAYER_DISPLAY_NAME));
-            saveData.Deeds.Add(entry);
+            saveData.RecordDeed(entry);
             _narrative.InvalidateDialogues(outcome.NpcId);
         }
 

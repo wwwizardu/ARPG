@@ -468,7 +468,8 @@ namespace ARPG.Systems
                     NpcActivityResolver.PartyHuntLootSaltBase + i, outcomeGameTime);
             }
 
-            AR.s.Npc.ApplyPartyRelationshipOutcome(memberIds, outcomes, successCount > 0, outcomeGameTime);
+            AR.s.Npc.ApplyPartyRelationshipOutcome(memberIds, outcomes, successCount > 0, outcomeGameTime,
+                NpcActivityKind.Hunt);
             for (int i = 0; i < members.Count; i++)
             {
                 int memberId = memberIds[i];
@@ -585,7 +586,7 @@ namespace ARPG.Systems
 
             // 파티 호감도 변화는 Hunt와 같은 규칙 (진단과 같은 공용 메서드, D107)
             AR.s.Npc.ApplyPartyRelationshipOutcome(report.MemberIds, report.Outcomes, report.SuccessCount > 0,
-                outcomeGameTime);
+                outcomeGameTime, NpcActivityKind.DungeonDelve, report.Completed);
             int survivorCount = 0;
             for (int i = 0; i < report.MemberIds.Count; i++)
             {

@@ -15,7 +15,7 @@ namespace ARPG.Npc
     /// 청크 비활성화 시 ECS 컴포넌트에서 스냅샷하여 보관하고,
     /// 청크 재활성화 시 이 데이터로 엔티티를 복원한다.
     /// </summary>
-    public class NpcSaveData
+    public partial class NpcSaveData
     {
         public int NpcTableId;
         public float PositionX;
@@ -49,11 +49,18 @@ namespace ARPG.Npc
         public NpcActivityState Activity = new();
         public float LastSimGameTime;
 
-        // 대사 회고와 지식 거리의 입력. 평범한 사냥 성공은 기록하지 않고 의미 있는 사건만 보존한다.
+        // 주요 사건 이력. 대화는 PersonalStories의 최신 참조를 읽으며 반복 절도 피해는 이력에 누적하지 않는다.
         public List<NpcDeedEntry> Deeds = new();
+
+        // 종류별 최신 개인 사연. 주요 이력은 인덱스로 참조하고 반복 절도 피해는 여기 한 건만 저장한다.
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore, DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public NpcPersonalStories? PersonalStories;
 
         // 사망 NPC의 관계를 현재 관계 그래프와 분리해 보존하는 회고용 스냅샷.
         public List<DeceasedRelationMemory> DeceasedRelations = new();
+
+        // 사망으로 호감도 채널에서 빠진 동료와의 공동 활동 통계. 빈 목록은 저장하지 않는다.
+        public List<NpcSharedActivityMemory> SharedActivityMemories = new();
 
         // NPC → 정착지 단위 감정 (피정복 반감/왕국 자부심 등). 관계 backfill(L2)이 시드. 보통 0~1개.
         // 설계: NPC_RELATION_HISTORY_DESIGN.md §4.2
@@ -173,6 +180,15 @@ namespace ARPG.Npc
                 Deeds[i].EnsureInitialized();
             if (DeceasedRelations == null)
                 DeceasedRelations = new List<DeceasedRelationMemory>();
+            for (int i = DeceasedRelations.Count - 1; i >= 0; i--)
+            {
+                if (DeceasedRelations[i] == null)
+                    DeceasedRelations.RemoveAt(i);
+            }
+            // 최신 절도 피해는 Deeds 밖에 따로 저장되므로 같은 null 보정을 따로 적용한다.
+            PersonalStories?.TheftVictim?.EnsureInitialized();
+            if (SharedActivityMemories == null)
+                SharedActivityMemories = new List<NpcSharedActivityMemory>();
             if (Rumors == null)
                 Rumors = new List<NpcRumor>();
             for (int i = Rumors.Count - 1; i >= 0; i--)
@@ -216,15 +232,18 @@ namespace ARPG.Npc
         // Newtonsoft 조건부 직렬화 규약: 빈 단서 목록은 저장하지 않는다 (로드 때 필드 초기값 = 빈 목록).
         public bool ShouldSerializeTheftClues() => TheftClues != null && TheftClues.Count > 0;
 
+        public bool ShouldSerializeSharedActivityMemories() => SharedActivityMemories != null && SharedActivityMemories.Count > 0;
+
         /// <summary>
         /// 원정 부상 1건을 누적 요약에 반영한다 (D91 ①·②, 가벼운 부상·중상 공통).
         /// </summary>
-        public void RecordExpeditionWound(float when, NpcActivityKind activity)
+        public void RecordExpeditionWound(float when, NpcActivityKind activity, bool severe = false)
         {
             WoundCount++;
             if (when >= LastWoundGameTime)
             {
                 LastWoundGameTime = when;
+                (PersonalStories ??= new()).LastWoundSevere = severe;
                 LastWoundActivity = activity == NpcActivityKind.DungeonDelve
                     ? NpcActivityKind.DungeonDelve
                     : NpcActivityKind.Hunt;
@@ -257,33 +276,6 @@ namespace ARPG.Npc
             if (merged > 0)
                 Deeds.RemoveRange(write, Deeds.Count - write);
             return merged;
-        }
-
-        /// <summary>
-        /// 파티 호감도 Deed를 같은 상대와의 기존 Deed에 누적한다 (D108 — 상대별 1건). 있으면 변화량을 더하고 시각을 최근으로 바꾼 뒤
-        /// 목록 끝으로 옮긴다(대화 사연·검사 창은 목록 끝을 가장 최근 사건으로 읽는다). 없으면 false — 호출자가 새 Deed를 추가한다.
-        /// </summary>
-        public bool TryAccumulatePartyAffinityDeed(int otherEntityId, int affinityDelta, float when)
-        {
-            for (int i = Deeds.Count - 1; i >= 0; i--)
-            {
-                NpcDeedEntry deed = Deeds[i];
-                if (deed == null || deed.Kind != NpcDeedKind.PartyAffinityChanged)
-                    continue;
-                if (GetPartyAffinityPartnerId(deed, EntityId) != otherEntityId)
-                    continue;
-
-                deed.AffinityDelta += affinityDelta;
-                if (when > deed.When)
-                    deed.When = when;
-                if (i != Deeds.Count - 1)
-                {
-                    Deeds.RemoveAt(i);
-                    Deeds.Add(deed);
-                }
-                return true;
-            }
-            return false;
         }
 
         /// <summary>
@@ -347,10 +339,10 @@ namespace ARPG.Npc
         }
 
         /// <summary>
-        /// PartyAffinityChanged Deed의 상대 EntityId. 참가자 = 본인 + 상대 (NpcManager.AddPartyAffinityDeed).
+        /// PartyAffinityChanged Deed의 상대 EntityId. 구 기록의 참가자 = 본인 + 상대.
         /// 본인이 참가자에 없거나 상대가 없으면 -1 — 합치기·누적 대상에서 빠진다.
         /// </summary>
-        private static int GetPartyAffinityPartnerId(NpcDeedEntry deed, int ownerEntityId)
+        public static int GetPartyAffinityPartnerId(NpcDeedEntry deed, int ownerEntityId)
         {
             int partnerId = -1;
             bool hasOwner = false;
@@ -373,6 +365,7 @@ namespace ARPG.Npc
             EnsureSlotsInitialized();
             MigrateLegacyWoundedDeeds();
             MergeDuplicatePartyAffinityDeeds();
+            MigratePersonalStories();
 
             for (int i = 0; i < InventoryEquip.Length; i++)
                 InventoryEquip[i]?.OnLoadCompleted();
@@ -469,7 +462,7 @@ namespace ARPG.Npc
 
     /// <summary>
     /// 직렬화용 호감도 엔트리. WorldData에 List 형태로 저장.
-    /// 런타임에서는 NpcManager가 Dictionary&lt;NpcPairKey, int&gt;로 변환하여 보관.
+    /// 런타임에서는 NpcManager가 NPC 쌍당 한 엔트리로 보관. 공동 활동 통계가 없으면 기존 3필드만 저장한다.
     /// </summary>
     [Serializable]
     public class NpcAffinityEntry
@@ -477,6 +470,9 @@ namespace ARPG.Npc
         public int NpcA;
         public int NpcB;
         public int Affinity;
+
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore, DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public NpcSharedActivityStats? SharedActivities;
 
         public NpcAffinityEntry() { }
 
@@ -486,6 +482,63 @@ namespace ARPG.Npc
             NpcB = npcB;
             Affinity = affinity;
         }
+
+        public NpcAffinityEntry Copy() => new NpcAffinityEntry(NpcA, NpcB, Affinity)
+        {
+            SharedActivities = SharedActivities?.Copy(),
+        };
+    }
+
+    /// <summary>함께 귀환한 NPC 쌍의 활동 통계. 구 Deed의 누적값은 보존하지만 과거 횟수는 추정하지 않는다.</summary>
+    [Serializable]
+    public class NpcSharedActivityStats
+    {
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public int HuntCount;
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public int DungeonDelveCount;
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public int DungeonClearCount;
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public int AffinityGain;
+        [System.ComponentModel.DefaultValue(-1f)]
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public float LastGameTime = -1f;
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public NpcActivityKind LastActivity;
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public bool HasUncountedHistory;
+
+        public NpcSharedActivityStats Copy() => (NpcSharedActivityStats)MemberwiseClone();
+
+        public string Describe()
+        {
+            // 하지 않은 활동의 0회는 적지 않는다. 새 기록은 사냥·던전 원정 중 하나가 항상 1 이상이다.
+            string counts = AppendCount(string.Empty, "사냥", HuntCount);
+            counts = AppendCount(counts, "던전 원정", DungeonDelveCount);
+            counts = AppendCount(counts, "클리어", DungeonClearCount);
+            if (counts.Length == 0)
+                counts = "횟수 기록 없음";
+            return HasUncountedHistory == true ? $"기록된 활동: {counts} (이전 원정 경험 있음)" : counts;
+        }
+
+        private static string AppendCount(string counts, string label, int count)
+        {
+            if (count <= 0)
+                return counts;
+            return counts.Length == 0 ? $"{label} {count}회" : $"{counts} · {label} {count}회";
+        }
+    }
+
+    /// <summary>활성 호감도에서 제거된 쌍의 원정 경험. 상대 이름과 통계를 소유 NPC에게 보존한다.</summary>
+    [Serializable]
+    public class NpcSharedActivityMemory
+    {
+        public int OtherNpcId;
+        public string OtherNpcName = string.Empty;
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore, DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public int? LastAffinity;
+        public NpcSharedActivityStats Activities = new();
     }
 
     /// <summary>

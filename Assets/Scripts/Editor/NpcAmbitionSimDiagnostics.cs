@@ -36,7 +36,7 @@ namespace ARPG.EditorTools
     ///   실행 전후 라이브 상태 해시가 같은지 검증한다. 시간·아이템 인스턴스 카운터·UnityEngine.Random 상태도 되돌린다.
     /// 출력: {프로젝트}/Logs/NpcAmbitionSim/ (.gitignore의 /Logs/ — git에 잡히지 않음)
     /// </summary>
-    public static class NpcAmbitionSimDiagnostics
+    public static partial class NpcAmbitionSimDiagnostics
     {
         private const float PowerEpsilon = 0.0001f;
         private const float CowardFraction = 0.10f;
@@ -358,7 +358,7 @@ namespace ARPG.EditorTools
             public long TotalFoodInflow;
 
             // D107: NPC 호감도·유형 관계 복제본 (라이브 대신 바꿔 끼운다)
-            public Dictionary<NpcPairKey, int> Affinity = new();
+            public Dictionary<NpcPairKey, NpcAffinityEntry> Affinity = new();
             public readonly Dictionary<int, List<NpcRelationEntry>> Relations = new();
             // P4-0: 가방·관계 지표(시작/끝), 절도 조건 깔때기(전 구간/마지막 15일), 시작 생존 집단의 끝 전투력
             public int CurrentDay;
@@ -933,8 +933,11 @@ namespace ARPG.EditorTools
             }
 
             // D107: NPC 호감도·유형 관계. 파티 호감도 변화(ApplyPartyRelationshipOutcome)·사망 정리가 복제본만 바꾸게 한다.
-            if (GetField(AR.s.Npc, "_npcAffinity").GetValue(AR.s.Npc) is Dictionary<NpcPairKey, int> liveAffinity)
-                sim.Affinity = new Dictionary<NpcPairKey, int>(liveAffinity);
+            if (GetField(AR.s.Npc, "_npcAffinity").GetValue(AR.s.Npc) is Dictionary<NpcPairKey, NpcAffinityEntry> liveAffinity)
+            {
+                foreach (var pair in liveAffinity)
+                    sim.Affinity.Add(pair.Key, pair.Value.Copy());
+            }
             if (GetField(AR.s.Npc, "_npcRelations").GetValue(AR.s.Npc) is Dictionary<int, List<NpcRelationEntry>> liveRelations)
             {
                 // 유형 관계 엔트리는 From·To 두 인덱스에 같은 인스턴스로 들어 있고 RemoveAllRelationsInvolving이 참조로 지운다.
@@ -1384,7 +1387,7 @@ namespace ARPG.EditorTools
                 return;
             // System_NpcSim.ResolvePartyDelve와 같은 시점의 파티 호감도 변화 (D107)
             AR.s.Npc.ApplyPartyRelationshipOutcome(report.MemberIds, report.Outcomes, report.SuccessCount > 0,
-                outcomeGameTime);
+                outcomeGameTime, NpcActivityKind.DungeonDelve, report.Completed);
             CountDelveReport(sim, report);
             if (confirmation == true)
             {
@@ -1660,7 +1663,8 @@ namespace ARPG.EditorTools
                         NpcActivityResolver.PartyHuntLootSaltBase + i, outcomeGameTime);
             }
             // System_NpcSim.ResolvePartyHunt와 같은 시점(전리품 뒤, 사망 처리 전)의 파티 호감도 변화 (D107)
-            AR.s.Npc.ApplyPartyRelationshipOutcome(memberIds, outcomes, successCount > 0, outcomeGameTime);
+            AR.s.Npc.ApplyPartyRelationshipOutcome(memberIds, outcomes, successCount > 0, outcomeGameTime,
+                NpcActivityKind.Hunt);
             for (int i = 0; i < members.Count; i++)
             {
                 if (outcomes[i] == NpcHuntOutcome.Dead)
@@ -2695,16 +2699,23 @@ namespace ARPG.EditorTools
             sim.TheftRecords.Add(record);
         }
 
-        /// <summary>새 절도 Deed 1건: 목록이 1건 늘었고 마지막이 그 종류·아이템이며, 참가자는 상대 1명(otherId -1이면 없음)이다.</summary>
+        /// <summary>피해자는 최신 사연 교체, 도둑은 주요 이력 추가. 종류·아이템·참가자를 검증한다.</summary>
         private static void CheckTheftDeed(List<string> problems, string label, NpcSaveData owner, int deedsBefore,
             NpcDeedKind kind, int otherId, int itemId)
         {
-            if (owner.Deeds.Count != deedsBefore + 1)
+            bool victim = NpcSaveData.IsTheftVictimStory(kind);
+            int expectedCount = deedsBefore + (victim ? 0 : 1);
+            if (owner.Deeds.Count != expectedCount)
             {
-                problems.Add($"{label} Deed {deedsBefore}→{owner.Deeds.Count}건 (+1이어야 함)");
+                problems.Add($"{label} 주요 이력 {deedsBefore}→{owner.Deeds.Count}건 (기대 {expectedCount})");
                 return;
             }
-            NpcDeedEntry deed = owner.Deeds[owner.Deeds.Count - 1];
+            NpcDeedEntry? deed = victim ? owner.PersonalStories?.TheftVictim : owner.Deeds[owner.Deeds.Count - 1];
+            if (deed == null)
+            {
+                problems.Add($"{label} 최신 절도 피해 사연 없음");
+                return;
+            }
             bool participantsOk = otherId < 0
                 ? deed.Participants.Count == 0 && deed.ParticipantSnapshots.Count == 0
                 : deed.Participants.Count == 1 && deed.Participants[0] == otherId && deed.ParticipantSnapshots.Count == 1;
@@ -2869,7 +2880,7 @@ namespace ARPG.EditorTools
         {
             if (a == b)
                 return 0;
-            return sim.Affinity.TryGetValue(new NpcPairKey(a, b), out int value) ? value : 0;
+            return sim.Affinity.TryGetValue(new NpcPairKey(a, b), out NpcAffinityEntry value) ? value.Affinity : 0;
         }
 
         private static int CountSimRelations(SimContext sim, int entityId)
@@ -2961,7 +2972,7 @@ namespace ARPG.EditorTools
 
         private static int CountTheftDeeds(NpcSaveData saveData)
         {
-            int count = 0;
+            int count = saveData.PersonalStories?.TheftVictim != null ? 1 : 0;
             for (int i = 0; i < saveData.Deeds.Count; i++)
             {
                 if (saveData.Deeds[i] != null && IsTheftDeedKind(saveData.Deeds[i].Kind) == true)
@@ -2972,7 +2983,7 @@ namespace ARPG.EditorTools
 
         private static int CountDeeds(NpcSaveData saveData, NpcDeedKind kind)
         {
-            int count = 0;
+            int count = saveData.PersonalStories?.TheftVictim?.Kind == kind ? 1 : 0;
             for (int i = 0; i < saveData.Deeds.Count; i++)
             {
                 if (saveData.Deeds[i] != null && saveData.Deeds[i].Kind == kind)
@@ -3296,11 +3307,11 @@ namespace ARPG.EditorTools
         private static SocialSnapshot MeasureSocial(SimContext sim)
         {
             SocialSnapshot social = new SocialSnapshot { Captured = true, AffinityMin = int.MaxValue, AffinityMax = int.MinValue };
-            foreach (KeyValuePair<NpcPairKey, int> pair in sim.Affinity)
+            foreach (KeyValuePair<NpcPairKey, NpcAffinityEntry> pair in sim.Affinity)
             {
                 if (IsSimLiving(sim, pair.Key.Lo) == false || IsSimLiving(sim, pair.Key.Hi) == false)
                     continue;
-                int affinity = pair.Value;
+                int affinity = pair.Value.Affinity;
                 social.AffinityPairs++;
                 social.AffinitySum += affinity;
                 if (affinity <= -50)
@@ -3520,8 +3531,9 @@ namespace ARPG.EditorTools
                 AuditTheftVictimTopic(a, npcId, save, ctx.NpcName, theftTopic);
 
                 bool hasNotable = false, hasCleared = false;
-                // 자랑 토픽은 두 종류 중 가장 최근 Deed를 말한다 — 목록 인덱스(CacheVariant) 대신 여기서 같은 규칙으로 찾는다 (D91)
+                // 전체 주요 이력에서 시각으로 독립 대조한다. 같은 시각이면 던전 완료를 우선한다.
                 NpcDeedKind latestBoastKind = NpcDeedKind.VentureFailed;
+                float latestBoastTime = float.NegativeInfinity;
                 for (int d = 0; d < save.Deeds.Count; d++)
                 {
                     NpcDeedEntry deed = save.Deeds[d];
@@ -3529,8 +3541,13 @@ namespace ARPG.EditorTools
                         continue;
                     hasNotable |= deed.Kind == NpcDeedKind.NotableItemAcquired;
                     hasCleared |= deed.Kind == NpcDeedKind.DungeonCleared;
-                    if (deed.Kind == NpcDeedKind.NotableItemAcquired || deed.Kind == NpcDeedKind.DungeonCleared)
+                    if ((deed.Kind == NpcDeedKind.NotableItemAcquired || deed.Kind == NpcDeedKind.DungeonCleared) &&
+                        (deed.When > latestBoastTime ||
+                         (deed.When == latestBoastTime && deed.Kind == NpcDeedKind.DungeonCleared)))
+                    {
                         latestBoastKind = deed.Kind;
+                        latestBoastTime = deed.When;
+                    }
                 }
                 if (hasNotable == true)
                     a.NotableDeedNpcs++;
@@ -3597,22 +3614,19 @@ namespace ARPG.EditorTools
         }
 
         /// <summary>
-        /// 피해자 도난 사연 (P4b, D106): 피해자 Deed가 있는 NPC 수, 실제 대화 1회분에 도난 토픽이 나온 수, 문구(범인을 알면 이름, 모르면 "누가"),
+        /// 피해자 도난 사연: 최신 사연 보유 NPC 수, 실제 대화 1회분에 도난 토픽이 나온 수, 문구(범인을 알면 이름, 모르면 "누가"),
         /// 도둑 쪽 Deed만 있는 NPC에게 도난 토픽이 나오지 않는지(도둑은 침묵).
         /// </summary>
         private static void AuditTheftVictimTopic(TopicAudit a, int npcId, NpcSaveData save, string npcName, DialogueTopic? topic)
         {
-            NpcDeedEntry? latestVictimDeed = null;
+            NpcDeedEntry? latestVictimDeed = save.PersonalStories?.TheftVictim;
             bool hasThiefDeed = false;
             for (int d = 0; d < save.Deeds.Count; d++)
             {
                 NpcDeedEntry deed = save.Deeds[d];
                 if (deed == null)
                     continue;
-                if (deed.Kind == NpcDeedKind.ItemStolen || deed.Kind == NpcDeedKind.CaughtThiefInAct ||
-                    deed.Kind == NpcDeedKind.TheftDiscovered)
-                    latestVictimDeed = deed;
-                else if (deed.Kind == NpcDeedKind.CaughtStealing || deed.Kind == NpcDeedKind.TheftExposed)
+                if (deed.Kind == NpcDeedKind.CaughtStealing || deed.Kind == NpcDeedKind.TheftExposed)
                     hasThiefDeed = true;
             }
             if (latestVictimDeed != null)
@@ -3840,7 +3854,7 @@ namespace ARPG.EditorTools
             return (int)Math.Floor((degrees + 22.5d) / 45d) % 8;
         }
 
-        /// <summary>Deed 종류별 JSON 크기·개수 (세이브와 같은 JsonSettings, 배열 쉼표 포함).</summary>
+        /// <summary>주요 이력·최신 절도 피해 사연의 종류별 JSON 크기·개수.</summary>
         private static void MeasureDeedJsonBytes(SimContext sim, long[] bytes, int[] counts)
         {
             Array.Clear(bytes, 0, bytes.Length);
@@ -3855,6 +3869,14 @@ namespace ARPG.EditorTools
                         continue;
                     int kind = Mathf.Clamp((int)deed.Kind, 0, DeedKindCount - 1);
                     bytes[kind] += Encoding.UTF8.GetByteCount(JsonConvert.SerializeObject(deed, Formatting.None,
+                        JsonSettings.Default)) + 1;
+                    counts[kind]++;
+                }
+                NpcDeedEntry? victim = sim.Npcs[sim.NpcIds[i]].PersonalStories?.TheftVictim;
+                if (victim != null)
+                {
+                    int kind = (int)victim.Kind;
+                    bytes[kind] += Encoding.UTF8.GetByteCount(JsonConvert.SerializeObject(victim, Formatting.None,
                         JsonSettings.Default)) + 1;
                     counts[kind]++;
                 }
@@ -3898,7 +3920,7 @@ namespace ARPG.EditorTools
                           $"(n={a.BoastRepertoireBase[0]}) / 친구 {Pct(a.BoastRepertoireIn[1], a.BoastRepertoireBase[1]):F1}% (n={a.BoastRepertoireBase[1]})");
             for (int i = 0; i < a.BoastExamples.Count; i++)
                 sb.AppendLine($"    - {a.BoastExamples[i]}");
-            sb.AppendLine($"도난 사연(TheftVictim, P4b): 피해자 Deed 보유 {a.TheftVictimDeedNpcs}명 → 대화 1회분에 나옴 {a.TheftVictimTopicNpcs}명 " +
+            sb.AppendLine($"도난 사연(TheftVictim, P4b): 최신 피해 사연 보유 {a.TheftVictimDeedNpcs}명 → 대화 1회분에 나옴 {a.TheftVictimTopicNpcs}명 " +
                           $"(범인 이름 {a.TheftTopicNamed} / \"누가\" {a.TheftTopicAnonymous}, 문구 불일치 {a.TheftTopicLineFail}) | " +
                           $"도둑 Deed만 있는 NPC {a.ThiefOnlyNpcs}명 중 도난 토픽 {a.ThiefSilenceViolations}명(0이어야 함)");
             sb.AppendLine($"  레퍼토리 포함률(도난 토픽이 있는 NPC 중): 낯선 사이 {Pct(a.TheftRepertoireIn[0], a.TheftRepertoireBase[0]):F1}% " +
@@ -3939,69 +3961,23 @@ namespace ARPG.EditorTools
             }
             sb.AppendLine();
 
-            // D108: 파티 호감도 Deed는 같은 상대와 NPC마다 1건 (게임 코드와 독립 계산)
             int party = (int)NpcDeedKind.PartyAffinityChanged;
-            CountPartyAffinityDuplicates(sim, out int violatingNpcs, out int duplicatePairs, out int extraDeeds,
-                out int unresolvedPartners);
-            sb.AppendLine($"  파티 호감도 Deed(D108 상대별 1건): {sim.DeedCountStart[party]}→{countEnd[party]}건 " +
-                          $"(+{(bytesEnd[party] - sim.DeedBytesStart[party]) / 1024f:F1}KB) | 위반 NPC {violatingNpcs}명 · " +
-                          $"중복 쌍 {duplicatePairs} · 초과 {extraDeeds}건 (모두 0이어야 함) | 상대 미확인 {unresolvedPartners}건");
-        }
-
-        /// <summary>
-        /// D108 불변식 검사: 같은 NPC에 같은 상대의 PartyAffinityChanged가 2건 이상이면 위반. 상대 = 참가자 중 본인이 아닌 Id.
-        /// unresolvedPartners = 본인 또는 상대를 참가자에서 찾지 못한 Deed (합치기 대상에서 빠지는 형식).
-        /// </summary>
-        private static void CountPartyAffinityDuplicates(SimContext sim, out int violatingNpcs, out int duplicatePairs,
-            out int extraDeeds, out int unresolvedPartners)
-        {
-            violatingNpcs = 0;
-            duplicatePairs = 0;
-            extraDeeds = 0;
-            unresolvedPartners = 0;
-            Dictionary<int, int> countByPartner = new Dictionary<int, int>();
-            for (int i = 0; i < sim.NpcIds.Count; i++)
+            int sharedPairs = 0;
+            long hunts = 0, delves = 0, clears = 0, sharedBytes = 0;
+            foreach (var pair in sim.Affinity)
             {
-                int ownerId = sim.NpcIds[i];
-                List<NpcDeedEntry> deeds = sim.Npcs[ownerId].Deeds;
-                countByPartner.Clear();
-                bool violated = false;
-                for (int d = 0; d < deeds.Count; d++)
-                {
-                    NpcDeedEntry deed = deeds[d];
-                    if (deed == null || deed.Kind != NpcDeedKind.PartyAffinityChanged)
-                        continue;
-                    int partnerId = -1;
-                    bool hasOwner = false;
-                    for (int p = 0; p < deed.Participants.Count; p++)
-                    {
-                        if (deed.Participants[p] == ownerId)
-                            hasOwner = true;
-                        else if (partnerId < 0)
-                            partnerId = deed.Participants[p];
-                    }
-                    if (hasOwner == false || partnerId < 0)
-                    {
-                        unresolvedPartners++;
-                        continue;
-                    }
-                    countByPartner.TryGetValue(partnerId, out int count);
-                    countByPartner[partnerId] = count + 1;
-                    if (count >= 1)
-                    {
-                        violated = true;
-                        extraDeeds++;
-                        if (count == 1)
-                            duplicatePairs++;
-                    }
-                }
-
-                if (violated == true)
-                    violatingNpcs++;
+                NpcSharedActivityStats? stats = pair.Value.SharedActivities;
+                if (stats == null)
+                    continue;
+                sharedPairs++;
+                hunts += stats.HuntCount;
+                delves += stats.DungeonDelveCount;
+                clears += stats.DungeonClearCount;
+                sharedBytes += Encoding.UTF8.GetByteCount(JsonConvert.SerializeObject(stats, Formatting.None, JsonSettings.Default));
             }
+            sb.AppendLine($"  공동 활동 통계: {sharedPairs}쌍 · 사냥 {hunts} · 던전 원정 {delves} · 클리어 {clears} · " +
+                          $"{sharedBytes / 1024f:F1}KB | 구 파티 호감도 Deed {countEnd[party]}건 (0이어야 함)");
         }
-
-        // ================= 소문 (P2b) =================
 
         private static void AttachRumorProbes(SimContext sim, List<FieldSwap> swaps)
         {
@@ -5118,10 +5094,10 @@ namespace ARPG.EditorTools
                 }
                 Check(kinExact == true && kin.Contains(deadSpouseId) == false && kin.Contains(mentorId) == false,
                     $"독립 계산한 피해자 가족·친구 {kin.Count}명 모두 정확히 −10 (기존 관계 포함)");
-                NpcDeedEntry? victimDeed = caughtVictim.Deeds.Count > 0 ? caughtVictim.Deeds[caughtVictim.Deeds.Count - 1] : null;
+                NpcDeedEntry? victimDeed = caughtVictim.PersonalStories?.TheftVictim;
                 NpcDeedEntry? thiefDeed = thief.Deeds.Count > 0 ? thief.Deeds[thief.Deeds.Count - 1] : null;
                 string itemName = caughtItem.Table != null ? caughtItem.Table.Name : string.Empty;
-                Check(caughtVictim.Deeds.Count == victimDeeds + 1 && victimDeed != null &&
+                Check(caughtVictim.Deeds.Count == victimDeeds && victimDeed != null &&
                       victimDeed.Kind == NpcDeedKind.CaughtThiefInAct && victimDeed.Participants.Count == 1 &&
                       victimDeed.Participants[0] == thiefId && victimDeed.ItemId == caughtItem.Id &&
                       victimDeed.ItemDisplayName == itemName && Mathf.Approximately(victimDeed.When, caughtTime),
@@ -5203,8 +5179,8 @@ namespace ARPG.EditorTools
                 Check(ReadSimAffinity(sim, bagVictimId, thiefId) == bagAffinityBefore && bagKinSame == true &&
                       CountSimRelations(sim, bagVictimId) == bagVictimRelations && CountSimRelations(sim, thiefId) == thiefRelations,
                     "안 들킴: 호감도·유형 관계 변화 없음 (피해자·가족·친구)");
-                NpcDeedEntry? stolenDeed = bagVictim.Deeds.Count > 0 ? bagVictim.Deeds[bagVictim.Deeds.Count - 1] : null;
-                Check(thief.Deeds.Count == thiefDeedsBefore && bagVictim.Deeds.Count == bagVictimDeeds + 1 && stolenDeed != null &&
+                NpcDeedEntry? stolenDeed = bagVictim.PersonalStories?.TheftVictim;
+                Check(thief.Deeds.Count == thiefDeedsBefore && bagVictim.Deeds.Count == bagVictimDeeds && stolenDeed != null &&
                       stolenDeed.Kind == NpcDeedKind.ItemStolen && stolenDeed.Participants.Count == 0 &&
                       stolenDeed.ParticipantSnapshots.Count == 0 && stolenDeed.ItemId == bagItem.Id,
                     "안 들킴: 피해자 Deed ItemStolen(참가자 없음), 도둑 쪽 Deed 없음");
@@ -5270,7 +5246,7 @@ namespace ARPG.EditorTools
                     Check(hasOwnerRumor == false && CountDeeds(thief, NpcDeedKind.NotableItemAcquired) == notableBefore &&
                           CountTheftDeeds(thief) == theftDeedsBefore,
                         "훔친 장비로는 ItemOwner 소문·NotableItemAcquired가 생기지 않음, 도둑 쪽 절도 Deed 없음");
-                    NpcDeedEntry? equipDeed = equipVictim.Deeds.Count > 0 ? equipVictim.Deeds[equipVictim.Deeds.Count - 1] : null;
+                    NpcDeedEntry? equipDeed = equipVictim.PersonalStories?.TheftVictim;
                     Check(equipDeed != null && equipDeed.Kind == NpcDeedKind.ItemStolen && equipDeed.Participants.Count == 0,
                         "피해자 Deed ItemStolen");
 
@@ -5353,9 +5329,9 @@ namespace ARPG.EditorTools
                               CountDirectedRelation(sim, equipVictimId, equipVictimId, thiefId, NpcRelationType.GrudgeAgainst) == 1 &&
                               kinOk == true && HasTestClue(equipVictim, stolenEquipItem.ItemInstanceId, thiefId, t0 + 50f) == false,
                             $"늦은 발각(장착 소문): 받아들이는 순간 −40·원한·가족친구 −10({equipKin.Count}명)·단서 제거");
-                        NpcDeedEntry? victimLate = equipVictim.Deeds.Count > 0 ? equipVictim.Deeds[equipVictim.Deeds.Count - 1] : null;
+                        NpcDeedEntry? victimLate = equipVictim.PersonalStories?.TheftVictim;
                         NpcDeedEntry? thiefLate = thief.Deeds.Count > 0 ? thief.Deeds[thief.Deeds.Count - 1] : null;
-                        Check(equipVictim.Deeds.Count == equipVictimDeeds + 1 && victimLate != null &&
+                        Check(equipVictim.Deeds.Count == equipVictimDeeds && victimLate != null &&
                               victimLate.Kind == NpcDeedKind.TheftDiscovered && victimLate.Participants.Count == 1 &&
                               victimLate.Participants[0] == thiefId && victimLate.ItemId == stolenEquipItem.Id &&
                               thief.Deeds.Count == thiefDeedsNow + 1 && thiefLate != null && thiefLate.Kind == NpcDeedKind.TheftExposed &&
@@ -5694,11 +5670,9 @@ namespace ARPG.EditorTools
                     {
                         NpcSaveData discoveredVictim = stolenEquipItem != null ? equipVictim : bagVictim;
                         entityField?.SetValue(inspect, discoveredVictim.EntityId);
-                        for (int i = 0; i < discoveredVictim.Deeds.Count; i++)
-                        {
-                            if (discoveredVictim.Deeds[i].Kind == NpcDeedKind.TheftDiscovered)
-                                texts.Append((string)history!.Invoke(inspect, new object[] { discoveredVictim.Deeds[i] })).Append(" | ");
-                        }
+                        NpcDeedEntry? victimStory = discoveredVictim.PersonalStories?.TheftVictim;
+                        if (victimStory?.Kind == NpcDeedKind.TheftDiscovered)
+                            texts.Append((string)history!.Invoke(inspect, new object[] { victimStory })).Append(" | ");
                         entityField?.SetValue(inspect, thiefId);
                         for (int i = 0; i < thief.Deeds.Count; i++)
                         {
@@ -5921,14 +5895,14 @@ namespace ARPG.EditorTools
         /// <summary>호감도 내용: (Lo, Hi) 순으로 정렬한 "Lo:Hi=값" 목록.</summary>
         private static string DescribeAffinity(object? value)
         {
-            Dictionary<NpcPairKey, int>? affinity = value as Dictionary<NpcPairKey, int>;
+            Dictionary<NpcPairKey, NpcAffinityEntry>? affinity = value as Dictionary<NpcPairKey, NpcAffinityEntry>;
             if (affinity == null)
                 return "null";
-            List<KeyValuePair<NpcPairKey, int>> pairs = new List<KeyValuePair<NpcPairKey, int>>(affinity);
+            List<KeyValuePair<NpcPairKey, NpcAffinityEntry>> pairs = new List<KeyValuePair<NpcPairKey, NpcAffinityEntry>>(affinity);
             pairs.Sort((a, b) => a.Key.Lo != b.Key.Lo ? a.Key.Lo.CompareTo(b.Key.Lo) : a.Key.Hi.CompareTo(b.Key.Hi));
             StringBuilder sb = new StringBuilder(pairs.Count * 16);
             for (int i = 0; i < pairs.Count; i++)
-                sb.Append(pairs[i].Key.Lo).Append(':').Append(pairs[i].Key.Hi).Append('=').Append(pairs[i].Value).Append(',');
+                sb.Append(pairs[i].Key.Lo).Append(':').Append(pairs[i].Key.Hi).Append('=').Append(JsonConvert.SerializeObject(pairs[i].Value, JsonSettings.Default)).Append(',');
             return sb.ToString();
         }
 

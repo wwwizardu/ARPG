@@ -333,7 +333,7 @@ namespace ARPG.Npc
                 if (memberIds[i] != entityId && outcomes[i] == NpcHuntOutcome.Success)
                     AddDeedParticipant(entry, memberIds[i]);
             }
-            saveData.Deeds.Add(entry);
+            saveData.RecordDeed(entry);
             _narrative.InvalidateDialogues(entityId);
         }
 

@@ -90,7 +90,7 @@ namespace ARPG.Npc
             activity.Kind = NpcActivityKind.None;
             activity.PhaseEndGameTime = outcomeGameTime + recoveryHours;
 
-            saveData.RecordExpeditionWound(outcomeGameTime, expedition);
+            saveData.RecordExpeditionWound(outcomeGameTime, expedition, severe);
             if (severe == true)
                 AddSevereWoundDeed(entityId, outcomeGameTime);
             else

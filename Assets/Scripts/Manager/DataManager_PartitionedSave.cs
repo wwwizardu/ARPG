@@ -493,11 +493,16 @@ namespace ARPG.Data
                     scope |= SaveScope.Player | SaveScope.World | SaveScope.Dungeons;
                 // NPC 던전 완료(NPC_AMBITION D58)는 즉시 저장하지 않는다. 대신 슬롯 변경(Dungeons)과 NPC 보상(NpcState)이
                 // 한쪽만 저장되지 않도록, 둘 중 하나를 싣는 다음 저장이 나머지도 함께 싣는다.
+                // 공동 활동 통계는 Social에, 사망 동료 기억은 State에 있다. 부분 저장도 두 파티션을 함께 커밋한다.
+                // NpcSocial만 요청해도 아래에서 NpcState가 붙으므로 완료 결합 조건에 Social도 포함한다.
                 const SaveScope npcCompletionScope = SaveScope.Dungeons | SaveScope.NpcState;
+                const SaveScope npcActivityScope = SaveScope.NpcState | SaveScope.NpcSocial;
                 long npcCompletionRevision = AR.s.Dungeon.NpcCompletionRevision;
                 if (captureRuntimeManagers == true && AR.s.Dungeon.HasUnsavedNpcCompletion == true &&
-                    (scope & npcCompletionScope) != 0)
+                    (scope & (npcCompletionScope | npcActivityScope)) != 0)
                     scope |= npcCompletionScope;
+                if ((scope & npcActivityScope) != 0)
+                    scope |= npcActivityScope;
                 if (_activeSaveManifest == null || _needsFullSaveAfterMigration == true)
                     scope = SaveScope.All;
 

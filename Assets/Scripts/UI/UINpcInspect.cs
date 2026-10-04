@@ -164,6 +164,15 @@ namespace ARPG.UI
                 _displayedDeeds.Add(entry);
             }
 
+            NpcDeedEntry? theft = _saveData.PersonalStories?.TheftVictim;
+            if (theft != null)
+            {
+                int index = 0;
+                while (index < _displayedDeeds.Count && _displayedDeeds[index].When > theft.When)
+                    index++;
+                _displayedDeeds.Insert(index, theft);
+            }
+
             _historyList.Rebuild();
         }
 
@@ -411,6 +420,7 @@ namespace ARPG.UI
             row.AddToClassList("npc-stat-row");
             Text lab = new() { text = label };
             lab.AddToClassList("npc-stat-label");
+            lab.style.whiteSpace = WhiteSpace.Normal;
             Text val = new() { text = value };
             val.AddToClassList("npc-stat-value");
             row.Add(lab);
@@ -551,6 +561,7 @@ namespace ARPG.UI
             row.AddToClassList("npc-stat-row");
             Text lab = new() { text = label };
             lab.AddToClassList("npc-stat-label");
+            lab.style.whiteSpace = WhiteSpace.Normal;
             Text val = new() { text = value };
             val.AddToClassList("npc-stat-value");
             row.Add(lab);
@@ -583,7 +594,9 @@ namespace ARPG.UI
                 return;
 
             var relations = AR.s.Npc.GetRelations(_entityId);
-            if (relations.Count == 0 && saveData.DeceasedRelations.Count == 0)
+            List<NpcAffinityEntry> sharedActivities = AR.s.Npc.GetSharedActivities(_entityId);
+            if (relations.Count == 0 && saveData.DeceasedRelations.Count == 0 &&
+                sharedActivities.Count == 0 && saveData.SharedActivityMemories.Count == 0)
             {
                 AddRelationRow("관계 없음", string.Empty);
                 return;
@@ -605,6 +618,27 @@ namespace ARPG.UI
                 string label = $"고인 {RelationLabel(memory.RelationType, memory.WasFromEntity)} {memory.DeceasedNpcName}";
                 AddRelationRow(label, "사망");
             }
+            for (int i = 0; i < sharedActivities.Count; i++)
+            {
+                NpcAffinityEntry entry = sharedActivities[i];
+                int otherId = entry.NpcA == _entityId ? entry.NpcB : entry.NpcA;
+                AddRelationRow($"원정 동료 {ResolveNpcName(otherId)}", $"호감도 {entry.Affinity}");
+                AddSharedActivityRow(entry.SharedActivities!);
+            }
+            for (int i = 0; i < saveData.SharedActivityMemories.Count; i++)
+            {
+                NpcSharedActivityMemory memory = saveData.SharedActivityMemories[i];
+                bool deceased = AR.s.Npc.GetSaveData(memory.OtherNpcId)?.Condition == ARPG.Creature.CharacterConditions.Dead;
+                AddRelationRow($"{(deceased ? "고인 동료" : "동료")} {memory.OtherNpcName}",
+                    memory.LastAffinity.HasValue ? $"마지막 호감도 {memory.LastAffinity.Value}" : string.Empty);
+                AddSharedActivityRow(memory.Activities);
+            }
+        }
+
+        private void AddSharedActivityRow(NpcSharedActivityStats stats)
+        {
+            string when = NpcRumorPhrasing.AgoPhrase(stats.LastGameTime, AR.s.Time.CurrentGameTime);
+            AddRelationRow($"{stats.Describe()} · 최근 {when}", string.Empty);
         }
 
         private void AddRelationRow(string label, string value)
@@ -614,6 +648,7 @@ namespace ARPG.UI
             row.AddToClassList("npc-stat-row");
             Text lab = new() { text = label };
             lab.AddToClassList("npc-stat-label");
+            lab.style.whiteSpace = WhiteSpace.Normal;
             Text val = new() { text = value };
             val.AddToClassList("npc-stat-value");
             row.Add(lab);
@@ -695,6 +730,7 @@ namespace ARPG.UI
             row.AddToClassList("npc-stat-row");
             Text lab = new() { text = label };
             lab.AddToClassList("npc-stat-label");
+            lab.style.whiteSpace = WhiteSpace.Normal;
             Text val = new() { text = value };
             val.AddToClassList("npc-stat-value");
             row.Add(lab);

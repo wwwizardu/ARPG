@@ -264,10 +264,10 @@ namespace ARPG.Npc
 
         /// <summary>
         /// 파티 원정(Hunt·Delve) 결과의 호감도 변화 (§7.5). 생존한 파티원 쌍마다 성공이 하나라도 있으면 +4, 아니면 +1을 주고
-        /// 양쪽에 PartyAffinityChanged Deed를 남긴다(상대별 1건에 누적, D108). 게임(System_NpcSim)과 진단이 같은 시점에 이 메서드를 부른다 (D107).
+        /// 공동 활동 횟수와 마지막 시각은 NPC 쌍의 호감도 통계에 저장한다. 게임과 진단이 같은 진입점을 사용한다.
         /// </summary>
         public void ApplyPartyRelationshipOutcome(IReadOnlyList<int> memberIds, IReadOnlyList<NpcHuntOutcome> outcomes,
-            bool hasSuccess, float outcomeGameTime)
+            bool hasSuccess, float outcomeGameTime, NpcActivityKind activity, bool dungeonCompleted = false)
         {
             int affinityDelta = hasSuccess ? 4 : 1;
             for (int i = 0; i < memberIds.Count; i++)
@@ -280,8 +280,10 @@ namespace ARPG.Npc
                     if (outcomes[j] == NpcHuntOutcome.Dead)
                         continue;
                     ModifyAffinity(memberIds[i], memberIds[j], affinityDelta);
-                    AddPartyAffinityDeed(memberIds[i], memberIds[j], affinityDelta, outcomeGameTime);
-                    AddPartyAffinityDeed(memberIds[j], memberIds[i], affinityDelta, outcomeGameTime);
+                    bool clearedTogether = dungeonCompleted == true && outcomes[i] == NpcHuntOutcome.Success &&
+                                           outcomes[j] == NpcHuntOutcome.Success;
+                    RecordSharedActivity(memberIds[i], memberIds[j], activity, affinityDelta, outcomeGameTime,
+                        clearedTogether);
                 }
             }
         }

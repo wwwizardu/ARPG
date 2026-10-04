@@ -280,10 +280,10 @@ ChronicleEvent(Type=Conquer, Year=412, Subject=S17, Object=S23, Kingdom=K3)
 - 현재 코드는 Gossip만 관계 링크를 쓰고, HistoryRumor/SettlementRumor는 전 세계에서 `Random.Range`로 **무게이트 픽** → distant 레인의 자격 게이팅(소문 전파)이 미설계 부분([WORLD_EVENT §8 #4](WORLD_EVENT_DESIGN.md)).
 
 **해결 ③ NPC 전기 로그 (biography)** — 지식 거리의 *입력*. NPC가 어디 살았고 무엇을 했는지를 **NPC 소유로 기록하되 내용은 EventId·SettlementId 참조(색인)** — 사실은 연대기에.
-- **데이터 위치**: `NpcSaveData`에 (a) 거주 이력, (b) 겪은 일 로그. 현재는 단일 `VillageId`만 있음 — [RELATION_HISTORY §4.2](../npc/NPC_RELATION_HISTORY_DESIGN.md) `Sentiments`의 sibling 채널. **상세 스키마·이벤트 카탈로그·보존 정책의 정본은 [NPC_SIMULATION §5.1](../npc/NPC_SIMULATION_DESIGN.md)** — 겪은 일은 연대기 EventId 참조뿐 아니라 **NPC 레벨 열린 이벤트**(원정 결과·전우사망·구출·배신·발견 등, 원정 리졸버가 참가자에 1회 기록)를 포함한다.
+- **데이터 위치**: 거주 이력은 후속이며 현재 소속은 `VillageId`다. 겪은 일은 현재 `NpcSaveData`의 중요 Deeds·사망 관계 기억·최신 개인 사연과 NPC 쌍의 공동 활동 통계로 저장한다(2026-10-04). 기록 개념은 [NPC_SIMULATION §5.1](../npc/NPC_SIMULATION_DESIGN.md), 현행 필드·보존·이관은 [NPC_AMBITION §12.1](../npc/NPC_AMBITION_DESIGN.md)이 정본이다. 구출·배신·월드이벤트 등 후속 종류는 각 기능 설계에서 확정한다. [src: Assets/Scripts/Npc/NpcSaveData.cs, Assets/Scripts/Npc/NpcSaveData_PersonalStories.cs, Assets/Scripts/Manager/NpcManager_SharedActivities.cs]
 - **A→B 이동 NPC가 A의 사건을 말하는 근거**: 로그의 A-거주 링크가 그 사건을 "가까움"으로 올린다 (**같은 사건도 화자에 따라 거리가 다름**). 두 A→B 이주민은 A 사건 E의 **동일 정본**을 참조하므로 서로 안 어긋난다.
-- **쓰는 쪽(대부분 Phase E)**: 이동→거주 이력 append, 원정→deed 로그 append([NPC_ACTIVITY §8.3](../npc/NPC_ACTIVITY_DESIGN.md)). 씨앗: backfill이 출생 정착지·관계 `OriginEventId`를 심음(구현됨). MVP는 씨앗만으로 동작.
-- 죽은 NPC의 **기억(색인)은 사라지고 세계 사실(연대기)은 남는다**.
+- **쓰는 쪽**: 현재 원정·구매·절도·사망 결과가 중요 이력/요약/통계와 최신 사연을 갱신한다. 대화는 최신 슬롯을 직접 읽는다. backfill의 관계 `OriginEventId`는 초기 씨앗이며, 이동→거주 이력 append는 후속이다. [src: Assets/Scripts/Common/System/System_NpcSim.cs, Assets/Scripts/Manager/NpcManager_Trade.cs, Assets/Scripts/Manager/NpcManager_Theft.cs, Assets/Scripts/Manager/NpcManager.cs, Assets/Scripts/Npc/Narrative/DialogueTopicSelector.cs]
+- 사망 NPC의 활성 관계·호감도는 제거하지만 `NpcSaveData`·중요 이력은 현재 보존한다. 관계자에게 사망 관계 기억과 과거 공동 활동 기억도 남긴다. 역사 신원 분리·사망 상태 정리는 [NPC_SIMULATION §9-13](../npc/NPC_SIMULATION_DESIGN.md)의 후속 설계다. [src: Assets/Scripts/Manager/NpcManager.cs, Assets/Scripts/Manager/NpcManager_SharedActivities.cs]
 
 **착수 순서**: 스파이크(§7)에서 같은 사건을 NPC 2~3명에게 물어 **사실 충돌 빈도부터 측정** → 심하면 정본화 층 건설. 과설계 회피. 미결정은 §8(#10~) 참조.
 
@@ -336,9 +336,11 @@ ChronicleEvent(Type=Conquer, Year=412, Subject=S17, Object=S23, Kingdom=K3)
 ### 6.3 비용 · 캐시 · 폴백 (제공자 무관)
 
 - **프롬프트 캐싱**: Groq엔 Anthropic식 프롬프트 캐싱이 없음 → **로컬 결과 캐시**에 의존(아래).
-- **온디맨드 + 결과 캐시**: 한 번 생성한 NPC 대사/이름은 세이브에 저장해 재호출 없이 재사용 (H3 신선도 vs 절감 균형은 §8 #2).
+- **온디맨드 + 결과 캐시 (목표 설계)**: 한 번 생성한 NPC 대사/이름을 세이브에 저장해 재호출 없이 재사용한다는 장기 목표다. 생성 텍스트의 세이브 영속화는 현재 NPC 대화 런타임에 구현되지 않았다(H3 신선도 vs 절감 균형은 §8 #2).
 - **오프라인/실패 대비**: `IsReady=false`거나 호출 실패 시 §4.6 규칙 기반 폴백으로 게임 진행 보장 — 기존 `IsReady` 그레이스풀 패턴 계승 (LLM은 *향상*이지 *의존*이 아니게).
-- **결정론 주의**: LLM 출력은 비결정론 → 세이브에 **결과를 저장**해 재현(같은 시드라도 생성 텍스트는 저장본이 정본).
+- **결정론 주의 (목표 설계)**: LLM 출력은 비결정론이므로 향후 세이브에 결과를 저장하면 저장본을 정본으로 삼는다. 현재는 세이브를 다시 로드한 뒤 동일 문장이 재생성된다고 보장하지 않는다.
+
+**현재 구현 (2026-10-04)**: `NpcNarrativeRuntime`의 대사 캐시는 `npcId → (tier, topicType, variant) → text`이며, 소망 캐시와 최근 화제 상태도 메모리에만 존재한다. `Reset()`이 이 상태를 비운다. 사연 원본·종류별 최신 요약/참조·공동 활동 통계와 NPC 이름 등 영속 자료는 `NpcSaveData`·`NpcAffinityEntry`에 저장하지만, 생성된 대사·소망 텍스트를 함께 저장하는 것은 아니다. 최신 사건/통계 변화는 NPC 단위 대화 캐시 무효화와 내용 기반 variant에 반영한다. 상세는 [NARRATIVE_DIALOGUE_VARIETY_DESIGN §5](NARRATIVE_DIALOGUE_VARIETY_DESIGN.md)와 [NPC_AMBITION_DESIGN §12.1](../npc/NPC_AMBITION_DESIGN.md)을 따른다. [src: Assets/Scripts/Npc/Narrative/NpcNarrativeRuntime.cs, Assets/Scripts/Npc/NpcSaveData.cs, Assets/Scripts/Npc/NpcSaveData_PersonalStories.cs, Assets/Scripts/Manager/NpcManager_SharedActivities.cs, Assets/Scripts/Npc/Narrative/DialogueTopicSelector.cs]
 
 ---
 

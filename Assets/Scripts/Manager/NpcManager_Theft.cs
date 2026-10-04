@@ -609,7 +609,7 @@ namespace ARPG.Npc
                 ItemDisplayName = itemName ?? string.Empty,
             };
             AddDeedParticipant(entry, otherId);
-            saveData.Deeds.Add(entry);
+            saveData.RecordDeed(entry);
             _narrative.InvalidateDialogues(entityId);
         }
 

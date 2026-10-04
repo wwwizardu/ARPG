@@ -12,7 +12,7 @@ namespace ARPG.Npc.Narrative
     /// 상태·백본 → 적용 가능한 대화 토픽(니즈·소문·잡담·사연) 산출 + 선택.
     /// 선택은 관계별 레퍼토리 + 성격 편향 + 셔플백(중복 회피) + 실제 긴급 니즈 새치기다.
     /// 니즈는 "표현만"(충족/보상 루프 없음). 소문은 C-method(진짜 사실 → 소문 말투).
-    /// 사연(Personal)은 개인 전기 Deeds·사별 기억 접지 — 난수 없이 최신순(결정론).
+    /// 사연(Personal)은 종류별 최신 기록 접지 — 난수 없이 최신순(결정론).
     /// 설계: NARRATIVE_ENGINE_SPIKE §4.5 + NARRATIVE_DIALOGUE_VARIETY §5 Phase 1
     /// </summary>
     public static class DialogueTopicSelector
@@ -90,6 +90,48 @@ namespace ARPG.Npc.Narrative
         {
             NpcSaveData? save = AR.s.Npc?.GetSaveData(npcId);
             AddAmbitionRumors(into, npcId, save, true);
+        }
+
+        /// <summary>대화·진단 공용: 종류별 최신 개인 사연만 읽어 후보를 만든다.</summary>
+        public static void CollectPersonalTopics(List<DialogueTopic> topics, int npcId, NpcSaveData? save,
+            NpcManager? manager, float now)
+        {
+            if (save == null)
+                return;
+            List<(float When, int Order, DialogueTopic Topic)> candidates = new();
+            if (save.WoundCount > 0 && save.LastWoundGameTime >= 0f)
+                candidates.Add((save.LastWoundGameTime, 0, BuildRecentWoundTopic(save)));
+            if (manager != null && manager.TryGetLatestSharedActivity(npcId, out int otherId,
+                out NpcSharedActivityStats? stats, out NpcSharedActivityMemory? memory) == true)
+                candidates.Add((stats!.LastGameTime, 1, BuildPartyBondTopic(manager, npcId, otherId, stats, memory)));
+            NpcDeedEntry? theft = save.PersonalStories?.TheftVictim;
+            if (theft != null)
+                candidates.Add((theft.When, 2, BuildTheftVictimTopic(npcId, theft)));
+            NpcDeedEntry? item = save.GetLatestPersonalDeed(NpcDeedKind.NotableItemAcquired);
+            NpcDeedEntry? clear = save.GetLatestPersonalDeed(NpcDeedKind.DungeonCleared);
+            NpcDeedEntry? boast = clear != null && (item == null || clear.When >= item.When) ? clear : item;
+            if (boast != null)
+                candidates.Add((boast.When, 3, BuildBoastTopic(npcId, boast, now)));
+            candidates.Sort((a, b) => a.When != b.When ? b.When.CompareTo(a.When) : a.Order.CompareTo(b.Order));
+            for (int i = 0; i < candidates.Count && i < 2; i++)
+                topics.Add(candidates[i].Topic);
+
+            // 사별은 기존 공개 단계와 별도 자리 정책을 유지한다.
+            DeceasedRelationMemory? loss = save.GetLatestLoss();
+            if (loss != null)
+            {
+                string label = NpcDialogueContextBuilder.RelationLabel(loss.RelationType, loss.WasFromEntity);
+                DialogueTopic topic = new()
+                {
+                    Type = DialogueTopicType.LostCompanion,
+                    Category = DialogueTopicCategory.Personal,
+                    MinTier = AffinityTier.Acquaintance,
+                    BaseLine = $"{loss.DeceasedNpcName}… 이젠 없는 사람 이야기요.",
+                    CacheVariant = loss.DeceasedNpcEntityId,
+                };
+                topic.Facts.Add($"{label}인 {loss.DeceasedNpcName}이(가) 게임 시간 {loss.DeathGameTime:F1}에 세상을 떠났다 (본인이 겪은 상실).");
+                topics.Add(topic);
+            }
         }
 
         // ── 선택: 레퍼토리 캡(NPC별 1~3) + 그 안에서 셔플백(긴급 새치기) ──
@@ -860,139 +902,70 @@ namespace ARPG.Npc.Narrative
             }
         }
 
-        // ── 사연 (Personal — 개인 전기 Deeds·사별 기억. 난수 없이 최신순 = 결정론) ──
-        // Fell은 사망자 본인 전기에만 남으므로 화자(생존자)의 상실은 DeceasedRelations가 접지.
-        // Boast = NotableItemAcquired(업그레이드 장착, P2c 배선) 또는 DungeonCleared(NPC 던전 완료) 중 최신 1건.
-        // 원정 부상(RecentHunt)은 Deed가 아니라 누적 부상 요약(WoundCount·LastWoundGameTime·LastWoundActivity, D91)으로 말한다.
-        // CacheVariant에 사건 식별자(사건 종류·시각 해시 / 사망자 id)를 실어 새 사건이면 캐시가 갈린다.
-        // Deeds 인덱스는 식별자로 쓰지 않는다 — D91 마이그레이션이 구 Wounded Deed를 지워 번호가 밀린다.
-        private static void AddPersonal(List<DialogueTopic> topics, int npcId, NpcSaveData? save)
+        // 과거 사건·관계 목록은 대화 때 순회하지 않는다. 최신 인덱스는 로드 때 재구성한다.
+        private static void AddPersonal(List<DialogueTopic> topics, int npcId, NpcSaveData? save) =>
+            CollectPersonalTopics(topics, npcId, save, AR.s.Npc, AR.s.Time?.CurrentGameTime ?? save?.LastSimGameTime ?? 0f);
+
+        private static DialogueTopic BuildBoastTopic(int npcId, NpcDeedEntry deed, float now)
         {
-            if (save == null)
-                return;
-
-            // Deeds 최신순 스캔 — 토픽 타입당 최신 1건, 합계 최대 2건.
-            // 마지막 원정 부상은 Deed 목록 밖에 있으므로 그 시각을 Deed 시각과 비교해 최신순 자리에 끼운다.
-            bool woundPending = save.WoundCount > 0 && save.LastWoundGameTime >= 0f;
-            bool hasBond = false;
-            bool hasBoast = false;
-            bool hasTheft = false;
-            int added = 0;
-            for (int i = save.Deeds.Count - 1; i >= 0 && added < 2; i--)
+            DialogueTopic topic = new()
             {
-                NpcDeedEntry deed = save.Deeds[i];
-                if (deed == null)
-                    continue;
-
-                if (woundPending == true && save.LastWoundGameTime >= deed.When)
-                {
-                    woundPending = false;
-                    topics.Add(BuildRecentWoundTopic(save));
-                    added++;
-                    if (added >= 2)
-                        break;
-                }
-
-                // 부상 Deed(중상·공격받은 부상·구 Wounded)는 부상 토픽이 요약으로 말한다 (공격받은 부상 토픽은 P3에서).
-                if (deed.Kind == NpcDeedKind.SevereWound || deed.Kind == NpcDeedKind.AttackedWound ||
-                    deed.Kind == NpcDeedKind.Wounded)
-                    continue;
-
-                // 도둑 쪽 절도 Deed(현장 적발·늦은 발각, D106): 도둑은 자기 절도를 말하지 않는다.
-                if (deed.Kind == NpcDeedKind.CaughtStealing || deed.Kind == NpcDeedKind.TheftExposed)
-                    continue;
-
-                if (IsTheftVictimDeed(deed.Kind) == true)
-                {
-                    // 피해자 도난 사연 (P4b, D106): 안 들킨 도난·현장 적발·늦은 발각 중 가장 최근 1건
-                    if (hasTheft == false)
-                    {
-                        hasTheft = true;
-                        added++;
-                        topics.Add(BuildTheftVictimTopic(npcId, deed));
-                    }
-                }
-                else if (deed.Kind == NpcDeedKind.PartyAffinityChanged && hasBond == false)
-                {
-                    hasBond = true;
-                    added++;
-                    string other = OtherParticipantName(deed, npcId);
-                    bool closer = deed.AffinityDelta >= 0;
-                    DialogueTopic t = new()
-                    {
-                        Type = DialogueTopicType.PartyBond,
-                        Category = DialogueTopicCategory.Personal,
-                        MinTier = AffinityTier.Acquaintance,
-                        BaseLine = closer ? $"{other}와는 요즘 손발이 잘 맞소." : $"{other}와는 요즘 영 서먹하오.",
-                        CacheVariant = DeedCacheVariant(deed),
-                    };
-                    t.Facts.Add($"게임 시간 {deed.When:F1}, {other}와 함께 사냥했고 사이가 {(closer ? "가까워졌다" : "서먹해졌다")} ({KnowledgeHint(deed.HowKnown)}).");
-                    topics.Add(t);
-                }
-                else if (deed.Kind == NpcDeedKind.NotableItemAcquired && hasBoast == false)
-                {
-                    hasBoast = true;
-                    added++;
-                    string item = string.IsNullOrEmpty(deed.ItemDisplayName) ? "귀한 물건" : deed.ItemDisplayName;
-                    DialogueTopic t = new()
-                    {
-                        Type = DialogueTopicType.Boast,
-                        Category = DialogueTopicCategory.Personal,
-                        MinTier = AffinityTier.Stranger,
-                        BaseLine = $"{NpcRumorPhrasing.Josa(item, "을", "를")} 손에 넣었소. 보는 눈이 있다면 알아보겠지.",
-                        CacheVariant = DeedCacheVariant(deed),
-                    };
-                    t.Facts.Add($"게임 시간 {deed.When:F1}에 {item}을(를) 손에 넣었다 ({KnowledgeHint(deed.HowKnown)}).");
-                    topics.Add(t);
-                }
-                else if (deed.Kind == NpcDeedKind.DungeonCleared && hasBoast == false)
-                {
-                    // 자랑 (P2c, D61): NPC 던전 완료. NotableItemAcquired와 같은 Boast 타입이라 둘 중 최신 1건만 말한다.
-                    hasBoast = true;
-                    added++;
-                    string companions = OtherParticipantNames(deed, npcId);
-                    float now = AR.s.Time != null ? AR.s.Time.CurrentGameTime : deed.When;
-                    string ago = NpcRumorPhrasing.AgoPhrase(deed.When, now);
-                    DialogueTopic t = new()
-                    {
-                        Type = DialogueTopicType.Boast,
-                        Category = DialogueTopicCategory.Personal,
-                        MinTier = AffinityTier.Stranger,
-                        BaseLine = string.IsNullOrEmpty(companions)
-                            ? $"{ago} 이 마을 던전 하나를 내 손으로 끝장냈소. 그 자리엔 벌써 새 던전이 들어섰지."
-                            : $"{ago} {NpcRumorPhrasing.Josa(companions, "과", "와")} 함께 이 마을 던전 하나를 끝장냈소. 그 자리엔 벌써 새 던전이 들어섰지.",
-                        CacheVariant = DeedCacheVariant(deed),
-                    };
-                    t.Facts.Add($"게임 시간 {deed.When:F1}에 소속 마을의 던전 하나를 끝까지 공략했다" +
-                                (string.IsNullOrEmpty(companions) ? " (혼자)" : $" ({companions}와(과) 함께)") +
-                                $". 끝낸 던전은 사라지고 그 자리에 새 던전이 생겼다 ({KnowledgeHint(deed.HowKnown)}).");
-                    topics.Add(t);
-                }
-            }
-
-            // Deed가 다 떨어졌는데 부상 토픽이 아직이면 (부상이 가장 오래된 사건이거나 Deed가 없음) 마지막 자리에 넣는다.
-            if (woundPending == true && added < 2)
+                Type = DialogueTopicType.Boast,
+                Category = DialogueTopicCategory.Personal,
+                MinTier = AffinityTier.Stranger,
+                CacheVariant = DeedCacheVariant(deed),
+            };
+            if (deed.Kind == NpcDeedKind.NotableItemAcquired)
             {
-                topics.Add(BuildRecentWoundTopic(save));
-                added++;
+                string item = string.IsNullOrEmpty(deed.ItemDisplayName) ? "귀한 물건" : deed.ItemDisplayName;
+                topic.BaseLine = $"{NpcRumorPhrasing.Josa(item, "을", "를")} 손에 넣었소. 보는 눈이 있다면 알아보겠지.";
+                topic.Facts.Add($"게임 시간 {deed.When:F1}에 {item}을(를) 손에 넣었다 ({KnowledgeHint(deed.HowKnown)}).");
             }
-
-            // 사별 기억 → LostCompanion (최신 1건, 사적인 이야기라 Acquaintance+)
-            if (save.DeceasedRelations != null && save.DeceasedRelations.Count > 0)
+            else
             {
-                DeceasedRelationMemory memory = save.DeceasedRelations[save.DeceasedRelations.Count - 1];
-                string label = NpcDialogueContextBuilder.RelationLabel(memory.RelationType, memory.WasFromEntity);
-                DialogueTopic t = new()
-                {
-                    Type = DialogueTopicType.LostCompanion,
-                    Category = DialogueTopicCategory.Personal,
-                    MinTier = AffinityTier.Acquaintance,
-                    BaseLine = $"{memory.DeceasedNpcName}… 이젠 없는 사람 이야기요.",
-                    CacheVariant = memory.DeceasedNpcEntityId,
-                };
-                t.Facts.Add($"{label}인 {memory.DeceasedNpcName}이(가) 게임 시간 {memory.DeathGameTime:F1}에 세상을 떠났다 (본인이 겪은 상실).");
-                topics.Add(t);
+                string companions = OtherParticipantNames(deed, npcId);
+                string ago = NpcRumorPhrasing.AgoPhrase(deed.When, now);
+                topic.BaseLine = string.IsNullOrEmpty(companions)
+                    ? $"{ago} 이 마을 던전 하나를 내 손으로 끝장냈소. 그 자리엔 벌써 새 던전이 들어섰지."
+                    : $"{ago} {NpcRumorPhrasing.Josa(companions, "과", "와")} 함께 이 마을 던전 하나를 끝장냈소. 그 자리엔 벌써 새 던전이 들어섰지.";
+                topic.Facts.Add($"게임 시간 {deed.When:F1}에 소속 마을의 던전 하나를 끝까지 공략했다" +
+                    (string.IsNullOrEmpty(companions) ? " (혼자)" : $" ({companions}와(과) 함께)") +
+                    $". 끝낸 던전은 사라지고 그 자리에 새 던전이 생겼다 ({KnowledgeHint(deed.HowKnown)}).");
             }
+            return topic;
+        }
+
+        private static DialogueTopic BuildPartyBondTopic(NpcManager manager, int npcId, int otherId, NpcSharedActivityStats stats,
+            NpcSharedActivityMemory? memory)
+        {
+            string other = memory != null ? memory.OtherNpcName : manager.GetDisplayName(otherId);
+            string otherWith = NpcRumorPhrasing.Josa(other, "과", "와");
+            int? affinity = memory != null ? memory.LastAffinity : manager.GetAffinity(npcId, otherId);
+            int variant = StableHash(otherId, (int)(stats.LastGameTime * 100f));
+            variant = StableHash(variant, stats.HuntCount);
+            variant = StableHash(variant, stats.DungeonDelveCount);
+            variant = StableHash(variant, stats.DungeonClearCount);
+            variant = StableHash(variant, stats.AffinityGain);
+            variant = StableHash(variant, affinity ?? 0);
+            variant = StableHash(variant, memory != null ? 1 : 0);
+            DialogueTopic topic = new()
+            {
+                Type = DialogueTopicType.PartyBond,
+                Category = DialogueTopicCategory.Personal,
+                MinTier = AffinityTier.Acquaintance,
+                BaseLine = memory != null ? $"{otherWith} 함께 원정하던 때가 기억나오." :
+                    $"{otherWith} 함께 다닌 원정이 있소. {stats.Describe()}.",
+                CacheVariant = variant,
+            };
+            topic.Facts.Add($"{otherWith} 함께한 활동: {stats.Describe()}. 마지막 공동 활동은 게임 시간 {stats.LastGameTime:F1}. " +
+                $"원정으로 쌓인 호감도 변화는 {stats.AffinityGain}. 이 값은 현재 관계 점수와 구분한다.");
+            if (affinity.HasValue == true)
+                topic.Facts.Add(memory != null ? $"마지막 관계 호감도는 {affinity.Value}." : $"현재 관계 호감도는 {affinity.Value}.");
+            if (stats.HasUncountedHistory == true)
+                topic.Facts.Add("기록 이전에도 함께 원정한 경험이 있으나 그 횟수와 사냥·던전 구분은 알 수 없다. 표시 횟수는 기록된 활동만 센다.");
+            if (memory != null)
+                topic.Facts.Add("과거 동료와의 회고이며 현재 함께 활동 중이라고 말하지 않는다.");
+            return topic;
         }
 
         /// <summary>
@@ -1001,7 +974,7 @@ namespace ARPG.Npc.Narrative
         private static DialogueTopic BuildRecentWoundTopic(NpcSaveData save)
         {
             bool delve = save.LastWoundActivity == NpcActivityKind.DungeonDelve;
-            bool severe = IsLastWoundSevere(save);
+            bool severe = save.PersonalStories?.LastWoundSevere == true;
             string where = delve ? "던전 원정" : "사냥";
             DialogueTopic t = new()
             {
@@ -1019,11 +992,6 @@ namespace ARPG.Npc.Narrative
                 : $"게임 시간 {save.LastWoundGameTime:F1}에 {where}을 나갔다가 부상을 입었다 ({KnowledgeHint(NpcKnowledgeLevel.Did)}).");
             t.Facts.Add($"지금까지 원정에서 다친 횟수: {save.WoundCount}회.");
             return t;
-        }
-
-        private static bool IsTheftVictimDeed(NpcDeedKind kind)
-        {
-            return kind == NpcDeedKind.ItemStolen || kind == NpcDeedKind.CaughtThiefInAct || kind == NpcDeedKind.TheftDiscovered;
         }
 
         /// <summary>
@@ -1064,22 +1032,6 @@ namespace ARPG.Npc.Narrative
             };
             t.Facts.Add($"{fact} ({KnowledgeHint(deed.HowKnown)}).");
             return t;
-        }
-
-        // 마지막 원정 부상이 중상인가 — 같은 시각에 기록된 SevereWound Deed가 있으면 중상 (D91: 중상만 Deed를 남긴다).
-        private static bool IsLastWoundSevere(NpcSaveData save)
-        {
-            for (int i = save.Deeds.Count - 1; i >= 0; i--)
-            {
-                NpcDeedEntry deed = save.Deeds[i];
-                if (deed == null)
-                    continue;
-                if (deed.When < save.LastWoundGameTime)
-                    return false;
-                if (deed.Kind == NpcDeedKind.SevereWound && deed.When == save.LastWoundGameTime)
-                    return true;
-            }
-            return false;
         }
 
         // Deed 토픽의 대화 캐시 구분자 — 목록 인덱스 대신 사건 내용(종류·시각·아이템·호감 변화·참가자)으로 만든다.
