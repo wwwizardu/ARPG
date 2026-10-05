@@ -4,9 +4,10 @@
 name: skill-aim
 description: 플레이어 커서 조준의 추적·커밋 정책, 방향 화살표 View, 스킬 사용 중 이동 감속의 현행 런타임 구조.
 type: topic
-last_updated: 2026-08-28
+last_updated: 2026-10-05
 sources:
   - Docs/combat/POE2_CURSOR_TRACKING_PLAN.md
+  - Docs/combat/WEAPON_SKILL_RANGE_DESIGN.md
   - Assets/Scripts/Common/System/System_Input.cs
   - Assets/Scripts/Common/System/System_SkillAim.cs
   - Assets/Scripts/Common/System/System_Skill.cs
@@ -39,6 +40,10 @@ sources:
 정책은 `SkillTable`의 명시값이 우선하며, 빈 값은 타깃 타입·스킬 타입·효과 타입으로 안전한 기본값을 정한다. 회전은 `AimTurnSpeedDegPerSec × fixedDeltaTime`으로 제한되고, 0/360도 경계에서는 최단 각도를 사용한다. [src: Assets/Scripts/Skill/SkillUsePolicyResolver.cs, Assets/Scripts/Skill/Aim/SkillAimResolver.cs, Assets/Scripts/Common/System/System_SkillAim.cs]
 
 커밋은 투사체 생성, 범위 효과 생성, 단일/다단 타격 판정 바로 전에 일어난다. 위치형 스킬은 커밋된 방향과 현재 커서 거리로 사거리 제한 위치를 다시 계산하며, 투사체는 커밋된 방향을 직접 소비한다. Jump는 Start 단계에서 조준을 추적하고 Process 진입을 `LaunchCommit`으로 삼아 그때 이동을 시작한다. [src: Assets/Scripts/Common/System/System_Skill.cs, Assets/Scripts/Common/System/System_Jump.cs]
+
+## 후속 범위 설계
+
+무기 도달거리와 범위 증가 옵션은 2026-10-05 **설계 확정·미구현**이다. 거리·반경은 `스킬 기본값 × 무기 배율 × (1 + 범위 증가 합계 / 100)`로 계산하고 부채꼴 각도는 유지한다. 구현 시 위치 커밋의 사용 거리 제한과 실제 타격 형상에 각 용도에 맞는 계산을 연결해야 하며, 현재 조준·커밋 코드에 이미 적용된 규칙으로 읽지 않는다. 상세 정본은 `WEAPON_SKILL_RANGE_DESIGN.md`, 요약은 [combat.md](combat.md)에 있다. [src: Docs/combat/WEAPON_SKILL_RANGE_DESIGN.md §확정 규칙·§현행 코드와 구현 경계]
 
 ## 이동 감속과 View
 

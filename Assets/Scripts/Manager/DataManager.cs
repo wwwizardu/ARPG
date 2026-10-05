@@ -113,6 +113,9 @@ namespace ARPG.Data
         private async Task<bool> LoadCoreAsync()
         {
             string savePath = Path.Combine(Application.persistentDataPath, "Saved");
+#if UNITY_EDITOR
+            if (string.IsNullOrEmpty(DiagnosticSavePath) == false) savePath = DiagnosticSavePath;
+#endif
             string worldDataPath = Path.Combine(savePath, "WorldData.json");
             string playerDataPath = Path.Combine(savePath, "PlayerData.json");
             string worldDataBackupPath = Path.Combine(savePath, "WorldData.json.backup");

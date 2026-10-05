@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using ARPG.Data;
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
@@ -91,6 +92,7 @@ namespace ARPG.Npc
             if (CanRequestCompanion(npcId, out message) == false)
                 return false;
 
+            AR.s.Data.MarkWorldSaveDirty(WorldSaveGroup.Companion);
             AR.s.Data.NpcCompanion.ReservedNpcId = npcId;
             AR.s.Data.NpcCompanion.IsInDungeon = false;
             message = $"{GetDisplayName(npcId)}: 좋아요, 다음에 들어가는 던전에 함께 가죠.";
@@ -130,12 +132,14 @@ namespace ARPG.Npc
             if (TryCancelUnavailableCompanion(state.ReservedNpcId) == true)
                 return false;
 
+            AR.s.Data.MarkWorldSaveDirty(WorldSaveGroup.Companion);
             state.IsInDungeon = true;
             return true;
         }
 
         public void RevertCompanionDungeonEntry()
         {
+            AR.s.Data.MarkWorldSaveDirty(WorldSaveGroup.Companion);
             AR.s.Data.NpcCompanion.IsInDungeon = false;
         }
 
@@ -152,7 +156,7 @@ namespace ARPG.Npc
                     return;
 
                 int npcId = state.ReservedNpcId;
-                MarkSaveDirty(npcId);
+                MarkSaveDirty(npcId, NpcSaveGroup.Identity | NpcSaveGroup.Location | NpcSaveGroup.Activity);
                 if (TryCancelUnavailableCompanion(npcId) == true)
                     return;
 
@@ -198,7 +202,7 @@ namespace ARPG.Npc
                     saveData.IsSpawning = false;
                 }
 
-                MarkSaveDirty(npcId); // await 이후 다시 표시한다.
+                MarkSaveDirty(npcId, NpcSaveGroup.Identity | NpcSaveGroup.Location | NpcSaveGroup.Activity); // await 이후 다시 표시한다.
                 if (createdId < 0 || created == null)
                 {
                     Debug.LogWarning($"[NpcCompanion] 동행 NPC 생성 실패 - EntityId: {npcId}");
@@ -262,6 +266,7 @@ namespace ARPG.Npc
             if (npcId < 0)
                 return;
 
+            AR.s.Data.MarkWorldSaveDirty(WorldSaveGroup.Companion);
             AR.s.Data.NpcCompanion.ReservedNpcId = npcId;
             AR.s.Data.NpcCompanion.IsInDungeon = true;
         }
@@ -301,7 +306,7 @@ namespace ARPG.Npc
         {
             if (npcId < 0)
                 return;
-            MarkSaveDirty(npcId);
+            MarkSaveDirty(npcId, NpcSaveGroup.Location | NpcSaveGroup.Activity | NpcSaveGroup.Condition);
 
             NpcSaveData? saveData = GetSaveData(npcId);
             if (saveData == null)
@@ -382,6 +387,7 @@ namespace ARPG.Npc
             NpcCompanionState state = AR.s.Data.NpcCompanion;
             if (state.ReservedNpcId < 0)
             {
+                AR.s.Data.MarkWorldSaveDirty(WorldSaveGroup.Companion);
                 state.IsInDungeon = false;
                 return;
             }
@@ -396,7 +402,10 @@ namespace ARPG.Npc
 
             if (state.IsInDungeon == true && AR.s.Data.Player != null &&
                 AR.s.Data.Player.CurrentMapKind != MapKind.Dungeon)
+            {
+                AR.s.Data.MarkWorldSaveDirty(WorldSaveGroup.Companion);
                 state.IsInDungeon = false;
+            }
         }
 
         /// <summary>죽었거나 부상·원정 중이면 예약을 취소하고 알린다. 취소했으면 true.</summary>
@@ -452,6 +461,7 @@ namespace ARPG.Npc
 
         private static void ClearCompanionState()
         {
+            AR.s.Data.MarkWorldSaveDirty(WorldSaveGroup.Companion);
             AR.s.Data.NpcCompanion.ReservedNpcId = -1;
             AR.s.Data.NpcCompanion.IsInDungeon = false;
         }

@@ -9,7 +9,7 @@ namespace ARPG.Npc
         public static readonly bool SimulationSaveSnapshotEnabled = true;
         private SaveSnapshotCache<NpcPairKey> _affinitySaveSnapshot = new("NpcAffinity");
         private SaveSnapshotCache<int> _relationSaveSnapshot = new("NpcRelations");
-        private SaveSnapshotCache<int> _partySaveSnapshot = new("NpcParties");
+        private SaveSnapshotCache<int> _partySaveSnapshot = new("NpcParties", SaveSnapshotGroups.Party);
         private SaveSnapshotCache<int> _populationSaveSnapshot = new("NpcPopulation");
 
         // 캐시 인스턴스도 포함해 Load/진단의 캐시 교체를 이전 세대와 구별한다.
@@ -17,6 +17,13 @@ namespace ARPG.Npc
             _relationSaveSnapshot, _relationSaveSnapshot.Generation);
         public object PartySaveSnapshotGeneration => (_partySaveSnapshot, _partySaveSnapshot.Generation);
         public object PopulationSaveSnapshotGeneration => (_populationSaveSnapshot, _populationSaveSnapshot.Generation);
+
+        public void FreezeSimulationSaveSnapshots(SaveScope scope, List<System.IDisposable> leases)
+        {
+            if ((scope & SaveScope.NpcSocial) != 0) { leases.Add(_affinitySaveSnapshot.Freeze()); leases.Add(_relationSaveSnapshot.Freeze()); }
+            if ((scope & SaveScope.NpcParties) != 0) leases.Add(_partySaveSnapshot.Freeze());
+            if ((scope & SaveScope.NpcMeta) != 0) leases.Add(_populationSaveSnapshot.Freeze());
+        }
 
         public void MarkAffinitySaveDirty(int a, int b)
         {
@@ -29,9 +36,9 @@ namespace ARPG.Npc
             if (SimulationSaveSnapshotEnabled == true) _relationSaveSnapshot.MarkDirty(fromId);
         }
 
-        public void MarkPartySaveDirty(int partyId)
+        public void MarkPartySaveDirty(int partyId, PartySaveGroup groups = PartySaveGroup.All)
         {
-            if (SimulationSaveSnapshotEnabled == true) _partySaveSnapshot.MarkDirty(partyId);
+            if (SimulationSaveSnapshotEnabled == true) _partySaveSnapshot.MarkDirty(partyId, (ulong)groups);
         }
 
         public void MarkPopulationSaveDirty()

@@ -293,7 +293,7 @@ namespace ARPG.Npc
         /// </summary>
         private void ApplyDuelOutcome(NpcDuelOutcome outcome)
         {
-            MarkSaveDirty(outcome.NpcId);
+            MarkSaveDirty(outcome.NpcId, NpcSaveGroup.Deeds | NpcSaveGroup.Stories | NpcSaveGroup.Activity | NpcSaveGroup.Condition);
             if (_npcSaveDict.TryGetValue(outcome.NpcId, out NpcSaveData? saveData) == false)
                 return;
 

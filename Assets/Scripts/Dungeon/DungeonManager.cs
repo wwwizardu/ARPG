@@ -315,6 +315,7 @@ namespace ARPG.Dungeon
             }
             if (_components.TryGetComponent<DungeonObjectComponent>(entityId, out var obj) == false ||
                 obj.DungeonId != _active.DungeonId) return false;
+            AR.s.Data.MarkDungeonSaveDirty(_active, DungeonSaveGroup.Progress);
             if (_active.KilledObjects.Add(obj.ObjectId) == true && obj.IsBoss == true) _completionPending = true;
             return false;
         }
@@ -357,6 +358,7 @@ namespace ARPG.Dungeon
         public void CaptureCheckpoint()
         {
             if (IsInside == false || _active == null) return;
+            AR.s.Data.MarkDungeonSaveDirty(_active, DungeonSaveGroup.Tiles);
             _active.TileModifications = ActiveMap.SaveTileModifications();
             CaptureLivingMonsters();
         }

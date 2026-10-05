@@ -74,6 +74,7 @@ namespace ARPG.Building
             if (_buildingSaveDict.TryGetValue(entityId, out BuildingSaveData? saveData) == false)
                 return false;
 
+            AR.s.Data.MarkBuildingSaveDirty(entityId);
             saveData.VillageId = villageId;
             saveData.CurrentHp = Mathf.Clamp(currentHp, 0, Mathf.Max(1, table.HP));
             saveData.IsUnderConstruction = true;
@@ -89,6 +90,7 @@ namespace ARPG.Building
                 return false;
 
             bool needsVisualUpdate = saveData.IsUnderConstruction;
+            AR.s.Data.MarkBuildingSaveDirty(entityId);
             saveData.CurrentHp = table.HP;
             saveData.IsUnderConstruction = false;
             if (needsVisualUpdate == true && saveData.IsActive == true
@@ -111,6 +113,7 @@ namespace ARPG.Building
             if (saveData.FacilityTier == facilityTier)
                 return true;
 
+            AR.s.Data.MarkBuildingSaveDirty(entityId);
             saveData.FacilityTier = facilityTier;
             if (saveData.IsActive == true && saveData.IsUnderConstruction == false
                 && AR.s.Message.TryGetEntity(entityId, out var entity) == true
@@ -274,6 +277,7 @@ namespace ARPG.Building
             Vector2Int chunkCoord = TileToChunk(saveData.WorldTileX, saveData.WorldTileY);
             RemoveBuildingFromChunk(chunkCoord, entityId);
 
+            AR.s.Data.MarkBuildingSaveDirty(entityId);
             _buildingSaveDict.Remove(entityId);
         }
 
@@ -322,6 +326,7 @@ namespace ARPG.Building
                     entity.transform.SetParent(_buildingParent, true);
 
                 saveData.EntityId = createdId;
+                AR.s.Data.MarkBuildingSaveDirty(entityId);
                 saveData.IsActive = true;
 
                 Tables.BuildableItemTable? latestTable = AR.s.Data.GetBuildableItem(
@@ -360,6 +365,7 @@ namespace ARPG.Building
                 Destroy(entity.gameObject);
             }
 
+            AR.s.Data.MarkBuildingSaveDirty(entityId);
             saveData.IsActive = false;
         }
 
@@ -374,6 +380,8 @@ namespace ARPG.Building
                 int entityId = kvp.Key;
                 if (AR.s.Component.TryGetComponent<BuildingComponent>(entityId, out var buildingComp))
                 {
+                    if (saveData.CurrentHp != buildingComp.CurrentHp || saveData.VillageId != buildingComp.VillageId || saveData.IsUnderConstruction != buildingComp.IsUnderConstruction)
+                        AR.s.Data.MarkBuildingSaveDirty(entityId);
                     saveData.CurrentHp = buildingComp.CurrentHp;
                     saveData.VillageId = buildingComp.VillageId;
                     saveData.IsUnderConstruction = buildingComp.IsUnderConstruction;
@@ -413,6 +421,7 @@ namespace ARPG.Building
                 int entityId = kvp.Key > 0 ? kvp.Key
                               : (saveData.EntityId > 0 ? saveData.EntityId : AR.s.Entity.CreateEntity());
 
+                AR.s.Data.MarkBuildingSaveDirty(entityId);
                 saveData.IsActive = false;
                 saveData.EntityId = entityId;
 

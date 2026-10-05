@@ -77,7 +77,7 @@ namespace ARPG.Village
             if (_villages.TryGetValue(villageId, out VillageData? data) == false)
                 return false;
 
-            MarkSaveDirty(villageId);
+            MarkSaveDirty(villageId, ARPG.Data.VillageSaveGroup.Resources);
             VillageResourceSimulation.DepositNpcGold(data, amount);
             SyncStorageFromData(data);
             return true;
@@ -92,7 +92,7 @@ namespace ARPG.Village
                 return false;
             if (_villages.TryGetValue(villageId, out VillageData? data) == false)
                 return false;
-            MarkSaveDirty(villageId);
+            MarkSaveDirty(villageId, ARPG.Data.VillageSaveGroup.Resources);
             if (VillageResourceSimulation.TryWithdrawNpcGold(data, amount) == false)
                 return false;
 
@@ -117,7 +117,7 @@ namespace ARPG.Village
             int cycle = GetCurrentRestockCycle(v);
             if (v.NpcPurchaseCycle != cycle)
             {
-                MarkSaveDirty(villageId);
+                MarkSaveDirty(villageId, ARPG.Data.VillageSaveGroup.Shop);
                 v.NpcPurchaseCycle = cycle;
                 v.NpcPurchaseCount = 0;
             }
@@ -196,7 +196,7 @@ namespace ARPG.Village
             if (DepositNpcGold(v.VillageId, price) == false)
                 return null;
 
-            MarkSaveDirty(v.VillageId);
+            MarkSaveDirty(v.VillageId, ARPG.Data.VillageSaveGroup.Shop | ARPG.Data.VillageSaveGroup.Resources);
             entry.RemainingCount -= 1;
             entry.NpcBuyerEntityId = buyerEntityId;
             entry.NpcBuyerName = buyerName ?? string.Empty;
@@ -291,7 +291,7 @@ namespace ARPG.Village
 
             if (consignedCount < MaxAdventurerConsignmentSlots)
             {
-                MarkSaveDirty(v.VillageId);
+                MarkSaveDirty(v.VillageId, ARPG.Data.VillageSaveGroup.Shop);
                 v.MerchantStock.Add(entry);
                 Debug.Log($"[NpcAmbition] Trade Consign v={v.VillageId} item={item.Id}:{table.Name}#{item.ItemInstanceId} " +
                           $"base={table.BasePrice} price={entry.UnitPrice} slot={consignedCount + 1}/{MaxAdventurerConsignmentSlots}");
@@ -301,7 +301,7 @@ namespace ARPG.Village
             if (replaceIndex >= 0 && table.BasePrice > replaceBasePrice)
             {
                 ItemData? dropped = v.MerchantStock[replaceIndex].Item;
-                MarkSaveDirty(v.VillageId);
+                MarkSaveDirty(v.VillageId, ARPG.Data.VillageSaveGroup.Shop);
                 v.MerchantStock[replaceIndex] = entry;
                 Debug.Log($"[NpcAmbition] Trade Consign v={v.VillageId} item={item.Id}:{table.Name}#{item.ItemInstanceId} " +
                           $"base={table.BasePrice} price={entry.UnitPrice} replaced={dropped?.Id}#{dropped?.ItemInstanceId} " +

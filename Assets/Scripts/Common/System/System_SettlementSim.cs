@@ -84,7 +84,7 @@ namespace ARPG.Systems
             VillageData village)
         {
             // 방문한 추상 마을은 자원 carry와 construction clock을 전진시킨다.
-            AR.s.Village.MarkSaveDirty(village.VillageId);
+            AR.s.Village.MarkSaveDirty(village.VillageId, ARPG.Data.VillageSaveGroup.Resources | ARPG.Data.VillageSaveGroup.Construction | ARPG.Data.VillageSaveGroup.Population);
             bool isOperational = false;
             if (AR.s.History.TryGetLiveSettlement(village.SettlementId,
                     out SettlementLiveState settlement) == true)

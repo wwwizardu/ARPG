@@ -8,66 +8,76 @@ using Newtonsoft.Json;
 
 namespace ARPG.Data
 {
-    /// <summary>소유 매니저의 변경 항목을 불변 저장 DTO로 게시한다. null 원장은 삭제를 뜻한다.</summary>
+    /// <summary>소유 원장의 변경 묶음을 반영한다. 배치 lease 동안 DTO 수정 없이 변경만 누적한다.</summary>
     public sealed class SaveSnapshotCache<TKey> where TKey : notnull
     {
         private readonly string _name;
         private readonly SaveDtoSnapshot _copier = new();
-        private Dictionary<TKey, object?> _snapshots = new();
-        private readonly HashSet<TKey> _dirty = new();
-        private readonly List<TKey> _dirtyOrder = new();
-        private readonly List<TKey> _failed = new();
+        private readonly Func<string, ulong>? _getGroup;
+        private State _state = new();
         private long _generation;
         public long Generation => _generation;
-        public bool HasPendingChanges => _dirtyOrder.Count > 0;
+        public bool HasPendingChanges => _state.Dirty.Count > 0 || _state.Failed.Count > 0;
+        public bool IsFrozen => _state.Readers > 0;
+        public IEnumerable<TKey> Keys => _state.Snapshots.Keys;
+        public bool Contains(TKey key) => _state.Snapshots.ContainsKey(key);
+        public bool TryGetSnapshot(TKey key, out object? snapshot) => _state.Snapshots.TryGetValue(key, out snapshot);
 #if UNITY_EDITOR
-        private Action<TKey>? _dirtyObserver;
-        public Action<TKey>? DirtyObserver { get => _dirtyObserver; set => _dirtyObserver = value; }
+        public Action<TKey>? DirtyObserver { get; set; }
 #endif
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         private long _flushCount;
         private double _flushTotalMs;
         private double _flushMaxMs;
+        private long _groupCaptureCount;
         public long FlushCount => _flushCount;
         public double FlushAverageMs => _flushCount == 0 ? 0 : _flushTotalMs / _flushCount;
         public double FlushMaxMs => _flushMaxMs;
+        public long GroupCaptureCount => _groupCaptureCount;
 #endif
 
-        public SaveSnapshotCache(string name) => _name = name;
-
-        public void MarkDirty(TKey key)
+        public SaveSnapshotCache(string name, Func<string, ulong>? getGroup = null)
         {
+            _name = name;
+            _getGroup = getGroup;
+        }
+
+        public void MarkDirty(TKey key, ulong groups = ulong.MaxValue)
+        {
+            if (groups == 0) return;
 #if UNITY_EDITOR
-            if (_dirty.Contains(key) == false)
-                _dirtyObserver?.Invoke(key);
+            // Existing records have a comparison baseline. A first explicit mark initializes a new record.
+            // The observer excludes already marked fields, not the entire item.
+            if (_state.Snapshots.ContainsKey(key) == true || _state.Failed.ContainsKey(key) == true)
+                DirtyObserver?.Invoke(key);
 #endif
-            if (_dirty.Add(key) == true)
-            {
-                _generation++;
-                _dirtyOrder.Add(key);
-            }
+            _state.Dirty.TryGetValue(key, out ulong existing);
+            if ((existing | groups) == existing) return;
+            _state.Dirty[key] = existing | groups;
+            _generation++;
+        }
+
+        public IDisposable Freeze()
+        {
+            _state.Readers++;
+            return new Lease(_state);
         }
 
         public void Flush(Func<TKey, object?> getLive, bool recordFrameTiming = false)
         {
-            if (_dirtyOrder.Count == 0)
-                return;
+            if (IsFrozen == true || _state.Dirty.Count == 0) return;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             long started = System.Diagnostics.Stopwatch.GetTimestamp();
 #endif
-            for (int i = 0; i < _dirtyOrder.Count; i++)
-            {
-                TKey key = _dirtyOrder[i];
-                if (TryCapture(key, getLive, _snapshots) == true)
-                    _failed.Remove(key);
-            }
-            _dirty.Clear();
-            _dirtyOrder.Clear();
+            var work = _state.Dirty;
+            _state.Dirty = new();
+            using var entries = work.GetEnumerator();
+            for (; entries.MoveNext() == true;)
+                TryCapture(entries.Current.Key, entries.Current.Value, getLive);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             if (recordFrameTiming == true)
             {
-                double ms = (System.Diagnostics.Stopwatch.GetTimestamp() - started) * 1000.0 /
-                    System.Diagnostics.Stopwatch.Frequency;
+                double ms = (System.Diagnostics.Stopwatch.GetTimestamp() - started) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
                 _flushCount++;
                 _flushTotalMs += ms;
                 _flushMaxMs = Math.Max(_flushMaxMs, ms);
@@ -77,43 +87,28 @@ namespace ARPG.Data
 
         public void Rebuild(IEnumerable<TKey> keys, Func<TKey, object?> getLive)
         {
-            _generation++;
-            Dictionary<TKey, object?> rebuilt = new();
-            HashSet<TKey> current = new();
-            foreach (TKey key in keys)
-            {
-                current.Add(key);
-                if (TryCapture(key, getLive, rebuilt) == true)
-                    _failed.Remove(key);
-            }
-            for (int i = _failed.Count - 1; i >= 0; i--)
-            {
-                if (current.Contains(_failed[i]) == false)
-                    _failed.RemoveAt(i);
-            }
-            _snapshots = rebuilt;
-            _dirty.Clear();
-            _dirtyOrder.Clear();
+            // Includes old keys so deletion and clear are reflected after thaw too.
+            HashSet<TKey> all = new(keys);
+            all.UnionWith(_state.Snapshots.Keys);
+            foreach (TKey key in all) MarkDirty(key);
+            Flush(getLive);
         }
 
-        /// <summary>실패 항목만 다시 복사한다. 실패가 남으면 낡은 DTO를 저장하지 않는다.</summary>
         public void PrepareForSave(Func<TKey, object?> getLive)
         {
+            if (IsFrozen == true) throw new InvalidOperationException(_name + " snapshot is still being read by a save batch.");
             Flush(getLive);
-            for (int i = _failed.Count - 1; i >= 0; i--)
-            {
-                if (TryCapture(_failed[i], getLive, _snapshots) == true)
-                    _failed.RemoveAt(i);
-            }
-            if (_failed.Count > 0)
-                throw new InvalidOperationException(_name + " save snapshot capture failed: " + string.Join(", ", _failed));
+            var retry = new Dictionary<TKey, ulong>(_state.Failed);
+            foreach (var pair in retry) TryCapture(pair.Key, pair.Value, getLive);
+            if (_state.Failed.Count > 0)
+                throw new InvalidOperationException(_name + " save snapshot capture failed: " + string.Join(", ", _state.Failed.Keys));
         }
 
         public object? Get(TKey key)
         {
-            if (_failed.Contains(key) == true)
+            if (_state.Failed.ContainsKey(key) == true)
                 throw new InvalidOperationException(_name + " save snapshot capture failed: " + key);
-            if (_snapshots.TryGetValue(key, out object? snapshot) == false)
+            if (_state.Snapshots.TryGetValue(key, out object? snapshot) == false)
                 throw new InvalidOperationException(_name + " save snapshot missing: " + key);
             return snapshot;
         }
@@ -121,64 +116,70 @@ namespace ARPG.Data
         public void Reset()
         {
             _generation++;
-            _snapshots.Clear();
-            _dirty.Clear();
-            _dirtyOrder.Clear();
-            _failed.Clear();
+            // Old readers own the old State. Releasing them cannot thaw the new lifetime.
+            _state = new();
 #if UNITY_EDITOR
-            _dirtyObserver = null;
+            DirtyObserver = null;
 #endif
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-            _flushCount = 0;
-            _flushTotalMs = 0;
-            _flushMaxMs = 0;
+            _flushCount = 0; _flushTotalMs = 0; _flushMaxMs = 0; _groupCaptureCount = 0;
 #endif
         }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-        /// <summary>명시적 진단 전용. 다음 정상 표시가 이전 누락을 가리기 전에 검사한다.</summary>
-        public bool TryFindUnmarkedChange(TKey key, Func<TKey, object?> getLive, List<string> fields)
+        public bool TryFindUnmarkedChange(TKey key, Func<TKey, object?> getLive, List<string> fields,
+            Func<string, bool>? ignore = null)
         {
             fields.Clear();
-            if (_dirty.Contains(key) == true || _failed.Contains(key) == true)
-                return false;
             object? live = getLive(key);
             object? fresh = _copier.Capture(live);
-            bool exists = _snapshots.TryGetValue(key, out object? cached);
-            if (live == null && exists == false)
-                return false;
-            if (live != null && exists == true && ValuesEqual(fresh, cached) == true)
-                return false;
+            bool exists = _state.Snapshots.TryGetValue(key, out object? cached);
+            _state.Dirty.TryGetValue(key, out ulong pending);
+            _state.Failed.TryGetValue(key, out ulong failed);
+            pending |= failed;
+            if (live == null && exists == false) return false;
             if (fresh is Dictionary<string, object?> a && cached is Dictionary<string, object?> b)
             {
                 HashSet<string> names = new(a.Keys, StringComparer.Ordinal);
                 names.UnionWith(b.Keys);
                 foreach (string name in names)
                 {
+                    if (ignore?.Invoke(name) == true || (pending & (_getGroup?.Invoke(name) ?? ulong.MaxValue)) != 0) continue;
                     bool inA = a.TryGetValue(name, out object? valueA);
                     bool inB = b.TryGetValue(name, out object? valueB);
-                    if (inA != inB || ValuesEqual(valueA, valueB) == false)
-                        fields.Add(name);
+                    if (inA != inB || ValuesEqual(valueA, valueB) == false) fields.Add(name);
                 }
             }
-            else fields.Add("(contents)");
-            if (live == null) _snapshots.Remove(key);
-            else _snapshots[key] = fresh;
+            else if (pending == 0 && ValuesEqual(fresh, cached) == false) fields.Add("(contents)");
+            if (fields.Count == 0) return false;
+            // Never mutate even from a diagnostic while a worker holds this state.
+            if (IsFrozen == false)
+            {
+                if (live == null) _state.Snapshots.Remove(key);
+                else _state.Snapshots[key] = fresh;
+            }
+            else
+            {
+                ulong groups = 0;
+                for (int i = 0; i < fields.Count; i++) groups |= _getGroup?.Invoke(fields[i]) ?? ulong.MaxValue;
+                _state.Dirty[key] = pending | groups;
+            }
             _generation++;
             return true;
         }
 
-        public int Validate(IEnumerable<TKey> keys, Func<TKey, object?> getLive)
+        public int Validate(IEnumerable<TKey> keys, Func<TKey, object?> getLive, Func<TKey, string, bool>? ignore = null)
         {
             Flush(getLive);
             HashSet<TKey> all = new(keys);
-            all.UnionWith(_snapshots.Keys);
-            all.UnionWith(_failed);
+            all.UnionWith(_state.Snapshots.Keys);
+            all.UnionWith(_state.Failed.Keys);
             List<string> fields = new();
             int mismatches = 0;
             foreach (TKey key in all)
             {
-                if (_failed.Contains(key) == true || TryFindUnmarkedChange(key, getLive, fields) == true)
+                if (_state.Failed.ContainsKey(key) == true || TryFindUnmarkedChange(key, getLive, fields,
+                    ignore == null ? null : field => ignore(key, field)) == true)
                 {
                     Debug.LogError($"[{_name}SaveSnapshot] {key}: {string.Join(", ", fields)} differs or capture failed");
                     mismatches++;
@@ -187,18 +188,12 @@ namespace ARPG.Data
             return mismatches;
         }
 
-        public string DescribeState()
-        {
-            List<object?> entries = new();
-            foreach (var pair in _snapshots)
-                entries.Add(new object?[] { pair.Key, pair.Value });
-            return JsonConvert.SerializeObject(new object?[] { entries, _dirtyOrder, _failed, _generation,
-                _flushCount, _flushTotalMs, _flushMaxMs,
+        public string DescribeState() => JsonConvert.SerializeObject(new object?[] { _state.Snapshots,
+            _state.Dirty, _state.Failed, _generation, _state.Readers, _flushCount, _flushTotalMs, _flushMaxMs, _groupCaptureCount,
 #if UNITY_EDITOR
-                _dirtyObserver == null ? 0 : _dirtyObserver.GetHashCode(),
+            DirtyObserver == null ? 0 : DirtyObserver.GetHashCode(),
 #endif
-            }, JsonSettings.Default);
-        }
+        }, JsonSettings.Default);
 
         private static bool ValuesEqual(object? a, object? b)
         {
@@ -208,42 +203,89 @@ namespace ARPG.Data
             {
                 if (b is not Dictionary<string, object?> dictB || dictA.Count != dictB.Count) return false;
                 foreach (var pair in dictA)
-                {
-                    if (dictB.TryGetValue(pair.Key, out object? value) == false || ValuesEqual(pair.Value, value) == false)
-                        return false;
-                }
+                    if (dictB.TryGetValue(pair.Key, out object? value) == false || ValuesEqual(pair.Value, value) == false) return false;
                 return true;
             }
             if (a is List<object?> listA)
             {
                 if (b is not List<object?> listB || listA.Count != listB.Count) return false;
-                for (int i = 0; i < listA.Count; i++)
-                {
-                    if (ValuesEqual(listA[i], listB[i]) == false) return false;
-                }
+                for (int i = 0; i < listA.Count; i++) if (ValuesEqual(listA[i], listB[i]) == false) return false;
                 return true;
             }
             return a.Equals(b);
         }
 #endif
 
-        private bool TryCapture(TKey key, Func<TKey, object?> getLive, Dictionary<TKey, object?> target)
+        private void TryCapture(TKey key, ulong groups, Func<TKey, object?> getLive)
         {
-            try
+            object? live;
+            try { live = getLive(key); }
+            catch (Exception exception) { Fail(key, groups, exception); return; }
+            if (live == null) { _state.Snapshots.Remove(key); _state.Failed.Remove(key); return; }
+            if (_getGroup == null || _state.Snapshots.TryGetValue(key, out object? cached) == false ||
+                cached is not Dictionary<string, object?> fields)
             {
-                object? live = getLive(key);
-                if (live == null) target.Remove(key);
-                else target[key] = _copier.Capture(live);
-                return true;
+                try { _state.Snapshots[key] = _copier.Capture(live); _state.Failed.Remove(key); }
+                catch (Exception exception) { Fail(key, groups, exception); }
+                return;
             }
-            catch (Exception exception)
+            // Each bit is its own atomic preparation/application. A failed group blocks saving.
+            ulong allGroups;
+            try { allGroups = _copier.GetGroupMask(live, _getGroup); }
+            catch (Exception exception) { Fail(key, groups, exception); return; }
+            groups &= allGroups;
+            // A full mark is one plain capture instead of one contract pass per group. On failure, fall back to
+            // per-group passes so the other groups still update and only the failing group blocks saving.
+            if (groups != 0 && groups == allGroups)
             {
-                if (_failed.Contains(key) == false)
+                try { _state.Snapshots[key] = _copier.Capture(live); _state.Failed.Remove(key); return; }
+                catch (Exception) { }
+            }
+            for (int bit = 0; bit < 64; bit++)
+            {
+                ulong group = 1UL << bit;
+                if ((groups & group) == 0) continue;
+                try
                 {
-                    _failed.Add(key);
-                    Debug.LogError($"[{_name}SaveSnapshot] {key}: snapshot capture failed. Every save that includes simulation data (shop, duel, dungeon saves too) is blocked until it succeeds.\n{exception}");
+                    _copier.UpdateGroup(live, fields, group, _getGroup);
+                    if (_state.Failed.TryGetValue(key, out ulong failed) == true)
+                    {
+                        failed &= ~group;
+                        if (failed == 0) _state.Failed.Remove(key);
+                        else _state.Failed[key] = failed;
+                    }
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                    _groupCaptureCount++;
+#endif
                 }
-                return false;
+                catch (Exception exception) { Fail(key, group, exception); }
+            }
+        }
+
+        private void Fail(TKey key, ulong groups, Exception exception)
+        {
+            _state.Failed.TryGetValue(key, out ulong existing);
+            _state.Failed[key] = existing | groups;
+            if (existing == 0) Debug.LogError($"[{_name}SaveSnapshot] {key}: snapshot capture failed; save blocked until retry.\n{exception}");
+        }
+
+        private sealed class State
+        {
+            public readonly Dictionary<TKey, object?> Snapshots = new();
+            public Dictionary<TKey, ulong> Dirty = new();
+            public readonly Dictionary<TKey, ulong> Failed = new();
+            public int Readers;
+        }
+
+        private sealed class Lease : IDisposable
+        {
+            private State? _state;
+            public Lease(State state) => _state = state;
+            public void Dispose()
+            {
+                if (_state == null) return;
+                _state.Readers--;
+                _state = null;
             }
         }
     }

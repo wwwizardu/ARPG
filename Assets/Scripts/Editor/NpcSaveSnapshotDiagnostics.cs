@@ -17,7 +17,7 @@ using UnityEngine;
 
 namespace ARPG.Editor
 {
-    public static class NpcSaveSnapshotDiagnostics
+    public static partial class NpcSaveSnapshotDiagnostics
     {
         [MenuItem("ARPG/Save/Diagnostics/Verify Simulation Snapshot Save Round Trip")]
         public static async void VerifySimulationSaveRoundTripMenu()
@@ -128,6 +128,8 @@ namespace ARPG.Editor
             NpcManager npc = owner.AddComponent<NpcManager>();
             VillageManager village = owner.AddComponent<VillageManager>();
             History.HistoryManager history = owner.AddComponent<History.HistoryManager>();
+            Building.BuildingManager buildingManager = owner.AddComponent<Building.BuildingManager>();
+            Map.MapManager mapManager = owner.AddComponent<Map.MapManager>();
             List<(object Target, FieldInfo Field, object? Original)> swaps = new();
             FieldInfo Field(object target, string name) => target.GetType().GetField(name, BindingFlags.NonPublic | BindingFlags.Instance)!;
             void Swap(object target, string name, object value)
@@ -184,6 +186,14 @@ namespace ARPG.Editor
             world.NpcPartyStates.Add(party);
             world.NpcAffinityList.Add(new NpcAffinityEntry(32, 33, 10));
             world.WorldSim.Settlements = new[] { new History.SettlementLiveState { SettlementId = 42, VillageId = -1, Pop = 10 } };
+            var player = new PlayerData { PlayerId = 1, _inventory = new() { new ItemData { Id = 1, Quantity = 2 } } };
+            var drop = new WorldDropItemData { ItemData = new ItemData { Id = 1, Quantity = 2 } };
+            world.WorldDropItemDatas.Add(drop);
+            var building = new BuildingSaveData(1, 2, 3) { EntityId = 99 };
+            world.BuildingSaveDatas.Add(99, building);
+            var slots = Dungeon.DungeonLayout.CreateSlots(world.WorldSeed, 42);
+            world.Dungeons.Villages.Add(slots);
+            world.Chronicle.Events.Add(new History.ChronicleEvent { EventId = 1 });
             void Flush()
             {
                 npc.FlushSaveSnapshot(); village.FlushSaveSnapshot();
@@ -208,16 +218,19 @@ namespace ARPG.Editor
                 Field(data, "_worldData").SetValue(data, world);
                 Field(data, "_editorMainThreadId").SetValue(data, Environment.CurrentManagedThreadId);
                 // RequiresCheckpoint는 Data.Player를 읽는다. 빈 목록이면 테이블 초기화를 시도하므로 fixture 플레이어를 둔다.
-                Field(data, "_playerDataList").SetValue(data, new List<PlayerData> { new PlayerData { PlayerId = 1 } });
+                Field(data, "_playerDataList").SetValue(data, new List<PlayerData> { player });
                 Field(data, "_currentPlayerEntityId").SetValue(data, -1);
                 Swap(AR.s, "_dataManager", data); Swap(AR.s, "_npcManager", npc);
                 Swap(AR.s, "_villageManager", village); Swap(AR.s, "_historyManager", history);
+                Swap(AR.s, "_buildingManager", buildingManager); Swap(AR.s, "_mapManager", mapManager);
+                Field(buildingManager, "_buildingSaveDict").SetValue(buildingManager, world.BuildingSaveDatas);
                 Swap(AR.s.Dungeon, "_npcCompletionRevision", 0L); Swap(AR.s.Dungeon, "_savedNpcCompletionRevision", 0L);
                 Field(npc, "_npcSaveDict").SetValue(npc, world.NpcSaveDatas);
                 Field(npc, "_npcPartyDict").SetValue(npc, new Dictionary<int, NpcPartyState> { { 7, party } });
                 Field(npc, "_simulationPartyIds").SetValue(npc, new List<int> { 7 });
                 Field(village, "_villages").SetValue(village, new Dictionary<int, VillageData> { { 42, v } });
                 Field(village, "_villageList").SetValue(village, world.VillageDatas);
+                InjectSaveSourceGetter(npc); InjectSaveSourceGetter(village);
                 npc.LoadAffinity(world.NpcAffinityList);
                 npc.RebuildSaveSnapshot(); village.RebuildSaveSnapshot();
                 npc.RefreshSimulationSaveSnapshots(SaveScope.Simulation, rebuild: true); history.RebuildSaveSnapshot();
@@ -238,6 +251,54 @@ namespace ARPG.Editor
                 await Save(SaveScope.Player | SaveScope.World);
                 Require((data.DiagnosticCommittedScope & SaveScope.Simulation) == 0, "player-only request keeps scope");
                 before = Manifest();
+                // Six newly cached partitions use the same real worker/reader and freeze/queue contract.
+                SaveScope ownedScope = SaveScope.Player | SaveScope.World | SaveScope.Map | SaveScope.Buildings | SaveScope.Chronicle | SaveScope.Dungeons;
+                await Save(ownedScope); ChangedFiles(before, Manifest()); before = Manifest();
+                int priorQuantity = player._inventory[0]!.Quantity;
+                int priorDropQuantity = drop.ItemData.Quantity;
+                int priorTier = building.FacilityTier;
+                int priorCandidate = slots.Slots[0].NextCandidate;
+                int priorEvents = world.Chronicle.Events.Count;
+                float priorPrice = world.GoldPrice.Index;
+                Task<bool>? ownedQueued = null;
+                data.DiagnosticAfterCapture = () =>
+                {
+                    data.DiagnosticAfterCapture = null;
+                    data.MarkPlayerSaveDirty(player, PlayerSaveGroup.Inventory); player._inventory[0]!.Quantity++;
+                    data.MarkWorldDropSaveDirty(drop); drop.ItemData.Quantity++;
+                    data.MarkBuildingSaveDirty(99); building.FacilityTier++;
+                    data.MarkDungeonSlotsSaveDirty(42); slots.Slots[0].NextCandidate++;
+                    world.Chronicle.Events.Add(new History.ChronicleEvent { EventId = 2 }); data.MarkChronicleEventSaveDirty(2);
+                    data.MarkWorldSaveDirty(WorldSaveGroup.GoldPrice); world.GoldPrice.Index += 1f;
+                    data.FlushOwnedSaveSnapshots();
+                    ownedQueued = data.SaveAsync(ownedScope);
+                };
+                Require(await data.SaveAsync(ownedScope), "owned in-flight batch");
+                Require(ownedQueued != null && await ownedQueued, "owned queued batch");
+                await data.WaitForSaveIdleAsync();
+                object ownedPrior = Read("manifest.prev.json");
+                object ownedLatest = Read();
+                Require(Part<PlayerSaveRoot>(ownedPrior, "Player").Players[0]._inventory[0]!.Quantity == priorQuantity &&
+                    Part<MapSaveRoot>(ownedPrior, "Map").WorldDropItems[0].ItemData.Quantity == priorDropQuantity &&
+                    Part<BuildingSaveRoot>(ownedPrior, "Buildings").Buildings[99].FacilityTier == priorTier &&
+                    Part<DungeonSaveRoot>(ownedPrior, "Dungeons").Villages[0].Slots[0].NextCandidate == priorCandidate &&
+                    Part<ChronicleSaveRoot>(ownedPrior, "Chronicle").Chronicle.Events.Count == priorEvents &&
+                    Part<WorldSaveRoot>(ownedPrior, "World").GoldPrice.Index == priorPrice, "all six owned roots remain frozen during worker reads");
+                Require(Part<PlayerSaveRoot>(ownedLatest, "Player").Players[0]._inventory[0]!.Quantity == priorQuantity + 1 &&
+                    Part<MapSaveRoot>(ownedLatest, "Map").WorldDropItems[0].ItemData.Quantity == priorDropQuantity + 1 &&
+                    Part<BuildingSaveRoot>(ownedLatest, "Buildings").Buildings[99].FacilityTier == priorTier + 1 &&
+                    Part<DungeonSaveRoot>(ownedLatest, "Dungeons").Villages[0].Slots[0].NextCandidate == priorCandidate + 1 &&
+                    Part<ChronicleSaveRoot>(ownedLatest, "Chronicle").Chronicle.Events.Count == priorEvents + 1 &&
+                    Part<WorldSaveRoot>(ownedLatest, "World").GoldPrice.Index == priorPrice + 1, "queued owned roots include every deferred change");
+                before = JsonConvert.DeserializeObject<SaveManifest>(File.ReadAllText(Path.Combine(slot, "manifest.prev.json")), JsonSettings.Default)!;
+                ChangedFiles(before, Manifest(), "player", "world", "map", "buildings", "chronicle", "dungeons"); before = Manifest();
+                data.MarkWorldDropSaveDirty(drop); world.WorldDropItemDatas.Clear();
+                data.MarkBuildingSaveDirty(99); world.BuildingSaveDatas.Clear();
+                data.FlushOwnedSaveSnapshots();
+                await Save(SaveScope.Map | SaveScope.Buildings);
+                ChangedFiles(before, Manifest(), "map", "buildings"); before = Manifest();
+                Require(Part<MapSaveRoot>(Read(), "Map").WorldDropItems.Count == 0 && Part<BuildingSaveRoot>(Read(), "Buildings").Buildings.Count == 0,
+                    "owned record removal survives worker and reader");
                 npc.MarkSaveDirty(32); a.Gold++; Flush();
                 await Save(SaveScope.Villages);
                 ChangedFiles(before, Manifest(), "npc_state_00"); before = Manifest();
@@ -552,11 +613,16 @@ namespace ARPG.Editor
                 string partyBefore = Json(partyRoot);
                 Check(partyBefore == Json(copier.Capture(new NpcPartySaveRoot { Parties = manager.SaveParties() })) &&
                     party.MemberIds.Count == 2 && party.MemberIds[0] == 3, "파티 로드 보정 뒤 캡처·멤버 순서");
-                manager.MarkPartySaveDirty(42);
+                List<IDisposable> partyLeases = new();
+                manager.FreezeSimulationSaveSnapshots(SaveScope.NpcParties, partyLeases);
+                manager.MarkPartySaveDirty(42, PartySaveGroup.Activity);
                 party.Activity.TargetKey = "changed path";
                 FlushSocial();
-                Check(Json(partyRoot) == partyBefore && Json(manager.CapturePartySaveSnapshotRoot()) ==
-                    Json(copier.Capture(new NpcPartySaveRoot { Parties = manager.SaveParties() })), "파티 활동·경로 변경과 이전 DTO 불변");
+                Check(Json(partyRoot) == partyBefore, "파티 저장 배치 동안 DTO 동결");
+                for (int i = 0; i < partyLeases.Count; i++) partyLeases[i].Dispose();
+                FlushSocial();
+                Check(Json(manager.CapturePartySaveSnapshotRoot()) ==
+                    Json(copier.Capture(new NpcPartySaveRoot { Parties = manager.SaveParties() })), "해제 후 파티 활동·경로 반영");
                 manager.DissolveParty(42); FlushSocial();
                 Check(Json(manager.CapturePartySaveSnapshotRoot()) == Json(copier.Capture(new NpcPartySaveRoot())), "해산한 파티 저장에서 제거");
                 typeof(NpcManager).GetMethod("ResetSimulationSaveSnapshots", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(manager, null);
@@ -642,7 +708,7 @@ namespace ARPG.Editor
         }
 
         [MenuItem("ARPG/Save/Diagnostics/Verify Village Snapshot Contracts")]
-        public static void VerifyVillageSnapshotContracts() => Debug.Log(VerifyVillageContracts());
+        public static void VerifyVillageSnapshotContracts() => Debug.Log(VerifyVillageContracts() + "\n" + VerifyGroupedSnapshotContracts() + "\n" + MeasureGroupedSnapshotUpdates());
 
         /// <summary>격리된 원장으로 순서·불변성·표시·실패 격리·수명을 검사한다. 실제 저장은 쓰지 않는다.</summary>
         public static string VerifyVillageContracts()
@@ -667,6 +733,7 @@ namespace ARPG.Editor
                 BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(manager, new object[] { village });
             try
             {
+                InjectSaveSourceGetter(manager);
                 manager.RebuildSaveSnapshot();
                 Check(Json(manager.CaptureSaveSnapshotRoot()) == Json(copier.Capture(new VillageSaveRoot())), "빈 루트");
                 VillageData a = new VillageData(42, Vector2.one);
@@ -684,23 +751,29 @@ namespace ARPG.Editor
                 a.ShopTier++;
                 Check(manager.TryFindUnmarkedSaveChange(a.VillageId, fields) == true && fields.Contains(nameof(VillageData.ShopTier)), "표시 누락·항목 이름 검출");
                 int observedOmissions = 0;
-                typeof(VillageManager).GetField("_snapshotDirtyObserver", BindingFlags.NonPublic | BindingFlags.Instance)!
-                    .SetValue(manager, new Action<int>(id =>
+                manager.SnapshotDirtyObserver = new Action<int>(id =>
                     {
                         if (manager.TryFindUnmarkedSaveChange(id, fields) == true) observedOmissions++;
-                    }));
+                    });
                 a.ShopTier++;
                 manager.MarkSaveDirty(a.VillageId);
                 manager.MarkSaveDirty(a.VillageId);
                 Check(observedOmissions == 1, "다음 정상 표시 전에 미표시 변경 검출");
-                typeof(VillageManager).GetField("_snapshotDirtyObserver", BindingFlags.NonPublic | BindingFlags.Instance)!
-                    .SetValue(manager, null);
-                Check(((List<int>)Field("_dirtyVillageOrder")).Count == 1, "중복 표시 1회");
-                a.MerchantStock[0].RemainingCount--;
-                a.MerchantStock[0].NpcBuyerName = "after";
-                a.Resources[GlobalEnum.ItemType.Gold] = 100;
+                manager.SnapshotDirtyObserver = null;
+                Check(((SaveSnapshotCache<int>)Field("_saveSnapshot")).HasPendingChanges == true, "중복 표시 1회");
+                // Capture a fresh baseline after omission repair; immutability lasts for this batch lease.
+                object? batchRoot = manager.CaptureSaveSnapshotRoot();
+                string batchJson = Json(batchRoot);
+                using (manager.FreezeSaveSnapshot())
+                {
+                    manager.MarkSaveDirty(a.VillageId, VillageSaveGroup.Shop | VillageSaveGroup.Resources);
+                    a.MerchantStock[0].RemainingCount--;
+                    a.MerchantStock[0].NpcBuyerName = "after";
+                    a.Resources[GlobalEnum.ItemType.Gold] = 100;
+                    manager.FlushSaveSnapshot(recordFrameTiming: true);
+                    Check(Json(batchRoot) == batchJson, "저장 배치 동안 루트·중첩 DTO 동결");
+                }
                 manager.FlushSaveSnapshot(recordFrameTiming: true);
-                Check(Json(oldRoot) == oldJson, "게시한 루트·중첩 DTO 불변");
                 Check(Json(manager.CaptureSaveSnapshotRoot()) == Json(copier.Capture(new VillageSaveRoot { Villages = manager.Save() })), "변경한 마을만 복사한 JSON 동일");
                 Check(manager.SnapshotFlushCount == 1, "프레임 측정");
                 manager.DepositNpcGold(a.VillageId, 5);
@@ -719,8 +792,7 @@ namespace ARPG.Editor
                     manager.MarkSaveDirty(b.VillageId);
                     b.ShopTier = 2;
                     manager.FlushSaveSnapshot();
-                    Check(((List<int>)Field("_dirtyVillageOrder")).Count == 0 &&
-                        Json(((Dictionary<int, object?>)Field("_saveSnapshot"))[b.VillageId]) == Json(copier.Capture(b)), "복사 실패 격리·목록 비움·다른 마을 계속");
+                    Check(Json(((SaveSnapshotCache<int>)Field("_saveSnapshot")).Get(b.VillageId)) == Json(copier.Capture(b)), "복사 실패 격리·목록 비움·다른 마을 계속");
                     manager.MarkSaveDirty(bad.VillageId);
                     manager.FlushSaveSnapshot();
                     bool blocked = false;
@@ -730,7 +802,7 @@ namespace ARPG.Editor
                     bad.Cycle = null;
                     // 새 표시 없이도 조립 직전 실패 항목을 다시 복사한다.
                     manager.CaptureSaveSnapshotRoot();
-                    Check(((List<int>)Field("_snapshotFailedIds")).Count == 0, "조립 직전 재시도 복구");
+                    Check(((SaveSnapshotCache<int>)Field("_saveSnapshot")).HasPendingChanges == false, "조립 직전 재시도 복구");
                 }
                 finally { Debug.unityLogger.logHandler = original; }
 
@@ -738,13 +810,13 @@ namespace ARPG.Editor
                 ((List<VillageData>)Field("_villageList")).Remove(b);
                 manager.MarkSaveDirty(b.VillageId);
                 manager.FlushSaveSnapshot();
-                Check(((Dictionary<int, object?>)Field("_saveSnapshot")).ContainsKey(b.VillageId) == false, "제거한 마을 DTO 정리");
+                Check(((SaveSnapshotCache<int>)Field("_saveSnapshot")).Contains(b.VillageId) == false, "제거한 마을 DTO 정리");
                 a.ShopTier++;
                 manager.RebuildSaveSnapshot();
                 Check(manager.ValidateSaveSnapshot() == 0, "재생성으로 표시 누락 복구");
                 typeof(VillageManager).GetMethod("ClearVillages", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(manager, null);
-                Check(((Dictionary<int, object?>)Field("_saveSnapshot")).Count == 0 &&
-                    ((List<int>)Field("_snapshotFailedIds")).Count == 0 && manager.SnapshotFlushCount == 0, "Reset·Load 공통 수명 정리");
+                Check(new List<int>(((SaveSnapshotCache<int>)Field("_saveSnapshot")).Keys).Count == 0 &&
+                    ((SaveSnapshotCache<int>)Field("_saveSnapshot")).HasPendingChanges == false && manager.SnapshotFlushCount == 0, "Reset·Load 공통 수명 정리");
             }
             finally { UnityEngine.Object.DestroyImmediate(owner); }
             report.Append($"{checks - failures}/{checks} PASS, failures={failures}");
@@ -766,7 +838,7 @@ namespace ARPG.Editor
             public void LogFormat(LogType logType, UnityEngine.Object? context, string format, params object[] args)
             {
                 string message = string.Format(format, args);
-                if (logType == LogType.Error && message.StartsWith("[VillageSaveSnapshot] Village 99: snapshot capture failed", StringComparison.Ordinal))
+                if (logType == LogType.Error && message.StartsWith("[VillageSaveSnapshot] 99: snapshot capture failed", StringComparison.Ordinal))
                     Count++;
                 else _original.LogFormat(logType, context, format, args);
             }
@@ -791,6 +863,15 @@ namespace ARPG.Editor
                 }
             }
             return root.ToString(Formatting.None);
+        }
+
+        // 격리 매니저는 Initialize/Load를 거치지 않으므로, 본 코드가 거기서 만드는 원장 조회 델리게이트를 직접 넣는다.
+        private static void InjectSaveSourceGetter(object manager)
+        {
+            Type type = manager.GetType();
+            MethodInfo method = type.GetMethod("GetSaveSource", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            type.GetField("_saveSourceGetter", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .SetValue(manager, method.CreateDelegate(typeof(Func<int, object?>), manager));
         }
     }
 }

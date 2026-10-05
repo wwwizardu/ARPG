@@ -176,7 +176,7 @@ namespace ARPG.Systems
                     VillageData? village = AR.s.Village.GetVillage(task.VillageId);
                     if (village != null)
                     {
-                        AR.s.Village.MarkSaveDirty(village.VillageId);
+                        AR.s.Village.MarkSaveDirty(village.VillageId, ARPG.Data.VillageSaveGroup.Construction);
                         VillageConstructionLedger.UpsertTask(village, CreateSnapshot(task));
                     }
                 }
@@ -304,7 +304,7 @@ namespace ARPG.Systems
                 BuildingEntityId = buildingEntityId,
             };
             AR.s.Component.AddComponent(taskEntityId, task);
-            AR.s.Village.MarkSaveDirty(v.VillageId);
+            AR.s.Village.MarkSaveDirty(v.VillageId, ARPG.Data.VillageSaveGroup.Construction);
             VillageConstructionLedger.UpsertTask(v, CreateSnapshot(task));
 
             string buildingNote = buildingEntityId >= 0 ? $", building={buildingEntityId}" : "";
@@ -321,7 +321,7 @@ namespace ARPG.Systems
             // task에는 VillageId만 있으므로 VillageData를 다시 조회
             VillageData? v = AR.s.Village.GetVillage(task.VillageId);
             if (v == null) return;
-            AR.s.Village.MarkSaveDirty(v.VillageId);
+            AR.s.Village.MarkSaveDirty(v.VillageId, ARPG.Data.VillageSaveGroup.Construction);
             VillageConstructionLedger.RemoveTask(v, task.TargetTableId, task.TileX, task.TileY,
                 task.BuildingEntityId);
 
@@ -422,7 +422,7 @@ namespace ARPG.Systems
             {
                 // 이미 무언가 있음 — 벽 못 세움. SegmentId가 있으니 재시도 안 함, IsBuilt=true로 마킹
                 Debug.LogWarning($"[WallPlanner] v{v.VillageId} seg{seg.SegmentId} 위치 ({seg.TileX},{seg.TileY}) 점유됨, 스킵");
-                AR.s.Village.MarkSaveDirty(v.VillageId);
+                AR.s.Village.MarkSaveDirty(v.VillageId, ARPG.Data.VillageSaveGroup.Walls | ARPG.Data.VillageSaveGroup.Construction);
                 WallSegmentRegistry.MarkSegmentBuilt(v, seg.SegmentId);
                 return false;
             }
@@ -448,7 +448,7 @@ namespace ARPG.Systems
                 BuildingEntityId = -1,
             };
             AR.s.Component.AddComponent(taskEntityId, task);
-            AR.s.Village.MarkSaveDirty(v.VillageId);
+            AR.s.Village.MarkSaveDirty(v.VillageId, ARPG.Data.VillageSaveGroup.Walls | ARPG.Data.VillageSaveGroup.Construction);
             VillageConstructionLedger.UpsertTask(v, CreateSnapshot(task));
 
             Debug.Log($"[BuildQueue] v{v.VillageId} 벽 착수 seg{seg.SegmentId} '{table.Name}' (taskEntity={taskEntityId}) tile=({seg.TileX},{seg.TileY})");
@@ -464,7 +464,7 @@ namespace ARPG.Systems
         /// <summary>벽 완성 시 처리 — PlacedObjectTypeIds에 추가하지 않고 WallSegments 마킹.</summary>
         private static void OnWallSegmentCompleted(VillageData v, ObjectPlacementTaskComponent task)
         {
-            AR.s.Village.MarkSaveDirty(v.VillageId);
+            AR.s.Village.MarkSaveDirty(v.VillageId, ARPG.Data.VillageSaveGroup.Walls | ARPG.Data.VillageSaveGroup.Construction);
             if (VillageWallRules.MarkSegmentBuiltAt(v, task.TileX, task.TileY) == false)
                 return;
             UpdateVillageWallStats(v);

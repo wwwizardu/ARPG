@@ -185,6 +185,7 @@ namespace ARPG.Data
             _saveLifetime++;
             _activeSaveManifest = null;
             _committedSnapshotGenerations.Clear();
+            _ownedSaveSnapshots = new();
             _queuedSaveScope = SaveScope.None;
             _queuedSaveSnapshotRebuild = false;
             _nextItemInstanceId = 1;
@@ -569,6 +570,7 @@ namespace ARPG.Data
             string slotPath = GetSlotPath(savePath);
             await _saveIoGate.WaitAsync();
             bool maintenanceOwnsGate = false;
+            List<IDisposable> snapshotLeases = new();
             try
             {
                 if (lifetime != _saveLifetime) return false;
@@ -607,6 +609,7 @@ namespace ARPG.Data
                 SaveManifest? previous = _activeSaveManifest;
                 Dictionary<string, object> capturedGenerations = SelectIncrementalSnapshotParts(pending, captureRuntimeManagers);
                 SaveManifest next = CloneManifest(previous, (previous?.Revision ?? 0) + 1);
+                if (captureRuntimeManagers == true) FreezeSaveSnapshotBatch(pending, snapshotLeases);
                 captureTimer.Stop();
                 string? failurePoint = null;
                 Action<string>? workerStage = null;
@@ -668,6 +671,7 @@ namespace ARPG.Data
             }
             finally
             {
+                for (int i = snapshotLeases.Count - 1; i >= 0; i--) snapshotLeases[i].Dispose();
                 if (maintenanceOwnsGate == false) _saveIoGate.Release();
             }
         }
@@ -749,7 +753,9 @@ namespace ARPG.Data
             if ((scope & SaveScope.Dungeons) != 0)
             {
                 if (captureRuntimeManagers == true) AR.s.Dungeon.CaptureCheckpoint();
-                AddPendingPart(pending, PART_DUNGEONS, _worldData.Dungeons);
+                if (captureRuntimeManagers == true && GroupedSaveSnapshotEnabled == true)
+                    AddPendingSnapshotPart(pending, PART_DUNGEONS, CaptureOwnedDungeons(_worldData.Dungeons, rebuildSaveSnapshots));
+                else AddPendingPart(pending, PART_DUNGEONS, _worldData.Dungeons);
             }
             if ((scope & SaveScope.Player) != 0)
             {
@@ -768,7 +774,9 @@ namespace ARPG.Data
                         ? AR.s.Npc.SavePlayerRelations()
                         : _worldData.PlayerNpcRelationList,
                 };
-                AddPendingPart(pending, PART_PLAYER, root);
+                if (captureRuntimeManagers == true && GroupedSaveSnapshotEnabled == true)
+                    AddPendingSnapshotPart(pending, PART_PLAYER, CaptureOwnedPlayer(root, rebuildSaveSnapshots));
+                else AddPendingPart(pending, PART_PLAYER, root);
             }
 
             if ((scope & SaveScope.World) != 0)
@@ -788,7 +796,9 @@ namespace ARPG.Data
                     NpcCompanion = _worldData.NpcCompanion,
                     GoldPrice = _worldData.GoldPrice,
                 };
-                AddPendingPart(pending, PART_WORLD, root);
+                if (captureRuntimeManagers == true && GroupedSaveSnapshotEnabled == true)
+                    AddPendingSnapshotPart(pending, PART_WORLD, CaptureOwnedWorld(root, rebuildSaveSnapshots));
+                else AddPendingPart(pending, PART_WORLD, root);
             }
 
             if ((scope & SaveScope.Map) != 0)
@@ -800,7 +810,9 @@ namespace ARPG.Data
                         ? AR.s.WorldMap.SaveTileModifications()
                         : _worldData.TileModifications,
                 };
-                AddPendingPart(pending, PART_MAP, root);
+                if (captureRuntimeManagers == true && GroupedSaveSnapshotEnabled == true)
+                    AddPendingSnapshotPart(pending, PART_MAP, CaptureOwnedMap(root, rebuildSaveSnapshots));
+                else AddPendingPart(pending, PART_MAP, root);
             }
 
             if ((scope & SaveScope.Villages) != 0)
@@ -832,14 +844,16 @@ namespace ARPG.Data
                     captureRuntimeManagers == true
                         ? AR.s.Building.Save()
                         : _worldData.BuildingSaveDatas;
-                AddPendingPart(pending, PART_BUILDINGS,
-                    new BuildingSaveRoot { Buildings = buildings });
+                if (captureRuntimeManagers == true && GroupedSaveSnapshotEnabled == true)
+                    AddPendingSnapshotPart(pending, PART_BUILDINGS, CaptureOwnedBuildings(buildings, rebuildSaveSnapshots));
+                else AddPendingPart(pending, PART_BUILDINGS, new BuildingSaveRoot { Buildings = buildings });
             }
 
             if ((scope & SaveScope.Chronicle) != 0)
             {
-                AddPendingPart(pending, PART_CHRONICLE,
-                    new ChronicleSaveRoot { Chronicle = _worldData.Chronicle });
+                if (captureRuntimeManagers == true && GroupedSaveSnapshotEnabled == true)
+                    AddPendingSnapshotPart(pending, PART_CHRONICLE, CaptureOwnedChronicle(_worldData.Chronicle, rebuildSaveSnapshots));
+                else AddPendingPart(pending, PART_CHRONICLE, new ChronicleSaveRoot { Chronicle = _worldData.Chronicle });
             }
 
             if ((scope & SaveScope.WorldSim) != 0)

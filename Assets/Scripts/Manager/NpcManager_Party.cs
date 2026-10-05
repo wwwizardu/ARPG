@@ -6,6 +6,8 @@ using ARPG.History;
 using ARPG.Village;
 using UnityEngine;
 
+using ARPG.Data;
+
 namespace ARPG.Npc
 {
     /// <summary>
@@ -39,7 +41,7 @@ namespace ARPG.Npc
         public bool TryCreateHuntParty(int leaderId, NpcActivityKind kind, float startGameTime, int worldSeed,
             out NpcPartyState? party)
         {
-            MarkSaveDirty(leaderId);
+            MarkSaveDirty(leaderId, NpcSaveGroup.Activity);
             party = null;
             if (NpcActivityResolver.IsExpedition(kind) == false)
                 return false;
@@ -145,7 +147,7 @@ namespace ARPG.Npc
             for (int i = 0; i < _partyAcceptedScratch.Count; i++)
             {
                 int memberId = _partyAcceptedScratch[i];
-                MarkSaveDirty(memberId);
+                MarkSaveDirty(memberId, NpcSaveGroup.Activity);
                 NpcSaveData member = _npcSaveDict[memberId];
                 if (member.Activity.Kind == NpcActivityKind.Rest)
                     EndRestForParty(memberId, member, startGameTime, worldSeed);
@@ -158,7 +160,7 @@ namespace ARPG.Npc
             for (int i = 0; i < created.MemberIds.Count; i++)
             {
                 int memberId = created.MemberIds[i];
-                MarkSaveDirty(memberId);
+                MarkSaveDirty(memberId, NpcSaveGroup.Activity);
                 NpcSaveData member = _npcSaveDict[memberId];
                 member.Activity.PartyId = partyId;
                 member.Activity.Kind = kind;
@@ -237,7 +239,7 @@ namespace ARPG.Npc
         /// </summary>
         private void EndRestForParty(int entityId, NpcSaveData saveData, float startGameTime, int worldSeed)
         {
-            MarkSaveDirty(entityId);
+            MarkSaveDirty(entityId, NpcSaveGroup.Activity);
             NpcActivityState activity = saveData.Activity;
             float endTime;
             if (activity.PhaseEndGameTime <= startGameTime)

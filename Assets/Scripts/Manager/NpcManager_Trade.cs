@@ -44,7 +44,7 @@ namespace ARPG.Npc
         /// </summary>
         public NpcTradeReport TradeAtShop(int entityId, int villageId)
         {
-            MarkSaveDirty(entityId);
+            MarkSaveDirty(entityId, NpcSaveGroup.Wallet);
             NpcTradeReport report = new NpcTradeReport { BuySkipReason = string.Empty };
             if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false ||
                 saveData.Condition == CharacterConditions.Dead)
@@ -82,7 +82,7 @@ namespace ARPG.Npc
             float seedGameTime, int worldSeed, int treatmentSalt, int severeSalt, float outcomeGameTime,
             out bool treated, out bool severe)
         {
-            MarkSaveDirty(entityId);
+            MarkSaveDirty(entityId, NpcSaveGroup.Condition | NpcSaveGroup.Activity | NpcSaveGroup.Stories);
             severe = NpcActivityResolver.RollSevereWound(rngOwnerId, seedGameTime, worldSeed, severeSalt);
             float recoveryHours = ResolveWoundedTreatment(entityId, saveData, rngOwnerId, seedGameTime, worldSeed,
                 treatmentSalt, severe, out treated);
@@ -108,7 +108,7 @@ namespace ARPG.Npc
         public float ResolveWoundedTreatment(int entityId, NpcSaveData saveData, int rngOwnerId, float seedGameTime,
             int worldSeed, int salt, bool severe, out bool treated)
         {
-            MarkSaveDirty(entityId);
+            MarkSaveDirty(entityId, NpcSaveGroup.Wallet);
             treated = false;
             int fee = GetTreatmentFee();
             float untreatedHours = NpcActivityResolver.GetWoundRecoveryHours(severe, false);
@@ -150,7 +150,7 @@ namespace ARPG.Npc
 
         private void SellInventoryToShop(int entityId, NpcSaveData saveData, int villageId, ref NpcTradeReport report)
         {
-            MarkSaveDirty(entityId);
+            MarkSaveDirty(entityId, NpcSaveGroup.Inventory | NpcSaveGroup.Wallet);
             // 실체화 중 장착을 미뤄 둔 업그레이드 후보는 팔지 않는다.
             _deferredPurchaseUpgradeItemIds.TryGetValue(entityId, out List<int>? deferred);
 
@@ -196,7 +196,7 @@ namespace ARPG.Npc
         private void BuyUpgradeFromShop(int entityId, NpcSaveData saveData, VillageData village,
             ref NpcTradeReport report)
         {
-            MarkSaveDirty(entityId);
+            MarkSaveDirty(entityId, NpcSaveGroup.Inventory | NpcSaveGroup.Equipment | NpcSaveGroup.Wallet);
             float now = AR.s.Time.CurrentGameTime;
             int villageId = village.VillageId;
 

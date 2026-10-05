@@ -319,8 +319,8 @@ namespace ARPG.Npc
         /// </summary>
         public NpcTheftOutcome ApplyTheft(in NpcTheftDecision decision, float gameTime)
         {
-            MarkSaveDirty(decision.ThiefId);
-            MarkSaveDirty(decision.VictimId);
+            MarkSaveDirty(decision.ThiefId, NpcSaveGroup.Inventory | NpcSaveGroup.Theft | NpcSaveGroup.Stories);
+            MarkSaveDirty(decision.VictimId, NpcSaveGroup.Inventory | NpcSaveGroup.Theft | NpcSaveGroup.Stories);
             if (_npcSaveDict.TryGetValue(decision.ThiefId, out NpcSaveData? thief) == false ||
                 _npcSaveDict.TryGetValue(decision.VictimId, out NpcSaveData? victim) == false ||
                 decision.ThiefId == decision.VictimId)
@@ -364,7 +364,7 @@ namespace ARPG.Npc
         /// </summary>
         public void AddTheftClue(NpcSaveData victim, int itemInstanceId, int thiefId, float when)
         {
-            MarkSaveDirty(victim.EntityId);
+            MarkSaveDirty(victim.EntityId, NpcSaveGroup.Theft);
             if (itemInstanceId == 0 || thiefId < 0)
                 return;
             List<NpcTheftClue> clues = victim.TheftClues;
@@ -392,7 +392,7 @@ namespace ARPG.Npc
         /// <summary>피해자의 Rest 종료 때 (ResolveRestEnd): 범인 사망·14일 경과 단서를 지운다 (D103).</summary>
         private void PruneTheftClues(NpcSaveData victim, float now)
         {
-            MarkSaveDirty(victim.EntityId);
+            MarkSaveDirty(victim.EntityId, NpcSaveGroup.Theft);
             List<NpcTheftClue> clues = victim.TheftClues;
             for (int i = clues.Count - 1; i >= 0; i--)
             {
@@ -441,7 +441,7 @@ namespace ARPG.Npc
         private void ApplyTheftDiscovery(int victimId, NpcSaveData victim, int clueIndex, int path, int itemId, int value,
             float now)
         {
-            MarkSaveDirty(victimId);
+            MarkSaveDirty(victimId, NpcSaveGroup.Theft);
             NpcTheftClue clue = victim.TheftClues[clueIndex];
             NpcTheftDiscovery discovery = new NpcTheftDiscovery
             {
@@ -499,7 +499,7 @@ namespace ARPG.Npc
         /// </summary>
         public void NotifyNpcItemSold(int sellerId, NpcSaveData seller, int villageId, ItemData item, float now)
         {
-            MarkSaveDirty(sellerId);
+            MarkSaveDirty(sellerId, NpcSaveGroup.Rumors);
             if (item == null || IsStolenItemSale(sellerId, villageId, item.ItemInstanceId, now) == false)
                 return;
             NpcRumor rumor = new NpcRumor
@@ -523,7 +523,7 @@ namespace ARPG.Npc
         private void AddBetrayalRumor(int victimId, NpcSaveData victim, int thiefId, NpcBetrayalKind kind, int itemInstanceId,
             int itemId, int value, float eventGameTime, float now)
         {
-            MarkSaveDirty(victimId);
+            MarkSaveDirty(victimId, NpcSaveGroup.Rumors);
             NpcRumor rumor = new NpcRumor
             {
                 Kind = NpcRumorKind.Betrayal,
@@ -608,7 +608,7 @@ namespace ARPG.Npc
         private void AddTheftDeed(int entityId, NpcDeedKind kind, NpcKnowledgeLevel howKnown, int otherId, int itemId,
             string itemName, float when)
         {
-            MarkSaveDirty(entityId);
+            MarkSaveDirty(entityId, NpcSaveGroup.Deeds | NpcSaveGroup.Stories);
             if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
                 return;
 

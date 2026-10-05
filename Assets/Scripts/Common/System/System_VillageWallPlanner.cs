@@ -41,7 +41,7 @@ namespace ARPG.Systems
                 if (AR.s.Component.HasComponent<WallPlanRequestTag>(v.EntityId) == false)
                     continue;
 
-                AR.s.Village.MarkSaveDirty(v.VillageId);
+                AR.s.Village.MarkSaveDirty(v.VillageId, ARPG.Data.VillageSaveGroup.Walls);
                 if (VillageWallRules.PlanWalls(v) == false)
                 {
                     Debug.LogWarning($"[WallPlanner] v{v.VillageId} Bounds 너무 작음 "

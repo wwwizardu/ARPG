@@ -30,6 +30,7 @@ namespace ARPG.EditorTools
                 ValidateSparseSuspension(report);
                 ValidateContextLifetime(report);
                 ValidateSnapshotIsolation(report);
+                report.AppendLine(ARPG.Editor.NpcSaveSnapshotDiagnostics.VerifyGroupedSnapshotContracts());
                 await ValidatePersistence(report);
                 await ValidateSaveScheduling(report);
                 report.AppendLine("PASS: all dungeon generation/storage diagnostics.");

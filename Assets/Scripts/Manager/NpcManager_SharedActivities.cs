@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using ARPG.Creature;
 using UnityEngine;
 
+using ARPG.Data;
+
 namespace ARPG.Npc
 {
     public partial class NpcManager
@@ -54,7 +56,7 @@ namespace ARPG.Npc
             Dictionary<NpcPairKey, NpcSharedActivityStats> legacy = new();
             foreach (var owner in _npcSaveDict)
             {
-                MarkSaveDirty(owner.Key);
+                MarkSaveDirty(owner.Key, NpcSaveGroup.Deeds | NpcSaveGroup.Memories | NpcSaveGroup.Stories);
                 NpcSaveData save = owner.Value;
                 save.MergeDuplicatePartyAffinityDeeds();
                 for (int i = 0; i < save.Deeds.Count; i++)
@@ -100,7 +102,7 @@ namespace ARPG.Npc
             int removed = 0;
             foreach (var owner in _npcSaveDict)
             {
-                MarkSaveDirty(owner.Key);
+                MarkSaveDirty(owner.Key, NpcSaveGroup.Deeds | NpcSaveGroup.Memories | NpcSaveGroup.Stories);
                 removed += owner.Value.Deeds.RemoveAll(deed => deed.Kind == NpcDeedKind.PartyAffinityChanged &&
                     legacy.ContainsKey(new NpcPairKey(owner.Key, NpcSaveData.GetPartyAffinityPartnerId(deed, owner.Key))));
             }
@@ -155,7 +157,7 @@ namespace ARPG.Npc
         private void StoreSharedActivityMemory(int ownerId, int otherId, NpcSharedActivityStats stats, int? affinity,
             bool fromLegacyDeeds)
         {
-            MarkSaveDirty(ownerId);
+            MarkSaveDirty(ownerId, NpcSaveGroup.Memories | NpcSaveGroup.Stories);
             if (_npcSaveDict.TryGetValue(ownerId, out NpcSaveData? owner) == false)
                 return;
             NpcSharedActivityMemory? memory = null;
@@ -225,7 +227,7 @@ namespace ARPG.Npc
             Dictionary<int, (int Id, int Memory)> previous = new();
             foreach (var npc in _npcSaveDict)
             {
-                MarkSaveDirty(npc.Key);
+                MarkSaveDirty(npc.Key, NpcSaveGroup.Stories | NpcSaveGroup.Deeds);
                 changed |= npc.Value.MigratePersonalStories();
                 NpcPersonalStories? stories = npc.Value.PersonalStories;
                 previous.Add(npc.Key, (stories?.CompanionId ?? -1, stories?.CompanionMemoryIndex ?? -1));
@@ -258,7 +260,7 @@ namespace ARPG.Npc
 
         private void RecordLatestCompanion(int npcId, int otherId, NpcSharedActivityStats stats, int memoryIndex)
         {
-            MarkSaveDirty(npcId);
+            MarkSaveDirty(npcId, NpcSaveGroup.Stories);
             if (_npcSaveDict.TryGetValue(npcId, out NpcSaveData? save) == false)
                 return;
             bool hasLatest = TryGetLatestSharedActivity(npcId, out int latestId, out NpcSharedActivityStats? latest, out _);

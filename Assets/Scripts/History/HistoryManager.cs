@@ -105,6 +105,7 @@ namespace ARPG.History
 
             int nextId = c.Events.Count > 0 ? c.Events[c.Events.Count - 1].EventId + 1 : 0;
             c.Events.Add(new ChronicleEvent(nextId, c.SimulatedYears, type, subjectSettlementId, objectSettlementId, kingdomId));
+            AR.s.Data.MarkChronicleEventSaveDirty(nextId);
             return nextId;
         }
 

@@ -24,6 +24,9 @@ namespace ARPG.Village
 
         public void Initialize()
         {
+            // 새 게임은 Load 없이 여기로 바로 온다. 세이브가 있으면 Load가 먼저 만들었다 (부팅 때 1회 더 만드는 것은 무해).
+            _saveSourceGetter = GetSaveSource;
+
             if (_villageList.Count > 0)
             {
                 // 세이브 로드는 데이터만 등록한다. Map/Building/Component 초기화 후
@@ -112,7 +115,7 @@ namespace ARPG.Village
         {
             if (_villages.TryGetValue(villageId, out VillageData? data))
             {
-                MarkSaveDirty(villageId);
+                MarkSaveDirty(villageId, ARPG.Data.VillageSaveGroup.Identity);
                 data.SettlementId = settlementId;
             }
         }
@@ -182,7 +185,7 @@ namespace ARPG.Village
             if (_villages.TryGetValue(villageId, out VillageData? data) == false)
                 return;
 
-            MarkSaveDirty(villageId);
+            MarkSaveDirty(villageId, ARPG.Data.VillageSaveGroup.Resources);
             VillageResourceSimulation.Produce(data, type, amount);
             SyncStorageFromData(data);
 
@@ -195,7 +198,7 @@ namespace ARPG.Village
             if (_villages.TryGetValue(villageId, out VillageData? data) == false)
                 return false;
 
-            MarkSaveDirty(villageId);
+            MarkSaveDirty(villageId, ARPG.Data.VillageSaveGroup.Resources);
             if (VillageResourceSimulation.Consume(data, type, amount) == false)
                 return false;
 
@@ -352,7 +355,7 @@ namespace ARPG.Village
                 v.Population = v.FixedPopulation;
             }
             if (v.Population != previousPopulation || v.FixedPopulation != previousFixedPopulation)
-                MarkSaveDirty(v.VillageId);
+                MarkSaveDirty(v.VillageId, ARPG.Data.VillageSaveGroup.Population);
         }
 
         public List<VillageData> Save()
@@ -362,6 +365,10 @@ namespace ARPG.Village
 
         public void Load(List<VillageData> villageDatas)
         {
+            // 저장 스냅샷 원장 조회 델리게이트. 부팅 때 Load는 DataManager.Initialize 안에서 Initialize보다 먼저 불리고,
+            // 끝의 RebuildSaveSnapshot이 이것을 쓴다.
+            _saveSourceGetter = GetSaveSource;
+
             ClearVillages();
             _placementWarnings.Clear();
             _profileWarnings.Clear();
@@ -534,7 +541,7 @@ namespace ARPG.Village
                     continue;
                 }
 
-                MarkSaveDirty(data.VillageId);
+                MarkSaveDirty(data.VillageId, ARPG.Data.VillageSaveGroup.Facilities);
                 Tables.BuildableItemTable? t = AR.s.Data.GetBuildableItem(saved.TableId);
                 if (t == null) continue;
 
@@ -896,7 +903,7 @@ namespace ARPG.Village
         {
             if (_villages.TryGetValue(villageId, out VillageData? data) == false)
                 return false;
-            MarkSaveDirty(villageId);
+            MarkSaveDirty(villageId, ARPG.Data.VillageSaveGroup.Walls);
             if (VillageWallRules.ApplyWallDamage(data, tileX, tileY, damage,
                     out bool destroyed) == false)
                 return false;
@@ -940,7 +947,7 @@ namespace ARPG.Village
                 return false;
             }
 
-            MarkSaveDirty(villageId);
+            MarkSaveDirty(villageId, ARPG.Data.VillageSaveGroup.Walls);
             if (VillageWallRules.TryToggleGate(data, segmentId,
                     out WallSegmentSaveData? gate) == false || gate == null)
                 return false;
@@ -1239,7 +1246,7 @@ namespace ARPG.Village
             if (t == null)
                 return;
 
-            MarkSaveDirty(villageId);
+            MarkSaveDirty(villageId, ARPG.Data.VillageSaveGroup.Facilities | ARPG.Data.VillageSaveGroup.Resources | ARPG.Data.VillageSaveGroup.Shop);
             VillageConstructionLedger.ApplyCompletedBuild(v, t, tileX, tileY,
                 buildingEntityId);
             SyncStorageFromData(v);
@@ -1304,7 +1311,7 @@ namespace ARPG.Village
                 if (v.EntityId < 0)
                     continue;
 
-                MarkSaveDirty(v.VillageId);
+                MarkSaveDirty(v.VillageId, ARPG.Data.VillageSaveGroup.Construction);
                 // Legacy 단일 필드는 신규 세이브에선 항상 비움 (구 세이브 호환만 위해 필드 유지)
                 v.CurrentBuildTableId = 0;
                 v.CurrentBuildStartedAt = -1f;
@@ -1351,7 +1358,7 @@ namespace ARPG.Village
             // Legacy 마이그레이션: 구 세이브의 단일 CurrentBuild* 필드 → ActiveBuildTasks
             if (v.ActiveBuildTasks.Count == 0 && v.CurrentBuildTableId > 0)
             {
-                MarkSaveDirty(v.VillageId);
+                MarkSaveDirty(v.VillageId, ARPG.Data.VillageSaveGroup.Construction);
                 v.ActiveBuildTasks.Add(new BuildTaskSnapshot
                 {
                     TableId = v.CurrentBuildTableId,
@@ -1373,7 +1380,7 @@ namespace ARPG.Village
                     && VillageConstructionPosition.IsAssigned(snap) == true)
                     continue;
 
-                MarkSaveDirty(v.VillageId);
+                MarkSaveDirty(v.VillageId, ARPG.Data.VillageSaveGroup.Construction);
                 Tables.BuildableItemTable? buildTable = AR.s.Data.GetBuildableItem(snap.TableId);
                 if (buildTable == null)
                 {
@@ -1595,7 +1602,7 @@ namespace ARPG.Village
             if (AR.s.Player.Inventory.AddItem(purchase) < 0) return -1;
 
             // 차감
-            MarkSaveDirty(villageId);
+            MarkSaveDirty(villageId, ARPG.Data.VillageSaveGroup.Shop | ARPG.Data.VillageSaveGroup.Resources);
             AR.s.Data.Player.Gold -= gold;
             entry.RemainingCount -= amount;
             v.MerchantStock[stockEntryIndex] = entry;
@@ -1630,7 +1637,7 @@ namespace ARPG.Village
                 && now - v.LastMerchantRollGameTime < trade.RestockIntervalHours)
                 return;
 
-            MarkSaveDirty(villageId);
+            MarkSaveDirty(villageId, ARPG.Data.VillageSaveGroup.Shop);
             RollMerchantStock(v, trade, cycle);
             v.LastMerchantRollGameTime = now;
             v.MerchantRestockCycle = cycle;
@@ -1702,7 +1709,7 @@ namespace ARPG.Village
                     $"{VillageProfileCatalog.DEFAULT_PROCEDURAL_PROFILE_ID} was used.");
             }
 
-            MarkSaveDirty(data.VillageId);
+            MarkSaveDirty(data.VillageId, ARPG.Data.VillageSaveGroup.Identity);
             data.VillageProfileId = resolution.Profile.ProfileId;
 
             if (string.IsNullOrWhiteSpace(previousProfileId) == false)
@@ -1729,7 +1736,7 @@ namespace ARPG.Village
                 .ResolveBaseTownFixedPopulation(data.FixedPopulation, data.Population,
                     profile, out BaseTownPopulationSource source);
             if (data.FixedPopulation != fixedPopulation || data.Population != fixedPopulation)
-                MarkSaveDirty(data.VillageId);
+                MarkSaveDirty(data.VillageId, ARPG.Data.VillageSaveGroup.Population);
             data.FixedPopulation = fixedPopulation;
             data.Population = fixedPopulation;
 

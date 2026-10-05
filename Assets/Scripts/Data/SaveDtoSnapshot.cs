@@ -26,6 +26,156 @@ namespace ARPG.Data
             return Copy(source, new HashSet<object>(ReferenceIdentity.Instance), 0);
         }
 
+        public ulong GetGroupMask(object source, Func<string, ulong> getGroup)
+        {
+            var contract = (JsonObjectContract)_contracts.ResolveContract(source.GetType());
+            ulong groups = 0;
+            for (int i = 0; i < contract.Properties.Count; i++)
+                if (contract.Properties[i].Ignored == false && contract.Properties[i].Readable == true)
+                    groups |= getGroup(contract.Properties[i].UnderlyingName!);
+            return groups;
+        }
+
+        /// <summary>선택 묶음만 읽는다. 준비가 모두 성공한 뒤 적용하며 생략 키 제거와 계약 순서를 보존한다.</summary>
+        public void UpdateGroup(object source, Dictionary<string, object?> target, ulong group,
+            Func<string, ulong> getGroup)
+        {
+            if (_contracts.ResolveContract(source.GetType()) is not JsonObjectContract contract || contract.Converter != null)
+                throw new InvalidOperationException("Unsupported grouped save DTO: " + source.GetType().FullName);
+            Dictionary<string, object?> prepared = new(StringComparer.Ordinal);
+            HashSet<object> ancestors = new(ReferenceIdentity.Instance) { source };
+            for (int i = 0; i < contract.Properties.Count; i++)
+            {
+                JsonProperty property = contract.Properties[i];
+                if (property.Ignored == true || property.Readable == false ||
+                    (getGroup(property.UnderlyingName!) & group) == 0) continue;
+                if (property.Converter != null || property.ItemConverter != null)
+                    throw new InvalidOperationException("Unsupported save member converter: " + property.PropertyName);
+                if (property.ShouldSerialize != null && property.ShouldSerialize(source) == false) continue;
+                object? value = property.ValueProvider!.GetValue(source);
+                if (IsIgnoredDefault(property, value) == true) continue;
+                target.TryGetValue(property.PropertyName!, out object? previous);
+                prepared.Add(property.PropertyName!, CopyCollectionChanges(value, previous, ancestors));
+            }
+            // Reorder only the shallow field table. Retained groups keep their independent containers.
+            Dictionary<string, object?> ordered = new(target.Count + prepared.Count, StringComparer.Ordinal);
+            for (int i = 0; i < contract.Properties.Count; i++)
+            {
+                JsonProperty property = contract.Properties[i];
+                if (property.Ignored == true || property.Readable == false) continue;
+                string name = property.PropertyName!;
+                Dictionary<string, object?> values = (getGroup(property.UnderlyingName!) & group) != 0 ? prepared : target;
+                if (values.TryGetValue(name, out object? value) == true) ordered.Add(name, value);
+            }
+            target.Clear();
+            foreach (var pair in ordered) target.Add(pair.Key, pair.Value);
+        }
+
+        /// <summary>슬롯/청크/오브젝트 목록은 순서를 조립하고 실제 바뀐 항목만 독립 복사한다.</summary>
+        private object? CopyCollectionChanges(object? live, object? previous, HashSet<object> ancestors)
+        {
+            if (live is IDictionary dictionary && previous is Dictionary<string, object?> oldDictionary)
+            {
+                if (ancestors.Add(live) == false) throw new InvalidOperationException("Cyclic save collection");
+                try
+                {
+                    Dictionary<string, object?> result = new(dictionary.Count, StringComparer.Ordinal);
+                    foreach (DictionaryEntry pair in dictionary)
+                    {
+                        Type keyType = pair.Key.GetType();
+                        if (keyType.IsEnum == false && keyType.IsPrimitive == false && pair.Key is string == false)
+                            throw new InvalidOperationException("Unsupported save dictionary key: " + keyType.FullName);
+                        string key = Convert.ToString(pair.Key, CultureInfo.InvariantCulture)!;
+                        oldDictionary.TryGetValue(key, out object? old);
+                        result.Add(key, Matches(pair.Value, old, ancestors, 1) == true ? old : Copy(pair.Value, ancestors, 1));
+                    }
+                    return result;
+                }
+                finally { ancestors.Remove(live); }
+            }
+            if (live is IEnumerable sequence && live is string == false && previous is List<object?> oldList)
+            {
+                if (ancestors.Add(live) == false) throw new InvalidOperationException("Cyclic save collection");
+                try
+                {
+                    List<object?> result = new(live is ICollection collection ? collection.Count : 0);
+                    int index = 0;
+                    foreach (object? item in sequence)
+                    {
+                        object? old = index < oldList.Count ? oldList[index] : null;
+                        result.Add(Matches(item, old, ancestors, 1) == true ? old : Copy(item, ancestors, 1));
+                        index++;
+                    }
+                    return result;
+                }
+                finally { ancestors.Remove(live); }
+            }
+            return Copy(live, ancestors, 1);
+        }
+
+        public ulong FindChangedScalarGroups(object source, Dictionary<string, object?> cached, Func<string, ulong> getGroup)
+        {
+            var contract = (JsonObjectContract)_contracts.ResolveContract(source.GetType());
+            ulong groups = 0;
+            for (int i = 0; i < contract.Properties.Count; i++)
+            {
+                JsonProperty property = contract.Properties[i];
+                if (property.Ignored == true || property.Readable == false) continue;
+                Type? type = property.PropertyType;
+                if (type == null || (type.IsPrimitive == false && type.IsEnum == false && type != typeof(string) && type != typeof(decimal))) continue;
+                object? value = property.ValueProvider!.GetValue(source);
+                bool include = IsIgnoredDefault(property, value) == false && (property.ShouldSerialize?.Invoke(source) ?? true);
+                bool existed = cached.TryGetValue(property.PropertyName!, out object? old);
+                if (include != existed || (include == true && Equals(value, old) == false)) groups |= getGroup(property.UnderlyingName!);
+            }
+            return groups;
+        }
+
+        private bool Matches(object? source, object? snapshot, HashSet<object> ancestors, int depth)
+        {
+            if (source == null) return snapshot == null;
+            Type type = source.GetType();
+            if (type.IsPrimitive == true || type.IsEnum == true || source is string || source is decimal) return source.Equals(snapshot);
+            if (depth > 128 || ancestors.Add(source) == false) throw new InvalidOperationException("Cyclic or excessively deep save data");
+            try
+            {
+                if (source is IDictionary dictionary)
+                {
+                    if (snapshot is not Dictionary<string, object?> old || old.Count != dictionary.Count) return false;
+                    foreach (DictionaryEntry pair in dictionary)
+                        if (old.TryGetValue(Convert.ToString(pair.Key, CultureInfo.InvariantCulture)!, out object? value) == false || Matches(pair.Value, value, ancestors, depth + 1) == false) return false;
+                    return true;
+                }
+                if (source is IEnumerable sequence)
+                {
+                    if (snapshot is not List<object?> old) return false;
+                    int index = 0;
+                    foreach (object? item in sequence)
+                    {
+                        if (index >= old.Count || Matches(item, old[index], ancestors, depth + 1) == false) return false;
+                        index++;
+                    }
+                    return index == old.Count;
+                }
+                if (type.Namespace == null || type.Namespace.StartsWith("ARPG", StringComparison.Ordinal) == false ||
+                    _contracts.ResolveContract(type) is not JsonObjectContract contract || contract.Converter != null || snapshot is not Dictionary<string, object?> fields) return false;
+                int count = 0;
+                for (int i = 0; i < contract.Properties.Count; i++)
+                {
+                    JsonProperty property = contract.Properties[i];
+                    if (property.Ignored == true || property.Readable == false) continue;
+                    if (property.Converter != null || property.ItemConverter != null) return false;
+                    if (property.ShouldSerialize?.Invoke(source) == false) continue;
+                    object? value = property.ValueProvider!.GetValue(source);
+                    if (IsIgnoredDefault(property, value) == true) continue;
+                    count++;
+                    if (fields.TryGetValue(property.PropertyName!, out object? old) == false || Matches(value, old, ancestors, depth + 1) == false) return false;
+                }
+                return count == fields.Count;
+            }
+            finally { ancestors.Remove(source); }
+        }
+
         private object? Copy(object? source, HashSet<object> ancestors, int depth)
         {
             if (source == null) return null;

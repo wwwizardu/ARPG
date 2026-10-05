@@ -24,6 +24,7 @@ This is a Unity 6000.0.42f1 LTS 2D URP ARPG using a custom ECS architecture, not
 - Prefix member variables with `_`; order methods `public` → `protected` → `private`.
 - `Initialize()` is for one-time setup; `Reset()` must clean up and restore the initial state.
 - Use `for` for performance-sensitive runtime iteration, such as per-frame/tick hot loops or large collections. Otherwise, choose `for` or `foreach` based on clarity. Use `SqrMagnitude` for distance comparisons.
+- Do not create delegates on hot paths (per-frame/tick work, per-entity loops, frequently called APIs). Passing an instance method group or a capturing lambda to a `Func`/`Action` parameter allocates a new delegate (and closure) on every call. Create the delegate once at the owner's real initialization entry point, store it in a field, and reuse it. If the lambda must capture a variable, build it in a separate method so the cached lookup path does not allocate the closure.
 - Use explicit boolean/null comparisons (for example, `== false` and `== null`) instead of `!`.
 - Components contain data only; game logic belongs in systems.
 - Use `ComponentManager.TryGetComponent` for optional components and `GetComponentPool<T>()` for iteration. Cache `ComponentManager` references and size pools appropriately.

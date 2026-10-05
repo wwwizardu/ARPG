@@ -4,6 +4,8 @@ sources:
   - Docs/combat/combatSystem.md
   - Docs/combat/ModSystem_Changelog.md
   - Docs/combat/ITEM_ENCHANTMENT_DESIGN.md
+  - Docs/combat/WEAPON_SKILL_RANGE_DESIGN.md
+  - Docs/combat/WEAPON_PROGRESSION_DESIGN.md
   - Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md
   - Assets/Scripts/Common/Component/SkillAttackProfileComponent.cs
   - Assets/Scripts/Common/Component/StatComponent.cs
@@ -39,6 +41,7 @@ sources:
   - Assets/_BinaryData/TableData/ModTierTable.bytes
   - Assets/_BinaryData/TableData/ItemEnchantmentCostTable.bytes
 last_synced: 2026-09-01
+last_updated: 2026-10-05
 status: implemented-contract-active-validation-pending
 ---
 
@@ -68,6 +71,32 @@ status: implemented-contract-active-validation-pending
 | §10–§11·§13 | 파일별 구현 계획·콘텐츠 보강안·Phase 순서로서 구현 이력으로만 읽는다. 현재 파일 위치와 완료 여부는 코드·테이블이 정본이다. [src: Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §10–§11·§13, Assets/Scripts/Item/ItemEnchantmentService.cs, Assets/Scripts/Village/VillageInitialDevelopment.cs, Assets/_BinaryData/TableData/ModTable.bytes] |
 
 따라서 MVP 런타임 구현은 완료로 분류하되, 문서 안의 모든 시제와 “현행 기준선”을 현재 상태로 읽지는 않는다. 문서를 제거하거나 전체를 구현 현황 대시보드로 사용하는 대신, 확정 규칙·검증 기준·후속 경계의 원본으로 유지한다. [src: Docs/combat/ITEM_ENCHANTMENT_DESIGN.md, Assets/Scripts/Item/ItemEnchantmentService.cs, Assets/Scripts/Editor/ItemEnchantmentDiagnostics.cs] [추론: 구현 완료와 원본 문서의 보존 가치는 별개]
+
+## 무기 도달거리와 스킬 범위 확정 설계
+
+2026-10-05 사용자 확정 규칙이며 **미구현**이다. 범위 옵션은 도달거리와 타격반경의 길이를 늘린다. 옵션끼리는 합산하고 무기 도달거리 배율은 독립적으로 곱해, 동일 스킬·옵션에서 무기별 거리 비율을 유지한다. [src: Docs/combat/WEAPON_SKILL_RANGE_DESIGN.md §확정 규칙·§현행 코드와 구현 경계]
+
+```text
+범위 증가 배율 = 1 + 범위 증가 옵션 합계 / 100
+최종 도달거리 = 스킬 기본 도달거리 × 무기 배율 × 범위 증가 배율
+최종 타격반경 = 스킬 기본 타격반경 × 무기 배율 × 범위 증가 배율
+```
+
+위 식의 정본은 `WEAPON_SKILL_RANGE_DESIGN.md`다. 부채꼴 각도는 유지하고 무기 범위를 사용하지 않는 스킬의 무기 배율은 1.0으로 둔다. 무기별 실제 배율·옵션 수치·스킬 목록·고정 거리 추가 옵션은 후속 결정이다. [src: Docs/combat/WEAPON_SKILL_RANGE_DESIGN.md §확정 규칙·§후속 결정]
+
+구현 시 사용·AI 교전 사거리와 실제 타격 형상을 구분하고, 거리 제한·판정·공격 예고가 같은 계산을 사용하도록 연결한다. 캐릭터 Collider 크기는 범위 배율로 확대하지 않는다. [src: Docs/combat/WEAPON_SKILL_RANGE_DESIGN.md §현행 코드와 구현 경계]
+
+## 무기 계열별 성장 방향
+
+2026-10-05 사용자 요청으로 성장 방향과 현행 장비 공백을 정리했으며 콘텐츠 재배치와 구현은 아직 하지 않았다. 지원하는 계열마다 성장 구간별 장비와 획득 경로를 마련해 같은 계열을 유지하며 업그레이드할 수 있게 한다. 계열의 거리·공속·한 방 피해 성향을 유지하며 상위 장비의 기본 성능과 옵션 수준을 높이는 방향이다. [src: Docs/combat/WEAPON_PROGRESSION_DESIGN.md §정리한 성장 원칙]
+
+같은 날 사용자 확정으로 표창을 제외하고 투창을 유지한다. 대검·활·석궁·지팡이는 양손이며 보조 장비를 사용할 수 없다. 한손검·단검·도끼·투창·완드는 한손 계열로 쌍수를 허용한다. [src: Docs/combat/WEAPON_PROGRESSION_DESIGN.md §지원 계열과 장착 규칙]
+
+쌍수 계산 초기안은 각 무기의 고유 강화 반영 후 피해를 `(오른손 + 왼손) × 0.7`로 합성하고 APS·무기 기본 치명타·도달거리 배율은 산술평균한다. 기존 타격 횟수와 타격당 치명타 한 번을 유지하며 별도 쌍수 공속 보너스는 없다. 동일 수치 두 자루의 무기 피해 항은 한 자루 대비 40% 증가한다. 평균 도달거리 배율을 기존 범위 식에 대입하며 공통 옵션과 스킬 계수의 계산 경로는 유지한다. 이 초기안은 **확정·미구현**이며 현행 무기 조회는 오른손 우선 경로다. [src: Docs/combat/WEAPON_PROGRESSION_DESIGN.md §쌍수 계산 초기안·§쌍수 구현의 현행 기준, Docs/combat/WEAPON_SKILL_RANGE_DESIGN.md §확정 규칙]
+
+현재 장비를 이름 기준으로 대응하면 한손검·단검·도끼 등은 Tier 1·2·3에 장비가 있고 대검·석궁은 Tier 1, 투창은 Tier 2·3 장비가 비어 있다. 기존 표창 행과 연결 데이터는 아직 삭제하지 않았다. 초·중·후반 3구간은 점검용 틀이며 최종 구간 수, 계열별 수치·고유 효과·신규 장비 목록은 미확정이다. [src: Docs/combat/WEAPON_PROGRESSION_DESIGN.md §현재 장비의 계열별 배치·§무기 성향 초안·§이번 정리의 범위]
+
+계열별 전체 배치표와 다음 작업 순서는 [무기 성장 정리](../Docs/combat/WEAPON_PROGRESSION_DESIGN.md)에 있다. [src: Docs/combat/WEAPON_PROGRESSION_DESIGN.md]
 
 ## 책임 경계
 

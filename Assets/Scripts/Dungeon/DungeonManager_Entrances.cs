@@ -78,6 +78,7 @@ namespace ARPG.Dungeon
                     for (; candidates < Mathf.Max(1, Settings.CandidatesPerFrame) &&
                            queries + 9 <= Mathf.Max(9, Settings.TileQueriesPerFrame); candidates++)
                     {
+                        AR.s.Data.MarkDungeonSlotsSaveDirty(village.VillageId);
                         int attempt = slot.NextCandidate++;
                         CandidatePosition(village, slot, attempt, out int x, out int y);
                         bool valid = ValidateEntrance(village, slot, x, y, ref queries);
@@ -150,6 +151,7 @@ namespace ARPG.Dungeon
         {
             _busy = true;
             int lifetime = _lifetime;
+            if (_ownersById.TryGetValue(slot.DungeonId, out var owner) == true) AR.s.Data.MarkDungeonSlotsSaveDirty(owner.VillageId);
             slot.EntranceX = x;
             slot.EntranceY = y;
             slot.HasEntrance = true;
@@ -160,13 +162,14 @@ namespace ARPG.Dungeon
                 if (lifetime != _lifetime) return;
                 if (saved == false)
                 {
+                    if (_ownersById.TryGetValue(slot.DungeonId, out var failedOwner) == true) AR.s.Data.MarkDungeonSlotsSaveDirty(failedOwner.VillageId);
                     slot.HasEntrance = false;
                     slot.NextCandidate = Mathf.Max(0, slot.NextCandidate - 1);
                     return;
                 }
                 RebuildEntranceIndex();
             }
-            catch (Exception ex) { slot.HasEntrance = false; Debug.LogError("[Dungeon] Placement: " + ex.Message); }
+            catch (Exception ex) { if (_ownersById.TryGetValue(slot.DungeonId, out var failedOwner) == true) AR.s.Data.MarkDungeonSlotsSaveDirty(failedOwner.VillageId); slot.HasEntrance = false; Debug.LogError("[Dungeon] Placement: " + ex.Message); }
             finally { if (lifetime == _lifetime) _busy = false; }
         }
 

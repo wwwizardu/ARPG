@@ -9,6 +9,9 @@ namespace ARPG.Item
 {
     public class Inventory
     {
+        private System.Action? _changed;
+        public System.Action? Changed { get => _changed; set => _changed = value; }
+
         private int _maxSlotCount = 0;
 
         private List<ItemData?> _items = null!;
@@ -44,6 +47,7 @@ namespace ARPG.Item
                 {
                     if (_items[i] != null && _items[i]!.Id == inItem.Id)
                     {
+                        _changed?.Invoke();
                         _items[i]!.Quantity += inItem.Quantity;
                         return i;
                     }
@@ -55,6 +59,7 @@ namespace ARPG.Item
             {
                 if (_items[i] == null)
                 {
+                    _changed?.Invoke();
                     _items[i] = inItem;
                     return i;
                 }
@@ -94,6 +99,7 @@ namespace ARPG.Item
             // 해당 슬롯에 같은 ID의 아이템이 있으면 수량 증가
             if (_items[slotIndex] != null && _items[slotIndex]!.Id == inItem.Id)
             {
+                _changed?.Invoke();
                 _items[slotIndex]!.Quantity += inItem.Quantity;
                 return true;
             }
@@ -103,7 +109,7 @@ namespace ARPG.Item
             {
                 replacedItem = _items[slotIndex];
             }
-
+            _changed?.Invoke();
             _items[slotIndex] = inItem;
             return true;
         }
@@ -152,7 +158,6 @@ namespace ARPG.Item
             // 인덱스 유효성 검사
             if (inSlotIndex < 0 || inSlotIndex >= _items.Count)
                 return false;
-
             if (_items[inSlotIndex] == null)
                 return false;
 
@@ -166,12 +171,14 @@ namespace ARPG.Item
             // 제거할 수량이 현재 수량과 같으면 슬롯 비우기
             if (_items[inSlotIndex]!.Quantity == inQuantity)
             {
+                _changed?.Invoke();
                 _items[inSlotIndex] = null;
                 return true;
             }
             else
             {
                 // 수량만 감소
+                _changed?.Invoke();
                 _items[inSlotIndex]!.Quantity -= inQuantity;
                 outRemainItem = _items[inSlotIndex];
                 return true;
@@ -219,6 +226,7 @@ namespace ARPG.Item
                     continue;
 
                 int consume = Mathf.Min(item.Quantity, remaining);
+                _changed?.Invoke();
                 item.Quantity -= consume;
                 remaining -= consume;
                 if (item.Quantity == 0)
@@ -244,7 +252,7 @@ namespace ARPG.Item
             // 아이템 위치 교환 (빈 슬롯이어도 교환 가능)
             ItemData? fromItem = _items[inFromIndex];
             ItemData? toItem = _items[inToIndex];
-
+            _changed?.Invoke();
             _items[inFromIndex] = toItem;
             _items[inToIndex] = fromItem;
 

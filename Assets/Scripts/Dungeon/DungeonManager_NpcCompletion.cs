@@ -201,6 +201,7 @@ namespace ARPG.Dungeon
 
             // 슬롯 객체를 제자리에서 바꾼다. 붙잡고 있던 역인덱스 참조도 HasEntrance=false를 보게 되어
             // 다음 인덱스 재구성 전에 옛 입구로 입장·상호작용할 수 없다.
+            AR.s.Data.MarkDungeonSlotsSaveDirty(villageId);
             slot.Generation = nextGeneration;
             slot.DungeonId = DungeonLayout.Id(AR.s.Data.WorldSeed, village.VillageId, slot.SlotIndex, nextGeneration);
             if (hadEntrance == true)

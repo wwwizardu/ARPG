@@ -76,7 +76,7 @@ namespace ARPG.Systems
                 {
                     // 순회 함수는 표시하지 않으므로 바꾸기 직전에 표시한다.
                     // 이동 중 위치는 경로로 다시 계산되는 값이라 표시하지 않는다 (SAVE_SNAPSHOT S13).
-                    AR.s.Npc.MarkSaveDirty(entityId);
+                    AR.s.Npc.MarkSaveDirty(entityId, NpcSaveGroup.ActivityTransition);
                     StartNextActivity(saveData, entityId, decisionTime, worldSeed);
                     // 새 활동도 이미 종료됐을 수 있으므로 즉시 다음 반복에서 종료시각을 확인한다.
                     continue;
@@ -87,7 +87,7 @@ namespace ARPG.Systems
                     return;
 
                 // 여기부터는 모든 경로가 이 NPC의 활동 상태를 바꾼다.
-                AR.s.Npc.MarkSaveDirty(entityId);
+                AR.s.Npc.MarkSaveDirty(entityId, NpcSaveGroup.ActivityTransition);
 
                 float transitionTime = activity.PhaseEndGameTime;
                 if (transitionTime < activity.PhaseStartedGameTime)
@@ -268,7 +268,7 @@ namespace ARPG.Systems
                     NpcSaveData? member = AR.s.Npc.GetSaveData(party.MemberIds[i]);
                     if (member == null)
                         continue;
-                    AR.s.Npc.MarkSaveDirty(party.MemberIds[i]);
+                    AR.s.Npc.MarkSaveDirty(party.MemberIds[i], NpcSaveGroup.ActivityTransition);
                     member.Activity.Kind = NpcActivityKind.None;
                     member.Activity.Phase = NpcActivityPhase.Idle;
                     member.Activity.TargetKey = string.Empty;
@@ -283,7 +283,7 @@ namespace ARPG.Systems
         private static void StartPartyExpedition(NpcPartyState party, NpcSaveData leader, NpcActivityKind kind,
             string targetKey, Vector2 targetPosition, float startGameTime)
         {
-            AR.s.Npc.MarkPartySaveDirty(party.PartyId);
+            AR.s.Npc.MarkPartySaveDirty(party.PartyId, PartySaveGroup.Activity);
             NpcActivityState activity = party.Activity;
             activity.PartyId = party.PartyId;
             activity.Kind = kind;
@@ -305,7 +305,7 @@ namespace ARPG.Systems
                 if (member == null)
                     continue;
 
-                AR.s.Npc.MarkSaveDirty(memberId);
+                AR.s.Npc.MarkSaveDirty(memberId, NpcSaveGroup.ActivityTransition);
                 member.Activity.PartyId = party.PartyId;
                 member.Activity.Kind = kind;
                 member.Activity.Phase = NpcActivityPhase.Venturing;
@@ -395,7 +395,7 @@ namespace ARPG.Systems
 
             for (int i = 0; i < members.Count; i++)
             {
-                AR.s.Npc.MarkSaveDirty(memberIds[i]);
+                AR.s.Npc.MarkSaveDirty(memberIds[i], NpcSaveGroup.ActivityTransition);
                 NpcSaveData member = members[i];
                 NpcActivityState memberActivity = member.Activity;
                 memberActivity.LastHuntOutcome = outcomes[i];

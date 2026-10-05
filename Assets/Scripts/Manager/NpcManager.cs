@@ -13,6 +13,7 @@ using ARPG.Scene;
 using ARPG.Tables;
 using ARPG.Utility;
 using ARPG.Village;
+using ARPG.Data;
 
 namespace ARPG.Npc
 {
@@ -51,6 +52,9 @@ namespace ARPG.Npc
 
         public void Initialize()
         {
+            // 저장 스냅샷 원장 조회 델리게이트는 여기서 한 번만 만든다 (아래 Load의 재생성보다 먼저).
+            _saveSourceGetter = GetSaveSource;
+
             // RegisterNpcsFromMapFile/Load 경로를 타지 않아도 SpawnNewNpc가 바로 동작하도록 항상 세팅
             _chunkSize = AR.s.Map.chunkSize;
 
@@ -464,7 +468,7 @@ namespace ARPG.Npc
                 SpawnDefaultNpcsForVillage(village, table, allocations[i]);
                 if (wasPopulated == false && village.NpcEntityIds.Count > 0)
                     NpcRelationBackfill.Generate(village, village.NpcEntityIds);
-                AR.s.Village.MarkSaveDirty(village.VillageId);
+                AR.s.Village.MarkSaveDirty(village.VillageId, ARPG.Data.VillageSaveGroup.Population);
                 village.HasBeenPopulated = true;
             }
 
@@ -754,7 +758,7 @@ namespace ARPG.Npc
 
                 // await 전에는 저장 대상이 바뀌지 않는다(IsSpawning은 저장 제외, 위치 보정은 SetNpcPosition이 표시).
                 // 생성 중·뒤의 변경(IsActive·EntityId 등)을 여기서 표시한다.
-                MarkSaveDirty(entityId);
+                MarkSaveDirty(entityId, NpcSaveGroup.Identity | NpcSaveGroup.Location | NpcSaveGroup.Condition | NpcSaveGroup.Activity);
                 if (createdId < 0 || entity == null)
                     return;
 
@@ -827,7 +831,7 @@ namespace ARPG.Npc
         /// </summary>
         private void SaveAndDeactivateNpc(int entityId, NpcSaveData saveData, Vector2Int originalChunk)
         {
-            MarkSaveDirty(entityId);
+            MarkSaveDirty(entityId, NpcSaveGroup.Location | NpcSaveGroup.Condition | NpcSaveGroup.Activity);
             if (AR.s.Component.TryGetComponent<TransformComponent>(entityId, out var transform))
             {
                 saveData.Position = new Vector2(transform.Position.x, transform.Position.y);
@@ -895,7 +899,7 @@ namespace ARPG.Npc
 
         private void ResumeHuntPathFromCurrentPosition(NpcSaveData saveData, float now)
         {
-            MarkSaveDirty(saveData.EntityId);
+            MarkSaveDirty(saveData.EntityId, NpcSaveGroup.Activity);
             NpcActivityState activity = saveData.Activity;
             if (NpcActivityResolver.HasTravelPath(activity.Kind) == false || activity.HasMovementPath == false)
                 return;
@@ -1007,14 +1011,14 @@ namespace ARPG.Npc
                     AR.s.Component.TryGetComponent<TransformComponent>(entityId, out var transform) &&
                     (saveData.PositionX != transform.Position.x || saveData.PositionY != transform.Position.y))
                 {
-                    MarkSaveDirty(entityId);
+                    MarkSaveDirty(entityId, NpcSaveGroup.Location);
                     saveData.Position = new Vector2(transform.Position.x, transform.Position.y);
                 }
 
                 if (AR.s.Component.TryGetComponent<StateComponent>(entityId, out var state) &&
                     saveData.Condition != state.Condition)
                 {
-                    MarkSaveDirty(entityId);
+                    MarkSaveDirty(entityId, NpcSaveGroup.Condition);
                     saveData.Condition = state.Condition;
                 }
             }
@@ -1137,7 +1141,7 @@ namespace ARPG.Npc
                 if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
                     continue;
 
-                MarkSaveDirty(entityId);
+                MarkSaveDirty(entityId, NpcSaveGroup.Activity);
                 saveData.Activity.PartyId = -1;
             }
 
@@ -1182,7 +1186,7 @@ namespace ARPG.Npc
                 for (int memberIndex = 0; memberIndex < validMembers.Count; memberIndex++)
                 {
                     int memberId = validMembers[memberIndex];
-                    MarkSaveDirty(memberId);
+                    MarkSaveDirty(memberId, NpcSaveGroup.Activity);
                     NpcSaveData member = _npcSaveDict[memberId];
                     member.Activity.PartyId = party.PartyId;
                     // 파티 활동 종류(Hunt/DungeonDelve)를 파티원에게 되돌린다. 구 세이브 파티는 Hunt뿐이다.
@@ -1329,6 +1333,7 @@ namespace ARPG.Npc
             relation.Intimacy = Mathf.Clamp(relation.Intimacy, 0, 100);
             relation.TalkCount = Mathf.Max(0, relation.TalkCount);
             relation.LastTalkGameTime = Mathf.Max(-1f, relation.LastTalkGameTime);
+            AR.s?.Data?.MarkPlayerRelationSaveDirty(npcId);
             _playerRelations[npcId] = relation;
         }
 
@@ -1432,6 +1437,7 @@ namespace ARPG.Npc
         /// </summary>
         public void RemovePlayerRelation(int npcId)
         {
+            AR.s?.Data?.MarkPlayerRelationSaveDirty(npcId);
             _playerRelations.Remove(npcId);
         }
 
@@ -1606,7 +1612,7 @@ namespace ARPG.Npc
             for (int i = 0; i < party.MemberIds.Count; i++)
             {
                 int memberId = party.MemberIds[i];
-                MarkSaveDirty(memberId);
+                MarkSaveDirty(memberId, NpcSaveGroup.Activity);
                 if (_npcSaveDict.TryGetValue(memberId, out NpcSaveData? member) &&
                     member.Activity.PartyId == partyId)
                     member.Activity.PartyId = -1;
@@ -1831,7 +1837,7 @@ namespace ARPG.Npc
         /// </summary>
         public void MarkNpcDead(int entityId, float when)
         {
-            MarkSaveDirty(entityId);
+            MarkSaveDirty(entityId, NpcSaveGroup.Condition | NpcSaveGroup.Activity | NpcSaveGroup.Location);
             if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
                 return;
             if (saveData.Condition == CharacterConditions.Dead ||
@@ -1893,7 +1899,7 @@ namespace ARPG.Npc
                     survivor.Activity.Phase == NpcActivityPhase.Dead)
                     continue;
 
-                MarkSaveDirty(survivorEntityId);
+                MarkSaveDirty(survivorEntityId, NpcSaveGroup.Memories | NpcSaveGroup.Stories);
                 bool wasFromEntity = relation.FromEntityId == survivorEntityId;
                 survivor.RecordDeceasedRelation(new DeceasedRelationMemory(deceasedEntityId, deceasedName,
                     relation.Type, wasFromEntity, fellEventId, deathGameTime));
@@ -1918,7 +1924,7 @@ namespace ARPG.Npc
         public void AddDeed(int entityId, NpcDeedKind kind, int refEventId,
             NpcKnowledgeLevel howKnown, float when, int participantId)
         {
-            MarkSaveDirty(entityId);
+            MarkSaveDirty(entityId, NpcSaveGroup.Deeds | NpcSaveGroup.Stories);
             if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
                 return;
 
@@ -1934,7 +1940,7 @@ namespace ARPG.Npc
         /// </summary>
         private void AddSevereWoundDeed(int entityId, float when)
         {
-            MarkSaveDirty(entityId);
+            MarkSaveDirty(entityId, NpcSaveGroup.Deeds | NpcSaveGroup.Stories);
             if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
                 return;
 
@@ -1949,7 +1955,7 @@ namespace ARPG.Npc
         /// </summary>
         public void AddAttackedWoundDeed(int entityId, int attackerId, string attackerDisplayName, float when)
         {
-            MarkSaveDirty(entityId);
+            MarkSaveDirty(entityId, NpcSaveGroup.Deeds | NpcSaveGroup.Stories);
             if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
                 return;
 
@@ -1962,7 +1968,7 @@ namespace ARPG.Npc
 
         public void AddNotableItemDeed(int entityId, int itemId, string itemDisplayName, float when)
         {
-            MarkSaveDirty(entityId);
+            MarkSaveDirty(entityId, NpcSaveGroup.Deeds | NpcSaveGroup.Stories);
             if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
                 return;
 
@@ -2215,7 +2221,7 @@ namespace ARPG.Npc
 
         private void SetNpcPosition(int entityId, NpcSaveData saveData, Vector2 position)
         {
-            MarkSaveDirty(entityId);
+            MarkSaveDirty(entityId, NpcSaveGroup.Location);
             Vector2Int oldChunk = PositionToChunk(saveData.Position);
             saveData.Position = position;
 

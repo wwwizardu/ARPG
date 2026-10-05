@@ -164,6 +164,7 @@ namespace ARPG.Data
             }
 
             // 아이템 장착
+            AR.s?.Data?.MarkPlayerSaveDirty(this, PlayerSaveGroup.Equipment);
             _inventoryEquip[(int)inEquipType] = inItem;
             
             return true;
@@ -176,6 +177,7 @@ namespace ARPG.Data
                 return false;
 
             unequippedItem = _inventoryEquip[(int)inEquipType];
+            AR.s?.Data?.MarkPlayerSaveDirty(this, PlayerSaveGroup.Equipment);
             _inventoryEquip[(int)inEquipType] = null;
 
             return true;

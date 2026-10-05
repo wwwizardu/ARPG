@@ -14,6 +14,7 @@ namespace ARPG.Systems
             AR.s.Village.FlushSaveSnapshot(recordFrameTiming: true);
             AR.s.Npc.RefreshSimulationSaveSnapshots(ARPG.Data.SaveScope.All, recordFrameTiming: true);
             AR.s.History.FlushSaveSnapshot(recordFrameTiming: true);
+            AR.s.Data.FlushOwnedSaveSnapshots(recordFrameTiming: true);
         }
     }
 }

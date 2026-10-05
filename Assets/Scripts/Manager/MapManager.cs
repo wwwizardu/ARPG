@@ -689,6 +689,13 @@ namespace ARPG.Map
 
         private void SetTileModification(Vector2Int chunkCoord, int localX, int localY, int objectId, bool isRemoval)
         {
+            if (AR.s?.Data != null)
+            {
+                if (ReferenceEquals(this, AR.s.WorldMap) == true)
+                    AR.s.Data.MarkMapChunkSaveDirty(new ARPG.Data.DataManager.Vector2IntKey(chunkCoord.x, chunkCoord.y));
+                else if (AR.s.Dungeon.IsInside == true)
+                    AR.s.Data.MarkDungeonSaveDirty(AR.s.Dungeon.ActiveRecord, ARPG.Data.DungeonSaveGroup.Tiles);
+            }
             if (_tileModifications.TryGetValue(chunkCoord, out List<TileModification> modifications) == false)
             {
                 modifications = new List<TileModification>();
@@ -757,6 +764,12 @@ namespace ARPG.Map
         }
 
         // ==================== 타일 수정 저장/로드 ====================
+
+        public ChunkModificationData GetSaveChunkModifications(int x, int y)
+        {
+            return _tileModifications.TryGetValue(new Vector2Int(x, y), out var modifications) == true
+                ? new ChunkModificationData { ChunkX = x, ChunkY = y, Modifications = modifications } : null;
+        }
 
         public List<ChunkModificationData> SaveTileModifications()
         {

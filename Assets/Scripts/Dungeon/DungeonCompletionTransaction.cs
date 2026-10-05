@@ -54,6 +54,8 @@ namespace ARPG.Dungeon
             if (_disposed == true) return;
             _disposed = true;
             if (_committed == true) return;
+            AR.s?.Data?.MarkDungeonSlotsSaveDirty(_village.VillageId);
+            AR.s?.Data?.MarkDungeonSaveDirty(_record, DungeonSaveGroup.Progress);
             _village.Slots[_previous.SlotIndex] = _previous;
             _player.Gold = _previousGold;
             _record.Completed = false;
@@ -66,6 +68,8 @@ namespace ARPG.Dungeon
         {
             _root = root; _player = player; _record = record; _village = village; _previous = slot;
             _previousGold = player.Gold;
+            AR.s?.Data?.MarkDungeonSlotsSaveDirty(village.VillageId);
+            AR.s?.Data?.MarkDungeonSaveDirty(record, DungeonSaveGroup.Progress);
             village.Slots[slot.SlotIndex] = new DungeonSlot
             {
                 SlotIndex = slot.SlotIndex, Generation = slot.Generation + 1,

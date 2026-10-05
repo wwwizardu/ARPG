@@ -73,6 +73,7 @@ namespace ARPG.Dungeon
                 candidate.DungeonObjectId != objectId || _active.OpenedChests.Contains(objectId) == true) return false;
             long gold = (long)AR.s.Data.Player.Gold + _active.ChestGold;
             if (gold < 0 || gold > int.MaxValue) return false;
+            AR.s.Data.MarkDungeonSaveDirty(_active, DungeonSaveGroup.Progress);
             _active.OpenedChests.Add(objectId);
             AR.s.Data.Player.Gold = (int)gold;
             if (_chests.TryGetValue(objectId, out var view) == true)
@@ -151,6 +152,7 @@ namespace ARPG.Dungeon
                 identity.DungeonId != _active.DungeonId || identity.ObjectId != objectId ||
                 _components.TryGetComponent<StatComponent>(entityId, out var stat) == false ||
                 _components.TryGetComponent<TransformComponent>(entityId, out var transform) == false) return;
+            AR.s.Data.MarkDungeonSaveDirty(_active, DungeonSaveGroup.Monsters);
             _active.Monsters[objectId] = new DungeonMonsterState { Hp = stat.CurrentHp,
                 X = transform.Position.x, Y = transform.Position.y };
         }

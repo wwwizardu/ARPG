@@ -50,7 +50,7 @@ namespace ARPG.Systems
                 int stoneBefore = VillageResourceSimulation.GetAmount(village, GlobalEnum.ItemType.Stone);
                 int hungerBefore = village.HungerHoursAccumulated;
 
-                AR.s.Village.MarkSaveDirty(village.VillageId);
+                AR.s.Village.MarkSaveDirty(village.VillageId, ARPG.Data.VillageSaveGroup.Resources);
                 VillageResourceSimulation.AdvanceWholeHours(village, deltaHours);
                 AR.s.Village.SyncStorageFromData(village);
 

@@ -135,7 +135,7 @@ namespace ARPG.Npc
         /// </summary>
         public void GrantAcquiredItem(int entityId, NpcSaveData saveData, ItemData item, float gameTime, string source)
         {
-            MarkSaveDirty(entityId);
+            MarkSaveDirty(entityId, NpcSaveGroup.Inventory | NpcSaveGroup.Equipment);
             if (item == null)
                 return;
 
@@ -170,9 +170,9 @@ namespace ARPG.Npc
         /// </summary>
         private void EnsureAmbitionInitialized(int entityId, NpcSaveData saveData)
         {
-            MarkSaveDirty(entityId);
             if (saveData.InitialPower > 0f)
                 return;
+            MarkSaveDirty(entityId, NpcSaveGroup.Identity | NpcSaveGroup.Wallet);
 
             float power = NpcPowerEvaluator.Evaluate(saveData);
             _npcPowerCache[entityId] = power;
@@ -213,7 +213,7 @@ namespace ARPG.Npc
         /// </summary>
         private int ReplaceEquipmentWithBasicItems(int entityId, NpcSaveData saveData, ref int skippedItems)
         {
-            MarkSaveDirty(entityId);
+            MarkSaveDirty(entityId, NpcSaveGroup.Equipment | NpcSaveGroup.Identity | NpcSaveGroup.Inventory);
             saveData.EnsureSlotsInitialized();
             int replaced = 0;
             int slotMax = (int)GE.EquipSlotType.Max;
@@ -257,7 +257,7 @@ namespace ARPG.Npc
         /// <summary>비실체화 직후 호출. 실체화 중에 사서 미뤄 둔 업그레이드 장비를 다시 평가해 장착한다.</summary>
         private void ApplyDeferredPurchaseUpgrades(int entityId, NpcSaveData saveData)
         {
-            MarkSaveDirty(entityId);
+            MarkSaveDirty(entityId, NpcSaveGroup.Inventory | NpcSaveGroup.Equipment);
             if (_deferredPurchaseUpgradeItemIds.TryGetValue(entityId, out List<int>? pending) == false)
                 return;
             _deferredPurchaseUpgradeItemIds.Remove(entityId);
@@ -300,7 +300,7 @@ namespace ARPG.Npc
         private bool ApplyUpgrade(int entityId, NpcSaveData saveData, ItemData item, GE.EquipSlotType slot,
             float currentPower, float newPower, float gameTime, string source)
         {
-            MarkSaveDirty(entityId);
+            MarkSaveDirty(entityId, NpcSaveGroup.Inventory | NpcSaveGroup.Equipment);
             if (saveData.EquipItem(slot, item, out ItemData? replacedItem) == false)
                 return false;
 
@@ -375,7 +375,7 @@ namespace ARPG.Npc
         /// </summary>
         private void StoreInInventory(int entityId, NpcSaveData saveData, ItemData item)
         {
-            MarkSaveDirty(entityId);
+            MarkSaveDirty(entityId, NpcSaveGroup.Inventory);
             if (CreateNpcInventoryView(saveData).AddItem(item) >= 0)
                 return;
 

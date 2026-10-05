@@ -103,7 +103,7 @@ namespace ARPG.Npc
         /// </summary>
         public NpcDelveReport ResolveSoloDelve(int entityId, NpcSaveData saveData, float outcomeGameTime, int worldSeed)
         {
-            MarkSaveDirty(entityId);
+            MarkSaveDirty(entityId, NpcSaveGroup.Activity | NpcSaveGroup.Location);
             NpcActivityState activity = saveData.Activity;
             float seedGameTime = activity.OutcomeSeedGameTime > 0f
                 ? activity.OutcomeSeedGameTime
@@ -248,7 +248,7 @@ namespace ARPG.Npc
 
             for (int i = 0; i < members.Count; i++)
             {
-                MarkSaveDirty(report.MemberIds[i]);
+                MarkSaveDirty(report.MemberIds[i], NpcSaveGroup.Activity | NpcSaveGroup.Location);
                 NpcSaveData member = members[i];
                 NpcActivityState memberActivity = member.Activity;
                 memberActivity.HasMovementPath = false;
@@ -325,7 +325,7 @@ namespace ARPG.Npc
         public void AddDungeonClearedDeed(int entityId, IReadOnlyList<int> memberIds, IReadOnlyList<NpcHuntOutcome> outcomes,
             float when)
         {
-            MarkSaveDirty(entityId);
+            MarkSaveDirty(entityId, NpcSaveGroup.Deeds | NpcSaveGroup.Stories);
             if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
                 return;
 

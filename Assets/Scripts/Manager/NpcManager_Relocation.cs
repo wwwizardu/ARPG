@@ -6,6 +6,8 @@ using ARPG.Tables;
 using ARPG.Village;
 using UnityEngine;
 
+using ARPG.Data;
+
 namespace ARPG.Npc
 {
     /// <summary>
@@ -30,7 +32,7 @@ namespace ARPG.Npc
         /// </summary>
         public bool TryStartRelocation(int entityId, NpcSaveData saveData, float startGameTime, int worldSeed)
         {
-            MarkSaveDirty(entityId);
+            MarkSaveDirty(entityId, NpcSaveGroup.Location | NpcSaveGroup.Activity);
             VillageData? home = saveData.VillageId >= 0 ? AR.s.Village.GetVillage(saveData.VillageId) : null;
             if (home == null || AR.s.Village.IsAbandonedSite(home) == false)
             {
@@ -77,7 +79,7 @@ namespace ARPG.Npc
         /// </summary>
         public void CompleteRelocation(int entityId, NpcSaveData saveData, float arrivalGameTime)
         {
-            MarkSaveDirty(entityId);
+            MarkSaveDirty(entityId, NpcSaveGroup.Location | NpcSaveGroup.Activity);
             NpcActivityState activity = saveData.Activity;
             bool parsed = int.TryParse(activity.TargetKey, NumberStyles.Integer, CultureInfo.InvariantCulture,
                 out int destinationId);

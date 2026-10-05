@@ -250,6 +250,7 @@ RegisterSystems(new System_MyFeature());
 - Cache ComponentManager references
 - Use `TryGetComponent` for optional components
 - Set appropriate pool sizes in ComponentManager
+- No delegate creation on hot paths: method groups / capturing lambdas passed to `Func`/`Action` allocate on every call. Create once at initialization (e.g. `Initialize()`) and reuse the field.
 
 ## Tool Execution Safety
 

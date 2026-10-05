@@ -33,7 +33,13 @@ namespace ARPG.Village
         {
             if (AR.s.Data == null)
                 return;
-            GoldPriceRules.Advance(AR.s.Data.GoldPrice, ComputeWorldGold(), now);
+            var price = AR.s.Data.GoldPrice;
+            long baseline = price.BaselineWorldGold;
+            float index = price.Index;
+            int day = price.LastUpdateDay;
+            GoldPriceRules.Advance(price, ComputeWorldGold(), now);
+            if (baseline != price.BaselineWorldGold || index != price.Index || day != price.LastUpdateDay)
+                AR.s.Data.MarkWorldSaveDirty(WorldSaveGroup.GoldPrice);
         }
 
         /// <summary>등급별 가격 배율 (지수^민감도). 지수를 쓰지 않는 동안은 1.</summary>

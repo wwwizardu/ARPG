@@ -15,14 +15,22 @@ namespace ARPG.Item
             var drops = ContextDrops;
             for (int i = 0; i < drops.Count; i++)
                 if (drops[i].ItemData.ItemInstanceId == data.ItemInstanceId) return;
-            drops.Add(new WorldDropItemData { ItemData = data, PositionX = position.x, PositionZ = position.y });
+            var drop = new WorldDropItemData { ItemData = data, PositionX = position.x, PositionZ = position.y };
+            drops.Add(drop);
+            if (AR.s.Dungeon.IsInside == true) AR.s.Data.MarkDungeonSaveDirty(AR.s.Dungeon.ActiveRecord, DungeonSaveGroup.Drops);
+            else AR.s.Data.MarkWorldDropSaveDirty(drop);
         }
 
         public void RemoveContextDrop(int instanceId)
         {
             var drops = ContextDrops;
             for (int i = drops.Count - 1; i >= 0; i--)
-                if (drops[i].ItemData.ItemInstanceId == instanceId) drops.RemoveAt(i);
+                if (drops[i].ItemData.ItemInstanceId == instanceId)
+                {
+                    if (AR.s.Dungeon.IsInside == true) AR.s.Data.MarkDungeonSaveDirty(AR.s.Dungeon.ActiveRecord, DungeonSaveGroup.Drops);
+                    else AR.s.Data.MarkWorldDropSaveDirty(drops[i]);
+                    drops.RemoveAt(i);
+                }
         }
 
         /// <summary>현재 맵 컨텍스트에 이 드랍이 월드 오브젝트로 실체화돼 있는지.</summary>

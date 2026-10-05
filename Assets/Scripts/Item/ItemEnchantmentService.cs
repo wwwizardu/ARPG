@@ -306,6 +306,7 @@ namespace ARPG.Item
                 equipment.Mods[replacementIndex] = appliedMod;
             else
                 equipment.Mods.Add(appliedMod);
+            AR.s?.Data?.MarkPlayerSaveDirty(playerData, PlayerSaveGroup.Progress | PlayerSaveGroup.Inventory | PlayerSaveGroup.Equipment);
             playerData.Gold -= cost.GoldCost;
             equipment.InvalidateWeaponStats();
             return true;

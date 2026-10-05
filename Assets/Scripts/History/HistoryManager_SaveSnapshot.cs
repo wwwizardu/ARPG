@@ -13,6 +13,8 @@ namespace ARPG.History
             AR.s.Data.WorldSim.Version, AR.s.Data.WorldSim.IsInitialized, AR.s.Data.WorldSim.Settlements?.Length);
 
         // 배열 인덱스는 Initialize 후 고정이며 저장 순서와 같다.
+        public System.IDisposable FreezeSaveSnapshot() => _settlementSaveSnapshot.Freeze();
+
         public void MarkSaveDirty(int index)
         {
             if (SaveSnapshotEnabled == true) _settlementSaveSnapshot.MarkDirty(index);

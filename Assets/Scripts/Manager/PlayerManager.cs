@@ -50,6 +50,7 @@ namespace ARPG.Manager
 
             _playerData = AR.s.Data.Player;
             _inventory.Initialize(_playerData._inventory, _playerData._inventory.Count);
+            _inventory.Changed = () => AR.s.Data.MarkPlayerSaveDirty(_playerData, PlayerSaveGroup.Inventory);
         }
 
         /// <summary>
@@ -78,6 +79,7 @@ namespace ARPG.Manager
                 return;
             }
 
+            AR.s.Data.MarkPlayerSaveDirty(inPlayerData, PlayerSaveGroup.Vitality | PlayerSaveGroup.Location);
             inPlayerData.CurrentHp = statComponent.CurrentHp;
             inPlayerData.CurrentMp = statComponent.CurrentMp;
 
