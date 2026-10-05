@@ -1,12 +1,14 @@
 # Agent Instructions
 
+Shared instructions for every coding agent in this repository. Codex reads this file directly; Claude Code loads it through `CLAUDE.md`. Edit rules here only.
+
 ## Project Overview
 
-This is a Unity 6000.0.42f1 LTS 2D URP ARPG using a custom ECS architecture, not Unity DOTS.
+This is a Unity 6000.4.2f1 2D URP ARPG using a custom ECS architecture, not Unity DOTS.
 
-- Unity Input System 1.13.1 (`InputSystem_Actions.inputactions`)
-- Universal Render Pipeline 17.0.4
-- Custom ECS with `SparseSet` component storage
+- Unity Input System 1.19.0 (`InputSystem_Actions.inputactions`)
+- Universal Render Pipeline 17.4.0
+- Custom ECS: an entity is an integer ID, a component is a data-only struct, a system is a class holding the logic, and `SparseSet` provides O(1) component storage
 
 ## Project Structure
 
@@ -19,16 +21,20 @@ This is a Unity 6000.0.42f1 LTS 2D URP ARPG using a custom ECS architecture, not
 - `Common/SparseSet.cs`: ECS component storage
 - `AI/`, `Buff/`, `Skill/`, `Creature/`, `UI/`: feature-specific implementations
 
-## C# and ECS Rules
+## C# Conventions
 
 - Prefix member variables with `_`; order methods `public` → `protected` → `private`.
 - `Initialize()` is for one-time setup; `Reset()` must clean up and restore the initial state.
 - Use `for` for performance-sensitive runtime iteration, such as per-frame/tick hot loops or large collections. Otherwise, choose `for` or `foreach` based on clarity. Use `SqrMagnitude` for distance comparisons.
 - Do not create delegates on hot paths (per-frame/tick work, per-entity loops, frequently called APIs). Passing an instance method group or a capturing lambda to a `Func`/`Action` parameter allocates a new delegate (and closure) on every call. Create the delegate once at the owner's real initialization entry point, store it in a field, and reuse it. If the lambda must capture a variable, build it in a separate method so the cached lookup path does not allocate the closure.
 - Use explicit boolean/null comparisons (for example, `== false` and `== null`) instead of `!`.
-- Components contain data only; game logic belongs in systems.
-- Use `ComponentManager.TryGetComponent` for optional components and `GetComponentPool<T>()` for iteration. Cache `ComponentManager` references and size pools appropriately.
-- Systems have one responsibility, remain stateless, declare an explicit priority, use the appropriate update phase, and set `UpdateInterval` for work that need not run every frame.
+
+## ECS Rules
+
+- Components contain data only; game logic belongs in systems. Tags are empty structs.
+- Access components through `AR.s.Component` and cache it in a local at the top of the method (`ComponentManager cm = AR.s.Component;`).
+- Use `TryGetComponent` for optional components. Iterate with `GetComponentPool<T>()` and `pool.Count` / `pool.GetEntityId(i)` / `pool.GetByIndex(i)`; for multi-component queries, iterate one pool and `TryGetComponent` the others. Size pools appropriately.
+- Systems have one responsibility, remain stateless (all state lives in components or managers), declare an explicit priority, implement the matching phase interface (`IUpdateSystem`, `IFixedUpdateSystem`, or `ILateUpdateSystem`), and set `UpdateInterval` for work that need not run every frame.
 - `ISystem` priorities run in ascending order. Use these ranges:
 
   | Priority | Use | Phase |
@@ -38,21 +44,40 @@ This is a Unity 6000.0.42f1 LTS 2D URP ARPG using a custom ECS architecture, not
   | 100–500 | Gameplay: movement, skills, buffs | FixedUpdate / Update |
   | 500–1000 | Animation and rendering | Update |
 
-  Village sub-ranges are 50–54 Resource, 55–59 Population, 60–64 Lifecycle, and 65–69 Construction.
-- New systems must implement `ISystem`, be registered in `SystemManager.Initialize()` with a priority comment, and have relevant `ComponentManager` pool sizes updated.
+  Village sub-ranges (see [VILLAGE_RUNTIME_DESIGN.md](Docs/village/VILLAGE_RUNTIME_DESIGN.md)): 50–54 Resource (passive production), 55–59 Population (respawn, immigration, birth, household split), 60–64 Lifecycle (tier promotion, reputation, threat level), and 65–69 Construction (build queue, walls).
+- New systems implement an interface from `Common/Interface/ISystem.cs`, are registered in `SystemManager.Initialize()` with a priority comment, and add pool sizes for new components to `ComponentManager._poolSizes`. Use existing systems in `Common/System/` as templates.
 - Name components `[Feature]Component`, systems `System_[Feature]`, and tags `[Feature]Tag`.
 
 ## Logic Placement
 
+Before creating a new `static` class, ask in order:
+
+1. **Does it hold mutable state or have a lifecycle** (reset, per-owner cleanup, save/load)? → Not static. Put the state in a component, manager instance, or save data. A static class may still own the pure logic and receive that state as a parameter.
+2. **Is it gameplay logic that runs every tick?** → A `System_*` registered in `SystemManager`.
+3. **Is it behavior tightly bound to one data type?** → A method or extension on that type.
+4. **Is it stateless pure logic used in more than one place?** → A static class is fine; keep it cohesive with a single responsibility.
+
+Guardrails:
+
 - Search for an existing home before adding a class to avoid duplicate or fragmented helpers.
-- Mutable state or anything with a lifecycle, cleanup, save/load, or per-owner ownership belongs in a component, manager instance, or save data—not a static class.
-- Per-tick gameplay logic belongs in `System_*`; behavior tightly bound to one type belongs on that type or an extension; reusable, stateless pure logic may use a cohesive static class.
-- Read-only static configuration is allowed. Persistent mutable static state is not. A scratch buffer that is cleared before every use is an exception.
+- Read-only static configuration is allowed. Persistent mutable static state is not: per-entity/per-village state, caches, and shuffle bags need an owner with a lifecycle. Anti-pattern: a static selector holding `private static readonly Dictionary<int, HashSet<DialogueTopicType>> _recent` — process-global, ownerless, and impossible to reset, clean up, or save.
+- Exception: a scratch buffer cleared before every use keeps no state between operations (for example, the `Pathfinder` A* sets and `System_StatCalculation._increasedByStatScratch`).
 - Do not create grab-bag helpers such as `*Util`, `*Helper`, `*Common`, or generic `*Manager`; class names must describe a single responsibility.
 
 ## Tool Execution Safety
 
-Run tools sequentially: issue one tool call, wait for its result, then continue. Do not run tool calls in parallel.
+Call independent tools in parallel by batching them into a single message. Run calls sequentially only when one genuinely depends on an earlier result or when two calls could conflict on the same target.
+
+Must be sequential:
+
+- A call whose arguments come from a previous call's output (search for a file, *then* read it)
+- Two writes to the same file, or a write followed by a read of that file
+- Google Sheets mutations on the same spreadsheet (`sheets_write`, `sheets_format`, `sheets_add_sheet`), because the API does not order concurrent edits
+- Anything mutating shared state: `git` commit/checkout, table re-download, asset generation
+
+Safe in parallel: reads of different files, independent searches, and read-only inspection commands (`git status`, `git diff`, `ls`). When it is unclear whether two calls can conflict, run them sequentially.
+
+## Unity Projects and Temporary Files
 
 Do not create, copy, or junction-link a secondary Unity project for testing. A separate project forces Unity to build a fresh `Library` and reimport project assets, so its time and disk cost grows with the resource set. Use the currently open project/editor, existing project-local test or diagnostic paths, or non-Unity static validation instead. If a required validation cannot run through those paths, stop and report the limitation rather than creating another Unity project.
 
@@ -75,9 +100,9 @@ Limit cleanup to temporary artifacts created by the current task. Preserve pre-e
 
 - Before work that requires design, synthesis, or understanding *why* (architecture decisions, changes spanning multiple systems, or confirming design intent), read the relevant `Wiki/<topic>.md` first.
 - Use this entry path, going deeper only when needed:
-  1. If the affected topics are unclear, read `Wiki/README.md` first.
-  2. Read every relevant `Wiki/<topic>.md` page, including related topics affected by the work.
-  3. Read only the original `Docs/` sections cited by those pages when canonical detail is needed.
+  1. If the affected topics are unclear, read `Wiki/README.md` (the map) first.
+  2. Read every relevant `Wiki/<topic>.md` page, including related topics affected by the work, not just the primary one.
+  3. Read only the original `Docs/` sections cited by those pages when canonical detail is needed; do not read whole doc folders.
 - If no topic page exists, use `Wiki/README.md` and the original documents it lists.
 - Straightforward single-file implementation or bug-fix work does not require consulting the wiki.
 - `Docs/` and the codebase are the source of truth. If the wiki conflicts with either, stop and report the discrepancy; do not independently change the wiki.
