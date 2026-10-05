@@ -192,6 +192,8 @@ namespace ARPG.EditorTools
             string root = Path.GetFullPath("Temp/DungeonDiagnostics/" + Guid.NewGuid().ToString("N"));
             var go = new GameObject("DungeonStorageDiagnostic");
             var data = go.AddComponent<DataManager>();
+            // 격리 fixture는 런타임 Initialize를 생략하므로 현재 Editor 메인 스레드를 등록한다.
+            Set(data, "_editorMainThreadId", Environment.CurrentManagedThreadId);
             data.DiagnosticSavePath = root;
             try
             {
@@ -261,8 +263,10 @@ namespace ARPG.EditorTools
                 data.DiagnosticFailurePoint = null;
                 Require(await Write(data, SaveScope.Player | SaveScope.World | SaveScope.Dungeons), "entry checkpoint");
                 var entered = ReadManifest(slotPath);
-                Require(entered.Parts["player"].Revision == entered.Parts["dungeons"].Revision &&
-                    entered.Parts["world"].Revision == entered.Revision, "atomic entry revision");
+                Require(entered.Parts["player"].Revision == entered.Revision &&
+                    entered.Parts["dungeons"].Revision == entered.Revision &&
+                    entered.Parts["world"].FileName == first.Parts["world"].FileName,
+                    "entry manifest atomically selects changed player/dungeon and unchanged world");
                 Require(entered.Parts["npc_state_00"].FileName == first.Parts["npc_state_00"].FileName &&
                     entered.Parts["villages"].FileName == first.Parts["villages"].FileName, "unrelated partitions unchanged");
                 object snapshot = ReadSnapshot(data, slotPath, "manifest.json");
@@ -516,6 +520,7 @@ namespace ARPG.EditorTools
             string root = Path.GetFullPath("Temp/SaveScheduling/" + Guid.NewGuid().ToString("N"));
             var go = new GameObject("SaveSchedulingDiagnostic");
             var data = go.AddComponent<DataManager>();
+            Set(data, "_editorMainThreadId", Environment.CurrentManagedThreadId);
             data.DiagnosticSavePath = root;
             data.DiagnosticSkipRuntimeCapture = true;
             var world = new WorldData();
@@ -615,7 +620,7 @@ namespace ARPG.EditorTools
                 Require(ReadManifest(slot).Revision == revision && ReadSnapshot(data, slot, "manifest.prev.json") != null,
                     "failed replacement preserves active AND previous manifests");
 
-                // Migration flag must survive failure and force all 43 partitions on retry.
+                // Migration must capture all 43 partitions; unchanged files can keep their creation revision.
                 typeof(DataManager).GetMethod("MigrateWorldData", BindingFlags.Instance | BindingFlags.NonPublic)
                     .Invoke(data, new object[] { (ushort)15, (ushort)16 });
                 data.DiagnosticFailurePoint = "serialize";
@@ -628,10 +633,13 @@ namespace ARPG.EditorTools
                 SaveManifest migrated = ReadManifest(slot);
                 var parts = new List<SavePartReference>(migrated.Parts.Values);
                 Require(parts.Count == 43, "all partitions including 32 NPC shards");
-                for (int i = 0; i < parts.Count; i++) Require(parts[i].Revision == migrated.Revision, "migration promotes every part");
+                Require(data.DiagnosticCommittedScope == SaveScope.All && data.DiagnosticPreparedPartCount == 43,
+                    "migration captures every part before content reuse");
+                string migratedNpcFile = migrated.Parts["npc_state_00"].FileName;
                 Require(await QueueWrite(data, SaveScope.Player | SaveScope.World | SaveScope.Dungeons), "normal save after migration");
                 await data.WaitForSaveIdleAsync();
-                Require(ReadManifest(slot).Parts["npc_state_00"].Revision == migrated.Revision, "migration flag clears only after full commit");
+                Require(ReadManifest(slot).Parts["npc_state_00"].FileName == migratedNpcFile && data.DiagnosticCommittedScope != SaveScope.All,
+                    "migration flag clears only after full commit");
 
                 // Synthetic, reproducible scale fixture with an active nine-room dungeon.
                 data.DiagnosticAfterCapture = () => Require(Thread.CurrentThread.ManagedThreadId == captureThread, "Unity capture thread");
@@ -693,7 +701,7 @@ namespace ARPG.EditorTools
 
         private static Task<bool> QueueWrite(DataManager data, SaveScope scope)
             => (Task<bool>)typeof(DataManager).GetMethod("SavePartitionedAsync", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(data, new object[] { scope });
+                .Invoke(data, new object[] { scope, false });
 
         private static async Task ValidateLegacyWriter(StringBuilder report, string parent)
         {
@@ -705,6 +713,7 @@ namespace ARPG.EditorTools
             File.WriteAllText(Path.Combine(root, "PlayerData.json"), playerJson);
             var go = new GameObject("LegacyWriterDiagnostic");
             var data = go.AddComponent<DataManager>();
+            Set(data, "_editorMainThreadId", Environment.CurrentManagedThreadId);
             data.DiagnosticSavePath = root;
             data.DiagnosticSkipRuntimeCapture = true;
             Set(data, "_worldData", JsonConvert.DeserializeObject<WorldData>(worldJson));
@@ -730,7 +739,7 @@ namespace ARPG.EditorTools
         }
         private static Task<bool> Write(DataManager data, SaveScope scope)
             => (Task<bool>)typeof(DataManager).GetMethod("WritePartitionSnapshotAsync", BindingFlags.NonPublic | BindingFlags.Instance)
-                .Invoke(data, new object[] { scope, false });
+                .Invoke(data, new object[] { scope, false, false });
 
         private static void DeleteDiagnosticDirectory(string path)
         {

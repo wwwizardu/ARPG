@@ -139,6 +139,7 @@ namespace ARPG.EditorTools
         /// </summary>
         public static void ForceWound(int npcId)
         {
+            AR.s.Npc.MarkSaveDirty(npcId);
             NpcSaveData? saveData = AR.s.Npc.GetSaveData(npcId);
             if (saveData == null)
                 return;

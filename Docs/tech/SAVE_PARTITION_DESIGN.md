@@ -1,6 +1,6 @@
 # 세이브 파티션 설계
 
-> **상태 (2026-08-22)**: 구현 완료, Unity 플레이 모드 왕복·장애 주입 검증 전.
+> **상태 (2026-10-05)**: 파티션 저장과 S-1~S-3 상시 스냅샷 구현 완료·핵심 기능 검증 통과. 그 위에 시뮬 6개 파트 묶음·증분 파일 쓰기를 구현했다(§5, SAVE_SNAPSHOT_DESIGN §13). S-2/S-3 장기 시뮬·실제 상점/던전 통합 비용 실측은 후속이다. 이번 개정의 진단 결과는 스냅샷 문서 §13.2에 기록한다.
 > **기억 저장 개정 (2026-10-04)**: 현재 WorldDataVersion은 **19**. 공동 활동 통계·최신 개인 사연·과거 동료 기억을 저장하고, `NpcState`와 `NpcSocial`은 부분 저장에서도 같은 revision으로 커밋한다. 기억 진단은 통과했으며 전체 플레이 모드·장애 주입 검증은 여전히 후속이다(§9).
 >
 > **범위**: 파일 분할, 저장 범위, NPC 샤딩, 원자 커밋, 레거시 마이그레이션.
@@ -79,18 +79,26 @@ Saved/Slot_0/
 | 변경 | 범위 |
 |---|---|
 | 아이템 획득, 장비·스킬북·스킬 페이지 변경 | Player + World(ItemInstanceId) |
-| 상점 구매·판매 | Player + World + Villages |
-| NPC 상태 또는 NPC 사회 데이터 저장 | NpcState + NpcSocial을 함께 포함 |
+| 상점 구매·판매 | Player + World + Simulation(여섯 시뮬 파트) |
+| NpcState·NpcSocial·NpcParties·NpcMeta·Villages·WorldSim 중 하나라도 요청 | Simulation 전체, 변경 없는 파일 참조 재사용 |
 | 거점·메뉴 수동 저장, 최초 월드 저장 | 전체 파티션 |
 
 NPC 죽음처럼 NPC 상태·관계·파티·연대기가 함께 바뀌는 체크포인트는 manifest 한 revision에
 묶인다. 향후 자동저장을 추가할 때도 변경된 샤드와 연관 파티션을 같은 revision으로 요청한다.
 
-**현재 결합 계약**: 저장 스냅샷을 잡기 전에 `NpcState`·`NpcSocial` 중 하나라도 포함된 요청은 둘 다 포함하도록 확장한다. 두 데이터는 같은 메인 스레드 상태에서 복사되고 한 manifest revision에 커밋된다. `NpcParties`·`Chronicle`까지 자동으로 추가한다는 뜻은 아니다. 미저장 NPC 던전 완료가 있으면 `Dungeons`·`NpcState`·`NpcSocial` 중 하나라도 실린 요청에 기존 `Dungeons` + `NpcState` 결합을 먼저 적용하고, 그 뒤 `NpcSocial`까지 넓힌다. 그래서 어느 쪽에서 시작한 요청이든 세 파티션이 함께 저장된다. 이관으로 전체 저장이 필요한 상태면 요청 범위와 관계없이 `All`로 승격한다. [src: Assets/Scripts/Manager/DataManager_PartitionedSave.cs]
+**현재 결합 계약(2026-10-05)**: 저장 스냅샷을 잡기 전에 `SaveScope.Simulation`의 여섯 파트 중 하나라도 요청되면 묶음 전체로 확장한다. 여섯 상태는 같은 메인 스레드에서 캡처되어 하나의 manifest 교체로 확정된다. `Chronicle`은 자동으로 추가하지 않는다. 미저장 NPC 던전 완료가 있으면 `Dungeons` 또는 묶음 요청에 Dungeons와 Simulation 전체를 함께 싣고, 캡처한 완료 revision만 성공 후 확정한다. 이관으로 전체 저장이 필요한 상태면 요청과 관계없이 `All`로 승격한다. 기존 파티 경로 위치 복원(S13)과 State/Social 공동 활동 일관성도 이 묶음에 포함된다. [src: Assets/Scripts/Manager/DataManager_PartitionedSave.cs, Assets/Scripts/Data/SavePartitionData.cs]
+
+**증분 파일 쓰기**: 프레임 정리와 독립된 캐시/샤드 세대를 `DataManager`의 마지막 성공 세대와 비교한다. 같으면 기존 참조를 재사용하고 JSON 직렬화를 건너뛴다. 후보 파트도 schema·JSON 길이·SHA-256이 기존과 같으면 새 파일을 만들지 않는다. 성공 후 캡처 세대만 확정하며 저장 도중 추가 변경·실패한 변경은 다음 요청에 남긴다. Reset/Load는 성공 세대를 비운다. 여섯 파트의 파일 생성 revision은 서로 달라도 하나의 manifest가 함께 선택한 전체 상태다. 계약·진단은 [SAVE_SNAPSHOT_DESIGN §13](SAVE_SNAPSHOT_DESIGN.md)을 따른다. [src: Assets/Scripts/Manager/DataManager_PartitionedSave.cs]
+
+**NPC 상태 스냅샷(2026-10-04)**: 위 저장 범위와 32샤드·manifest 계약을 유지한다. `NpcManager`가 NPC별 불변 DTO와 변경 목록을 소유하고, LateUpdate Priority 990 및 저장 직전에 변경 NPC만 다시 복사한다. 저장은 새 샤드 루트에 캐시된 NPC DTO를 넣어 전체 NPC 깊은 복사를 우회한다. 수동·최초·이관 전체 저장과 던전 입장·퇴장·완료 커밋에서는 전체 재생성한다. 최초·이관의 런타임 미캡처 경로는 기존 `_worldData` 깊은 복사를 유지한다. 던전 커밋의 재생성 요청은 저장 큐에서도 해당 배치에 유지된다. 복사에 실패한 NPC가 남아 있으면 낡은 DTO를 쓰지 않도록 그 저장을 중단한다([SAVE_SNAPSHOT_DESIGN](SAVE_SNAPSHOT_DESIGN.md) S12). 화면 밖에서 이동 중인 NPC의 위치는 경로 계산값이라 저장 파일에서 실제와 다를 수 있고, 로드 때 활동·파티 경로로 다시 계산한다(S13). [src: Assets/Scripts/Manager/NpcManager_SaveSnapshot.cs, Assets/Scripts/Common/System/System_SaveSnapshotFlush.cs, Assets/Scripts/Manager/SystemManager.cs, Assets/Scripts/Manager/DataManager.cs, Assets/Scripts/Manager/DataManager_PartitionedSave.cs]
+
+**마을 상태 스냅샷(2026-10-05)**: `VillageManager`도 마을별 불변 DTO·변경·실패 목록을 소유하며, 같은 Priority 990과 저장 직전에 정리한다. 저장은 기존 목록 순서의 새 `VillageSaveRoot`에 캐시 DTO를 넣어 전체 마을 깊은 복사를 우회한다. Load 마이그레이션 뒤 초기 캐시를 만들고 Reset/Load에서 수명을 정리한다. ECS task/컴포넌트 되쓰기와 materialize/fold-back, 상점·자원·추상 시뮬 변경 경계를 표시한다. NPC 단계와 같은 재생성·큐·실패 중단 정책을 공유하고, 최초/이관의 런타임 미캡처 경로와 저장 범위·파일 형식은 유지한다. [src: Assets/Scripts/Village/VillageManager_SaveSnapshot.cs, Assets/Scripts/Village/VillageManager.cs, Assets/Scripts/Village/VillageManager_NpcTrade.cs, Assets/Scripts/Common/System/System_SaveSnapshotFlush.cs, Assets/Scripts/Manager/DataManager_PartitionedSave.cs]
+
+**S-3 시뮬 스냅샷(2026-10-05)**: NpcSocial·NpcParties·NpcMeta·WorldSim도 상시 스냅샷을 사용한다. `NpcManager`는 호감도 쌍·From NPC별 유형 관계 목록·파티·인구 메타를, `HistoryManager`는 정착지 인덱스별 상태를 소유한다. 각 캐시는 인스턴스 필드인 `SaveSnapshotCache<TKey>`로 변경·실패 목록과 불변 DTO를 관리하고, Priority 990 및 저장 직전에 갱신한다. 저장은 기존 JSON 순서의 루트에 캐시 DTO를 넣어 깊은 복사를 우회하며, 전체 재생성·큐·실패 시 저장 중단·Reset/Load 정책을 공유한다. 스위치가 꺼진 경로와 `captureRuntimeManagers=false`는 기존 캡처를 유지한다. 상세 계약은 [SAVE_SNAPSHOT_DESIGN §12.1](SAVE_SNAPSHOT_DESIGN.md)에 기록한다. [src: Assets/Scripts/Data/SaveSnapshotCache.cs, Assets/Scripts/Manager/NpcManager_SimulationSaveSnapshot.cs, Assets/Scripts/History/HistoryManager_SaveSnapshot.cs, Assets/Scripts/Common/System/System_SaveSnapshotFlush.cs, Assets/Scripts/Manager/DataManager_PartitionedSave.cs]
 
 ## 6. 원자 커밋과 복구
 
-1. 변경 파티션을 고유 파일의 `.tmp`에 기록한다.
+1. 변경 없는 파티션 참조는 그대로 유지하고, 변경 파티션만 고유 파일의 `.tmp`에 기록한다.
 2. 기록이 끝난 파일을 최종 이름으로 이동한다.
 3. 길이와 SHA-256을 manifest에 기록한다.
 4. 새 manifest를 작성한다.
@@ -122,13 +130,21 @@ manifest가 없고 `WorldData.json`/`PlayerData.json`이 있으면 기존 버전
 
 ## 9. 검증 현황과 후속 검증
 
+2026-10-05 묶음·증분 개정: Unity 및 Runtime/Editor 빌드 오류 0(기존 경고 22/13개), Village 계약 17/17·Simulation 계약 28/28·실제 S-3 JSON/SHA-256/파일 참조 왕복 4/4 PASS. 여섯 범위 결합·파일 재사용·단일 샤드/마을 변경·삭제·저장 중 추가 변경/큐·네 실패 지점/재시도·Reset 취소·공유 파일을 포함한 previous 전체 읽기는 1,916개 검사 PASS다. 기존 DungeonRuntimeDiagnostics의 전체 저장·복구·스케줄링 진단도 PASS. 1일 복제 시뮬은 NPC·마을·S-3 누락 0·에러 0·라이브 해시 동일이며, 30일 및 실제 플레이 통합 비용 실측은 남긴다. 조건·표본·한계는 [SAVE_SNAPSHOT_DESIGN §13.2](SAVE_SNAPSHOT_DESIGN.md)를 따른다. [src: Assets/Scripts/Editor/NpcSaveSnapshotDiagnostics.cs, Assets/Scripts/Editor/NpcAmbitionSimDiagnostics.cs, Assets/Scripts/Editor/DungeonRuntimeDiagnostics.cs]
+
 2026-10-04 기억 저장 개정에서 Runtime/Editor 빌드 오류 0을 확인했다. Editor 진단 메뉴 `ARPG/Npc/Diagnostics/Ambition Sim/Validate Shared Activities`는 27 PASS, `Validate Personal Stories`는 30 PASS였다. 저장 복사/로드, 이관 반복, 활성·사망 쌍 기억과 최신 참조를 검사한다. 실제 세이브 읽기 전용 복제 실측의 범위와 수치는 [NPC_AMBITION_DESIGN §12.2](../npc/NPC_AMBITION_DESIGN.md)에 기록했다. [src: Assets/Scripts/Editor/NpcAmbitionSimDiagnostics_SharedActivities.cs, Assets/Scripts/Editor/NpcAmbitionSimDiagnostics_PersonalStories.cs]
 
-아래 전체 저장·복구·Profiler 검증은 위 기억 진단과 구분해 후속으로 남긴다.
+2026-10-04 NPC 상태 스냅샷 추가 검증: Runtime/Editor 컴파일 오류 0, Shared Activities 28 PASS / Personal Stories 32 PASS. 실제 NPC 2,406명의 기존 캡처와 캐시 조립은 32샤드 JSON이 동일했다. 30일 복제 시뮬레이션은 누락 0·라이브 해시 동일·기존 주요 지표 PASS, 던전 전환·완료·결투·동행·거래·청크 전환·전투 사망·수동 저장 후에도 누락 0이었다. 초기 로드 보정을 마치고 게임 시간을 멈춘 실제 저장·재접속·재저장에서 NPC 샤드 32개 SHA-256이 동일했다. 결투 종료 부분 저장의 NPC 정리/조립은 0.501/0.853ms, 전체 재생성은 약 129~132ms였다. 프레임 정리는 재접속 후 210회 평균 1.089ms·최대 3.857ms로 1ms 미만 목표가 일부 구간에서 미달했다. 상세 조건과 초기 구간 측정은 [SAVE_SNAPSHOT_DESIGN §7.1](SAVE_SNAPSHOT_DESIGN.md)에 기록한다. 같은 날 리뷰 후속으로, 30일 진단이 매 tick 전원을 다시 복사해 누락을 가리던 문제를 고쳐 다시 검증했고(표시 누락 0), 방문만으로는 표시하지 않고 이동 중 위치도 저장하지 않도록 바꿔 프레임 정리가 약 70초 표본 평균 0.288ms가 됐다(§7.2). [src: Assets/Scripts/Editor/NpcSaveSnapshotDiagnostics.cs, Assets/Scripts/Editor/NpcAmbitionSimDiagnostics.cs, Assets/Scripts/Manager/NpcManager_SaveSnapshot.cs, Assets/Scripts/Manager/DataManager_PartitionedSave.cs]
+
+2026-10-05 마을 스냅샷 검증·성능 기록: [SAVE_SNAPSHOT_DESIGN §11.3](SAVE_SNAPSHOT_DESIGN.md). 기존 Save 진단과 30일 복제 진단에 마을 경로 동등성·표시 누락·실패 격리·라이브 캐시 복원 검사를 추가했다. 완료 결과는 계약 17/17·실제 마을 JSON 동일·1일 복제 시뮬 누락 0이며, 30일 완료 결과는 없다. 변경 프레임 마을 정리 평균 2.306ms·최대 7.397ms로 평균 1ms 미만 목표도 남아 있다. [src: Assets/Scripts/Editor/NpcSaveSnapshotDiagnostics.cs, Assets/Scripts/Editor/NpcAmbitionSimDiagnostics.cs]
+
+2026-10-05 S-3 스냅샷 검증: Unity 및 Runtime/Editor 빌드 오류 0(기존 경고 22/13개), Shared Activities 28 PASS / Personal Stories 32 PASS, 격리 계약 28/28 PASS. NPC 2,406명·마을 300개·파티 339개·정착지 상태 338개의 GameScene에서 S-3 네 파티션의 기존/캐시 JSON이 4/4 동일했다. 1일 복제 시뮬은 NPC·마을·S-3 누락 0·에러 0·라이브 해시 동일이다. 같은 프로젝트 Temp의 별도 DataManager로 실제 전체 저장(revision 1)·부분 저장(revision 2) 후 manifest reader를 사용해 네 루트 JSON·SHA-256 동등성과 이전 DTO 불변을 확인했다(4/4 PASS). 사용자 저장 파일 88개는 덮어쓰지 않고 해시 동일을 확인했으며 작업용 파일은 정리했다. 기존 깊은 복사 36.1~56.8ms에 비해 S-3 캐시 정리·조립은 1.1~1.7ms였다(JSON·파일 I/O·전체 재생성 제외). 상세 조건·실제 저장 타이밍은 [SAVE_SNAPSHOT_DESIGN §12.3](SAVE_SNAPSHOT_DESIGN.md)에 기록한다. [src: Assets/Scripts/Editor/NpcSaveSnapshotDiagnostics.cs, Assets/Scripts/Editor/NpcAmbitionSimDiagnostics.cs, Assets/Scripts/Manager/DataManager_PartitionedSave.cs]
+
+위 묶음·증분 및 기존 던전 진단은 격리 원장의 실제 writer/reader·장애 주입 결과다. 아래 실제 플레이의 저장·복구·Profiler 검증과 구분한다. S-2·S-3 통합 30일 시뮬과 일부 실제 던전/청크/건설 경로는 미완료다([SAVE_SNAPSHOT_DESIGN §12.4](SAVE_SNAPSHOT_DESIGN.md)).
 
 - 레거시 → 파티션 → 재로드 왕복 후 NPC/마을/관계/장비·Mod 수 동일성
 - 아이템 획득 시 Player/World 이외 파티션 revision 불변
-- 상점 구매 시 Player/World/Villages만 변경
+- 상점 구매 시 Player/World + 시뮬 여섯 파트 함께 확정, 변경된 파일만 생성
 - manifest 교체 전·후 강제 종료 복구
 - active 파티션 손상 시 previous manifest 전체 폴백
 - NPC 사망·파티 Hunt·마을 materialize 직후 전체 체크포인트 왕복

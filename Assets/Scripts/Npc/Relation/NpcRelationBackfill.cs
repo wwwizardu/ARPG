@@ -53,6 +53,7 @@ namespace ARPG.Npc
                 NpcSaveData saveData = AR.s.Npc.GetSaveData(eid);
                 if (saveData == null)
                     continue;
+                AR.s.Npc.MarkSaveDirty(eid);
                 npcs.Add(new Worker
                 {
                     EntityId = eid,

@@ -70,6 +70,9 @@ namespace ARPG.Data
 
         public async Task Initialize()
         {
+#if UNITY_EDITOR
+            _editorMainThreadId = System.Environment.CurrentManagedThreadId;
+#endif
             await WaitForSaveIdleAsync();
             // 데이터 초기화 로직
             await LoadTableAsync();
@@ -398,7 +401,7 @@ namespace ARPG.Data
         }
 
         // Only DungeonManager's exclusive transition calls this after draining existing saves.
-        public Task<bool> SaveDungeonTransactionAsync(SaveScope scope) => SavePartitionedAsync(scope);
+        public Task<bool> SaveDungeonTransactionAsync(SaveScope scope) => SavePartitionedAsync(scope, rebuildSaveSnapshots: true);
 
         public bool DropItem(Vector2 inPosition, ItemData inItem)
         {

@@ -70,10 +70,13 @@ namespace ARPG.Systems
                 if (activity.PartyId >= 0)
                     return;
 
-                UpdateAnalyticPosition(saveData, entityId, now);
+                AR.s.Npc.UpdateSoloTravelPosition(entityId, saveData, now);
 
                 if (activity.Kind == NpcActivityKind.None && activity.Phase == NpcActivityPhase.Idle)
                 {
+                    // 순회 함수는 표시하지 않으므로 바꾸기 직전에 표시한다.
+                    // 이동 중 위치는 경로로 다시 계산되는 값이라 표시하지 않는다 (SAVE_SNAPSHOT S13).
+                    AR.s.Npc.MarkSaveDirty(entityId);
                     StartNextActivity(saveData, entityId, decisionTime, worldSeed);
                     // 새 활동도 이미 종료됐을 수 있으므로 즉시 다음 반복에서 종료시각을 확인한다.
                     continue;
@@ -82,6 +85,9 @@ namespace ARPG.Systems
                 // 활동 중간에는 어떤 롤도 하지 않는다. 대부분의 라운드로빈 방문은 여기서 끝난다.
                 if (activity.PhaseEndGameTime > now)
                     return;
+
+                // 여기부터는 모든 경로가 이 NPC의 활동 상태를 바꾼다.
+                AR.s.Npc.MarkSaveDirty(entityId);
 
                 float transitionTime = activity.PhaseEndGameTime;
                 if (transitionTime < activity.PhaseStartedGameTime)
@@ -262,6 +268,7 @@ namespace ARPG.Systems
                     NpcSaveData? member = AR.s.Npc.GetSaveData(party.MemberIds[i]);
                     if (member == null)
                         continue;
+                    AR.s.Npc.MarkSaveDirty(party.MemberIds[i]);
                     member.Activity.Kind = NpcActivityKind.None;
                     member.Activity.Phase = NpcActivityPhase.Idle;
                     member.Activity.TargetKey = string.Empty;
@@ -276,6 +283,7 @@ namespace ARPG.Systems
         private static void StartPartyExpedition(NpcPartyState party, NpcSaveData leader, NpcActivityKind kind,
             string targetKey, Vector2 targetPosition, float startGameTime)
         {
+            AR.s.Npc.MarkPartySaveDirty(party.PartyId);
             NpcActivityState activity = party.Activity;
             activity.PartyId = party.PartyId;
             activity.Kind = kind;
@@ -297,6 +305,7 @@ namespace ARPG.Systems
                 if (member == null)
                     continue;
 
+                AR.s.Npc.MarkSaveDirty(memberId);
                 member.Activity.PartyId = party.PartyId;
                 member.Activity.Kind = kind;
                 member.Activity.Phase = NpcActivityPhase.Venturing;
@@ -306,7 +315,7 @@ namespace ARPG.Systems
                 AR.s.Npc.PauseMaterializedNpcPartyActivity(memberId);
             }
 
-            UpdatePartyAnalyticPositions(party, startGameTime);
+            AR.s.Npc.UpdatePartyTravelPositions(party, startGameTime);
         }
 
         private static void AdvancePartyActivity(NpcPartyState party, float now, int worldSeed)
@@ -318,7 +327,7 @@ namespace ARPG.Systems
                 return;
             }
 
-            UpdatePartyAnalyticPositions(party, now);
+            AR.s.Npc.UpdatePartyTravelPositions(party, now);
             if (activity.PhaseEndGameTime > now)
                 return;
 
@@ -333,48 +342,6 @@ namespace ARPG.Systems
                 ResolvePartyDelve(party, activity.PhaseEndGameTime, worldSeed);
             else
                 ResolvePartyHunt(party, activity.PhaseEndGameTime, worldSeed);
-        }
-
-        private static void UpdatePartyAnalyticPositions(NpcPartyState party, float now)
-        {
-            NpcActivityState activity = party.Activity;
-            if (activity.HasMovementPath == false)
-                return;
-
-            float evaluationTime = now < activity.PhaseEndGameTime ? now : activity.PhaseEndGameTime;
-            Vector2 partyPosition = NpcActivityResolver.EvaluateHuntPosition(activity, evaluationTime);
-            for (int i = 0; i < party.MemberIds.Count; i++)
-            {
-                int memberId = party.MemberIds[i];
-                NpcSaveData? member = AR.s.Npc.GetSaveData(memberId);
-                if (member == null)
-                    continue;
-
-                Vector2 formationOffset = GetPartyFormationOffset(i);
-                AR.s.Npc.UpdateOffscreenNpcPosition(memberId, partyPosition + formationOffset);
-            }
-        }
-
-        private static Vector2 GetPartyFormationOffset(int memberIndex)
-        {
-            return memberIndex switch
-            {
-                0 => Vector2.zero,
-                1 => new Vector2(-1.25f, -1f),
-                2 => new Vector2(1.25f, -1f),
-                _ => new Vector2(0f, -2f),
-            };
-        }
-
-        private static void UpdateAnalyticPosition(NpcSaveData saveData, int entityId, float now)
-        {
-            NpcActivityState activity = saveData.Activity;
-            if (NpcActivityResolver.HasTravelPath(activity.Kind) == false || activity.HasMovementPath == false)
-                return;
-
-            float evaluationTime = now < activity.PhaseEndGameTime ? now : activity.PhaseEndGameTime;
-            AR.s.Npc.UpdateOffscreenNpcPosition(entityId,
-                NpcActivityResolver.EvaluateHuntPosition(activity, evaluationTime));
         }
 
         private static void ResolvePartyHunt(NpcPartyState party, float outcomeGameTime, int worldSeed)
@@ -428,6 +395,7 @@ namespace ARPG.Systems
 
             for (int i = 0; i < members.Count; i++)
             {
+                AR.s.Npc.MarkSaveDirty(memberIds[i]);
                 NpcSaveData member = members[i];
                 NpcActivityState memberActivity = member.Activity;
                 memberActivity.LastHuntOutcome = outcomes[i];

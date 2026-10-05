@@ -39,6 +39,7 @@ namespace ARPG.Npc
         public bool TryCreateHuntParty(int leaderId, NpcActivityKind kind, float startGameTime, int worldSeed,
             out NpcPartyState? party)
         {
+            MarkSaveDirty(leaderId);
             party = null;
             if (NpcActivityResolver.IsExpedition(kind) == false)
                 return false;
@@ -144,17 +145,20 @@ namespace ARPG.Npc
             for (int i = 0; i < _partyAcceptedScratch.Count; i++)
             {
                 int memberId = _partyAcceptedScratch[i];
+                MarkSaveDirty(memberId);
                 NpcSaveData member = _npcSaveDict[memberId];
                 if (member.Activity.Kind == NpcActivityKind.Rest)
                     EndRestForParty(memberId, member, startGameTime, worldSeed);
             }
             _partyAcceptedScratch.Clear();
 
+            MarkPartySaveDirty(partyId);
             _npcPartyDict.Add(partyId, created);
             AddPartyToSimulation(partyId);
             for (int i = 0; i < created.MemberIds.Count; i++)
             {
                 int memberId = created.MemberIds[i];
+                MarkSaveDirty(memberId);
                 NpcSaveData member = _npcSaveDict[memberId];
                 member.Activity.PartyId = partyId;
                 member.Activity.Kind = kind;
@@ -233,6 +237,7 @@ namespace ARPG.Npc
         /// </summary>
         private void EndRestForParty(int entityId, NpcSaveData saveData, float startGameTime, int worldSeed)
         {
+            MarkSaveDirty(entityId);
             NpcActivityState activity = saveData.Activity;
             float endTime;
             if (activity.PhaseEndGameTime <= startGameTime)

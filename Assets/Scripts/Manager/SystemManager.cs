@@ -208,6 +208,9 @@ namespace ARPG.Systems
             System_EntityDestroy entityDestroySystem = new();
             RegisterSystems(entityDestroySystem);
 
+            // Priority 990: Save Snapshot Flush (LateUpdate) - 메시지·제거 처리 뒤 NPC·마을·시뮬 저장 DTO 갱신
+            RegisterSystems(new System_SaveSnapshotFlush());
+
             // Priority 값이 작은 순서대로 정렬 (타이머 리스트도 함께 정렬)
             SortSystemsByPriority(_updateSystems, _updateSystemTimers);
             SortSystemsByPriority(_fixedUpdateSystems, _fixedUpdateSystemTimers);

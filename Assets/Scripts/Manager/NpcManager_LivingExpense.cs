@@ -50,6 +50,7 @@ namespace ARPG.Npc
         /// </summary>
         private void ResolveLivingExpenseOnRestEnd(int entityId, NpcSaveData saveData, float restStartGameTime, int worldSeed)
         {
+            MarkSaveDirty(entityId);
             if (saveData.VillageId < 0)
                 return;
             int reserve = GetTreatmentFee() * LivingExpenseReserveTreatmentMultiple;

@@ -40,6 +40,7 @@ namespace ARPG.Npc
         /// </summary>
         public bool TryStartPickupNearestDrop(int npcId, out string message)
         {
+            MarkSaveDirty(npcId);
             ComponentManager cm = AR.s.Component;
             NpcSaveData? saveData = GetSaveData(npcId);
             if (saveData == null)
@@ -118,6 +119,7 @@ namespace ARPG.Npc
         /// <summary>System_NpcPickup이 드랍에 도착한 NPC에 대해 호출한다. 인벤토리에 넣고 월드에서 드랍을 제거한다.</summary>
         public void CompleteNpcPickup(int npcId)
         {
+            MarkSaveDirty(npcId);
             ComponentManager cm = AR.s.Component;
             if (cm.TryGetComponent<NpcPickupComponent>(npcId, out NpcPickupComponent pickup) == false)
                 return;
@@ -161,8 +163,9 @@ namespace ARPG.Npc
         }
 
         /// <summary>NpcSaveData.Inventory 리스트를 그대로 감싼 Inventory (같은 리스트를 수정한다 — 플레이어와 같은 AddItem 규칙 재사용).</summary>
-        private static Inventory CreateNpcInventoryView(NpcSaveData saveData)
+        private Inventory CreateNpcInventoryView(NpcSaveData saveData)
         {
+            MarkSaveDirty(saveData.EntityId);
             saveData.EnsureSlotsInitialized();
             Inventory inventory = new Inventory();
             inventory.Initialize(saveData.Inventory, GlobalEnum.NPC_INVENTORY_SLOTCOUNT_MAX);

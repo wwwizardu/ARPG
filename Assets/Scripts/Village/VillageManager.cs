@@ -111,7 +111,10 @@ namespace ARPG.Village
         public void LinkSettlement(int villageId, int settlementId)
         {
             if (_villages.TryGetValue(villageId, out VillageData? data))
+            {
+                MarkSaveDirty(villageId);
                 data.SettlementId = settlementId;
+            }
         }
 
         /// <summary>정착지 SettlementId로 연결된 마을 조회. 없으면 null.</summary>
@@ -179,6 +182,7 @@ namespace ARPG.Village
             if (_villages.TryGetValue(villageId, out VillageData? data) == false)
                 return;
 
+            MarkSaveDirty(villageId);
             VillageResourceSimulation.Produce(data, type, amount);
             SyncStorageFromData(data);
 
@@ -191,6 +195,7 @@ namespace ARPG.Village
             if (_villages.TryGetValue(villageId, out VillageData? data) == false)
                 return false;
 
+            MarkSaveDirty(villageId);
             if (VillageResourceSimulation.Consume(data, type, amount) == false)
                 return false;
 
@@ -323,8 +328,10 @@ namespace ARPG.Village
                 RefreshPopulationFromAbstract(_villageList[i]);
         }
 
-        private static void RefreshPopulationFromAbstract(VillageData v)
+        private void RefreshPopulationFromAbstract(VillageData v)
         {
+            int previousPopulation = v.Population;
+            int previousFixedPopulation = v.FixedPopulation;
             if (v.SettlementId >= 0)
             {
                 int abstractPop = AR.s.History.GetSettlementPopulation(v.SettlementId);
@@ -344,6 +351,8 @@ namespace ARPG.Village
                         profile, out _);
                 v.Population = v.FixedPopulation;
             }
+            if (v.Population != previousPopulation || v.FixedPopulation != previousFixedPopulation)
+                MarkSaveDirty(v.VillageId);
         }
 
         public List<VillageData> Save()
@@ -461,6 +470,8 @@ namespace ARPG.Village
                 Debug.LogWarning($"[VillageProfile] Backfilled {profileBackfills} " +
                     "villages whose save data had no VillageProfileId.");
             }
+            if (SaveSnapshotEnabled == true)
+                RebuildSaveSnapshot();
             Debug.Log($"[VillageManager] Loaded {_villageList.Count} villages");
         }
 
@@ -523,6 +534,7 @@ namespace ARPG.Village
                     continue;
                 }
 
+                MarkSaveDirty(data.VillageId);
                 Tables.BuildableItemTable? t = AR.s.Data.GetBuildableItem(saved.TableId);
                 if (t == null) continue;
 
@@ -789,6 +801,7 @@ namespace ARPG.Village
                 return;
             }
 
+            MarkSaveDirty(villageId);
             int completedCountBefore = data.PlacedObjectTypeIds.Count;
             int placedRecordCountBefore = data.PlacedObjects.Count;
             int foodCapBefore = VillageResourceSimulation.GetCap(data,
@@ -883,6 +896,7 @@ namespace ARPG.Village
         {
             if (_villages.TryGetValue(villageId, out VillageData? data) == false)
                 return false;
+            MarkSaveDirty(villageId);
             if (VillageWallRules.ApplyWallDamage(data, tileX, tileY, damage,
                     out bool destroyed) == false)
                 return false;
@@ -926,6 +940,7 @@ namespace ARPG.Village
                 return false;
             }
 
+            MarkSaveDirty(villageId);
             if (VillageWallRules.TryToggleGate(data, segmentId,
                     out WallSegmentSaveData? gate) == false || gate == null)
                 return false;
@@ -993,6 +1008,7 @@ namespace ARPG.Village
             if (data.EntityId < 0)
                 return;   // 이미 추상
 
+            MarkSaveDirty(villageId);
             FlushAndDestroyTasks(data);
             FlushAndDestroyPlacedObjects(data);
             FlushVillageEntityState(data);
@@ -1223,6 +1239,7 @@ namespace ARPG.Village
             if (t == null)
                 return;
 
+            MarkSaveDirty(villageId);
             VillageConstructionLedger.ApplyCompletedBuild(v, t, tileX, tileY,
                 buildingEntityId);
             SyncStorageFromData(v);
@@ -1287,6 +1304,7 @@ namespace ARPG.Village
                 if (v.EntityId < 0)
                     continue;
 
+                MarkSaveDirty(v.VillageId);
                 // Legacy 단일 필드는 신규 세이브에선 항상 비움 (구 세이브 호환만 위해 필드 유지)
                 v.CurrentBuildTableId = 0;
                 v.CurrentBuildStartedAt = -1f;
@@ -1333,6 +1351,7 @@ namespace ARPG.Village
             // Legacy 마이그레이션: 구 세이브의 단일 CurrentBuild* 필드 → ActiveBuildTasks
             if (v.ActiveBuildTasks.Count == 0 && v.CurrentBuildTableId > 0)
             {
+                MarkSaveDirty(v.VillageId);
                 v.ActiveBuildTasks.Add(new BuildTaskSnapshot
                 {
                     TableId = v.CurrentBuildTableId,
@@ -1354,6 +1373,7 @@ namespace ARPG.Village
                     && VillageConstructionPosition.IsAssigned(snap) == true)
                     continue;
 
+                MarkSaveDirty(v.VillageId);
                 Tables.BuildableItemTable? buildTable = AR.s.Data.GetBuildableItem(snap.TableId);
                 if (buildTable == null)
                 {
@@ -1575,6 +1595,7 @@ namespace ARPG.Village
             if (AR.s.Player.Inventory.AddItem(purchase) < 0) return -1;
 
             // 차감
+            MarkSaveDirty(villageId);
             AR.s.Data.Player.Gold -= gold;
             entry.RemainingCount -= amount;
             v.MerchantStock[stockEntryIndex] = entry;
@@ -1609,6 +1630,7 @@ namespace ARPG.Village
                 && now - v.LastMerchantRollGameTime < trade.RestockIntervalHours)
                 return;
 
+            MarkSaveDirty(villageId);
             RollMerchantStock(v, trade, cycle);
             v.LastMerchantRollGameTime = now;
             v.MerchantRestockCycle = cycle;
@@ -1680,6 +1702,7 @@ namespace ARPG.Village
                     $"{VillageProfileCatalog.DEFAULT_PROCEDURAL_PROFILE_ID} was used.");
             }
 
+            MarkSaveDirty(data.VillageId);
             data.VillageProfileId = resolution.Profile.ProfileId;
 
             if (string.IsNullOrWhiteSpace(previousProfileId) == false)
@@ -1705,6 +1728,8 @@ namespace ARPG.Village
             int fixedPopulation = VillageProfilePopulationPolicy
                 .ResolveBaseTownFixedPopulation(data.FixedPopulation, data.Population,
                     profile, out BaseTownPopulationSource source);
+            if (data.FixedPopulation != fixedPopulation || data.Population != fixedPopulation)
+                MarkSaveDirty(data.VillageId);
             data.FixedPopulation = fixedPopulation;
             data.Population = fixedPopulation;
 
@@ -1736,12 +1761,14 @@ namespace ARPG.Village
                 return;
             }
             _villageList.Add(data);
+            MarkSaveDirty(data.VillageId);
         }
 
         private void ClearVillages()
         {
             _villages.Clear();
             _villageList.Clear();
+            ResetSaveSnapshot();
         }
 
         /// <summary>

@@ -24,6 +24,7 @@ namespace ARPG.Data
         NpcSocial = 1 << 9,
         NpcParties = 1 << 10,
         Dungeons = 1 << 11,
+        Simulation = Villages | WorldSim | NpcMeta | NpcState | NpcSocial | NpcParties,
         All = Player | World | Map | Villages | Buildings | Chronicle |
               WorldSim | NpcMeta | NpcState | NpcSocial | NpcParties | Dungeons,
     }

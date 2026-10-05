@@ -293,6 +293,7 @@ namespace ARPG.Npc
         /// </summary>
         private void ApplyDuelOutcome(NpcDuelOutcome outcome)
         {
+            MarkSaveDirty(outcome.NpcId);
             if (_npcSaveDict.TryGetValue(outcome.NpcId, out NpcSaveData? saveData) == false)
                 return;
 

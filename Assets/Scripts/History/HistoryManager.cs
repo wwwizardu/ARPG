@@ -10,7 +10,7 @@ namespace ARPG.History
     /// Phase 0: 골격만 — Initialize/Reset 호출 시 로그만 출력.
     /// Phase 1 이후: GenerateOrLoad(worldSeed)에서 카탈로그 로드 + 백본 생성.
     /// </summary>
-    public class HistoryManager : MonoBehaviour
+    public partial class HistoryManager : MonoBehaviour
     {
         private bool _generated = false;
         private int _worldSeed = 0;
@@ -34,6 +34,7 @@ namespace ARPG.History
                 BootstrapNewGameVillageDevelopment();
                 EnsureNewGameMinimumForges();
             }
+            RebuildSaveSnapshot();
         }
 
         /// <summary>
@@ -69,6 +70,7 @@ namespace ARPG.History
 
         public void Reset()
         {
+            _settlementSaveSnapshot.Reset();
             _generated = false;
             _worldSeed = 0;
             _abstractCursor = 0;
@@ -313,6 +315,7 @@ namespace ARPG.History
 
                 // 경제 인구는 고정 raw 인구의 정량화 값 — 생산량 계산에만 쓰인다.
                 // GetSettlementPopulation과 같은 (int) 절사를 사용해 이후 tick 동기화와 일치시킨다.
+                AR.s.Village.MarkSaveDirty(village.VillageId);
                 village.Population = VillageManager.QuantizeAbstractPopulation(
                     (int)settlement.Pop);
 
@@ -362,6 +365,7 @@ namespace ARPG.History
                 if (string.IsNullOrEmpty(planWarning) == false)
                     Debug.LogWarning($"[VillageBootstrap] v{village.VillageId} {planWarning}");
 
+                AR.s.Village.MarkSaveDirty(village.VillageId);
                 VillageInitialDevelopmentResult milestones =
                     VillageInitialDevelopment.ApplyInitialMilestones(village, plan,
                         initialStage, AR.s.Data.GetBuildableItem);
@@ -398,6 +402,7 @@ namespace ARPG.History
             for (int i = 0; i < villages.Count; i++)
             {
                 VillageData village = villages[i];
+                AR.s.Village.MarkSaveDirty(village.VillageId);
                 MinimumForgeEnsureResult result =
                     VillageInitialDevelopment.EnsureMinimumForge(village,
                         AR.s.Data.GetBuildableItem, out string error);
@@ -458,7 +463,10 @@ namespace ARPG.History
                     continue;   // 근처 = ECS가 처리 중
 
                 if (sim.Settlements[i].LastSimGameTime < now)
+                {
+                    MarkSaveDirty(i);
                     sim.Settlements[i].LastSimGameTime = now;   // 인구 고정 — 시계만 정렬
+                }
             }
         }
 
@@ -522,12 +530,14 @@ namespace ARPG.History
 
             // V2: 인구는 역사 완료 값으로 고정 — materialize 직전 catch-up에서도 전진시키지 않고
             // 시계만 현재 시각으로 정렬한다(재활성화 시 backlog 방지).
+            MarkSaveDirty(idx);
             sim.Settlements[idx].LastSimGameTime = now;
             VillageData village = AR.s.Village.GetVillage(villageId);
             if (village == null)
                 return false;
 
             // 전역 population refresh보다 먼저 catch-up하므로 여기서 최신 추상 인구를 직접 반영한다.
+            AR.s.Village.MarkSaveDirty(village.VillageId);
             village.Population = VillageManager.QuantizeAbstractPopulation(
                 (int)sim.Settlements[idx].Pop);
             bool isOperational = VillageDevelopmentBootstrap.IsOperationalFate(
@@ -575,6 +585,7 @@ namespace ARPG.History
             if (TryGetLiveIndex(settlementId, out int idx) == false)
                 return;
 
+            MarkSaveDirty(idx);
             WorldSimState sim = AR.s.Data.WorldSim;
             float now = AR.s.Time.CurrentGameTime;
 
@@ -586,6 +597,7 @@ namespace ARPG.History
                 VillageData village = AR.s.Village.GetVillage(villageId);
                 if (village != null)
                 {
+                    AR.s.Village.MarkSaveDirty(village.VillageId);
                     village.LastConstructionSimGameTime = now;
                     village.LastConstructionTierCheckGameTime = now;
                 }

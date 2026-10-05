@@ -286,6 +286,14 @@ namespace ARPG.EditorTools
             public readonly Dictionary<int, VillageStats> VillageStats = new();
             public readonly Dictionary<int, NpcStats> NpcStats = new();
             public readonly List<string> Examples = new();
+            // 저장 스냅샷: 변경 표시 없이 바뀐 NPC 수, 항목별 횟수, 앞쪽 사례
+            public int UnmarkedSaveChanges;
+            public int UnmarkedVillageSaveChanges;
+            public int UnmarkedSimulationSaveChanges;
+            public int SnapshotHour;
+            public readonly Dictionary<string, int> UnmarkedSaveFields = new();
+            public readonly List<string> UnmarkedSaveSamples = new();
+            public readonly List<string> UnmarkedFieldScratch = new();
             // 시작 시점 생존 NPC 고정 집단. 사망자는 마지막 장비의 전투력으로 계속 센다 — 생존 편향 없이 성장만 본다.
             public readonly List<int> CohortIds = new();
             // 시작 시점 전투력. 생존자 평균 상승을 "생존 편향"과 "장비 교체"로 나눠 보는 데 쓴다.
@@ -513,9 +521,16 @@ namespace ARPG.EditorTools
             SimContext sim = new SimContext();
             System.Diagnostics.Stopwatch watch = System.Diagnostics.Stopwatch.StartNew();
             string? failure = null;
+            bool cancelled = false;
             List<int> cowardIds = new List<int>();
             int cowardCourageMax = 0;
             Dictionary<NpcAmbitionKind, int> ambitionCounts = new Dictionary<NpcAmbitionKind, int>();
+
+            int snapshotMismatches = -1;
+            int villageSnapshotMismatches = -1;
+            int simulationSnapshotMismatches = -1;
+            double snapshotFlushAverageMs = 0;
+            double snapshotFlushMaxMs = 0;
 
             try
             {
@@ -551,18 +566,40 @@ namespace ARPG.EditorTools
                 int totalHours = days * 24;
                 for (int hour = 1; hour <= totalHours; hour++)
                 {
+                    if (EditorUtility.DisplayCancelableProgressBar("NPC / Village snapshot simulation",
+                            $"{hour - 1}/{totalHours} game hours (Cancel restores live state)",
+                            (float)(hour - 1) / totalHours) == true)
+                        throw new OperationCanceledException("Simulation cancelled by user.");
                     float now = startGameTime + hour;
                     sim.CurrentDay = (hour - 1) / 24 + 1;
                     elapsedField.SetValue(AR.s.Time, now);
                     accumulatorField.SetValue(AR.s.Time, 0f);
 
+                    sim.SnapshotHour = hour;
                     AdvanceVillageProduction(sim);
+                    AR.s.Village.FlushSaveSnapshot();
                     AdvanceParties(sim, now);
+                    AR.s.Npc.RefreshSimulationSaveSnapshots(SaveScope.All);
+                    AR.s.Village.FlushSaveSnapshot();
                     for (int i = 0; i < sim.NpcIds.Count; i++)
-                        AdvanceNpc(sim, sim.NpcIds[i], now);
+                    {
+                        int entityId = sim.NpcIds[i];
+                        // 표시 없이 바뀐 게 있는지 먼저 보고, 처리 직후 바로 정리한다.
+                        // tick 끝에 몰아서 정리하면 같은 tick 뒤쪽에서 이 NPC를 표시 없이 고친 것이 가려진다.
+                        CheckUnmarkedSaveChange(sim, entityId, hour);
+                        AdvanceNpc(sim, entityId, now);
+                        AR.s.Npc.FlushSaveSnapshot();
+                        AR.s.Npc.RefreshSimulationSaveSnapshots(SaveScope.All);
+                        AR.s.Village.FlushSaveSnapshot();
+                    }
                     UpdateRumorPropagation(sim, now);
                     SampleActivityStates(sim);
                     AR.s.Village.UpdateGoldPriceIndex(now);
+
+                    // NPC 처리 뒤에 표시된 변경(소문 전파 등)을 정리한다. 여기서 빠진 표시는 다음 tick 검사가 잡는다.
+                    AR.s.Npc.FlushSaveSnapshot(recordFrameTiming: true);
+                    AR.s.Npc.RefreshSimulationSaveSnapshots(SaveScope.All, recordFrameTiming: true);
+                    AR.s.Village.FlushSaveSnapshot(recordFrameTiming: true);
 
                     if (hour % 24 == 0)
                     {
@@ -576,6 +613,24 @@ namespace ARPG.EditorTools
 
                 // P2c: 복제본이 끼워진 채로(시각 = 시뮬 마지막) 대화 토픽을 실제 selector 코드로 만들어 검증한다.
                 AuditDialogueTopics(sim);
+                snapshotMismatches = NpcManager.SaveSnapshotEnabled == true ? AR.s.Npc.ValidateSaveSnapshot() : 0;
+                CheckUnmarkedVillageSaveChanges(sim, totalHours);
+                villageSnapshotMismatches = VillageManager.SaveSnapshotEnabled == true ? AR.s.Village.ValidateSaveSnapshot() : 0;
+                simulationSnapshotMismatches = AR.s.Npc.ValidateSimulationSaveSnapshots();
+                snapshotFlushAverageMs = AR.s.Npc.SnapshotFlushAverageMs;
+                snapshotFlushMaxMs = AR.s.Npc.SnapshotFlushMaxMs;
+                if (sim.UnmarkedSaveChanges != 0 || snapshotMismatches != 0 ||
+                    sim.UnmarkedVillageSaveChanges != 0 || villageSnapshotMismatches != 0 ||
+                    sim.UnmarkedSimulationSaveChanges != 0 || simulationSnapshotMismatches != 0)
+                    throw new InvalidOperationException(BuildSaveSnapshotOmissionReport(sim, snapshotMismatches) +
+                        $"\nVillage omissions: unmarked={sim.UnmarkedVillageSaveChanges} final={villageSnapshotMismatches}" +
+                        $"\nSimulation omissions: unmarked={sim.UnmarkedSimulationSaveChanges} final={simulationSnapshotMismatches}" +
+                        "\n" + string.Join("\n", capture.FirstErrors));
+            }
+            catch (OperationCanceledException exception)
+            {
+                cancelled = true;
+                failure = exception.Message;
             }
             catch (Exception exception)
             {
@@ -583,6 +638,7 @@ namespace ARPG.EditorTools
             }
             finally
             {
+                EditorUtility.ClearProgressBar();
                 DetachRumorProbes();
                 for (int i = swaps.Count - 1; i >= 0; i--)
                     swaps[i].Field.SetValue(swaps[i].Target, swaps[i].Original);
@@ -600,7 +656,10 @@ namespace ARPG.EditorTools
             if (failure != null)
             {
                 string failed = $"[NpcAmbitionSim] 실패 (라이브 상태 복원 {(liveUnchanged ? "확인" : "불일치!")}): {failure}";
-                Debug.LogError(failed);
+                if (cancelled == true && liveUnchanged == true)
+                    Debug.LogWarning(failed);
+                else
+                    Debug.LogError(failed);
                 return failed;
             }
 
@@ -615,6 +674,10 @@ namespace ARPG.EditorTools
 
             string summary = BuildSummary(sim, rows, cowardIds, cowardCourageMax, ambitionCounts, days,
                 watch.ElapsedMilliseconds, hashBefore, hashAfter, capture);
+            summary += $"\n[NpcSaveSnapshot] 표시 누락={sim.UnmarkedSaveChanges} 끝 비교 누락={snapshotMismatches} " +
+                $"tick끝 정리 평균={snapshotFlushAverageMs:F3}ms 최대={snapshotFlushMaxMs:F3}ms\n";
+            summary += $"\n[VillageSaveSnapshot] 표시 누락={sim.UnmarkedVillageSaveChanges} 끝 비교 누락={villageSnapshotMismatches}\n";
+            summary += $"\n[SimulationSaveSnapshot] 표시 누락={sim.UnmarkedSimulationSaveChanges} 끝 비교 누락={simulationSnapshotMismatches}\n";
             File.WriteAllText(summaryPath, summary, new UTF8Encoding(true));
 
             string report = summary + $"\nCSV: {dailyPath}\n     {villagePath}\n     {summaryPath}";
@@ -971,6 +1034,22 @@ namespace ARPG.EditorTools
             object? nextPartyId = GetField(npc, "_nextPartyId").GetValue(npc);
 
             Swap(swaps, npc, "_npcSaveDict", sim.Npcs);
+            Swap(swaps, npc, "_saveSnapshot", new Dictionary<int, object?>());
+            Swap(swaps, npc, "_dirtyNpcIds", new HashSet<int>());
+            Swap(swaps, npc, "_dirtyNpcOrder", new List<int>());
+            Swap(swaps, npc, "_snapshotFailedIds", new List<int>());
+            Swap(swaps, npc, "_saveShardGenerations", new long[DataManager.NPC_SHARD_COUNT]);
+            Swap(swaps, npc, "_snapshotFlushCount", 0L);
+            Swap(swaps, npc, "_snapshotFlushTotalMs", 0.0);
+            Swap(swaps, npc, "_snapshotFlushMaxMs", 0.0);
+            var affinitySnapshot = new SaveSnapshotCache<NpcPairKey>("NpcAffinity");
+            var relationSnapshot = new SaveSnapshotCache<int>("NpcRelations");
+            var partySnapshot = new SaveSnapshotCache<int>("NpcParties");
+            var populationSnapshot = new SaveSnapshotCache<int>("NpcPopulation");
+            Swap(swaps, npc, "_affinitySaveSnapshot", affinitySnapshot);
+            Swap(swaps, npc, "_relationSaveSnapshot", relationSnapshot);
+            Swap(swaps, npc, "_partySaveSnapshot", partySnapshot);
+            Swap(swaps, npc, "_populationSaveSnapshot", populationSnapshot);
             Swap(swaps, npc, "_npcPowerCache", new Dictionary<int, float>());
             Swap(swaps, npc, "_deferredPurchaseUpgradeItemIds", new Dictionary<int, List<int>>());
             Swap(swaps, npc, "_npcPartyDict", sim.Parties);
@@ -984,6 +1063,16 @@ namespace ARPG.EditorTools
             Swap(swaps, npc, "_narrative", new NpcNarrativeRuntime());
             Swap(swaps, village, "_villages", sim.Villages);
             Swap(swaps, village, "_villageList", sim.VillageList);
+            Swap(swaps, village, "_saveSnapshot", new Dictionary<int, object?>());
+            Swap(swaps, village, "_dirtyVillageIds", new HashSet<int>());
+            Swap(swaps, village, "_dirtyVillageOrder", new List<int>());
+            Swap(swaps, village, "_snapshotFailedIds", new List<int>());
+            Swap(swaps, village, "_saveSnapshotGeneration", 0L);
+            Swap(swaps, village, "_snapshotFlushCount", 0L);
+            Swap(swaps, village, "_snapshotFlushTotalMs", 0.0);
+            Swap(swaps, village, "_snapshotFlushMaxMs", 0.0);
+            Swap(swaps, village, "_snapshotDirtyObserver", new Action<int>(id =>
+                CheckUnmarkedVillageSaveChange(sim, id, sim.SnapshotHour)));
             // GOLD_BALANCE: NPC 골드 흐름 카운터 (생활비 입금·소멸)
             Swap(swaps, npc, "_goldFlowCounters", sim.GoldFlow);
 
@@ -993,12 +1082,33 @@ namespace ARPG.EditorTools
             Swap(swaps, worldData, "Dungeons", sim.Dungeons);
             // GOLD_BALANCE: 세계 물가 지수 상태 — 가격 함수(VillageManager)와 지수 갱신이 복제본만 읽고 바꾼다.
             Swap(swaps, worldData, "GoldPrice", sim.GoldPrice);
+            Swap(swaps, worldData, "NpcPopulation", CloneJson(AR.s.Data.NpcPopulation));
             object dungeon = AR.s.Dungeon;
             Swap(swaps, dungeon, "_villageSlots", sim.DungeonVillageSlots);
             Swap(swaps, dungeon, "_entranceIndexDirty", false);
             Swap(swaps, dungeon, "_npcCompletionRevision", 0L);
             Swap(swaps, dungeon, "_savedNpcCompletionRevision", 0L);
             Swap(swaps, dungeon, "_busy", false);
+            if (NpcManager.SaveSnapshotEnabled == true)
+                AR.s.Npc.RebuildSaveSnapshot();
+            if (VillageManager.SaveSnapshotEnabled == true)
+                AR.s.Village.RebuildSaveSnapshot();
+            AR.s.Npc.RefreshSimulationSaveSnapshots(SaveScope.All, rebuild: true);
+            void RecordOmission(string label, bool changed)
+            {
+                if (changed == false) return;
+                sim.UnmarkedSimulationSaveChanges++;
+                if (sim.UnmarkedSaveSamples.Count < 20)
+                    sim.UnmarkedSaveSamples.Add($"{sim.SnapshotHour}h {label}: {string.Join(", ", sim.UnmarkedFieldScratch)}");
+            }
+            affinitySnapshot.DirtyObserver = key => RecordOmission($"Affinity {key.Lo}/{key.Hi}",
+                AR.s.Npc.TryFindUnmarkedAffinitySaveChange(key, sim.UnmarkedFieldScratch));
+            relationSnapshot.DirtyObserver = key => RecordOmission($"Relations {key}",
+                AR.s.Npc.TryFindUnmarkedRelationSaveChange(key, sim.UnmarkedFieldScratch));
+            partySnapshot.DirtyObserver = key => RecordOmission($"Party {key}",
+                AR.s.Npc.TryFindUnmarkedPartySaveChange(key, sim.UnmarkedFieldScratch));
+            populationSnapshot.DirtyObserver = key => RecordOmission("Population",
+                AR.s.Npc.TryFindUnmarkedPopulationSaveChange(sim.UnmarkedFieldScratch));
         }
 
         private static void Swap(List<FieldSwap> swaps, object target, string fieldName, object? value)
@@ -1057,6 +1167,7 @@ namespace ARPG.EditorTools
             {
                 VillageData village = sim.VillageList[i];
                 int goldBefore = VillageResourceSimulation.GetAmount(village, GlobalEnum.ItemType.Gold);
+                AR.s.Village.MarkSaveDirty(village.VillageId);
                 int upkeepBurned = VillageResourceSimulation.AdvanceWholeHours(village, 1);
                 // 같은 시간에 생산과 금고 유지비(D132 B-보조)가 섞이므로 생산 = 금고 변화 + 유지비로 지운 양, 소멸은 따로 센다.
                 sim.Today.VaultUpkeepBurn += upkeepBurned;
@@ -1104,6 +1215,60 @@ namespace ARPG.EditorTools
             }
         }
 
+        /// <summary>
+        /// 이 NPC가 변경 표시 없이 바뀌었는지 본다. 직전 정리 뒤에 다른 NPC 처리·파티·소문 전파가 표시 없이 고친 것이 걸린다.
+        /// </summary>
+        private static void CheckUnmarkedVillageSaveChanges(SimContext sim, int hour)
+        {
+            for (int i = 0; i < sim.VillageList.Count; i++)
+            {
+                CheckUnmarkedVillageSaveChange(sim, sim.VillageList[i].VillageId, hour);
+            }
+        }
+
+        private static void CheckUnmarkedVillageSaveChange(SimContext sim, int villageId, int hour)
+        {
+            if (AR.s.Village.TryFindUnmarkedSaveChange(villageId, sim.UnmarkedFieldScratch) == false)
+                return;
+            sim.UnmarkedVillageSaveChanges++;
+            if (sim.UnmarkedSaveSamples.Count < 20)
+                sim.UnmarkedSaveSamples.Add($"{hour}h Village {villageId}: {string.Join(", ", sim.UnmarkedFieldScratch)}");
+        }
+
+        private static void CheckUnmarkedSaveChange(SimContext sim, int entityId, int hour)
+        {
+            if (AR.s.Npc.TryFindUnmarkedSaveChange(entityId, sim.UnmarkedFieldScratch) == false)
+                return;
+
+            sim.UnmarkedSaveChanges++;
+            for (int i = 0; i < sim.UnmarkedFieldScratch.Count; i++)
+            {
+                string field = sim.UnmarkedFieldScratch[i];
+                sim.UnmarkedSaveFields.TryGetValue(field, out int count);
+                sim.UnmarkedSaveFields[field] = count + 1;
+            }
+            if (sim.UnmarkedSaveSamples.Count < 20)
+                sim.UnmarkedSaveSamples.Add($"{hour - 1}~{hour}h NPC {entityId}: {string.Join(", ", sim.UnmarkedFieldScratch)}");
+        }
+
+        private static string BuildSaveSnapshotOmissionReport(SimContext sim, int finalMismatches)
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.Append("NPC save snapshot omissions: unmarked=").Append(sim.UnmarkedSaveChanges)
+              .Append(" final=").Append(finalMismatches);
+            List<string> fields = new List<string>(sim.UnmarkedSaveFields.Keys);
+            fields.Sort(StringComparer.Ordinal);
+            if (fields.Count > 0)
+            {
+                sb.Append("\nfields:");
+                for (int i = 0; i < fields.Count; i++)
+                    sb.Append(' ').Append(fields[i]).Append('=').Append(sim.UnmarkedSaveFields[fields[i]]);
+            }
+            for (int i = 0; i < sim.UnmarkedSaveSamples.Count; i++)
+                sb.Append("\n  ").Append(sim.UnmarkedSaveSamples[i]);
+            return sb.ToString();
+        }
+
         private static void AdvanceNpc(SimContext sim, int entityId, float now)
         {
             NpcSaveData saveData = sim.Npcs[entityId];
@@ -1121,6 +1286,8 @@ namespace ARPG.EditorTools
 
                 if (activity.Kind == NpcActivityKind.None && activity.Phase == NpcActivityPhase.Idle)
                 {
+                    // System_NpcSim과 같은 위치에서 표시한다 (활동 시작 직전).
+                    AR.s.Npc.MarkSaveDirty(entityId);
                     StartNextActivity(sim, saveData, entityId, decisionTime);
                     continue;
                 }
@@ -1128,6 +1295,8 @@ namespace ARPG.EditorTools
                 if (activity.PhaseEndGameTime > now)
                     return;
 
+                // System_NpcSim과 같다: 여기부터는 모든 경로가 이 NPC의 활동 상태를 바꾼다.
+                AR.s.Npc.MarkSaveDirty(entityId);
                 float transitionTime = activity.PhaseEndGameTime;
                 if (transitionTime < activity.PhaseStartedGameTime)
                     transitionTime = now;
@@ -1181,6 +1350,7 @@ namespace ARPG.EditorTools
 
         private static void SetIdle(NpcSaveData saveData, float gameTime)
         {
+            AR.s.Npc.MarkSaveDirty(saveData.EntityId);
             NpcActivityState activity = saveData.Activity;
             activity.Phase = NpcActivityPhase.Idle;
             activity.Kind = NpcActivityKind.None;
@@ -1280,6 +1450,7 @@ namespace ARPG.EditorTools
 
         private static void StartPartyHunt(NpcPartyState party, float startGameTime)
         {
+            AR.s.Npc.MarkPartySaveDirty(party.PartyId);
             NpcActivityState activity = party.Activity;
             activity.PartyId = party.PartyId;
             activity.Kind = NpcActivityKind.Hunt;
@@ -1294,6 +1465,7 @@ namespace ARPG.EditorTools
                 NpcSaveData? member = AR.s.Npc.GetSaveData(party.MemberIds[i]);
                 if (member == null)
                     continue;
+                AR.s.Npc.MarkSaveDirty(party.MemberIds[i]);
                 member.Activity.PartyId = party.PartyId;
                 member.Activity.Kind = NpcActivityKind.Hunt;
                 member.Activity.Phase = NpcActivityPhase.Venturing;
@@ -1315,6 +1487,7 @@ namespace ARPG.EditorTools
                     NpcSaveData? member = AR.s.Npc.GetSaveData(party.MemberIds[i]);
                     if (member == null)
                         continue;
+                    AR.s.Npc.MarkSaveDirty(party.MemberIds[i]);
                     member.Activity.Kind = NpcActivityKind.None;
                     member.Activity.Phase = NpcActivityPhase.Idle;
                     member.Activity.TargetKey = string.Empty;
@@ -1325,6 +1498,7 @@ namespace ARPG.EditorTools
 
             if (fromRumor == true)
                 sim.ConfirmationParties.Add(party.PartyId);
+            AR.s.Npc.MarkPartySaveDirty(party.PartyId);
             NpcActivityState activity = party.Activity;
             activity.PartyId = party.PartyId;
             activity.Kind = NpcActivityKind.DungeonDelve;
@@ -1339,6 +1513,7 @@ namespace ARPG.EditorTools
                 NpcSaveData? member = AR.s.Npc.GetSaveData(party.MemberIds[i]);
                 if (member == null)
                     continue;
+                AR.s.Npc.MarkSaveDirty(party.MemberIds[i]);
                 member.Activity.PartyId = party.PartyId;
                 member.Activity.Kind = NpcActivityKind.DungeonDelve;
                 member.Activity.Phase = NpcActivityPhase.Venturing;
@@ -1626,6 +1801,7 @@ namespace ARPG.EditorTools
 
             for (int i = 0; i < members.Count; i++)
             {
+                AR.s.Npc.MarkSaveDirty(memberIds[i]);
                 NpcSaveData member = members[i];
                 NpcActivityState activity = member.Activity;
                 activity.LastHuntOutcome = outcomes[i];
@@ -1690,6 +1866,7 @@ namespace ARPG.EditorTools
         {
             if (sim.Villages.TryGetValue(villageId, out VillageData? village) == false)
                 return;
+            AR.s.Village.MarkSaveDirty(villageId);
             int produced = VillageResourceSimulation.Produce(village, GlobalEnum.ItemType.Food, amount);
             sim.Today.FoodYieldRaw += amount;
             sim.Today.FoodInflow += produced;
@@ -1704,6 +1881,7 @@ namespace ARPG.EditorTools
         /// </summary>
         private static void MarkDead(SimContext sim, NpcSaveData saveData, int entityId, float when)
         {
+            AR.s.Npc.MarkSaveDirty(entityId);
             if (saveData.Condition == CharacterConditions.Dead)
                 return;
             sim.Today.Deaths++;
@@ -4701,6 +4879,10 @@ namespace ARPG.EditorTools
             UnityEngine.Random.State randomState = UnityEngine.Random.state;
             FieldInfo itemCounterField = GetField(AR.s.Item, "_instanceIdCounter");
             object? itemCounter = itemCounterField.GetValue(AR.s.Item);
+            FieldInfo elapsedField = GetField(AR.s.Time, "_elapsedGameTime");
+            FieldInfo accumulatorField = GetField(AR.s.Time, "_accumulator");
+            object? elapsed = elapsedField.GetValue(AR.s.Time);
+            object? accumulator = accumulatorField.GetValue(AR.s.Time);
             List<FieldSwap> swaps = new List<FieldSwap>();
             StringBuilder log = new StringBuilder();
             int failures = 0;
@@ -4711,6 +4893,15 @@ namespace ARPG.EditorTools
                 if (condition == false)
                     failures++;
                 log.AppendLine((condition ? "  PASS " : "  FAIL ") + label);
+            }
+
+            // TradeAtShop은 매니저 시각을 읽는다. 주입한 사건 시각과 같은 시계를 쓰고 역행을 거부한다.
+            void AdvanceGameTime(float gameTime)
+            {
+                if (gameTime < AR.s.Time.CurrentGameTime)
+                    throw new InvalidOperationException("Theft diagnostic game time cannot move backwards.");
+                elapsedField.SetValue(AR.s.Time, gameTime);
+                accumulatorField.SetValue(AR.s.Time, 0f);
             }
 
             SimContext sim = new SimContext();
@@ -4821,6 +5012,14 @@ namespace ARPG.EditorTools
                     sim.Affinity.Remove(new NpcPairKey(thiefId, victimId));
                     victim.Inventory[0] = item;
                 }
+                // 조회 함수는 활동 보정까지 수행하지 않는다. 보정이 늦게 실행되면 캐시 게시 후 Activity가 달라진다.
+                NpcSaveData slotQueryProbe = CloneJson(sim.Npcs[thiefId]);
+                slotQueryProbe.Activity.Kind = NpcActivityKind.Hunt;
+                slotQueryProbe.Activity.PhaseStartedGameTime = 12f;
+                slotQueryProbe.Activity.OutcomeSeedGameTime = 0f;
+                NpcManager.HasFreeBagSlot(slotQueryProbe);
+                Check(slotQueryProbe.Activity.OutcomeSeedGameTime == 0f, "가방 빈칸 조회가 활동 저장 상태를 바꾸지 않음");
+
                 void EnsureThiefFreeSlot()
                 {
                     if (NpcManager.HasFreeBagSlot(thief) == false)
@@ -5264,7 +5463,6 @@ namespace ARPG.EditorTools
 
                 // ================= P4b: 단서 · 늦은 발각 · 판매/배신 소문 · 대화 (D103~D106) =================
                 float p4bTime = t0 + 60f;
-                float realNow = AR.s.Time.CurrentGameTime;
                 NpcTheftCounters theftCounters = npc.TheftCounters;
                 float p4bInitialPower = thief.InitialPower;
 
@@ -5281,6 +5479,7 @@ namespace ARPG.EditorTools
                 {
                     ItemData capItem = MakeCopy(template, 500 + n);
                     bagVictim.Inventory[0] = capItem;
+                    AdvanceGameTime(p4bTime + n);
                     npc.ApplyTheft(new NpcTheftDecision
                     {
                         ThiefId = thiefId, VictimId = bagVictimId, ItemSlot = 0, ItemInstanceId = capItem.ItemInstanceId,
@@ -5319,6 +5518,7 @@ namespace ARPG.EditorTools
                         int equipAffinityBefore = ReadSimAffinity(sim, equipVictimId, thiefId);
                         int equipVictimDeeds = equipVictim.Deeds.Count, thiefDeedsNow = thief.Deeds.Count;
                         long lateOwnerBefore = theftCounters.LateDiscoveries[NpcManager.TheftDiscoveryPathItemOwner];
+                        AdvanceGameTime(p4bTime + 10f);
                         bool accepted = npc.ReceiveRumor(equipVictim, ownerRumor, thiefId, p4bTime + 10f);
                         bool kinOk = true;
                         for (int i = 0; i < equipKin.Count; i++)
@@ -5344,6 +5544,11 @@ namespace ARPG.EditorTools
                 }
 
                 // ⑧-3 판매 소문 (D104): 훔친 물건 판매만 ItemSold. 판매 마을 명단의 유효 단서 (인스턴스, 판매자 = 범인)로 판별
+                float saleTime = p4bTime + 11f;
+                AdvanceGameTime(saleTime);
+                float realNow = AR.s.Time.CurrentGameTime;
+                Check(realNow == saleTime && realNow > p4bTime + capItems.Count - 1,
+                    "판매·발각 시각은 도난 뒤이며 매니저 시각과 같음");
                 ItemData normalItem = MakeCopy(template, 600);
                 thief.Inventory[NpcSaveData.MaxTheftClues] = normalItem;
                 long soldBefore = sim.RumorCounters.CreatedItemSold;
@@ -5415,6 +5620,7 @@ namespace ARPG.EditorTools
                 NpcSaveData secondThief = candidate;
                 ItemData chainItem = MakeCopy(template, 700);
                 PrepareVictim(chainVictimId, chainItem);
+                AdvanceGameTime(p4bTime + 20f);
                 npc.ApplyTheft(new NpcTheftDecision
                 {
                     ThiefId = thiefId, VictimId = chainVictimId, ItemSlot = 0, ItemInstanceId = chainItem.ItemInstanceId,
@@ -5431,6 +5637,7 @@ namespace ARPG.EditorTools
                     if (thief.Inventory[i] != null && thief.Inventory[i]!.ItemInstanceId == chainItem.ItemInstanceId)
                         chainSlot = i;
                 }
+                AdvanceGameTime(p4bTime + 21f);
                 NpcTheftOutcome rethief = npc.ApplyTheft(new NpcTheftDecision
                 {
                     ThiefId = secondThiefId, VictimId = thiefId, ItemSlot = chainSlot, ItemInstanceId = chainItem.ItemInstanceId,
@@ -5441,6 +5648,9 @@ namespace ARPG.EditorTools
                     if (secondThief.Inventory[i] != null && secondThief.Inventory[i]!.ItemInstanceId == chainItem.ItemInstanceId)
                         secondThief.Inventory[i] = null;
                 }
+                AdvanceGameTime(p4bTime + 22f);
+                realNow = AR.s.Time.CurrentGameTime;
+                Check(realNow > p4bTime + 21f, "재절도 뒤 판매·발각 시각 전진");
                 npc.NotifyNpcItemSold(secondThiefId, secondThief, village.VillageId, chainItem, realNow);
                 NpcRumor? soldBySecond = null;
                 for (int i = 0; i < secondThief.Rumors.Count; i++)
@@ -5603,6 +5813,7 @@ namespace ARPG.EditorTools
                 ItemData pureItem = MakeCopy(template, 800);
                 sim.Npcs[pureVictimId].EnsureSlotsInitialized();
                 sim.Npcs[pureVictimId].Inventory[0] = pureItem;
+                AdvanceGameTime(p4bTime + 30f);
                 npc.ApplyTheft(new NpcTheftDecision
                 {
                     ThiefId = pureThiefId, VictimId = pureVictimId, ItemSlot = 0, ItemInstanceId = pureItem.ItemInstanceId,
@@ -5726,15 +5937,19 @@ namespace ARPG.EditorTools
                 DetachRumorProbes();
                 for (int i = swaps.Count - 1; i >= 0; i--)
                     swaps[i].Field.SetValue(swaps[i].Target, swaps[i].Original);
+                elapsedField.SetValue(AR.s.Time, elapsed);
+                accumulatorField.SetValue(AR.s.Time, accumulator);
                 itemCounterField.SetValue(AR.s.Item, itemCounter);
                 UnityEngine.Random.state = randomState;
             }
 
             string hashAfter = ComputeLiveStateHash();
             bool liveUnchanged = hashBefore == hashAfter;
-            string result = $"[TheftRules] 실패 {failures}건, 라이브 상태 해시 전후 동일: {liveUnchanged}\n" + log +
+            bool timeUnchanged = Equals(elapsedField.GetValue(AR.s.Time), elapsed) == true &&
+                Equals(accumulatorField.GetValue(AR.s.Time), accumulator) == true;
+            string result = $"[TheftRules] 실패 {failures}건, 라이브 상태 해시 전후 동일: {liveUnchanged}, 게임 시각 복원: {timeUnchanged}\n" + log +
                             (error != null ? "  ERROR " + error + "\n" : string.Empty);
-            if (failures == 0 && liveUnchanged == true && error == null)
+            if (failures == 0 && liveUnchanged == true && timeUnchanged == true && error == null)
                 Debug.Log(result);
             else
                 Debug.LogError(result);
@@ -5846,16 +6061,30 @@ namespace ARPG.EditorTools
             object village = AR.s.Village;
             string[] npcFields = { "_npcSaveDict", "_npcPowerCache", "_deferredPurchaseUpgradeItemIds", "_npcPartyDict",
                 "_simulationPartyIds", "_simulationWorkCursor", "_nextPartyId", "_simulationNpcIds", "_simulationCursor", "_narrative",
-                "_npcAffinity", "_npcRelations", "_goldFlowCounters" };
+                "_npcAffinity", "_npcRelations", "_goldFlowCounters", "_saveSnapshot", "_dirtyNpcIds", "_dirtyNpcOrder",
+                "_snapshotFailedIds", "_saveShardGenerations", "_snapshotFlushCount", "_snapshotFlushTotalMs", "_snapshotFlushMaxMs",
+                "_affinitySaveSnapshot", "_relationSaveSnapshot", "_partySaveSnapshot", "_populationSaveSnapshot" };
             for (int i = 0; i < npcFields.Length; i++)
             {
                 object? value = GetField(npc, npcFields[i]).GetValue(npc);
                 sb.Append(npcFields[i]).Append('=').Append(DescribeFieldValue(value)).Append('\n');
             }
             // D107: 호감도·유형 관계 내용 (참조 동일성은 위 줄, 내용은 Dictionary 열거 순서와 무관하게 정렬해 본다)
+            sb.Append("snapshot=").Append(JsonConvert.SerializeObject(GetField(npc, "_saveSnapshot").GetValue(npc), JsonSettings.Default)).Append('\n');
+            sb.Append("snapshotDirty=").Append(JsonConvert.SerializeObject(GetField(npc, "_dirtyNpcOrder").GetValue(npc), JsonSettings.Default)).Append('\n');
+            sb.Append("shardGenerations=").Append(JsonConvert.SerializeObject(GetField(npc, "_saveShardGenerations").GetValue(npc), JsonSettings.Default)).Append('\n');
+            sb.Append("simulationSnapshots=").Append(AR.s.Npc.DescribeSimulationSaveSnapshots()).Append('\n');
+            sb.Append("worldSimSnapshot=").Append(AR.s.History.DescribeSaveSnapshot()).Append('\n');
+            sb.Append("worldSimSnapshotRef=").Append(DescribeFieldValue(GetField(AR.s.History, "_settlementSaveSnapshot").GetValue(AR.s.History))).Append('\n');
+            sb.Append("worldSim=").Append(JsonConvert.SerializeObject(AR.s.Data.WorldSim, JsonSettings.Default)).Append('\n');
+            sb.Append("population=").Append(DescribeFieldValue(AR.s.Data.NpcPopulation)).Append('|')
+                .Append(JsonConvert.SerializeObject(AR.s.Data.NpcPopulation, JsonSettings.Default)).Append('\n');
             sb.Append("affinity=").Append(DescribeAffinity(GetField(npc, "_npcAffinity").GetValue(npc))).Append('\n');
             sb.Append("relations=").Append(DescribeRelations(GetField(npc, "_npcRelations").GetValue(npc))).Append('\n');
-            string[] villageFields = { "_villages", "_villageList" };
+            string[] villageFields = { "_villages", "_villageList", "_saveSnapshot", "_dirtyVillageIds", "_dirtyVillageOrder",
+                "_snapshotFailedIds", "_snapshotFlushCount", "_snapshotFlushTotalMs", "_snapshotFlushMaxMs", "_snapshotDirtyObserver", "_saveSnapshotGeneration" };
+            sb.Append("villageSnapshot=").Append(JsonConvert.SerializeObject(GetField(village, "_saveSnapshot").GetValue(village), JsonSettings.Default)).Append('\n');
+            sb.Append("villageSnapshotDirty=").Append(JsonConvert.SerializeObject(GetField(village, "_dirtyVillageOrder").GetValue(village), JsonSettings.Default)).Append('\n');
             for (int i = 0; i < villageFields.Length; i++)
             {
                 object? value = GetField(village, villageFields[i]).GetValue(village);
@@ -5934,14 +6163,14 @@ namespace ARPG.EditorTools
         {
             if (value == null)
                 return "null";
-            if (value is int || value is float || value is long || value is bool)
+            if (value is int || value is float || value is double || value is long || value is bool)
                 return Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
 
             // 참조 동일성 + 내용 요약. 파티·캐시는 JSON으로 내용까지 본다.
             int identity = System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(value);
             string content = value is System.Collections.ICollection collection ? collection.Count.ToString() : string.Empty;
             if (value is Dictionary<int, NpcPartyState> || value is Dictionary<int, float> ||
-                value is Dictionary<int, List<int>> || value is List<int>)
+                value is Dictionary<int, List<int>> || value is List<int> || value is HashSet<int>)
                 content = JsonConvert.SerializeObject(value, JsonSettings.Default);
             return $"#{identity}:{content}";
         }

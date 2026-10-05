@@ -106,6 +106,7 @@ namespace ARPG.Npc
         /// </summary>
         public NpcTheftCheck GetTheftThiefBlock(int thiefId, NpcSaveData thief, float gameTime, out float ambitionMultiplier)
         {
+            // 판정만 하므로 표시하지 않는다. HasFreeBagSlot의 칸 보정은 생성·로드 때 끝나 있어 여기서 바뀌는 게 없다.
             ambitionMultiplier = 0f;
             if (thief.Condition == CharacterConditions.Dead || thief.Activity.Phase == NpcActivityPhase.Dead ||
                 thief.VillageId < 0)
@@ -213,7 +214,7 @@ namespace ARPG.Npc
         /// <summary>도둑 가방에 빈칸이 있는가 (D99: 없으면 시도하지 않는다).</summary>
         public static bool HasFreeBagSlot(NpcSaveData saveData)
         {
-            saveData.EnsureSlotsInitialized();
+            // 생성·로드에서 칸 보정을 마친다. 조회 중 Activity 초기값까지 보정하면 변경 표시 없이 저장 상태가 바뀐다.
             return FindEmptyInventorySlot(saveData) >= 0;
         }
 
@@ -318,6 +319,8 @@ namespace ARPG.Npc
         /// </summary>
         public NpcTheftOutcome ApplyTheft(in NpcTheftDecision decision, float gameTime)
         {
+            MarkSaveDirty(decision.ThiefId);
+            MarkSaveDirty(decision.VictimId);
             if (_npcSaveDict.TryGetValue(decision.ThiefId, out NpcSaveData? thief) == false ||
                 _npcSaveDict.TryGetValue(decision.VictimId, out NpcSaveData? victim) == false ||
                 decision.ThiefId == decision.VictimId)
@@ -361,6 +364,7 @@ namespace ARPG.Npc
         /// </summary>
         public void AddTheftClue(NpcSaveData victim, int itemInstanceId, int thiefId, float when)
         {
+            MarkSaveDirty(victim.EntityId);
             if (itemInstanceId == 0 || thiefId < 0)
                 return;
             List<NpcTheftClue> clues = victim.TheftClues;
@@ -388,6 +392,7 @@ namespace ARPG.Npc
         /// <summary>피해자의 Rest 종료 때 (ResolveRestEnd): 범인 사망·14일 경과 단서를 지운다 (D103).</summary>
         private void PruneTheftClues(NpcSaveData victim, float now)
         {
+            MarkSaveDirty(victim.EntityId);
             List<NpcTheftClue> clues = victim.TheftClues;
             for (int i = clues.Count - 1; i >= 0; i--)
             {
@@ -436,6 +441,7 @@ namespace ARPG.Npc
         private void ApplyTheftDiscovery(int victimId, NpcSaveData victim, int clueIndex, int path, int itemId, int value,
             float now)
         {
+            MarkSaveDirty(victimId);
             NpcTheftClue clue = victim.TheftClues[clueIndex];
             NpcTheftDiscovery discovery = new NpcTheftDiscovery
             {
@@ -493,6 +499,7 @@ namespace ARPG.Npc
         /// </summary>
         public void NotifyNpcItemSold(int sellerId, NpcSaveData seller, int villageId, ItemData item, float now)
         {
+            MarkSaveDirty(sellerId);
             if (item == null || IsStolenItemSale(sellerId, villageId, item.ItemInstanceId, now) == false)
                 return;
             NpcRumor rumor = new NpcRumor
@@ -516,6 +523,7 @@ namespace ARPG.Npc
         private void AddBetrayalRumor(int victimId, NpcSaveData victim, int thiefId, NpcBetrayalKind kind, int itemInstanceId,
             int itemId, int value, float eventGameTime, float now)
         {
+            MarkSaveDirty(victimId);
             NpcRumor rumor = new NpcRumor
             {
                 Kind = NpcRumorKind.Betrayal,
@@ -600,6 +608,7 @@ namespace ARPG.Npc
         private void AddTheftDeed(int entityId, NpcDeedKind kind, NpcKnowledgeLevel howKnown, int otherId, int itemId,
             string itemName, float when)
         {
+            MarkSaveDirty(entityId);
             if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
                 return;
 

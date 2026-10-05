@@ -152,6 +152,7 @@ namespace ARPG.Npc
                     return;
 
                 int npcId = state.ReservedNpcId;
+                MarkSaveDirty(npcId);
                 if (TryCancelUnavailableCompanion(npcId) == true)
                     return;
 
@@ -197,6 +198,7 @@ namespace ARPG.Npc
                     saveData.IsSpawning = false;
                 }
 
+                MarkSaveDirty(npcId); // await 이후 다시 표시한다.
                 if (createdId < 0 || created == null)
                 {
                     Debug.LogWarning($"[NpcCompanion] 동행 NPC 생성 실패 - EntityId: {npcId}");
@@ -299,6 +301,7 @@ namespace ARPG.Npc
         {
             if (npcId < 0)
                 return;
+            MarkSaveDirty(npcId);
 
             NpcSaveData? saveData = GetSaveData(npcId);
             if (saveData == null)

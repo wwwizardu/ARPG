@@ -162,6 +162,8 @@ namespace ARPG.Npc
             {
                 if (IsRumorValid(rumors[i]) == true)
                     continue;
+                // 지울 때만 표시한다. 마을 명단 전원을 훑는 호출이라 입구에서 표시하면 명단 전원이 복사된다.
+                MarkSaveDirty(saveData.EntityId);
                 rumors.RemoveAt(i);
                 removed++;
             }
@@ -193,6 +195,7 @@ namespace ARPG.Npc
         public void AddFirsthandDelveRumor(int holderId, NpcSaveData holder, int villageId, int slotIndex, int generation,
             int subjectNpcId, int value, float when)
         {
+            MarkSaveDirty(holderId);
             if (villageId < 0 || slotIndex < 0)
                 return;
             NpcRumor rumor = new NpcRumor
@@ -218,6 +221,7 @@ namespace ARPG.Npc
         /// </summary>
         public void MarkDelveRumorsChecked(NpcSaveData holder, int villageId, int slotIndex)
         {
+            MarkSaveDirty(holder.EntityId);
             if (villageId < 0 || slotIndex < 0)
                 return;
             List<NpcRumor> rumors = holder.Rumors;
@@ -274,6 +278,7 @@ namespace ARPG.Npc
         public void NotifyNpcEquipmentChanged(int entityId, NpcSaveData saveData, GE.EquipSlotType slot, ItemData item,
             float gameTime)
         {
+            MarkSaveDirty(entityId);
             if (item == null || item.ItemInstanceId == 0)
                 return;
             PurgeInvalidRumorsInVillage(saveData.VillageId);
@@ -298,6 +303,7 @@ namespace ARPG.Npc
         /// 가해자 또는 피해자인 Betrayal — D104·D105)을 마을 명단에서 지운다. Condition을 Dead로 바꾼 뒤 호출해야 한다.</summary>
         public void PurgeRumorsOnNpcDeath(int entityId, NpcSaveData saveData)
         {
+            MarkSaveDirty(entityId);
             saveData.Rumors.Clear();
             _narrative.InvalidateDialogues(entityId);
             PurgeInvalidRumorsInVillage(saveData.VillageId);
@@ -311,6 +317,7 @@ namespace ARPG.Npc
         /// </summary>
         public NpcRumorAddResult AddRumor(NpcSaveData holder, NpcRumor rumor, float now)
         {
+            MarkSaveDirty(holder.EntityId);
             if (rumor == null || rumor.Kind == NpcRumorKind.None)
                 return NpcRumorAddResult.Invalid;
 
@@ -393,6 +400,7 @@ namespace ARPG.Npc
         public void ResolveRestEnd(int entityId, NpcSaveData saveData, float restStartGameTime, float gameTime,
             int worldSeed, bool allowTheft)
         {
+            MarkSaveDirty(entityId);
             if (saveData.TheftClues.Count > 0)
                 PruneTheftClues(saveData, gameTime);
             ExchangeRumorsOnRestEnd(entityId, saveData, restStartGameTime, gameTime, worldSeed);
@@ -509,6 +517,7 @@ namespace ARPG.Npc
         /// </summary>
         public bool ReceiveRumor(NpcSaveData receiver, NpcRumor source, int giverId, float now)
         {
+            MarkSaveDirty(receiver.EntityId);
             NpcRumor copy = source.Clone();
             copy.SourceNpcId = giverId;
             copy.Hops = source.Hops + 1;

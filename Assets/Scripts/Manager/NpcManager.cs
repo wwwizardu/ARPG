@@ -66,6 +66,10 @@ namespace ARPG.Npc
             LoadRelations(AR.s.Data.NpcRelationList);
             LoadParties(AR.s.Data.NpcPartyStates);
             ValidateCompanionState();
+            RestoreTravelPositions();
+            if (SaveSnapshotEnabled == true)
+                RebuildSaveSnapshot();
+            RefreshSimulationSaveSnapshots(Data.SaveScope.All, rebuild: true);
         }
 
         public void Reset()
@@ -85,6 +89,8 @@ namespace ARPG.Npc
             }
 
             _npcSaveDict.Clear();
+            ResetSaveSnapshot();
+            ResetSimulationSaveSnapshots();
             _chunkNpcs.Clear();
             _simulationNpcIds.Clear();
             _simulationCursor = 0;
@@ -323,6 +329,7 @@ namespace ARPG.Npc
                 }
 
                 _npcSaveDict[entityId] = saveData;
+                MarkSaveDirty(entityId);
                 AddNpcToSimulation(entityId);
 
                 Vector2Int chunkCoord = PositionToChunk(worldPos);
@@ -401,6 +408,7 @@ namespace ARPG.Npc
             EnsureAmbitionInitialized(entityId, saveData);
 
             _npcSaveDict[entityId] = saveData;
+            MarkSaveDirty(entityId);
             AddNpcToSimulation(entityId);
 
             Vector2Int chunkCoord = PositionToChunk(position);
@@ -434,6 +442,7 @@ namespace ARPG.Npc
                 return;
 
             NpcPopulationState population = AR.s.Data.NpcPopulation;
+            MarkPopulationSaveDirty();
             if (population.TargetNpcCount < 0)
                 population.TargetNpcCount = DetermineGlobalNpcTarget(targetVillageCount);
 
@@ -455,6 +464,7 @@ namespace ARPG.Npc
                 SpawnDefaultNpcsForVillage(village, table, allocations[i]);
                 if (wasPopulated == false && village.NpcEntityIds.Count > 0)
                     NpcRelationBackfill.Generate(village, village.NpcEntityIds);
+                AR.s.Village.MarkSaveDirty(village.VillageId);
                 village.HasBeenPopulated = true;
             }
 
@@ -474,6 +484,7 @@ namespace ARPG.Npc
             if (population.TargetNpcCount <= 0 || now < population.NextReplenishGameTime)
                 return;
 
+            MarkPopulationSaveDirty();
             population.NextReplenishGameTime = now + ReplenishIntervalHours;
             if (GetLivingNpcCount() >= population.TargetNpcCount)
                 return;
@@ -741,6 +752,9 @@ namespace ARPG.Npc
                 // 발급된 EntityId를 전달하여 동일한 ID로 엔티티 생성. saveData를 같이 넘겨 장비 modifier도 복원.
                 var (createdId, entity) = await EntityFactory.CreateNpc(saveData.NpcTableId, spawnPos3D, _npcParent, entityId, saveData);
 
+                // await 전에는 저장 대상이 바뀌지 않는다(IsSpawning은 저장 제외, 위치 보정은 SetNpcPosition이 표시).
+                // 생성 중·뒤의 변경(IsActive·EntityId 등)을 여기서 표시한다.
+                MarkSaveDirty(entityId);
                 if (createdId < 0 || entity == null)
                     return;
 
@@ -813,6 +827,7 @@ namespace ARPG.Npc
         /// </summary>
         private void SaveAndDeactivateNpc(int entityId, NpcSaveData saveData, Vector2Int originalChunk)
         {
+            MarkSaveDirty(entityId);
             if (AR.s.Component.TryGetComponent<TransformComponent>(entityId, out var transform))
             {
                 saveData.Position = new Vector2(transform.Position.x, transform.Position.y);
@@ -878,8 +893,9 @@ namespace ARPG.Npc
             AIStateHelper.StopMovement(entityId);
         }
 
-        private static void ResumeHuntPathFromCurrentPosition(NpcSaveData saveData, float now)
+        private void ResumeHuntPathFromCurrentPosition(NpcSaveData saveData, float now)
         {
+            MarkSaveDirty(saveData.EntityId);
             NpcActivityState activity = saveData.Activity;
             if (NpcActivityResolver.HasTravelPath(activity.Kind) == false || activity.HasMovementPath == false)
                 return;
@@ -941,6 +957,7 @@ namespace ARPG.Npc
         /// </summary>
         public void UnregisterNpcByEntityId(int entityId)
         {
+            MarkSaveDirty(entityId);
             if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
                 return;
 
@@ -984,15 +1001,20 @@ namespace ARPG.Npc
 
                 int entityId = kvp.Key;
 
+                // 값이 달라진 NPC만 표시한다. 제자리에 있는 NPC까지 표시하면 저장마다 깊은 복사가 반복된다.
                 // 던전 동행 NPC는 입장 전 월드 위치를 유지한다. 던전 좌표가 저장되면 재접속 시 월드 청크 인덱스가 오염된다.
                 if (IsCompanionInDungeon(entityId) == false &&
-                    AR.s.Component.TryGetComponent<TransformComponent>(entityId, out var transform))
+                    AR.s.Component.TryGetComponent<TransformComponent>(entityId, out var transform) &&
+                    (saveData.PositionX != transform.Position.x || saveData.PositionY != transform.Position.y))
                 {
+                    MarkSaveDirty(entityId);
                     saveData.Position = new Vector2(transform.Position.x, transform.Position.y);
                 }
 
-                if (AR.s.Component.TryGetComponent<StateComponent>(entityId, out var state))
+                if (AR.s.Component.TryGetComponent<StateComponent>(entityId, out var state) &&
+                    saveData.Condition != state.Condition)
                 {
+                    MarkSaveDirty(entityId);
                     saveData.Condition = state.Condition;
                 }
             }
@@ -1019,6 +1041,8 @@ namespace ARPG.Npc
         public void Load(Dictionary<int, NpcSaveData> npcSaveDatas, int chunkSize)
         {
             _npcSaveDict.Clear();
+            ResetSaveSnapshot();
+            ResetSimulationSaveSnapshots();
             _chunkNpcs.Clear();
             _simulationNpcIds.Clear();
             _simulationCursor = 0;
@@ -1073,6 +1097,7 @@ namespace ARPG.Npc
                     saveData.Description = PickDescription(GetPreferredJobType(saveData.NpcTableId));
 
                 _npcSaveDict[entityId] = saveData;
+                MarkSaveDirty(entityId);
 
                 // 사망 기록은 전기/연대기 조회를 위해 저장 딕셔너리에만 보존한다.
                 // 런타임 시뮬레이션/청크/마을 명단에 다시 넣으면 로드할 때마다 죽은 NPC가 후보군에 복귀한다.
@@ -1100,6 +1125,7 @@ namespace ARPG.Npc
 
         public void LoadParties(List<NpcPartyState>? partyStates)
         {
+            _partySaveSnapshot.Reset();
             _npcPartyDict.Clear();
             _simulationPartyIds.Clear();
             _simulationWorkCursor = 0;
@@ -1111,6 +1137,7 @@ namespace ARPG.Npc
                 if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
                     continue;
 
+                MarkSaveDirty(entityId);
                 saveData.Activity.PartyId = -1;
             }
 
@@ -1147,6 +1174,7 @@ namespace ARPG.Npc
 
                 party.Activity.PartyId = party.PartyId;
                 _npcPartyDict.Add(party.PartyId, party);
+                MarkPartySaveDirty(party.PartyId);
                 AddPartyToSimulation(party.PartyId);
                 if (party.PartyId >= _nextPartyId)
                     _nextPartyId = party.PartyId + 1;
@@ -1154,6 +1182,7 @@ namespace ARPG.Npc
                 for (int memberIndex = 0; memberIndex < validMembers.Count; memberIndex++)
                 {
                     int memberId = validMembers[memberIndex];
+                    MarkSaveDirty(memberId);
                     NpcSaveData member = _npcSaveDict[memberId];
                     member.Activity.PartyId = party.PartyId;
                     // 파티 활동 종류(Hunt/DungeonDelve)를 파티원에게 되돌린다. 구 세이브 파티는 Hunt뿐이다.
@@ -1230,6 +1259,7 @@ namespace ARPG.Npc
             {
                 NpcPairKey key = toRemove[i];
                 NpcAffinityEntry entry = _npcAffinity[key];
+                MarkAffinitySaveDirty(key.Lo, key.Hi);
                 if (entry.SharedActivities != null)
                     ArchiveSharedActivities(key, entry.SharedActivities, entry.Affinity);
                 _npcAffinity.Remove(key);
@@ -1252,11 +1282,13 @@ namespace ARPG.Npc
         /// </summary>
         public bool LoadAffinity(List<NpcAffinityEntry>? list)
         {
+            _affinitySaveSnapshot.Reset();
             _npcAffinity.Clear();
             for (int i = 0; i < (list?.Count ?? 0); i++)
             {
                 NpcAffinityEntry entry = list![i];
                 _npcAffinity[new NpcPairKey(entry.NpcA, entry.NpcB)] = entry.Copy();
+                MarkAffinitySaveDirty(entry.NpcA, entry.NpcB);
             }
             bool migrated = MigrateLegacyPartyActivities() > 0;
             return RestorePersonalStories() || migrated;
@@ -1490,10 +1522,12 @@ namespace ARPG.Npc
             for (int i = 0; i < list.Count; i++)
             {
                 NpcRelationEntry e = list[i];
+                MarkRelationSaveDirty(e.FromEntityId);
                 int other = e.FromEntityId == entityId ? e.ToEntityId : e.FromEntityId;
                 if (_npcRelations.TryGetValue(other, out var otherList))
                     otherList.Remove(e);
             }
+            MarkRelationSaveDirty(entityId);
             _npcRelations.Remove(entityId);
         }
 
@@ -1521,6 +1555,7 @@ namespace ARPG.Npc
         /// </summary>
         public void LoadRelations(List<NpcRelationEntry>? list)
         {
+            _relationSaveSnapshot.Reset();
             _npcRelations.Clear();
             if (list == null)
                 return;
@@ -1537,6 +1572,7 @@ namespace ARPG.Npc
 
         private void AddToRelationIndex(int key, NpcRelationEntry entry)
         {
+            MarkRelationSaveDirty(key);
             if (_npcRelations.TryGetValue(key, out var list) == false)
             {
                 list = new List<NpcRelationEntry>();
@@ -1566,9 +1602,11 @@ namespace ARPG.Npc
             if (_npcPartyDict.TryGetValue(partyId, out NpcPartyState? party) == false)
                 return;
 
+            MarkPartySaveDirty(partyId);
             for (int i = 0; i < party.MemberIds.Count; i++)
             {
                 int memberId = party.MemberIds[i];
+                MarkSaveDirty(memberId);
                 if (_npcSaveDict.TryGetValue(memberId, out NpcSaveData? member) &&
                     member.Activity.PartyId == partyId)
                     member.Activity.PartyId = -1;
@@ -1612,6 +1650,7 @@ namespace ARPG.Npc
                     candidate.Activity.Phase == NpcActivityPhase.Dead || candidate.Activity.PartyId >= 0)
                     continue;
 
+                // 방문만으로는 표시하지 않는다. 대부분은 활동 도중이라 바뀌는 게 없다. 바꾸는 쪽(System_NpcSim)이 표시한다.
                 entityId = candidateId;
                 saveData = candidate;
                 return true;
@@ -1655,6 +1694,7 @@ namespace ARPG.Npc
                     candidate.Activity.Phase == NpcActivityPhase.Dead)
                     continue;
 
+                // 방문만으로는 표시하지 않는다. 돌려받은 NPC를 고치는 쪽이 표시한다.
                 entityId = candidateId;
                 saveData = candidate;
                 return true;
@@ -1688,14 +1728,90 @@ namespace ARPG.Npc
             AR.s.Component.RemoveComponent<NpcActivityPausedTag>(entityId);
         }
 
+        /// <summary>혼자 이동 중인 NPC의 위치를 자기 활동 경로로 갱신한다.</summary>
+        public void UpdateSoloTravelPosition(int entityId, NpcSaveData saveData, float now)
+        {
+            NpcActivityState activity = saveData.Activity;
+            if (NpcActivityResolver.HasTravelPath(activity.Kind) == false || activity.HasMovementPath == false)
+                return;
+            UpdateOffscreenNpcPosition(entityId, EvaluateTravelPosition(activity, now));
+        }
+
+        /// <summary>원정 파티원 위치 = 파티 경로 위치 + 대열 오프셋. 대열 순서는 MemberIds 순서다.</summary>
+        public void UpdatePartyTravelPositions(NpcPartyState party, float now)
+        {
+            NpcActivityState activity = party.Activity;
+            if (activity.HasMovementPath == false)
+                return;
+
+            Vector2 partyPosition = EvaluateTravelPosition(activity, now);
+            for (int i = 0; i < party.MemberIds.Count; i++)
+                UpdateOffscreenNpcPosition(party.MemberIds[i], partyPosition + GetPartyFormationOffset(i));
+        }
+
+        /// <summary>
+        /// 저장 파일의 위치가 실제 위치와 달라도 되는 NPC인지 (SAVE_SNAPSHOT S13). 화면 밖에서 이동 중이면
+        /// 위치는 경로로 계산되는 값이라 저장하지 않는다. 검증 도구는 이 NPC의 위치를 비교하지 않는다.
+        /// </summary>
+        public bool IsSavePositionDerived(int entityId)
+        {
+            if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false || saveData.IsActive == true)
+                return false;
+            NpcActivityState activity = saveData.Activity;
+            if (activity.PartyId >= 0)
+                return _npcPartyDict.TryGetValue(activity.PartyId, out NpcPartyState? party) == true &&
+                       party.Activity.HasMovementPath == true;
+            return NpcActivityResolver.HasTravelPath(activity.Kind) == true && activity.HasMovementPath == true;
+        }
+
+        /// <summary>
+        /// 이동 중 위치는 저장하지 않으므로(SAVE_SNAPSHOT S13) 로드 때 활동·파티 경로로 다시 계산하고 청크 인덱스도 맞춘다.
+        /// TimeManager는 NpcManager 뒤에 초기화되므로 저장된 세계 시각을 직접 쓴다.
+        /// </summary>
+        private void RestoreTravelPositions()
+        {
+            float now = Mathf.Max(0f, AR.s.Data.ElapsedWorldGameHours);
+            for (int i = 0; i < _simulationNpcIds.Count; i++)
+            {
+                int entityId = _simulationNpcIds[i];
+                if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == true && saveData.Activity.PartyId < 0)
+                    UpdateSoloTravelPosition(entityId, saveData, now);
+            }
+            for (int i = 0; i < _simulationPartyIds.Count; i++)
+            {
+                if (_npcPartyDict.TryGetValue(_simulationPartyIds[i], out NpcPartyState? party) == true)
+                    UpdatePartyTravelPositions(party, now);
+            }
+        }
+
+        // 도착 시각이 지났으면 도착 시각의 위치에 둔다.
+        private static Vector2 EvaluateTravelPosition(NpcActivityState activity, float now)
+        {
+            float evaluationTime = now < activity.PhaseEndGameTime ? now : activity.PhaseEndGameTime;
+            return NpcActivityResolver.EvaluateHuntPosition(activity, evaluationTime);
+        }
+
+        private static Vector2 GetPartyFormationOffset(int memberIndex)
+        {
+            return memberIndex switch
+            {
+                0 => Vector2.zero,
+                1 => new Vector2(-1.25f, -1f),
+                2 => new Vector2(1.25f, -1f),
+                _ => new Vector2(0f, -2f),
+            };
+        }
+
         /// <summary>
         /// 오프스크린 활동의 analytic 좌표를 저장하고 청크 인덱스를 함께 갱신한다.
         /// 다음 청크 활성화는 이 인덱스로 NPC를 현재 위치에 승격한다.
+        /// 표시하지 않는다: 이 좌표는 활동·파티 경로로 언제든 다시 계산되고, 로드 때 RestoreTravelPositions가 다시 넣는다 (S13).
         /// </summary>
-        public void UpdateOffscreenNpcPosition(int entityId, Vector2 position)
+        private void UpdateOffscreenNpcPosition(int entityId, Vector2 position)
         {
             if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
                 return;
+            // 실체화 NPC는 위치를 ECS가 가진다.
             if (saveData.IsActive)
                 return;
 
@@ -1715,6 +1831,7 @@ namespace ARPG.Npc
         /// </summary>
         public void MarkNpcDead(int entityId, float when)
         {
+            MarkSaveDirty(entityId);
             if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
                 return;
             if (saveData.Condition == CharacterConditions.Dead ||
@@ -1776,6 +1893,7 @@ namespace ARPG.Npc
                     survivor.Activity.Phase == NpcActivityPhase.Dead)
                     continue;
 
+                MarkSaveDirty(survivorEntityId);
                 bool wasFromEntity = relation.FromEntityId == survivorEntityId;
                 survivor.RecordDeceasedRelation(new DeceasedRelationMemory(deceasedEntityId, deceasedName,
                     relation.Type, wasFromEntity, fellEventId, deathGameTime));
@@ -1800,6 +1918,7 @@ namespace ARPG.Npc
         public void AddDeed(int entityId, NpcDeedKind kind, int refEventId,
             NpcKnowledgeLevel howKnown, float when, int participantId)
         {
+            MarkSaveDirty(entityId);
             if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
                 return;
 
@@ -1815,6 +1934,7 @@ namespace ARPG.Npc
         /// </summary>
         private void AddSevereWoundDeed(int entityId, float when)
         {
+            MarkSaveDirty(entityId);
             if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
                 return;
 
@@ -1829,6 +1949,7 @@ namespace ARPG.Npc
         /// </summary>
         public void AddAttackedWoundDeed(int entityId, int attackerId, string attackerDisplayName, float when)
         {
+            MarkSaveDirty(entityId);
             if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
                 return;
 
@@ -1841,6 +1962,7 @@ namespace ARPG.Npc
 
         public void AddNotableItemDeed(int entityId, int itemId, string itemDisplayName, float when)
         {
+            MarkSaveDirty(entityId);
             if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
                 return;
 
@@ -2093,6 +2215,7 @@ namespace ARPG.Npc
 
         private void SetNpcPosition(int entityId, NpcSaveData saveData, Vector2 position)
         {
+            MarkSaveDirty(entityId);
             Vector2Int oldChunk = PositionToChunk(saveData.Position);
             saveData.Position = position;
 

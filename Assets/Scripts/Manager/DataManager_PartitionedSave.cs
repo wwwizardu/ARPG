@@ -16,7 +16,8 @@ namespace ARPG.Data
     {
         private const int PARTITION_FORMAT_VERSION = 1;
         private const int PARTITION_SCHEMA_VERSION = 1;
-        private const int NPC_SHARD_COUNT = 32;
+        // 2의 거듭제곱이어야 한다 (GetNpcShardIndex가 비트 AND로 나눈다).
+        public const int NPC_SHARD_COUNT = 32;
         private const string SAVE_SLOT_DIRECTORY = "Slot_0";
         private const string PARTS_DIRECTORY = "parts";
         private const string MANIFEST_FILE = "manifest.json";
@@ -38,16 +39,25 @@ namespace ARPG.Data
         private const string PART_NPC_STATE_PREFIX = "npc_state_";
 
         private SaveManifest? _activeSaveManifest;
+        // 프레임 정리와 독립된 디스크 확정 세대. 실패/Reset 중인 writer는 이 값을 전진시키지 않는다.
+        private readonly Dictionary<string, object> _committedSnapshotGenerations = new();
         // One lane owns disk preparation, manifest replacement and maintenance, across Reset.
         private readonly SemaphoreSlim _saveIoGate = new(1, 1);
         private readonly SaveDtoSnapshot _saveSnapshots = new();
         // 저장 1회의 깊은 복사 누적 시간 ([SaveTiming] 로그). 캡처 시작마다 Reset — 저장 사이에 값을 들고 있지 않는다.
         private readonly System.Diagnostics.Stopwatch _deepCopyTimer = new();
+        private readonly System.Diagnostics.Stopwatch _npcSnapshotRefreshTimer = new();
+        private readonly System.Diagnostics.Stopwatch _npcSnapshotAssemblyTimer = new();
+        private readonly System.Diagnostics.Stopwatch _villageSnapshotRefreshTimer = new();
+        private readonly System.Diagnostics.Stopwatch _villageSnapshotAssemblyTimer = new();
+        private readonly System.Diagnostics.Stopwatch _simulationSnapshotRefreshTimer = new();
+        private readonly System.Diagnostics.Stopwatch _simulationSnapshotAssemblyTimer = new();
         private Task _saveMaintenanceTask = Task.CompletedTask;
         private bool _isLoading;
         private int _saveLifetime;
         private int _saveOperationLifetime;
         private SaveScope _queuedSaveScope = SaveScope.None;
+        private bool _queuedSaveSnapshotRebuild;
         private int _nextItemInstanceId = 1;
 
         /// <summary>
@@ -62,7 +72,8 @@ namespace ARPG.Data
         public long SaveRevision => _activeSaveManifest?.Revision ?? 0;
 
 #if UNITY_EDITOR
-        private readonly int _editorMainThreadId = Environment.CurrentManagedThreadId;
+        // 필드 초기화는 Unity 로딩 스레드에서 실행될 수 있다. Initialize 진입 때 기록한다.
+        private int _editorMainThreadId;
         // Editor fault injection is instance-owned and never touches the real slot when an override is set.
         public string? DiagnosticSavePath { get; set; }
         public string? DiagnosticFailurePoint { get; set; }
@@ -73,6 +84,9 @@ namespace ARPG.Data
         public double DiagnosticCaptureMilliseconds { get; private set; }
         public double DiagnosticPrepareMilliseconds { get; private set; }
         public double DiagnosticCommitMilliseconds { get; private set; }
+        public SaveScope DiagnosticCommittedScope { get; private set; }
+        public int DiagnosticPreparedPartCount { get; private set; }
+        public int DiagnosticWrittenPartCount { get; private set; }
 #endif
 
         public async Task WaitForSaveIdleAsync()
@@ -101,13 +115,78 @@ namespace ARPG.Data
             await SaveAsync(SaveScope.Player | SaveScope.World | SaveScope.Villages);
         }
 
+#if UNITY_EDITOR
+        public string DiagnosticCaptureSimulationJson(SaveScope scope, bool useSnapshot)
+        {
+            object? root;
+            if (useSnapshot == true)
+            {
+                AR.s.Npc.RefreshSimulationSaveSnapshots(scope);
+                if (scope == SaveScope.NpcSocial) root = AR.s.Npc.CaptureSocialSaveSnapshotRoot();
+                else if (scope == SaveScope.NpcParties) root = AR.s.Npc.CapturePartySaveSnapshotRoot();
+                else if (scope == SaveScope.NpcMeta) root = AR.s.Npc.CapturePopulationSaveSnapshotRoot();
+                else if (scope == SaveScope.WorldSim) root = AR.s.History.CaptureSaveSnapshotRoot();
+                else throw new ArgumentOutOfRangeException(nameof(scope));
+            }
+            else
+            {
+                if (scope == SaveScope.NpcSocial) root = new NpcSocialSaveRoot
+                    { Affinities = AR.s.Npc.SaveAffinity(), Relations = AR.s.Npc.SaveRelations() };
+                else if (scope == SaveScope.NpcParties) root = new NpcPartySaveRoot { Parties = AR.s.Npc.SaveParties() };
+                else if (scope == SaveScope.NpcMeta) root = new NpcMetaSaveRoot { Population = _worldData.NpcPopulation };
+                else if (scope == SaveScope.WorldSim) root = new WorldSimSaveRoot { WorldSim = _worldData.WorldSim };
+                else throw new ArgumentOutOfRangeException(nameof(scope));
+                root = _saveSnapshots.Capture(root);
+            }
+            return JsonConvert.SerializeObject(root, Formatting.None, JsonSettings.Default);
+        }
+
+        public string DiagnosticCaptureVillageJson(bool useSnapshot)
+        {
+            AR.s.Village.SyncTaskToData();
+            object? root;
+            if (useSnapshot == true)
+            {
+                AR.s.Village.FlushSaveSnapshot();
+                root = AR.s.Village.CaptureSaveSnapshotRoot();
+            }
+            else
+                root = _saveSnapshots.Capture(new VillageSaveRoot { Villages = AR.s.Village.Save() });
+            return JsonConvert.SerializeObject(root, Formatting.None, JsonSettings.Default);
+        }
+
+        public string[] DiagnosticCaptureNpcShardJson(bool useSnapshot)
+        {
+            AR.s.Npc.SaveAllActiveNpcs();
+            object?[] roots;
+            if (useSnapshot == true)
+            {
+                AR.s.Npc.FlushSaveSnapshot();
+                roots = AR.s.Npc.CaptureSaveSnapshotShards();
+            }
+            else
+            {
+                Dictionary<int, Npc.NpcSaveData>[] shards = SplitNpcShards(new Dictionary<int, Npc.NpcSaveData>(AR.s.Npc.SaveDataView));
+                roots = new object?[NPC_SHARD_COUNT];
+                for (int i = 0; i < roots.Length; i++)
+                    roots[i] = _saveSnapshots.Capture(new NpcShardSaveRoot { ShardIndex = i, Npcs = shards[i] });
+            }
+            string[] json = new string[roots.Length];
+            for (int i = 0; i < json.Length; i++)
+                json[i] = JsonConvert.SerializeObject(roots[i], Formatting.None, JsonSettings.Default);
+            return json;
+        }
+#endif
+
         private void ResetPartitionedSaveState()
         {
             // Called on the main thread, as is the final manifest replacement. Workers own
             // detached data and may finish, but cannot commit into a different lifetime.
             _saveLifetime++;
             _activeSaveManifest = null;
+            _committedSnapshotGenerations.Clear();
             _queuedSaveScope = SaveScope.None;
+            _queuedSaveSnapshotRebuild = false;
             _nextItemInstanceId = 1;
             _needsFullSaveAfterMigration = false;
             _needsNpcBasicEquipmentReplacement = false;
@@ -316,6 +395,7 @@ namespace ARPG.Data
 
         private void ApplyPartitionSnapshot(SaveManifest manifest, PartitionSnapshot snapshot)
         {
+            _committedSnapshotGenerations.Clear();
             _worldData = new WorldData
             {
                 Version = snapshot.World.WorldDataVersion,
@@ -407,7 +487,7 @@ namespace ARPG.Data
             return result;
         }
 
-        private async Task<bool> SavePartitionedAsync(SaveScope requestedScope)
+        private async Task<bool> SavePartitionedAsync(SaveScope requestedScope, bool rebuildSaveSnapshots = false)
         {
             if (_isLoading == true) return false;
             int requestedLifetime = _saveLifetime;
@@ -422,6 +502,7 @@ namespace ARPG.Data
             if (_isSaving == true)
             {
                 _queuedSaveScope |= requestedScope;
+                _queuedSaveSnapshotRebuild |= rebuildSaveSnapshots;
                 _queuedSaveCompletion ??= new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                 Debug.Log($"[DataManager] Save in progress. Queued scope: {_queuedSaveScope}");
                 return await _queuedSaveCompletion.Task;
@@ -431,19 +512,19 @@ namespace ARPG.Data
             _saveOperationLifetime = _saveLifetime;
             _saveCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             var request = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            _ = RunSaveQueueAsync(requestedScope, request, _saveLifetime, _saveCompletion);
+            _ = RunSaveQueueAsync(requestedScope, request, _saveLifetime, _saveCompletion, rebuildSaveSnapshots);
             return await request.Task;
         }
 
         private async Task RunSaveQueueAsync(SaveScope scope, TaskCompletionSource<bool> request,
-            int lifetime, TaskCompletionSource<bool> idle)
+            int lifetime, TaskCompletionSource<bool> idle, bool rebuildSaveSnapshots)
         {
             bool result = false;
             try
             {
                 while (scope != SaveScope.None && lifetime == _saveLifetime)
                 {
-                    result = await WritePartitionSnapshotAsync(scope, true);
+                    result = await WritePartitionSnapshotAsync(scope, true, rebuildSaveSnapshots);
                     // Each caller observes its own committed batch. A later queued failure
                     // must never make an already committed transaction roll back in memory.
                     request.TrySetResult(result);
@@ -451,7 +532,9 @@ namespace ARPG.Data
                     scope = _queuedSaveScope;
                     if (scope == SaveScope.None) break;
                     request = _queuedSaveCompletion!;
+                    rebuildSaveSnapshots = _queuedSaveSnapshotRebuild;
                     _queuedSaveScope = SaveScope.None;
+                    _queuedSaveSnapshotRebuild = false;
                     _queuedSaveCompletion = null;
                     await Task.Yield();
                 }
@@ -467,6 +550,7 @@ namespace ARPG.Data
                 _queuedSaveCompletion?.TrySetResult(false);
                 _queuedSaveCompletion = null;
                 _queuedSaveScope = SaveScope.None;
+                _queuedSaveSnapshotRebuild = false;
                 _isSaving = false;
                 _saveCompletion = null;
                 idle.TrySetResult(result);
@@ -474,7 +558,7 @@ namespace ARPG.Data
         }
 
         private async Task<bool> WritePartitionSnapshotAsync(SaveScope requestedScope,
-            bool captureRuntimeManagers)
+            bool captureRuntimeManagers, bool rebuildSaveSnapshots = false)
         {
             int lifetime = _saveLifetime;
             string savePath = Path.Combine(Application.persistentDataPath, "Saved");
@@ -493,18 +577,16 @@ namespace ARPG.Data
                     scope |= SaveScope.Player | SaveScope.World | SaveScope.Dungeons;
                 // NPC 던전 완료(NPC_AMBITION D58)는 즉시 저장하지 않는다. 대신 슬롯 변경(Dungeons)과 NPC 보상(NpcState)이
                 // 한쪽만 저장되지 않도록, 둘 중 하나를 싣는 다음 저장이 나머지도 함께 싣는다.
-                // 공동 활동 통계는 Social에, 사망 동료 기억은 State에 있다. 부분 저장도 두 파티션을 함께 커밋한다.
-                // NpcSocial만 요청해도 아래에서 NpcState가 붙으므로 완료 결합 조건에 Social도 포함한다.
                 const SaveScope npcCompletionScope = SaveScope.Dungeons | SaveScope.NpcState;
-                const SaveScope npcActivityScope = SaveScope.NpcState | SaveScope.NpcSocial;
                 long npcCompletionRevision = AR.s.Dungeon.NpcCompletionRevision;
-                if (captureRuntimeManagers == true && AR.s.Dungeon.HasUnsavedNpcCompletion == true &&
-                    (scope & (npcCompletionScope | npcActivityScope)) != 0)
-                    scope |= npcCompletionScope;
-                if ((scope & npcActivityScope) != 0)
-                    scope |= npcActivityScope;
                 if (_activeSaveManifest == null || _needsFullSaveAfterMigration == true)
                     scope = SaveScope.All;
+                // 여섯 시뮬 파트는 한 상태로 확정한다. 변경 없는 파일도 다음 manifest에 기존 참조로 포함한다.
+                if ((scope & SaveScope.Simulation) != 0)
+                    scope |= SaveScope.Simulation;
+                if (captureRuntimeManagers == true && AR.s.Dungeon.HasUnsavedNpcCompletion == true &&
+                    (scope & (SaveScope.Dungeons | SaveScope.Simulation)) != 0)
+                    scope |= npcCompletionScope | SaveScope.Simulation;
 
                 // No awaits during capture: all parts describe the same main-thread state.
 #if UNITY_EDITOR
@@ -513,16 +595,24 @@ namespace ARPG.Data
                 var totalTimer = System.Diagnostics.Stopwatch.StartNew();
                 int gcCountBefore = GC.CollectionCount(0);
                 _deepCopyTimer.Reset();
+                _npcSnapshotRefreshTimer.Reset();
+                _npcSnapshotAssemblyTimer.Reset();
+                _villageSnapshotRefreshTimer.Reset();
+                _villageSnapshotAssemblyTimer.Reset();
+                _simulationSnapshotRefreshTimer.Reset();
+                _simulationSnapshotAssemblyTimer.Reset();
                 var captureTimer = System.Diagnostics.Stopwatch.StartNew();
                 Dictionary<string, PendingSavePart> pending = new();
-                CapturePendingParts(scope, captureRuntimeManagers, pending);
+                CapturePendingParts(scope, captureRuntimeManagers, pending, rebuildSaveSnapshots || scope == SaveScope.All);
                 SaveManifest? previous = _activeSaveManifest;
+                Dictionary<string, object> capturedGenerations = SelectIncrementalSnapshotParts(pending, captureRuntimeManagers);
                 SaveManifest next = CloneManifest(previous, (previous?.Revision ?? 0) + 1);
                 captureTimer.Stop();
                 string? failurePoint = null;
                 Action<string>? workerStage = null;
 #if UNITY_EDITOR
                 DiagnosticCaptureMilliseconds = captureTimer.Elapsed.TotalMilliseconds;
+                DiagnosticPreparedPartCount = pending.Count;
                 DiagnosticAfterCapture?.Invoke();
                 failurePoint = DiagnosticFailurePoint;
                 workerStage = DiagnosticWorkerStage;
@@ -548,12 +638,17 @@ namespace ARPG.Data
                 var commitTimer = System.Diagnostics.Stopwatch.StartNew();
                 CommitManifest(slotPath, prepared.Path);
                 _activeSaveManifest = next;
+                // 현재 매니저 세대가 아니라 캡처했던 세대만 확정한다. await 도중 생긴 변경은 다음 저장에 남는다.
+                foreach (string key in pending.Keys) _committedSnapshotGenerations.Remove(key);
+                foreach (var pair in capturedGenerations) _committedSnapshotGenerations[pair.Key] = pair.Value;
                 if (scope == SaveScope.All) _needsFullSaveAfterMigration = false;
                 if (captureRuntimeManagers == true && (scope & npcCompletionScope) == npcCompletionScope)
                     AR.s.Dungeon.MarkNpcCompletionSaved(npcCompletionRevision);
                 commitTimer.Stop();
 #if UNITY_EDITOR
                 DiagnosticCommitMilliseconds = commitTimer.Elapsed.TotalMilliseconds;
+                DiagnosticCommittedScope = scope;
+                DiagnosticWrittenPartCount = CountWrittenParts(next);
 #endif
                 // Hand off the SAME lane before reporting success. No subsequent preparation,
                 // quarantine or Load may overlap this cleanup, even after Reset.
@@ -568,7 +663,7 @@ namespace ARPG.Data
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[DataManager] Partitioned save failed: {ex.Message}");
+                Debug.LogError($"[DataManager] Partitioned save failed: {ex}");
                 return false;
             }
             finally
@@ -599,7 +694,7 @@ namespace ARPG.Data
                 workerStage?.Invoke("serialize");
                 string json = JsonConvert.SerializeObject(pending[key].Snapshot, Formatting.None, settings);
                 next.Parts[key] = WritePartFile(partsPath, key, pending[key].SchemaVersion,
-                    json, next.Revision, failurePoint);
+                    json, next.Revision, failurePoint, next.Parts.TryGetValue(key, out SavePartReference? existing) ? existing : null);
                 if (failurePoint == "after-part") throw new IOException("Injected after-part failure");
             }
             next.SavedAtUtc = DateTime.UtcNow.ToString("O");
@@ -635,8 +730,22 @@ namespace ARPG.Data
         }
 
         private void CapturePendingParts(SaveScope scope, bool captureRuntimeManagers,
-            Dictionary<string, PendingSavePart> pending)
+            Dictionary<string, PendingSavePart> pending, bool rebuildSaveSnapshots = false)
         {
+            if (captureRuntimeManagers == true && Npc.NpcManager.SimulationSaveSnapshotEnabled == true)
+            {
+                _simulationSnapshotRefreshTimer.Start();
+                AR.s.Npc.RefreshSimulationSaveSnapshots(scope, rebuildSaveSnapshots);
+                _simulationSnapshotRefreshTimer.Stop();
+            }
+            if (captureRuntimeManagers == true && History.HistoryManager.SaveSnapshotEnabled == true &&
+                (scope & SaveScope.WorldSim) != 0)
+            {
+                _simulationSnapshotRefreshTimer.Start();
+                if (rebuildSaveSnapshots == true) AR.s.History.RebuildSaveSnapshot();
+                else AR.s.History.FlushSaveSnapshot();
+                _simulationSnapshotRefreshTimer.Stop();
+            }
             if ((scope & SaveScope.Dungeons) != 0)
             {
                 if (captureRuntimeManagers == true) AR.s.Dungeon.CaptureCheckpoint();
@@ -696,18 +805,25 @@ namespace ARPG.Data
 
             if ((scope & SaveScope.Villages) != 0)
             {
-                List<Village.VillageData> villages;
                 if (captureRuntimeManagers == true)
-                {
                     AR.s.Village.SyncTaskToData();
-                    villages = AR.s.Village.Save();
+                if (captureRuntimeManagers == true && Village.VillageManager.SaveSnapshotEnabled == true)
+                {
+                    _villageSnapshotRefreshTimer.Start();
+                    if (rebuildSaveSnapshots == true) AR.s.Village.RebuildSaveSnapshot();
+                    else AR.s.Village.FlushSaveSnapshot();
+                    _villageSnapshotRefreshTimer.Stop();
+                    _villageSnapshotAssemblyTimer.Start();
+                    AddPendingSnapshotPart(pending, PART_VILLAGES, AR.s.Village.CaptureSaveSnapshotRoot());
+                    _villageSnapshotAssemblyTimer.Stop();
                 }
                 else
                 {
-                    villages = _worldData.VillageDatas;
+                    List<Village.VillageData> villages = captureRuntimeManagers == true
+                        ? AR.s.Village.Save()
+                        : _worldData.VillageDatas;
+                    AddPendingPart(pending, PART_VILLAGES, new VillageSaveRoot { Villages = villages });
                 }
-                AddPendingPart(pending, PART_VILLAGES,
-                    new VillageSaveRoot { Villages = villages });
             }
 
             if ((scope & SaveScope.Buildings) != 0)
@@ -728,53 +844,99 @@ namespace ARPG.Data
 
             if ((scope & SaveScope.WorldSim) != 0)
             {
-                AddPendingPart(pending, PART_WORLD_SIM,
+                if (captureRuntimeManagers == true && History.HistoryManager.SaveSnapshotEnabled == true)
+                {
+                    _simulationSnapshotAssemblyTimer.Start();
+                    AddPendingSnapshotPart(pending, PART_WORLD_SIM, AR.s.History.CaptureSaveSnapshotRoot());
+                    _simulationSnapshotAssemblyTimer.Stop();
+                }
+                else AddPendingPart(pending, PART_WORLD_SIM,
                     new WorldSimSaveRoot { WorldSim = _worldData.WorldSim });
             }
 
             if ((scope & SaveScope.NpcMeta) != 0)
             {
-                AddPendingPart(pending, PART_NPC_META,
+                if (captureRuntimeManagers == true && Npc.NpcManager.SimulationSaveSnapshotEnabled == true)
+                {
+                    _simulationSnapshotAssemblyTimer.Start();
+                    AddPendingSnapshotPart(pending, PART_NPC_META, AR.s.Npc.CapturePopulationSaveSnapshotRoot());
+                    _simulationSnapshotAssemblyTimer.Stop();
+                }
+                else AddPendingPart(pending, PART_NPC_META,
                     new NpcMetaSaveRoot { Population = _worldData.NpcPopulation });
             }
 
             if ((scope & SaveScope.NpcSocial) != 0)
             {
-                NpcSocialSaveRoot root = new NpcSocialSaveRoot
+                if (captureRuntimeManagers == true && Npc.NpcManager.SimulationSaveSnapshotEnabled == true)
                 {
-                    Affinities = captureRuntimeManagers == true
-                        ? AR.s.Npc.SaveAffinity()
-                        : _worldData.NpcAffinityList,
-                    Relations = captureRuntimeManagers == true
-                        ? AR.s.Npc.SaveRelations()
-                        : _worldData.NpcRelationList,
-                };
-                AddPendingPart(pending, PART_NPC_SOCIAL, root);
+                    _simulationSnapshotAssemblyTimer.Start();
+                    AddPendingSnapshotPart(pending, PART_NPC_SOCIAL, AR.s.Npc.CaptureSocialSaveSnapshotRoot());
+                    _simulationSnapshotAssemblyTimer.Stop();
+                }
+                else
+                {
+                    NpcSocialSaveRoot root = new NpcSocialSaveRoot
+                    {
+                        Affinities = captureRuntimeManagers == true
+                            ? AR.s.Npc.SaveAffinity()
+                            : _worldData.NpcAffinityList,
+                        Relations = captureRuntimeManagers == true
+                            ? AR.s.Npc.SaveRelations()
+                            : _worldData.NpcRelationList,
+                    };
+                    AddPendingPart(pending, PART_NPC_SOCIAL, root);
+                }
             }
 
             if ((scope & SaveScope.NpcParties) != 0)
             {
-                List<Npc.NpcPartyState> parties = captureRuntimeManagers == true
-                    ? AR.s.Npc.SaveParties()
-                    : _worldData.NpcPartyStates;
-                AddPendingPart(pending, PART_NPC_PARTIES,
-                    new NpcPartySaveRoot { Parties = parties });
+                if (captureRuntimeManagers == true && Npc.NpcManager.SimulationSaveSnapshotEnabled == true)
+                {
+                    _simulationSnapshotAssemblyTimer.Start();
+                    AddPendingSnapshotPart(pending, PART_NPC_PARTIES, AR.s.Npc.CapturePartySaveSnapshotRoot());
+                    _simulationSnapshotAssemblyTimer.Stop();
+                }
+                else
+                {
+                    List<Npc.NpcPartyState> parties = captureRuntimeManagers == true
+                        ? AR.s.Npc.SaveParties()
+                        : _worldData.NpcPartyStates;
+                    AddPendingPart(pending, PART_NPC_PARTIES,
+                        new NpcPartySaveRoot { Parties = parties });
+                }
             }
 
             if ((scope & SaveScope.NpcState) != 0)
             {
-                Dictionary<int, Npc.NpcSaveData> npcs = captureRuntimeManagers == true
-                    ? AR.s.Npc.Save()
-                    : _worldData.NpcSaveDatas;
-                Dictionary<int, Npc.NpcSaveData>[] shards = SplitNpcShards(npcs);
-                for (int shardIndex = 0; shardIndex < NPC_SHARD_COUNT; shardIndex++)
+                if (captureRuntimeManagers == true && Npc.NpcManager.SaveSnapshotEnabled == true)
                 {
-                    NpcShardSaveRoot root = new NpcShardSaveRoot
+                    AR.s.Npc.SaveAllActiveNpcs();
+                    _npcSnapshotRefreshTimer.Start();
+                    if (rebuildSaveSnapshots == true) AR.s.Npc.RebuildSaveSnapshot();
+                    else AR.s.Npc.FlushSaveSnapshot();
+                    _npcSnapshotRefreshTimer.Stop();
+                    _npcSnapshotAssemblyTimer.Start();
+                    object?[] roots = AR.s.Npc.CaptureSaveSnapshotShards();
+                    for (int i = 0; i < roots.Length; i++)
+                        AddPendingSnapshotPart(pending, GetNpcShardPartKey(i), roots[i]);
+                    _npcSnapshotAssemblyTimer.Stop();
+                }
+                else
+                {
+                    Dictionary<int, Npc.NpcSaveData> npcs = captureRuntimeManagers == true
+                        ? AR.s.Npc.Save()
+                        : _worldData.NpcSaveDatas;
+                    Dictionary<int, Npc.NpcSaveData>[] shards = SplitNpcShards(npcs);
+                    for (int shardIndex = 0; shardIndex < NPC_SHARD_COUNT; shardIndex++)
                     {
-                        ShardIndex = shardIndex,
-                        Npcs = shards[shardIndex],
-                    };
-                    AddPendingPart(pending, GetNpcShardPartKey(shardIndex), root);
+                        NpcShardSaveRoot root = new NpcShardSaveRoot
+                        {
+                            ShardIndex = shardIndex,
+                            Npcs = shards[shardIndex],
+                        };
+                        AddPendingPart(pending, GetNpcShardPartKey(shardIndex), root);
+                    }
                 }
             }
         }
@@ -785,8 +947,60 @@ namespace ARPG.Data
             _deepCopyTimer.Start();
             object? snapshot = _saveSnapshots.Capture(root);
             _deepCopyTimer.Stop();
+            AddPendingSnapshotPart(pending, key, snapshot);
+        }
+
+        private static void AddPendingSnapshotPart(Dictionary<string, PendingSavePart> pending,
+            string key, object? snapshot)
+        {
             pending[key] = new PendingSavePart(PARTITION_SCHEMA_VERSION, snapshot);
         }
+
+        private Dictionary<string, object> SelectIncrementalSnapshotParts(Dictionary<string, PendingSavePart> pending,
+            bool captureRuntimeManagers)
+        {
+            Dictionary<string, object> captured = new();
+            if (captureRuntimeManagers == false) return captured;
+            List<string> keys = new(pending.Keys);
+            for (int i = 0; i < keys.Count; i++)
+            {
+                string key = keys[i];
+                object? generation = null;
+                if (key == PART_VILLAGES && Village.VillageManager.SaveSnapshotEnabled == true)
+                    generation = (AR.s.Village, AR.s.Village.SaveSnapshotGeneration);
+                else if (key == PART_WORLD_SIM && History.HistoryManager.SaveSnapshotEnabled == true)
+                    generation = AR.s.History.SaveSnapshotGeneration;
+                else if (Npc.NpcManager.SimulationSaveSnapshotEnabled == true)
+                {
+                    if (key == PART_NPC_SOCIAL) generation = AR.s.Npc.SocialSaveSnapshotGeneration;
+                    else if (key == PART_NPC_PARTIES) generation = AR.s.Npc.PartySaveSnapshotGeneration;
+                    else if (key == PART_NPC_META) generation = AR.s.Npc.PopulationSaveSnapshotGeneration;
+                }
+                if (key.StartsWith(PART_NPC_STATE_PREFIX, StringComparison.Ordinal) == true && Npc.NpcManager.SaveSnapshotEnabled == true)
+                {
+                    int shard = int.Parse(key.Substring(PART_NPC_STATE_PREFIX.Length), System.Globalization.CultureInfo.InvariantCulture);
+                    generation = (AR.s.Npc, AR.s.Npc.GetSaveShardGeneration(shard));
+                }
+                if (generation == null) continue;
+                captured[key] = generation;
+                if (_activeSaveManifest?.Parts.TryGetValue(key, out SavePartReference? part) == true &&
+                    part.SchemaVersion == PARTITION_SCHEMA_VERSION &&
+                    _committedSnapshotGenerations.TryGetValue(key, out object? committed) == true && committed.Equals(generation) == true)
+                    pending.Remove(key);
+            }
+            return captured;
+        }
+
+        private static int CountWrittenParts(SaveManifest manifest)
+        {
+            int count = 0;
+            foreach (SavePartReference part in manifest.Parts.Values)
+            {
+                if (part.Revision == manifest.Revision) count++;
+            }
+            return count;
+        }
+
 
         /// <summary>
         /// 저장 1회의 비용과 크기를 한 줄로 남긴다. 메인 스레드에서 도는 구간은 복사(매니저 저장 데이터 정리 + 깊은 복사)와
@@ -796,6 +1010,21 @@ namespace ARPG.Data
             double captureMs, double prepareMs, double commitMs, double totalMs, int gcCount)
         {
             double deepCopyMs = _deepCopyTimer.Elapsed.TotalMilliseconds;
+            double snapshotRefreshMs = _npcSnapshotRefreshTimer.Elapsed.TotalMilliseconds;
+            double snapshotAssemblyMs = _npcSnapshotAssemblyTimer.Elapsed.TotalMilliseconds;
+            double villageRefreshMs = _villageSnapshotRefreshTimer.Elapsed.TotalMilliseconds;
+            double villageAssemblyMs = _villageSnapshotAssemblyTimer.Elapsed.TotalMilliseconds;
+            double simulationRefreshMs = _simulationSnapshotRefreshTimer.Elapsed.TotalMilliseconds;
+            double simulationAssemblyMs = _simulationSnapshotAssemblyTimer.Elapsed.TotalMilliseconds;
+            string frameTiming = string.Empty;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (Npc.NpcManager.SaveSnapshotEnabled == true)
+                frameTiming = $" 프레임정리={AR.s.Npc.SnapshotFlushAverageMs:F3}ms평균/" +
+                    $"{AR.s.Npc.SnapshotFlushMaxMs:F3}ms최대/{AR.s.Npc.SnapshotFlushCount}회";
+            if (Village.VillageManager.SaveSnapshotEnabled == true)
+                frameTiming += $" 마을프레임정리={AR.s.Village.SnapshotFlushAverageMs:F3}ms평균/" +
+                    $"{AR.s.Village.SnapshotFlushMaxMs:F3}ms최대/{AR.s.Village.SnapshotFlushCount}회";
+#endif
             long totalBytes = 0;
             long npcStateBytes = 0;
             int npcShardCount = 0;
@@ -806,6 +1035,7 @@ namespace ARPG.Data
             {
                 if (next.Parts.TryGetValue(keys[i], out SavePartReference? part) == false || part == null)
                     continue;
+                if (part.Revision != next.Revision) continue;
                 totalBytes += part.Length;
                 if (keys[i].StartsWith(PART_NPC_STATE_PREFIX, StringComparison.Ordinal) == true)
                 {
@@ -817,10 +1047,11 @@ namespace ARPG.Data
             }
 
             Debug.Log($"[SaveTiming] rev={next.Revision} scope={scope} 메인복사={captureMs:F1}ms " +
-                      $"(매니저정리 등={captureMs - deepCopyMs:F1}ms, 깊은복사={deepCopyMs:F1}ms) " +
+                      $"(매니저정리 등={captureMs - deepCopyMs - snapshotRefreshMs - snapshotAssemblyMs - villageRefreshMs - villageAssemblyMs - simulationRefreshMs - simulationAssemblyMs:F1}ms, " +
+                      $"깊은복사={deepCopyMs:F1}ms, NPC스냅샷정리={snapshotRefreshMs:F3}ms, 조립={snapshotAssemblyMs:F3}ms, 마을스냅샷정리={villageRefreshMs:F3}ms, 마을조립={villageAssemblyMs:F3}ms, 시뮬스냅샷정리={simulationRefreshMs:F3}ms, 시뮬조립={simulationAssemblyMs:F3}ms) " +
                       $"백그라운드={prepareMs:F1}ms 교체={commitMs:F1}ms 메인합계={captureMs + commitMs:F1}ms " +
-                      $"전체={totalMs:F1}ms 크기={FormatSaveBytes(totalBytes)} " +
-                      $"(NPC상태 {npcShardCount}샤드={FormatSaveBytes(npcStateBytes)}{parts}) GC0=+{gcCount}");
+                      $"전체={totalMs:F1}ms 새파일={CountWrittenParts(next)} 재사용={next.Parts.Count - CountWrittenParts(next)} 새파일크기={FormatSaveBytes(totalBytes)} " +
+                      $"(NPC상태 {npcShardCount}샤드={FormatSaveBytes(npcStateBytes)}{parts}) GC0=+{gcCount}{frameTiming}");
         }
 
         private static string FormatSaveBytes(long bytes)
@@ -842,10 +1073,15 @@ namespace ARPG.Data
             for (int i = 0; i < npcIds.Count; i++)
             {
                 int npcId = npcIds[i];
-                int shardIndex = npcId & (NPC_SHARD_COUNT - 1);
-                shards[shardIndex][npcId] = npcs[npcId];
+                shards[GetNpcShardIndex(npcId)][npcId] = npcs[npcId];
             }
             return shards;
+        }
+
+        /// <summary>NPC가 들어갈 샤드 번호. 기존 경로(SplitNpcShards)와 스냅샷 조립(NpcManager)이 같이 쓴다.</summary>
+        public static int GetNpcShardIndex(int npcId)
+        {
+            return npcId & (NPC_SHARD_COUNT - 1);
         }
 
         private static string GetNpcShardPartKey(int shardIndex)
@@ -879,10 +1115,14 @@ namespace ARPG.Data
         }
 
         private static SavePartReference WritePartFile(string partsPath, string partKey,
-            int schemaVersion, string json, long revision, string? failurePoint)
+            int schemaVersion, string json, long revision, string? failurePoint, SavePartReference? existing = null)
         {
             byte[] bytes = Encoding.UTF8.GetBytes(json);
             string hash = ComputeSha256(bytes);
+            // 재생성/스위치 OFF/최초 런타임 저장도 동일한 내용은 새 파일을 만들지 않는다.
+            if (existing != null && existing.SchemaVersion == schemaVersion && existing.Length == bytes.LongLength &&
+                existing.Sha256 == hash && File.Exists(Path.Combine(partsPath, existing.FileName)) == true)
+                return existing;
             string safeKey = partKey.Replace(Path.DirectorySeparatorChar, '_')
                 .Replace(Path.AltDirectorySeparatorChar, '_');
             string fileName = $"{safeKey}.r{revision:D8}.{Guid.NewGuid():N}.json";
@@ -1147,7 +1387,8 @@ namespace ARPG.Data
         private void AssertEditorMainThread(string operation)
         {
             Debug.Assert(Environment.CurrentManagedThreadId == _editorMainThreadId,
-                $"[DataManager] {operation} left the Unity main thread.");
+                $"[DataManager] {operation} left the Unity main thread. " +
+                $"Expected thread {_editorMainThreadId}, actual {Environment.CurrentManagedThreadId}.");
         }
 
         private sealed class DiagnosticFailingSaveConverter : JsonConverter

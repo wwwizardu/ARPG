@@ -4,11 +4,11 @@ This file provides guidance to Claude Code when working with this Unity ARPG pro
 
 ## Project Overview
 
-Unity 6000.0.42f1 (LTS) ARPG project with 2D URP setup and custom ECS architecture.
+Unity 6000.4.2f1 ARPG project with 2D URP setup and custom ECS architecture.
 
 **Key Technologies:**
-- Unity Input System 1.13.1 (configured in `InputSystem_Actions.inputactions`)
-- Universal Render Pipeline (URP) 17.0.4
+- Unity Input System 1.19.0 (configured in `InputSystem_Actions.inputactions`)
+- Universal Render Pipeline (URP) 17.4.0
 - Custom ECS (not Unity DOTS)
 
 ## Project Structure

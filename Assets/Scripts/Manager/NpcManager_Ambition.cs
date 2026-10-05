@@ -92,6 +92,7 @@ namespace ARPG.Npc
         /// </summary>
         public NpcActivityChoiceContext BuildActivityChoiceContext(int entityId, NpcSaveData saveData, float gameTime)
         {
+            // 판정만 하므로 표시하지 않는다. 칸 보정은 생성·로드 때 끝나 있어 여기서 바뀌는 게 없다.
             saveData.EnsureSlotsInitialized();
             int freeSlots = 0;
             for (int i = 0; i < saveData.Inventory.Count; i++)
@@ -134,6 +135,7 @@ namespace ARPG.Npc
         /// </summary>
         public void GrantAcquiredItem(int entityId, NpcSaveData saveData, ItemData item, float gameTime, string source)
         {
+            MarkSaveDirty(entityId);
             if (item == null)
                 return;
 
@@ -168,6 +170,7 @@ namespace ARPG.Npc
         /// </summary>
         private void EnsureAmbitionInitialized(int entityId, NpcSaveData saveData)
         {
+            MarkSaveDirty(entityId);
             if (saveData.InitialPower > 0f)
                 return;
 
@@ -210,6 +213,7 @@ namespace ARPG.Npc
         /// </summary>
         private int ReplaceEquipmentWithBasicItems(int entityId, NpcSaveData saveData, ref int skippedItems)
         {
+            MarkSaveDirty(entityId);
             saveData.EnsureSlotsInitialized();
             int replaced = 0;
             int slotMax = (int)GE.EquipSlotType.Max;
@@ -253,6 +257,7 @@ namespace ARPG.Npc
         /// <summary>비실체화 직후 호출. 실체화 중에 사서 미뤄 둔 업그레이드 장비를 다시 평가해 장착한다.</summary>
         private void ApplyDeferredPurchaseUpgrades(int entityId, NpcSaveData saveData)
         {
+            MarkSaveDirty(entityId);
             if (_deferredPurchaseUpgradeItemIds.TryGetValue(entityId, out List<int>? pending) == false)
                 return;
             _deferredPurchaseUpgradeItemIds.Remove(entityId);
@@ -295,6 +300,7 @@ namespace ARPG.Npc
         private bool ApplyUpgrade(int entityId, NpcSaveData saveData, ItemData item, GE.EquipSlotType slot,
             float currentPower, float newPower, float gameTime, string source)
         {
+            MarkSaveDirty(entityId);
             if (saveData.EquipItem(slot, item, out ItemData? replacedItem) == false)
                 return false;
 
@@ -369,6 +375,7 @@ namespace ARPG.Npc
         /// </summary>
         private void StoreInInventory(int entityId, NpcSaveData saveData, ItemData item)
         {
+            MarkSaveDirty(entityId);
             if (CreateNpcInventoryView(saveData).AddItem(item) >= 0)
                 return;
 

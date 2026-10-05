@@ -77,6 +77,7 @@ namespace ARPG.Village
             if (_villages.TryGetValue(villageId, out VillageData? data) == false)
                 return false;
 
+            MarkSaveDirty(villageId);
             VillageResourceSimulation.DepositNpcGold(data, amount);
             SyncStorageFromData(data);
             return true;
@@ -91,6 +92,7 @@ namespace ARPG.Village
                 return false;
             if (_villages.TryGetValue(villageId, out VillageData? data) == false)
                 return false;
+            MarkSaveDirty(villageId);
             if (VillageResourceSimulation.TryWithdrawNpcGold(data, amount) == false)
                 return false;
 
@@ -115,6 +117,7 @@ namespace ARPG.Village
             int cycle = GetCurrentRestockCycle(v);
             if (v.NpcPurchaseCycle != cycle)
             {
+                MarkSaveDirty(villageId);
                 v.NpcPurchaseCycle = cycle;
                 v.NpcPurchaseCount = 0;
             }
@@ -193,6 +196,7 @@ namespace ARPG.Village
             if (DepositNpcGold(v.VillageId, price) == false)
                 return null;
 
+            MarkSaveDirty(v.VillageId);
             entry.RemainingCount -= 1;
             entry.NpcBuyerEntityId = buyerEntityId;
             entry.NpcBuyerName = buyerName ?? string.Empty;
@@ -287,6 +291,7 @@ namespace ARPG.Village
 
             if (consignedCount < MaxAdventurerConsignmentSlots)
             {
+                MarkSaveDirty(v.VillageId);
                 v.MerchantStock.Add(entry);
                 Debug.Log($"[NpcAmbition] Trade Consign v={v.VillageId} item={item.Id}:{table.Name}#{item.ItemInstanceId} " +
                           $"base={table.BasePrice} price={entry.UnitPrice} slot={consignedCount + 1}/{MaxAdventurerConsignmentSlots}");
@@ -296,6 +301,7 @@ namespace ARPG.Village
             if (replaceIndex >= 0 && table.BasePrice > replaceBasePrice)
             {
                 ItemData? dropped = v.MerchantStock[replaceIndex].Item;
+                MarkSaveDirty(v.VillageId);
                 v.MerchantStock[replaceIndex] = entry;
                 Debug.Log($"[NpcAmbition] Trade Consign v={v.VillageId} item={item.Id}:{table.Name}#{item.ItemInstanceId} " +
                           $"base={table.BasePrice} price={entry.UnitPrice} replaced={dropped?.Id}#{dropped?.ItemInstanceId} " +

@@ -90,6 +90,7 @@ namespace ARPG.Systems
 
         private static void Promote(VillageData v, VillageStage next)
         {
+            AR.s.Village.MarkSaveDirty(v.VillageId);
             VillageStage prev = v.Stage;
             int radius = VillageManager.GetBoundsRadius(next);
             bool requestWallPlan = VillageProgressionRules.ApplyPromotion(v, next, radius);
