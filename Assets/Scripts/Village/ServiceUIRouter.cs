@@ -42,6 +42,7 @@ namespace ARPG.Village
             out Candidate candidate)
         {
             candidate = new Candidate { Kind = CandidateKind.None, EntityId = -1 };
+            if (AR.s.UI.HasOpenInteractionMenu || AR.s.Dungeon.GameplayPaused) return false;
             if (AR.s.Npc.IsPlayerInDuel == true) return false;
             if (AR.s.Dungeon.IsInside) return TryGetDungeonCandidate(out candidate);
             if (AR.s.Dungeon.GameplayPaused) return false;

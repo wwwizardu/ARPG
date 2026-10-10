@@ -24,9 +24,11 @@ namespace ARPG.Data
         NpcSocial = 1 << 9,
         NpcParties = 1 << 10,
         Dungeons = 1 << 11,
+        // 공통 콘텐츠 실행 원장 (NPC_NARRATIVE_CONTENT_DESIGN §7.3). 부탁 칸·행적 소문이 사건을 가리키므로 NpcState와 함께 확정한다.
+        Narrative = 1 << 12,
         Simulation = Villages | WorldSim | NpcMeta | NpcState | NpcSocial | NpcParties,
         All = Player | World | Map | Villages | Buildings | Chronicle |
-              WorldSim | NpcMeta | NpcState | NpcSocial | NpcParties | Dungeons,
+              WorldSim | NpcMeta | NpcState | NpcSocial | NpcParties | Dungeons | Narrative,
     }
 
     [Serializable]

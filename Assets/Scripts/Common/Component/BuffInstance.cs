@@ -11,6 +11,7 @@ namespace ARPG.Component
         public float Duration;          // 전체 지속시간
         public float RemainTime;        // 남은 시간
         public int StackCount;          // 중복 카운트 (같은 버프가 여러 번 적용되면 증가)
+        public KillCreditComponent Credit;
 
         // 틱 데이터 (DoT/HoT용) - 테이블에서 복사하여 보유
         public float TickInterval;      // 틱 간격 (초), 0이면 틱 없음
@@ -25,6 +26,7 @@ namespace ARPG.Component
             Duration = duration;
             RemainTime = duration;
             StackCount = 1;
+            Credit = new KillCreditComponent { SourceEntityId = -1 };
 
             // 틱 데이터 초기화 (기본값)
             TickInterval = 0f;

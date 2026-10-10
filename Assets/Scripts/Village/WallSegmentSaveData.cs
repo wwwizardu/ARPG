@@ -6,7 +6,7 @@ namespace ARPG.Village
     /// <summary>
     /// 벽 세그먼트 1칸의 영구 세이브 데이터.
     /// VillageData.WallSegments에 누적. 청크 활성/비활성과 무관하게 보존.
-    /// 실제 ECS 컴포넌트(WallSegmentComponent)는 활성 청크에서만 부착, 로드 시 재구성.
+    /// 벽·성문은 엔티티가 아니라 맵 타일 구조물이다. 마을 실체화 때 이 데이터로 맵 타일 오브젝트를 배치한다.
     /// </summary>
     [Serializable]
     public class WallSegmentSaveData

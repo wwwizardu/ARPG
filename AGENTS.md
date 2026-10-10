@@ -32,6 +32,7 @@ This is a Unity 6000.4.2f1 2D URP ARPG using a custom ECS architecture, not Unit
 ## ECS Rules
 
 - Components contain data only; game logic belongs in systems. Tags are empty structs.
+- Objects that have a world position and that the player interacts with or that need world-space presentation (for example dungeon chests and entrances) are entities: an `EntityBase` prefab plus components, decisions in systems, and visuals as `IEntityMessageHandler` children (see `HpBarView`). Keep the saved source of truth in domain data and treat the entity as its runtime representation. Do not add manager-owned marker GameObjects with their own distance checks or child lookups. Exception: map tile structures whose source of truth is tile data, such as village walls and gates in `VillageData.WallSegments`, stay tiles.
 - Access components through `AR.s.Component` and cache it in a local at the top of the method (`ComponentManager cm = AR.s.Component;`).
 - Use `TryGetComponent` for optional components. Iterate with `GetComponentPool<T>()` and `pool.Count` / `pool.GetEntityId(i)` / `pool.GetByIndex(i)`; for multi-component queries, iterate one pool and `TryGetComponent` the others. Size pools appropriately.
 - Systems have one responsibility, remain stateless (all state lives in components or managers), declare an explicit priority, implement the matching phase interface (`IUpdateSystem`, `IFixedUpdateSystem`, or `ILateUpdateSystem`), and set `UpdateInterval` for work that need not run every frame.

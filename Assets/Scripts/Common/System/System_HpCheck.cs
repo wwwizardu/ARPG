@@ -60,12 +60,15 @@ namespace ARPG.Systems
                 if (stat.CurrentHp <= 0 && AR.s.Npc.TryInterceptDuelDefeat(entityId) == true)
                 {
                     cm.TryGetComponent<StatComponent>(entityId, out stat);
+                    cm.RemoveComponent<KillCreditComponent>(entityId);
                 }
 
                 // CurrentHp가 0 이하이면 사망 처리
                 if (stat.CurrentHp <= 0)
                 {
-                    if (AR.s.Dungeon.HandleDeath(entityId))
+                    KillCreditComponent credit = cm.TryGetComponent<KillCreditComponent>(entityId, out var lethal)
+                        ? lethal : new KillCreditComponent { SourceEntityId = -1 };
+                    if (AR.s.Dungeon.HandleDeath(entityId, credit))
                     {
                         cm.RemoveComponent<HpDirtyTag>(entityId);
                         continue;
@@ -97,7 +100,7 @@ namespace ARPG.Systems
                     AR.s.Message.SendToEntity(new DeathMessage
                     {
                         TargetEntityId = entityId,
-                        KillerEntityId = 0
+                        KillerEntityId = credit.SourceEntityId
                     });
                 }
 

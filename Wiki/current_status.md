@@ -2,9 +2,10 @@
 name: current-status
 description: 최근 구현 흐름과 재개 지점을 코드·정본 문서 기준으로 종합한 프로젝트 현황.
 type: status
-last_updated: 2026-10-03
+last_updated: 2026-10-10
 sources:
   - Docs/npc/NPC_AMBITION_DESIGN.md
+  - Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md
   - Docs/npc/NPC_COMBAT_DESIGN.md
   - Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md
   - Docs/npc/NPC_EQUIPMENT_DESIGN.md
@@ -30,6 +31,7 @@ sources:
   - Wiki/skill_aim.md
   - Wiki/skill_propagation.md
   - Wiki/monster_spawn_runtime.md
+  - AGENTS.md
   - Assets/Scripts/
   - Assets/_BinaryData/TableData/
 ---
@@ -42,7 +44,9 @@ sources:
 
 **NPC**: 약 2,400명의 NPC가 Rest·Hunt·Trade·DungeonDelve를 솔로 또는 파티로 오프스크린 수행하고, 다음 활동은 성격에서 나온 야망과 필요로 효용 선택한다. 전리품을 상점에 팔아 Gold를 얻고(닫힌 경제), 상점의 기본 장비를 사서 강해진다. 소문 교환, 낮은 확률의 NPC 던전 완료, 파티 자동 구성, 부상 등급, NPC 간 절도가 구현됐고, 협력·배신(P3)은 보류다. 화면 안에서는 조건부 전투, 던전 전용 동행, 플레이어–NPC 결투가 동작한다. 상세는 [npc.md](npc.md). [src: Docs/npc/NPC_AMBITION_DESIGN.md §2·§13, Docs/npc/NPC_COMBAT_DESIGN.md, Wiki/npc.md]
 
-**2026-10-03 (커밋 대기)**: NPC 장비를 무작위 옵션에서 **상점용 기본 아이템**(고정 옵션 1개)으로 바꿨다. 상점은 기존 재고 뒤에 기본 장비 칸을 따로 진열하고, NPC는 기본 장비만 산다. 기존 세이브는 WorldDataVersion 17 로드 때 NPC 장착 장비를 일괄 교체한다. NPC 평균 전투력이 25.96 → 10.75로 내려가 Hunt 기준 전투력을 10.75로 옮겼다. 함께 저장 표현을 줄여 전체 저장이 13.3MB → 6.3MB, 메인 스레드 복사가 599ms → 254~358ms가 됐다. [src: Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md D116~D123·§11]
+**2026-10-03 (커밋 `e3ed610`)**: NPC 장비를 무작위 옵션에서 **상점용 기본 아이템**(고정 옵션 1개)으로 바꿨다. 상점은 기존 재고 뒤에 기본 장비 칸을 따로 진열하고, NPC는 기본 장비만 산다. 기존 세이브는 WorldDataVersion 17 로드 때 NPC 장착 장비를 일괄 교체한다. NPC 평균 전투력이 25.96 → 10.75로 내려가 Hunt 기준 전투력을 10.75로 옮겼다. 함께 저장 표현을 줄여 전체 저장이 13.3MB → 6.3MB, 메인 스레드 복사가 599ms → 254~358ms가 됐다. [src: Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md D116~D123·§11]
+
+**2026-10-10 (커밋 대기)**: NPC 행적·반응 새 구조 1·2단계를 구현했다. 던전 세대의 40%에 소문이 붙고, 그 마을 주민 1명이 소문 주인이 되어 플레이어에게 부탁한다. 보스 처치로 해결하고 부탁한 NPC에게 보고하면 반응과 의뢰 보답을 받는다. 그 뒤 `PlayerDeed` 소문이 같은 마을에 퍼지고, 들은 NPC가 관련도만큼 한 번 반응한다. 옛 던전 시나리오 코드와 번들은 삭제했고 구 형식은 호환하지 않는다. 진행 원장은 새 `narrative` 저장 파트(WorldDataVersion 21)다. 같은 날 3단계 소망 ItemGift도 구현했다. 호감 30 이상인 NPC가 소망을 털어놓고, 그 아이템(첫 콘텐츠는 구리 목걸이)을 선물로 건네면 소모·감사·의뢰 보답·행적 소문이 한 번에 저장된다. 반응 표에는 대상(All·Owner·Others) 열이 생겼다. LLM 소망 스파이크는 지웠고 저장 버전은 21 그대로다. 5단계로 호기심 반응을 고른 NPC가 아는 다른 던전 소문을 소개하고, 그 소문은 소개한 NPC의 부탁 칸에 들어간다(보고·보답도 그 NPC). 4단계로 최근 부상 화제의 기본 문구도 시트(3001)에서 읽는다("지난 던전 원정에서 호되게 당했소. 다음엔 더 조심해야겠소."). 저장소·생성 진단은 모두 PASS이고 실제 플레이 확인은 남았다. 상세는 [npc.md](npc.md). [src: Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md 머리말·§7.7·§8.1·§8.2·§8.3]
 
 **던전**: 마을마다 2~3개 슬롯, 마을 접근 시 입구 배치, E 입장, 분리된 맵 컨텍스트, ESC 퇴장, 사망 복귀, 보스 완료 트랜잭션, `dungeons` 저장 파티션이 구현됐다. 던전 안에서는 월드 시스템(NPC 시뮬·시간)이 멈춘다 — 이를 바꾸는 월드 시뮬 계속 실행안은 초안이다. [src: Docs/map/DUNGEON_RUNTIME_DESIGN.md 상태·§4, Docs/map/DUNGEON_WORLD_SIM_DESIGN.md 상태]
 
@@ -55,10 +59,10 @@ sources:
 | **마을** | V1~V7 Profile·고정 인구·초기 Stage·누적 시설·Race별 배치/상권·결정론 상점, 신규 게임 Forge 160 Tier 1 보장, 벽 바깥 Gate 탐색, NPC 상점 거래(닫힌 경제)와 기본 장비 칸 [src: Docs/village/VILLAGE_REWORK_PLAN.md §V1–V7·§8.4, Wiki/village.md] | 마을 골드 밸런스(매입 거절로 NPC 가방 포화, D109 ②), V7 PlayMode A~F 재실측, 런타임 성장 V8은 보류 [src: Docs/npc/NPC_AMBITION_DESIGN.md D109, Wiki/village.md §4] |
 | **NPC 활동·경제** | Rest·Hunt·Trade·DungeonDelve(솔로·파티), 야망 효용 선택, 장비 전투력·개인 상한, 소문, NPC 던전 완료, 파티 자동 구성, 부상 등급, NPC 간 절도, 기본 장비 구매 [src: Docs/npc/NPC_AMBITION_DESIGN.md §2·§13, Wiki/npc.md §4] | P3 협력·배신(보류, §14 Q14~Q20), P5 양방향 배신·결투 명분/처단, P6 Forge·경매장 참여, 대화 사연 밸런스(자랑 토픽 60·90일 FAIL, D109 ①), 이주·WORLD_EVENT [src: Docs/npc/NPC_AMBITION_DESIGN.md §13·§14] |
 | **NPC 실전투** | B1~B5: 진영·조건부 인식, 던전 전용 임시 동행(D97 최종), 플레이어–NPC 결투, 드랍 줍기(디버그 호출만), 전투 사망 연결 [src: Docs/npc/NPC_COMBAT_DESIGN.md 상태] | 도주(D25)·NPC 간 결투 화면 장면(D24) 보류 [src: Docs/npc/NPC_COMBAT_DESIGN.md 상태] |
-| **NPC 장비** | 12슬롯·세트 5종(슬롯별 장착 확률)·검사 UI, 상점용 기본 아이템 198행(장비 66종 × 3), 시작 장비 = 기본 아이템, 전리품·장물 미장착 [src: Docs/npc/NPC_EQUIPMENT_DESIGN.md, Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §3·§5] | 커밋, 시트 `BasicItem` 변형 다듬기(기획), NPC 장비 강화(P6a)와 기본 아이템의 관계 결정 [src: Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §3.1·§11, Wiki/combat.md] |
-| **던전** | 슬롯·입구 배치·입장/퇴장·사망 복귀·보스 완료·진행 차이 저장·동행 NPC·NPC 완료, 에디터 진단 [src: Docs/map/DUNGEON_RUNTIME_DESIGN.md 상태·§3.3·§5.3] | 함정, 생성 재시도, 입구 배치 실패율 진단, GeneratorVersion 마이그레이션, 사망 패널, Profiler 실측. 던전 중 월드 시뮬 계속 실행안 검토 [src: Docs/map/DUNGEON_RUNTIME_DESIGN.md 상태, Docs/map/DUNGEON_WORLD_SIM_DESIGN.md] |
-| **세이브** | 소유권별 파티션, NPC 상태 32샤드, manifest/previous 원자 커밋·검증, 레거시 자동 마이그레이션(WorldDataVersion 17). 기본 아이템 행 번호 저장, 계산 캐시·기본값 생략, 저장 복사기가 `DefaultValueHandling.Ignore`를 따름 [src: Docs/tech/SAVE_PARTITION_DESIGN.md, Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §11.3] | 장기 증가분(가방 전리품·소문) — 30일 시뮬 끝 NPC 데이터 약 11MB, 마을 골드 밸런스와 함께 [src: Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §11.3] |
-| **NPC 대화** | 사연 토픽, 사건별 cache variant, 소문·자랑·절도 토픽, Deed·사망 기억 발생 시 NPC 단위 캐시 무효화 [src: Docs/world_history/NARRATIVE_DIALOGUE_VARIETY_DESIGN.md §5, Docs/npc/NPC_AMBITION_DESIGN.md D80~D83·D106] | 사연 2자리 경쟁(자랑 토픽이 밀림, D109 ①), Phase 2 판단 [src: Docs/npc/NPC_AMBITION_DESIGN.md D109] |
+| **NPC 장비** | 12슬롯·세트 5종(슬롯별 장착 확률)·검사 UI, 상점용 기본 아이템 198행(장비 66종 × 3), 시작 장비 = 기본 아이템, 전리품·장물 미장착 [src: Docs/npc/NPC_EQUIPMENT_DESIGN.md, Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §3·§5] | 시트 `BasicItem` 변형 다듬기(기획), NPC 장비 강화(P6a)와 기본 아이템의 관계 결정 [src: Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §3.1·§11, Wiki/combat.md] |
+| **던전** | 슬롯·입구 배치·입장/퇴장·사망 복귀·보스 완료·진행 차이 저장·동행 NPC·NPC 완료, 에디터 진단 [src: Docs/map/DUNGEON_RUNTIME_DESIGN.md 상태·§3.3·§5.3]. 상자·입구는 엔티티다(2026-10-09 구현, 사용자 플레이 확인). 매니저 전용 마커를 없앴고, 입구 소문 징후는 자막 전용이다. 소리·흔적 연출은 2026-10-09에 없앴다. 벽·성문은 원칙상 맵 타일로 둔다 [src: Docs/map/DUNGEON_RUNTIME_DESIGN.md 상태·§4.1, AGENTS.md ECS Rules]. 던전 세대의 40%에 소문 콘텐츠가 붙는다(소문 주인·부탁은 [npc.md](npc.md)). 자막 문구는 그 콘텐츠의 `SignText`다. 플레이어가 입구 8칸 안에 들어오면 `System_DungeonEntranceSign`이 입구 엔티티의 자식 표시를 켠다. 지정 몬스터(늑대 등)를 잡아도 꺼지지 않고, 보스 처치로 소문이 해결될 때까지 뜬다(2026-10-10) [src: Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md §2.1·§3.1·§8.1, Assets/Scripts/Common/System/System_DungeonEntranceSign.cs, Assets/Scripts/Dungeon/DungeonManager_ScenarioPresentation.cs, Assets/Scripts/Manager/NpcManager_Narrative.cs] | 함정, 생성 재시도, 입구 배치 실패율 진단, GeneratorVersion 마이그레이션, 사망 패널, Profiler 실측. 던전 중 월드 시뮬 계속 실행안 검토 [src: Docs/map/DUNGEON_RUNTIME_DESIGN.md 상태, Docs/map/DUNGEON_WORLD_SIM_DESIGN.md] |
+| **세이브** | 소유권별 파티션, NPC 상태 32샤드, manifest/previous 원자 커밋·검증, 레거시 자동 마이그레이션(현재 WorldDataVersion 21). 기본 아이템 행 번호 저장, 계산 캐시·기본값 생략, 저장 복사기가 `DefaultValueHandling.Ignore`를 따름 [src: Docs/tech/SAVE_PARTITION_DESIGN.md, Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §11.3, Assets/Scripts/Manager/DataManager.cs]. 2026-10-10 `narrative` 파트 추가: 21 미만 세이브는 빈 원장으로 열고, 21 이상에서 파트가 없거나 손상되면 로드 실패, 구 시나리오 필드는 무시한다 [src: Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md §7.7·§8.1] | 장기 증가분(가방 전리품·소문) — 30일 시뮬 끝 NPC 데이터 약 11MB, 마을 골드 밸런스와 함께 [src: Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §11.3] |
+| **NPC 대화** | 사연 토픽, 사건별 cache variant, 소문·자랑·절도 토픽, Deed·사망 기억 발생 시 NPC 단위 캐시 무효화 [src: Docs/world_history/NARRATIVE_DIALOGUE_VARIETY_DESIGN.md §5, Docs/npc/NPC_AMBITION_DESIGN.md D80~D83·D106]. 던전 소문 부탁·진행 확인 화제(대화 후보에 고정), 보고·행적 반응 대화. 검사 창의 "근처 소식"·"조사 결과 이야기" 버튼을 없애고 "대화"로 통합(2026-10-10). 소망 털어놓기·떠올리기 화제(고정), 선물 목록의 "(소망)" 표시와 소망 전달 대화, 검사 창 소망 한 줄, 최근 부상 화제 문구를 시트 3001에서 읽음, 보고·소문 반응 대사의 후속 소개(소개한 NPC가 부탁)(2026-10-10) [src: Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md 머리말·§8.1·§8.2·§8.3, Assets/Scripts/UI/UINpcInspect.cs, Assets/Scripts/Npc/Narrative/DialogueTopicSelector.cs] | 사연 2자리 경쟁(자랑 토픽이 밀림, D109 ①), Phase 2 판단 [src: Docs/npc/NPC_AMBITION_DESIGN.md D109]. 부탁·보고·소망·부상 문구·후속 소개 실제 플레이 확인, 선물 선호 판정 [src: Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md §8·§8.1·§8.2·§8.3] |
 | **관찰 반응** | 전리품→소스 몬스터 식별 인터페이스 [src: Assets/Scripts/Common/Utility/MonsterTrophyIdentifier.cs] | 현행 `ItemTable`에 `SourceMonsterId>0` 아이템 0건. 감지·Trust·영속화·대사·보상 전체 [src: Assets/_BinaryData/TableData/ItemTable.bytes, Docs/npc/PLAYER_RECOGNITION_DESIGN.md §구현 계획] |
 | **몬스터 스폰** | 거리 링·청크 슬롯·슬롯 쿨타임·Active/Warm/Expired 캐시, 마을 스폰 금지 영역(5타일), 던전 안 정지 [src: Wiki/monster_spawn_runtime.md, Assets/Scripts/Map/MapManager_Generator.cs `MarkVillageSpawnExclusion`, Assets/Scripts/Common/System/System_MonsterSpawn.cs `IWorldMapSystem`] | 실제 biome 분류 데이터(11종 모두 Any), 가중치, Zone×풀, 엘리트·보스 [src: Assets/_BinaryData/TableData/MonsterTable.bytes, Docs/ai_monster/MONSTER_SPAWN_DESIGN.md §7.2.1] |
 | **몬스터 공격 예고** | Phase 0~2 구현(타이밍 해석·배치 렌더·셰이더), Phase 3 일부 [src: Docs/combat/MONSTER_ATTACK_TELEGRAPH_DESIGN.md 상태, Assets/Scripts/Common/System/System_AttackTelegraph.cs] | Phase 4, 취소 페이드·경고음·LOD·최소 가독 시간 진단 [src: Docs/combat/MONSTER_ATTACK_TELEGRAPH_DESIGN.md] |
@@ -70,12 +74,13 @@ sources:
 
 ## 3. 권장 재개 순서
 
-1. **커밋 정리**: NPC 상점 기본 장비·저장 축소·관련 문서 변경이 미커밋이다. 측정용 `[SaveTiming]` 로그를 남길지 함께 정한다. [src: Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §11, Assets/Scripts/Manager/DataManager_PartitionedSave.cs]
+1. ~~**커밋 정리**: NPC 상점 기본 장비·저장 축소·관련 문서 변경이 미커밋~~ → 2026-10-03 `e3ed610`으로 커밋했다. 측정용 `[SaveTiming]` 로그는 지금도 저장이 성공할 때마다 출력되며, 남길지는 따로 정한다. [src: git e3ed610, Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §11, Assets/Scripts/Manager/DataManager_PartitionedSave.cs `LogSaveTiming`]
 2. ~~**데이터 정리**: `AiTable` 4번(SwampToad)이 SkillTable에서 빠진 SkillId 205를 참조~~ → 2026-10-03 205번 행 복구, 빌드 검증기 통과. [src: Docs/combat/SKILL_DESIGN.md §2, Assets/_BinaryData/TableData/SkillTable.bytes, Assets/Scripts/Editor/AttackTelegraphBuildValidator.cs]
 3. **마을 골드 밸런스** (D109 ②): 매입 거절로 NPC 가방이 차는 문제, 가방 전리품에 따른 세이브 증가, 절도 빈도, 첫 며칠에 몰리는 NPC 구매를 함께 본다. [src: Docs/npc/NPC_AMBITION_DESIGN.md D109, Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §7·§11.2]
 4. **대화 사연 밸런스** (D109 ①): 자랑 토픽이 사연 자리에서 밀리는 문제. [src: Docs/npc/NPC_AMBITION_DESIGN.md D109]
 5. **PlayMode 검증 묶음**: 던전 Profiler·입구 배치 실패율, 마법부여 Tier·저장 왕복, 마을 V7 A~F, 스킬 조준·전파 대표 스킬, 공격 예고 가독성. [src: Docs/map/DUNGEON_RUNTIME_DESIGN.md §7, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §12, Docs/village/VILLAGE_REWORK_PLAN.md §V7, Docs/combat/POE2_CURSOR_TRACKING_PLAN.md, Docs/combat/MONSTER_ATTACK_TELEGRAPH_DESIGN.md]
-6. **다음 설계 후보**: 던전 중 월드 시뮬(초안 검토 대기), NPC 장비 강화(P6a), 평판(Renown), P3 협력·배신 재개, 관찰 반응 데이터. 경매장은 착수 승인이 없다. [src: Docs/map/DUNGEON_WORLD_SIM_DESIGN.md, Docs/npc/NPC_AMBITION_DESIGN.md §13·§14, Docs/npc/PLAYER_RECOGNITION_DESIGN.md, Docs/economy/AUCTION_HOUSE_DESIGN.md]
+6. **NPC 행적·반응 마무리**: 설계 문서 §8의 1~5단계는 모두 구현됐다. 남은 것은 커밋과 실제 플레이 확인(대화 화면의 부탁·보고 표시, 소문 교환 속도, 소망 공개·선물 목록·전달 대사, 부상 문구, 후속 소개와 이어지는 부탁)이다. 마을 평판은 보류다. [src: Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md 머리말·§8·§8.1~§8.4]
+7. **다음 설계 후보**: 던전 중 월드 시뮬(초안 검토 대기), NPC 장비 강화(P6a), 평판(Renown), P3 협력·배신 재개, 관찰 반응 데이터. 경매장은 착수 승인이 없다. [src: Docs/map/DUNGEON_WORLD_SIM_DESIGN.md, Docs/npc/NPC_AMBITION_DESIGN.md §13·§14, Docs/npc/PLAYER_RECOGNITION_DESIGN.md, Docs/economy/AUCTION_HOUSE_DESIGN.md]
 
 ## 4. 문서 신뢰도 주의
 

@@ -47,7 +47,11 @@ namespace ARPG.UI
         private VisualElement? _giftList;
         private Button? _companionBtn;
         private Button? _duelBtn;
-        private static readonly bool _enableWishSpike = false;
+        private int _bindingVersion;
+        private int _narrativeLifetime;
+        private int _dialogueRequestId;
+        private bool _dialogueBusy;
+        private bool _viewOpen;
 
         public override void Initialize(string inName, bool isForm = false)
         {
@@ -101,6 +105,11 @@ namespace ARPG.UI
         public void Bind(int entityId)
         {
             EnsureBound();
+            _bindingVersion++;
+            _narrativeLifetime = AR.s.Npc.Narrative.Lifetime;
+            _dialogueRequestId++;
+            _dialogueBusy = false;
+            if (_dialogueLabel != null) _dialogueLabel.text = string.Empty;
             _entityId = entityId;
             _saveData = AR.s.Npc?.GetSaveData(entityId);
 
@@ -116,9 +125,21 @@ namespace ARPG.UI
         public override void OnOpen()
         {
             base.OnOpen();
+            _viewOpen = true;
+            AR.s.Dungeon.SetMenuOpen(true);
             EnsureBound();
             if (_saveData != null)
                 RefreshAll();
+        }
+
+        public override void OnClose()
+        {
+            _viewOpen = false;
+            _bindingVersion++;
+            _dialogueRequestId++;
+            _dialogueBusy = false;
+            AR.s.Dungeon.SetMenuOpen(false);
+            base.OnClose();
         }
 
         private void RefreshAll()
@@ -339,6 +360,11 @@ namespace ARPG.UI
                 AddActivityRow("부상", $"{_saveData.WoundCount}회 (최근: {ago}, {where})");
             }
 
+            // 털어놓은 소망 (QUEST_SYSTEM_DESIGN §7): 퀘스트 로그 대신 "이 NPC가 ~을 바람" 한 줄.
+            NarrativeContentInstance? wish = AR.s.Npc.GetOpenWish(_saveData.EntityId);
+            if (wish != null)
+                AddActivityRow("소망", $"{NpcRumorPhrasing.Josa(NpcRumorPhrasing.ItemName(wish.TargetItemId), "을", "를")} 다시 보고 싶어 함");
+
             if (activity.LastHuntOutcome == NpcHuntOutcome.None)
                 return;
 
@@ -385,12 +411,24 @@ namespace ARPG.UI
                 NpcRumorPlace place = NpcRumorPlace.Unavailable;
                 if (AR.s.Npc != null && _saveData != null)
                     place = AR.s.Npc.ResolveRumorDungeonPlace(rumor, _saveData.VillageId, out bearing);
-                string what = rumor.Cleared == true
-                    ? $"{subject} 일행이 끝낸 자리의 새 던전"
-                    : $"{subject}의 원정 성공 (가치 {rumor.Value})";
+                string what = rumor.IsDiscovery == true
+                    ? (string.IsNullOrEmpty(rumor.InstanceId) == false ? "입구 발견 (징후 있음)" : "입구 발견")
+                    : rumor.Cleared == true
+                        ? $"{subject} 일행이 끝낸 자리의 새 던전"
+                        : $"{subject}의 원정 성공 (가치 {rumor.Value})";
                 string checkedMark = rumor.Checked == true ? " · 확인함" : string.Empty;
                 return $"{NpcRumorPhrasing.PlaceCore(place, bearing)} 던전[슬롯 {rumor.SlotIndex}·세대 {rumor.Generation}] · " +
                        $"{what} · {source} · {ago}{checkedMark}";
+            }
+
+            // 플레이어 행적 (NPC_NARRATIVE_CONTENT_DESIGN §4.1): 반응 여부도 검증용으로 보인다.
+            if (rumor.Kind == NpcRumorKind.PlayerDeed)
+            {
+                string reacted = rumor.Reacted == true ? " · 반응함" : string.Empty;
+                if (rumor.DeedKind == PlayerDeedKind.WishFulfilled)
+                    return $"플레이어의 소망 충족 [마을 {rumor.VillageId}] · {source} · {ago}{reacted}";
+                string deed = rumor.DeedKind == PlayerDeedKind.RumorResolved ? "소문 던전 해결" : "던전 클리어";
+                return $"플레이어의 {deed} [마을 {rumor.VillageId}·슬롯 {rumor.SlotIndex}·세대 {rumor.Generation}] · {source} · {ago}{reacted}";
             }
 
             // P4b (D104·D105): 판매 소문은 검사 창에만, 배신 소문은 가해자·피해자·세부 종류. 아이템 이름은 소문에 남긴 테이블 Id로 읽는다.
@@ -837,18 +875,59 @@ namespace ARPG.UI
 
         private void OnClickTalk()
         {
-            if (_entityId < 0) return;
-            OnClickTalkAsync().Forget();
+            if (_entityId < 0 || _dialogueBusy) return;
+            RunDialogueAsync().Forget();
         }
 
-        // 스파이크: 대화 클릭 → 백본 문맥 기반 LLM 대화(+Friend↑ 소망) 생성.
-        private async UniTask OnClickTalkAsync()
+        private bool IsCurrentDialogue(int npcId, int binding, int request)
+            => _viewOpen && _entityId == npcId && _bindingVersion == binding && _dialogueRequestId == request &&
+                _narrativeLifetime == AR.s.Npc.Narrative.Lifetime &&
+                AR.s.Npc.IsNpcAlive(npcId);
+
+        // 말 걸기 한 번. 보고·소문 전 해결·미해결 알림·소문으로 들은 행적 반응이 있으면 일반 대화보다 먼저 처리하고
+        // 일반 대화 보상(+1/+1)은 주지 않는다 (NPC_NARRATIVE_CONTENT_DESIGN §4.1·§7.6). 없으면 일반 대화다.
+        private async UniTask RunDialogueAsync()
+        {
+            if (_dialogueBusy || _entityId < 0 || _viewOpen == false) return;
+            _dialogueBusy = true;
+            int npcId = _entityId, binding = _bindingVersion, request = ++_dialogueRequestId;
+            try
+            {
+                NarrativeConversation conversation = AR.s.Npc.FindNarrativeConversation(npcId);
+                if (conversation.Kind != NarrativeConversationKind.None)
+                {
+                    if (_dialogueLabel != null) _dialogueLabel.text = "이야기를 나누는 중…";
+                    NarrativeDialogueResult? result = await AR.s.Npc.RunNarrativeConversationAsync(npcId, conversation);
+                    if (IsCurrentDialogue(npcId, binding, request) == false) return;
+                    if (result == null)
+                    {
+                        if (_dialogueLabel != null) _dialogueLabel.text = "이야기를 저장하지 못했습니다. 다시 말을 걸어 주세요.";
+                        return;
+                    }
+                    if (_dialogueLabel != null) _dialogueLabel.text = result.Text;
+                    Debug.Log($"[Narrative] npc={npcId} {conversation.Kind} {result.Text}");
+                    // 실제로 표시한 뒤에만 표시 완료를 저장한다. 실패하면 다음 대화에서 같은 보고를 다시 보여 준다.
+                    await AR.s.Npc.CommitNarrativeDisplayAsync(npcId, result);
+                    if (IsCurrentDialogue(npcId, binding, request)) RefreshAll();
+                    return;
+                }
+                await OnClickTalkAsync(npcId, binding, request);
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError("[NpcDialogue] " + ex);
+                if (IsCurrentDialogue(npcId, binding, request) && _dialogueLabel != null) _dialogueLabel.text = "대화를 다시 시도해 주세요.";
+            }
+            finally { if (binding == _bindingVersion && request == _dialogueRequestId) _dialogueBusy = false; }
+        }
+
+        // 스파이크: 대화 클릭 → 백본 문맥 기반 LLM 대화 생성. 부탁·소망 화제는 작성 문구를 그대로 쓰고 표시 뒤 저장한다.
+        private async UniTask OnClickTalkAsync(int npcId, int binding, int request)
         {
             // 첫 만남·재방문 판정은 이번 Talk가 관계와 만남 횟수를 올리기 전 스냅샷을 사용한다.
-            PlayerRelation relation = AR.s.Npc.GetPlayerRelation(_entityId);
+            PlayerRelation relation = AR.s.Npc.GetPlayerRelation(npcId);
             float talkGameTime = AR.s.Time.CurrentGameTime;
             AffinityTier tier = DialogueTopicSelector.GetAffinityTier(relation.Affinity);
-            InteractionResult interaction = InteractionHelper.Resolve(_entityId, InteractionType.Talk);
 
             // 야외 몬스터는 세계의 상시 배경이다. 토픽 선택기에서 긴급이 아닌 낮은 우선순위 화제로 취급한다.
             ThreatSeed threat = new()
@@ -859,21 +938,23 @@ namespace ARPG.UI
 
             if (_dialogueLabel != null) _dialogueLabel.text = $"[{tier}] 생성 중…";
 
-            DialogueResult r = await NpcNarrativeService.GetDialogueAsync(_entityId, relation, talkGameTime, threat);
+            DialogueResult r = await NpcNarrativeService.GetDialogueAsync(npcId, relation, talkGameTime, threat);
+            if (IsCurrentDialogue(npcId, binding, request) == false) return;
+            InteractionResult interaction = InteractionHelper.Resolve(npcId, InteractionType.Talk);
             string line = $"[{tier}/{r.Topic}/{r.Source}] {r.Text}\n호감도 +{interaction.AffinityDelta}, 친밀도 +{interaction.IntimacyDelta}";
 
-            if (_enableWishSpike && tier >= AffinityTier.Friend)
-            {
-                NpcWish? wish = await NpcNarrativeService.GetOrGenerateWishAsync(_entityId, tier, threat);
-                if (wish != null)
-                {
-                    string fb = wish.IsFallback ? " [폴백]" : string.Empty;
-                    line += $"\n(소망 {wish.Kind}→{wish.TargetRef}{fb}) \"{wish.RevealDialogue}\"";
-                }
-            }
-
             if (_dialogueLabel != null) _dialogueLabel.text = line;
-            Debug.Log($"[Narrative] npc={_entityId} {line}");
+            Debug.Log($"[Narrative] npc={npcId} {line}");
+            // 소문 주인의 부탁이 실제로 표시됐으면 부탁 칸에 넣는다 (NPC_NARRATIVE_CONTENT_DESIGN §2.4·§4.1).
+            if (r.IsNarrativeRequest == true && string.IsNullOrEmpty(r.NarrativeInstanceId) == false &&
+                await AR.s.Npc.CommitNarrativeRequestAsync(npcId, r.NarrativeInstanceId) == true &&
+                IsCurrentDialogue(npcId, binding, request))
+                RefreshAll();
+            // 소망을 털어놓는 대사가 실제로 표시됐으면 소망 사건을 만든다 (§2.2·§2.4).
+            if (r.IsWishReveal == true && r.NarrativeContentId > 0 &&
+                await AR.s.Npc.CommitNarrativeWishRevealAsync(npcId, r.NarrativeContentId) == true &&
+                IsCurrentDialogue(npcId, binding, request))
+                RefreshAll();
         }
 
         private void OnClickTrade()
@@ -911,7 +992,9 @@ namespace ARPG.UI
                     continue;
 
                 int slotIndex = i;
-                Button itemButton = new() { title = $"{item.Table.Name} x{item.Quantity}" };
+                // 이 NPC가 털어놓은 소망 아이템은 표시해 둔다. 건네면 일반 선물 대신 소망 전달로 처리한다.
+                string wishMark = AR.s.Npc.IsOpenWishItem(_entityId, item) == true ? " (소망)" : string.Empty;
+                Button itemButton = new() { title = $"{item.Table.Name} x{item.Quantity}{wishMark}" };
                 itemButton.clicked += () => OnGiftItemSelected(slotIndex);
                 _giftList.Add(itemButton);
                 selectableCount++;
@@ -930,6 +1013,16 @@ namespace ARPG.UI
             if (item == null)
                 return;
 
+            // 소망 아이템: 소모·충족·반응·보답을 원장과 함께 저장한다. 일반 선물 효과(가격별 호감)는 주지 않는다.
+            if (AR.s.Npc.IsOpenWishItem(_entityId, item) == true)
+            {
+                if (_dialogueBusy == true)
+                    return;
+                HideGiftSelection();
+                RunWishDeliveryAsync(slotIndex).Forget();
+                return;
+            }
+
             if (AR.s.Player.Inventory.RemoveItem(slotIndex, 1, out _) == false)
             {
                 if (_dialogueLabel != null)
@@ -938,11 +1031,46 @@ namespace ARPG.UI
             }
 
             OnGiftItemSelected(item);
-            if (_giftList != null)
+            HideGiftSelection();
+        }
+
+        private void HideGiftSelection()
+        {
+            if (_giftList == null)
+                return;
+            _giftList.Clear();
+            _giftList.style.display = DisplayStyle.None;
+        }
+
+        // 소망 아이템 전달 (NPC_NARRATIVE_CONTENT_DESIGN §2.2·§7.5). 말 걸기와 같은 바인딩 검사로, 창이 닫혔으면 표시하지 않고
+        // 다음 대화에서 같은 내용을 다시 보여 준다(효과는 다시 적용하지 않음).
+        private async UniTask RunWishDeliveryAsync(int slotIndex)
+        {
+            if (_dialogueBusy || _entityId < 0 || _viewOpen == false) return;
+            _dialogueBusy = true;
+            int npcId = _entityId, binding = _bindingVersion, request = ++_dialogueRequestId;
+            try
             {
-                _giftList.Clear();
-                _giftList.style.display = DisplayStyle.None;
+                if (_dialogueLabel != null) _dialogueLabel.text = "소망을 전하는 중…";
+                NarrativeDialogueResult? result = await AR.s.Npc.DeliverWishItemAsync(npcId, slotIndex);
+                if (IsCurrentDialogue(npcId, binding, request) == false) return;
+                if (result == null)
+                {
+                    if (_dialogueLabel != null) _dialogueLabel.text = "선물을 전하지 못했습니다. 다시 시도해 주세요.";
+                    RefreshAll();
+                    return;
+                }
+                if (_dialogueLabel != null) _dialogueLabel.text = result.Text;
+                Debug.Log($"[Narrative] npc={npcId} {result.Kind} {result.Text}");
+                await AR.s.Npc.CommitNarrativeDisplayAsync(npcId, result);
+                if (IsCurrentDialogue(npcId, binding, request)) RefreshAll();
             }
+            catch (System.Exception ex)
+            {
+                Debug.LogError("[NpcDialogue] " + ex);
+                if (IsCurrentDialogue(npcId, binding, request) && _dialogueLabel != null) _dialogueLabel.text = "선물을 다시 시도해 주세요.";
+            }
+            finally { if (binding == _bindingVersion && request == _dialogueRequestId) _dialogueBusy = false; }
         }
 
         /// <summary>선물 아이템 선택 UI가 아이템을 확정하면 호출 (ResolveGift 호출부만 배선).</summary>

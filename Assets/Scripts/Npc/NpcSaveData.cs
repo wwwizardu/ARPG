@@ -86,6 +86,10 @@ namespace ARPG.Npc
         // 소문 (NPC_AMBITION_DESIGN §5.2·§7.4, P2b D70~D78). 최대 8개, 대상별 1개. 구 세이브는 필드가 없어 빈 리스트로 보정한다.
         // 유효성은 저장하지 않고 조회 시 NpcManager.IsRumorValid가 판정한다 (D72).
         public List<NpcRumor> Rumors = new();
+        // 부탁 칸 (NPC_NARRATIVE_CONTENT_DESIGN §4.1). 플레이어에게 맡긴 던전 소문 하나. 비어 있으면 저장하지 않는다.
+        // 칸이 찬 동안 새 소문 의뢰를 하지 않고 진행 확인 화제를 꺼낸다. 소문 목록(Rumors)과 따로 저장한다.
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore, DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public NpcNarrativeRequest? NarrativeRequest;
         // 원정 부상 요약 (NPC_AMBITION_DESIGN D91 ①). 가벼운 부상은 Deed 없이 여기만 갱신하고, 중상은 SevereWound Deed와 함께 갱신한다.
         // 치료 여부는 저장하지 않는다. 기본값(부상 없음)은 저장하지 않아 부상 없는 NPC의 저장 크기는 늘지 않는다.
         // 구 세이브의 Wounded Deed는 로드 때 MigrateLegacyWoundedDeeds가 여기로 합친다.
@@ -98,6 +102,9 @@ namespace ARPG.Npc
         // 마지막 원정 부상의 활동 (Hunt / DungeonDelve). None = 부상 기록 없음.
         [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
         public NpcActivityKind LastWoundActivity;
+        // 마지막 원정 부상을 입은 던전 (NPC_NARRATIVE_CONTENT_DESIGN §4.2 피해자 판정). 사냥 부상이면 비운다. 비어 있으면 저장하지 않는다.
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore, DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public string? LastWoundDungeonId;
         // 마지막 절도 시도 게임시각 (NPC_AMBITION_DESIGN D100 — 도둑 쿨다운 168h, 시도 기준). -1 = 시도 없음.
         // 같은 마을 쿨다운(72h)은 새 필드 없이 마을 명단의 이 값 최댓값으로 계산한다. 기본값은 저장하지 않는다.
         [System.ComponentModel.DefaultValue(-1f)]
@@ -151,6 +158,8 @@ namespace ARPG.Npc
         /// </summary>
         public void EnsureSlotsInitialized()
         {
+            if (NarrativeRequest != null && string.IsNullOrEmpty(NarrativeRequest.InstanceId) == true)
+                NarrativeRequest = null;
             int slotMax = (int)GlobalEnum.EquipSlotType.Max;
             if (InventoryEquip == null || InventoryEquip.Length != slotMax)
             {
@@ -195,6 +204,8 @@ namespace ARPG.Npc
             {
                 if (Rumors[i] == null)
                     Rumors.RemoveAt(i);
+                else if (Rumors[i].InstanceId == null)
+                    Rumors[i].InstanceId = string.Empty;
             }
             // 원정 부상 요약 보정 (D91). 횟수가 0이면 마지막 부상 정보도 비운다. 활동이 없으면 사냥으로 읽는다.
             if (WoundCount <= 0)
@@ -207,6 +218,9 @@ namespace ARPG.Npc
             {
                 LastWoundActivity = NpcActivityKind.Hunt;
             }
+            // 피해자 판정용 던전은 마지막 부상이 던전 원정일 때만 남긴다 (§4.2).
+            if (LastWoundActivity != NpcActivityKind.DungeonDelve || string.IsNullOrEmpty(LastWoundDungeonId) == true)
+                LastWoundDungeonId = null;
             // 절도 시도 시각 보정 (D100). 음수·NaN은 "시도 없음"(-1)으로 본다.
             if (float.IsNaN(LastTheftGameTime) == true || LastTheftGameTime < 0f)
                 LastTheftGameTime = -1f;
@@ -237,7 +251,7 @@ namespace ARPG.Npc
         /// <summary>
         /// 원정 부상 1건을 누적 요약에 반영한다 (D91 ①·②, 가벼운 부상·중상 공통).
         /// </summary>
-        public void RecordExpeditionWound(float when, NpcActivityKind activity, bool severe = false)
+        public void RecordExpeditionWound(float when, NpcActivityKind activity, bool severe = false, string? dungeonId = null)
         {
             WoundCount++;
             if (when >= LastWoundGameTime)
@@ -247,6 +261,10 @@ namespace ARPG.Npc
                 LastWoundActivity = activity == NpcActivityKind.DungeonDelve
                     ? NpcActivityKind.DungeonDelve
                     : NpcActivityKind.Hunt;
+                // 던전 원정 부상이면 그 던전을, 사냥 부상이면 비운다. 한 칸을 덮어써 쌓이지 않는다 (NPC_NARRATIVE §4.2).
+                LastWoundDungeonId = LastWoundActivity == NpcActivityKind.DungeonDelve && string.IsNullOrEmpty(dungeonId) == false
+                    ? dungeonId
+                    : null;
             }
         }
 
@@ -622,5 +640,16 @@ namespace ARPG.Npc
                 LastTalkGameTime = restoredLastTalkGameTime,
             };
         }
+    }
+
+    /// <summary>
+    /// NPC 부탁 칸 (NPC_NARRATIVE_CONTENT_DESIGN §4.1·§7.2). 플레이어에게 맡긴 던전 소문 인스턴스와 부탁한 게임 시각.
+    /// 보고·미해결 종료·칸 주인 사망 때 비운다. 이주해도 유지한다.
+    /// </summary>
+    [Serializable]
+    public sealed class NpcNarrativeRequest
+    {
+        public string InstanceId = string.Empty;
+        public float RequestedGameTime;
     }
 }

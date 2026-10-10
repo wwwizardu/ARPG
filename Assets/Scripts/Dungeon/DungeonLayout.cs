@@ -7,7 +7,7 @@ namespace ARPG.Dungeon
     /// <summary>Versioned, bounded room graph generation. Saved geometry is the authority.</summary>
     public static class DungeonLayout
     {
-        public const int GeneratorVersion = 2;
+        public const int GeneratorVersion = 3;
 
         private const int MONSTER_OBJECT_STRIDE = 10;
         private const int CHEST_OBJECT_OFFSET = 1;

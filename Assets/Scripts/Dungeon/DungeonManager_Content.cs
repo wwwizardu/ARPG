@@ -11,9 +11,13 @@ namespace ARPG.Dungeon
 {
     public partial class DungeonManager
     {
+        // Static interactables keep the old marker layering and sprite placement above their tile center.
+        private const int STATIC_ENTITY_SORTING_ORDER = 10;
+        private static readonly Vector2 _chestVisualOffset = new(0f, -0.2f);
+
         private readonly Dictionary<int, int> _monsters = new();
         private readonly HashSet<int> _spawning = new();
-        private readonly Dictionary<int, GameObject> _chests = new();
+        private readonly Dictionary<int, int> _chests = new();   // DungeonObject.Id → chest EntityId
         private readonly List<int> _contentIds = new();
 
         public void TickContent()
@@ -26,17 +30,17 @@ namespace ARPG.Dungeon
                 bool nearby = ActiveMap.IsChunkActiveAtWorld(new Vector2(obj.X, obj.Y));
                 if (obj.Kind == DungeonObjectKind.Chest)
                 {
-                    if (nearby == true && _active.OpenedChests.Contains(obj.Id) == false && _chests.ContainsKey(obj.Id) == false)
+                    bool opened = _active.OpenedChests.Contains(obj.Id);
+                    if (_chests.TryGetValue(obj.Id, out int chestId) == true)
                     {
-                        var chest = GetMarker("Dungeon chest " + obj.Id, true);
-                        chest.transform.position = new Vector3(obj.X + 0.5f, obj.Y + 0.3f, -0.05f);
-                        _chests.Add(obj.Id, chest);
+                        if (nearby == false || opened == true)
+                        {
+                            RemoveDungeonEntity(chestId, obj.Id);
+                            _chests.Remove(obj.Id);
+                        }
                     }
-                    else if ((nearby == false || _active.OpenedChests.Contains(obj.Id) == true) && _chests.TryGetValue(obj.Id, out var view) == true)
-                    {
-                        ReturnMarker(view);
-                        _chests.Remove(obj.Id);
-                    }
+                    else if (nearby == true && opened == false && _spawning.Add(obj.Id) == true)
+                        SpawnChestAsync(obj);
                     continue;
                 }
                 if (_monsters.TryGetValue(obj.Id, out int entityId) == true)
@@ -76,9 +80,9 @@ namespace ARPG.Dungeon
             AR.s.Data.MarkDungeonSaveDirty(_active, DungeonSaveGroup.Progress);
             _active.OpenedChests.Add(objectId);
             AR.s.Data.Player.Gold = (int)gold;
-            if (_chests.TryGetValue(objectId, out var view) == true)
+            if (_chests.TryGetValue(objectId, out int chestId) == true)
             {
-                ReturnMarker(view);
+                RemoveDungeonEntity(chestId, objectId);
                 _chests.Remove(objectId);
             }
             Notify($"상자를 열었습니다. 골드 +{_active.ChestGold}");
@@ -88,21 +92,52 @@ namespace ARPG.Dungeon
         private bool TryGetChestInteraction(out ServiceUIRouter.Candidate candidate)
         {
             candidate = default;
+            var chests = _components.GetComponentPool<DungeonChestTag>();
+            if (chests.Count == 0) return false;
+            Vector2 player = PlayerPosition();
             float best = 9f;
             bool found = false;
-            for (int i = 0; i < _active.Objects.Count; i++)
+            for (int i = 0; i < chests.Count; i++)
             {
-                var obj = _active.Objects[i];
-                if (obj.Kind != DungeonObjectKind.Chest || _active.OpenedChests.Contains(obj.Id) == true || _chests.ContainsKey(obj.Id) == false) continue;
-                float distance = Vector2.SqrMagnitude(PlayerPosition() - new Vector2(obj.X + 0.5f, obj.Y + 0.5f));
+                int entityId = chests.GetEntityId(i);
+                if (_components.TryGetComponent<DungeonObjectComponent>(entityId, out var obj) == false ||
+                    obj.DungeonId != _active.DungeonId || _active.OpenedChests.Contains(obj.ObjectId) == true ||
+                    _components.TryGetComponent<TransformComponent>(entityId, out var transform) == false) continue;
+                float distance = Vector2.SqrMagnitude(player - transform.Position);
                 if (distance >= best) continue;
                 best = distance;
                 found = true;
                 candidate = new ServiceUIRouter.Candidate { Kind = ServiceUIRouter.CandidateKind.DungeonChest,
-                    DungeonObjectId = obj.Id, DungeonId = _active.DungeonId, EntityId = -1,
-                    HasTile = true, TileX = obj.X, TileY = obj.Y, DistanceSqr = distance };
+                    DungeonObjectId = obj.ObjectId, DungeonId = _active.DungeonId, EntityId = -1,
+                    HasTile = true, TileX = Mathf.FloorToInt(transform.Position.x), TileY = Mathf.FloorToInt(transform.Position.y),
+                    DistanceSqr = distance };
             }
             return found;
+        }
+
+        private async void SpawnChestAsync(DungeonObject obj)
+        {
+            var map = ActiveMap;
+            var record = _active;
+            int lifetime = _lifetime;
+            try
+            {
+                var position = new Vector3(obj.X + 0.5f, obj.Y + 0.5f, -0.05f);
+                var (id, entity) = await EntityFactory.CreateStaticEntity(map, position, _chestSprite,
+                    _chestVisualOffset, STATIC_ENTITY_SORTING_ORDER, map.transform);
+                if (id < 0 || entity == null) return;
+                if (lifetime != _lifetime || ActiveMap != map || record.OpenedChests.Contains(obj.Id) == true)
+                {
+                    EntityFactory.ReleaseStaticEntity(entity);
+                    return;
+                }
+                _components.AddComponent(id, new DungeonObjectComponent { DungeonId = record.DungeonId, ObjectId = obj.Id });
+                _components.AddComponent(id, new DungeonChestTag());
+                entity.name = "Dungeon Chest " + obj.Id;
+                _chests[obj.Id] = id;
+            }
+            catch (Exception ex) { Debug.LogError("[Dungeon] Chest spawn: " + ex.Message); }
+            finally { if (lifetime == _lifetime && ActiveMap == map) _spawning.Remove(obj.Id); }
         }
 
         private async void SpawnMonsterAsync(DungeonObject obj)
@@ -165,6 +200,11 @@ namespace ARPG.Dungeon
                 identity.DungeonId != _active.DungeonId || identity.ObjectId != objectId)) return;
             if (_components.TryGetComponent<DungeonObjectComponent>(id, out _) == false &&
                 _components.HasComponent<MonsterTag>(id) == false) return;
+            DestroyOwnedEntity(id);
+        }
+
+        private void DestroyOwnedEntity(int id)
+        {
             _components.AddComponent(id, new DestroyTag());
             AR.s.System.GetSystem<System_EntityDestroy>()?.OnLateUpdate(0);
         }
@@ -174,7 +214,7 @@ namespace ARPG.Dungeon
             _contentIds.Clear(); _contentIds.AddRange(_monsters.Keys);
             for (int i = 0; i < _contentIds.Count; i++) RemoveDungeonEntity(_monsters[_contentIds[i]], _contentIds[i]);
             _contentIds.Clear(); _contentIds.AddRange(_chests.Keys);
-            for (int i = 0; i < _contentIds.Count; i++) ReturnMarker(_chests[_contentIds[i]]);
+            for (int i = 0; i < _contentIds.Count; i++) RemoveDungeonEntity(_chests[_contentIds[i]], _contentIds[i]);
             _monsters.Clear(); _spawning.Clear(); _chests.Clear(); _contentIds.Clear();
         }
     }

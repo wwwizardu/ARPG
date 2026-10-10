@@ -1,29 +1,28 @@
 #nullable enable
-using System;
 using System.Collections.Generic;
 using System.Text;
 using Cysharp.Threading.Tasks;
-using Newtonsoft.Json;
 using ARPG.Manager;
 
 namespace ARPG.Npc.Narrative
 {
     /// <summary>
-    /// 검증 스파이크: 백본 문맥 → LLM(Groq/Llama) → 대화·소망 생성. static·무상태(순수 로직만).
-    /// 대화·소망 캐시와 화제 셔플백은 NpcManager.Narrative(NpcNarrativeRuntime)가 소유 — 새 게임·씬 로드 시 Reset로 정리.
-    /// 관계 실반영/세이브는 이번 스코프 밖. 티어는 호출측 지정.
+    /// 검증 스파이크: 백본 문맥 → LLM(Groq/Llama) → 대화 생성. static·무상태(순수 로직만).
+    /// 대화 캐시와 화제 셔플백은 NpcManager.Narrative(NpcNarrativeRuntime)가 소유 — 새 게임·씬 로드 시 Reset로 정리.
+    /// 소망은 LLM으로 만들지 않고 작성 표(NarrativeContent)와 원장이 정한다 (NPC_NARRATIVE_CONTENT_DESIGN §2.2, 2026-10-10).
     /// 설계: Docs/world_history/NARRATIVE_ENGINE_SPIKE.md
     /// </summary>
     public static class NpcNarrativeService
     {
         private const float DialogueTemperature = 0.8f;
-        private const float WishTemperature = 0.7f;
 
         // ── 대화 ──────────────────────────────────────────────────────────
         public static async UniTask<DialogueResult> GetDialogueAsync(
             int npcId, PlayerRelation relation, float currentGameTime, ThreatSeed threat)
         {
             AffinityTier tier = DialogueTopicSelector.GetAffinityTier(relation.Affinity);
+            var runtime = AR.s.Npc.Narrative;
+            int lifetime = runtime.Lifetime;
             string greeting = DialogueTopicSelector.SelectGreeting(npcId, relation, currentGameTime);
             NpcDialogueContext? ctx = NpcDialogueContextBuilder.Build(npcId, threat);
             if (ctx == null)
@@ -38,6 +37,15 @@ namespace ARPG.Npc.Narrative
             // 토픽 선택 (상태·백본 → 적용 토픽 추림 → 티어 게이트 + 레퍼토리 캡 + 긴급 새치기·셔플백 1개)
             List<DialogueTopic> topics = DialogueTopicSelector.Collect(npcId, ctx, threat);
             DialogueTopic topic = DialogueTopicSelector.Select(npcId, topics, tier, AR.s.Npc.Narrative.GetRecentTopics(npcId));
+
+            // 부탁·진행 확인·소망·발견 소문은 약속과 사실이 걸린 문장이라 작성 문구를 그대로 쓴다 (LLM·캐시 없음, NPC_NARRATIVE §6).
+            if (topic.Type == DialogueTopicType.DungeonRequest || topic.Type == DialogueTopicType.DungeonRequestProgress ||
+                topic.Type == DialogueTopicType.WishReveal || topic.Type == DialogueTopicType.WishReminder ||
+                topic.Rumor?.IsDiscovery == true)
+                return new DialogueResult { Text = ComposeDialogue(greeting, topic.BaseLine), Source = NarrativeSource.Fallback,
+                    Tier = tier, Topic = topic.Type, NarrativeInstanceId = topic.NarrativeInstanceId,
+                    IsNarrativeRequest = topic.Type == DialogueTopicType.DungeonRequest,
+                    IsWishReveal = topic.Type == DialogueTopicType.WishReveal, NarrativeContentId = topic.NarrativeContentId };
 
             if (AR.s.Npc.Narrative.TryGetDialogue(npcId, tier, topic.Type, topic.CacheVariant, out string? cached))
                 return new DialogueResult
@@ -54,7 +62,7 @@ namespace ARPG.Npc.Narrative
                 List<ChatMessage> msgs = new()
                 {
                     new ChatMessage("system", DialogueSystemPrompt()),
-                    new ChatMessage("user", ctx.ToPromptText() + DialogueUserSuffix(tier, relation, topic)),
+                    new ChatMessage("user", BuildDialoguePrompt(ctx, tier, relation, topic)),
                 };
                 text = await AR.s.LLM.RequestWithContextAsync(msgs, LLMClient.MODEL_GPT_OSS_120B, DialogueTemperature);
             }
@@ -70,7 +78,7 @@ namespace ARPG.Npc.Narrative
                 };
 
             string clean = text!.Trim();
-            AR.s.Npc.Narrative.SetDialogue(npcId, tier, topic.Type, topic.CacheVariant, clean);
+            if (runtime.Lifetime == lifetime) runtime.SetDialogue(npcId, tier, topic.Type, topic.CacheVariant, clean);
             return new DialogueResult
             {
                 Text = ComposeDialogue(greeting, clean),
@@ -80,119 +88,11 @@ namespace ARPG.Npc.Narrative
             };
         }
 
-        // ── 소망 ──────────────────────────────────────────────────────────
-        public static async UniTask<NpcWish?> GetOrGenerateWishAsync(int npcId, AffinityTier tier, ThreatSeed threat)
+        public static string BuildDialoguePrompt(NpcDialogueContext context, AffinityTier tier, PlayerRelation relation, DialogueTopic topic)
         {
-            if (tier < AffinityTier.Friend)   // Friend↑ 게이트
-                return null;
-            if (AR.s.Npc.Narrative.TryGetWish(npcId, out NpcWish cached))
-                return cached;
-
-            NpcDialogueContext? ctx = NpcDialogueContextBuilder.Build(npcId, threat);
-            if (ctx == null)
-                return null;
-
-            NpcWish? wish = null;
-            if (AR.s.LLM != null && AR.s.LLM.IsReady)
-            {
-                wish = await TryGenerateWishAsync(ctx, npcId);   // 1차
-                if (wish == null)
-                    wish = await TryGenerateWishAsync(ctx, npcId); // 재시도 1회
-            }
-            if (wish == null)
-                wish = FallbackWish(ctx, npcId);   // 규칙 템플릿 폴백
-
-            AR.s.Npc.Narrative.SetWish(npcId, wish);
-            return wish;
-        }
-
-        private static async UniTask<NpcWish?> TryGenerateWishAsync(NpcDialogueContext ctx, int npcId)
-        {
-            List<ChatMessage> msgs = new()
-            {
-                new ChatMessage("system", WishSystemPrompt()),
-                new ChatMessage("user", ctx.ToPromptText() + WishUserSuffix(ctx)),
-            };
-            string? raw = await AR.s.LLM.RequestWithContextAsync(msgs, LLMClient.MODEL_GPT_OSS_120B, WishTemperature);
-            if (string.IsNullOrWhiteSpace(raw))
-                return null;
-            return ParseAndValidateWish(raw!, ctx, npcId);
-        }
-
-        // ── 검증 (R2: kind∈enum / target∈후보 / gold≤예산 / usedEventIds⊆문맥) ──
-        private static NpcWish? ParseAndValidateWish(string raw, NpcDialogueContext ctx, int npcId)
-        {
-            try
-            {
-                string json = ExtractJson(raw);
-                WishJson? w = JsonConvert.DeserializeObject<WishJson>(json);
-                if (w == null)
-                    return null;
-
-                if (Enum.TryParse(w.Kind, true, out WishKind kind) == false)
-                    return null;
-                if (IsCandidate(ctx, w.Target) == false)
-                    return null;
-
-                int gold = w.Reward != null ? w.Reward.Gold : 0;
-                if (gold < 0 || gold > ctx.RewardGoldMax)
-                    return null;
-
-                if (w.UsedEventIds != null)
-                {
-                    for (int i = 0; i < w.UsedEventIds.Count; i++)
-                        if (ctx.ContextEventIds.Contains(w.UsedEventIds[i]) == false)
-                            return null;
-                }
-
-                NpcWish wish = new()
-                {
-                    GiverNpcEntityId = npcId,
-                    Kind = kind,
-                    TargetRef = w.Target,
-                    AffinityReward = w.AffinityReward,
-                    RewardGold = gold,
-                    RevealDialogue = w.RevealDialogue,
-                    FulfillDialogue = w.FulfillDialogue,
-                    State = WishState.Revealed,
-                    ContextEventIds = w.UsedEventIds ?? new List<int>(),
-                };
-                if (w.Reward != null && w.Reward.Items != null)
-                    wish.RewardItems = w.Reward.Items;
-                return wish;
-            }
-            catch
-            {
-                return null;   // 파싱 실패 → 상위에서 재시도/폴백
-            }
-        }
-
-        private static bool IsCandidate(NpcDialogueContext ctx, string target)
-        {
-            if (string.IsNullOrEmpty(target))
-                return false;
-            for (int i = 0; i < ctx.Candidates.Count; i++)
-                if (ctx.Candidates[i].Ref == target)
-                    return true;
-            return false;
-        }
-
-        private static NpcWish FallbackWish(NpcDialogueContext ctx, int npcId)
-        {
-            string target = ctx.Candidates.Count > 0 ? ctx.Candidates[0].Ref : "item#heritage";
-            string desc = ctx.Candidates.Count > 0 ? ctx.Candidates[0].Desc : "의미 있는 물건";
-            return new NpcWish
-            {
-                GiverNpcEntityId = npcId,
-                Kind = WishKind.ItemGift,
-                TargetRef = target,
-                AffinityReward = 20,
-                RewardGold = 100,
-                RevealDialogue = $"…{desc}이 있으면 좋겠소.",
-                FulfillDialogue = "고맙소. 이 은혜는 잊지 않겠소.",
-                State = WishState.Revealed,
-                IsFallback = true,
-            };
+            // Topic.Facts already projects the selected history, rumor or personal story. Sending the entire
+            // backbone here mixes unrelated threats and can reveal facts the chosen speaker does not know.
+            return "[NPC]\n" + context.NpcBlock + DialogueUserSuffix(tier, relation, topic);
         }
 
         // ── 프롬프트 ─────────────────────────────────────────────────────
@@ -252,34 +152,12 @@ namespace ARPG.Npc.Narrative
             DialogueTopicType.PartyBond => "동료 이야기",
             DialogueTopicType.DungeonRumor => "이 마을 던전 소문",
             DialogueTopicType.ItemOwnerRumor => "누가 좋은 장비를 얻었다는 소문",
+            DialogueTopicType.DungeonRequest => "던전 일 부탁",
+            DialogueTopicType.DungeonRequestProgress => "부탁한 던전 일의 진행",
+            DialogueTopicType.WishReveal => "마음에 품은 소망",
+            DialogueTopicType.WishReminder => "털어놓았던 소망",
             _ => "잡담",
         };
-
-        private static string WishSystemPrompt()
-        {
-            return
-                "너는 이 판타지 세계에서 이 NPC의 사연을 아는 작가다.\n" +
-                "- 제공된 정보에 없는 인물·사건·장소·아이템을 지어내지 마라.\n" +
-                "- 소망은 이 NPC의 사연(HISTORY/RELATIONS/SENTIMENT)에서 자연스럽게 비롯돼야 한다.\n" +
-                "- kind는 [ItemGift, Recover, Reunion] 중 하나만 고른다.\n" +
-                "- target은 CANDIDATES의 ref 중에서만 고른다(새 ref 금지).\n" +
-                "- reward.gold는 REWARD_BUDGET 범위 안. usedEventIds는 HISTORY의 event 번호만.\n" +
-                "- 서술은 한국어. 아래 JSON 스키마만 출력(코드블록·설명 금지):\n" +
-                "{\"kind\":\"\",\"target\":\"\",\"affinityReward\":0,\"reward\":{\"gold\":0,\"items\":[]},\"revealDialogue\":\"\",\"fulfillDialogue\":\"\",\"usedEventIds\":[]}";
-        }
-
-        private static string WishUserSuffix(NpcDialogueContext ctx)
-        {
-            StringBuilder sb = new();
-            sb.AppendLine();
-            sb.AppendLine("[WISH_KINDS] ItemGift, Recover, Reunion");
-            sb.AppendLine("[CANDIDATES] (ref | desc)");
-            for (int i = 0; i < ctx.Candidates.Count; i++)
-                sb.AppendLine($"- {ctx.Candidates[i].Ref} | {ctx.Candidates[i].Desc}");
-            sb.AppendLine($"[REWARD_BUDGET] gold 0~{ctx.RewardGoldMax}");
-            sb.AppendLine("위 정보로 이 NPC가 품을 법한 소망 1개를 위 JSON 스키마로 생성하라.");
-            return sb.ToString();
-        }
 
         private static string TierKorean(AffinityTier tier) => tier switch
         {
@@ -289,32 +167,5 @@ namespace ARPG.Npc.Narrative
             AffinityTier.Confidant => "속을 터놓는 사이",
             _ => "낯선 사이",
         };
-
-        // ── JSON 파싱 보조 ───────────────────────────────────────────────
-        private static string ExtractJson(string raw)
-        {
-            int start = raw.IndexOf('{');
-            int end = raw.LastIndexOf('}');
-            if (start >= 0 && end > start)
-                return raw.Substring(start, end - start + 1);
-            return raw;
-        }
-
-        private class WishJson
-        {
-            [JsonProperty("kind")] public string Kind = string.Empty;
-            [JsonProperty("target")] public string Target = string.Empty;
-            [JsonProperty("affinityReward")] public int AffinityReward;
-            [JsonProperty("reward")] public RewardJson? Reward;
-            [JsonProperty("revealDialogue")] public string RevealDialogue = string.Empty;
-            [JsonProperty("fulfillDialogue")] public string FulfillDialogue = string.Empty;
-            [JsonProperty("usedEventIds")] public List<int>? UsedEventIds;
-        }
-
-        private class RewardJson
-        {
-            [JsonProperty("gold")] public int Gold;
-            [JsonProperty("items")] public List<string>? Items;
-        }
     }
 }

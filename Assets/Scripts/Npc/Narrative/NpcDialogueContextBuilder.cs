@@ -7,7 +7,7 @@ using ARPG.Village;
 namespace ARPG.Npc.Narrative
 {
     /// <summary>
-    /// 백본(NpcSaveData / 관계 / 연대기) + 시드 위협 → 대화·소망 생성 문맥.
+    /// 백본(NpcSaveData / 관계 / 연대기) + 시드 위협 → 대화 생성 문맥.
     /// NpcRelationBackfill.ExtractContext의 연대기 순회를 미러한다.
     /// 설계: NARRATIVE_ENGINE §4.2~4.3 / NARRATIVE_ENGINE_SPIKE §4.1
     /// </summary>
@@ -43,14 +43,12 @@ namespace ARPG.Npc.Narrative
             ChronicleSaveData? chronicle = AR.s.Data?.Chronicle;
 
             StringBuilder hist = new();
-            string raceHint = "고향";
 
             if (chronicle != null && settlementId >= 0)
             {
                 SettlementSnapshot? self = FindSettlement(chronicle, settlementId);
                 if (self != null)
                 {
-                    raceHint = self.Race.ToString();
                     string ruled = self.Fate == SettlementFate.Conquered && self.KingdomId >= 0
                         ? $", 정복국 왕국#{self.KingdomId}"
                         : string.Empty;
@@ -75,7 +73,6 @@ namespace ARPG.Npc.Narrative
                 && AR.s.Village.TryGetVillageProfile(save.VillageId, out VillageProfile homeProfile))
             {
                 // 손제작 마을(연대기 미연결): 정착지 스냅샷이 없으므로 마을 Profile 종족으로 홈 정체성만 접지한다.
-                raceHint = homeProfile.Race.ToString();
                 hist.AppendLine($"현재 정착지: {homeProfile.Race} 종족 마을");
             }
 
@@ -98,11 +95,8 @@ namespace ARPG.Npc.Narrative
             ctx.SentimentBlock = sent.ToString().TrimEnd();
             ctx.HistoryBlock = hist.ToString().TrimEnd();
 
-            // ── 관계 블록 (+ Reunion 후보) ──
+            // ── 관계 블록 ──
             BuildRelations(ctx, npcId);
-
-            // ── 소망 후보: 향수 아이템 (ItemGift) ──
-            ctx.Candidates.Add(new WishCandidate("item#heritage", $"{raceHint} 유물/공예품"));
 
             // ── 상황(위협) 시드 — D2 ──
             if (threat.NearbyMonsters)
@@ -130,10 +124,6 @@ namespace ARPG.Npc.Narrative
                 string otherName = ResolveNpcName(otherId);
                 string label = RelationLabel(r.Type, isFrom);
                 rel.AppendLine($"- {label}: {otherName}");
-
-                // 헤어진 가족 → Reunion 소망 후보
-                if (r.Type == NpcRelationType.Sibling || r.Type == NpcRelationType.Spouse)
-                    ctx.Candidates.Add(new WishCandidate($"npc#{otherId}", $"{label} {otherName}"));
 
                 if (r.OriginEventId >= 0 && ctx.ContextEventIds.Contains(r.OriginEventId) == false)
                     ctx.ContextEventIds.Add(r.OriginEventId);

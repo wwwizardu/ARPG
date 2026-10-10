@@ -101,6 +101,10 @@ namespace ARPG.Component
             // 맵 컴포넌트
             { typeof(MapChunkLoaderComponent), 4 },           // 청크 로더 (플레이어 전용)
             { typeof(DungeonObjectComponent), 64 },
+            { typeof(DungeonChestTag), 32 },                  // 활성 던전 청크의 미개봉 상자
+            { typeof(DungeonEntranceComponent), 32 },         // 활성 월드 청크의 던전 입구 (마을당 2~3개)
+            { typeof(DungeonEntranceSignComponent), 32 },     // 소문 징후 자막이 있는 입구만
+            { typeof(KillCreditComponent), 128 },
 
             // 엔티티 라이프사이클 컴포넌트
             { typeof(DestroyTag), 100 },                       // 제거 예약 태그
@@ -116,7 +120,6 @@ namespace ARPG.Component
             { typeof(VillageStorageComponent), 32 },   // 마을 1개당 1개, 현재 <10, 여유 32
             { typeof(VillageComponent), 32 },          // 마을 1개당 1개 (Phase C: Stage/Bounds/Threat)
             { typeof(WallPlanRequestTag), 32 },        // Stage 3 도달 시 부착, 처리 후 제거
-            { typeof(WallSegmentComponent), 500 },     // 마을 외곽 벽 세그먼트 (마을당 ~60칸 × 5마을 여유)
             { typeof(ObjectPlacementTaskComponent), 32 }, // 마을 1개당 0~1개 (Phase B 배치 큐)
 
             // Phase D 마을 시스템 컴포넌트
@@ -350,5 +353,4 @@ namespace ARPG.Component
 
     }
 }
-
 

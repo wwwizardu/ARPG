@@ -16,6 +16,8 @@ namespace ARPG.Data
         public int WorldSeed = 12345;
         public float ElapsedWorldGameHours;
         public DungeonSaveRoot Dungeons = new();
+        // 공통 콘텐츠 실행 원장 — narrative 파트 (NPC_NARRATIVE_CONTENT_DESIGN §7). WorldDataVersion 21 미만은 빈 원장으로 시작한다.
+        public NarrativeSaveRoot Narrative = new();
 
         public List<WorldDropItemData> WorldDropItemDatas = new();
         public List<VillageData> VillageDatas = new();
@@ -51,6 +53,11 @@ namespace ARPG.Data
             if (float.IsNaN(ElapsedWorldGameHours) || float.IsInfinity(ElapsedWorldGameHours) ||
                 ElapsedWorldGameHours < 0f) ElapsedWorldGameHours = 0f;
             if (Dungeons == null) Dungeons = new();
+            if (Narrative == null) Narrative = new();
+            Narrative.Instances ??= new();
+            Narrative.Definitions ??= new();
+            Narrative.Policies ??= new();
+            Narrative.Selections ??= new();
             for (int d = 0; d < Dungeons.Dungeons.Count; d++)
                 for (int i = 0; i < Dungeons.Dungeons[d].Drops.Count; i++)
                     Dungeons.Dungeons[d].Drops[i].ItemData?.OnLoadCompleted();

@@ -1036,6 +1036,8 @@ namespace ARPG
             //OnLangugeChanged?.Invoke();
         }
 
+        public bool HasOpenInteractionMenu => _uiCurrentList.Count > 0;
+
         public bool UpdateInput() // false를 리턴하면 Player Input을 처리하지 않는다.
         {
             if (_isLocked == true)

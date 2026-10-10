@@ -2,10 +2,11 @@
 
 > **목표**: NPC의 **소망(Wish)** 이 게임 안에서 *동작*하는 방식을 설계한다 — 관계가 깊어질 때 떠오른 소망을 추적하고, 충족을 판정해 보상(호감도 대폭↑ + 보답)을 주고, 그 상태가 세이브에 **기록**되기까지. **소망은 구조적으로 퀘스트다**(목표 대상 + 충족 판정 + 보상 + 상태). 그래서 본 문서는 퀘스트 시스템의 정본이되, *게시판에서 계약을 수락하는* 옛 모델이 아니라 **관계 속에서 자연 발생하는 소망**을 다룬다.
 >
-> **상태 (2026-07-09 갱신)**: 🟦 설계 초안 — 본 문서 소관 **메커니즘(추적·완료·보상·영속화)은 미구현**.
-> 단 소망 타입 골격(`NpcWish`·`WishKind`·`WishState`·`WishCandidate`)은 내러티브 검증 스파이크가 **부분집합으로 선구현**했다
-> ([NpcNarrativeTypes.cs](../../Assets/Scripts/Npc/Narrative/NpcNarrativeTypes.cs) — 파일 주석에 "정본은 QUEST §2, 추후 ARPG.Quest 이관" 명시).
-> 구현 착수 시 스파이크 타입을 §2 정본 스키마로 이관·확장할 것.
+> **상태 (2026-10-10 갱신)**: 첫 소망 종류 **ItemGift는 구현됐다** — 단, 이 문서 §2·§6의 `NpcWish`·`WorldData.Wishes` 스키마가 아니라
+> [NPC_NARRATIVE_CONTENT_DESIGN](NPC_NARRATIVE_CONTENT_DESIGN.md)의 통합 구조(작성 표 `NarrativeContent` Wish 행 + 원장 `NarrativeContentInstance`, §2.2·§7.2·§8.2)로 구현했다.
+> 떠오름은 호감 30(사용자 결정 2026-10-10, 아래 §3의 "보통 Friend↑"를 대체), 충족은 선물로 아이템 전달·소모, 보상은 그 문서 §4.5의 관계 변화·의뢰 보답이다.
+> 스파이크 타입 `NpcWish`·`WishCandidate`와 LLM 소망 생성은 2026-10-10에 지웠고 `WishKind`·`WishState`만 남겼다. Recover·Reunion·목표 진행(`QuestObjective`)·소망 UI 패널은 미구현이다.
+> 이 문서의 상태머신(§2.2)·대상 보장(§4.0, §8.2)·관계 프레이밍(§1)은 계속 기준으로 삼는다.
 >
 > **경계 (3분할)**:
 > - 소망이 *어떻게 떠오르나*(호감도 단계·대화로 사연 공개·플레이어 유추) → [interactionSystem.md §4](interactionSystem.md) (관계·선물 몰입 루프)
@@ -42,8 +43,8 @@
 
 **2층 구조 — 기계 골격 + 내러티브 스킨**: 게임이 *결정론적으로 실행·검증*하는 기계 골격(목표·대상·보상)과, 생성기가 채우는 내러티브 스킨(대사)을 한 객체에 담되 역할을 분리한다.
 
-> **스파이크 선구현 (2026-07-09 확인)**: 아래 스키마의 부분집합이 [NpcNarrativeTypes.cs](../../Assets/Scripts/Npc/Narrative/NpcNarrativeTypes.cs)에 이미 존재한다.
-> 차이: 스파이크판 `NpcWish`는 `WishId`·`Objectives`·`RevealTierGate`·`Title`이 없고, 대상을 `QuestObjective` 대신 `TargetRef`(string ref)로 든다. **본 스키마가 정본** — 구현 시 이쪽으로 이관.
+> **스파이크 선구현 (2026-07-09 확인, 2026-10-10 삭제)**: 아래 스키마의 부분집합인 스파이크판 `NpcWish`가 [NpcNarrativeTypes.cs](../../Assets/Scripts/Npc/Narrative/NpcNarrativeTypes.cs)에 있었으나 2026-10-10에 지웠다(`WishKind`·`WishState` enum만 남음).
+> 첫 소망(ItemGift)은 이 스키마로 이관하지 않고 [NPC_NARRATIVE_CONTENT_DESIGN](NPC_NARRATIVE_CONTENT_DESIGN.md)의 `NarrativeContentInstance`(Kind=Wish: 주인·`TargetItemId`·`WishState`·보고·의뢰 보답)로 구현했다(§7.2·§8.2). 아래 `NpcWish`·`QuestObjective`·`QuestReward`는 Recover·Reunion 등 다른 소망 종류를 설계할 때 참고하는 이전 설계다.
 
 ```csharp
 // Assets/Scripts/Quest/NpcWish.cs (제안)
@@ -121,7 +122,7 @@ Hidden ──────────▶ Revealed ──────────
 
 소망이 *언제·어떻게* 떠오르는지는 [interactionSystem §4.7](interactionSystem.md)이 정본이다. 요약:
 
-1. 플레이어가 NPC와 대화로 관계를 쌓아 호감도가 `RevealTierGate`(보통 `Friend`↑, [interactionSystem §4.2](interactionSystem.md))에 도달.
+1. 플레이어가 NPC와 대화로 관계를 쌓아 호감도가 `RevealTierGate`(보통 `Friend`↑, [interactionSystem §4.2](interactionSystem.md))에 도달. (2026-10-10 사용자 결정: 첫 구현은 호감 30 — [NPC_NARRATIVE_CONTENT_DESIGN](NPC_NARRATIVE_CONTENT_DESIGN.md) 머리말)
 2. 깊은 대화 비트에서 NPC가 백본 사연에서 비롯된 소망을 토로(`RevealDialogue`) → 본 시스템에서 `Hidden → Revealed`, 추적 시작.
 3. 인지: 퀘스트 로그가 아니라 **관계 패널**에 *"이 NPC가 ~을 바람"* 으로 은근히 표시(§7).
 

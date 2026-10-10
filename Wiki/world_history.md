@@ -4,9 +4,11 @@
 name: world-history
 description: world_history 도메인 종합 — 문서 5장의 정본 매핑, 설계 vs 구현 현황, LLM 생성 통제 장치 목록, 인접 도메인 경계.
 type: topic
-last_updated: 2026-10-04
+last_updated: 2026-10-10
 sources:
   - Docs/world_history/ 전체 5장 (본문 정독)
+  - Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md §8.2
+  - Assets/Scripts/Manager/NpcManager_NarrativeWish.cs
   - Docs/world_history/NARRATIVE_DIALOGUE_VARIETY_DESIGN.md
   - Docs/npc/NPC_AMBITION_DESIGN.md §12.1–12.2
   - Docs/tech/SAVE_PARTITION_DESIGN.md
@@ -26,7 +28,7 @@ sources:
 
 **현재 상태**: 절차적 역사 백본과 런타임 LOD가 구현됐고, 추상 인구는 마을 경제의 입력이 된다. 마을은 현재 역사 종료 고정 인구로 초기 Stage와 완공 시설을 직접 확정하며 런타임 자동 발전은 비활성이다. 내러티브 엔진은 검증 스파이크 위에 최신 개인 사연 직접 조회·내용 기반 cache variant·NPC 단위 무효화가 구현됐지만 실제 플레이 품질 검증 전이고, 도전 이벤트는 미구현이다. [src: Docs/world_history/WORLD_HISTORY_PLAN.md, Docs/world_history/NARRATIVE_DIALOGUE_VARIETY_DESIGN.md §5 Phase 1, Docs/world_history/WORLD_EVENT_DESIGN.md, Docs/village/VILLAGE_REWORK_PLAN.md §V2–V7, Assets/Scripts/History/HistoryManager.cs]
 
-**사연 저장과 생성 텍스트는 구분한다(2026-10-04)**: 부상·동료·아이템·던전 완료·절도 피해·사별 6종의 최신 요약/참조를 저장하고 기존 개인 토픽 5종에 연결한다. 중요 이력은 유지하며 반복 파티 활동은 통계, 절도 피해는 최신 1건으로 저장한다. 생성된 대사·소망 텍스트와 최근 화제 상태는 `NpcNarrativeRuntime` 메모리 캐시다. 최신 사연 30 PASS·공동 활동 27 PASS를 확인했고 실제 LLM 품질·재미·호출 비용 실측은 후속이다. [src: Docs/npc/NPC_AMBITION_DESIGN.md §12.1–12.2, Docs/world_history/NARRATIVE_DIALOGUE_VARIETY_DESIGN.md §5, Assets/Scripts/Npc/NpcSaveData_PersonalStories.cs, Assets/Scripts/Npc/Narrative/NpcNarrativeRuntime.cs]
+**사연 저장과 생성 텍스트는 구분한다(2026-10-04)**: 부상·동료·아이템·던전 완료·절도 피해·사별 6종의 최신 요약/참조를 저장하고 기존 개인 토픽 5종에 연결한다. 중요 이력은 유지하며 반복 파티 활동은 통계, 절도 피해는 최신 1건으로 저장한다. 생성된 대사와 최근 화제 상태는 `NpcNarrativeRuntime` 메모리 캐시다. 소망은 2026-10-10부터 LLM으로 만들지 않는다. 작성 표(`NarrativeContent`)와 저장되는 narrative 원장이 정하며, LLM 소망 스파이크와 소망 캐시는 지웠다. [src: Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md §8.2, Assets/Scripts/Npc/Narrative/NpcNarrativeRuntime.cs] 최신 사연 30 PASS·공동 활동 27 PASS를 확인했고 실제 LLM 품질·재미·호출 비용 실측은 후속이다. [src: Docs/npc/NPC_AMBITION_DESIGN.md §12.1–12.2, Docs/world_history/NARRATIVE_DIALOGUE_VARIETY_DESIGN.md §5, Assets/Scripts/Npc/NpcSaveData_PersonalStories.cs, Assets/Scripts/Npc/Narrative/NpcNarrativeRuntime.cs]
 
 ## 2. 정본 매핑 — "이걸 물으면 이 문서의 이 절"
 
@@ -39,7 +41,7 @@ sources:
 | **교차 일관성** (사건 정본화·지식 거리·NPC 전기 로그) | [NARRATIVE_ENGINE_DESIGN §4.8](../Docs/world_history/NARRATIVE_ENGINE_DESIGN.md) | 2026-07-09 추가, 미구현. 사실=사건 앵커 / 관점=NPC. 데이터: PROCEDURAL §3.4 · RELATION_HISTORY §4.2 |
 | LLM 통합(Groq/Llama, 모델 티어링, 캐시·폴백) | [NARRATIVE_ENGINE §6](../Docs/world_history/NARRATIVE_ENGINE_DESIGN.md) | `LLMManager`/`LLMClient` 기존 자산 확장 |
 | 검증 스파이크 범위·통과 기준·대화 토픽 카탈로그 | [NARRATIVE_ENGINE_SPIKE](../Docs/world_history/NARRATIVE_ENGINE_SPIKE.md) | 셔플백·화제 캡은 §4.5 |
-| 소망(Wish) 데이터 모델·추적·영속화 | [QUEST_SYSTEM_DESIGN](../Docs/npc/QUEST_SYSTEM_DESIGN.md) (npc 소속) | 엔진은 "그 스키마에 맞는 산출물"만 책임 |
+| 소망(Wish) 데이터 모델·추적·영속화 | [QUEST_SYSTEM_DESIGN](../Docs/npc/QUEST_SYSTEM_DESIGN.md) (npc 소속) | 엔진은 "그 스키마에 맞는 산출물"만 책임. 실행 중인 ItemGift는 LLM 없이 [NPC_NARRATIVE_CONTENT_DESIGN](../Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md) §8.2 구조로 구현됐다(2026-10-10) |
 | 관계·선물 루프(대화의 런타임 소비처) | [interactionSystem §4](../Docs/npc/interactionSystem.md) (npc 소속) | |
 | 도전 이벤트 카탈로그·역사→도전 변환 | [WORLD_EVENT_DESIGN §3·§5](../Docs/world_history/WORLD_EVENT_DESIGN.md) | 발화·페이싱(디렉터)은 §8 미결정 |
 | NPC 개인 관계·backfill (연대기의 소비자) | [NPC_RELATION_HISTORY_DESIGN](../Docs/npc/NPC_RELATION_HISTORY_DESIGN.md) (npc 소속) | 3계층(L1/L2/L3)의 L2·L3 |
@@ -47,8 +49,8 @@ sources:
 ## 3. 문서 최신성 · 발견된 드리프트
 
 - **PROCEDURAL_HISTORY / WORLD_HISTORY_PLAN** — 2026-07-08 구현 상태 배너까지 반영된 최신 상태. 설계-구현 이탈(§0.2 fold-back, `Pop` float 등)도 문서 스스로 기록.
-- **NARRATIVE_ENGINE_DESIGN** — 초안의 장기 설계와 스파이크 구현을 구분한다. 2026-10-04 §6.3은 생성 텍스트의 세이브 영속화를 목표 설계로, 현행 대사/소망/최근 화제를 메모리 캐시로 명시했다. [src: Docs/world_history/NARRATIVE_ENGINE_DESIGN.md §6.3, Assets/Scripts/Npc/Narrative/NpcNarrativeRuntime.cs]
-- **NARRATIVE_ENGINE_SPIKE** (07-02) — "1차 구현 완료(Unity 실측 전)". 코드(`Scripts/Npc/Narrative/`) 존재 확인.
+- **NARRATIVE_ENGINE_DESIGN** — 초안의 장기 설계와 스파이크 구현을 구분한다. 2026-10-04 §6.3은 생성 텍스트의 세이브 영속화를 목표 설계로 명시했다. 2026-10-10 소망 스파이크 삭제에 맞춰 상태 메모와 §6.3을 고쳐, 지금 메모리 캐시는 대사와 최근 화제뿐이고 소망 생성 설계는 장기 설계로 남는다. [src: Docs/world_history/NARRATIVE_ENGINE_DESIGN.md 상태·§6.3, Assets/Scripts/Npc/Narrative/NpcNarrativeRuntime.cs]
+- **NARRATIVE_ENGINE_SPIKE** (07-02) — "1차 구현 완료(Unity 실측 전)". 코드(`Scripts/Npc/Narrative/`) 존재 확인. 소망 생성 경로는 R2·R3 실측 없이 2026-10-10에 지웠고 대화 경로만 남았다. [src: Docs/world_history/NARRATIVE_ENGINE_SPIKE.md 상태]
 - **WORLD_EVENT_DESIGN** (06-30) — 콘텐츠 카탈로그 단계, 미구현 0%. 유효.
 - **NARRATIVE_DIALOGUE_VARIETY_DESIGN** — 최초 Phase 1(2026-07-15) 이후 절도 피해와 최신 사연 저장 개정(2026-10-04)이 반영됐다. 최신 슬롯 6종 → 개인 토픽 5종, 시각 기반 후보 선택·내용 기반 variant·NPC 단위 무효화가 현재 계약이다. [src: Docs/world_history/NARRATIVE_DIALOGUE_VARIETY_DESIGN.md §5, Assets/Scripts/Npc/Narrative/DialogueTopicSelector.cs]
 - 과거 드리프트 2건은 2026-07-09 해소됨: Docs/README.md 대시보드의 절차적 역사 "보류"·SPIKE "구현 대기" 표기 → 실제 구현 상태로 정정, WORLD_HISTORY_PLAN 헤더의 "NPC 소속 분리 논의 중" → §11.8과 일치하게 폐기 표기. [src: 양 문서 2026-07-09 갱신]
@@ -64,7 +66,8 @@ sources:
 | 관계 backfill(L2)·호감도 채널 | RELATION_HISTORY §3–4 | NpcRelationBackfill, NpcManager 관계 region | ✅ |
 | 대화 생성 스파이크 + 최신 개인 사연 | SPIKE §4 + DIALOGUE_VARIETY §5 | [Scripts/Npc/Narrative/](../Assets/Scripts/Npc/Narrative/) — 최신 부상/동료/피해/자랑 중 2개 + 최신 사별 별도 1개, 티어·레퍼토리 적용, 내용 기반 variant | 🟨 구현·저장/이관 진단 통과, 생성 텍스트는 메모리 캐시·실제 플레이 실측 후속 [src: Assets/Scripts/Npc/Narrative/DialogueTopicSelector.cs, Assets/Scripts/Npc/Narrative/NpcNarrativeRuntime.cs, Docs/npc/NPC_AMBITION_DESIGN.md §12.2] |
 | LLM 클라이언트 | NARRATIVE_ENGINE §6 | [LLMManager.cs](../Assets/Scripts/Manager/LLMManager.cs)/[LLMClient.cs](../Assets/Scripts/Manager/LLMClient.cs) (Groq/Llama) | ✅ (JSON 모드 옵션 미구현 — 프롬프트 강제로 대체 중) |
-| 소망 생성→추적→보상 본 구현 | QUEST_SYSTEM | 스파이크 DTO만 | ❌ |
+| 소망 추적→보상(ItemGift) | QUEST_SYSTEM + NPC_NARRATIVE_CONTENT §2.2·§8.2 | `NpcManager_NarrativeWish`, `NarrativeContentInstance`(Kind=Wish) — 작성 표 기반 | 🟨 ItemGift만 구현(2026-10-10, 플레이 확인 전) [src: Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md §8.2] |
+| 소망 LLM 생성 | NARRATIVE_ENGINE §4.4·§4.6 | 없음(스파이크 2026-10-10 삭제) | ❌ [src: Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md 머리말(3단계)] |
 | R4 회고 대사·Sentiment 표시 | PLAN §7 | 없음 | ❌ (명시적 잔여 작업) |
 | 교차 일관성 (사건 정본·지식 거리·전기 로그) | NARRATIVE_ENGINE §4.8 | 없음 | ❌ (2026-07-09 설계, 스파이크 측정 선행) |
 | 멀리 정치 사건 지속(§0.4-나)·위협도·이벤트 디렉터 | PROCEDURAL §0.4, WORLD_EVENT §8 | 없음 | ❌ (설계상 보류) |
@@ -82,7 +85,7 @@ sources:
 | 5 | 정합성 가드(사후 검증) | `usedEventIds⊆컨텍스트`, `target∈candidates`, `reward≤예산`, 참조 대상 실재·생존 검사 → 실패 시 재시도 1회 → 규칙 템플릿 폴백 | NARRATIVE_ENGINE §4.6 |
 | 6 | 백본 유래 선호 | 선호는 임의 태그가 아니라 종족·Sentiment·직업→카테고리 도출 규칙 공유 — 어느 NPC든 같은 규칙 | interactionSystem §4.4 |
 | 7 | 티어 게이트 | 호감도 단계가 허용한 백본 층만 회고 가능("단계 초과 사연 금지" 가드) | NARRATIVE_ENGINE §4.4 표 |
-| 8 | 결과 캐시의 목표와 현재 범위 | **목표**: LLM 결과를 세이브에 저장해 정본으로 재현. **현재**: 대사·소망·최근 화제는 메모리 캐시, 사연 원본·통계·최신 참조만 영속 | NARRATIVE_ENGINE §6.3 [src: Docs/world_history/NARRATIVE_ENGINE_DESIGN.md §6.3, Assets/Scripts/Npc/Narrative/NpcNarrativeRuntime.cs, Assets/Scripts/Npc/NpcSaveData_PersonalStories.cs] |
+| 8 | 결과 캐시의 목표와 현재 범위 | **목표**: LLM 결과를 세이브에 저장해 정본으로 재현. **현재**: 대사·최근 화제는 메모리 캐시, 사연 원본·통계·최신 참조와 소망 진행(narrative 원장)만 영속. 소망은 LLM 생성이 아니다(2026-10-10) | NARRATIVE_ENGINE §6.3 [src: Docs/world_history/NARRATIVE_ENGINE_DESIGN.md §6.3, Assets/Scripts/Npc/Narrative/NpcNarrativeRuntime.cs, Assets/Scripts/Npc/NpcSaveData_PersonalStories.cs, Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md §8.2] |
 | 9 | 화제 캡 + 셔플백 | NPC 시드의 기본 1~3 + 관계 티어를 2~5로 제한하고 성격 편향을 적용한다. 긴급 화제 우선·최근 화제 순환 유지 | 현행 선택 코드 [src: Assets/Scripts/Npc/Narrative/DialogueTopicSelector.cs] |
 | 10 | 그레이스풀 폴백 | LLM 없음/실패 시 `BaseLine`/규칙 템플릿으로 진행 — "LLM은 향상이지 의존이 아니다" | NARRATIVE_ENGINE §6.3 |
 

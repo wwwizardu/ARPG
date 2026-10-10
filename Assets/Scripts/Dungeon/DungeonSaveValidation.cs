@@ -8,7 +8,7 @@ namespace ARPG.Dungeon
     {
         public static bool IsConsistent(DungeonSaveRoot root, List<PlayerData> players, int worldSeed)
         {
-            if (root == null || root.Version != 1 || root.Villages == null || root.Dungeons == null || players == null)
+            if (root == null || (root.Version != 1 && root.Version != 2) || root.Villages == null || root.Dungeons == null || players == null)
                 return false;
             var slots = new Dictionary<string, DungeonSlot>();
             var villages = new Dictionary<int, VillageDungeonSlots>();

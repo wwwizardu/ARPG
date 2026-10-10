@@ -1,6 +1,6 @@
 # 절차 던전 런타임 설계
 
-> 상태: **구현됨** — 2026-09-19 던전 시스템("던전 시스템 추가"), 09-20 테이블 정리(GeneratorVersion 2), 09-27 동행 NPC(§5.3), 09-29 NPC 완료(§3.3). 마을별 2~3 슬롯, 접근 시 시간분할 입구 배치, E 입장, 분리된 `MapContext` 던전 맵, ESC 퇴장, 사망 복귀, 보스 완료 트랜잭션, `dungeons` 저장 파티션, 에디터 진단(`Editor/DungeonRuntimeDiagnostics.cs`)이 있다. **미구현**: 함정, 생성 실패 재시도, 입구 배치 실패율·"2~3개 보장" 진단, GeneratorVersion 마이그레이션(지원하지 않는 버전은 차단만), 사망 패널. Play Mode Profiler 실측 기록은 없다. (2026-10-03 문서 정리)
+> 상태: **구현됨** — 2026-09-19 던전 시스템("던전 시스템 추가"), 09-20 테이블 정리(GeneratorVersion 2), 09-27 동행 NPC(§5.3), 09-29 NPC 완료(§3.3). 마을별 2~3 슬롯, 접근 시 시간분할 입구 배치, E 입장, 분리된 `MapContext` 던전 맵, ESC 퇴장, 사망 복귀, 보스 완료 트랜잭션, `dungeons` 저장 파티션, 에디터 진단(`Editor/DungeonRuntimeDiagnostics.cs`)이 있다. **미구현**: 함정, 생성 실패 재시도, 입구 배치 실패율·"2~3개 보장" 진단, GeneratorVersion 마이그레이션(지원하지 않는 버전은 차단만), 사망 패널. Play Mode Profiler 실측 기록은 없다. (2026-10-03 문서 정리) 2026-10-09: 던전 상자와 입구를 엔티티로 전환(§4.1, 구현·사용자 플레이 확인). 2026-10-10: 입구 자막 문구를 `NarrativeContent.SignText`로 바꾸고, 입구가 있는 동안 거리만으로 켜도록 했다(§4.1, 진단 PASS·플레이 확인 전).
 >
 > 표기: **확정** = 사용자 요청·답변, **구현** = 구현된 방식(처음 [제안]이던 항목 중 구현된 것), **제안** = 아직 구현되지 않은 기본안.
 >
@@ -76,6 +76,74 @@ ESC는 현재 UIManager에서 열린 UI가 없을 때 `UIMainMenu`를 연다. �
 타일 전체 배열은 저장하지 않는다. 방/복도 메타데이터에서 플레이어 주변 8×8 청크만 래스터화·렌더하며, 플레이어가 이동하면 기존 청크 풀을 재사용한다. 구조 메타데이터를 저장하므로 생성 알고리즘이 업데이트되어도 진행 중 던전의 레이아웃이 달라지지 않는다. 상자·몬스터는 안정 ID로 만들고, 처치·획득·열림 등의 **차이 데이터만** 저장한다. [구현: `Dungeon/DungeonManager_Content.cs`] 함정은 없다(`DungeonObjectKind` = Monster/Boss/Chest). [미구현]
 
 월드 NPC·마을 시뮬레이션·건물 근접 UI·월드 몬스터 스폰은 던전 플레이어 좌표를 월드 좌표로 해석하면 안 된다. 던전 활성 동안 월드 시스템(`IWorldMapSystem` — `System_NpcSim`, `System_Time` 등)은 일시 중지한다(구현: `SystemManager.cs`). 던전 중에도 월드 시뮬을 돌리는 개정안은 [`DUNGEON_WORLD_SIM_DESIGN.md`](DUNGEON_WORLD_SIM_DESIGN.md)(2026-10-03 초안, 검토 대기). 던전 전투 시스템은 던전 엔티티만 조회한다. 월드로 돌아가면 기존 월드 컨텍스트와 매니저 상태를 복원한다. [`System_NpcSim.cs`](../../Assets/Scripts/Common/System/System_NpcSim.cs), [`System_SettlementSim.cs`](../../Assets/Scripts/Common/System/System_SettlementSim.cs), [`System_MonsterSpawn.cs`](../../Assets/Scripts/Common/System/System_MonsterSpawn.cs)
+
+### 4.1 던전 상자·입구 엔티티 (2026-10-09)
+
+월드에 위치를 갖는 상호작용·표시 대상은 엔티티로 만든다는 원칙(AGENTS.md ECS Rules)에 따라, 던전 상자와 던전 입구를 엔티티로 바꿨다. 입구의 소문 징후 표시도 입구 엔티티의 표시 부분으로 옮겼다. 목적은 성능보다 구조 통일이다. 엔티티와 매니저 전용 마커가 섞여 대상마다 관리 방식이 달라지는 것을 막는다. [확정: 2026-10-09 사용자 결정] [구현: 2026-10-09, 사용자 플레이 확인]
+
+**공통:**
+- **생성:** 범용 엔티티 프리팹(`Prefabs/Entity`, Addressable)을 `EntityFactory.CreateStaticEntity`로 만든다. 건물과 같은 프리팹이므로 새 프리팹은 없다.
+  - 설정하는 것은 스프라이트(`Resources/Dungeon`의 DungeonChest·DungeonEntrance), 정렬 순서 10, 그림 오프셋뿐이다.
+  - HP·진영·AI·그림자는 붙이지 않는다. 대상 조회는 `FactionComponent`가 있는 엔티티만 고르므로 스킬·투사체·AI에 잡히지 않는다.
+- **위치:** 엔티티 루트는 타일 중심이며 상호작용 판정 기준이다. 그림은 `Visual` 로컬 오프셋(상자 −0.2, 입구 −0.3)으로 예전 마커 위치와 같게 띄운다.
+- **비동기 생성 중 상태 변화:** 맵 컨텍스트가 바뀌면 팩토리가 결과를 버린다. 소유자 조건이 바뀌면 컴포넌트를 붙이기 전에 `EntityFactory.ReleaseStaticEntity`로 반환한다.
+- **제거:** 몬스터와 같은 `DestroyTag` + `System_EntityDestroy` 경로다. EntityId가 재사용될 수 있으므로 지우기 전에 소유 컴포넌트를 확인한다.
+- **저장:** 저장 형식은 바뀌지 않는다. EntityId는 저장하지 않는다.
+- **없앤 것:** 마커 풀(`GetMarker`·`ReturnMarker`·`_markerPool`), 쓰이지 않던 트리거 BoxCollider2D, `_entranceViews`, `TickScenarioPresentation`과 그 안의 매 프레임 자식 탐색. 입구 징후의 소리 파일(`WolfHowl`·`StoneScrape`)·바닥 흔적 그림·정의의 `Cues` 목록·시트 `CuesJson` 열.
+
+[구현: `Factory/EntityFactory.cs`, `Dungeon/DungeonManager_Content.cs`, `Dungeon/DungeonManager_Entrances.cs`, `Dungeon/DungeonManager_ScenarioPresentation.cs`]
+
+#### 상자
+
+- **정본:** `DungeonRecord.Objects`(Kind=Chest)와 `OpenedChests`.
+- **생성·제거:** 던전 몬스터와 같은 규칙이다.
+  - `TickContent`가 청크가 활성화된 미개봉 상자를 `SpawnChestAsync`로 만든다. 생성 중복은 몬스터와 같은 `_spawning`으로 막는다.
+  - 청크가 비활성화되거나 상자를 열면 `RemoveDungeonEntity`로 지운다.
+  - `_chests`는 오브젝트 ID → EntityId다. 퇴장 때 `ResetContent`가 모두 지운다.
+- **컴포넌트:** `DungeonObjectComponent { DungeonId, ObjectId }`와 빈 태그 `DungeonChestTag`.
+- **E키 후보:** `TryGetChestInteraction`이 `DungeonChestTag` 풀을 돌며 `TransformComponent` 위치로 거리를 잰다(거리 제곱 9 미만).
+- **개봉:** `OpenChest`가 골드 지급, `OpenedChests` 기록, dirty 표시를 한 뒤 엔티티를 지운다.
+
+#### 입구
+
+- **정본:** `DungeonSlot`. `_entrancesByChunk`(청크 → 슬롯)는 청크별로 만들 입구를 찾는 조회 인덱스로 남겼다.
+- **생성·제거:**
+  - `MapManager_Spawner`가 청크를 만들거나 해제할 때 `RefreshEntranceChunk`가 `SpawnEntranceAsync`·`RemoveEntrance`를 부른다.
+  - 던전에 들어갈 때 `SuspendWorld`도 같은 청크 해제 경로를 부르므로, 던전 안에서는 입구 엔티티가 없다. 퇴장하면 `ResumeWorld`의 청크 활성화가 다시 만든다.
+  - `_entrances`는 DungeonId → EntityId, `_entranceSpawning`은 생성 중복 방지용이다.
+  - `RebuildEntranceIndex`는 모든 입구 엔티티를 지우고 다시 만든다. `_entranceGeneration`으로 그 전에 시작한 비동기 생성은 버린다.
+  - 생성이 끝나면 다시 확인한다: lifetime·generation, 던전 밖, 같은 슬롯 객체, 입구 있음, 청크 활성, 중복 없음. 하나라도 어긋나면 반환한다.
+- **컴포넌트:** 모든 입구에 `DungeonEntranceComponent { DungeonId }`. 징후 자막이 있는 입구에만 `DungeonEntranceSignComponent { Active }`.
+- **E키 후보:** `TryGetInteraction`이 `DungeonEntranceComponent` 풀을 돌며 `TransformComponent` 위치로 거리를 잰다(거리 제곱 9 미만). 슬롯에 입구가 있는지도 확인한다.
+
+#### 입구 징후 (자막 전용)
+
+**사용자 결정(2026-10-09):** 입구 징후는 자막으로만 보여 준다. 소리 파일과 바닥 흔적 그림은 없앴고, 퀄리티를 올릴 때 다시 검토한다.
+
+- **문구:** 소문 콘텐츠의 `SignText`(시트 `NarrativeContent`)를 그대로 쓴다. NPC가 소문으로 전하는 징후와 플레이어가 입구에서 보는 자막이 같은 문장이다. 별도 자막 열은 없다([NPC_NARRATIVE_CONTENT_DESIGN](../npc/NPC_NARRATIVE_CONTENT_DESIGN.md) §2.1). 입구 엔티티를 만들 때 `NpcManager.GetNarrativeSignText`가 그 던전의 열린 소문 사건에서 문구를 찾고, 문구가 있을 때만 자막 자식과 징후 컴포넌트를 붙인다(2026-10-10).
+- **표시:** `DungeonEntranceSignView`는 입구 엔티티 `Visual` 아래 `"Entrance sign"` 자식이다. `IEntityMessageHandler`로 등록되어(`AutoRegisterChildHandlers`), `DungeonEntranceSignMessage { Active }`를 받으면 자막을 켜고 끄기만 한다.
+- **판단:** `System_DungeonEntranceSign`(`IUpdateSystem` + `IWorldMapSystem`, 우선순위 520, 0.2초 간격)이 맡는다.
+  - 켜는 조건: 플레이어가 8칸(거리 제곱 64) 안에 있다. 규칙은 이 하나뿐이다. 지정 몬스터(늑대 등)의 생사는 보지 않는다. 늑대를 잡아도 부탁이 끝난 것이 아니기 때문이다(2026-10-09 사용자 결정, 2026-10-10 구현).
+  - 상태가 바뀔 때만 메시지를 보낸다. 월드 맵 시스템이라 던전 안에서는 멈춘다.
+- **일시정지:** 시스템 실행 조건상 일시정지 중에는 돌지 않으므로 그동안 마지막 상태가 유지된다.
+
+**예:** 늑대 울음 소문이 붙은 입구.
+1. 입구가 있는 월드 청크가 생기면 입구 엔티티가 만들어진다. `Visual` 아래 "입구 안쪽에서 긴 울음소리가 들린다." 자막이 꺼진 채로 있고, 징후 컴포넌트는 `Active = false`다.
+2. 플레이어가 8칸 안에 들어오면 시스템이 `Active = true`로 바꾸고 메시지를 보낸다. 표시가 자막을 켠다.
+3. 플레이어가 3칸 안에 오면 E키 프롬프트가 이 입구를 후보로 띄운다.
+4. 던전에서 늑대만 처치하고 나와도 자막은 그대로 뜬다. 보스를 처치하면 소문 사건이 닫히고 완료 트랜잭션이 입구를 교체하므로 그 소문의 자막도 사라진다. 교체된 새 세대 입구는 새로 붙은 소문이 있을 때만 자막을 단다.
+5. 청크가 사라지거나 던전에 들어가면 엔티티가 지워지고 표시도 함께 사라진다.
+
+**검증:**
+- 2026-10-09 확인: Unity 컴파일·`dotnet build` 런타임/에디터 오류 0개. 기존 던전 진단(`Run Storage and Generation Diagnostics`, 시나리오 진단 포함) PASS. 다만 이 진단들은 상자·입구 엔티티 생성 경로를 실행하지 않는다.
+- 2026-10-09 사용자 플레이 확인: 상자·입구 엔티티와 입구 징후가 정상 동작한다(자막 전용으로 바꾸기 전 기준).
+- 2026-10-09 자막 전용 전환 뒤 확인: Unity 컴파일·`dotnet build` 오류 0개, 던전 진단 PASS, 시트 다운로드 결과가 번들 `Scenarios.json`과 바이트 단위로 같음(구 번들·시트 탭은 2026-10-10 새 팩으로 교체 뒤 삭제).
+- 2026-10-10 `SignText`·거리 단독 규칙 전환 뒤 확인: 던전 진단에서 늑대만 처치하면 문구가 남고 보스 처치 뒤에는 빈 문구임을 검사해 PASS([NPC_NARRATIVE_CONTENT_DESIGN](../npc/NPC_NARRATIVE_CONTENT_DESIGN.md) §8.1). 실제 플레이 확인은 아직 하지 않았다.
+- 이후 회귀 확인 항목:
+  - 청크 왕복·로드·입구 교체 뒤에도 입구 엔티티가 슬롯당 하나이고, 옛 입구가 남지 않는다.
+  - 던전 안에서는 입구가 보이거나 상호작용되지 않고, 퇴장하면 복원된다.
+  - 상자가 중복 생성되거나 열린 상자가 다시 생기지 않는다.
+  - 징후 자막이 청크 해제, 소문 해결(보스 처치), 던전 입장, Reset 뒤에 남지 않는다. 늑대만 처치한 뒤에는 남는다.
 
 ## 5. 전환·퇴장·저장
 

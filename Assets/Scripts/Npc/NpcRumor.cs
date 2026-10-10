@@ -20,6 +20,23 @@ namespace ARPG.Npc
         ItemSold = 3,
         // 배신 (D105, 공용). 세부 종류(BetrayalKind)로 구분한다 — P4 절도 현장 적발·늦은 발각, P3 배신 유형은 세부 종류 끝에 추가.
         Betrayal = 4,
+        // 플레이어가 한 일 (NPC_NARRATIVE_CONTENT_DESIGN §4.1). 세부 종류(PlayerDeedKind)로 구분한다 — 소문 해결·던전 클리어,
+        // NPC_AMBITION P5 "살인자" 소문도 세부 종류 끝에 추가한다. 이미 일어난 일이라 항상 유효하다.
+        PlayerDeed = 5,
+    }
+
+    /// <summary>
+    /// PlayerDeed 소문의 세부 종류 (NPC_NARRATIVE_CONTENT_DESIGN §1.1·§4.1). NPC 사건 기록(NpcDeedKind)과 다른 데이터다. 끝에만 추가한다.
+    /// </summary>
+    public enum PlayerDeedKind
+    {
+        None = 0,
+        // 플레이어나 동행이 소문이 붙은 던전의 보스를 처치해 던전을 닫았다
+        RumorResolved = 1,
+        // 플레이어 측이 소문이 붙지 않은 던전의 보스를 처치했다
+        DungeonCleared = 2,
+        // NPC의 소망을 실제로 채웠다 (3단계)
+        WishFulfilled = 3,
     }
 
     /// <summary>Betrayal 소문의 세부 종류 (D105). 끝에만 추가한다 (P3 배신 유형).</summary>
@@ -44,6 +61,20 @@ namespace ARPG.Npc
         public NpcRumorKind Kind;
         // DungeonInfo: true = "○○ 일행이 이 슬롯의 이전 던전을 끝냈다"(가리키는 세대는 완료 뒤 새 세대). false = 원정 성공 보고.
         public bool Cleared;
+        // DungeonInfo: true = 소문 주인이 처음 알게 된 입구 발견 소문 (원정 보고가 아니다). 기본값은 기존 원정 소문이다.
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public bool IsDiscovery;
+        // 관련 콘텐츠 인스턴스 (NPC_NARRATIVE_CONTENT_DESIGN §7.2). 발견 소문 = 소문 던전의 인스턴스(일반 던전은 빈 값),
+        // PlayerDeed = 해결한 소문 인스턴스(소문 없는 던전 클리어는 빈 값).
+        [DefaultValue("")]
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public string InstanceId = string.Empty;
+        // PlayerDeed 세부 종류. None = PlayerDeed가 아님.
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public PlayerDeedKind DeedKind;
+        // PlayerDeed: 이 NPC가 이미 반응했다. 소문이 퍼질 때 옮기지 않는다 (§4.1).
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public bool Reacted;
         // DungeonInfo 대상: 던전 슬롯의 마을·슬롯 번호·세대. 현재 슬롯 세대와 같을 때만 유효하다.
         public int VillageId = -1;
         public int SlotIndex = -1;
@@ -136,6 +167,8 @@ namespace ARPG.Npc
         public long CreatedCleared;
         public long CreatedItemOwner;
         public long CreatedItemSold;                                   // 훔친 물건 판매 (D104)
+        public long CreatedPlayerDeed;                                 // 플레이어 행적 (보고·동행·소문 전 해결)
+        public long AcceptedPlayerDeed;
         public readonly long[] CreatedBetrayal = new long[3];          // NpcBetrayalKind 인덱스 (D105)
         public long AcceptedItemSold;
         public long AcceptedBetrayal;

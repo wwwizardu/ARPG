@@ -78,9 +78,10 @@ namespace ARPG.Npc
         /// </summary>
         /// <param name="expedition">Hunt 또는 DungeonDelve</param>
         /// <param name="rngOwnerId">솔로 = NPC EntityId, 파티원 = PartyId</param>
+        /// <param name="dungeonId">던전 원정이면 그 던전 (피해자 판정용 LastWoundDungeonId, NPC_NARRATIVE_CONTENT_DESIGN §4.2)</param>
         public float ApplyExpeditionWound(int entityId, NpcSaveData saveData, NpcActivityKind expedition, int rngOwnerId,
             float seedGameTime, int worldSeed, int treatmentSalt, int severeSalt, float outcomeGameTime,
-            out bool treated, out bool severe)
+            out bool treated, out bool severe, string? dungeonId = null)
         {
             MarkSaveDirty(entityId, NpcSaveGroup.Condition | NpcSaveGroup.Activity | NpcSaveGroup.Stories);
             severe = NpcActivityResolver.RollSevereWound(rngOwnerId, seedGameTime, worldSeed, severeSalt);
@@ -92,7 +93,7 @@ namespace ARPG.Npc
             activity.Kind = NpcActivityKind.None;
             activity.PhaseEndGameTime = outcomeGameTime + recoveryHours;
 
-            saveData.RecordExpeditionWound(outcomeGameTime, expedition, severe);
+            saveData.RecordExpeditionWound(outcomeGameTime, expedition, severe, dungeonId);
             if (severe == true)
                 AddSevereWoundDeed(entityId, outcomeGameTime);
             else

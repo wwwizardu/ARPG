@@ -98,6 +98,8 @@ namespace ARPG.Npc
                 AR.s.Village.UnregisterNpcFromVillage(fromVillageId, entityId);
                 saveData.VillageId = destinationId;
                 AR.s.Village.RegisterNpcToVillage(destinationId, entityId);
+                // 부탁 칸은 유지한다 (옮겨 간 마을에서 보고받는다). 주인이 없는 그 마을 소문 던전은 다시 고른다 (NPC_NARRATIVE §4.1).
+                RetryPendingRumorOwners(destinationId);
                 saveData.AbandonedSiteSinceGameTime = -1f;
                 if (saveData.IsActive == true &&
                     AR.s.Component.TryGetComponent<NpcVillageComponent>(entityId, out NpcVillageComponent village))

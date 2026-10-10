@@ -29,6 +29,12 @@ namespace ARPG.Data
         public void MarkDungeonSaveDirty(DungeonRecord record, DungeonSaveGroup groups) =>
             MarkOwnedSaveDirty(PART_DUNGEONS, ("record", record.DungeonId), (ulong)groups);
         public void MarkDungeonSlotsSaveDirty(int villageId) => MarkOwnedSaveDirty(PART_DUNGEONS, ("village", villageId));
+        // narrative 파트 (NPC_NARRATIVE_CONTENT_DESIGN §7.3). 원장 소유자 NpcManager만 부른다 — 사건 revision도 함께 올린다.
+        public void MarkNarrativeInstanceSaveDirty(string instanceId, NarrativeSaveGroup groups) =>
+            MarkOwnedSaveDirty(PART_NARRATIVE, ("instance", instanceId), (ulong)groups);
+        public void MarkNarrativeDefinitionSaveDirty(string hash) => MarkOwnedSaveDirty(PART_NARRATIVE, ("definition", hash));
+        public void MarkNarrativePolicySaveDirty(string hash) => MarkOwnedSaveDirty(PART_NARRATIVE, ("policy", hash));
+        public void MarkNarrativeSelectionSaveDirty(string dungeonId) => MarkOwnedSaveDirty(PART_NARRATIVE, ("selection", dungeonId));
         public void MarkBuildingSaveDirty(int entityId) => MarkOwnedSaveDirty(PART_BUILDINGS, entityId);
         public void MarkMapChunkSaveDirty(Vector2IntKey chunk) => MarkOwnedSaveDirty(PART_MAP, chunk);
         public void MarkWorldDropSaveDirty(WorldDropItemData drop) => MarkOwnedSaveDirty(PART_MAP, drop);
@@ -81,6 +87,8 @@ namespace ARPG.Data
                 if (key is Vector2IntKey chunk) return AR.s.WorldMap.GetSaveChunkModifications(chunk.X, chunk.Y);
             }
             if (part == PART_BUILDINGS && key is int building) return AR.s.Building.GetSaveData(building);
+            if (part == PART_NARRATIVE && key is ValueTuple<string, string> narrative)
+                return GetNarrativeSaveSource(narrative.Item1, narrative.Item2);
             if (part == PART_DUNGEONS)
             {
                 if (key is ValueTuple<string, string> dungeon)
@@ -106,6 +114,31 @@ namespace ARPG.Data
             return null;
         }
 
+        private object? GetNarrativeSaveSource(string kind, string id)
+        {
+            NarrativeSaveRoot root = _worldData.Narrative;
+            switch (kind)
+            {
+                case "instance":
+                    for (int i = 0; i < root.Instances.Count; i++)
+                        if (root.Instances[i].InstanceId == id) return root.Instances[i];
+                    return null;
+                case "definition":
+                    for (int i = 0; i < root.Definitions.Count; i++)
+                        if (root.Definitions[i].Hash == id) return root.Definitions[i];
+                    return null;
+                case "policy":
+                    for (int i = 0; i < root.Policies.Count; i++)
+                        if (root.Policies[i].Hash == id) return root.Policies[i];
+                    return null;
+                case "selection":
+                    for (int i = 0; i < root.Selections.Count; i++)
+                        if (root.Selections[i].DungeonId == id) return root.Selections[i];
+                    return null;
+            }
+            return null;
+        }
+
         private Func<object, object?> GetOwnedSaveSourceGetter(string part)
         {
             if (_ownedSaveSourceGetters.TryGetValue(part, out var getter) == true) return getter;
@@ -125,6 +158,7 @@ namespace ARPG.Data
                 PART_PLAYER => SaveSnapshotGroups.Player,
                 PART_WORLD => SaveSnapshotGroups.World,
                 PART_DUNGEONS => SaveSnapshotGroups.Dungeon,
+                PART_NARRATIVE => SaveSnapshotGroups.Narrative,
                 _ => null,
             };
             cache = new SaveSnapshotCache<object>(part, groups);
@@ -249,6 +283,26 @@ namespace ARPG.Data
             for (int i = 0; i < live.Dungeons.Count; i++) dungeons.Add(cache.Get(("record", live.Dungeons[i].DungeonId)));
             var villages = (List<object?>)root[nameof(DungeonSaveRoot.Villages)]!;
             for (int i = 0; i < live.Villages.Count; i++) villages.Add(cache.Get(("village", live.Villages[i].VillageId)));
+            return root;
+        }
+
+        private object CaptureOwnedNarrative(NarrativeSaveRoot live, bool rebuild)
+        {
+            Dictionary<object, object?> sources = new();
+            for (int i = 0; i < live.Instances.Count; i++) sources.Add(("instance", live.Instances[i].InstanceId), live.Instances[i]);
+            for (int i = 0; i < live.Definitions.Count; i++) sources.Add(("definition", live.Definitions[i].Hash), live.Definitions[i]);
+            for (int i = 0; i < live.Policies.Count; i++) sources.Add(("policy", live.Policies[i].Hash), live.Policies[i]);
+            for (int i = 0; i < live.Selections.Count; i++) sources.Add(("selection", live.Selections[i].DungeonId), live.Selections[i]);
+            var cache = PrepareOwnedSaveCache(PART_NARRATIVE, sources, rebuild);
+            var root = EmptySnapshotRoot(new NarrativeSaveRoot { Version = live.Version });
+            var instances = (List<object?>)root[nameof(NarrativeSaveRoot.Instances)]!;
+            for (int i = 0; i < live.Instances.Count; i++) instances.Add(cache.Get(("instance", live.Instances[i].InstanceId)));
+            var definitions = (List<object?>)root[nameof(NarrativeSaveRoot.Definitions)]!;
+            for (int i = 0; i < live.Definitions.Count; i++) definitions.Add(cache.Get(("definition", live.Definitions[i].Hash)));
+            var policies = (List<object?>)root[nameof(NarrativeSaveRoot.Policies)]!;
+            for (int i = 0; i < live.Policies.Count; i++) policies.Add(cache.Get(("policy", live.Policies[i].Hash)));
+            var selections = (List<object?>)root[nameof(NarrativeSaveRoot.Selections)]!;
+            for (int i = 0; i < live.Selections.Count; i++) selections.Add(cache.Get(("selection", live.Selections[i].DungeonId)));
             return root;
         }
 

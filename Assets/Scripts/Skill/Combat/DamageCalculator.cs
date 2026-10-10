@@ -331,6 +331,9 @@ namespace ARPG.Skill.Combat
         /// </summary>
         public static void ApplyDamageResult(int skillEntityId, int attackerId, int targetId, DamageResult result)
         {
+            ComponentManager cm = AR.s.Component;
+            // Extra hits and UI updates must not replace the lethal hit's source or resurrect it through leech.
+            if (cm.TryGetComponent<StatComponent>(targetId, out var living) == false || living.CurrentHp <= 0) return;
             // ========== 회피 처리 ==========
             if (result.IsEvaded)
             {
@@ -360,6 +363,7 @@ namespace ARPG.Skill.Combat
             {
                 int damage = Mathf.RoundToInt(result.FinalDamage);
                 int newHp = Mathf.Max(0, targetStat.CurrentHp - damage);
+                CombatCredit.RecordLethalDamage(targetId, targetStat.CurrentHp, newHp, CombatCredit.Resolve(attackerId));
                 targetStat.SetCurrentHp(targetId, newHp);
                 AR.s.Component.SetComponent(targetId, targetStat);
 
@@ -372,7 +376,7 @@ namespace ARPG.Skill.Combat
             // ========== 생명력 흡수 ==========
             if (result.LifeStealAmount > 0f)
             {
-                if (AR.s.Component.TryGetComponent<StatComponent>(attackerId, out var attackerStat))
+                if (AR.s.Component.TryGetComponent<StatComponent>(attackerId, out var attackerStat) && attackerStat.CurrentHp > 0)
                 {
                     int healAmount = Mathf.RoundToInt(result.LifeStealAmount);
                     int newHp = Mathf.Min(attackerStat.FinalMaxHp, attackerStat.CurrentHp + healAmount);
@@ -388,6 +392,7 @@ namespace ARPG.Skill.Combat
                 {
                     int thornsDamage = Mathf.RoundToInt(result.ThornsDamage);
                     int newHp = Mathf.Max(0, attackerStat.CurrentHp - thornsDamage);
+                    CombatCredit.RecordLethalDamage(attackerId, attackerStat.CurrentHp, newHp, CombatCredit.Resolve(targetId));
                     attackerStat.SetCurrentHp(attackerId, newHp);
                     AR.s.Component.SetComponent(attackerId, attackerStat);
                 }
@@ -438,27 +443,27 @@ namespace ARPG.Skill.Combat
             // 독 데미지 > 0 → 중독 자동 적용
             if (result.PoisonDamage > 0f)
             {
-                ApplyPoison(targetId, result.PoisonDamage);
+                ApplyPoison(attackerId, targetId, result.PoisonDamage);
             }
 
             // 물리 데미지 > 0 → 출혈 판정
             if (result.PhysDamage > 0f)
             {
-                ApplyBleeding(skillEntityId, targetId, attackerStat, result);
+                ApplyBleeding(skillEntityId, attackerId, targetId, attackerStat, result);
             }
         }
 
         /// <summary>
         /// 출혈 발동 (물리 DoT)
         /// </summary>
-        private static void ApplyBleeding(int skillEntityId, int targetId, StatComponent attackerStat, DamageResult result)
+        private static void ApplyBleeding(int skillEntityId, int attackerId, int targetId, StatComponent attackerStat, DamageResult result)
         {
             int bloodingRate = attackerStat.FinalBloodingRate;
             if (AR.s.Component.TryGetComponent<SkillStatBonusOnHitComponent>(skillEntityId, out var onHit))
                 bloodingRate += onHit.BloodingRateBonus;
             if (Random.Range(0, 100) < bloodingRate)
             {
-                int buffEntityId = Utility.BuffHelper.AddDamageBasedBuffByEffectType(targetId, GlobalEnum.BuffEffectType.Blooding, result.FinalDamage);
+                int buffEntityId = Utility.BuffHelper.AddDamageBasedBuffByEffectType(targetId, GlobalEnum.BuffEffectType.Blooding, result.FinalDamage, sourceEntityId: attackerId);
 
 
                 if (buffEntityId != -1 && AR.s.Component.TryGetComponent<BuffInstance>(buffEntityId, out var buff))
@@ -484,7 +489,7 @@ namespace ARPG.Skill.Combat
                 int totalIgniteDamage = Mathf.FloorToInt(fireDamage * 0.5f);
                 int tickDamage = totalIgniteDamage / 4;
 
-                int buffEntityId = Utility.BuffHelper.AddBuffByEffectType(targetId, GlobalEnum.BuffEffectType.Ignite);
+                int buffEntityId = Utility.BuffHelper.AddBuffByEffectType(targetId, GlobalEnum.BuffEffectType.Ignite, sourceEntityId: attackerId);
 
                 if (buffEntityId != -1 && AR.s.Component.TryGetComponent<BuffInstance>(buffEntityId, out var buff))
                 {
@@ -507,12 +512,12 @@ namespace ARPG.Skill.Combat
         /// <summary>
         /// 중독 적용 (독 DoT + HP 재생 감소, 자동 발동, 스택 가능)
         /// </summary>
-        private static void ApplyPoison(int targetId, float poisonDamage)
+        private static void ApplyPoison(int attackerId, int targetId, float poisonDamage)
         {
             int totalPoisonDamage = Mathf.FloorToInt(poisonDamage * 0.2f);
             int tickDamage = totalPoisonDamage / 10;
 
-            int buffEntityId = Utility.BuffHelper.AddBuffByEffectType(targetId, GlobalEnum.BuffEffectType.Poison);
+            int buffEntityId = Utility.BuffHelper.AddBuffByEffectType(targetId, GlobalEnum.BuffEffectType.Poison, sourceEntityId: attackerId);
 
             if (buffEntityId != -1 && AR.s.Component.TryGetComponent<BuffInstance>(buffEntityId, out var buff))
             {

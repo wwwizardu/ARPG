@@ -153,7 +153,7 @@ namespace ARPG.Npc
             {
                 ApplyExpeditionWound(entityId, saveData, NpcActivityKind.DungeonDelve, entityId, seedGameTime, worldSeed,
                     NpcActivityResolver.DelveTreatmentSalt, NpcActivityResolver.SevereWoundDelveSalt, outcomeGameTime,
-                    out treated, out bool severe);
+                    out treated, out bool severe, report.DungeonId);
                 report.Treated.Add(treated);
                 report.Severe.Add(severe);
                 return report;
@@ -262,7 +262,8 @@ namespace ARPG.Npc
                 {
                     ApplyExpeditionWound(report.MemberIds[i], member, NpcActivityKind.DungeonDelve, party.PartyId,
                         seedGameTime, worldSeed, NpcActivityResolver.PartyDelveTreatmentSaltBase + i,
-                        NpcActivityResolver.PartySevereWoundDelveSaltBase + i, outcomeGameTime, out treated, out severe);
+                        NpcActivityResolver.PartySevereWoundDelveSaltBase + i, outcomeGameTime, out treated, out severe,
+                        report.DungeonId);
                 }
                 else if (report.Outcomes[i] != NpcHuntOutcome.Dead)
                 {

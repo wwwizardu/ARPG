@@ -100,6 +100,7 @@ namespace ARPG.Systems
                 Debug.LogWarning($"[System_BuffUpdate] Target entity has no StatComponent - TargetEntityId: {buff.TargetEntityId}, BuffEntityId: {buffEntityId}");
                 return;
             }
+            if (targetStat.CurrentHp <= 0) return;
 
             // 스택에 따른 총 데미지 계산
             int totalDamage = buff.TickDamage * buff.StackCount;
@@ -108,13 +109,14 @@ namespace ARPG.Systems
 
             // 속성 저항 적용 (DamageType에 따라 저항 계산)
             float reduction = GetReductionForDamageType(buff.DamageType, targetStat, totalDamage);
-            int finalDamage = Mathf.Max(1, Mathf.RoundToInt(totalDamage * (1f - reduction)));
+            int finalDamage = totalDamage < 0 ? totalDamage : Mathf.Max(1, Mathf.RoundToInt(totalDamage * (1f - reduction)));
 
             // 데미지 적용 (양수면 데미지, 음수면 힐)
             if (finalDamage > 0)
             {
                 // 데미지 처리
                 int newHp = Mathf.Max(0, targetStat.CurrentHp - finalDamage);
+                CombatCredit.RecordLethalDamage(buff.TargetEntityId, targetStat.CurrentHp, newHp, buff.Credit);
                 targetStat.SetCurrentHp(buff.TargetEntityId, newHp);
 
                 // 데미지 메시지 전송(UI 변경 등)
@@ -122,7 +124,7 @@ namespace ARPG.Systems
                 {
                     TargetEntityId = buff.TargetEntityId,
                     DamageAmount = finalDamage,
-                    AttackerEntityId = -1, // 버프로 인한 데미지이므로 공격자 없음
+                    AttackerEntityId = buff.Credit.SourceEntityId,
                     DamageType = buff.DamageType,
                     IsCritical = false,
                     CurrentHp = targetStat.CurrentHp,

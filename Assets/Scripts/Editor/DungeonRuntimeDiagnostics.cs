@@ -17,7 +17,7 @@ using UnityEngine;
 namespace ARPG.EditorTools
 {
     /// <summary>Real partition writer/reader fault tests in a unique Temp directory; never the player slot.</summary>
-    public static class DungeonRuntimeDiagnostics
+    public static partial class DungeonRuntimeDiagnostics
     {
         [MenuItem("ARPG/Dungeon/Run Storage and Generation Diagnostics")]
         public static async void Run()
@@ -30,7 +30,7 @@ namespace ARPG.EditorTools
                 ValidateSparseSuspension(report);
                 ValidateContextLifetime(report);
                 ValidateSnapshotIsolation(report);
-                report.AppendLine(ARPG.Editor.NpcSaveSnapshotDiagnostics.VerifyGroupedSnapshotContracts());
+                await ValidateScenarios(report);
                 await ValidatePersistence(report);
                 await ValidateSaveScheduling(report);
                 report.AppendLine("PASS: all dungeon generation/storage diagnostics.");
@@ -234,6 +234,34 @@ namespace ARPG.EditorTools
                     ((WorldSaveRoot)Field(v15Snapshot, "World")).ElapsedWorldGameHours == 0f &&
                     ((DungeonSaveRoot)Field(v15Snapshot, "Dungeons")).Villages.Count == 1,
                     "v15 dungeon save gains zero-based accumulated world time");
+                // narrative 파트 (NPC_NARRATIVE_CONTENT_DESIGN §7.7): 21 미만은 파트가 없어도 빈 원장, 21 이상은 빈 원장으로 진행하지 않는다.
+                Require(first.Parts.ContainsKey("narrative"), "initial narrative partition");
+                foreach (int version in new[] { 20, 21 })
+                {
+                    string fixture = Path.Combine(root, "narrative-v" + version);
+                    Directory.CreateDirectory(Path.Combine(fixture, "parts"));
+                    SaveManifest manifest = JsonConvert.DeserializeObject<SaveManifest>(JsonConvert.SerializeObject(first));
+                    manifest.Parts.Remove("narrative");
+                    foreach (SavePartReference part in manifest.Parts.Values)
+                        File.Copy(Path.Combine(slotPath, "parts", part.FileName), Path.Combine(fixture, "parts", part.FileName));
+                    ReplaceFixturePart(fixture, manifest, "world",
+                        "{\"Version\":1,\"WorldDataVersion\":" + version + ",\"WorldSeed\":12345,\"NextItemInstanceId\":1}");
+                    File.WriteAllText(Path.Combine(fixture, "manifest.json"), JsonConvert.SerializeObject(manifest));
+                    object loaded = ReadSnapshot(data, fixture, "manifest.json");
+                    if (version < 21)
+                        Require(loaded != null && ((NarrativeSaveRoot)Field(loaded, "Narrative")).Instances.Count == 0,
+                            "pre-21 save without narrative part opens with an empty ledger");
+                    else
+                        Require(loaded == null, "v21 save without narrative part is rejected");
+                }
+                string corrupt = Path.Combine(root, "narrative-corrupt");
+                Directory.CreateDirectory(Path.Combine(corrupt, "parts"));
+                foreach (SavePartReference part in first.Parts.Values)
+                    File.Copy(Path.Combine(slotPath, "parts", part.FileName), Path.Combine(corrupt, "parts", part.FileName));
+                File.WriteAllText(Path.Combine(corrupt, "manifest.json"), JsonConvert.SerializeObject(first));
+                File.AppendAllText(Path.Combine(corrupt, "parts", first.Parts["narrative"].FileName), "corrupt");
+                Require(ReadSnapshot(data, corrupt, "manifest.json") == null, "corrupt narrative part rejected");
+                report.AppendLine("PASS: narrative partition presence, pre-21 empty ledger, v21 missing/corrupt rejection.");
                 data.DiagnosticBeforeCommit = () =>
                 {
                     typeof(DataManager).GetMethod("ResetPartitionedSaveState", BindingFlags.Instance | BindingFlags.NonPublic)
@@ -621,7 +649,7 @@ namespace ARPG.EditorTools
                 Require(ReadManifest(slot).Revision == revision && ReadSnapshot(data, slot, "manifest.prev.json") != null,
                     "failed replacement preserves active AND previous manifests");
 
-                // Migration must capture all 43 partitions; unchanged files can keep their creation revision.
+                // Migration must capture all 44 partitions (narrative 포함); unchanged files can keep their creation revision.
                 typeof(DataManager).GetMethod("MigrateWorldData", BindingFlags.Instance | BindingFlags.NonPublic)
                     .Invoke(data, new object[] { (ushort)15, (ushort)16 });
                 data.DiagnosticFailurePoint = "serialize";
@@ -633,8 +661,8 @@ namespace ARPG.EditorTools
                 await data.WaitForSaveIdleAsync();
                 SaveManifest migrated = ReadManifest(slot);
                 var parts = new List<SavePartReference>(migrated.Parts.Values);
-                Require(parts.Count == 43, "all partitions including 32 NPC shards");
-                Require(data.DiagnosticCommittedScope == SaveScope.All && data.DiagnosticPreparedPartCount == 43,
+                Require(parts.Count == 44, "all partitions including 32 NPC shards and narrative");
+                Require(data.DiagnosticCommittedScope == SaveScope.All && data.DiagnosticPreparedPartCount == 44,
                     "migration captures every part before content reuse");
                 string migratedNpcFile = migrated.Parts["npc_state_00"].FileName;
                 Require(await QueueWrite(data, SaveScope.Player | SaveScope.World | SaveScope.Dungeons), "normal save after migration");
@@ -727,7 +755,7 @@ namespace ARPG.EditorTools
                     BindingFlags.Instance | BindingFlags.NonPublic).Invoke(data, null);
                 await data.WaitForSaveIdleAsync();
                 string slot = Path.Combine(root, "Slot_0");
-                Require(migrated && ReadManifest(slot).Parts.Count == 43 && ReadSnapshot(data, slot, "manifest.json") != null,
+                Require(migrated && ReadManifest(slot).Parts.Count == 44 && ReadSnapshot(data, slot, "manifest.json") != null,
                     "legacy monolith migration writes a readable full revision");
                 Require(File.ReadAllText(Path.Combine(root, "WorldData.json")) == worldJson &&
                     File.ReadAllText(Path.Combine(root, "PlayerData.json")) == playerJson, "legacy files preserved");

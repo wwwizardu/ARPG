@@ -4238,6 +4238,13 @@ namespace ARPG.EditorTools
                 reason = ok ? 0 : 2;
                 return ok;
             }
+            // 플레이어 행적은 이미 일어난 일이라 항상 유효하다 (NPC_NARRATIVE_CONTENT_DESIGN §4.1)
+            if (rumor.Kind == NpcRumorKind.PlayerDeed)
+            {
+                bool ok = rumor.DeedKind != PlayerDeedKind.None;
+                reason = ok ? 0 : 1;
+                return ok;
+            }
             reason = 1;
             return false;
         }

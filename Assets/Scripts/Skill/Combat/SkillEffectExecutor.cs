@@ -154,11 +154,11 @@ namespace ARPG.Skill.Combat
             float duration = effect.Param3 > 0f ? effect.Param3 : buffTable.Duration;
             if (buffTable.EffectType == GE.BuffEffectType.Blooding)
             {
-                BuffHelper.AddDamageBasedBuff(ctx.TargetEntityId, buffId, ctx.DamageResult.FinalDamage, duration);
+                BuffHelper.AddDamageBasedBuff(ctx.TargetEntityId, buffId, ctx.DamageResult.FinalDamage, duration, ctx.OwnerEntityId);
                 return;
             }
 
-            BuffHelper.AddBuff(ctx.TargetEntityId, buffId, duration);
+            BuffHelper.AddBuff(ctx.TargetEntityId, buffId, duration, ctx.OwnerEntityId);
         }
     }
 }

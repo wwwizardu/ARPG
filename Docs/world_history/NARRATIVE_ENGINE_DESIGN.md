@@ -6,6 +6,8 @@
 >
 > **상태 (2026-06-30)**: 🟦 설계 초안. 백본(R0~R4)은 코드 완료(Unity 검증 전). **LLM 토대(`LLMManager`/`LLMClient`, Groq/Llama)도 이미 존재** — 본 엔진은 신규 클라이언트를 만들지 않고 이를 확장한다(§6).
 >
+> **소망 생성 경로 (2026-10-10)**: 꺼져 있던 LLM 소망 생성 스파이크(`NpcWish`·소망 프롬프트·검증·폴백·소망 캐시)는 지웠다. 지금 소망은 LLM이 고르지 않고 작성 표(`NarrativeContent`의 Wish 행)와 저장되는 원장이 대상·보답을 정한다([NPC_NARRATIVE_CONTENT_DESIGN](../npc/NPC_NARRATIVE_CONTENT_DESIGN.md) §2.2·§8.2). 이 문서의 소망 생성 설계(§3.1 ③·§4.4~4.7)는 LLM 소망 생성을 다시 도입할 때의 장기 설계로 남긴다.
+>
 > **경계**: 본 문서는 대화·선호·소망 *생성*(컨텍스트→프롬프트→LLM→검증)까지. 생성된 대화·선호·소망의 *동작·판정·기록*(호감도 단계·선물 반응·소망 충족·보답·세이브)은 [QUEST_SYSTEM_DESIGN.md](../npc/QUEST_SYSTEM_DESIGN.md)가 담당하며, **데이터 모델의 정본도 그쪽**이다.
 >
 > **선행/관련 문서**:
@@ -340,7 +342,7 @@ ChronicleEvent(Type=Conquer, Year=412, Subject=S17, Object=S23, Kingdom=K3)
 - **오프라인/실패 대비**: `IsReady=false`거나 호출 실패 시 §4.6 규칙 기반 폴백으로 게임 진행 보장 — 기존 `IsReady` 그레이스풀 패턴 계승 (LLM은 *향상*이지 *의존*이 아니게).
 - **결정론 주의 (목표 설계)**: LLM 출력은 비결정론이므로 향후 세이브에 결과를 저장하면 저장본을 정본으로 삼는다. 현재는 세이브를 다시 로드한 뒤 동일 문장이 재생성된다고 보장하지 않는다.
 
-**현재 구현 (2026-10-04)**: `NpcNarrativeRuntime`의 대사 캐시는 `npcId → (tier, topicType, variant) → text`이며, 소망 캐시와 최근 화제 상태도 메모리에만 존재한다. `Reset()`이 이 상태를 비운다. 사연 원본·종류별 최신 요약/참조·공동 활동 통계와 NPC 이름 등 영속 자료는 `NpcSaveData`·`NpcAffinityEntry`에 저장하지만, 생성된 대사·소망 텍스트를 함께 저장하는 것은 아니다. 최신 사건/통계 변화는 NPC 단위 대화 캐시 무효화와 내용 기반 variant에 반영한다. 상세는 [NARRATIVE_DIALOGUE_VARIETY_DESIGN §5](NARRATIVE_DIALOGUE_VARIETY_DESIGN.md)와 [NPC_AMBITION_DESIGN §12.1](../npc/NPC_AMBITION_DESIGN.md)을 따른다. [src: Assets/Scripts/Npc/Narrative/NpcNarrativeRuntime.cs, Assets/Scripts/Npc/NpcSaveData.cs, Assets/Scripts/Npc/NpcSaveData_PersonalStories.cs, Assets/Scripts/Manager/NpcManager_SharedActivities.cs, Assets/Scripts/Npc/Narrative/DialogueTopicSelector.cs]
+**현재 구현 (2026-10-04, 2026-10-10 갱신)**: `NpcNarrativeRuntime`의 대사 캐시는 `npcId → (tier, topicType, variant) → text`이며, 최근 화제 상태도 메모리에만 존재한다. `Reset()`이 이 상태를 비운다. 소망 캐시는 2026-10-10에 LLM 소망 스파이크와 함께 지웠고, 소망 진행은 narrative 원장에 저장된다([NPC_NARRATIVE_CONTENT_DESIGN](../npc/NPC_NARRATIVE_CONTENT_DESIGN.md) §8.2). 사연 원본·종류별 최신 요약/참조·공동 활동 통계와 NPC 이름 등 영속 자료는 `NpcSaveData`·`NpcAffinityEntry`에 저장하지만, 생성된 대사 텍스트를 함께 저장하는 것은 아니다. 최신 사건/통계 변화는 NPC 단위 대화 캐시 무효화와 내용 기반 variant에 반영한다. 상세는 [NARRATIVE_DIALOGUE_VARIETY_DESIGN §5](NARRATIVE_DIALOGUE_VARIETY_DESIGN.md)와 [NPC_AMBITION_DESIGN §12.1](../npc/NPC_AMBITION_DESIGN.md)을 따른다. [src: Assets/Scripts/Npc/Narrative/NpcNarrativeRuntime.cs, Assets/Scripts/Npc/NpcSaveData.cs, Assets/Scripts/Npc/NpcSaveData_PersonalStories.cs, Assets/Scripts/Manager/NpcManager_SharedActivities.cs, Assets/Scripts/Npc/Narrative/DialogueTopicSelector.cs]
 
 ---
 

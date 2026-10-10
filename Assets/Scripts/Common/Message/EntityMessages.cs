@@ -185,4 +185,16 @@ namespace ARPG.Message
         /// <summary>새로 장착된 SkillId. 해제(unequip) 시 0.</summary>
         public int NewSkillId;
     }
+
+    /// <summary>
+    /// 던전 입구 소문 징후 자막의 표시 상태 변경 메시지
+    /// System_DungeonEntranceSign이 상태가 바뀔 때만 전송, DungeonEntranceSignView가 수신해 자막만 켜고 끈다.
+    /// </summary>
+    public struct DungeonEntranceSignMessage : IEntityMessage
+    {
+        public int TargetEntityId { get; set; }
+
+        /// <summary>true면 자막 표시, false면 숨김.</summary>
+        public bool Active;
+    }
 }

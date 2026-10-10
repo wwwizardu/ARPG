@@ -7,6 +7,7 @@ namespace ARPG.Data
     [Serializable]
     public sealed class DungeonSaveRoot
     {
+        // 1로 쓰고 1·2를 읽는다. 2는 구 시나리오 개발 세이브이며 그 필드는 무시된다 (NPC_NARRATIVE_CONTENT_DESIGN §7.7).
         public int Version = 1;
         public List<VillageDungeonSlots> Villages = new();
         public List<DungeonRecord> Dungeons = new();
@@ -66,6 +67,8 @@ namespace ARPG.Data
         public Dictionary<int, DungeonMonsterState> Monsters = new();
         public List<WorldDropItemData> Drops = new();
         public List<ChunkModificationData> TileModifications = new();
+        // 보스를 플레이어나 동행이 처치했다. 소문 해결 판정의 유일한 근거다 (NPC_NARRATIVE_CONTENT_DESIGN §3.1).
+        public bool BossKilledByPlayerParty;
     }
 
     [Serializable]

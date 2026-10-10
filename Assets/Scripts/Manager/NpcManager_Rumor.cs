@@ -68,6 +68,9 @@ namespace ARPG.Npc
                     return IsLivingRumorNpc(rumor.SubjectNpcId) == true;
                 case NpcRumorKind.Betrayal:
                     return IsLivingRumorNpc(rumor.SubjectNpcId) == true && IsLivingRumorNpc(rumor.VictimNpcId) == true;
+                case NpcRumorKind.PlayerDeed:
+                    // 이미 일어난 플레이어 행적이라 거짓이 되지 않는다 (NPC_NARRATIVE_CONTENT_DESIGN §4.1).
+                    return rumor.DeedKind != PlayerDeedKind.None;
                 default:
                     return false;
             }
@@ -371,7 +374,7 @@ namespace ARPG.Npc
 
         /// <summary>
         /// 같은 대상인가: DungeonInfo = (마을, 슬롯), ItemOwner = (소유자, 장비 슬롯), ItemSold = (판매자, 인스턴스),
-        /// Betrayal = (가해자, 피해자, 사건 시각).
+        /// Betrayal = (가해자, 피해자, 사건 시각), PlayerDeed = (세부 종류, 인스턴스 — 소문 없는 클리어는 던전 세대). 같은 행적은 NPC당 1개다.
         /// </summary>
         public static bool IsSameRumorTarget(NpcRumor a, NpcRumor b)
         {
@@ -384,6 +387,9 @@ namespace ARPG.Npc
                 NpcRumorKind.ItemSold => a.SubjectNpcId == b.SubjectNpcId && a.ItemInstanceId == b.ItemInstanceId,
                 NpcRumorKind.Betrayal => a.SubjectNpcId == b.SubjectNpcId && a.VictimNpcId == b.VictimNpcId &&
                                          a.EventGameTime == b.EventGameTime,
+                NpcRumorKind.PlayerDeed => a.DeedKind == b.DeedKind && a.InstanceId == b.InstanceId &&
+                                           (string.IsNullOrEmpty(a.InstanceId) == false ||
+                                            (a.VillageId == b.VillageId && a.SlotIndex == b.SlotIndex && a.Generation == b.Generation)),
                 _ => false,
             };
         }
@@ -522,6 +528,8 @@ namespace ARPG.Npc
             copy.SourceNpcId = giverId;
             copy.Hops = source.Hops + 1;
             copy.Checked = false;
+            // 반응 여부는 듣는 NPC마다 따로다. 퍼질 때 옮기지 않는다 (NPC_NARRATIVE_CONTENT_DESIGN §4.1).
+            copy.Reacted = false;
             NpcRumorAddResult result = AddRumor(receiver, copy, now);
             if (result != NpcRumorAddResult.Added && result != NpcRumorAddResult.Replaced &&
                 result != NpcRumorAddResult.AddedWithEviction)
@@ -534,6 +542,8 @@ namespace ARPG.Npc
                 _rumorCounters.AcceptedItemSold++;
             else if (copy.Kind == NpcRumorKind.Betrayal)
                 _rumorCounters.AcceptedBetrayal++;
+            else if (copy.Kind == NpcRumorKind.PlayerDeed)
+                _rumorCounters.AcceptedPlayerDeed++;
 
             if ((copy.Kind == NpcRumorKind.ItemOwner || copy.Kind == NpcRumorKind.ItemSold) && receiver.TheftClues.Count > 0)
                 TryDiscoverTheftFromRumor(receiver, copy, now);
@@ -642,7 +652,7 @@ namespace ARPG.Npc
         /// <summary>보유자와 무관한 "유망한 사실": 원정 성공 보고, 가치 ≥ 기준, 사건 뒤 72h 이내.</summary>
         private static bool HasPromisingFacts(NpcRumor rumor, float now)
         {
-            if (rumor.Kind != NpcRumorKind.DungeonInfo || rumor.Cleared == true || rumor.Value < PromisingRumorValueMin)
+            if (rumor.Kind != NpcRumorKind.DungeonInfo || rumor.IsDiscovery || rumor.Cleared == true || rumor.Value < PromisingRumorValueMin)
                 return false;
             float age = now - rumor.EventGameTime;
             return age >= -0.01f && age <= PromisingRumorFreshHours;

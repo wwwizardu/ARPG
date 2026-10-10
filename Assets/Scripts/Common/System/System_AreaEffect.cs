@@ -107,6 +107,8 @@ namespace ARPG.Systems
                 if (cm.TryGetComponent<StatComponent>(targetEntityId, out var targetStat))
                 {
                     int newHp = Mathf.Max(0, targetStat.CurrentHp - table.Damage);
+                    Skill.Combat.CombatCredit.RecordLethalDamage(targetEntityId, targetStat.CurrentHp, newHp,
+                        Skill.Combat.CombatCredit.Resolve(ownerEntityId));
                     targetStat.SetCurrentHp(targetEntityId, newHp);
                     cm.SetComponent(targetEntityId, targetStat);
 
@@ -120,7 +122,7 @@ namespace ARPG.Systems
                 BuffTable? buff = AR.s.Data.GetBuff(table.OnTickBuffId);
                 if (buff != null)
                 {
-                    BuffHelper.AddBuff(targetEntityId, table.OnTickBuffId, buff.Duration);
+                    BuffHelper.AddBuff(targetEntityId, table.OnTickBuffId, buff.Duration, ownerEntityId);
                 }
             }
         }

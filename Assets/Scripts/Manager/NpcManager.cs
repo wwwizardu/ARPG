@@ -70,6 +70,8 @@ namespace ARPG.Npc
             LoadRelations(AR.s.Data.NpcRelationList);
             LoadParties(AR.s.Data.NpcPartyStates);
             ValidateCompanionState();
+            // 공통 콘텐츠 원장 조회 사전 (NPC_NARRATIVE_CONTENT_DESIGN §7.1). NPC 부탁 칸을 검사하므로 NPC 로드 뒤에 둔다.
+            InitializeNarrative();
             RestoreTravelPositions();
             if (SaveSnapshotEnabled == true)
                 RebuildSaveSnapshot();
@@ -106,6 +108,7 @@ namespace ARPG.Npc
             _playerRelations.Clear();
             _npcRelations.Clear();
             _narrative.Reset();
+            ResetNarrative();
             ResetAmbitionRuntime();
             ResetRumorRuntime();
             ResetPartyRuntime();
@@ -419,7 +422,11 @@ namespace ARPG.Npc
             AddNpcToChunk(chunkCoord, entityId);
 
             if (villageId >= 0)
+            {
                 AR.s.Village.RegisterNpcToVillage(villageId, entityId);
+                // 주인을 못 고른 그 마을의 소문 던전은 새 주민 등록 때 다시 고른다 (사용자 결정 2026-10-10).
+                RetryPendingRumorOwners(villageId);
+            }
 
             if (AR.s.Map.IsChunkActive(chunkCoord))
                 SpawnNpc(entityId, saveData).Forget();
@@ -1858,6 +1865,8 @@ namespace ARPG.Npc
             RemoveNpcFromSimulation(entityId);
             // 소문 (P2b, D72): 본인 소문을 비우고 이 NPC가 소유자인 ItemOwner 소문을 마을 명단에서 지운다 (명단 제거 전).
             PurgeRumorsOnNpcDeath(entityId, saveData);
+            ClearNarrativeRequestOnDeath(entityId, saveData);
+            FailNarrativeWishesOnDeath(entityId);
             _npcPowerCache.Remove(entityId);
             _deferredPurchaseUpgradeItemIds.Remove(entityId);
             RemoveAllAffinityInvolving(entityId);

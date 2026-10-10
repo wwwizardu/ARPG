@@ -131,6 +131,8 @@ namespace ARPG.Map
 
             // MapFileData에 배치된 NPC가 없는 마을은 VillageTable 기반으로 기본 NPC 스폰 (쿨타임 포함)
             AR.s.Npc.EnsureAllVillagesPopulated();
+            // 던전 소문 선정과 소문 주인 선택은 마을 주민이 배치된 뒤에 한다 (NPC_NARRATIVE_CONTENT_DESIGN §4.1, 2026-10-10).
+            AR.s.Dungeon.OnVillagesPopulated();
 
             UpdateChunksAroundPlayer(playerPosition);
 

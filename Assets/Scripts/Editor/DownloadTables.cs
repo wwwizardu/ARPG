@@ -22,7 +22,7 @@ namespace ARPG.Editor
         String,
     }
 
-    public class DownloadTables
+    public partial class DownloadTables
     {
         private static Dictionary<Type, object> _tableDic;
 
@@ -106,6 +106,13 @@ namespace ARPG.Editor
             for (int i = 0; i < _tableEntries.Count; i++)
                 await _tableEntries[i].DownloadAction();
 
+            var narrative = await DownloadNarrativePackAsync(GetTableList<DungeonTable>(), GetTableList<MonsterTable>(), GetTableList<ItemTable>());
+            if (narrative == null)
+            {
+                Debug.LogError("[DownloadTables] NPC 대화 콘텐츠 다운로드 또는 검증 실패로 전체 테이블 저장을 중단합니다.");
+                return;
+            }
+
             if (ValidateModSetup() == false)
             {
                 Debug.LogError("[DownloadTables] Mod/ModTier 검증 실패로 전체 테이블 저장을 중단합니다.");
@@ -126,6 +133,7 @@ namespace ARPG.Editor
 
             ValidateAiSetup();
 
+            if (SaveNarrativePack(narrative) == false) return;
             AssetDatabase.Refresh();
 
             Debug.Log("download Completed...");

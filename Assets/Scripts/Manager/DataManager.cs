@@ -13,12 +13,17 @@ namespace ARPG.Data
 {
     public partial class DataManager : MonoBehaviour
     {
-        private const ushort CURRENT_WORLD_DATA_VERSION = 19;
+        // 21: narrative 파트 도입 (NPC_NARRATIVE_CONTENT_DESIGN §7.7). 21 이상은 narrative 파트가 반드시 있어야 한다.
+        private const ushort CURRENT_WORLD_DATA_VERSION = 21;
+        private const ushort NARRATIVE_PART_REQUIRED_VERSION = 21;
         private const ushort CURRENT_PLAYER_DATA_VERSION = 2;
         private WorldData _worldData = new();
         public int WorldSeed => _worldData.WorldSeed;
         public float ElapsedWorldGameHours => _worldData.ElapsedWorldGameHours;
         public DungeonSaveRoot Dungeons => _worldData.Dungeons;
+        // 공통 콘텐츠 실행 원장의 저장 루트. 원장 수정은 NpcManager만 한다.
+        public NarrativeSaveRoot Narrative => _worldData.Narrative;
+        public Npc.Narrative.NarrativeContentCatalog NarrativeCatalog { get; } = new();
         public List<WorldDropItemData> WorldDrops => _worldData.WorldDropItemDatas;
         private List<PlayerData> _playerDataList = new();
         private int _currentPlayerEntityId = 0; // 현재 활성화된 플레이어 ID
@@ -76,6 +81,16 @@ namespace ARPG.Data
             await WaitForSaveIdleAsync();
             // 데이터 초기화 로직
             await LoadTableAsync();
+            try
+            {
+                NarrativeCatalog.Initialize(new Npc.Narrative.BundledNarrativeContentSource(), GetAllDungeonTables(), GetMonster, GetItem);
+            }
+            catch (System.Exception ex)
+            {
+                // 콘텐츠 팩이 잘못돼도 게임은 연다. 새 던전에 소문 콘텐츠만 붙지 않는다 (위치 소문은 유지).
+                NarrativeCatalog.Reset();
+                Debug.LogError("[Narrative] Content pack rejected; dungeon rumors are disabled: " + ex.Message);
+            }
 
             await LoadBaseSpriteAtlas();
 
@@ -88,6 +103,7 @@ namespace ARPG.Data
         {
             // 데이터 리셋 로직
             ResetRuntimeData();   // 런타임(휘발성) 파티션 정리 — DataManager_Runtime
+            NarrativeCatalog.Reset();
             ResetPartitionedSaveState();
             Debug.Log("DataManager Reset");
         }

@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using ARPG.Component;
 using ARPG.Data;
+using ARPG.Factory;
 using ARPG.Village;
 using UnityEngine;
 
@@ -8,12 +10,15 @@ namespace ARPG.Dungeon
 {
     public partial class DungeonManager
     {
+        private static readonly Vector2 _entranceVisualOffset = new(0f, -0.3f);
+
         private readonly Dictionary<int, VillageDungeonSlots> _villageSlots = new();
         private readonly Dictionary<string, DungeonSlot> _slotsById = new();
         private readonly Dictionary<string, VillageDungeonSlots> _ownersById = new();
         private readonly Dictionary<Vector2Int, List<DungeonSlot>> _entrancesByChunk = new();
-        private readonly Dictionary<string, GameObject> _entranceViews = new();
-        private readonly Stack<GameObject> _markerPool = new();
+        private readonly Dictionary<string, int> _entrances = new();   // DungeonId → entrance EntityId
+        private readonly HashSet<string> _entranceSpawning = new();
+        private int _entranceGeneration;   // Index rebuilds discard entrance spawns started before them.
         private readonly List<Vector2Int> _visibleChunks = new();
         private readonly List<string> _entranceKeys = new();
         private Sprite _entranceSprite;
@@ -45,6 +50,7 @@ namespace ARPG.Dungeon
                 saved.Add(slots);
                 _villageSlots.Add(id, slots);
             }
+            RefreshNarrativeSelections();
         }
 
         public void TickPlacement()
@@ -103,48 +109,88 @@ namespace ARPG.Dungeon
                 var slot = slots[i];
                 if (active == true && slot.HasEntrance == true)
                 {
-                    if (_entranceViews.ContainsKey(slot.DungeonId) == true) continue;
-                    var view = GetMarker("Dungeon entrance " + slot.DungeonId, false);
-                    view.transform.position = new Vector3(slot.EntranceX + 0.5f, slot.EntranceY + 0.2f, -0.05f);
-                    _entranceViews.Add(slot.DungeonId, view);
+                    if (_entrances.ContainsKey(slot.DungeonId) == true || _entranceSpawning.Add(slot.DungeonId) == false) continue;
+                    SpawnEntranceAsync(slot);
                 }
-                else if (_entranceViews.TryGetValue(slot.DungeonId, out var view) == true)
-                {
-                    ReturnMarker(view);
-                    _entranceViews.Remove(slot.DungeonId);
-                }
+                else RemoveEntrance(slot.DungeonId);
             }
         }
 
         public bool TryGetInteraction(out ServiceUIRouter.Candidate candidate)
         {
             candidate = default;
-            if (_busy == true || _initialized == false) return false;
-            if (IsInside == true) return TryGetChestInteraction(out candidate);
+            if (GameplayPaused || _initialized == false) return false;
+            if (IsInside) return TryGetChestInteraction(out candidate);
+            var entrances = _components.GetComponentPool<DungeonEntranceComponent>();
+            if (entrances.Count == 0) return false;
             Vector2 position = PlayerPosition();
-            var chunk = new Vector2Int(Mathf.FloorToInt(position.x / AR.s.WorldMap.chunkSize),
-                Mathf.FloorToInt(position.y / AR.s.WorldMap.chunkSize));
             float best = 9f;
             bool found = false;
-            for (int x = -1; x <= 1; x++)
-                for (int y = -1; y <= 1; y++)
-                {
-                    var coord = chunk + new Vector2Int(x, y);
-                    if (AR.s.WorldMap.IsChunkActive(coord) == false ||
-                        _entrancesByChunk.TryGetValue(coord, out var slots) == false) continue;
-                    for (int i = 0; i < slots.Count; i++)
-                    {
-                        var slot = slots[i];
-                        float distance = Vector2.SqrMagnitude(position - new Vector2(slot.EntranceX + 0.5f, slot.EntranceY + 0.5f));
-                        if (slot.HasEntrance == false || distance >= best) continue;
-                        best = distance;
-                        found = true;
-                        candidate = new ServiceUIRouter.Candidate { Kind = ServiceUIRouter.CandidateKind.Dungeon,
-                            DungeonId = slot.DungeonId, EntityId = -1, HasTile = true,
-                            TileX = slot.EntranceX, TileY = slot.EntranceY, DistanceSqr = distance };
-                    }
-                }
+            for (int i = 0; i < entrances.Count; i++)
+            {
+                int entityId = entrances.GetEntityId(i);
+                string dungeonId = entrances.GetByIndex(i).DungeonId;
+                if (_slotsById.TryGetValue(dungeonId, out var slot) == false || slot.HasEntrance == false ||
+                    _components.TryGetComponent<TransformComponent>(entityId, out var transform) == false) continue;
+                float distance = Vector2.SqrMagnitude(position - transform.Position);
+                if (distance >= best) continue;
+                best = distance;
+                found = true;
+                candidate = new ServiceUIRouter.Candidate { Kind = ServiceUIRouter.CandidateKind.Dungeon,
+                    DungeonId = dungeonId, EntityId = -1, HasTile = true,
+                    TileX = slot.EntranceX, TileY = slot.EntranceY, DistanceSqr = distance };
+            }
             return found;
+        }
+
+        private async void SpawnEntranceAsync(DungeonSlot slot)
+        {
+            int lifetime = _lifetime;
+            int generation = _entranceGeneration;
+            string dungeonId = slot.DungeonId;
+            try
+            {
+                // The root sits on the tile center so the E-distance matches the entering rule in EnterAsync.
+                var center = new Vector2(slot.EntranceX + 0.5f, slot.EntranceY + 0.5f);
+                var (id, entity) = await EntityFactory.CreateStaticEntity(AR.s.WorldMap, new Vector3(center.x, center.y, -0.05f),
+                    _entranceSprite, _entranceVisualOffset, STATIC_ENTITY_SORTING_ORDER);
+                if (id < 0 || entity == null) return;
+                if (lifetime != _lifetime || generation != _entranceGeneration || IsInside == true ||
+                    _slotsById.TryGetValue(dungeonId, out var current) == false || current != slot || slot.HasEntrance == false ||
+                    AR.s.WorldMap.IsChunkActiveAtWorld(center) == false || _entrances.ContainsKey(dungeonId) == true)
+                {
+                    EntityFactory.ReleaseStaticEntity(entity);
+                    return;
+                }
+                _components.AddComponent(id, new DungeonEntranceComponent { DungeonId = dungeonId });
+                AttachEntranceSign(id, entity, dungeonId);
+                entity.AutoRegisterChildHandlers();
+                entity.name = "Dungeon Entrance " + dungeonId;
+                _entrances[dungeonId] = id;
+            }
+            catch (Exception ex) { Debug.LogError("[Dungeon] Entrance spawn: " + ex.Message); }
+            finally { if (lifetime == _lifetime && generation == _entranceGeneration) _entranceSpawning.Remove(dungeonId); }
+        }
+
+        private void RemoveEntrance(string dungeonId)
+        {
+            if (_entrances.TryGetValue(dungeonId, out int id) == false) return;
+            _entrances.Remove(dungeonId);
+            // Entity IDs can be recycled: only destroy the entrance entity this manager still owns.
+            if (_components.TryGetComponent<DungeonEntranceComponent>(id, out var entrance) == false ||
+                entrance.DungeonId != dungeonId) return;
+            DestroyOwnedEntity(id);
+        }
+
+        private void RemoveAllEntrances()
+        {
+            _entranceKeys.Clear();
+            _entranceKeys.AddRange(_entrances.Keys);
+            for (int i = 0; i < _entranceKeys.Count; i++) RemoveEntrance(_entranceKeys[i]);
+            _entranceKeys.Clear();
+            // In-flight spawns from before this point are discarded by the generation check.
+            _entranceGeneration++;
+            _entranceSpawning.Clear();
         }
 
         private async void PlaceEntranceAsync(DungeonSlot slot, int x, int y)
@@ -225,10 +271,7 @@ namespace ARPG.Dungeon
 
         private void RebuildEntranceIndex()
         {
-            _entranceKeys.Clear();
-            _entranceKeys.AddRange(_entranceViews.Keys);
-            for (int i = 0; i < _entranceKeys.Count; i++) ReturnMarker(_entranceViews[_entranceKeys[i]]);
-            _entranceViews.Clear();
+            RemoveAllEntrances();
             _entrancesByChunk.Clear();
             _slotsById.Clear();
             _ownersById.Clear();
@@ -251,28 +294,6 @@ namespace ARPG.Dungeon
             for (int i = 0; i < _visibleChunks.Count; i++) RefreshEntranceChunk(_visibleChunks[i], true);
         }
 
-        private GameObject GetMarker(string name, bool chest)
-        {
-            GameObject view;
-            if (_markerPool.Count > 0) view = _markerPool.Pop();
-            else
-            {
-                view = new GameObject(name, typeof(SpriteRenderer), typeof(BoxCollider2D));
-                var collider = view.GetComponent<BoxCollider2D>();
-                collider.isTrigger = true;
-            }
-            view.name = name;
-            var renderer = view.GetComponent<SpriteRenderer>();
-            renderer.sprite = chest == true ? _chestSprite : _entranceSprite;
-            renderer.color = Color.white;
-            renderer.sortingOrder = 10;
-            var box = view.GetComponent<BoxCollider2D>();
-            box.size = chest == true ? new Vector2(1.1f, 0.75f) : new Vector2(1.45f, 0.9f);
-            box.offset = chest == true ? new Vector2(0f, 0.38f) : new Vector2(0f, 0.45f);
-            view.SetActive(true);
-            return view;
-        }
-
         private void LoadMarkerSprites()
         {
             _entranceSprite = Resources.Load<Sprite>("Dungeon/DungeonEntrance");
@@ -281,22 +302,12 @@ namespace ARPG.Dungeon
                 Debug.LogError("[Dungeon] Dungeon entrance or chest sprite is missing from Resources/Dungeon.");
         }
 
-        private void ReturnMarker(GameObject view)
-        {
-            if (view == null) return;
-            view.SetActive(false);
-            _markerPool.Push(view);
-        }
-
         private void ResetEntrances()
         {
-            _entranceKeys.Clear();
-            _entranceKeys.AddRange(_entranceViews.Keys);
-            for (int i = 0; i < _entranceKeys.Count; i++) UnityEngine.Object.Destroy(_entranceViews[_entranceKeys[i]]);
-            while (_markerPool.Count > 0) UnityEngine.Object.Destroy(_markerPool.Pop());
+            RemoveAllEntrances();
             _entranceSprite = null;
             _chestSprite = null;
-            _entranceViews.Clear(); _villageSlots.Clear(); _slotsById.Clear(); _ownersById.Clear();
+            _villageSlots.Clear(); _slotsById.Clear(); _ownersById.Clear();
             _entrancesByChunk.Clear(); _visibleChunks.Clear(); _entranceKeys.Clear(); _villageCursor = 0;
         }
     }

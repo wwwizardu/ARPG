@@ -6,6 +6,7 @@ sources:
   - Docs/combat/ITEM_ENCHANTMENT_DESIGN.md
   - Docs/combat/WEAPON_SKILL_RANGE_DESIGN.md
   - Docs/combat/WEAPON_PROGRESSION_DESIGN.md
+  - Docs/combat/SKILLBOOK_DESIGN.md
   - Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md
   - Assets/Scripts/Common/Component/SkillAttackProfileComponent.cs
   - Assets/Scripts/Common/Component/StatComponent.cs
@@ -82,7 +83,7 @@ status: implemented-contract-active-validation-pending
 최종 타격반경 = 스킬 기본 타격반경 × 무기 배율 × 범위 증가 배율
 ```
 
-위 식의 정본은 `WEAPON_SKILL_RANGE_DESIGN.md`다. 부채꼴 각도는 유지하고 무기 범위를 사용하지 않는 스킬의 무기 배율은 1.0으로 둔다. 무기별 실제 배율·옵션 수치·스킬 목록·고정 거리 추가 옵션은 후속 결정이다. [src: Docs/combat/WEAPON_SKILL_RANGE_DESIGN.md §확정 규칙·§후속 결정]
+위 식의 정본은 `WEAPON_SKILL_RANGE_DESIGN.md`다. 부채꼴 각도는 유지하고 무기 범위를 사용하지 않는 스킬의 무기 배율은 1.0으로 둔다. 계열별 초기 배율의 상태는 무기 성장 설계를 따르며, 최종 배율·범위 옵션 수치·적용 스킬 목록·고정 거리 추가 옵션은 후속 결정이다. [src: Docs/combat/WEAPON_SKILL_RANGE_DESIGN.md §확정 규칙·§후속 결정, Docs/combat/WEAPON_PROGRESSION_DESIGN.md §주문 무기 성장 확정 설계]
 
 구현 시 사용·AI 교전 사거리와 실제 타격 형상을 구분하고, 거리 제한·판정·공격 예고가 같은 계산을 사용하도록 연결한다. 캐릭터 Collider 크기는 범위 배율로 확대하지 않는다. [src: Docs/combat/WEAPON_SKILL_RANGE_DESIGN.md §현행 코드와 구현 경계]
 
@@ -94,9 +95,19 @@ status: implemented-contract-active-validation-pending
 
 쌍수 계산 초기안은 각 무기의 고유 강화 반영 후 피해를 `(오른손 + 왼손) × 0.7`로 합성하고 APS·무기 기본 치명타·도달거리 배율은 산술평균한다. 기존 타격 횟수와 타격당 치명타 한 번을 유지하며 별도 쌍수 공속 보너스는 없다. 동일 수치 두 자루의 무기 피해 항은 한 자루 대비 40% 증가한다. 평균 도달거리 배율을 기존 범위 식에 대입하며 공통 옵션과 스킬 계수의 계산 경로는 유지한다. 이 초기안은 **확정·미구현**이며 현행 무기 조회는 오른손 우선 경로다. [src: Docs/combat/WEAPON_PROGRESSION_DESIGN.md §쌍수 계산 초기안·§쌍수 구현의 현행 기준, Docs/combat/WEAPON_SKILL_RANGE_DESIGN.md §확정 규칙]
 
-현재 장비를 이름 기준으로 대응하면 한손검·단검·도끼 등은 Tier 1·2·3에 장비가 있고 대검·석궁은 Tier 1, 투창은 Tier 2·3 장비가 비어 있다. 기존 표창 행과 연결 데이터는 아직 삭제하지 않았다. 초·중·후반 3구간은 점검용 틀이며 최종 구간 수, 계열별 수치·고유 효과·신규 장비 목록은 미확정이다. [src: Docs/combat/WEAPON_PROGRESSION_DESIGN.md §현재 장비의 계열별 배치·§무기 성향 초안·§이번 정리의 범위]
+현재 장비를 이름 기준으로 대응하면 한손검·단검·도끼 등은 Tier 1·2·3에 장비가 있고 대검·석궁은 Tier 1, 투창은 Tier 2·3 장비가 비어 있다. 기존 표창 행과 연결 데이터는 아직 삭제하지 않았다. 초·중·후반 3구간은 점검용 틀이며 근접 수치는 초안, 원거리는 임시 기준이다. 최종 구간 수·전체 계열의 최종 밸런스·추가 고유 효과·신규 장비 목록은 미확정이다. [src: Docs/combat/WEAPON_PROGRESSION_DESIGN.md §현재 장비의 계열별 배치·§근접 4종 기준 성능표 초안·§원거리 3종 임시 기준 성능표·§이번 정리의 범위]
+
+지팡이·완드는 같은 날 사용자 확정으로 주문 강화용 고정 Implicit으로 성장시킨다. 초기 기준은 지팡이 주문 피해 증가 +60%·고정 시전 속도 증가 없음·거리 배율 1.30, 완드 한 자루 주문 피해 증가 +20%·시전 속도 증가 +10%·거리 배율 1.00이다. 상위 장비는 고정 주문 피해 증가 수치를 높이며 구간별 실제 값은 후속 결정이다. 이 설계는 **확정·미구현**이다. [src: Docs/combat/WEAPON_PROGRESSION_DESIGN.md §주문 무기 성장 확정 설계]
+
+완드 쌍수의 주문 피해 증가·시전 속도 옵션은 글로벌 합산하여 동일 완드 두 개가 +40%·+20%를 제공한다. 무기 피해 ×0.7과 APS 평균은 Attack용 무기 수치에 적용하고 주문 강화 옵션에는 적용하지 않는다. 주문 기본 치명타·시전 시간은 스킬 값을 유지하고 무기 범위를 사용하는 주문의 거리 배율은 두 무기의 평균을 사용한다. 현행 시전 속도 소비는 구현돼 있지만 주문 피해 % 증가 옵션과 고정 주문 옵션 배치·무기 범위 연결은 구현 과제다. [src: Docs/combat/WEAPON_PROGRESSION_DESIGN.md §주문 무기 성장 확정 설계, Assets/Scripts/Common/System/System_SkillAttackProfileCalculation.cs, Assets/Scripts/Common/System/System_Skill.cs]
 
 계열별 전체 배치표와 다음 작업 순서는 [무기 성장 정리](../Docs/combat/WEAPON_PROGRESSION_DESIGN.md)에 있다. [src: Docs/combat/WEAPON_PROGRESSION_DESIGN.md]
+
+## 스킬북 내부 스킬 레벨 성장 계획
+
+2026-10-05 사용자 확정으로 스킬북 안의 스킬 레벨을 **책마다 개별 저장하고 골드로 올리는 방식**을 사용하며 아직 미구현이다. 책 등급은 기존 페이지 용량·슬롯을 담당하고 스킬 레벨은 해당 책을 장착한 슬롯의 피해 성장을 담당한다. 동일 SkillId의 책도 레벨을 공유하지 않으며 장착·해제·이동·거래·저장 후 그 책의 레벨과 페이지를 유지한다. 책 등급 승급이나 책 간 레벨 이전은 초기 계획에 포함하지 않는다. [src: Docs/combat/WEAPON_PROGRESSION_DESIGN.md §스킬북 내부 스킬 레벨 성장 계획]
+
+기존 피해 배율 초안의 +0~+10은 스킬 Lv.1~Lv.11로 대응시키고, 새 책과 레벨 필드가 없는 기존 책은 Lv.1로 시작하는 계획이다. 최대 레벨·공격과 주문의 레벨별 피해 배율·전체 성장 비교는 수치 초안이며 골드 금액·수급·레벨업 시점은 추후 결정이다. 저장·슬롯별 런타임 레벨·피해 프로필·골드 갱신·UI·기존 진단의 순서로 구현한다. 공용 SkillTable의 Tier·책 생성 후보와 AI 기본 스킬에는 책 레벨을 반영하지 않는다. [src: Docs/combat/WEAPON_PROGRESSION_DESIGN.md §스킬 레벨별 피해 배율 초안·§피해 적용 항과 계산 순서·§구현 순서와 완료 조건, Docs/combat/SKILLBOOK_DESIGN.md §2.7·§2.8]
 
 ## 책임 경계
 

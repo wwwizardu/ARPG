@@ -1,7 +1,8 @@
 # 세이브 파티션 설계
 
 > **상태 (2026-10-05)**: 파티션 저장과 S-1~S-3 상시 스냅샷 구현 완료·핵심 기능 검증 통과. 그 위에 시뮬 6개 파트 묶음·증분 파일 쓰기를 구현했다(§5, SAVE_SNAPSHOT_DESIGN §13). S-2/S-3 장기 시뮬·실제 상점/던전 통합 비용 실측은 후속이다. 이번 개정의 진단 결과는 스냅샷 문서 §13.2에 기록한다.
-> **기억 저장 개정 (2026-10-04)**: 현재 WorldDataVersion은 **19**. 공동 활동 통계·최신 개인 사연·과거 동료 기억을 저장하고, `NpcState`와 `NpcSocial`은 부분 저장에서도 같은 revision으로 커밋한다. 기억 진단은 통과했으며 전체 플레이 모드·장애 주입 검증은 여전히 후속이다(§9).
+> **내러티브 파트 개정 (2026-10-10)**: 현재 WorldDataVersion은 **21**. NPC 행적·반응의 진행 원장 `narrative` 파트(`SaveScope.Narrative`)를 더했다(§2·§3·§5·§8). 원장 안의 형식·dirty 그룹은 [NPC_NARRATIVE_CONTENT_DESIGN §7](../npc/NPC_NARRATIVE_CONTENT_DESIGN.md)을 따른다.
+> **기억 저장 개정 (2026-10-04)**: WorldDataVersion을 **19**로 올렸다. 공동 활동 통계·최신 개인 사연·과거 동료 기억을 저장하고, `NpcState`와 `NpcSocial`은 부분 저장에서도 같은 revision으로 커밋한다. 기억 진단은 통과했으며 전체 플레이 모드·장애 주입 검증은 여전히 후속이다(§9).
 >
 > **범위**: 파일 분할, 저장 범위, NPC 샤딩, 원자 커밋, 레거시 마이그레이션.
 > NPC 기본 장비는 기본 아이템 행 번호로 저장한다(2026-10-03). 그 밖의 별도 compact DTO/시드 재구성은 후속이다. [src: Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §11]
@@ -31,6 +32,8 @@ Saved/Slot_0/
     player.r{revision}.{guid}.json
     world.r{revision}.{guid}.json
     map.r{revision}.{guid}.json
+    dungeons.r{revision}.{guid}.json
+    narrative.r{revision}.{guid}.json
     villages.r{revision}.{guid}.json
     buildings.r{revision}.{guid}.json
     chronicle.r{revision}.{guid}.json
@@ -51,6 +54,8 @@ Saved/Slot_0/
 | Player | `PlayerData` 목록, 현재 플레이어 인덱스, 플레이어↔NPC 관계 |
 | World | WorldData 버전, 다음 `ItemInstanceId` |
 | Map | 월드 드랍 아이템, 타일 변경 |
+| Dungeons | `DungeonSaveRoot`: 던전 슬롯·세대·입구, 방문한 던전의 맵·방·배치·몬스터 상태·처치·클리어·드롭 ([DUNGEON_RUNTIME_DESIGN](../map/DUNGEON_RUNTIME_DESIGN.md)) |
+| Narrative | `NarrativeSaveRoot`: 콘텐츠 실행 인스턴스(던전 소문 사건의 대상·소문 주인·진행·보고·보답, 소망의 주인·대상 아이템·진행·전달 반응·보답), 정의·정책 해시 스냅샷, 세대 선정 기록 ([NPC_NARRATIVE_CONTENT_DESIGN §7.2](../npc/NPC_NARRATIVE_CONTENT_DESIGN.md)) |
 | Villages | `VillageData` 목록 |
 | Buildings | `BuildingSaveData` 딕셔너리 |
 | Chronicle | 정착지 연대기와 왕국 스냅샷 |
@@ -58,7 +63,7 @@ Saved/Slot_0/
 | NpcMeta | 목표 인원·보충 시각·순회 커서 |
 | NpcSocial | NPC↔NPC 현재 호감도·유형 관계, 쌍당 공동 활동 통계(`NpcAffinityEntry.SharedActivities`) |
 | NpcParties | 파티 리더·멤버·공통 활동 상태 |
-| NpcState 00~31 | 개별 `NpcSaveData`: 중요 Deeds·사망 관계 기억·최신 사연 요약/참조(`PersonalStories`)·과거 동료 활동 기억(`SharedActivityMemories`) |
+| NpcState 00~31 | 개별 `NpcSaveData`: 중요 Deeds·사망 관계 기억·최신 사연 요약/참조(`PersonalStories`)·과거 동료 활동 기억(`SharedActivityMemories`)·부탁 칸(`NarrativeRequest`)·최근 원정 부상 던전(`LastWoundDungeonId`) |
 
 플레이어↔NPC 관계는 단일 플레이어 전제의 기존 WorldData 필드에서 Player 파티션으로
 이동한다. 런타임 소유자는 계속 `NpcManager`지만 저장 범위는 플레이어 진행과 일치한다.
@@ -81,12 +86,18 @@ Saved/Slot_0/
 | 아이템 획득, 장비·스킬북·스킬 페이지 변경 | Player + World(ItemInstanceId) |
 | 상점 구매·판매 | Player + World + Simulation(여섯 시뮬 파트) |
 | NpcState·NpcSocial·NpcParties·NpcMeta·Villages·WorldSim 중 하나라도 요청 | Simulation 전체, 변경 없는 파일 참조 재사용 |
+| 던전 소문 부탁 표시, 소망 털어놓기 표시, 보고·알림·소망 전달 표시 확정, 후속 소개 확정(소개한 NPC의 부탁 칸) | Narrative + Simulation(Narrative가 NpcState를 끌어온다) |
+| 소문 보고(반응·관계·의뢰 보답), 소망 아이템 전달(소모·반응·관계·의뢰 보답) | Player + World + Narrative + Simulation |
+| `PlayerDeed` 소문 반응 | Player + World + Simulation |
+| 던전 보스 완료 | 기존 완료 범위 + Narrative(소문 해결·미해결 종료를 같은 manifest로) |
 | 거점·메뉴 수동 저장, 최초 월드 저장 | 전체 파티션 |
 
 NPC 죽음처럼 NPC 상태·관계·파티·연대기가 함께 바뀌는 체크포인트는 manifest 한 revision에
 묶인다. 향후 자동저장을 추가할 때도 변경된 샤드와 연관 파티션을 같은 revision으로 요청한다.
 
 **현재 결합 계약(2026-10-05)**: 저장 스냅샷을 잡기 전에 `SaveScope.Simulation`의 여섯 파트 중 하나라도 요청되면 묶음 전체로 확장한다. 여섯 상태는 같은 메인 스레드에서 캡처되어 하나의 manifest 교체로 확정된다. `Chronicle`은 자동으로 추가하지 않는다. 미저장 NPC 던전 완료가 있으면 `Dungeons` 또는 묶음 요청에 Dungeons와 Simulation 전체를 함께 싣고, 캡처한 완료 revision만 성공 후 확정한다. 이관으로 전체 저장이 필요한 상태면 요청과 관계없이 `All`로 승격한다. 기존 파티 경로 위치 복원(S13)과 State/Social 공동 활동 일관성도 이 묶음에 포함된다. [src: Assets/Scripts/Manager/DataManager_PartitionedSave.cs, Assets/Scripts/Data/SavePartitionData.cs]
+
+**Narrative 결합(2026-10-10)**: NPC의 부탁 칸과 `PlayerDeed` 소문(NpcState)이 원장의 사건(Narrative)을 가리키므로, Narrative를 싣는 저장은 NpcState도 싣고 그래서 시뮬 묶음 전체가 된다. 즉시 저장하지 않는 사건 변경(새 세대 선정·소문 주인 선정·미해결 종료)은 NPC 던전 완료와 같은 방식으로 처리한다. Dungeons나 시뮬 묶음을 싣는 다음 저장에 Narrative와 시뮬 묶음을 붙이고, 캡처한 Narrative revision만 성공 뒤 확정한다. [src: Assets/Scripts/Manager/DataManager_PartitionedSave.cs, Assets/Scripts/Manager/NpcManager_Narrative.cs, Assets/Scripts/Manager/NpcManager_NarrativeDialogue.cs, Assets/Scripts/Dungeon/DungeonManager.cs]
 
 **증분 파일 쓰기**: 프레임 정리와 독립된 캐시/샤드 세대를 `DataManager`의 마지막 성공 세대와 비교한다. 같으면 기존 참조를 재사용하고 JSON 직렬화를 건너뛴다. 후보 파트도 schema·JSON 길이·SHA-256이 기존과 같으면 새 파일을 만들지 않는다. 성공 후 캡처 세대만 확정하며 저장 도중 추가 변경·실패한 변경은 다음 요청에 남긴다. Reset/Load는 성공 세대를 비운다. 여섯 파트의 파일 생성 revision은 서로 달라도 하나의 manifest가 함께 선택한 전체 상태다. 계약·진단은 [SAVE_SNAPSHOT_DESIGN §13](SAVE_SNAPSHOT_DESIGN.md)을 따른다. [src: Assets/Scripts/Manager/DataManager_PartitionedSave.cs]
 
@@ -124,11 +135,15 @@ manifest가 없고 `WorldData.json`/`PlayerData.json`이 있으면 기존 버전
 수행한 뒤 로딩 화면에서 전체 파티션 revision 1을 작성한다. manifest 커밋이 성공해도 기존
 두 파일과 backup은 자동 삭제하지 않아 수동 복구 경로를 보존한다.
 
-**현재 버전 19의 NPC 기억 이관**: 구 `PartyAffinityChanged` 양쪽 사본을 한 쌍의 통계로 옮기며 현재 호감도는 보존한다. 구 기록에 없는 사냥/던전 횟수는 추정하지 않고 미집계 표시를 남긴다. 구 절도 피해 기록은 최신 1건으로 압축하고 중요 Deeds·사망 관계 기억은 보존한다. 기존 장비 교체(16 → 17)도 별도의 이전 마이그레이션으로 유지한다. [src: Assets/Scripts/Manager/DataManager.cs, Assets/Scripts/Manager/NpcManager_SharedActivities.cs, Assets/Scripts/Npc/NpcSaveData_PersonalStories.cs]
+**버전 19의 NPC 기억 이관**: 구 `PartyAffinityChanged` 양쪽 사본을 한 쌍의 통계로 옮기며 현재 호감도는 보존한다. 구 기록에 없는 사냥/던전 횟수는 추정하지 않고 미집계 표시를 남긴다. 구 절도 피해 기록은 최신 1건으로 압축하고 중요 Deeds·사망 관계 기억은 보존한다. 기존 장비 교체(16 → 17)도 별도의 이전 마이그레이션으로 유지한다. [src: Assets/Scripts/Manager/DataManager.cs, Assets/Scripts/Manager/NpcManager_SharedActivities.cs, Assets/Scripts/Npc/NpcSaveData_PersonalStories.cs]
 
 기존 파티션 세이브에서 기억 이관이 발생하면 다음 저장을 전체 저장으로 승격해 State·Social·World 버전을 함께 커밋한다. 로드 단계에서 기존 파티션 파일을 바로 덮어쓰지 않는다. `PersonalStories`가 null이면 생략하고, 빈 과거 동료 기억 목록과 기본값 필드도 생략한다. 아이템·던전 완료·사별 참조 인덱스는 로드 때 항상 다시 만들므로 저장하지 않는다. 실제 백그라운드 저장 복사도 JSON 기본값 생략 설정을 따른다. [src: Assets/Scripts/Npc/NpcSaveData.cs, Assets/Scripts/Manager/NpcManager.cs, Assets/Scripts/Manager/DataManager.cs, Assets/Scripts/Manager/DataManager_PartitionedSave.cs, Assets/Scripts/Data/SaveDtoSnapshot.cs]
 
+**버전 21의 narrative 파트(2026-10-10)**: 21 미만 세이브는 narrative 파트가 없어도 정상이며 빈 원장으로 연다. 버전 이관이 일어났으므로 첫 저장은 `All`로 승격해 파트를 처음 쓴다. 21 이상인데 파트가 없거나, 읽을 수 없거나, 원장 정합성 검사(`NarrativeSaveValidation`)를 통과하지 못하면 로드 실패로 처리한다. dungeons 파트의 15 이상 검사와 같은 방식이다. 구 던전 시나리오 필드가 남은 개발 세이브는 그 필드만 무시하고 연다. [src: Assets/Scripts/Manager/DataManager.cs, Assets/Scripts/Manager/DataManager_PartitionedSave.cs, Assets/Scripts/Npc/Narrative/NarrativeSaveValidation.cs, Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md §7.7]
+
 ## 9. 검증 현황과 후속 검증
+
+2026-10-10 narrative 파트: `ARPG/Dungeon/Run Storage and Generation Diagnostics`에서 저장 묶음 42/42(narrative 루트·부탁 칸·부상 던전 묶음 포함), 21 미만 빈 원장·21 이상 파트 누락/손상 거절, 부탁·완료·보고 저장 실패 주입 롤백이 PASS다. 실제 플레이 저장 확인은 남았다. 상세는 [NPC_NARRATIVE_CONTENT_DESIGN §8.1](../npc/NPC_NARRATIVE_CONTENT_DESIGN.md). [src: Assets/Scripts/Editor/DungeonRuntimeDiagnostics.cs, Assets/Scripts/Editor/DungeonRuntimeDiagnostics_Scenarios.cs, Assets/Scripts/Editor/NpcSaveSnapshotDiagnostics_Grouped.cs]
 
 2026-10-05 묶음·증분 개정: Unity 및 Runtime/Editor 빌드 오류 0(기존 경고 22/13개), Village 계약 17/17·Simulation 계약 28/28·실제 S-3 JSON/SHA-256/파일 참조 왕복 4/4 PASS. 여섯 범위 결합·파일 재사용·단일 샤드/마을 변경·삭제·저장 중 추가 변경/큐·네 실패 지점/재시도·Reset 취소·공유 파일을 포함한 previous 전체 읽기는 1,916개 검사 PASS다. 기존 DungeonRuntimeDiagnostics의 전체 저장·복구·스케줄링 진단도 PASS. 1일 복제 시뮬은 NPC·마을·S-3 누락 0·에러 0·라이브 해시 동일이며, 30일 및 실제 플레이 통합 비용 실측은 남긴다. 조건·표본·한계는 [SAVE_SNAPSHOT_DESIGN §13.2](SAVE_SNAPSHOT_DESIGN.md)를 따른다. [src: Assets/Scripts/Editor/NpcSaveSnapshotDiagnostics.cs, Assets/Scripts/Editor/NpcAmbitionSimDiagnostics.cs, Assets/Scripts/Editor/DungeonRuntimeDiagnostics.cs]
 

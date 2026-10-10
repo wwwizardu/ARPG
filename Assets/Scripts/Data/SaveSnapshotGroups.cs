@@ -8,7 +8,8 @@ namespace ARPG.Data
     {
         Identity = 1, Location = 2, Condition = 4, Activity = 8, Wallet = 16,
         Inventory = 32, Equipment = 64, Rumors = 128, Theft = 256, Deeds = 512,
-        Memories = 1024, Stories = 2048, All = 4095,
+        // NarrativeRequest(부탁 칸)는 구 ScenarioKnowledge 자리(4096)를 이어받았다 (NPC_NARRATIVE_CONTENT_DESIGN §7.2).
+        Memories = 1024, Stories = 2048, NarrativeRequest = 4096, All = 8191,
         // System_NpcSim activity state transitions (and the diagnostics that replay them) mark these together.
         ActivityTransition = Activity | Location | Condition,
     }
@@ -33,6 +34,13 @@ namespace ARPG.Data
         Identity = 1, Layout = 2, Progress = 4, Monsters = 8, Drops = 16, Tiles = 32, All = 63,
     }
 
+    /// <summary>narrative 파트 갱신 묶음 (NPC_NARRATIVE_CONTENT_DESIGN §7.3). 인스턴스·정의·정책·선정 기록이 같은 묶음 함수를 쓴다.</summary>
+    [Flags]
+    public enum NarrativeSaveGroup : ulong
+    {
+        Identity = 1, Target = 2, Progress = 4, Introductions = 8, Reports = 16, Rewards = 32, Continuations = 64, All = 127,
+    }
+
     [Flags]
     public enum WorldSaveGroup : ulong
     {
@@ -51,7 +59,7 @@ namespace ARPG.Data
         public static ulong Npc(string field) => (ulong)(field switch
         {
             "PositionX" or "PositionY" or "VillageId" or "IsActive" or "AbandonedSiteSinceGameTime" => NpcSaveGroup.Location,
-            "Condition" or "WoundCount" or "LastWoundGameTime" or "LastWoundActivity" => NpcSaveGroup.Condition,
+            "Condition" or "WoundCount" or "LastWoundGameTime" or "LastWoundActivity" or "LastWoundDungeonId" => NpcSaveGroup.Condition,
             "Activity" or "LastSimGameTime" => NpcSaveGroup.Activity,
             "Gold" or "LastTradeGameTime" => NpcSaveGroup.Wallet,
             "Inventory" => NpcSaveGroup.Inventory,
@@ -61,6 +69,7 @@ namespace ARPG.Data
             "Deeds" => NpcSaveGroup.Deeds,
             "DeceasedRelations" or "SharedActivityMemories" or "Sentiments" => NpcSaveGroup.Memories,
             "PersonalStories" => NpcSaveGroup.Stories,
+            "NarrativeRequest" => NpcSaveGroup.NarrativeRequest,
             _ => NpcSaveGroup.Identity,
         });
 
@@ -98,11 +107,23 @@ namespace ARPG.Data
         public static ulong Dungeon(string field) => (ulong)(field switch
         {
             "Rooms" or "Corridors" or "Objects" => DungeonSaveGroup.Layout,
-            "Completed" or "KilledObjects" or "OpenedChests" => DungeonSaveGroup.Progress,
+            "Completed" or "KilledObjects" or "OpenedChests" or "BossKilledByPlayerParty" => DungeonSaveGroup.Progress,
             "Monsters" => DungeonSaveGroup.Monsters,
             "Drops" => DungeonSaveGroup.Drops,
             "TileModifications" => DungeonSaveGroup.Tiles,
             _ => DungeonSaveGroup.Identity,
+        });
+        public static ulong Narrative(string field) => (ulong)(field switch
+        {
+            "DungeonId" or "VillageId" or "SlotIndex" or "Generation" or "TargetMonsterId" or
+                "HasEntranceContext" or "EntranceX" or "EntranceY" or "TargetItemId" or "OwnerNpcId" => NarrativeSaveGroup.Target,
+            "Progress" or "WishState" or "ProgressGameTime" or "Ended" or "EndNoticePending" or "Revision" => NarrativeSaveGroup.Progress,
+            "RequesterNpcId" or "RequestedGameTime" or "IntroducedFromInstanceId" => NarrativeSaveGroup.Introductions,
+            "FollowUpInstanceId" or "FollowUpState" => NarrativeSaveGroup.Continuations,
+            "Reported" or "ReportNpcId" or "ReportRelevance" or "ReactionRuleId" or "Reaction" or "Response" or
+                "AffinityDelta" or "TrustDelta" or "IntimacyDelta" or "ReportGameTime" or "ReportDisplayed" => NarrativeSaveGroup.Reports,
+            "RewardGold" or "RewardRefused" => NarrativeSaveGroup.Rewards,
+            _ => NarrativeSaveGroup.Identity,
         });
     }
 }

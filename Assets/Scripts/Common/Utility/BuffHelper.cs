@@ -29,25 +29,25 @@ namespace ARPG.Utility
             return true;
         }
 
-        public static int AddBuffByEffectType(int targetEntityId, GE.BuffEffectType effectType, float durationOverride = 0f)
+        public static int AddBuffByEffectType(int targetEntityId, GE.BuffEffectType effectType, float durationOverride = 0f, int sourceEntityId = -1)
         {
             if (TryGetBuffTableByEffectType(effectType, out BuffTable buffTable) == false)
                 return -1;
 
             float duration = durationOverride > 0f ? durationOverride : buffTable.Duration;
-            return AddBuff(targetEntityId, buffTable.Id, duration);
+            return AddBuff(targetEntityId, buffTable.Id, duration, sourceEntityId);
         }
 
-        public static int AddDamageBasedBuffByEffectType(int targetEntityId, GE.BuffEffectType effectType, float dealtDamage, float durationOverride = 0f)
+        public static int AddDamageBasedBuffByEffectType(int targetEntityId, GE.BuffEffectType effectType, float dealtDamage, float durationOverride = 0f, int sourceEntityId = -1)
         {
             if (TryGetBuffTableByEffectType(effectType, out BuffTable buffTable) == false)
                 return -1;
 
             float duration = durationOverride > 0f ? durationOverride : buffTable.Duration;
-            return AddDamageBasedBuff(targetEntityId, buffTable.Id, dealtDamage, duration);
+            return AddDamageBasedBuff(targetEntityId, buffTable.Id, dealtDamage, duration, sourceEntityId);
         }
 
-        public static int AddDamageBasedBuff(int targetEntityId, int buffTableID, float dealtDamage, float duration)
+        public static int AddDamageBasedBuff(int targetEntityId, int buffTableID, float dealtDamage, float duration, int sourceEntityId = -1)
         {
             if (dealtDamage <= 0f)
                 return -1;
@@ -59,7 +59,7 @@ namespace ARPG.Utility
                 return -1;
             }
 
-            int buffEntityId = AddBuff(targetEntityId, buffTableID, duration);
+            int buffEntityId = AddBuff(targetEntityId, buffTableID, duration, sourceEntityId);
             if (buffEntityId == -1)
                 return -1;
 
@@ -75,7 +75,7 @@ namespace ARPG.Utility
         /// <param name="buffTableID">버프 테이블 ID</param>
         /// <param name="duration">지속 시간 (초)</param>
         /// <returns>버프 Entity ID (신규 생성 또는 기존), 실패 시 -1</returns>
-        public static int AddBuff(int targetEntityId, int buffTableID, float duration)
+        public static int AddBuff(int targetEntityId, int buffTableID, float duration, int sourceEntityId = -1)
         {
             // 1. 타겟 엔티티 유효성 검증
             if (AR.s.Entity.IsEntityRegistered(targetEntityId) == false)
@@ -107,6 +107,8 @@ namespace ARPG.Utility
                     
                     existingBuff.RemainTime = duration; // 지속 시간 갱신
                     existingBuff.Duration = duration;
+                    // Stacks are merged by type; the latest applying source owns the refreshed tick.
+                    existingBuff.Credit = Skill.Combat.CombatCredit.Resolve(sourceEntityId);
                     AR.s.Component.SetComponent(buffEntityId, existingBuff);
 
                     Debug.Log($"[BuffHelper] Buff stacked - BuffEntityId: {buffEntityId}, Target: {targetEntityId}, TableID: {buffTableID}, StackCount: {existingBuff.StackCount}, Duration: {duration}");
@@ -134,6 +136,7 @@ namespace ARPG.Utility
 
             // 5. 신규 버프 - BuffInstance 컴포넌트 추가 (테이블 데이터 복사)
             BuffInstance newBuff = new BuffInstance(targetEntityId, buffTableID, duration);
+            newBuff.Credit = Skill.Combat.CombatCredit.Resolve(sourceEntityId);
 
             // 틱 데이터를 테이블에서 복사
             newBuff.TickInterval = buffTable.TickInterval;

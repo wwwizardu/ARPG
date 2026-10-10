@@ -6,6 +6,7 @@ using ARPG.Base;
 using ARPG.Component;
 using ARPG.Data;
 using ARPG.Manager;
+using ARPG.Map;
 using ARPG.Npc;
 using ARPG.Tables;
 using ARPG.Utility;
@@ -607,6 +608,62 @@ namespace ARPG.Factory
 
                 CreateSkill(entityId, i, skillIds[i]);
             }
+        }
+
+        /// <summary>
+        /// 상호작용 전용 정적 엔티티(던전 상자·입구) 생성. 범용 프리팹에 스프라이트만 붙이고
+        /// HP·진영·AI·그림자는 붙이지 않으므로 전투 대상 조회에 잡히지 않는다.
+        /// 도메인 컴포넌트와 표시 자식은 소유 매니저가 붙인다. 생성 중 맵 컨텍스트가 바뀌면 (-1, null).
+        /// </summary>
+        /// <param name="map">엔티티가 속할 맵. 이 맵의 컨텍스트가 바뀌면 생성을 버린다</param>
+        /// <param name="position">루트 위치 (상호작용 판정 기준)</param>
+        /// <param name="visualOffset">스프라이트를 루트에서 띄울 로컬 오프셋</param>
+        public static async UniTask<(int entityId, EntityBase? entity)> CreateStaticEntity(MapManager map,
+            Vector3 position, Sprite? sprite, Vector2 visualOffset, int sortingOrder, Transform? parent = null)
+        {
+            using var contextLoad = map.Context.BeginLoad();
+            GameObject obj = await Addressables.InstantiateAsync(ENTITY_PREFAB_KEY, position, Quaternion.identity, parent).ToUniTask();
+            if (obj == null)
+            {
+                Debug.LogError("[EntityFactory] Failed to instantiate static entity prefab");
+                return (-1, null);
+            }
+            if (contextLoad.IsCurrent == false)
+            {
+                Addressables.ReleaseInstance(obj);
+                return (-1, null);
+            }
+
+            EntityBase? entity = obj.GetComponent<EntityBase>();
+            if (entity == null)
+            {
+                Debug.LogError("[EntityFactory] EntityBase not found on static entity prefab");
+                Addressables.ReleaseInstance(obj);
+                return (-1, null);
+            }
+
+            entity.SetupEntityId();
+            if (entity.SpriteRenderer != null)
+            {
+                entity.SpriteRenderer.sprite = sprite;
+                entity.SpriteRenderer.sortingOrder = sortingOrder;
+            }
+            if (entity.Visual != null)
+                entity.Visual.transform.localPosition = visualOffset;
+            return (entity.EntityId, entity);
+        }
+
+        /// <summary>
+        /// 생성 직후 소유자가 더 이상 필요로 하지 않게 된 정적 엔티티를 컴포넌트 부착 전에 반환한다.
+        /// </summary>
+        public static void ReleaseStaticEntity(EntityBase entity)
+        {
+            if (entity.IsCurrentEntity == true)
+            {
+                entity.OnEntityDestroy();
+                AR.s.Entity.DestroyEntity(entity.EntityId);
+            }
+            Addressables.ReleaseInstance(entity.gameObject);
         }
 
         /// <summary>

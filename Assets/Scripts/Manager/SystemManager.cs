@@ -137,6 +137,9 @@ namespace ARPG.Systems
             RegisterSystems(new System_DungeonStreaming());
             RegisterSystems(new System_DungeonCheckpoint());
 
+            // Priority 520 (Update, 0.2초): 던전 입구 소문 징후 자막 판단. 월드 전용 표시 단계
+            RegisterSystems(new System_DungeonEntranceSign());
+
             // Priority 130: Monster Spawn System (FixedUpdate) - 거리 링/슬롯 스폰 + Warm 청크 정리 (0.5초 간격)
             System_MonsterSpawn monsterSpawnSystem = new();
             RegisterSystems(monsterSpawnSystem);

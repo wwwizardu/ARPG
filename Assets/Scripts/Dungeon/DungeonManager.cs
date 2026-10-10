@@ -115,6 +115,11 @@ namespace ARPG.Dungeon
                         return false;
                     }
                     record = DungeonLayout.Generate(AR.s.Data.WorldSeed, villageSlots.VillageId, slot, table);
+                    if (EnsureNarrativeTargetPlacement(record) == false)
+                    {
+                        Notify("소문에 나온 몬스터를 배치할 수 없어 입장을 취소했습니다.");
+                        return false;
+                    }
                     created = true;
                 }
                 if (DungeonLayout.Validate(record, out string error) == false)
@@ -258,6 +263,7 @@ namespace ARPG.Dungeon
                     player.CurrentHp = Mathf.Max(1, stat.FinalMaxHp);
                 _playerSaveOverride = true;
                 staged = true;
+                // 소문 해결은 보스 완료 커밋에서 이미 저장했다. 퇴장은 원장을 바꾸지 않는다 (NPC_NARRATIVE_CONTENT_DESIGN §7.4).
                 if (record.Completed == true) AR.s.Data.Dungeons.Dungeons.Remove(record);
                 // 퇴장(ESC·사망 공통) 시 동행 종료를 퇴장 커밋(World)에 함께 싣는다 (NPC_COMBAT_DESIGN §4.5)
                 companionId = AR.s.Npc.StageCompanionDungeonExit();
@@ -305,7 +311,7 @@ namespace ARPG.Dungeon
             finally { if (lifetime == _lifetime) { _playerSaveOverride = false; _busy = false; } }
         }
 
-        public bool HandleDeath(int entityId)
+        public bool HandleDeath(int entityId, KillCreditComponent credit = default)
         {
             if (IsInside == false) return false;
             if (entityId == AR.s.Data.CurrentPlayerEntityId)
@@ -316,7 +322,12 @@ namespace ARPG.Dungeon
             if (_components.TryGetComponent<DungeonObjectComponent>(entityId, out var obj) == false ||
                 obj.DungeonId != _active.DungeonId) return false;
             AR.s.Data.MarkDungeonSaveDirty(_active, DungeonSaveGroup.Progress);
-            if (_active.KilledObjects.Add(obj.ObjectId) == true && obj.IsBoss == true) _completionPending = true;
+            // 보스 처치 공로(플레이어·동행)만 기록한다. 소문 대상 몬스터의 처치는 진행 판정에 쓰지 않는다 (NPC_NARRATIVE §3.1).
+            if (_active.KilledObjects.Add(obj.ObjectId) && obj.IsBoss)
+            {
+                _active.BossKilledByPlayerParty = credit.PlayerParty;
+                _completionPending = true;
+            }
             return false;
         }
 
@@ -338,16 +349,30 @@ namespace ARPG.Dungeon
                     _active.ReplacementCooldownHours, out var transaction) == false) return false;
                 using (transaction)
                 {
-                    if (await CommitAsync(scope | SaveScope.Player | SaveScope.World |
-                                          SaveScope.NpcState | SaveScope.Dungeons) == false)
+                    // 보스 처치 결과를 공통 원장에 같은 커밋으로 기록한다. 플레이어 측 처치면 소문 해결과 동행의 행적 소문,
+                    // 아니면 미해결 종료다. 맵을 지우기 전에 해결 근거와 입구 위치를 원장에 남긴다 (NPC_NARRATIVE_CONTENT_DESIGN §7.4).
+                    var narrative = AR.s.Npc.StageDungeonCompletion(_active, slot.EntranceX, slot.EntranceY,
+                        CompanionInDungeonId(), AR.s.Time.CurrentGameTime);
+                    bool committed = false;
+                    try
                     {
-                        Notify("보스 완료 저장 실패. 보상과 입구 교체를 함께 재시도합니다.");
-                        return false;
+                        if (await CommitAsync(scope | SaveScope.Player | SaveScope.World |
+                                              SaveScope.NpcState | SaveScope.Dungeons | SaveScope.Narrative) == false)
+                        {
+                            Notify("보스 완료 저장 실패. 보상과 입구 교체를 함께 재시도합니다.");
+                            return false;
+                        }
+                        transaction.Commit(); committed = true;
                     }
-                    transaction.Commit();
+                    finally
+                    {
+                        if (committed == false && lifetime == _lifetime)
+                            AR.s.Npc.RollbackDungeonCompletion(narrative);
+                    }
                 }
                 if (lifetime != _lifetime) return false;
                 _completionPending = false;
+                RefreshNarrativeSelections();
                 RebuildEntranceIndex();
                 Notify("던전 완료! ESC 메뉴에서 던전 나오기를 선택하세요.");
                 return true;
@@ -376,6 +401,15 @@ namespace ARPG.Dungeon
                 await AR.s.Data.SaveAsync(SaveScope.Player | SaveScope.World | SaveScope.Dungeons);
             }
             catch (Exception ex) { Notify("던전 체크포인트 오류: " + ex.Message); }
+        }
+
+        // 던전 안에 실제로 소환된 동행 NPC. 없으면 -1.
+        private int CompanionInDungeonId()
+        {
+            var state = AR.s.Data.NpcCompanion;
+            return state.IsInDungeon == true && state.ReservedNpcId >= 0 &&
+                   _components.HasComponent<NpcCompanionComponent>(state.ReservedNpcId) == true
+                ? state.ReservedNpcId : -1;
         }
 
         private async Task<bool> CommitAsync(SaveScope scope)
@@ -436,6 +470,7 @@ namespace ARPG.Dungeon
             });
             _components.RemoveComponent<JumpComponent>(id);
             _components.RemoveComponent<DestroyTag>(id);
+            _components.RemoveComponent<KillCreditComponent>(id);
             _components.SetComponent(id, new StateComponent
             {
                 Condition = Creature.CharacterConditions.Normal,

@@ -76,6 +76,7 @@ namespace ARPG.Npc.Narrative
             AddNeeds(topics, save, village, threat);
             AddRumors(topics, npcId, chronicle);
             AddAmbitionRumors(topics, npcId, save, false);
+            AddNarrativeRequest(topics, npcId, save);
             AddFlavor(topics, save);
             AddPersonal(topics, npcId, save);
 
@@ -202,15 +203,16 @@ namespace ARPG.Npc.Narrative
             int cap = RepertoireSize(npcId, tier);
             List<DialogueTopic> result = new();
 
-            // 1) 활성 긴급 니즈(현재는 기아)는 급하니 자동 포함
+            // 1) 활성 긴급 니즈(현재는 기아)와 고정 화제(던전 소문 부탁·진행 확인, 소망 털어놓기·떠올리기)는 자동 포함.
+            //    고정 화제는 새치기하지 않고 PickRandom의 일반 순환에서 다른 화제와 번갈아 나온다.
             for (int i = 0; i < applicable.Count && result.Count < cap; i++)
-                if (applicable[i].Urgent)
+                if (applicable[i].Urgent || applicable[i].Pinned)
                     result.Add(applicable[i]);
 
             // 2) 나머지: 관계 단계별 카테고리 우선순위 + 성격 편향 + npcId 안정 tiebreak로 채움
             List<DialogueTopic> rest = new();
             for (int i = 0; i < applicable.Count; i++)
-                if (applicable[i].Urgent == false)
+                if (applicable[i].Urgent == false && applicable[i].Pinned == false)
                     rest.Add(applicable[i]);
             NpcSaveData? save = AR.s.Npc?.GetSaveData(npcId);
             rest.Sort((a, b) => SortKey(npcId, tier, save, b).CompareTo(SortKey(npcId, tier, save, a)));
@@ -243,7 +245,8 @@ namespace ARPG.Npc.Narrative
                 return 2;
             // 야망 소문은 지금 확인할 수 있는 실제 사건(유효 검증 통과)이라 연대기 소문보다 앞세운다 (P2c) — 낯선 사이에서도 일상 화제와 겨룬다.
             if (topic.Type == DialogueTopicType.DungeonRumor || topic.Type == DialogueTopicType.ItemOwnerRumor ||
-                topic.Type == DialogueTopicType.BetrayalRumor)
+                topic.Type == DialogueTopicType.BetrayalRumor || topic.Type == DialogueTopicType.DungeonRequest ||
+                topic.Type == DialogueTopicType.DungeonRequestProgress)
                 return AmbitionRumorPriority;
 
             return topic.Category switch
@@ -723,6 +726,28 @@ namespace ARPG.Npc.Narrative
             }
         }
 
+        // 던전 소문 부탁·진행 확인 (NPC_NARRATIVE_CONTENT_DESIGN §4.1)과 소망 털어놓기·떠올리기 (§2.2). 야망 소문 1개 규칙(D82)과 따로 넣는다.
+        private static void AddNarrativeRequest(List<DialogueTopic> topics, int npcId, NpcSaveData? save)
+        {
+            if (save == null || AR.s.Npc == null)
+                return;
+            DialogueTopic? topic = AR.s.Npc.BuildNarrativeRequestTopic(npcId, save);
+            if (topic != null)
+                topics.Add(topic);
+            DialogueTopic? wish = AR.s.Npc.BuildNarrativeWishTopic(npcId, save);
+            if (wish != null)
+                topics.Add(wish);
+        }
+
+        // 징후 문장을 전해 들은 말투로 바꾼다: "...들린다." → "...들린다더군."
+        private static string Hearsay(string sign)
+        {
+            string trimmed = sign.Trim();
+            return trimmed.EndsWith("다.", System.StringComparison.Ordinal)
+                ? trimmed.Substring(0, trimmed.Length - 1) + "더군."
+                : "듣자 하니 " + trimmed;
+        }
+
         private static DialogueTopic? BuildDungeonRumorTopic(int npcId, NpcSaveData save, NpcRumor rumor, float now)
         {
             NpcRumorPlace place = AR.s.Npc.ResolveRumorDungeonPlace(rumor, save.VillageId, out int bearing);
@@ -731,6 +756,24 @@ namespace ARPG.Npc.Narrative
                 return null;
 
             string placeCore = NpcRumorPhrasing.PlaceCore(place, bearing);
+            if (rumor.IsDiscovery)
+            {
+                if (place != NpcRumorPlace.Bearing) return null;
+                // 소문 주인이 이 소문을 부탁·진행 확인 화제로 말하는 중이면 위치 화제를 따로 내지 않는다.
+                NarrativeContentInstance? instance = AR.s.Npc.GetNarrativeInstance(rumor.InstanceId);
+                if (instance != null && AR.s.Npc.IsNarrativeOwnTopic(npcId, instance) == true) return null;
+                // 일반 던전은 위치만, 소문 던전은 입구 징후까지 전한다. 전해 들은 NPC는 부탁하지 않는다 (§4.1).
+                string sign = instance != null && instance.IsOpen ? AR.s.Npc.GetNarrativeContent(instance)?.SignText ?? string.Empty : string.Empty;
+                string discoveryLine = $"{placeCore}에 던전 입구가 있다는 소식이 있소.";
+                if (sign.Length > 0) discoveryLine += " " + Hearsay(sign);
+                var location = new DialogueTopic { Type = DialogueTopicType.DungeonRumor,
+                    Category = DialogueTopicCategory.Rumor, BaseLine = discoveryLine,
+                    CacheVariant = RumorCacheVariant(rumor), Rumor = rumor };
+                location.Facts.Add(sign.Length > 0
+                    ? "알려진 지역 관찰: " + sign + " 원인과 원정 성공 여부는 모른다."
+                    : "입구의 위치만 알려져 있다. 원인, 전리품과 원정 성공 여부는 모른다.");
+                return location;
+            }
             string ago = NpcRumorPhrasing.AgoPhrase(rumor.EventGameTime, now);
             string subject = NpcRumorPhrasing.NpcName(rumor.SubjectNpcId);
             bool firsthand = rumor.SourceNpcId < 0;
@@ -970,20 +1013,24 @@ namespace ARPG.Npc.Narrative
 
         /// <summary>
         /// 원정 부상 토픽 (D91). 누적 부상 요약으로 말한다. 마지막 부상이 중상이면(같은 시각의 SevereWound Deed) 더 무거운 문구.
+        /// 문구는 작성 표의 최근 부상 사연 행(NPC_NARRATIVE_CONTENT_DESIGN §2.1 3001, 4단계)이 정하고, 그 행이 없으면 코드 기본 문구를 쓴다.
         /// </summary>
         private static DialogueTopic BuildRecentWoundTopic(NpcSaveData save)
         {
             bool delve = save.LastWoundActivity == NpcActivityKind.DungeonDelve;
             bool severe = save.PersonalStories?.LastWoundSevere == true;
             string where = delve ? "던전 원정" : "사냥";
+            // {knownWoundSummary}: 이 NPC가 실제로 겪은 최신 부상 요약 (§3.2 — 겪은 사실만 말한다)
+            string summary = severe ? $"지난 {where}에서 죽다 살아났소." : $"지난 {where}에서 호되게 당했소.";
+            NarrativeContentDefinition? story = AR.s.Data?.NarrativeCatalog.FindPersonalStory(NarrativeTargetType.RecentWound);
             DialogueTopic t = new()
             {
                 Type = DialogueTopicType.RecentHunt,
                 Category = DialogueTopicCategory.Personal,
                 MinTier = AffinityTier.Stranger,
-                BaseLine = severe
-                    ? $"지난 {where}에서 죽다 살아났소. 이만하길 천만다행이지."
-                    : $"지난 {where}에서 호되게 당했소. 아직 몸이 뻐근하구려.",
+                BaseLine = story != null
+                    ? story.IntroText.Replace(NarrativeContentCatalog.KnownWoundSummaryToken, summary)
+                    : severe ? summary + " 이만하길 천만다행이지." : summary + " 아직 몸이 뻐근하구려.",
                 CacheVariant = StableHash(StableHash((int)(save.LastWoundGameTime * 100f), severe == true ? 1 : 0),
                     (int)save.LastWoundActivity),
             };

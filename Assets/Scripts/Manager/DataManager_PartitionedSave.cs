@@ -29,6 +29,7 @@ namespace ARPG.Data
         private const string PART_WORLD = "world";
         private const string PART_MAP = "map";
         private const string PART_DUNGEONS = "dungeons";
+        private const string PART_NARRATIVE = "narrative";
         private const string PART_VILLAGES = "villages";
         private const string PART_BUILDINGS = "buildings";
         private const string PART_CHRONICLE = "chronicle";
@@ -305,13 +306,26 @@ namespace ARPG.Data
                 {
                     if (TryReadPart(slotPath, manifest, PART_DUNGEONS,
                         out DungeonSaveRoot? loadedDungeons) == false || loadedDungeons == null ||
-                        loadedDungeons.Version != 1 || loadedDungeons.Villages == null || loadedDungeons.Dungeons == null)
+                        (loadedDungeons.Version != 1 && loadedDungeons.Version != 2) || loadedDungeons.Villages == null || loadedDungeons.Dungeons == null)
                         return false;
                     dungeons = loadedDungeons;
                 }
                 else if (world.WorldDataVersion >= 15)
                     return false; // Only old schemas may legitimately omit this partition.
                 if (Dungeon.DungeonSaveValidation.IsConsistent(dungeons, player.Players, world.WorldSeed) == false)
+                    return false;
+
+                NarrativeSaveRoot narrative = new();
+                if (manifest.Parts.ContainsKey(PART_NARRATIVE) == true)
+                {
+                    if (TryReadPart(slotPath, manifest, PART_NARRATIVE, out NarrativeSaveRoot? loadedNarrative) == false ||
+                        loadedNarrative == null)
+                        return false;
+                    narrative = loadedNarrative;
+                }
+                else if (world.WorldDataVersion >= NARRATIVE_PART_REQUIRED_VERSION)
+                    return false; // 21 이상은 빈 원장으로 진행하지 않는다 (NPC_NARRATIVE_CONTENT_DESIGN §7.7).
+                if (Npc.Narrative.NarrativeSaveValidation.IsConsistent(narrative, world.WorldSeed) == false)
                     return false;
 
                 Dictionary<int, Npc.NpcSaveData> npcs = new();
@@ -340,6 +354,7 @@ namespace ARPG.Data
                     Player = player!,
                     World = world!,
                     Dungeons = dungeons,
+                    Narrative = narrative,
                     Map = map!,
                     Villages = villages!,
                     Buildings = buildings!,
@@ -403,6 +418,7 @@ namespace ARPG.Data
                 WorldSeed = snapshot.World.WorldSeed,
                 ElapsedWorldGameHours = snapshot.World.ElapsedWorldGameHours,
                 Dungeons = snapshot.Dungeons,
+                Narrative = snapshot.Narrative,
                 WorldDropItemDatas = snapshot.Map.WorldDropItems ?? new(),
                 VillageDatas = snapshot.Villages.Villages ?? new(),
                 NpcSaveDatas = snapshot.Npcs,
@@ -583,12 +599,22 @@ namespace ARPG.Data
                 long npcCompletionRevision = AR.s.Dungeon.NpcCompletionRevision;
                 if (_activeSaveManifest == null || _needsFullSaveAfterMigration == true)
                     scope = SaveScope.All;
+                // 부탁 칸·행적 소문(NpcState)이 사건(Narrative)을 가리키므로 Narrative를 싣는 저장은 NPC 상태도 싣는다
+                // (NPC_NARRATIVE_CONTENT_DESIGN §7.3·§7.5).
+                if ((scope & SaveScope.Narrative) != 0)
+                    scope |= SaveScope.NpcState;
                 // 여섯 시뮬 파트는 한 상태로 확정한다. 변경 없는 파일도 다음 manifest에 기존 참조로 포함한다.
                 if ((scope & SaveScope.Simulation) != 0)
                     scope |= SaveScope.Simulation;
                 if (captureRuntimeManagers == true && AR.s.Dungeon.HasUnsavedNpcCompletion == true &&
                     (scope & (SaveScope.Dungeons | SaveScope.Simulation)) != 0)
                     scope |= npcCompletionScope | SaveScope.Simulation;
+                // 즉시 저장하지 않는 사건 변경(새 세대 선정·소문 주인·미해결 종료)은 Dungeons나 시뮬 묶음을 싣는 다음 저장이 함께 싣는다.
+                // NPC 던전 완료와 같은 방식으로, 캡처한 revision만 성공 뒤 확정한다.
+                long narrativeRevision = captureRuntimeManagers == true ? AR.s.Npc.NarrativeRevision : 0;
+                if (captureRuntimeManagers == true && AR.s.Npc.HasUnsavedNarrativeChange == true &&
+                    (scope & (SaveScope.Dungeons | SaveScope.Simulation)) != 0)
+                    scope |= SaveScope.Narrative | SaveScope.Simulation;
 
                 // No awaits during capture: all parts describe the same main-thread state.
 #if UNITY_EDITOR
@@ -647,6 +673,8 @@ namespace ARPG.Data
                 if (scope == SaveScope.All) _needsFullSaveAfterMigration = false;
                 if (captureRuntimeManagers == true && (scope & npcCompletionScope) == npcCompletionScope)
                     AR.s.Dungeon.MarkNpcCompletionSaved(npcCompletionRevision);
+                if (captureRuntimeManagers == true && (scope & SaveScope.Narrative) != 0)
+                    AR.s.Npc.MarkNarrativeSaved(narrativeRevision);
                 commitTimer.Stop();
 #if UNITY_EDITOR
                 DiagnosticCommitMilliseconds = commitTimer.Elapsed.TotalMilliseconds;
@@ -756,6 +784,12 @@ namespace ARPG.Data
                 if (captureRuntimeManagers == true && GroupedSaveSnapshotEnabled == true)
                     AddPendingSnapshotPart(pending, PART_DUNGEONS, CaptureOwnedDungeons(_worldData.Dungeons, rebuildSaveSnapshots));
                 else AddPendingPart(pending, PART_DUNGEONS, _worldData.Dungeons);
+            }
+            if ((scope & SaveScope.Narrative) != 0)
+            {
+                if (captureRuntimeManagers == true && GroupedSaveSnapshotEnabled == true)
+                    AddPendingSnapshotPart(pending, PART_NARRATIVE, CaptureOwnedNarrative(_worldData.Narrative, rebuildSaveSnapshots));
+                else AddPendingPart(pending, PART_NARRATIVE, _worldData.Narrative);
             }
             if ((scope & SaveScope.Player) != 0)
             {
@@ -1374,6 +1408,7 @@ namespace ARPG.Data
             public PlayerSaveRoot Player = null!;
             public WorldSaveRoot World = null!;
             public DungeonSaveRoot Dungeons = new();
+            public NarrativeSaveRoot Narrative = new();
             public MapSaveRoot Map = null!;
             public VillageSaveRoot Villages = null!;
             public BuildingSaveRoot Buildings = null!;

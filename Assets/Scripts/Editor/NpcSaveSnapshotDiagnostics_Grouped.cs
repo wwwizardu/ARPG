@@ -8,6 +8,7 @@ using ARPG.Data;
 using ARPG.History;
 using ARPG.Map;
 using ARPG.Npc;
+using ARPG.Npc.Narrative;
 using ARPG.Village;
 using Newtonsoft.Json;
 using UnityEngine;
@@ -131,6 +132,18 @@ namespace ARPG.Editor
             npc.WoundCount = 2; npc.LastWoundGameTime = 9; npc.LastWoundActivity = NpcActivityKind.DungeonDelve;
             npcCache.MarkDirty(32, (ulong)NpcSaveGroup.Condition); npcCache.Flush(NpcSource);
             Require(Json(npcFields) == Json(copier.Capture(npc)), "omitted fields reappear in original contract order");
+            // NPC_NARRATIVE_CONTENT_DESIGN §4.2·§7.2: 피해자 판정 던전은 Condition, 부탁 칸은 NarrativeRequest 묶음이며 비면 생략한다.
+            npc.LastWoundDungeonId = "dungeon-a";
+            npcCache.MarkDirty(32, (ulong)NpcSaveGroup.Condition); npcCache.Flush(NpcSource);
+            Require(Json(npcFields) == Json(copier.Capture(npc)), "last wound dungeon refreshes with the Condition group");
+            npc.NarrativeRequest = new NpcNarrativeRequest { InstanceId = "rumor/dungeon-a", RequestedGameTime = 3f };
+            npcCache.MarkDirty(32, (ulong)NpcSaveGroup.NarrativeRequest); npcCache.Flush(NpcSource);
+            Require(Json(npcFields) == Json(copier.Capture(npc)) && ReferenceEquals(bag, npcFields[nameof(NpcSaveData.Inventory)]),
+                "request slot group updates alone");
+            npc.NarrativeRequest = null;
+            npcCache.MarkDirty(32, (ulong)NpcSaveGroup.NarrativeRequest); npcCache.Flush(NpcSource);
+            Require(npcFields.ContainsKey(nameof(NpcSaveData.NarrativeRequest)) == false && Json(npcFields) == Json(copier.Capture(npc)),
+                "empty request slot is omitted");
 
             GameObject owner = new("Grouped snapshot diagnostics") { hideFlags = HideFlags.HideAndDontSave };
             DataManager data = owner.AddComponent<DataManager>();
@@ -227,9 +240,56 @@ namespace ARPG.Editor
                 Require(Json(Capture("CaptureOwnedDungeons", dungeons)) == Json(copier.Capture(dungeons)), "completed/deleted dungeon cannot resurrect");
                 dungeons.Dungeons.Add(dungeon);
                 Require(Json(Capture("CaptureOwnedDungeons", dungeons)) == Json(copier.Capture(dungeons)), "delete/re-add record initializes all groups");
+                // narrative 파트 (NPC_NARRATIVE_CONTENT_DESIGN §7.3): 인스턴스·정의·정책·선정 기록 묶음 갱신과 삭제 뒤 되살아나지 않음.
+                var narrative = new NarrativeSaveRoot();
+                var instance = new NarrativeContentInstance { InstanceId = "rumor/test", ContentId = 1002, DungeonId = "test",
+                    DefinitionHash = "hash", PolicyHash = "policy", OwnerNpcId = 4, TargetMonsterId = 1009 };
+                narrative.Instances.Add(instance);
+                narrative.Definitions.Add(new NarrativeDefinitionSnapshot { Hash = "hash", Content = new NarrativeContentDefinition { ContentId = 1002 } });
+                narrative.Policies.Add(new NarrativePolicySnapshot { Hash = "policy", PolicyVersion = 1 });
+                narrative.Selections.Add(new NarrativeSelectionRecord { DungeonId = "test", InstanceId = "rumor/test" });
+                object? narrativeRoot = Capture("CaptureOwnedNarrative", narrative);
+                Require(Json(narrativeRoot) == Json(copier.Capture(narrative)), "narrative root initial capture");
+                object? definitionDto = ((List<object?>)Fields(narrativeRoot)[nameof(NarrativeSaveRoot.Definitions)]!)[0];
+                instance.Progress = NarrativeRumorProgress.Resolved; instance.ProgressGameTime = 12f; instance.Revision++;
+                data.MarkNarrativeInstanceSaveDirty(instance.InstanceId, NarrativeSaveGroup.Progress);
+                instance.Reported = true; instance.ReportNpcId = 4; instance.ReportRelevance = NarrativeRelevance.Requester; instance.RewardGold = 14;
+                data.MarkNarrativeInstanceSaveDirty(instance.InstanceId, NarrativeSaveGroup.Reports | NarrativeSaveGroup.Rewards);
+                object? narrativeUpdated = Capture("CaptureOwnedNarrative", narrative);
+                Require(Json(narrativeUpdated) == Json(copier.Capture(narrative)) &&
+                    ReferenceEquals(definitionDto, ((List<object?>)Fields(narrativeUpdated)[nameof(NarrativeSaveRoot.Definitions)]!)[0]),
+                    "narrative progress/report/reward groups match complete DTO and retain the definition DTO");
+                instance.RequesterNpcId = 4; instance.RequestedGameTime = 2f;
+                data.MarkNarrativeInstanceSaveDirty(instance.InstanceId, NarrativeSaveGroup.Introductions);
+                Require(Json(Capture("CaptureOwnedNarrative", narrative)) == Json(copier.Capture(narrative)), "narrative introduction group");
+                // 3단계 소망: 대상 아이템은 Target, 소망 진행은 Progress 묶음이다. 기본값(Hidden·0)은 던전 소문 DTO에서 생략된다.
+                var wish = new NarrativeContentInstance { InstanceId = "wish/4/2001", ContentId = 2001, Kind = NarrativeContentKind.Wish,
+                    DefinitionHash = "hash", PolicyHash = "policy", OwnerNpcId = 4, RequesterNpcId = 4, WishState = WishState.Revealed };
+                narrative.Instances.Add(wish);
+                data.MarkNarrativeInstanceSaveDirty(wish.InstanceId, NarrativeSaveGroup.All);
+                Require(Json(Capture("CaptureOwnedNarrative", narrative)) == Json(copier.Capture(narrative)) &&
+                    Json(copier.Capture(instance)).Contains(nameof(NarrativeContentInstance.WishState)) == false,
+                    "wish instance capture; rumor DTO omits default wish fields");
+                wish.TargetItemId = 16;
+                data.MarkNarrativeInstanceSaveDirty(wish.InstanceId, NarrativeSaveGroup.Target);
+                wish.WishState = WishState.Fulfilled; wish.ProgressGameTime = 20f;
+                data.MarkNarrativeInstanceSaveDirty(wish.InstanceId, NarrativeSaveGroup.Progress);
+                Require(Json(Capture("CaptureOwnedNarrative", narrative)) == Json(copier.Capture(narrative)),
+                    "wish target item and state refresh with the Target/Progress groups");
+                // 5단계 후속 소개: 소개한 쪽 기록은 Continuations, 소개받은 쪽 기록은 Introductions 묶음이다.
+                instance.FollowUpInstanceId = "rumor/next"; instance.FollowUpState = NarrativeFollowUpState.Pending;
+                data.MarkNarrativeInstanceSaveDirty(instance.InstanceId, NarrativeSaveGroup.Continuations);
+                instance.IntroducedFromInstanceId = "rumor/prev";
+                data.MarkNarrativeInstanceSaveDirty(instance.InstanceId, NarrativeSaveGroup.Introductions);
+                Require(Json(Capture("CaptureOwnedNarrative", narrative)) == Json(copier.Capture(narrative)),
+                    "follow-up fields refresh with the Continuations/Introductions groups");
+                narrative.Instances.Clear(); narrative.Selections.Clear();
+                Require(Json(Capture("CaptureOwnedNarrative", narrative)) == Json(copier.Capture(narrative)), "pruned narrative instance/selection cannot resurrect");
+                narrative.Definitions.Clear(); narrative.Policies.Clear();
+                Require(Json(Capture("CaptureOwnedNarrative", narrative)) == Json(copier.Capture(narrative)), "pruned definition/policy cannot resurrect");
             }
             finally { UnityEngine.Object.DestroyImmediate(owner); }
-            return $"[GroupedSnapshotContracts] {checks}/{checks} PASS: selective groups, changed slots, omission observers, freeze/reset lifetimes, Player/World/Map/Buildings/Chronicle/Dungeons roots.";
+            return $"[GroupedSnapshotContracts] {checks}/{checks} PASS: selective groups, changed slots, omission observers, freeze/reset lifetimes, Player/World/Map/Buildings/Chronicle/Dungeons/Narrative roots.";
         }
 
         /// <summary>동일 합성 마을과 변경 패턴으로 전체/묶음 복사를 비교한다. 기존 Village 진단에서 명시적으로 실행한다.</summary>

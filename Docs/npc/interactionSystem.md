@@ -139,7 +139,7 @@ float CalculateSuccessRate(InteractionType type, int playerEntityId, int npcEnti
 - 고가 (50G 이상): Affinity +15, Intimacy +5
 - NPC 선호 아이템: 추가 보너스 +10
 
-> **선호 판정 일반화 (§4 관계·선물 루프)**: 위 "선호 아이템 +10"은 단일 보너스가 아니라, NPC의 백본 사연에서 도출된 **선호/혐오 카테고리에 따른 반응 배수**(`Loved/Liked/Neutral/Disliked`)로 일반화된다 — `Gift`가 *관계 루프의 핵심 행동*이기 때문(정본 §4.4·§4.5). **혐오 아이템은 호감도를 깎을 수도** 있다(예: 전쟁으로 가족을 잃은 NPC에게 무기류). 또한 `Gift`로 **특정 소망(Wish) 아이템**을 건네면 호감도가 대폭 상승하며, 그 충족 메커니즘은 [QUEST_SYSTEM_DESIGN.md](QUEST_SYSTEM_DESIGN.md)가 담당한다(§4.7).
+> **선호 판정 일반화 (§4 관계·선물 루프)**: 위 "선호 아이템 +10"은 단일 보너스가 아니라, NPC의 백본 사연에서 도출된 **선호/혐오 카테고리에 따른 반응 배수**(`Loved/Liked/Neutral/Disliked`)로 일반화된다 — `Gift`가 *관계 루프의 핵심 행동*이기 때문(정본 §4.4·§4.5). **혐오 아이템은 호감도를 깎을 수도** 있다(예: 전쟁으로 가족을 잃은 NPC에게 무기류). 또한 `Gift`로 **특정 소망(Wish) 아이템**을 건네면 호감도가 대폭 상승하며, 그 충족 메커니즘은 [QUEST_SYSTEM_DESIGN.md](QUEST_SYSTEM_DESIGN.md)가 담당한다(§4.7). (2026-10-10 구현·사용자 결정: 소망 아이템이면 위 가격별 효과는 주지 않고 소망 반응·관계 변화·의뢰 보답이 대신한다 — [NPC_NARRATIVE_CONTENT_DESIGN](NPC_NARRATIVE_CONTENT_DESIGN.md) §8.2)
 
 ---
 
@@ -257,7 +257,7 @@ public enum AffinityTier { Stranger, Acquaintance, Friend, Confidant }
 |------|-------------|-----------------|----------|
 | **Stranger** | <20 | 직업·마을 표면 잡담 | 선호 힌트 거의 없음 |
 | **Acquaintance** | 20–49 | 종족·취향 일반론 | 거친 선호 카테고리 암시 |
-| **Friend** | 50–79 | 개인 관계·과거 일부(`GetRelations`·일부 `Sentiment`) | 구체적 선호 단서, **첫 소망 가능** |
+| **Friend** | 50–79 | 개인 관계·과거 일부(`GetRelations`·일부 `Sentiment`) | 구체적 선호 단서, **첫 소망 가능** (2026-10-10 사용자 결정: 첫 구현은 호감 30부터, [NPC_NARRATIVE_CONTENT_DESIGN](NPC_NARRATIVE_CONTENT_DESIGN.md) 머리말) |
 | **Confidant** | 80+ | 트라우마·핵심 `Sentiment`·연대기 사건(`OriginEventId`) | 깊은 소망, 보답 |
 
 ### 4.3 단계별 대화 (사연 점진 공개 → 유추 단서)
@@ -325,7 +325,7 @@ public enum GiftCategory { Food, Craft, Gem, Relic, Lore, Weapon, Trinket, Flowe
 
 NPC가 관계가 깊어질 때 백본 사연에서 비롯된 **구체적 소망**을 토로한다. 이는 구조적으로 **퀘스트**이므로, *떠오름·인지*는 본 문서가, *메커니즘(목표 추적·완료 판정·보상·상태·영속화)*은 [QUEST_SYSTEM_DESIGN.md](QUEST_SYSTEM_DESIGN.md)가 담당한다.
 
-1. **떠오름**: 호감도가 `Friend`↑에 이르고 깊은 대화 비트에서 NPC가 소망을 토로(예: "가문 인장이 옛 숲 신전에 봉인돼 있소…").
+1. **떠오름**: 호감도가 `Friend`↑에 이르고 깊은 대화 비트에서 NPC가 소망을 토로(예: "가문 인장이 옛 숲 신전에 봉인돼 있소…"). (2026-10-10 구현: 호감 30 이상이면 대화 후보에 소망 화제가 고정되고, 아이템을 선물로 건네면 충족된다 — [NPC_NARRATIVE_CONTENT_DESIGN](NPC_NARRATIVE_CONTENT_DESIGN.md) §8.2)
 2. **인지**: 퀘스트 게시판/수락 버튼 없음. 관계 패널에 *"이 NPC가 ~을 바람"* 정도로 은근히 표시(§5). 채워줄지는 플레이어 자유.
 3. **충족·보상**: 충족 판정·보상 지급은 [QUEST_SYSTEM](QUEST_SYSTEM_DESIGN.md). 충족 시 **호감도 대폭 상승** + 보답(§4.6) + 서사 반영이 본 루프로 되먹임.
 

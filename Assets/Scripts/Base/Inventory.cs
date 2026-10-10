@@ -186,6 +186,28 @@ namespace ARPG.Item
         }
 
         /// <summary>
+        /// RemoveItem으로 꺼낸 아이템을 원래 수량으로 되돌린다 (저장 실패 롤백). 같은 아이템이 아직 슬롯에 있으면 그 슬롯에서,
+        /// 원래 슬롯이 비었으면 그 슬롯에, 그 사이 다른 아이템이 들어왔으면 빈 슬롯에 넣는다. 넣을 곳이 없으면 false.
+        /// </summary>
+        public bool RestoreItem(int slotIndex, ItemData item, int quantity)
+        {
+            if (item == null || quantity <= 0)
+                return false;
+            int current = _items.IndexOf(item);
+            if (current < 0 && slotIndex >= 0 && slotIndex < _items.Count && _items[slotIndex] == null)
+                current = slotIndex;
+            if (current >= 0)
+            {
+                _changed?.Invoke();
+                item.Quantity = quantity;
+                _items[current] = item;
+                return true;
+            }
+            item.Quantity = quantity;
+            return AddItem(item) >= 0;
+        }
+
+        /// <summary>
         /// 인벤토리 전체 스택에서 ItemId의 보유 수량을 합산한다.
         /// </summary>
         public int GetTotalQuantity(int itemId)

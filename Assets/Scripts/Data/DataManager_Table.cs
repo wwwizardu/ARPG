@@ -890,6 +890,14 @@ namespace ARPG.Data
             return null;
         }
 
+        /// <summary>모든 던전 표 (Id 오름차순). 콘텐츠 배치 가능성 검증용.</summary>
+        public List<Tables.DungeonTable> GetAllDungeonTables()
+        {
+            List<Tables.DungeonTable> result = new(_dungeonTable.Values);
+            result.Sort((a, b) => a.Id.CompareTo(b.Id));
+            return result;
+        }
+
         public List<Tables.ItemEnchantmentCostTable> GetAllItemEnchantmentCosts()
         {
             List<Tables.ItemEnchantmentCostTable> result =

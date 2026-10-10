@@ -198,6 +198,9 @@ namespace ARPG.Dungeon
             float cooldownHours = table != null ? Math.Max(0f, table.ReplacementCooldownHours) : 0f;
             int nextGeneration = slot.Generation + 1;
             bool hadEntrance = slot.HasEntrance;
+            // 플레이어 결과가 없으므로 소문은 미해결로 끝나고 부탁 칸이 빈다 (NPC_NARRATIVE_CONTENT_DESIGN §3.1·§4.1).
+            // 슬롯을 바꾸기 전에 입구 위치를 원장에 남긴다. 저장은 NPC 완료와 같은 다음 저장에 실린다.
+            AR.s.Npc.EndDungeonNarrativeUnresolved(slot.DungeonId, hadEntrance, slot.EntranceX, slot.EntranceY, gameTime);
 
             // 슬롯 객체를 제자리에서 바꾼다. 붙잡고 있던 역인덱스 참조도 HasEntrance=false를 보게 되어
             // 다음 인덱스 재구성 전에 옛 입구로 입장·상호작용할 수 없다.
@@ -272,6 +275,7 @@ namespace ARPG.Dungeon
             if (_entranceIndexDirty == false || _initialized == false || _busy == true)
                 return;
             _entranceIndexDirty = false;
+            RefreshNarrativeSelections();
             RebuildEntranceIndex();
         }
 

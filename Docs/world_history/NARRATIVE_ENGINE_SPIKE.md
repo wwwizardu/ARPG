@@ -4,6 +4,8 @@
 >
 > **상태 (2026-07-02)**: 🟨 스파이크 **1차 구현 완료** (Unity 컴파일/실측 전). 대화·소망 생성 경로 + UINpcInspect 호출부 배선. 코드: `Assets/Scripts/Npc/Narrative/`(`NpcNarrativeTypes`/`NpcDialogueContextBuilder`/`NpcNarrativeService`) + `UINpcInspect` 대화 버튼. 대화 경로는 **토픽 카탈로그(§4.5 셔플백 + 니즈·소문·잡담)** 코드 반영. 미구현: `LLMClient` JSON 모드 옵션(프롬프트 강제 JSON으로 대체), 통과 기준(§5) 실측, 관계 실반영, 니즈 충족/보상·사연 토픽.
 >
+> **소망 경로 삭제 (2026-10-10)**: 소망 생성 경로(③ 소망 생성·④ 검증·재시도·템플릿 폴백·소망 캐시, `NpcWish`·`WishCandidate`, 검사 창의 꺼진 스위치)는 R2·R3 실측 없이 지웠다. 지금 소망은 LLM 없이 작성 표와 원장으로 동작한다([NPC_NARRATIVE_CONTENT_DESIGN](../npc/NPC_NARRATIVE_CONTENT_DESIGN.md) §2.2·§8.2, 호감 30에 털어놓음). 아래 소망 관련 절(§3 흐름 ③④, §4.2~4.3 소망 프롬프트·검증, §5 R2·R3, §6 소망 DTO·`GenerateWish`, §7 4번)은 당시 스파이크 기록이다. 대화 생성 경로는 그대로다.
+>
 > **경계**: 본 문서는 *검증 스파이크*의 범위·설계·통과 기준까지. 대화·소망의 *정본 데이터 모델·동작*은 [QUEST_SYSTEM_DESIGN.md](../npc/QUEST_SYSTEM_DESIGN.md), *생성 엔진의 완성형*은 [NARRATIVE_ENGINE_DESIGN.md](NARRATIVE_ENGINE_DESIGN.md), *런타임 소비처(대화·선물·보답)*는 [interactionSystem.md §4](../npc/interactionSystem.md)가 담당한다. 스파이크는 이들의 **부분집합을 최소 구현**해 가설만 검증한다.
 >
 > **관련 문서**:
