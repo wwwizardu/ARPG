@@ -85,6 +85,13 @@ public static bool GetSkillCommandComponent(int slotIndex, int entityId, Vector2
 
 ## 가중치 스킬 선택 (PickFireSkill)
 
+### 선택 시점
+
+- 소유자의 `StateComponent.Condition`이 `Normal`일 때만 새 스킬을 선택한다.
+- `Start`, `Process`, `End` 동안에는 소유자가 `UseSkill` 상태이므로 추첨과 다음 명령 예약을 하지 않는다. 후딜까지 완료되어 `Normal`로 돌아온 뒤 다음 AI 틱에서 선택한다.
+- 이미 `SkillCommandComponent`가 있으면 처리될 때까지 다시 추첨하거나 명령을 덮어쓰지 않는다.
+- 가중치는 해당 시점의 쿨타임·사거리 조건을 만족하는 후보끼리 적용한다. 두 후보가 모두 사용 가능할 때만 80:20이 80%:20%가 된다.
+
 ### 후보 제외 조건 (`IsFireCandidate`)
 
 1. `AiTable.SkillWeight[slot] <= 0`
@@ -125,6 +132,8 @@ distance² ≤ GetEngagementRangeSqr  →  Attack 전이
 ```
 distance² > GetEngagementRangeSqr  →  Chase 복귀
 KeepDistance 내부 진입              →  Retreat (AiTable.KeepDistance, EntityFactory가 컴포넌트에 복사)
+스킬 실행 중(Start/Process/End)       →  다음 스킬 선택·예약 안 함
+기존 스킬 명령 처리 대기 중           →  재추첨 안 함
 PickFireSkill → 슬롯 선택          →  GetSkillCommandComponent 발동
 선택 불가(쿨/사거리 전원 실패)        →  대기 (그 자리에 머무름)
 ```
@@ -155,6 +164,8 @@ AI와 플레이어가 **동일한 `GetSkillCommandComponent`**로 발동 조건(
 - `IsCooldownReady`: `CooldownRemaining <= 0`
 
 **쿨타임 시작 시점**: 스킬 Start→Process→End→None 전이 시점(= `OnSkillComplete`). 스킬 실행 중에는 쿨타임이 흐르지 않음.
+
+몬스터 기본 근접 공격(`StrikeMonster`, Skill Id=2)은 `Cooltime=0`, `ProcessTime=0.85`, `EndTime=1.15`를 사용한다. 기존 쿨타임 1초를 후딜에 더했으므로 완료 직후 기본 공격도 다시 선택할 수 있다. EndTime은 공격속도에 따라 보정되며, 후딜 동안 공격 애니메이션의 마지막 프레임을 유지한다. 점프의 쿨타임과 AI 가중치 80:20은 유지한다.
 
 ---
 

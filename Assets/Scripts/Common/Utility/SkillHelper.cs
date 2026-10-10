@@ -87,20 +87,32 @@ namespace ARPG.Utility
 
         /// <summary>
         /// AI 엔티티가 발동할 스킬을 가중치 기반 랜덤으로 선택.
+        /// 현재 스킬의 후딜까지 끝나 소유자가 Normal 상태일 때만 새 스킬을 선택한다.
         /// AiTable.SkillWeight1/2/3 가중치와 쿨타임/사거리 조건을 모두 만족하는 슬롯 중 하나를 가중치 비율로 뽑는다.
         /// 사거리 비교 시 `attacker.HitRadius + SkillRangeMax + target.HitRadius`를 유효 사거리로 사용 (몸 가장자리 기준).
         /// </summary>
         /// <returns>발동 가능한 스킬 슬롯 인덱스, 없으면 -1</returns>
         public static int PickFireSkill(int ownerEntityId, int targetEntityId, Vector2 targetPosition, int slotCount)
         {
-            if (AR.s.Component.TryGetComponent<AIComponent>(ownerEntityId, out var ai) == false)
+            ComponentManager cm = AR.s.Component;
+
+            // 실행 중인 스킬을 후보에서 뺀 채 다음 스킬을 미리 예약하지 않는다.
+            if (cm.TryGetComponent<StateComponent>(ownerEntityId, out var ownerState) == false
+                || ownerState.Condition != Creature.CharacterConditions.Normal)
+                return -1;
+
+            // 아직 처리되지 않은 명령은 다시 추첨하거나 덮어쓰지 않는다.
+            if (cm.HasComponent<SkillCommandComponent>(ownerEntityId) == true)
+                return -1;
+
+            if (cm.TryGetComponent<AIComponent>(ownerEntityId, out var ai) == false)
                 return -1;
 
             AiTable? aiTable = AR.s.Data.GetAiTable(ai.AITableID);
             if (aiTable == null)
                 return -1;
 
-            if (AR.s.Component.TryGetComponent<TransformComponent>(ownerEntityId, out var ownerTransform) == false)
+            if (cm.TryGetComponent<TransformComponent>(ownerEntityId, out var ownerTransform) == false)
                 return -1;
 
             float sqrDistance = (ownerTransform.Position - targetPosition).sqrMagnitude;

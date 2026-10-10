@@ -1,0 +1,126 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <ui:Style src="project://database/Assets/UI/SkillBar/SkillBar.uss"/>
+    <!-- UISkillBar binds slot-0..9 and their named children.
+         Toggle skillbar-slot-empty / skillbar-slot-equipped / skillbar-slot-cooldown /
+         skillbar-slot-no-mana / skillbar-slot-active without rebuilding the visual tree. -->
+    <ui:VisualElement name="skillbar-root" class="skillbar-root" picking-mode="Ignore">
+        <ui:VisualElement name="skillbar-panel" class="skillbar-panel" picking-mode="Ignore">
+            <ui:VisualElement name="primary-slots" class="skillbar-group skillbar-primary-group" picking-mode="Ignore">
+                <ui:VisualElement name="slot-0" class="skillbar-slot skillbar-slot-empty" picking-mode="Position" tooltip="빈 스킬 슬롯">
+                    <ui:Label name="key-0" text="LMB" class="skillbar-key" picking-mode="Ignore"/>
+                    <ui:VisualElement name="icon-0" class="skillbar-icon" picking-mode="Ignore"/>
+                    <ui:VisualElement name="empty-0" class="skillbar-empty-mark" picking-mode="Ignore"/>
+                    <ui:VisualElement name="cooldown-overlay-0" class="skillbar-cooldown-overlay" picking-mode="Ignore">
+                        <ui:VisualElement name="cooldown-fill-0" class="skillbar-cooldown-fill" picking-mode="Ignore"/>
+                        <ui:Label name="cooldown-text-0" text="" class="skillbar-cooldown-text" picking-mode="Ignore"/>
+                    </ui:VisualElement>
+                    <ui:Label name="mana-indicator-0" text="마나 부족" class="skillbar-mana-indicator" picking-mode="Ignore"/>
+                    <ui:Label name="name-0" text="—" class="skillbar-name" picking-mode="Ignore"/>
+                </ui:VisualElement>
+                <ui:VisualElement name="slot-1" class="skillbar-slot skillbar-slot-empty" picking-mode="Position" tooltip="빈 스킬 슬롯">
+                    <ui:Label name="key-1" text="SPACE" class="skillbar-key" picking-mode="Ignore"/>
+                    <ui:VisualElement name="icon-1" class="skillbar-icon" picking-mode="Ignore"/>
+                    <ui:VisualElement name="empty-1" class="skillbar-empty-mark" picking-mode="Ignore"/>
+                    <ui:VisualElement name="cooldown-overlay-1" class="skillbar-cooldown-overlay" picking-mode="Ignore">
+                        <ui:VisualElement name="cooldown-fill-1" class="skillbar-cooldown-fill" picking-mode="Ignore"/>
+                        <ui:Label name="cooldown-text-1" text="" class="skillbar-cooldown-text" picking-mode="Ignore"/>
+                    </ui:VisualElement>
+                    <ui:Label name="mana-indicator-1" text="마나 부족" class="skillbar-mana-indicator" picking-mode="Ignore"/>
+                    <ui:Label name="name-1" text="—" class="skillbar-name" picking-mode="Ignore"/>
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement name="skillbar-separator" class="skillbar-separator" picking-mode="Ignore"/>
+            <ui:VisualElement name="number-slots" class="skillbar-group" picking-mode="Ignore">
+                <ui:VisualElement name="slot-2" class="skillbar-slot skillbar-slot-empty" picking-mode="Position" tooltip="빈 스킬 슬롯">
+                    <ui:Label name="key-2" text="1" class="skillbar-key" picking-mode="Ignore"/>
+                    <ui:VisualElement name="icon-2" class="skillbar-icon" picking-mode="Ignore"/>
+                    <ui:VisualElement name="empty-2" class="skillbar-empty-mark" picking-mode="Ignore"/>
+                    <ui:VisualElement name="cooldown-overlay-2" class="skillbar-cooldown-overlay" picking-mode="Ignore">
+                        <ui:VisualElement name="cooldown-fill-2" class="skillbar-cooldown-fill" picking-mode="Ignore"/>
+                        <ui:Label name="cooldown-text-2" text="" class="skillbar-cooldown-text" picking-mode="Ignore"/>
+                    </ui:VisualElement>
+                    <ui:Label name="mana-indicator-2" text="마나 부족" class="skillbar-mana-indicator" picking-mode="Ignore"/>
+                    <ui:Label name="name-2" text="—" class="skillbar-name" picking-mode="Ignore"/>
+                </ui:VisualElement>
+                <ui:VisualElement name="slot-3" class="skillbar-slot skillbar-slot-empty" picking-mode="Position" tooltip="빈 스킬 슬롯">
+                    <ui:Label name="key-3" text="2" class="skillbar-key" picking-mode="Ignore"/>
+                    <ui:VisualElement name="icon-3" class="skillbar-icon" picking-mode="Ignore"/>
+                    <ui:VisualElement name="empty-3" class="skillbar-empty-mark" picking-mode="Ignore"/>
+                    <ui:VisualElement name="cooldown-overlay-3" class="skillbar-cooldown-overlay" picking-mode="Ignore">
+                        <ui:VisualElement name="cooldown-fill-3" class="skillbar-cooldown-fill" picking-mode="Ignore"/>
+                        <ui:Label name="cooldown-text-3" text="" class="skillbar-cooldown-text" picking-mode="Ignore"/>
+                    </ui:VisualElement>
+                    <ui:Label name="mana-indicator-3" text="마나 부족" class="skillbar-mana-indicator" picking-mode="Ignore"/>
+                    <ui:Label name="name-3" text="—" class="skillbar-name" picking-mode="Ignore"/>
+                </ui:VisualElement>
+                <ui:VisualElement name="slot-4" class="skillbar-slot skillbar-slot-empty" picking-mode="Position" tooltip="빈 스킬 슬롯">
+                    <ui:Label name="key-4" text="3" class="skillbar-key" picking-mode="Ignore"/>
+                    <ui:VisualElement name="icon-4" class="skillbar-icon" picking-mode="Ignore"/>
+                    <ui:VisualElement name="empty-4" class="skillbar-empty-mark" picking-mode="Ignore"/>
+                    <ui:VisualElement name="cooldown-overlay-4" class="skillbar-cooldown-overlay" picking-mode="Ignore">
+                        <ui:VisualElement name="cooldown-fill-4" class="skillbar-cooldown-fill" picking-mode="Ignore"/>
+                        <ui:Label name="cooldown-text-4" text="" class="skillbar-cooldown-text" picking-mode="Ignore"/>
+                    </ui:VisualElement>
+                    <ui:Label name="mana-indicator-4" text="마나 부족" class="skillbar-mana-indicator" picking-mode="Ignore"/>
+                    <ui:Label name="name-4" text="—" class="skillbar-name" picking-mode="Ignore"/>
+                </ui:VisualElement>
+                <ui:VisualElement name="slot-5" class="skillbar-slot skillbar-slot-empty" picking-mode="Position" tooltip="빈 스킬 슬롯">
+                    <ui:Label name="key-5" text="4" class="skillbar-key" picking-mode="Ignore"/>
+                    <ui:VisualElement name="icon-5" class="skillbar-icon" picking-mode="Ignore"/>
+                    <ui:VisualElement name="empty-5" class="skillbar-empty-mark" picking-mode="Ignore"/>
+                    <ui:VisualElement name="cooldown-overlay-5" class="skillbar-cooldown-overlay" picking-mode="Ignore">
+                        <ui:VisualElement name="cooldown-fill-5" class="skillbar-cooldown-fill" picking-mode="Ignore"/>
+                        <ui:Label name="cooldown-text-5" text="" class="skillbar-cooldown-text" picking-mode="Ignore"/>
+                    </ui:VisualElement>
+                    <ui:Label name="mana-indicator-5" text="마나 부족" class="skillbar-mana-indicator" picking-mode="Ignore"/>
+                    <ui:Label name="name-5" text="—" class="skillbar-name" picking-mode="Ignore"/>
+                </ui:VisualElement>
+                <ui:VisualElement name="slot-6" class="skillbar-slot skillbar-slot-empty" picking-mode="Position" tooltip="빈 스킬 슬롯">
+                    <ui:Label name="key-6" text="5" class="skillbar-key" picking-mode="Ignore"/>
+                    <ui:VisualElement name="icon-6" class="skillbar-icon" picking-mode="Ignore"/>
+                    <ui:VisualElement name="empty-6" class="skillbar-empty-mark" picking-mode="Ignore"/>
+                    <ui:VisualElement name="cooldown-overlay-6" class="skillbar-cooldown-overlay" picking-mode="Ignore">
+                        <ui:VisualElement name="cooldown-fill-6" class="skillbar-cooldown-fill" picking-mode="Ignore"/>
+                        <ui:Label name="cooldown-text-6" text="" class="skillbar-cooldown-text" picking-mode="Ignore"/>
+                    </ui:VisualElement>
+                    <ui:Label name="mana-indicator-6" text="마나 부족" class="skillbar-mana-indicator" picking-mode="Ignore"/>
+                    <ui:Label name="name-6" text="—" class="skillbar-name" picking-mode="Ignore"/>
+                </ui:VisualElement>
+                <ui:VisualElement name="slot-7" class="skillbar-slot skillbar-slot-empty" picking-mode="Position" tooltip="빈 스킬 슬롯">
+                    <ui:Label name="key-7" text="6" class="skillbar-key" picking-mode="Ignore"/>
+                    <ui:VisualElement name="icon-7" class="skillbar-icon" picking-mode="Ignore"/>
+                    <ui:VisualElement name="empty-7" class="skillbar-empty-mark" picking-mode="Ignore"/>
+                    <ui:VisualElement name="cooldown-overlay-7" class="skillbar-cooldown-overlay" picking-mode="Ignore">
+                        <ui:VisualElement name="cooldown-fill-7" class="skillbar-cooldown-fill" picking-mode="Ignore"/>
+                        <ui:Label name="cooldown-text-7" text="" class="skillbar-cooldown-text" picking-mode="Ignore"/>
+                    </ui:VisualElement>
+                    <ui:Label name="mana-indicator-7" text="마나 부족" class="skillbar-mana-indicator" picking-mode="Ignore"/>
+                    <ui:Label name="name-7" text="—" class="skillbar-name" picking-mode="Ignore"/>
+                </ui:VisualElement>
+                <ui:VisualElement name="slot-8" class="skillbar-slot skillbar-slot-empty" picking-mode="Position" tooltip="빈 스킬 슬롯">
+                    <ui:Label name="key-8" text="7" class="skillbar-key" picking-mode="Ignore"/>
+                    <ui:VisualElement name="icon-8" class="skillbar-icon" picking-mode="Ignore"/>
+                    <ui:VisualElement name="empty-8" class="skillbar-empty-mark" picking-mode="Ignore"/>
+                    <ui:VisualElement name="cooldown-overlay-8" class="skillbar-cooldown-overlay" picking-mode="Ignore">
+                        <ui:VisualElement name="cooldown-fill-8" class="skillbar-cooldown-fill" picking-mode="Ignore"/>
+                        <ui:Label name="cooldown-text-8" text="" class="skillbar-cooldown-text" picking-mode="Ignore"/>
+                    </ui:VisualElement>
+                    <ui:Label name="mana-indicator-8" text="마나 부족" class="skillbar-mana-indicator" picking-mode="Ignore"/>
+                    <ui:Label name="name-8" text="—" class="skillbar-name" picking-mode="Ignore"/>
+                </ui:VisualElement>
+                <ui:VisualElement name="slot-9" class="skillbar-slot skillbar-slot-empty" picking-mode="Position" tooltip="빈 스킬 슬롯">
+                    <ui:Label name="key-9" text="8" class="skillbar-key" picking-mode="Ignore"/>
+                    <ui:VisualElement name="icon-9" class="skillbar-icon" picking-mode="Ignore"/>
+                    <ui:VisualElement name="empty-9" class="skillbar-empty-mark" picking-mode="Ignore"/>
+                    <ui:VisualElement name="cooldown-overlay-9" class="skillbar-cooldown-overlay" picking-mode="Ignore">
+                        <ui:VisualElement name="cooldown-fill-9" class="skillbar-cooldown-fill" picking-mode="Ignore"/>
+                        <ui:Label name="cooldown-text-9" text="" class="skillbar-cooldown-text" picking-mode="Ignore"/>
+                    </ui:VisualElement>
+                    <ui:Label name="mana-indicator-9" text="마나 부족" class="skillbar-mana-indicator" picking-mode="Ignore"/>
+                    <ui:Label name="name-9" text="—" class="skillbar-name" picking-mode="Ignore"/>
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:Button name="settings-btn" text="K  스킬 설정" class="skillbar-settings-button" focusable="false" tooltip="스킬 설정 창 열기"/>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

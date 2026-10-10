@@ -141,12 +141,13 @@ namespace ARPG.Systems
             inputComponent.IsSprinting = _input.Value.Sprint.IsPressed();
 
             // 좌클릭 = 아이템 줍기 + 슬롯 0 공격 공용.
-            // 누른 순간 드랍 아이템을 클릭했다면(줍기 성공 여부 무관) 버튼을 뗄 때까지 공격을 막는다.
+            // 누른 순간 UI나 드랍 아이템을 클릭했다면(줍기 성공 여부 무관) 버튼을 뗄 때까지 공격을 막는다.
             // 새로 누를 때마다 다시 판정하므로, UI가 입력을 가져간 사이 버튼을 떼도 플래그가 남지 않는다.
             bool attackPressed = _input.Value.Attack.IsPressed();
             if (_input.Value.Attack.WasPressedThisFrame() == true)
             {
-                inputComponent.AttackSuppressedUntilRelease = TryClickDroppedItem(inputComponent.MouseWorldPosition);
+                inputComponent.AttackSuppressedUntilRelease = AR.s.UI.IsPointerOverUIElement(inputComponent.MousePosition) == true
+                    || TryClickDroppedItem(inputComponent.MouseWorldPosition);
             }
             else if (attackPressed == false)
             {

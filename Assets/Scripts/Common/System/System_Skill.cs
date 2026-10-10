@@ -650,7 +650,10 @@ namespace ARPG.Systems
         /// </summary>
         private void OnEnterEndState(int skillEntityId, ref SkillComponent inSkill)
         {
-            AR.s.Component.RemoveComponent<SkillLandingCommitComponent>(skillEntityId);
+            ComponentManager cm = AR.s.Component;
+            // 채널 종료 등 남은 커밋이 실행되지 않는 경우에도 후딜에는 예고를 남기지 않는다.
+            cm.RemoveComponent<AttackTelegraphComponent>(skillEntityId);
+            cm.RemoveComponent<SkillLandingCommitComponent>(skillEntityId);
 
             // [SkillEffect] OnSkillEnd 트리거
             SkillEffectContext endCtx = new()
@@ -713,6 +716,7 @@ namespace ARPG.Systems
                     float cdr = Mathf.Clamp(ownerStat.FinalCooldownReduction, 0, 90) / 100f;
                     cooldown *= (1f - cdr);
                 }
+                inSkillState.CooldownDuration = cooldown;
                 inSkillState.CooldownRemaining = cooldown;
             }
 
@@ -950,10 +954,12 @@ namespace ARPG.Systems
             SkillImpactSchedule schedule,
             in SkillRuntimePools pools)
         {
+            ComponentManager cm = AR.s.Component;
             int nextCommitIndex = skill.CurrentHitIndex;
             if (schedule.HasCommitAt(nextCommitIndex) == false)
             {
-                // 마지막 커밋 뒤에도 100% 상태를 유지하고 스킬 완료/취소 생명주기에서 제거합니다.
+                // 마지막 타격·발사·착지 직후 제거하고, 다음 커밋이 있을 때만 예고를 유지한다.
+                cm.RemoveComponent<AttackTelegraphComponent>(skillEntityId);
                 return;
             }
 
@@ -977,7 +983,7 @@ namespace ARPG.Systems
                     Time.fixedDeltaTime);
             telegraph.CommitIndex = nextCommitIndex;
             telegraph.CommitCount = schedule.CommitCount;
-            AR.s.Component.SetComponent(skillEntityId, telegraph);
+            cm.SetComponent(skillEntityId, telegraph);
         }
 
         private static Vector2 ResolveJumpEndPosition(

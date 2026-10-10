@@ -12,6 +12,7 @@ namespace ARPG.Scene
         [SerializeField] private Transform _monsterRoot;
         [SerializeField] private Transform _npcRoot;
         [SerializeField] private Transform _buildingRoot;
+        private UIManager _uiManager;
 
         public Transform MonsterRoot => _monsterRoot;
         public Transform NpcRoot => _npcRoot;
@@ -65,8 +66,17 @@ namespace ARPG.Scene
                 AR.s.Component.SetComponent(playerEntityId, chunkLoader);
             }
 
+            _uiManager = AR.s.UI;
+            _uiManager.Show<UI.UISkillBar>(AddressablePath.SkillBar, UIManager.Layer.MainBase);
+
             // CreateMap이 초기 NPC SaveData 배치까지 동기적으로 마친 뒤 새 월드를 한 번 영속화한다.
             await AR.s.Data.SaveInitialWorldIfNeededAsync();
+        }
+
+        private void OnDestroy()
+        {
+            if (_uiManager != null && _uiManager.IsShow(AddressablePath.SkillBar) == true)
+                _uiManager.Close(AddressablePath.SkillBar, true);
         }
     }
 }

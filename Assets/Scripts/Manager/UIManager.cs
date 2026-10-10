@@ -37,6 +37,7 @@ namespace ARPG
 
         // 스킬북 UI (SKILLBOOK_DESIGN.md §5)
         public const string SkillBook = "UI/SkillBook";
+        public const string SkillBar = "UI/SkillBar";
 
         // NPC 장비/인벤토리 검사 UI (NPC_EQUIPMENT_DESIGN.md UI 패스)
         public const string NpcInspect = "UI/NpcInspect";
@@ -197,7 +198,8 @@ namespace ARPG
 
         public void Reset()
         {
-
+            if (_uiList.ContainsKey(AddressablePath.SkillBar) == true)
+                Close(AddressablePath.SkillBar, true);
         }
 
         public void DisableInputSystem()
@@ -425,6 +427,10 @@ namespace ARPG
                 {
                     _uiCurrentList.Remove(ui);
                 }
+                else
+                {
+                    _uiBaseList.Remove(ui);
+                }
 
                 // UI 삭제
                 if (isDestroy == true)
@@ -443,7 +449,7 @@ namespace ARPG
 
 
             // 창이 닫힐 때 툴팁도 닫는걸 시도한다.
-            AR.s.Tooltip.Hide();
+            AR.s?.Tooltip.Hide();
 
             // _uiCurrentList.Count가 0보다 크면 Input ActionMap을 UI로 세팅, 아니라면 Player 타입으로 세팅
             UpdateInputActionMap();
@@ -1009,6 +1015,10 @@ namespace ARPG
 
         public bool IsPointerOverUIElement(Vector3 mousePosition)
         {
+            if (_uiList.TryGetValue(AddressablePath.SkillBar, out var resource) == true
+                && resource.UI is UISkillBar skillBar && skillBar.IsPointerOver(mousePosition) == true)
+                return true;
+
             _pointerEventData.position = mousePosition;
             List<RaycastResult> results = new();
 

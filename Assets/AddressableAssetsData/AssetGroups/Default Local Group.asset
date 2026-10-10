@@ -150,6 +150,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4eb6acb66cc36394eb38a213d786765d
+    m_Address: UI/SkillBar
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 578e3d57ccf7ae344b6c4fd7d6443a82
     m_Address: Prefabs/Shadow
     m_ReadOnly: 0

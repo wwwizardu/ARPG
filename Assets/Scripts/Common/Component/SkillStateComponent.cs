@@ -35,6 +35,9 @@ namespace ARPG.Component
         /// <summary>남은 쿨타임 (초). 0 이하면 사용 가능</summary>
         public float CooldownRemaining;
 
+        /// <summary>이번 재사용 대기시간의 전체 길이 (쿨타임 감소 적용 후, HUD 진행률 기준)</summary>
+        public float CooldownDuration;
+
         /// <summary>
         /// 스킬이 실행 중인지 여부
         /// </summary>
@@ -65,6 +68,7 @@ namespace ARPG.Component
             ElapsedTime = 0f;
             IsEffectApplied = false;
             CooldownRemaining = 0f;
+            CooldownDuration = 0f;
         }
     }
 }
