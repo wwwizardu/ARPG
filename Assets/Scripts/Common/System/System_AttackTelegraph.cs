@@ -117,7 +117,9 @@ namespace ARPG.Systems
 
                 Vector2 origin = ResolveOrigin(skillEntityId, skill, telegraph, ownerTransform);
                 float boundsRadius = GetBoundsRadius(telegraph);
-                if (CircleIntersectsRect(origin, boundsRadius, expandedCameraRect) == false)
+                // 시야 밖 몬스터의 예고도 범위가 시야 원에 걸리면 그린다 — 보이지 않는 몬스터에게 예고 없이 맞지 않게 (FOG_OF_WAR_DESIGN §5)
+                if (CircleIntersectsRect(origin, boundsRadius, expandedCameraRect) == false ||
+                    AR.s.Fog.OverlapsVision(origin, boundsRadius) == false)
                 {
                     _telegraphPool.SetByIndex(i, telegraph);
                     continue;

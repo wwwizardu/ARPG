@@ -203,6 +203,13 @@ namespace ARPG.Systems
             System_Render renderSystem = new();
             RegisterSystems(renderSystem);
 
+            // Priority 880: Fog Vision (LateUpdate) - 플레이어 시야·탐험 기록. 칸을 넘을 때만 다시 계산 (FOG_OF_WAR_DESIGN §4)
+            // Render(Update 1000)의 이동 적분 뒤여야 시야 원 중심이 이번 프레임 위치와 맞는다
+            RegisterSystems(new System_FogVision());
+
+            // Priority 890: Fog Entity Visibility (LateUpdate) - 시야 밖 이동 엔티티 Visual 숨김, 바뀐 엔티티만 적용 (§5)
+            RegisterSystems(new System_FogEntityVisibility());
+
             // Priority 900: Entity Message System (LateUpdate) - 메시지 일괄 처리
             System_EntityMessage entityMessageSystem = new();
             RegisterSystems(entityMessageSystem);

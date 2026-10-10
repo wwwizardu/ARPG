@@ -14,7 +14,9 @@ namespace ARPG.Data
     public partial class DataManager : MonoBehaviour
     {
         // 21: narrative 파트 도입 (NPC_NARRATIVE_CONTENT_DESIGN §7.7). 21 이상은 narrative 파트가 반드시 있어야 한다.
-        private const ushort CURRENT_WORLD_DATA_VERSION = 21;
+        // 22: exploration 파트(시야 탐험 기억) 도입 뒤 같은 날 제거 (FOG_OF_WAR_DESIGN §6). 22 세이브에 남은 exploration 파트와
+        //     던전 기록의 탐험 칸은 읽지 않고, 파트는 다음 저장의 manifest에서 뺀다(OBSOLETE_PARTS). 데이터 이관은 없다.
+        private const ushort CURRENT_WORLD_DATA_VERSION = 22;
         private const ushort NARRATIVE_PART_REQUIRED_VERSION = 21;
         private const ushort CURRENT_PLAYER_DATA_VERSION = 2;
         private WorldData _worldData = new();

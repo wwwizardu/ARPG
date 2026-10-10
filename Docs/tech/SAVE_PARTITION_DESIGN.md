@@ -1,7 +1,8 @@
 # 세이브 파티션 설계
 
 > **상태 (2026-10-05)**: 파티션 저장과 S-1~S-3 상시 스냅샷 구현 완료·핵심 기능 검증 통과. 그 위에 시뮬 6개 파트 묶음·증분 파일 쓰기를 구현했다(§5, SAVE_SNAPSHOT_DESIGN §13). S-2/S-3 장기 시뮬·실제 상점/던전 통합 비용 실측은 후속이다. 이번 개정의 진단 결과는 스냅샷 문서 §13.2에 기록한다.
-> **내러티브 파트 개정 (2026-10-10)**: 현재 WorldDataVersion은 **21**. NPC 행적·반응의 진행 원장 `narrative` 파트(`SaveScope.Narrative`)를 더했다(§2·§3·§5·§8). 원장 안의 형식·dirty 그룹은 [NPC_NARRATIVE_CONTENT_DESIGN §7](../npc/NPC_NARRATIVE_CONTENT_DESIGN.md)을 따른다.
+> **탐험 파트 도입·제거 (2026-10-10)**: 현재 WorldDataVersion은 **22**. 시야·안개의 탐험 기억 `exploration` 파트와 던전 기록의 탐험 칸을 더했다가 같은 날 제거했다. 22 세이브에 남은 것은 읽지 않고 다음 저장에서 빠진다(§8). 경위는 [FOG_OF_WAR_DESIGN §6](../map/FOG_OF_WAR_DESIGN.md).
+> **내러티브 파트 개정 (2026-10-10)**: WorldDataVersion **21**. NPC 행적·반응의 진행 원장 `narrative` 파트(`SaveScope.Narrative`)를 더했다(§2·§3·§5·§8). 원장 안의 형식·dirty 그룹은 [NPC_NARRATIVE_CONTENT_DESIGN §7](../npc/NPC_NARRATIVE_CONTENT_DESIGN.md)을 따른다.
 > **기억 저장 개정 (2026-10-04)**: WorldDataVersion을 **19**로 올렸다. 공동 활동 통계·최신 개인 사연·과거 동료 기억을 저장하고, `NpcState`와 `NpcSocial`은 부분 저장에서도 같은 revision으로 커밋한다. 기억 진단은 통과했으며 전체 플레이 모드·장애 주입 검증은 여전히 후속이다(§9).
 >
 > **범위**: 파일 분할, 저장 범위, NPC 샤딩, 원자 커밋, 레거시 마이그레이션.
@@ -141,7 +142,11 @@ manifest가 없고 `WorldData.json`/`PlayerData.json`이 있으면 기존 버전
 
 **버전 21의 narrative 파트(2026-10-10)**: 21 미만 세이브는 narrative 파트가 없어도 정상이며 빈 원장으로 연다. 버전 이관이 일어났으므로 첫 저장은 `All`로 승격해 파트를 처음 쓴다. 21 이상인데 파트가 없거나, 읽을 수 없거나, 원장 정합성 검사(`NarrativeSaveValidation`)를 통과하지 못하면 로드 실패로 처리한다. dungeons 파트의 15 이상 검사와 같은 방식이다. 구 던전 시나리오 필드가 남은 개발 세이브는 그 필드만 무시하고 연다. [src: Assets/Scripts/Manager/DataManager.cs, Assets/Scripts/Manager/DataManager_PartitionedSave.cs, Assets/Scripts/Npc/Narrative/NarrativeSaveValidation.cs, Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md §7.7]
 
+**버전 22 — exploration 파트 도입 뒤 제거(2026-10-10)**: 시야 탐험 기억용 `exploration` 파트와 던전 기록의 `ExploredBlocks`·`ExploredGameTime`을 더해 22로 올렸다가 같은 날 제거했다. 버전은 22를 유지하고 데이터 이관은 없다. 22 세이브에 남은 `exploration` 파트는 읽지 않으며, 다음 저장의 manifest로 옮기지 않는다(`OBSOLETE_PARTS`). 파일은 이전 manifest도 가리키지 않게 된 뒤 정리 단계가 지운다. 던전 기록의 옛 칸은 JSON 기본 설정(모르는 필드 무시)으로 읽히고 다음 던전 저장에서 빠진다. `SaveScope`의 `1 << 13`은 다시 쓰지 않는다. [src: Assets/Scripts/Manager/DataManager.cs, Assets/Scripts/Manager/DataManager_PartitionedSave.cs, Assets/Scripts/Data/SavePartitionData.cs, Docs/map/FOG_OF_WAR_DESIGN.md §6]
+
 ## 9. 검증 현황과 후속 검증
+
+2026-10-10 exploration 파트 제거: `ARPG/Dungeon/Run Storage and Generation Diagnostics` 전체 PASS — 파트 44개, 옛 v22 exploration 파트가 있는 manifest 로드 성공·다음 manifest에서 빠짐, 던전 기록의 옛 탐험 칸 무시, 저장 묶음 45/45. 실제 v22 세이브(리비전 214)를 편집기 플레이로 열고 저장(215)하자 manifest에서 exploration이 빠졌다(확인 뒤 백업으로 되돌림). 상세는 [FOG_OF_WAR_DESIGN §9](../map/FOG_OF_WAR_DESIGN.md). [src: Assets/Scripts/Editor/DungeonRuntimeDiagnostics.cs]
 
 2026-10-10 narrative 파트: `ARPG/Dungeon/Run Storage and Generation Diagnostics`에서 저장 묶음 42/42(narrative 루트·부탁 칸·부상 던전 묶음 포함), 21 미만 빈 원장·21 이상 파트 누락/손상 거절, 부탁·완료·보고 저장 실패 주입 롤백이 PASS다. 실제 플레이 저장 확인은 남았다. 상세는 [NPC_NARRATIVE_CONTENT_DESIGN §8.1](../npc/NPC_NARRATIVE_CONTENT_DESIGN.md). [src: Assets/Scripts/Editor/DungeonRuntimeDiagnostics.cs, Assets/Scripts/Editor/DungeonRuntimeDiagnostics_Scenarios.cs, Assets/Scripts/Editor/NpcSaveSnapshotDiagnostics_Grouped.cs]
 

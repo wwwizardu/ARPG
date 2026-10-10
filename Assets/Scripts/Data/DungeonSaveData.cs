@@ -69,6 +69,8 @@ namespace ARPG.Data
         public List<ChunkModificationData> TileModifications = new();
         // 보스를 플레이어나 동행이 처치했다. 소문 해결 판정의 유일한 근거다 (NPC_NARRATIVE_CONTENT_DESIGN §3.1).
         public bool BossKilledByPlayerParty;
+        // (제거 2026-10-10) ExploredBlocks·ExploredGameTime — 시야 탐험 기억 (FOG_OF_WAR_DESIGN §6).
+        // 그 칸이 남은 WorldDataVersion 22 세이브는 JSON 기본 설정(모르는 필드 무시)으로 읽고, 다음 저장에서 빠진다.
     }
 
     [Serializable]

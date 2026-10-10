@@ -60,6 +60,13 @@ namespace ARPG.Utility
 
             AR.s.Component.AddComponent(entityId, new ProjectileTag());
 
+            // 플레이어 편이 아닌 투사체는 시야 밖에서 숨긴다 (FOG_OF_WAR_DESIGN §5). 숨김 상태로 시작하고 표시는 프리팹 로드 뒤 적용한다.
+            if (AR.s.Component.TryGetComponent<FactionComponent>(ownerEntityId, out FactionComponent ownerFaction) == false ||
+                ownerFaction.FactionId != Faction.Player)
+            {
+                AR.s.Component.AddComponent(entityId, new FogVisibilityComponent { IsVisible = AR.s.Fog.IsActive == false });
+            }
+
             // [SkillEffect] OnProjectileSpawn 트리거
             if (AR.s.Component.TryGetComponent<SkillComponent>(skillEntityId, out var skill) == true
                 && skill.Table != null)
@@ -142,6 +149,11 @@ namespace ARPG.Utility
                 AddressablePool.Return(prefabKey, obj);
                 return;
             }
+
+            // 풀에서 꺼낸 프리팹에는 이전 투사체의 숨김 상태가 남아 있을 수 있다. 지금 판정 상태로 맞춘다 (FOG_OF_WAR_DESIGN §5).
+            bool visible = cm.TryGetComponent<FogVisibilityComponent>(entityId, out FogVisibilityComponent fog) == false || fog.IsVisible;
+            if (entityBase.Visual != null && entityBase.Visual.activeSelf != visible)
+                entityBase.Visual.SetActive(visible);
 
             renderSystem.RegisterEntity(entityId, entityBase);
         }

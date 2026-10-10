@@ -33,6 +33,8 @@ namespace ARPG
 
         private PlayerManager _playerManager = new PlayerManager();
         private readonly Dungeon.DungeonManager _dungeonManager = new();
+        // 시야·안개와 탐험 기억 (FOG_OF_WAR_DESIGN). plain class, 덮개 GameObject는 Initialize에서 AR 아래에 만든다
+        private FogOfWarManager _fogManager = new();
         private PlayerSkillManager _playerSkillManager = new PlayerSkillManager();
         // 엔티티 생명주기(ID 발급/등록/소멸 오케스트레이션) — 구 EntityIdHelper. plain class, 프리팹 배선 불필요
         private Manager.EntityManager _entityManager = new Manager.EntityManager();
@@ -47,6 +49,7 @@ namespace ARPG
         public MapManager Map => _dungeonManager.ActiveMap ?? _mapManager;
         public MapManager WorldMap => _mapManager;
         public Dungeon.DungeonManager Dungeon => _dungeonManager;
+        public FogOfWarManager Fog => _fogManager;
         public UIManager UI => _uiManager;
         public Monster.MonsterManager Monster => _monsterManager;
         public Npc.NpcManager Npc => _npcManager;
@@ -101,6 +104,8 @@ namespace ARPG
             _effectManager.Initialize();
             _historyManager.Initialize();
             _dungeonManager.Initialize();
+            // 로드된 탐험 기억과 게임 시각(던전 탐험 만료)을 읽으므로 데이터·시간·던전 다음
+            _fogManager.Initialize();
 
             _initialized = true;
 
@@ -116,6 +121,7 @@ namespace ARPG
             _systemManager.Reset();
             _itemManager.UnloadContextDrops();
             _dungeonManager.Reset();
+            _fogManager.Reset();
 
             _dataManager.Reset();
             _uiManager.Reset();

@@ -287,6 +287,7 @@ namespace ARPG.Dungeon
                 UnityEngine.Object.Destroy(ActiveMap.gameObject);
                 ActiveMap = null;
                 _active = null;
+                AR.s.Fog.OnMapChanged();
                 _components.RestoreSuspended(_suspendedWorld);
                 // 월드 맵 기준으로 귀환 위치를 계산해야 하므로 ActiveMap 해제 뒤, 청크 재활성화(ResumeWorld) 전에 처리한다.
                 AR.s.Npc.FinishCompanionDungeonExit(companionId, returnPosition);
@@ -437,6 +438,8 @@ namespace ARPG.Dungeon
             // Resume the idempotent transaction even if the process ended between those two events.
             _completionPending = DungeonCompletionTransaction.NeedsCompletion(record);
             ActiveMap = AR.s.WorldMap.CreateDungeonMap(record);
+            // 시야 창을 비우고 던전에서 다시 계산한다 (FOG_OF_WAR_DESIGN §3)
+            AR.s.Fog.OnMapChanged();
             var p = AR.s.Data.Player;
             Vector2 position = new Vector2(p.DungeonPositionX, p.DungeonPositionY);
             if (DungeonLayout.IsFloor(record, Mathf.FloorToInt(position.x), Mathf.FloorToInt(position.y)) == false)

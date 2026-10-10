@@ -38,6 +38,9 @@ namespace ARPG.Data
         private const string PART_NPC_SOCIAL = "npc_social";
         private const string PART_NPC_PARTIES = "npc_parties";
         private const string PART_NPC_STATE_PREFIX = "npc_state_";
+        // 더는 쓰지 않는 파트. 예전 manifest에 남아 있으면 읽지 않고, 다음 저장의 manifest에 옮기지 않는다(파일은 정리 단계가 지운다).
+        // exploration: WorldDataVersion 22에 도입했다가 같은 날 제거한 시야 탐험 기억 (FOG_OF_WAR_DESIGN §6).
+        private static readonly string[] OBSOLETE_PARTS = { "exploration" };
 
         private SaveManifest? _activeSaveManifest;
         // 프레임 정리와 독립된 디스크 확정 세대. 실패/Reset 중인 writer는 이 값을 전진시키지 않는다.
@@ -1152,6 +1155,8 @@ namespace ARPG.Data
             for (int i = 0; i < partKeys.Count; i++)
             {
                 string partKey = partKeys[i];
+                if (Array.IndexOf(OBSOLETE_PARTS, partKey) >= 0)
+                    continue;
                 SavePartReference part = source.Parts[partKey];
                 result.Parts[partKey] = new SavePartReference
                 {

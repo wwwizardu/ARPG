@@ -487,6 +487,8 @@ namespace ARPG.Building
                     _occupiedTiles.Add(new Vector2Int(worldX + dx, worldY + dy));
                 }
             }
+            // 건물 칸은 시야를 가린다. 다음 프레임에 시야를 다시 계산한다 (FOG_OF_WAR_DESIGN §4)
+            if (AR.s != null) AR.s.Fog.MarkVisionDirty();
         }
 
         private void RemoveOccupiedTiles(int worldX, int worldY, int width, int height)
@@ -498,6 +500,7 @@ namespace ARPG.Building
                     _occupiedTiles.Remove(new Vector2Int(worldX + dx, worldY + dy));
                 }
             }
+            if (AR.s != null) AR.s.Fog.MarkVisionDirty();
         }
 
         #endregion

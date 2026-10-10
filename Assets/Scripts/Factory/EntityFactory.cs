@@ -74,6 +74,7 @@ namespace ARPG.Factory
             // 3. EntityId 발급 + TransformComponent
             entity.SetupEntityId();
             int entityId = entity.EntityId;
+            AddFogVisibility(entityId, entity);
 
             // 4. ECS 컴포넌트 추가
             await AddCreatureComponents(entityId, table, entity);
@@ -175,6 +176,7 @@ namespace ARPG.Factory
             }
             entity.SetupEntityId();
             int entityId = entity.EntityId;
+            AddFogVisibility(entityId, entity);
 
             // 4. ECS 컴포넌트 추가
             await AddCreatureComponents(entityId, table, entity);
@@ -311,6 +313,9 @@ namespace ARPG.Factory
             // 진영 (플레이어) - 스킬·발사체·AI 타겟 필터에 사용. 토템·지뢰는 이 값을 그대로 복사
             AR.s.Component.AddComponent(entityId, new FactionComponent { FactionId = Faction.Player });
 
+            // 시야 (FOG_OF_WAR_DESIGN §4) - 지금은 고정 반경. 장비 옵션으로 늘리면 이 값을 스탯에서 채운다
+            AR.s.Component.AddComponent(entityId, new VisionComponent { Radius = FogOfWarManager.DEFAULT_VISION_RADIUS });
+
             // 저장된 장비의 스탯 modifier 복원
             EquipHelper.ApplyAllEquipmentModifiers(entityId, AR.s.Data.Player._inventoryEquip);
 
@@ -389,6 +394,19 @@ namespace ARPG.Factory
 
         private const string UI_CANVAS_PREFAB_KEY = "Prefabs/UICanvas";
         private const string SHADOW_PREFAB_KEY = "Prefabs/Shadow";
+
+        /// <summary>
+        /// 시야 밖에서 숨길 이동 엔티티로 등록한다 (FOG_OF_WAR_DESIGN §5). 안개가 켜져 있으면 숨김 상태로 시작해
+        /// HP바·그림자·애니메이션을 비동기로 불러오는 동안이나 첫 판정 전에 한 프레임도 보이지 않게 한다.
+        /// 숨긴 Visual 아래의 핸들러도 AutoRegisterChildHandlers가 등록한다. 보임 전환은 System_FogEntityVisibility가 한다.
+        /// </summary>
+        private static void AddFogVisibility(int entityId, EntityBase entity)
+        {
+            bool visible = AR.s.Fog.IsActive == false;
+            AR.s.Component.AddComponent(entityId, new FogVisibilityComponent { IsVisible = visible });
+            if (entity.Visual != null && entity.Visual.activeSelf != visible)
+                entity.Visual.SetActive(visible);
+        }
 
         /// <summary>
         /// CreatureTable 기반 공통 컴포넌트 추가 (Stat + State + Velocity + HP바 프리팹 로드)

@@ -508,6 +508,25 @@ namespace ARPG.Map
             return false;
         }
 
+        /// <summary>
+        /// 시야 판정용 막힘 종류 (FOG_OF_WAR_DESIGN §4). IsTileBlocked와 같은 규칙을 벽(맵 밖·타일 Blocked 비트)과
+        /// 시설(월드의 건물 점유 칸)로 나눈다. 벽 뒤와 시설 뒤는 서로 다른 밝기의 반투명 그림자로 그린다.
+        /// </summary>
+        public VisionBlocker GetVisionBlocker(int worldTileX, int worldTileY)
+        {
+            if (IsWorldTileInBounds(worldTileX, worldTileY) == false)
+                return VisionBlocker.Wall;
+
+            ulong tile = GetTileAt(worldTileX, worldTileY);
+            if ((tile & (ulong)GlobalEnum.TileFlag.Blocked) != 0)
+                return VisionBlocker.Wall;
+
+            if (Context.Kind == MapKind.World && AR.s.Building != null && AR.s.Building.IsTileOccupied(worldTileX, worldTileY) == true)
+                return VisionBlocker.Facility;
+
+            return VisionBlocker.None;
+        }
+
         public bool IsWalkable(Vector3 worldPosition)
         {
             Vector3Int cellPos = _tileMap.WorldToCell(worldPosition);
@@ -638,6 +657,8 @@ namespace ARPG.Map
                 currentTile &= ~(ulong)GlobalEnum.TileFlag.MonsterSpawn;
                 chunk.tiles[localX, localY] = currentTile;
                 DisableMonsterSpawnSlotAtLocal(chunk, new Vector2Int(localX, localY));
+                // 막힌 칸이 생겼다 (벽·닫힌 문). 시야를 다시 계산한다 (FOG_OF_WAR_DESIGN §4)
+                if (AR.s != null) AR.s.Fog.MarkVisionDirty();
 
                 if (_renderedChunks.Contains(chunkCoord))
                 {
@@ -679,6 +700,8 @@ namespace ARPG.Map
                 currentTile &= ~(ulong)GlobalEnum.TileFlag.ObjectLayerMask;
                 currentTile &= ~(ulong)GlobalEnum.TileFlag.Blocked;
                 chunk.tiles[localX, localY] = currentTile;
+                // 막힌 칸이 열렸다 (문 열기·벽 파괴). 시야를 다시 계산한다 (FOG_OF_WAR_DESIGN §4)
+                if (AR.s != null) AR.s.Fog.MarkVisionDirty();
 
                 if (_renderedChunks.Contains(chunkCoord))
                 {

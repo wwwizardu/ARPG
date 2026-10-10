@@ -169,11 +169,12 @@ namespace ARPG.Base
 
         /// <summary>
         /// 자식 GameObject에서 IEntityMessageHandler를 구현한 컴포넌트를 찾아 자동 등록
-        /// EntityFactory에서 프리팹 생성 후 호출
+        /// EntityFactory에서 프리팹 생성 후 호출. 시야 밖에서 숨김 상태로 시작한 Visual 아래의 핸들러(HP바)도 등록해야 하므로
+        /// 비활성 자식까지 찾는다 (FOG_OF_WAR_DESIGN §5).
         /// </summary>
         public void AutoRegisterChildHandlers()
         {
-            var handlers = GetComponentsInChildren<IEntityMessageHandler>();
+            var handlers = GetComponentsInChildren<IEntityMessageHandler>(true);
             for (int i = 0; i < handlers.Length; i++)
             {
                 handlers[i].RegisterTo(this);

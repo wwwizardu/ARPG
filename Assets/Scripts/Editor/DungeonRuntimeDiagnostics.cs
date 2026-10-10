@@ -262,6 +262,31 @@ namespace ARPG.EditorTools
                 File.AppendAllText(Path.Combine(corrupt, "parts", first.Parts["narrative"].FileName), "corrupt");
                 Require(ReadSnapshot(data, corrupt, "manifest.json") == null, "corrupt narrative part rejected");
                 report.AppendLine("PASS: narrative partition presence, pre-21 empty ledger, v21 missing/corrupt rejection.");
+                // 제거한 exploration 파트 (FOG_OF_WAR_DESIGN §6): 같은 날 잠시 쓰인 WorldDataVersion 22 세이브에 남아 있어도
+                // 로드를 막지 않고, 다음 저장의 manifest로 옮기지 않는다. 던전 기록의 옛 탐험 칸도 무시하고 읽는다.
+                Require(first.Parts.ContainsKey("exploration") == false && first.Parts.Count == 44, "current writer has no exploration partition");
+                string obsolete = Path.Combine(root, "obsolete-exploration");
+                Directory.CreateDirectory(Path.Combine(obsolete, "parts"));
+                SaveManifest obsoleteManifest = JsonConvert.DeserializeObject<SaveManifest>(JsonConvert.SerializeObject(first));
+                foreach (SavePartReference part in obsoleteManifest.Parts.Values)
+                    File.Copy(Path.Combine(slotPath, "parts", part.FileName), Path.Combine(obsolete, "parts", part.FileName));
+                obsoleteManifest.Parts["exploration"] = new SavePartReference
+                {
+                    FileName = "exploration.r00000001.obsolete.json", SchemaVersion = 1, Revision = 1,
+                };
+                ReplaceFixturePart(obsolete, obsoleteManifest, "exploration",
+                    "{\"Version\":1,\"World\":[{\"X\":-3,\"Y\":2,\"Bits\":\"AQAAAAAAAIA=\"}]}");
+                ReplaceFixturePart(obsolete, obsoleteManifest, "world",
+                    "{\"Version\":1,\"WorldDataVersion\":22,\"WorldSeed\":12345,\"NextItemInstanceId\":1}");
+                File.WriteAllText(Path.Combine(obsolete, "manifest.json"), JsonConvert.SerializeObject(obsoleteManifest));
+                Require(ReadSnapshot(data, obsolete, "manifest.json") != null, "v22 save with an obsolete exploration partition loads");
+                var cloned = (SaveManifest)typeof(DataManager).GetMethod("CloneManifest", BindingFlags.Static | BindingFlags.NonPublic)
+                    .Invoke(null, new object[] { obsoleteManifest, obsoleteManifest.Revision + 1 });
+                Require(cloned.Parts.ContainsKey("exploration") == false && cloned.Parts.Count == 44, "next manifest drops the obsolete exploration partition");
+                var oldRecord = JsonConvert.DeserializeObject<DungeonRecord>(
+                    "{\"DungeonId\":\"old\",\"ExploredBlocks\":[{\"X\":0,\"Y\":0,\"Bits\":\"AA==\"}],\"ExploredGameTime\":3.5}", JsonSettings.Default);
+                Require(oldRecord != null && oldRecord.DungeonId == "old", "old dungeon exploration fields are ignored");
+                report.AppendLine("PASS: obsolete v22 exploration partition and dungeon exploration fields load without effect; the partition leaves the next manifest.");
                 data.DiagnosticBeforeCommit = () =>
                 {
                     typeof(DataManager).GetMethod("ResetPartitionedSaveState", BindingFlags.Instance | BindingFlags.NonPublic)

@@ -105,6 +105,9 @@ namespace ARPG.Component
             { typeof(DungeonEntranceComponent), 32 },         // 활성 월드 청크의 던전 입구 (마을당 2~3개)
             { typeof(DungeonEntranceSignComponent), 32 },     // 소문 징후 자막이 있는 입구만
             { typeof(KillCreditComponent), 128 },
+            // 시야·안개 (FOG_OF_WAR_DESIGN §5)
+            { typeof(VisionComponent), 4 },                   // 시야를 주는 엔티티 (플레이어 전용)
+            { typeof(FogVisibilityComponent), 512 },          // 시야 밖에서 숨길 이동 엔티티: 몬스터(최대 ~150) + NPC + 적 투사체
 
             // 엔티티 라이프사이클 컴포넌트
             { typeof(DestroyTag), 100 },                       // 제거 예약 태그

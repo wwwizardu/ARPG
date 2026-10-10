@@ -95,6 +95,7 @@
 | **[THEME_TILESET_REFACTOR.md](map/THEME_TILESET_REFACTOR.md)** | 바이옴 비주얼 차별화 리팩토링 |
 | **[DUNGEON_RUNTIME_DESIGN.md](map/DUNGEON_RUNTIME_DESIGN.md)** | 절차 던전 런타임 — 입구 배치·입장/퇴장·완료·저장 (✅ 구현 2026-09-19, 함정 등 일부 미구현) |
 | **[DUNGEON_WORLD_SIM_DESIGN.md](map/DUNGEON_WORLD_SIM_DESIGN.md)** | 던전 중 월드 시뮬 계속 실행 (설계 초안 2026-10-03, 검토 대기) |
+| **[FOG_OF_WAR_DESIGN.md](map/FOG_OF_WAR_DESIGN.md)** | 플레이어 시야·안개(시야 밖 거리 어둡기), 벽·시설 차단(반투명 그림자), 이동 엔티티 숨김 (✅ 구현 2026-10-10, 사용자 실플레이 확인 전) |
 | **[PROCEDURAL_HISTORY_DESIGN.md](world_history/PROCEDURAL_HISTORY_DESIGN.md)** | 정착지 통폐합 / 연대기 시뮬 (런타임 LOD) |
 | **[NPC_RELATION_HISTORY_DESIGN.md](npc/NPC_RELATION_HISTORY_DESIGN.md)** | NPC 개인 관계 (가족/원한/호감도) |
 | **[WORLD_HISTORY_PLAN.md](world_history/WORLD_HISTORY_PLAN.md)** | 위 두 문서 구현 계획 (R0~R4) |

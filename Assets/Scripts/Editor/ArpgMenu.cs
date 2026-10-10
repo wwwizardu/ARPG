@@ -30,6 +30,23 @@ public class ArpgMenu
         }
     }
 
+    // 시야·안개 켜기/끄기 (FOG_OF_WAR_DESIGN). 플레이 중에만 쓴다. 끄면 덮개가 사라지고 숨은 이동 엔티티가 모두 보인다.
+    [MenuItem("ARPG/Toggle Fog Of War", false, 5)]
+    private static void ToggleFogOfWar()
+    {
+        if (Application.isPlaying == false || ARPG.AR.s.IsInitialized == false)
+        {
+            Debug.LogWarning("[Fog] 플레이 모드 GameScene에서 실행하세요.");
+            return;
+        }
+
+        ARPG.Map.FogOfWarManager fog = ARPG.AR.s.Fog;
+        fog.SetEnabled(fog.IsEnabled == false);
+        Debug.Log($"[Fog] Fog of war {(fog.IsEnabled == true ? "enabled" : "disabled")}.");
+    }
+
+    [MenuItem("ARPG/Toggle Fog Of War", true)]
+    private static bool ValidateToggleFogOfWar() => Application.isPlaying;
     [MenuItem("ARPG/Create Theme Tile Set", false, 3)]
     private static void CreateThemeTileSet()
     {

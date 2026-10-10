@@ -24,9 +24,11 @@ namespace ARPG.UI
         [SerializeField] private Image _mpBar = null!;
 
         private bool _isPlayer;
+        private int _entityId = -1;
 
         public void RegisterTo(EntityBase entity)
         {
+            _entityId = entity.EntityId;
             _isPlayer = AR.s.Data != null && entity.EntityId == AR.s.Data.CurrentPlayerEntityId;
 
             entity.RegisterMessageHandler<DamageMessage>(OnDamage);
@@ -75,6 +77,12 @@ namespace ARPG.UI
 
             // 0 데미지(진행도/HP 동기화용 메시지)는 텍스트 표시 안 함
             if (msg.DamageAmount <= 0 && msg.IsEvaded == false && msg.IsBlocked == false)
+                return;
+
+            // 시야 밖에서 숨은 엔티티의 데미지 숫자는 띄우지 않는다 (FOG_OF_WAR_DESIGN §5).
+            // 만피 몬스터는 HP 캔버스가 원래 꺼져 있으므로 캔버스 활성 여부가 아니라 안개 상태로 판단한다.
+            if (AR.s.Component.TryGetComponent<FogVisibilityComponent>(_entityId, out FogVisibilityComponent fog) == true &&
+                fog.IsVisible == false)
                 return;
 
             Vector3 damagePos = _hpBar.transform.position;
