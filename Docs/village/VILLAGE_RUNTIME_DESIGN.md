@@ -66,6 +66,10 @@
 
 다음 건물의 선택과 자원 부족 정책은 [BUILD_PRIORITY_DESIGN.md](BUILD_PRIORITY_DESIGN.md)를 따르되, 위 후보 평가는 런타임 발전이 재개될 때만 실행된다.
 
+**신규 게임의 최소 시설 보장**: `HistoryManager.Initialize()`는 절차 마을의 누적 초기 발전 뒤 모든 마을에 Forge 160을 최소 Tier 1로 보장한다. 이어서 연대기 미연결 시작 마을(BaseTown, `SettlementId < 0`)에는 MerchantStall 151과 `ShopTier`를 최소 1로 보장한다(`EnsureNewGameBaseTownShops` → `VillageInitialDevelopment.EnsureMinimumShop`). BaseTown에 성장 계획 전체를 적용하지 않으므로 이 경로에서 거점·여관·Stage·Cap은 추가하거나 변경하지 않는다.
+
+상점이 없으면 자원·건설시간·task 없이 완공 원장에 추가하고, 기존 상점과 상권의 상위 Tier는 유지한다. 원장 중복·불일치는 변경 없이 오류로 거부한다. 저장 변경을 표시한 뒤 `RetryPendingPlacements`로 이미 실체화된 시작 마을에 배치하며, 배치 실패는 `PlacementPending`으로 보존한다. 이 최소 시설 보장은 신규 게임에서만 실행하며, 기존 세이브의 상점 일괄 보정은 하지 않는다. 상세 초기화 순서는 [ABSTRACT_CONSTRUCTION_DESIGN.md](ABSTRACT_CONSTRUCTION_DESIGN.md) §11을 따른다.
+
 ---
 
 ## 5. 건물 데이터와 완료 계약

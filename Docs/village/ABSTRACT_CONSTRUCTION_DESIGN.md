@@ -224,7 +224,7 @@ clock을 맞추는 이유는 실시간에서 이미 처리한 시간을 추상 �
 
 절차적 역사는 New Game 전에 오랜 기간을 시뮬레이션하지만, 그 전체 시간을 건설 시간으로 재생하면 모든 마을이 비슷한 최고 단계에 수렴한다. 그래서 시간을 흘려 Stage를 순차 승격시키지 않고, **고정 인구로 `InitialStage`를 한 번 계산한 뒤 그 Stage까지의 누적 상태를 결정론적으로 생성**한다(VILLAGE_REWORK_PLAN.md §3.2·§3.3·§3.5).
 
-`HistoryManager.BootstrapNewGameVillageDevelopment`가 마을마다 다음을 수행한다.
+`HistoryManager.BootstrapNewGameVillageDevelopment`가 운영 중인 연대기 연결 마을마다 다음을 수행한다.
 
 1. `VillageManager.QuantizeAbstractPopulation`으로 고정 경제 인구를 반영한다(생산 계산용, 1~25).
 2. `VillageProgressionRules.CalculateInitialStage(원본 역사 인구, Profile.MaxStage)`로 초기 Stage를 확정한다.
@@ -240,6 +240,13 @@ clock을 맞추는 이유는 실시간에서 이미 처리한 시간을 추상 �
 - 마을별 `InitialDevelopmentApplied=true`로 1회 적용을 확정하고, 세이브 로드나 재실체화에서 재적용하지 않는다(중복 방지 정본은 `VillageData.AppliedGrowthMilestones`).
 
 완료 부작용은 §4의 `ApplyCompletedBuild` 단일 계약을 그대로 쓴다. 시간 경과에 따른 일반 자동 건설·Tier 승격은 `RuntimeProgressionEnabled=false`로 중단돼 있다(런타임 발전 재개는 후속 Phase). 이전 방식인 시간 압축 bootstrap(`VillageDevelopmentBootstrap.CreatePlans`/`AdvanceBootstrapSlice`, 공통 자원·건설·완료·Tier 코어 실행)은 parity·진단 재현용으로만 보존한다.
+
+누적 초기 발전이 끝나면 같은 신규 게임 분기에서 다음 최소 시설 보장을 순서대로 실행한다.
+
+1. `EnsureNewGameMinimumForges` → `VillageInitialDevelopment.EnsureMinimumForge`: 모든 `VillageData`에 Forge 160을 최소 Tier 1로 보장하며 기존 Tier 2/3은 유지한다.
+2. `EnsureNewGameBaseTownShops` → `VillageInitialDevelopment.EnsureMinimumShop`: `SettlementId < 0`인 손제작 시작 마을에 MerchantStall 151과 `ShopTier`를 최소 1로 보장한다. 연대기에 연결된 절차 마을과 폐허·합병 터에는 이 상점 보장을 적용하지 않는다.
+
+BaseTown 상점 보장은 성장 마일스톤 전체와 별개다. 거점·여관·Stage·Cap을 추가하거나 변경하지 않고, 상점이 없을 때만 `ApplyCompletedBuild`로 미할당 완공 레코드를 만든다. 기존 상위 시설 Tier·상권 Tier는 유지하고, 원장 중복·불일치는 변경 없이 오류로 거부한다. 저장 변경 표시 후 `RetryPendingPlacements`로 이미 실체화된 마을의 배치를 재시도한다. 이 후조건들은 세이브 로드에서 실행하지 않으며, `HistoryManager.Initialize()`의 마지막 `RebuildSaveSnapshot`이 초기화 결과를 반영한다.
 
 ---
 
@@ -282,8 +289,11 @@ materialize 검증은 다음 불변식을 확인한다.
 - 실패한 배치는 `PlacementPending`으로 보존된다.
 - 기존 좌표와 BuildingEntityId를 가진 레코드를 중복 생성하지 않는다.
 
+시작 마을 상점의 별도 검증은 기존 `ARPG/Village/Run V3 Initial Facilities Diagnostics`의 `ValidateMinimumBaseTownShop`이 담당한다. Forge 보존·상점 단일 생성·반복 호출·상위 Tier 유지·Tier 0 정규화·저장 왕복·원장 불일치 및 테이블 누락 거부를 확인한다. 실제 청크 배치와 상점 UI 진입은 아래 수동 통합 검증에 포함한다.
+
 남은 수동 통합 검증:
 
+- 신규 게임 BaseTown의 상점 위치·상호작용 프롬프트·상점 UI와 재고
 - 실제 청크 활성화와 Addressables 스폰
 - PlacementPending 강제 실패 후 재시도
 - materialize/fold-back 반복

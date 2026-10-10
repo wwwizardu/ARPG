@@ -12,6 +12,14 @@ namespace ARPG.Village
         DataError,
     }
 
+    public enum MinimumShopEnsureResult
+    {
+        Unchanged,
+        Created,
+        TierNormalized,
+        DataError,
+    }
+
     public sealed class VillageInitialDevelopmentResult
     {
         public int MilestonesApplied;
@@ -101,6 +109,74 @@ namespace ARPG.Village
                 VillageConstructionPosition.UnassignedTile);
             village.PlacedObjects[village.PlacedObjects.Count - 1].FacilityTier = 1;
             return MinimumForgeEnsureResult.Created;
+        }
+
+        /// <summary>
+        /// 신규 게임 시작 마을의 상점 최소 보장. 상점과 상권 Tier를 최소 1로 만들고,
+        /// 기존 상위 Tier를 보존한다. 원장 불일치/중복은 변경 없이 오류로 거부한다.
+        /// </summary>
+        public static MinimumShopEnsureResult EnsureMinimumShop(VillageData village,
+            Func<int, Tables.BuildableItemTable?> tableResolver, out string error)
+        {
+            error = string.Empty;
+            int shopTableId = VillageInitialFacilityCatalog.MERCHANT_STALL_TABLE_ID;
+            int recordCount = 0;
+            int typeIdCount = 0;
+            PlacedObjectSaveData? shopRecord = null;
+
+            for (int i = 0; i < village.PlacedObjects.Count; i++)
+            {
+                PlacedObjectSaveData placed = village.PlacedObjects[i];
+                if (placed.TableId != shopTableId)
+                    continue;
+
+                recordCount++;
+                shopRecord = placed;
+            }
+            for (int i = 0; i < village.PlacedObjectTypeIds.Count; i++)
+            {
+                if (village.PlacedObjectTypeIds[i] == shopTableId)
+                    typeIdCount++;
+            }
+
+            if (recordCount > 1 || typeIdCount > 1 || recordCount != typeIdCount)
+            {
+                error = $"Village {village.VillageId}: Shop {shopTableId} 원장 불일치/중복 " +
+                    $"(records={recordCount}, typeIds={typeIdCount})";
+                return MinimumShopEnsureResult.DataError;
+            }
+
+            bool created = false;
+            if (shopRecord == null)
+            {
+                Tables.BuildableItemTable? table = tableResolver(shopTableId);
+                if (table == null || table.Id != shopTableId
+                    || table.SpawnType != GlobalEnum.BuildableSpawnType.Entity
+                    || ((ProvidedService)table.ProvidedService & ProvidedService.Shop) == 0)
+                {
+                    error = $"Village {village.VillageId}: Shop {shopTableId} 테이블이 없거나 " +
+                        "Entity/Shop 서비스 계약을 충족하지 않음";
+                    return MinimumShopEnsureResult.DataError;
+                }
+
+                VillageConstructionLedger.ApplyCompletedBuild(village, table,
+                    VillageConstructionPosition.UnassignedTile,
+                    VillageConstructionPosition.UnassignedTile);
+                shopRecord = village.PlacedObjects[village.PlacedObjects.Count - 1];
+                created = true;
+            }
+
+            bool normalized = shopRecord.FacilityTier < 1 || village.ShopTier < 1;
+            if (shopRecord.FacilityTier < 1)
+                shopRecord.FacilityTier = 1;
+            if (village.ShopTier < 1)
+                village.ShopTier = 1;
+
+            if (created == true)
+                return MinimumShopEnsureResult.Created;
+            return normalized == true
+                ? MinimumShopEnsureResult.TierNormalized
+                : MinimumShopEnsureResult.Unchanged;
         }
 
         /// <summary>

@@ -6,7 +6,9 @@
 >
 > **현재 런타임 정본**: 구현이 완료되기 전까지 [VILLAGE_RUNTIME_DESIGN.md](VILLAGE_RUNTIME_DESIGN.md), [ABSTRACT_CONSTRUCTION_DESIGN.md](ABSTRACT_CONSTRUCTION_DESIGN.md), [BUILD_PRIORITY_DESIGN.md](BUILD_PRIORITY_DESIGN.md), [VILLAGE_NPC_BOUNDARY_DESIGN.md](../npc/VILLAGE_NPC_BOUNDARY_DESIGN.md)가 현행 동작의 정본이다. 이 문서는 그 정본을 변경하기 위한 작업 순서이지 현재 구현 계약이 아니다.
 >
-> **후속 사용자 결정 (2026-08-30, 마법 부여 접근성)**: V6의 Dwarf 전용 Forge 접근성 계약을 후속 설계에서 폐기한다. [ITEM_ENCHANTMENT_DESIGN.md](../combat/ITEM_ENCHANTMENT_DESIGN.md) MVP는 신규 게임의 모든 Race·Profile·초기 Stage 마을에 Forge 160을 최소 `FacilityTier=1`로 멱등 보장한다. 기존 누적 성장 결과가 Tier 2/3이면 높은 값을 유지하며, 구 세이브 전체 backfill은 범위에서 제외한다. 이 항목은 아직 미구현이므로 구현 전 런타임은 아래 V6 기록대로 Dwarf 전용이다.
+> **후속 사용자 결정 (2026-08-30, 마법 부여 접근성)**: V6의 Dwarf 전용 Forge 접근성 계약을 후속 설계에서 폐기한다. [ITEM_ENCHANTMENT_DESIGN.md](../combat/ITEM_ENCHANTMENT_DESIGN.md) MVP는 신규 게임의 모든 Race·Profile·초기 Stage 마을에 Forge 160을 최소 `FacilityTier=1`로 멱등 보장한다. 기존 누적 성장 결과가 Tier 2/3이면 높은 값을 유지하며, 구 세이브 전체 backfill은 범위에서 제외한다. 공통 보장은 `HistoryManager.EnsureNewGameMinimumForges`와 `VillageInitialDevelopment.EnsureMinimumForge`에 구현돼 있다. 아래 V6의 Dwarf 전용 설명은 공통 보장 구현 전 이력이다.
+>
+> **시작 마을 기본 상점 (2026-10-10 구현)**: 신규 게임은 공통 Forge 보장 뒤 연대기 미연결 BaseTown에 MerchantStall 151과 `ShopTier`를 최소 1로 보장한다(`EnsureNewGameBaseTownShops` → `EnsureMinimumShop`). 기존 상점은 중복 생성하지 않고 상위 Tier를 유지한다. 성장 계획 전체를 적용하거나 기존 세이브를 일괄 보정하지 않는다. 실제 배치는 기존 `RetryPendingPlacements`를 사용한다. 계약은 [VILLAGE_RUNTIME_DESIGN.md](VILLAGE_RUNTIME_DESIGN.md) §4와 [ABSTRACT_CONSTRUCTION_DESIGN.md](ABSTRACT_CONSTRUCTION_DESIGN.md) §11, 검증 결과는 [GOLD_BALANCE_DESIGN.md](../economy/GOLD_BALANCE_DESIGN.md) §11.3을 따른다.
 >
 > **관련 콘텐츠 방향**: [VILLAGE_GROWTH_STAGES.md](VILLAGE_GROWTH_STAGES.md) · [MAP_DESIGN.md](../map/MAP_DESIGN.md)
 

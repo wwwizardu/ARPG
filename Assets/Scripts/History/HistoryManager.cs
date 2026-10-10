@@ -33,6 +33,7 @@ namespace ARPG.History
             {
                 BootstrapNewGameVillageDevelopment();
                 EnsureNewGameMinimumForges();
+                EnsureNewGameBaseTownShops();
             }
             RebuildSaveSnapshot();
         }
@@ -432,6 +433,35 @@ namespace ARPG.History
             Debug.Log($"[VillageBootstrap] New Game 공통 Forge 최소 보장: " +
                 $"villages={villages.Count}, created={created}, normalized={normalized}, " +
                 $"unchanged={unchanged}, errors={errors}");
+        }
+
+        /// <summary>
+        /// 신규 게임의 연대기 미연결 시작 마을(BaseTown)에 상점을 최소 Tier 1로 보장한다.
+        /// 절차 마을의 초기 성장 계획과 폐허/합병 터는 이 경로의 대상이 아니다.
+        /// </summary>
+        private void EnsureNewGameBaseTownShops()
+        {
+            IReadOnlyList<VillageData> villages = AR.s.Village.GetAllVillages();
+            for (int i = 0; i < villages.Count; i++)
+            {
+                VillageData village = villages[i];
+                if (village.SettlementId >= 0)
+                    continue;
+
+                AR.s.Village.MarkSaveDirty(village.VillageId);
+                MinimumShopEnsureResult result =
+                    VillageInitialDevelopment.EnsureMinimumShop(village,
+                        AR.s.Data.GetBuildableItem, out string error);
+                if (result == MinimumShopEnsureResult.Created
+                    || result == MinimumShopEnsureResult.TierNormalized)
+                {
+                    AR.s.Village.RetryPendingPlacements(village.VillageId);
+                }
+                else if (result == MinimumShopEnsureResult.DataError)
+                {
+                    Debug.LogError($"[VillageBootstrap] 시작 마을 상점 보장 실패: {error}");
+                }
+            }
         }
 
         /// <summary>

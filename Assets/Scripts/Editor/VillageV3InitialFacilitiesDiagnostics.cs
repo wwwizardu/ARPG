@@ -39,6 +39,7 @@ namespace ARPG.EditorTools
             ValidateCumulativeApplication(resolver, passed, failed);
             ValidateTierReplacement(resolver, passed, failed);
             ValidateExactlyOnce(resolver, passed, failed);
+            ValidateMinimumBaseTownShop(resolver, passed, failed);
             ValidateSaveRoundTrip(resolver, passed, failed);
             ValidateZeroResourceAndNoTasks(resolver, passed, failed);
             ValidateNonInteractiveRejected(resolver, passed, failed);
@@ -121,6 +122,77 @@ namespace ARPG.EditorTools
         }
 
         // ========== 검증 ==========
+
+        private static void ValidateMinimumBaseTownShop(
+            Func<int, Tables.BuildableItemTable?> resolver,
+            List<string> passed, List<string> failed)
+        {
+            VillageData village = CreateVillage(0);
+            village.SettlementId = -1;
+            VillageInitialDevelopment.EnsureMinimumForge(village, resolver, out _);
+            MinimumShopEnsureResult first = VillageInitialDevelopment.EnsureMinimumShop(
+                village, resolver, out string error);
+            int shopId = VillageInitialFacilityCatalog.MERCHANT_STALL_TABLE_ID;
+            PlacedObjectSaveData? shop = village.PlacedObjects.Find(p => p.TableId == shopId);
+            Check(first == MinimumShopEnsureResult.Created && error.Length == 0
+                && village.ShopTier == 1 && shop != null && shop.FacilityTier == 1
+                && shop.PlacementPending == true && village.PlacedObjects.Count == 2
+                && VillageConstructionLedger.CountPlaced(village, shopId) == 1
+                && village.ActiveBuildTasks.Count == 0
+                && village.AppliedGrowthMilestones.Count == 0,
+                "BaseTown은 Forge를 보존하고 상점 하나와 ShopTier 1만 완공 생성함",
+                passed, failed);
+            if (shop == null)
+                return;
+
+            MinimumShopEnsureResult repeated = VillageInitialDevelopment.EnsureMinimumShop(
+                village, resolver, out _);
+            Check(repeated == MinimumShopEnsureResult.Unchanged
+                && village.PlacedObjects.Count == 2
+                && VillageConstructionLedger.CountPlaced(village, shopId) == 1,
+                "시작 마을 상점 보장을 반복해도 상점이 중복되지 않음", passed, failed);
+
+            shop.FacilityTier = 3;
+            village.ShopTier = 4;
+            MinimumShopEnsureResult higher = VillageInitialDevelopment.EnsureMinimumShop(
+                village, resolver, out _);
+            Check(higher == MinimumShopEnsureResult.Unchanged && shop.FacilityTier == 3
+                && village.ShopTier == 4,
+                "기존 상점 시설 Tier와 상권 Tier를 낮추지 않음", passed, failed);
+
+            shop.FacilityTier = 0;
+            village.ShopTier = 0;
+            MinimumShopEnsureResult normalized = VillageInitialDevelopment.EnsureMinimumShop(
+                village, resolver, out _);
+            Check(normalized == MinimumShopEnsureResult.TierNormalized
+                && shop.FacilityTier == 1 && village.ShopTier == 1
+                && village.PlacedObjects.Count == 2,
+                "기존 상점의 미설정 Tier를 중복 생성 없이 1로 정규화함", passed, failed);
+
+            VillageData loaded = JsonConvert.DeserializeObject<VillageData>(
+                JsonConvert.SerializeObject(village))!;
+            MinimumShopEnsureResult restored = VillageInitialDevelopment.EnsureMinimumShop(
+                loaded, resolver, out _);
+            Check(restored == MinimumShopEnsureResult.Unchanged
+                && VillageSimulationParity.CompareFixedState(village, loaded,
+                    out string _) == true,
+                "시작 마을 상점과 Tier가 저장/복원 뒤에도 유지됨", passed, failed);
+
+            loaded.PlacedObjectTypeIds.Add(shopId);
+            string beforeError = JsonConvert.SerializeObject(loaded);
+            MinimumShopEnsureResult invalid = VillageInitialDevelopment.EnsureMinimumShop(
+                loaded, resolver, out _);
+            Check(invalid == MinimumShopEnsureResult.DataError
+                && JsonConvert.SerializeObject(loaded) == beforeError,
+                "상점 원장 불일치/중복은 상태 변경 없이 거부함", passed, failed);
+
+            VillageData missingTable = CreateVillage(99);
+            MinimumShopEnsureResult missing = VillageInitialDevelopment.EnsureMinimumShop(
+                missingTable, _ => null, out _);
+            Check(missing == MinimumShopEnsureResult.DataError
+                && missingTable.PlacedObjects.Count == 0 && missingTable.ShopTier == 0,
+                "상점 테이블 누락 시 시설과 상권 Tier를 변경하지 않음", passed, failed);
+        }
 
         private static void ValidateFacilityCatalogContract(
             Func<int, Tables.BuildableItemTable?> resolver,

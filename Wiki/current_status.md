@@ -25,6 +25,7 @@ sources:
   - Docs/tech/SAVE_PARTITION_DESIGN.md
   - Docs/world_history/NARRATIVE_DIALOGUE_VARIETY_DESIGN.md
   - Docs/economy/AUCTION_HOUSE_DESIGN.md
+  - Docs/economy/GOLD_BALANCE_DESIGN.md
   - Wiki/npc.md
   - Wiki/village.md
   - Wiki/combat.md
@@ -36,7 +37,7 @@ sources:
   - Assets/_BinaryData/TableData/
 ---
 
-# 현재 개발 현황 — 2026-10-03
+# 현재 개발 현황 — 2026-10-10
 
 ## 1. 한눈에 보기
 
@@ -56,7 +57,7 @@ sources:
 
 | 영역 | 구현된 기준선 | 남은 핵심 |
 |------|---------------|-----------|
-| **마을** | V1~V7 Profile·고정 인구·초기 Stage·누적 시설·Race별 배치/상권·결정론 상점, 신규 게임 Forge 160 Tier 1 보장, 벽 바깥 Gate 탐색, NPC 상점 거래(닫힌 경제)와 기본 장비 칸 [src: Docs/village/VILLAGE_REWORK_PLAN.md §V1–V7·§8.4, Wiki/village.md] | 마을 골드 밸런스(매입 거절로 NPC 가방 포화, D109 ②), V7 PlayMode A~F 재실측, 런타임 성장 V8은 보류 [src: Docs/npc/NPC_AMBITION_DESIGN.md D109, Wiki/village.md §4] |
+| **마을** | V1~V7 Profile·고정 인구·초기 Stage·누적 시설·Race별 배치/상권·결정론 상점, 신규 게임 Forge 160 Tier 1·BaseTown 상점 151 최소 Tier 1 보장, 벽 바깥 Gate 탐색, NPC 상점 거래(닫힌 경제)와 기본 장비 칸·골드 밸런스 [src: Docs/village/VILLAGE_REWORK_PLAN.md §V1–V7·§8.4·§시작 마을 기본 상점, Docs/economy/GOLD_BALANCE_DESIGN.md §11.2·§11.3, Wiki/village.md] | V7 PlayMode A~F와 BaseTown 상점 배치·상호작용 실측, 런타임 성장 V8은 보류 [src: Wiki/village.md §4] |
 | **NPC 활동·경제** | Rest·Hunt·Trade·DungeonDelve(솔로·파티), 야망 효용 선택, 장비 전투력·개인 상한, 소문, NPC 던전 완료, 파티 자동 구성, 부상 등급, NPC 간 절도, 기본 장비 구매 [src: Docs/npc/NPC_AMBITION_DESIGN.md §2·§13, Wiki/npc.md §4] | P3 협력·배신(보류, §14 Q14~Q20), P5 양방향 배신·결투 명분/처단, P6 Forge·경매장 참여, 대화 사연 밸런스(자랑 토픽 60·90일 FAIL, D109 ①), 이주·WORLD_EVENT [src: Docs/npc/NPC_AMBITION_DESIGN.md §13·§14] |
 | **NPC 실전투** | B1~B5: 진영·조건부 인식, 던전 전용 임시 동행(D97 최종), 플레이어–NPC 결투, 드랍 줍기(디버그 호출만), 전투 사망 연결 [src: Docs/npc/NPC_COMBAT_DESIGN.md 상태] | 도주(D25)·NPC 간 결투 화면 장면(D24) 보류 [src: Docs/npc/NPC_COMBAT_DESIGN.md 상태] |
 | **NPC 장비** | 12슬롯·세트 5종(슬롯별 장착 확률)·검사 UI, 상점용 기본 아이템 198행(장비 66종 × 3), 시작 장비 = 기본 아이템, 전리품·장물 미장착 [src: Docs/npc/NPC_EQUIPMENT_DESIGN.md, Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §3·§5] | 시트 `BasicItem` 변형 다듬기(기획), NPC 장비 강화(P6a)와 기본 아이템의 관계 결정 [src: Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §3.1·§11, Wiki/combat.md] |
@@ -87,5 +88,5 @@ sources:
 - `Docs/README.md`는 2026-10-03에 문서 목록과 상태 줄을 갱신했지만, "구현 완료 시스템·진행 중·미구현" 절의 비율과 상세는 2026-07-13 기준이다. `Docs/overview/implementationStatus.md`는 2026-04-08 기준이다. 현재 상태는 이 페이지와 각 주제 정본을, 구현 여부는 코드·테이블을 우선한다. [src: Docs/README.md, Docs/overview/implementationStatus.md, Wiki/_SCHEMA.md]
 - `DUNGEON_RUNTIME_DESIGN.md`·`MONSTER_ATTACK_TELEGRAPH_DESIGN.md`·`NPC_EQUIPMENT_SET_PLAN.md`는 구현 뒤에도 "구현 전/검증 대기" 상태 줄이 남아 있다가 2026-10-03에 코드 대조로 고쳤다. 던전 문서는 구현된 [제안]을 [구현]으로 바꿨고(남은 [제안]은 미구현), 공격 예고·스킬·연쇄 계획 문서는 "(2026-10-03 확인: …)" 메모와 ✅/◐/❌ 진행 표시를 붙였다. [src: Docs/map/DUNGEON_RUNTIME_DESIGN.md 상태, Docs/combat/MONSTER_ATTACK_TELEGRAPH_DESIGN.md 상태, Docs/combat/SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md §9, Docs/npc/NPC_EQUIPMENT_SET_PLAN.md 상태]
 - NPC 결정 번호는 NPC_AMBITION·NPC_COMBAT·NPC_SHOP_EQUIPMENT 공용 연번이고(현재 D123까지), 정본 결정표는 `NPC_AMBITION_DESIGN.md` §2다. [src: Docs/npc/NPC_AMBITION_DESIGN.md §2]
-- `VILLAGE_REWORK_PLAN.md`의 2026-08-30 Forge 메모는 공통 보장을 미구현으로 남겨 현재 코드 및 `ITEM_ENCHANTMENT_DESIGN.md` 상태와 충돌한다. 현행 판단에는 코드와 마법부여 정본을 쓴다. [src: Docs/village/VILLAGE_REWORK_PLAN.md §후속 사용자 결정, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §상태·§5.1]
+- BaseTown 상점 보장은 2026-10-10 신규 게임 초기화에 적용됐으며 기존 세이브 일괄 보정은 하지 않는다. `GOLD_BALANCE_DESIGN.md` §1의 상점 없는 BaseTown·31곳 수치는 2026-10-03 수정 전 진단 기준이다. [src: Docs/village/VILLAGE_REWORK_PLAN.md §시작 마을 기본 상점, Docs/economy/GOLD_BALANCE_DESIGN.md §1·§8 Q10·§11.3]
 - `ITEM_ENCHANTMENT_DESIGN.md`는 구현 완료 후에도 active 원본으로 유지한다. §3–§5·§6.1–§6.2·§6.4·§7–§9·§15는 구현 계약, §12는 회귀 검증, §14는 후속 경계로 읽는다. [src: Docs/combat/ITEM_ENCHANTMENT_DESIGN.md, Wiki/combat.md]
