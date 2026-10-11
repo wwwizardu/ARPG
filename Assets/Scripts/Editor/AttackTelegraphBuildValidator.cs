@@ -51,6 +51,149 @@ namespace ARPG.Editor
             Debug.Log("[AttackTelegraphBuildValidator] 공격 예고 계약 검증 통과");
         }
 
+        [MenuItem("ARPG/Validation/Delayed Area Runtime Contract")]
+        public static void ValidateDelayedAreaRuntime()
+        {
+            if (EditorApplication.isPlaying == false || AR.s.Data.GetSkill(208) == null)
+            {
+                Debug.LogError("[DelayedArea] GameScene 플레이 모드에서 테이블 로드 후 실행하세요.");
+                return;
+            }
+
+            ComponentManager cm = AR.s.Component;
+            List<int> created = new();
+            List<string> errors = new();
+            UnityEngine.Random.State previousRandom = UnityEngine.Random.state;
+            AreaEffectTable repeatTable = AR.s.Data.GetAreaEffect(3)!;
+            float previousDelay = repeatTable.ActivationDelay;
+            string previousPrefab = repeatTable.PrefabKey;
+            try
+            {
+                Vector2 center = new(1000000f, 1000000f);
+                int caster = CreateAreaDiagnosticEntity(cm, created, center, Faction.Hostile, 0);
+                int source = AR.s.Entity.CreateEntity();
+                created.Add(source);
+                cm.AddComponent(source, new SkillComponent { OwnerEntityId = caster, SkillId = 208, Table = AR.s.Data.GetSkill(208) });
+                cm.AddComponent(source, new SkillAttackProfileComponent
+                {
+                    IceAddedMin = 10, IceAddedMax = 10, BaseDamageMul = 1f, SkillDamageMul = 2f,
+                    CritMultiplier = 1.5f, DamageType = GlobalEnum.DamageType.Ice,
+                });
+                int inside = CreateAreaDiagnosticEntity(cm, created, center, Faction.Player, 50);
+                int enters = CreateAreaDiagnosticEntity(cm, created, center + Vector2.right * 4f, Faction.Player, 0);
+                int leaves = CreateAreaDiagnosticEntity(cm, created, center, Faction.Player, 0);
+                int ally = CreateAreaDiagnosticEntity(cm, created, center, Faction.Hostile, 0);
+                int outside = CreateAreaDiagnosticEntity(cm, created, center + Vector2.right * 4f, Faction.Player, 0);
+
+                cm.AddComponent(source, new SkillTargetComponent { TargetPosition = center, TargetDirection = Vector2.right });
+                var skillSystem = new Systems.System_Skill();
+                var poolsType = typeof(Systems.System_Skill).GetNestedType("SkillRuntimePools", System.Reflection.BindingFlags.NonPublic)!;
+                object runtimePools = Activator.CreateInstance(poolsType, new object[] { cm })!;
+                var commit = typeof(Systems.System_Skill).GetMethod("ProcessSkillHit",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+                object[] commitArguments = { source, ReadAreaDiagnosticComponent<SkillComponent>(cm, source), runtimePools };
+                commit.Invoke(skillSystem, commitArguments);
+                Require(errors, ReadAreaDiagnosticComponent<StatComponent>(cm, inside).CurrentHp == 100,
+                    "설치 커밋에서 직접 타격을 적용하면 안 됩니다.");
+                var pool = cm.GetComponentPool<AreaEffectComponent>();
+                int areaId = pool.GetEntityId(pool.Count - 1);
+                created.Add(areaId);
+                int installedCount = pool.Count;
+                commit.Invoke(skillSystem, commitArguments);
+                Require(errors, pool.Count == installedCount, "한 실행에서 설치 엔티티를 중복 생성하면 안 됩니다.");
+                AreaEffectComponent area = ReadAreaDiagnosticComponent<AreaEffectComponent>(cm, areaId);
+                Require(errors, cm.HasComponent<LifetimeComponent>(areaId) == false, "대기 수명은 활성 수명을 소비하면 안 됩니다.");
+                Require(errors, cm.HasComponent<AttackTelegraphComponent>(areaId) == true, "대기 예고 원이 필요합니다.");
+                RequireApproximately(errors, area.ActivationFixedTime - Time.fixedTime,
+                    Mathf.Ceil(1.5f / Time.fixedDeltaTime) * Time.fixedDeltaTime, "설치 시각부터 지연해야 합니다.");
+
+                var system = new Systems.System_AreaEffect();
+                var update = typeof(Systems.System_AreaEffect).GetMethod("UpdateArea",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+                update.Invoke(system, new object[] { cm, areaId, area, Time.fixedDeltaTime });
+                Require(errors, ReadAreaDiagnosticComponent<StatComponent>(cm, inside).CurrentHp == 100
+                    && Utility.BuffHelper.HasBuff(inside, 6) == false, "대기 중 피해/슬로우가 없어야 합니다.");
+
+                cm.SetComponent(enters, new TransformComponent { Position = center });
+                cm.SetComponent(leaves, new TransformComponent { Position = center + Vector2.right * 4f });
+                cm.SetComponent(source, new SkillAttackProfileComponent { IceAddedMin = 999, IceAddedMax = 999 });
+                AR.s.Entity.DestroyEntity(caster);
+                AR.s.Entity.DestroyEntity(source);
+                Require(errors, cm.HasComponent<AttackTelegraphComponent>(areaId) == true, "시전자 제거 후에도 예고를 유지해야 합니다.");
+                area.ActivationFixedTime = Time.fixedTime;
+                cm.SetComponent(areaId, area);
+                update.Invoke(system, new object[] { cm, areaId, area, Time.fixedDeltaTime });
+                Require(errors, ReadAreaDiagnosticComponent<StatComponent>(cm, inside).CurrentHp == 90,
+                    "설치 당시 피해 배율과 피격 당시 냉기 저항을 적용해야 합니다.");
+                Require(errors, ReadAreaDiagnosticComponent<StatComponent>(cm, enters).CurrentHp == 80,
+                    "설치 후 들어온 대상은 폭발 시 맞아야 합니다.");
+                Require(errors, ReadAreaDiagnosticComponent<StatComponent>(cm, leaves).CurrentHp == 100
+                    && ReadAreaDiagnosticComponent<StatComponent>(cm, ally).CurrentHp == 100
+                    && ReadAreaDiagnosticComponent<StatComponent>(cm, outside).CurrentHp == 100,
+                    "이탈자/아군/범위 밖 대상은 맞으면 안 됩니다.");
+                Require(errors, Utility.BuffHelper.HasBuff(inside, 6) == true
+                    && Utility.BuffHelper.HasBuff(inside, 3) == false, "명시적 Slow만 부여하고 자동 Chill은 부여하지 않습니다.");
+                int slowId = Manager.EntityManager.GetDeterministicId(inside, Manager.EntityIdCategory.Buff, 6);
+                RequireApproximately(errors, ReadAreaDiagnosticComponent<BuffInstance>(cm, slowId).RemainTime, 3f,
+                    "냉기 폭발 둔화는 3초 유지해야 합니다.");
+                RequireApproximately(errors, ReadAreaDiagnosticComponent<MoveSlowBuffComponent>(cm, slowId).SlowRate, 0.4f,
+                    "냉기 폭발은 이동 속도를 40% 감소시켜야 합니다.");
+                Require(errors, cm.HasComponent<DestroyTag>(areaId) == true
+                    && cm.HasComponent<AttackTelegraphComponent>(areaId) == false, "폭발 후 예고/엔티티를 정리해야 합니다.");
+                update.Invoke(system, new object[] { cm, areaId, ReadAreaDiagnosticComponent<AreaEffectComponent>(cm, areaId), Time.fixedDeltaTime });
+                Require(errors, ReadAreaDiagnosticComponent<StatComponent>(cm, inside).CurrentHp == 90, "연속 FixedUpdate에서 재폭발하면 안 됩니다.");
+
+                repeatTable.ActivationDelay = 0.3f;
+                repeatTable.PrefabKey = string.Empty;
+                Factory.EntityFactory.CreateAreaEffect(-1, 3, center, fallbackCasterFaction: Faction.Hostile);
+                int repeatId = pool.GetEntityId(pool.Count - 1);
+                created.Add(repeatId);
+                AreaEffectComponent repeat = ReadAreaDiagnosticComponent<AreaEffectComponent>(cm, repeatId);
+                update.Invoke(system, new object[] { cm, repeatId, repeat, Time.fixedDeltaTime });
+                Require(errors, cm.HasComponent<LifetimeComponent>(repeatId) == false, "반복 장판도 준비 중에는 활성 수명이 없어야 합니다.");
+                repeat.ActivationFixedTime = Time.fixedTime;
+                cm.SetComponent(repeatId, repeat);
+                update.Invoke(system, new object[] { cm, repeatId, repeat, Time.fixedDeltaTime });
+                Require(errors, cm.HasComponent<LifetimeComponent>(repeatId) == true
+                    && cm.HasComponent<DestroyTag>(repeatId) == false
+                    && Utility.BuffHelper.HasBuff(inside, 5) == true, "반복 장판은 활성화 후 수명과 기존 틱 버프를 유지해야 합니다.");
+                RequireApproximately(errors, ReadAreaDiagnosticComponent<LifetimeComponent>(cm, repeatId).Remaining,
+                    repeatTable.Duration, "준비 시간은 활성 수명에서 차감하면 안 됩니다.");
+
+                if (errors.Count > 0) throw new System.InvalidOperationException(BuildMessage(errors));
+                Debug.Log("[DelayedArea] PASS: 설치 커밋 무피해/중복 방지, 대기 무피해, 진입/이탈, 아군 제외, 피해 스냅샷, 냉기 저항, 시전자 제거 후 발동, 40% Slow 3초, 단발 정리, 반복 장판 수명.");
+            }
+            finally
+            {
+                repeatTable.ActivationDelay = previousDelay;
+                repeatTable.PrefabKey = previousPrefab;
+                UnityEngine.Random.state = previousRandom;
+                for (int i = created.Count - 1; i >= 0; i--)
+                    if (AR.s.Entity.IsEntityRegistered(created[i]) == true) AR.s.Entity.DestroyEntity(created[i]);
+            }
+        }
+
+        private static T ReadAreaDiagnosticComponent<T>(ComponentManager cm, int entityId) where T : struct
+        {
+            if (cm.TryGetComponent<T>(entityId, out var component) == true) return component;
+            throw new System.InvalidOperationException($"진단 엔티티 {entityId}에 {typeof(T).Name}이 없습니다.");
+        }
+
+        private static int CreateAreaDiagnosticEntity(ComponentManager cm, List<int> created, Vector2 position,
+            Faction faction, int iceResistance)
+        {
+            int entityId = AR.s.Entity.CreateEntity();
+            created.Add(entityId);
+            StatComponent stat = new() { BaseMaxHp = 100, FinalMaxHp = 100,
+                FinalIceResist = iceResistance, FinalMaxIceResist = 75 };
+            stat.SetCurrentHpDirect(100);
+            cm.AddComponent(entityId, stat);
+            cm.AddComponent(entityId, new TransformComponent { Position = position });
+            cm.AddComponent(entityId, new FactionComponent { FactionId = faction });
+            Systems.System_StatCalculation.BuildDefenseCache(entityId, stat);
+            return entityId;
+        }
+
         private static List<string> CollectErrors()
         {
             List<string> errors = new();
@@ -216,6 +359,48 @@ namespace ARPG.Editor
             Dictionary<int, AiTable> aiById = IndexRows(ais, errors, "AI");
             HashSet<int> validatedSkillIds = new();
 
+            for (int i = 0; i < areas.Count; i++)
+            {
+                AreaEffectTable area = areas[i];
+                if (float.IsNaN(area.ActivationDelay) == true || float.IsInfinity(area.ActivationDelay) == true
+                    || area.ActivationDelay < 0f || area.Radius <= 0f || area.TickInterval < 0f
+                    || (area.SingleShot == false && area.Duration <= 0f))
+                    errors.Add($"AreaEffect {area.Id}({area.Name})의 지연/반경/수명이 유효하지 않습니다.");
+                if (area.OnTickBuffId > 0)
+                    ValidateAreaTickBuff(area, buffById, errors);
+                if (area.SingleShot == true && string.IsNullOrEmpty(area.TickEffectName) == false)
+                {
+                    var settings = UnityEditor.AddressableAssets.AddressableAssetSettingsDefaultObject.Settings;
+                    bool found = false;
+                    if (settings != null)
+                    {
+                        for (int g = 0; g < settings.groups.Count; g++)
+                        {
+                            var group = settings.groups[g];
+                            if (group == null) continue;
+                            foreach (var entry in group.entries)
+                                if (entry.address == area.TickEffectName) found = true;
+                        }
+                    }
+                    if (found == false)
+                        errors.Add($"AreaEffect {area.Id}의 폭발 이펙트 주소 {area.TickEffectName}이 없습니다.");
+                }
+            }
+
+            // 아직 AI에 연결하지 않은 설치형 콘텐츠도 빌드 전에 검증한다.
+            for (int i = 0; i < skills.Count; i++)
+            {
+                SkillTable skill = skills[i];
+                if (skill.AreaEffectId > 0 && areaById.TryGetValue(skill.AreaEffectId, out var area) == true
+                    && area.SingleShot == true)
+                {
+                    ValidateMonsterSkillReference(skill.Id, 0, skillById, projectileById, areaById, buffById,
+                        validatedSkillIds, errors);
+                    if (skill.ProjectileId == 0 && skill.ExecutionType != SkillExecutionType.Single)
+                        errors.Add($"단발 설치 Skill {skill.Id}는 Single 실행 타입이어야 합니다.");
+                }
+            }
+
             for (int i = 0; i < monsters.Count; i++)
             {
                 MonsterTable monster = monsters[i];
@@ -287,7 +472,7 @@ namespace ARPG.Editor
                 {
                     errors.Add($"Skill {skill.Id}({skill.Name})의 AreaEffectId {skill.AreaEffectId}가 없습니다.");
                 }
-                else if (area.Radius <= 0f || area.Duration <= 0f || area.TickInterval < 0f)
+                else if (area.Radius <= 0f || (area.SingleShot == false && area.Duration <= 0f) || area.TickInterval < 0f)
                 {
                     errors.Add($"AreaEffect {area.Id}({area.Name})의 Radius/Duration/TickInterval이 유효하지 않습니다.");
                 }
@@ -364,7 +549,7 @@ namespace ARPG.Editor
                 return;
             }
 
-            if (buff.Duration < area.TickInterval)
+            if (area.SingleShot == false && buff.Duration < area.TickInterval)
                 errors.Add($"AreaEffect {area.Id}({area.Name})가 거는 Buff {buff.Id}({buff.Name})의 Duration {buff.Duration}이 장판 TickInterval {area.TickInterval}보다 짧아 장판 안에서 효과가 끊깁니다.");
         }
 

@@ -721,6 +721,8 @@ namespace ARPG.Tables
         [JsonProperty("TargetFaction")] public Faction TargetFaction;                // 타격 대상 진영 (Neutral=caster의 적, 그 외=명시 진영)
         [JsonProperty("TickEffectName")] public string TickEffectName = string.Empty; // 매 틱 재생할 이펙트 키
         [JsonProperty("PrefabKey")] public string PrefabKey = string.Empty;          // Addressable 프리팹 키 (장판 본체 시각)
+        [JsonProperty("ActivationDelay")] public float ActivationDelay;             // 설치 후 첫 발동까지 대기 시간. 대기 중에는 피해/버프 없음
+        [JsonProperty("SingleShot")] public bool SingleShot;                       // 1회 폭발 후 제거. 연결된 스킬의 공격 프로필을 설치 시 저장해 사용
     }
 
     /// <summary>

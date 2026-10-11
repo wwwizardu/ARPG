@@ -64,7 +64,7 @@ namespace ARPG.Editor
             Register<SkillPropagationTable>(list, "155977417&range=A:M");
             Register<SkillBookTable>(list, "1726438368&range=A:C");
             // 장판(지속 영역 효과) 테이블
-            Register<AreaEffectTable>(list, "1891935594&range=A:M");
+            Register<AreaEffectTable>(list, "1891935594&range=A:O");
             Register<BuffTable>(list, "127577579&range=A:T");
             Register<AnimationTable>(list, "747631090&range=A:G");
             Register<ProjectileTable>(list, "1810235418&range=A:G");
@@ -1840,9 +1840,9 @@ namespace ARPG.Editor
 
         private static void ParseAreaEffectTable(AreaEffectTable table, string[] values)
         {
-            // 전체 범위: A:M = 13개 컬럼
+            // 전체 범위: A:O = 15개 컬럼. 신규 칸이 없는 기존 행은 지연 없는 반복 장판.
             // (Id, Name, Description, DamageType, Damage, Radius, Duration, TickInterval,
-            //  OnTickBuffId, OnEnterBuffId, TargetFaction, TickEffectName, PrefabKey)
+            //  OnTickBuffId, OnEnterBuffId, TargetFaction, TickEffectName, PrefabKey, ActivationDelay, SingleShot)
             if (values.Length < 12)
             {
                 Debug.LogError($"[ParseAreaEffectTable] Invalid data length. Expected at least 12, got {values.Length}. Id: {table.Id}");
@@ -1861,6 +1861,8 @@ namespace ARPG.Editor
             table.TargetFaction = ParseEnumSafe(values, 10, Faction.Neutral);
             table.TickEffectName = values[11];
             table.PrefabKey = values.Length > 12 ? values[12] : string.Empty;
+            table.ActivationDelay = Mathf.Max(0f, ParseFloatSafe(values, 13));
+            table.SingleShot = values.Length > 14 && values[14].Trim().Equals("TRUE", StringComparison.OrdinalIgnoreCase);
         }
 
         private static void ParseModTable(ModTable table, string[] values)

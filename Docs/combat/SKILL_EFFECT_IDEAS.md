@@ -65,12 +65,13 @@ SKILL_DESIGN.md §6.8 / [skill_effect_system.md](../../../../Users/peace/.claude
 
 ## B. 군중 제어 (CC) (4개)
 
-### 6. KnockbackOnHit
+### 6. KnockbackOnHit → 설계 확정: [SKILL_DESIGN.md §6.10](SKILL_DESIGN.md) (2026-10-12, 미구현)
+- **EffectType**: `Knockback`(밀기) / `Pull`(당기기) 두 가지로 확정
 - **Trigger**: `OnHit`
-- **Param**: `Param1=넉백 거리`, `Param2=지속시간(이동 보간)`, `Param3=확률(%)`
-- **요약**: 명중한 적을 시전자→타겟 방향으로 밀어냄.
-- **사용 예**: A1 Slam, 방패 강타, "넉백 룬".
-- **구현 메모**: 타겟에 `KnockbackComponent { TargetPos, Duration }` 추가하고 별도 `System_Knockback` (Priority 110~120 권장)이 Lerp로 처리. 이미 유사 시스템이 있으면 재활용.
+- **Param**: `Param1=거리(칸)`, `Param2=걸리는 시간(초)`. 확률은 `Probability` 칸을 쓴다.
+- **요약**: 명중한 적을 판정 범위 중심(직접 공격은 공격자, 범위 공격은 범위 중심, 발사체는 날아온 방향)에서 짧게 밀어내거나 끌어당김.
+- **사용 예**: A1 Strike, 방패 강타, 소용돌이 장판.
+- **구현 메모**: 방향 규칙·데이터·적용 규칙·런타임 구조의 정본은 §6.10이다. 이 카드의 초안 메모(`KnockbackComponent { TargetPos, Duration }` + FixedUpdate `System_Knockback` 110~120, 끝 위치 Lerp)는 §6.10의 Update 단계 `System_ForcedMove`로 대체됐다.
 
 ### 7. StunOnCrit
 - **Trigger**: `OnCrit`
@@ -218,3 +219,4 @@ SKILL_DESIGN.md §6.8 / [skill_effect_system.md](../../../../Users/peace/.claude
 ## 변경 이력
 
 - 2026-05-08: 초안 작성, 20개 후보 + 우선순위 권고
+- 2026-10-12: #6 KnockbackOnHit을 SKILL_DESIGN §6.10 확정 설계(`Knockback`/`Pull`)로 연결하고 초안 구현 메모를 대체 표기

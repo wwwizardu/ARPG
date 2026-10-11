@@ -31,6 +31,7 @@ namespace ARPG.Visual
         private float _duration;
         private float _elapsed;
         private bool _isActive;
+        private Vector3 _initialScale;
 
         public bool IsLoop => _isLoop;
         public int InstanceId => _instanceId;
@@ -39,6 +40,7 @@ namespace ARPG.Visual
         private void Awake()
         {
             _particles = GetComponentsInChildren<ParticleSystem>(true);
+            _initialScale = transform.localScale;
         }
 
         private void OnEnable()
@@ -67,6 +69,14 @@ namespace ARPG.Visual
 
                 ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             }
+        }
+
+        /// <summary>풀 재사용마다 프리팹 기준 배율을 적용해 이전 스폰의 크기가 남지 않게 한다.</summary>
+        public void SetScale(float? scale)
+        {
+            transform.localScale = scale.HasValue == true
+                ? _initialScale * Mathf.Max(0f, scale.Value)
+                : _initialScale;
         }
 
         /// <summary>

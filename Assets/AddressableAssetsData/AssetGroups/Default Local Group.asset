@@ -170,6 +170,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5b9666e427377e342aab13bef442812d
+    m_Address: Effects/FrostExplosion
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 655633fc0242a184188ff0b68704521a
     m_Address: Tile/WoodWall
     m_ReadOnly: 0

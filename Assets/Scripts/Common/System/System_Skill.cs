@@ -1217,8 +1217,8 @@ namespace ARPG.Systems
 
             // 장판은 공통 스케줄의 첫 커밋에서 논리 엔티티를 즉시 생성한다.
             // AreaEffect 시스템(priority 240)이 같은 FixedUpdate의 첫 틱을 처리한다.
-            // 생성은 IsAreaEffectCreated로 한 실행에 1회만 보장하고, 직접 타격/발사체는 그대로 진행한다.
-            // (장판과 직접 타격은 공존한다 — 예: 내려찍어 3연타 + 바닥에 불장판 1개)
+            // 생성은 IsAreaEffectCreated로 한 실행에 1회만 보장한다. 반복 장판은 직접 타격과 공존할 수 있다.
+            // 단발 폭발 장판은 설치 이후의 타격을 AreaEffect 시스템에서 처리한다.
             // 발사체가 장판을 운반하는 스킬은 여기서 만들지 않고 아래에서 던진 발사체가 착지할 때 깐다.
             if (skillTable.AreaEffectId > 0 && skillTable.DeliversAreaByProjectile == false)
             {
@@ -1228,10 +1228,15 @@ namespace ARPG.Systems
                         skill.OwnerEntityId,
                         skillTable.AreaEffectId,
                         commitPosition,
-                        skill.SkillId);
+                        skill.SkillId,
+                        sourceSkillEntityId: skillEntityId);
                     skill.IsAreaEffectCreated = true;
                     AR.s.Component.SetComponent(skillEntityId, skill);
                 }
+
+                // 단발 장판은 설치된 엔티티가 타격을 소유한다. 설치 순간의 직접 타격은 중복 피해가 된다.
+                if (AR.s.Data.GetAreaEffect(skillTable.AreaEffectId)?.SingleShot == true)
+                    return;
             }
 
             // 발사체 스킬인 경우 발사체 생성 (BaseProjectileCount + Stat.ProjectileCountAdd만큼 부채꼴 발사)

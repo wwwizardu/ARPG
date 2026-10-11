@@ -866,13 +866,12 @@ namespace ARPG.Factory
         /// System_AreaEffect가 매 틱 범위 내 적에게 데미지/버프를 적용한다.
         /// 만료(LifetimeComponent)는 System_Lifetime이 DestroyTag를 부착해 정리.
         /// PrefabKey가 지정되면 AddressablePool에서 GameObject를 로드하고 System_Render에 등록.
-        /// 호출자는 await할 필요 없음 (fire-and-forget) — 컴포넌트는 즉시 부착되고 GameObject만 비동기 로드됨.
+        /// 컴포넌트는 즉시 부착된다. 반복 장판의 GameObject는 활성화 시점에 비동기 로드한다.
         /// </summary>
         /// <param name="fallbackCasterFaction">caster가 이미 사라져 진영을 읽을 수 없을 때 쓸 진영 (포물선 발사체 비행 중 사망 등)</param>
-        public static async void CreateAreaEffect(int casterEntityId, int areaEffectTableId, Vector2 position, int skillId = 0,
-            Faction fallbackCasterFaction = Faction.Neutral)
+        public static void CreateAreaEffect(int casterEntityId, int areaEffectTableId, Vector2 position, int skillId = 0,
+            Faction fallbackCasterFaction = Faction.Neutral, int sourceSkillEntityId = 0)
         {
-            using var contextLoad = AR.s.Map.Context.BeginLoad();
             ComponentManager cm = AR.s.Component;
 
             AreaEffectTable? table = AR.s.Data.GetAreaEffect(areaEffectTableId);
@@ -901,7 +900,10 @@ namespace ARPG.Factory
             // FactionComponent는 의도적으로 부착하지 않음 — AI 적 탐색이 장판을 공격 대상으로 인식하지 않게.
             // 적/아군 판정은 AreaEffectComponent.CasterFaction 스냅샷으로 수행 (System_AreaEffect 참조).
             cm.AddComponent(entityId, new CasterLinkComponent { CasterEntityId = casterEntityId });
-            cm.AddComponent(entityId, new LifetimeComponent { Remaining = table.Duration });
+            // Lifetime은 활성화 이후부터 시작한다. 대기 시간 만료가 폭발보다 먼저 엔티티를 없애면 안 된다.
+            float activationDelay = Mathf.Max(0f, table.ActivationDelay);
+            float step = Mathf.Max(0.0001f, Time.fixedDeltaTime);
+            float activationTime = Time.fixedTime + Mathf.Ceil(activationDelay / step) * step;
             cm.AddComponent(entityId, new AreaEffectComponent
             {
                 OwnerEntityId = casterEntityId,
@@ -911,14 +913,45 @@ namespace ARPG.Factory
                 Radius = table.Radius,
                 TickInterval = table.TickInterval,
                 NextTickIn = 0f,   // 첫 프레임에 첫 틱 발동
+                ActivationFixedTime = activationTime,
+                SingleShot = table.SingleShot,
+                Credit = ARPG.Skill.Combat.CombatCredit.Resolve(casterEntityId),
             });
             cm.AddComponent(entityId, new AreaEffectTag());
 
-            Debug.Log($"[EntityFactory] CreateAreaEffect - EntityId: {entityId}, Caster: {casterEntityId}, TableId: {areaEffectTableId}, Position: {position}, Radius: {table.Radius}, Duration: {table.Duration}");
+            if (table.SingleShot == true)
+                SnapshotAreaAttack(cm, entityId, casterEntityId, table, sourceSkillEntityId, skillId);
 
-            // GameObject 시각 로드 (PrefabKey가 비어있으면 시각 없이 로직만 — 디버그/투명 장판)
+            // 설치된 범위의 예고는 시전자 사망/시전 종료와 독립적으로 유지한다.
+            if (activationDelay > 0f && faction == Faction.Hostile)
+            {
+                cm.AddComponent(entityId, new AttackTelegraphComponent
+                {
+                    OwnerEntityId = casterEntityId,
+                    Shape = ARPG.Skill.Telegraph.AttackTelegraphShape.TargetCircle,
+                    OriginMode = ARPG.Skill.Telegraph.AttackTelegraphOriginMode.TargetPosition,
+                    TargetPosition = position,
+                    Direction = Vector2.right,
+                    Range = table.Radius,
+                    HalfAngleDeg = 180f,
+                    ProjectileCount = 1,
+                    WarningStartFixedTime = Time.fixedTime,
+                    NextCommitFixedTime = activationTime,
+                    CommitCount = 1,
+                });
+            }
+
+            Debug.Log($"[EntityFactory] CreateAreaEffect - EntityId: {entityId}, Caster: {casterEntityId}, TableId: {areaEffectTableId}, Position: {position}, Radius: {table.Radius}, Duration: {table.Duration}");
+        }
+
+        /// <summary>반복 장판의 활성화 순간 시각을 로드한다. 준비 중에는 활성 장판 비주얼을 표시하지 않는다.</summary>
+        public static async void AttachAreaEffectVisual(int entityId, AreaEffectTable table, Vector2 position)
+        {
             if (string.IsNullOrEmpty(table.PrefabKey))
                 return;
+
+            using var contextLoad = AR.s.Map.Context.BeginLoad();
+            ComponentManager cm = AR.s.Component;
 
             // 엔티티가 이미 만료되어 사라진 경우(짧은 Duration + 늦은 로드) 로드 결과를 버림
             Vector3 spawnPos = new Vector3(position.x, position.y, 0f);
@@ -1300,6 +1333,57 @@ namespace ARPG.Factory
             {
                 cts.Dispose();
             }
+        }
+
+        private static void SnapshotAreaAttack(ComponentManager cm, int areaEntityId, int casterEntityId,
+            AreaEffectTable table, int sourceSkillEntityId, int skillId)
+        {
+            if (sourceSkillEntityId <= 0 && skillId > 0)
+            {
+                SparseSet<SkillComponent> skills = cm.GetComponentPool<SkillComponent>();
+                for (int i = 0; i < skills.Count; i++)
+                {
+                    SkillComponent skill = skills.GetByIndex(i);
+                    if (skill.OwnerEntityId == casterEntityId && skill.SkillId == skillId)
+                    {
+                        sourceSkillEntityId = skills.GetEntityId(i);
+                        break;
+                    }
+                }
+            }
+
+            if (sourceSkillEntityId > 0)
+            {
+                if (cm.HasComponent<SkillAttackProfileComponent>(sourceSkillEntityId) == false)
+                    Systems.System_SkillAttackProfileCalculation.BuildProfile(sourceSkillEntityId);
+                if (cm.TryGetComponent<SkillAttackProfileComponent>(sourceSkillEntityId, out var profile) == true)
+                {
+                    // 장판은 생명체가 아니므로 흡혈/반사 자기 유지 효과를 갖지 않는다.
+                    profile.LifeStealRatio = 0f;
+                    cm.AddComponent(areaEntityId, profile);
+                    return;
+                }
+            }
+
+            // 독립 생성(연결 스킬 없음)은 장판 Damage를 기본 피해로 사용한다.
+            cm.TryGetComponent<StatComponent>(casterEntityId, out var casterStat);
+            SkillAttackProfileComponent fallback = new()
+            {
+                DamageType = table.DamageType,
+                BaseDamageMul = 1f,
+                SkillDamageMul = casterStat.FinalSkillDamage > 0 ? casterStat.FinalSkillDamage / 100f : 1f,
+                CritMultiplier = 1.5f,
+            };
+            int damage = Mathf.Max(0, table.Damage);
+            switch (table.DamageType)
+            {
+                case GlobalEnum.DamageType.Physics: fallback.PhysAddedMin = fallback.PhysAddedMax = damage; break;
+                case GlobalEnum.DamageType.Fire: fallback.FireAddedMin = fallback.FireAddedMax = damage; break;
+                case GlobalEnum.DamageType.Ice: fallback.IceAddedMin = fallback.IceAddedMax = damage; break;
+                case GlobalEnum.DamageType.Lightning: fallback.LightAddedMin = fallback.LightAddedMax = damage; break;
+                case GlobalEnum.DamageType.Poison: fallback.PoisonAddedMin = fallback.PoisonAddedMax = damage; break;
+            }
+            cm.AddComponent(areaEntityId, fallback);
         }
 
         private static void UpdateAnimationLoadState(int entityId, AnimationLoadState state)

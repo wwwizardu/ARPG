@@ -208,9 +208,15 @@ namespace ARPG.Skill.Combat
         /// </summary>
         public static DamageResult Calculate(int skillEntityId, int attackerId, int targetId, SkillTable skillData, float damageMultiplier)
         {
+            return Calculate(GetOrBuildProfile(skillEntityId), targetId, damageMultiplier);
+        }
+
+        /// <summary>설치 당시 공격 프로필과 피격 당시 방어 수치로 계산. 원 시전자/스킬이 없어도 동작한다.</summary>
+        public static DamageResult Calculate(in SkillAttackProfileComponent profile, int targetId, float damageMultiplier = 1f)
+        {
             DamageResult result = new DamageResult
             {
-                DamageType = skillData.DamageType
+                DamageType = profile.DamageType
             };
 
             // 공중 무적 판정: 타겟이 일정 높이 이상 점프 중이면 회피 처리
@@ -229,9 +235,6 @@ namespace ARPG.Skill.Combat
                 Debug.LogWarning($"[DamageCalculator] Target StatComponent not found - TargetId: {targetId}");
                 return result;
             }
-
-            // 공격 프로파일 (Weapon + Stat.FinalX + SkillTable + OnHitBonus 모두 합산된 캐시)
-            SkillAttackProfileComponent profile = GetOrBuildProfile(skillEntityId);
 
             // ========== 1~2-2단계: 속성별 Added 데미지 (캐시에서 한 번에) ==========
             float physDamage      = Random.Range(profile.PhysAddedMin,   profile.PhysAddedMax + 1);
@@ -331,6 +334,13 @@ namespace ARPG.Skill.Combat
         /// </summary>
         public static void ApplyDamageResult(int skillEntityId, int attackerId, int targetId, DamageResult result)
         {
+            ApplyDamageResult(skillEntityId, attackerId, targetId, result, true, CombatCredit.Resolve(attackerId));
+        }
+
+        /// <summary>설치형 공격은 저장된 귀속과 명시적 버프를 사용하며 자동 속성 상태이상을 선택적으로 생략한다.</summary>
+        public static void ApplyDamageResult(int skillEntityId, int attackerId, int targetId, DamageResult result,
+            bool applyStatusEffects, KillCreditComponent credit)
+        {
             ComponentManager cm = AR.s.Component;
             // Extra hits and UI updates must not replace the lethal hit's source or resurrect it through leech.
             if (cm.TryGetComponent<StatComponent>(targetId, out var living) == false || living.CurrentHp <= 0) return;
@@ -363,7 +373,7 @@ namespace ARPG.Skill.Combat
             {
                 int damage = Mathf.RoundToInt(result.FinalDamage);
                 int newHp = Mathf.Max(0, targetStat.CurrentHp - damage);
-                CombatCredit.RecordLethalDamage(targetId, targetStat.CurrentHp, newHp, CombatCredit.Resolve(attackerId));
+                CombatCredit.RecordLethalDamage(targetId, targetStat.CurrentHp, newHp, credit);
                 targetStat.SetCurrentHp(targetId, newHp);
                 AR.s.Component.SetComponent(targetId, targetStat);
 
@@ -413,7 +423,7 @@ namespace ARPG.Skill.Combat
             });
 
             // ========== 상태이상 독립 판정 (속성별) ==========
-            if (result.IsEvaded == false)
+            if (applyStatusEffects == true && result.IsEvaded == false)
             {
                 ApplyStatusEffects(skillEntityId, attackerId, targetId, result);
             }

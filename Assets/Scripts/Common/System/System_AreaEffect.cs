@@ -2,15 +2,16 @@
 using ARPG.Component;
 using ARPG.Tables;
 using ARPG.Utility;
+using ARPG.Skill.Combat;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 namespace ARPG.Systems
 {
     /// <summary>
-    /// 장판(지속 영역 효과) 처리 시스템.
-    /// 매 FixedUpdate마다 AreaEffectComponent를 가진 엔티티의 NextTickIn을 차감하고,
-    /// 0 이하가 되면 1 틱 발동 — 반경 내 적대 엔티티에 데미지/버프 부여.
-    /// 만료(생존시간 종료)는 LifetimeComponent + System_Lifetime이 담당.
+    /// 설치된 장판의 대기 → 활성화 → 반복 틱/단발 폭발을 처리한다.
+    /// 대기 중에는 피해/버프가 없고, 반복 장판의 Lifetime은 활성화 시점부터 시작한다.
+    /// 단발 폭발은 설치 당시 공격 프로필과 귀속을 사용하고 같은 틱에 제거를 예약한다.
     ///
     /// Priority 240: System_Skill(200)·System_Jump(220) 이후, System_HpCheck(250) 이전.
     /// 같은 프레임에 데미지 → HP 0 체크가 처리되어 사망 후 정리가 자연스럽게 이어짐.
@@ -39,25 +40,55 @@ namespace ARPG.Systems
             {
                 int entityId = pool.GetEntityId(i);
 
-                // Lifetime이 만료시킨 엔티티는 이번 프레임 LateUpdate에 정리 — 틱 스킵
-                if (cm.HasComponent<DestroyTag>(entityId))
-                    continue;
+                UpdateArea(cm, entityId, pool.GetByIndex(i), inFixedDeltaTime);
+            }
+        }
 
-                AreaEffectComponent area = pool.GetByIndex(i);
+        private void UpdateArea(ComponentManager cm, int entityId, AreaEffectComponent area, float deltaTime)
+        {
+            if (cm.HasComponent<DestroyTag>(entityId) == true)
+                return;
 
-                area.NextTickIn -= inFixedDeltaTime;
-                if (area.NextTickIn > 0f)
+            AreaEffectTable? table = AR.s.Data.GetAreaEffect(area.AreaEffectTableId);
+            if (table == null)
+            {
+                cm.AddComponent(entityId, new DestroyTag());
+                return;
+            }
+
+            if (area.IsActivated == false)
+            {
+                if (Time.fixedTime + 0.0001f < area.ActivationFixedTime)
+                    return;
+
+                area.IsActivated = true;
+                cm.RemoveComponent<AttackTelegraphComponent>(entityId);
+                if (area.SingleShot == false)
                 {
-                    cm.SetComponent(entityId, area);
-                    continue;
+                    cm.AddComponent(entityId, new LifetimeComponent { Remaining = table.Duration });
+                    if (cm.TryGetComponent<TransformComponent>(entityId, out var areaTransform) == true)
+                        Factory.EntityFactory.AttachAreaEffectVisual(entityId, table, areaTransform.Position);
                 }
+            }
 
-                // 다음 틱 예약 (TickInterval이 0이면 매 프레임 발동 방지를 위해 1프레임 간격)
-                float interval = area.TickInterval > 0f ? area.TickInterval : inFixedDeltaTime;
-                area.NextTickIn = interval;
+            area.NextTickIn -= deltaTime;
+            if (area.NextTickIn > 0f)
+            {
                 cm.SetComponent(entityId, area);
+                return;
+            }
 
-                ProcessTick(cm, entityId, area);
+            area.NextTickIn = area.TickInterval > 0f ? area.TickInterval : deltaTime;
+            cm.SetComponent(entityId, area);
+            // side effect보다 먼저 완료를 기록해 재진입/연속 FixedUpdate에서도 1회만 발동한다.
+            if (area.SingleShot == true)
+                cm.AddComponent(entityId, new DestroyTag());
+
+            ProcessTick(cm, entityId, area);
+            if (area.SingleShot == true && string.IsNullOrEmpty(table.TickEffectName) == false
+                && cm.TryGetComponent<TransformComponent>(entityId, out var transform) == true)
+            {
+                AR.s.Effect.Spawn(table.TickEffectName, transform.Position, Quaternion.identity, scale: area.Radius).Forget();
             }
         }
 
@@ -83,6 +114,11 @@ namespace ARPG.Systems
             {
                 int candidateId = factionPool.GetEntityId(i);
 
+                if (cm.HasComponent<DestroyTag>(candidateId) == true
+                    || cm.TryGetComponent<StatComponent>(candidateId, out var targetStat) == false
+                    || targetStat.CurrentHp <= 0)
+                    continue;
+
                 FactionComponent candidateFaction = factionPool.GetByIndex(i);
 
                 // Neutral(NPC·중립)·같은 진영(아군) 제외. 결투 쌍 규칙(NPC_COMBAT_DESIGN §3.3)은 IsEntityHostile이 우선 적용
@@ -95,24 +131,41 @@ namespace ARPG.Systems
                 if ((candidateTransform.Position - center).sqrMagnitude > sqrRadius)
                     continue;
 
-                ApplyTickToTarget(cm, area.OwnerEntityId, candidateId, table);
+                ApplyTickToTarget(cm, areaEntityId, area, candidateId, table);
             }
         }
 
-        private void ApplyTickToTarget(ComponentManager cm, int ownerEntityId, int targetEntityId, AreaEffectTable table)
+        private void ApplyTickToTarget(ComponentManager cm, int areaEntityId, AreaEffectComponent area,
+            int targetEntityId, AreaEffectTable table)
         {
+            if (area.SingleShot == true)
+            {
+                if (cm.TryGetComponent<SkillAttackProfileComponent>(areaEntityId, out var profile) == false)
+                    return;
+
+                bool hasDamage = profile.BaseDamageMul > 0f && profile.SkillDamageMul > 0f
+                    && profile.PhysAddedMax + profile.FireAddedMax + profile.IceAddedMax
+                        + profile.LightAddedMax + profile.PoisonAddedMax > 0;
+                if (hasDamage == true)
+                {
+                    DamageResult result = DamageCalculator.Calculate(profile, targetEntityId);
+                    // 폭발 상태이상은 OnTickBuffId로 명시한다. Ice의 자동 Chill과 Slow를 중첩하지 않는다.
+                    DamageCalculator.ApplyDamageResult(areaEntityId, areaEntityId, targetEntityId, result, false, area.Credit);
+                    if (result.IsEvaded == true)
+                        return;
+                }
+            }
             // 직접 데미지
-            if (table.Damage > 0)
+            else if (table.Damage > 0)
             {
                 if (cm.TryGetComponent<StatComponent>(targetEntityId, out var targetStat))
                 {
                     int newHp = Mathf.Max(0, targetStat.CurrentHp - table.Damage);
-                    Skill.Combat.CombatCredit.RecordLethalDamage(targetEntityId, targetStat.CurrentHp, newHp,
-                        Skill.Combat.CombatCredit.Resolve(ownerEntityId));
+                    CombatCredit.RecordLethalDamage(targetEntityId, targetStat.CurrentHp, newHp, area.Credit);
                     targetStat.SetCurrentHp(targetEntityId, newHp);
                     cm.SetComponent(targetEntityId, targetStat);
 
-                    Debug.Log($"[System_AreaEffect] Tick damage — Owner({ownerEntityId}) → Target({targetEntityId}) {table.Damage} {table.DamageType}, HP {newHp}/{targetStat.FinalMaxHp}");
+                    Debug.Log($"[System_AreaEffect] Tick damage — Owner({area.OwnerEntityId}) → Target({targetEntityId}) {table.Damage} {table.DamageType}, HP {newHp}/{targetStat.FinalMaxHp}");
                 }
             }
 
@@ -122,7 +175,12 @@ namespace ARPG.Systems
                 BuffTable? buff = AR.s.Data.GetBuff(table.OnTickBuffId);
                 if (buff != null)
                 {
-                    BuffHelper.AddBuff(targetEntityId, table.OnTickBuffId, buff.Duration, ownerEntityId);
+                    int buffEntityId = BuffHelper.AddBuff(targetEntityId, table.OnTickBuffId, buff.Duration, areaEntityId);
+                    if (cm.TryGetComponent<BuffInstance>(buffEntityId, out var instance) == true)
+                    {
+                        instance.Credit = area.Credit;
+                        cm.SetComponent(buffEntityId, instance);
+                    }
                 }
             }
         }

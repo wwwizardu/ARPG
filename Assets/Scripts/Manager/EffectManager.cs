@@ -77,16 +77,16 @@ namespace ARPG.Manager
         /// 이펙트 스폰. 부모를 지정하면 그 자식으로 부착(부모 따라다님).
         /// 키가 비어있거나 로드 실패 시 Invalid 핸들 반환.
         /// </summary>
-        public UniTask<EffectHandle> Spawn(string key, Vector3 position, Quaternion rotation, Transform? parent = null)
+        public UniTask<EffectHandle> Spawn(string key, Vector3 position, Quaternion rotation, Transform? parent = null, float? scale = null)
         {
             // 시야 밖 위치의 이펙트는 만들지 않는다 — 숨은 몬스터의 행동을 드러내지 않고 생성 비용도 아낀다 (FOG_OF_WAR_DESIGN §5)
             if (AR.s.Fog.IsVisibleWorld(position) == false)
                 return UniTask.FromResult(EffectHandle.Invalid);
 
-            return SpawnInternal(key, position, rotation, parent);
+            return SpawnInternal(key, position, rotation, parent, scale);
         }
 
-        private async UniTask<EffectHandle> SpawnInternal(string key, Vector3 position, Quaternion rotation, Transform? parent)
+        private async UniTask<EffectHandle> SpawnInternal(string key, Vector3 position, Quaternion rotation, Transform? parent, float? scale = null)
         {
             if (string.IsNullOrEmpty(key))
                 return EffectHandle.Invalid;
@@ -113,6 +113,7 @@ namespace ARPG.Manager
             }
 
             int id = _nextInstanceId++;
+            instance.SetScale(scale);
             instance.Bind(key, id, this);
             _active[id] = instance;
 

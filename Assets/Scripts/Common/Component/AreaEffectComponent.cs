@@ -15,6 +15,10 @@ namespace ARPG.Component
         public float Radius;                // 효과 반경
         public float TickInterval;          // 틱 간격(초)
         public float NextTickIn;            // 다음 틱까지 남은 시간(초)
+        public float ActivationFixedTime;  // 설치 시 확정한 활성화 시각. 시전자/스킬 수명과 독립
+        public bool IsActivated;
+        public bool SingleShot;
+        public KillCreditComponent Credit; // 설치 당시 처치 귀속. 시전자 제거/ID 재사용 후 재조회하지 않음
     }
 
     public struct AreaEffectTag { }

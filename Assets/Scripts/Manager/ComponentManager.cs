@@ -84,7 +84,7 @@ namespace ARPG.Component
             { typeof(SkillStateComponent), 50 },
             { typeof(SkillTimingComponent), 50 },
             { typeof(SkillTargetComponent), 50 },
-            { typeof(SkillAttackProfileComponent), 50 }, // 스킬 엔티티와 1:1 — 데미지 계산용 캐시
+            { typeof(SkillAttackProfileComponent), 128 }, // 스킬 캐시 + 설치된 단발 장판의 공격 스냅샷
             { typeof(SkillAttackProfileDirtyTag), 50 },  // 재계산 요청 태그 (처리 후 즉시 제거)
             { typeof(SkillLandingCommitComponent), 32 }, // 점프 착지 후 다음 FixedUpdate까지 유지되는 일회성 신호
             { typeof(SkillPropagationComponent), 32 },

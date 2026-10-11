@@ -127,8 +127,8 @@ namespace ARPG.Skill.Telegraph
             // 발사체는 비행 중 아무도 맞히지 않고 착지 지점에 장판만 깔기 때문에 직선 경로 예고를 그리면 틀린
             // 위험을 알리게 된다. 깔린 장판 자체가 위험을 알리므로 예고하지 않는다 (SkillTable.DeliversAreaByProjectile).
             //
-            // IsPositionTarget / AreaEffectRadius 입력과 TargetCircle / TargetPosition은
-            // "준비 시간이 있는 장판"(생성까지 대기가 필요한 장판) 예고용으로 예약해 둔 미사용 상태다.
+            // 설치된 지연 장판의 TargetCircle은 EntityFactory가 별도 엔티티에 만든다.
+            // 이 Resolver는 설치 전 시전 예고만 다루므로 IsPositionTarget / AreaEffectRadius로 장판 원을 추가하지 않는다.
             // 자세한 내용은 MONSTER_ATTACK_TELEGRAPH_DESIGN.md §5.3 참조.
 
             if (input.HasProjectile == true && input.HasAreaEffect == true && input.IsPositionTarget == true)

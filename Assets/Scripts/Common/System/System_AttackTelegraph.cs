@@ -74,6 +74,27 @@ namespace ARPG.Systems
                 int skillEntityId = _telegraphPool.GetEntityId(i);
                 AttackTelegraphComponent telegraph = _telegraphPool.GetByIndex(i);
 
+                if (_componentManager.TryGetComponent<AreaEffectComponent>(skillEntityId, out var area) == true)
+                {
+                    if (_componentManager.HasComponent<DestroyTag>(skillEntityId) == true || area.IsActivated == true)
+                    {
+                        _componentManager.RemoveComponent<AttackTelegraphComponent>(skillEntityId);
+                        continue;
+                    }
+
+                    // 설치 위치/범위는 이미 고정되어 있다. 시전자나 SkillState를 다시 조회하지 않는다.
+                    Vector2 areaOrigin = telegraph.TargetPosition;
+                    if (CircleIntersectsRect(areaOrigin, telegraph.Range, expandedCameraRect) == true
+                        && AR.s.Fog.OverlapsVision(areaOrigin, telegraph.Range) == true)
+                    {
+                        _view.Add(new AttackTelegraphRenderData(
+                            telegraph.Shape, areaOrigin, telegraph.Direction, telegraph.Range,
+                            telegraph.HalfAngleDeg, 0f, 1, 0f, telegraph.WarningStartFixedTime,
+                            telegraph.NextCommitFixedTime, AttackTelegraphRenderDetail.Full));
+                    }
+                    continue;
+                }
+
                 if (ShouldRemove(skillEntityId, telegraph.OwnerEntityId) == true)
                 {
                     _componentManager.RemoveComponent<AttackTelegraphComponent>(skillEntityId);
