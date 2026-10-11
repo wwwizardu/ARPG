@@ -16,6 +16,10 @@ namespace ARPG.Item
         private int _instanceIdCounter = 1;
         private Dictionary<int, ItemObject> _itemInstances = new Dictionary<int, ItemObject>();
         private ItemEnchantmentService _enchantment = null!;
+        // 옵션 티어 선택용 scratch — 쓸 때마다 비운다
+        private readonly List<ModTierTable> _tierCandidateScratch = new List<ModTierTable>();
+        private readonly List<int> _tierWeightScratch = new List<int>();
+        private readonly List<int> _specialModIndexScratch = new List<int>();
         public int NextItemInstanceId => _instanceIdCounter;
         public ItemEnchantmentService Enchantment => _enchantment;
 
@@ -36,10 +40,11 @@ namespace ARPG.Item
             return true;
         }
 
-        public async Task<bool> CreateItem(int inItemId, int inQuantity, Vector3 inPosition)
+        public async Task<bool> CreateItem(int inItemId, int inQuantity, Vector3 inPosition,
+            EquipmentRollOptions rollOptions = default)
         {
             if (inQuantity <= 0) return false;
-            ItemData? item = CreateInventoryItemData(inItemId, inQuantity);
+            ItemData? item = CreateInventoryItemData(inItemId, inQuantity, null, rollOptions);
             return item != null && await CreateItemFromData(item, inPosition);
         }
         /// <summary>
@@ -244,7 +249,7 @@ namespace ARPG.Item
         }
 
         /// <summary>
-        /// 등급(Tier)에 해당하는 책 ItemId를 찾고, 같은 Tier의 스킬 풀에서 랜덤 SkillId를 뽑아 스킬북 생성.
+        /// 등급(Tier)에 해당하는 책 ItemId를 찾고, 같은 Tier의 DropEnabled 스킬 풀에서 랜덤 SkillId를 뽑아 스킬북 생성.
         /// 드랍/상점 stock 생성 시 사용. 풀이 비어 있으면 null 반환.
         /// </summary>
         public ItemData? CreateRandomSkillBookOfTier(int tier, HistoryRng? inRng = null)
@@ -259,7 +264,7 @@ namespace ARPG.Item
             int skillId = PickRandomSkillByTier(tier, inRng);
             if (skillId == 0)
             {
-                Debug.LogWarning($"[ItemManager] CreateRandomSkillBookOfTier - No skills with Tier({tier})");
+                Debug.LogWarning($"[ItemManager] CreateRandomSkillBookOfTier - No drop-enabled skills with Tier({tier})");
                 return null;
             }
 
@@ -338,9 +343,10 @@ namespace ARPG.Item
         /// SkillBook/SkillPage는 인스턴스 데이터(SkillBookData/SkillPageData)가 빈 채로 만들어지지 않도록
         /// 등급 기반 랜덤 헬퍼로 위임한다. CreateItem(월드 드랍)·UICheat·DropHelper 모두 이 함수를 거쳐야
         /// 인스턴스 데이터 누락이 일어나지 않는다.
+        /// rollOptions는 장비일 때만 쓰인다(아이템 레벨·특수 티어 확률). 기본값은 아이템 레벨 1, 특수 판정 없음.
         /// </summary>
         public ItemData? CreateInventoryItemData(int itemId, int quantity = 1,
-            HistoryRng? inRng = null)
+            HistoryRng? inRng = null, EquipmentRollOptions rollOptions = default)
         {
             ItemTable? itemTable = AR.s.Data?.GetItem(itemId);
             if (itemTable == null)
@@ -364,7 +370,7 @@ namespace ARPG.Item
                         ItemInstanceId = _instanceIdCounter++,
                         Quantity = quantity,
                         Table = itemTable,
-                        Equipment = CreateEquipmentData(itemTable, inRng),
+                        Equipment = CreateEquipmentData(itemTable, inRng, rollOptions),
                     };
             }
         }
@@ -428,18 +434,18 @@ namespace ARPG.Item
         }
 
         /// <summary>
-        /// SkillTable.Tier == tier 인 스킬들 중 균등 랜덤 픽. 없으면 0.
+        /// SkillTable.Tier == tier && DropEnabled인 스킬들 중 균등 랜덤 픽. 없으면 0.
         /// </summary>
         private int PickRandomSkillByTier(int tier, HistoryRng? inRng = null)
         {
-            if (AR.s.Data == null)
+            if (tier <= 0 || AR.s.Data == null)
                 return 0;
 
             List<SkillTable> all = AR.s.Data.GetAllSkills();
             List<int> matched = new List<int>();
             for (int i = 0; i < all.Count; i++)
             {
-                if (all[i].Tier == tier)
+                if (all[i].Tier == tier && all[i].DropEnabled == true)
                     matched.Add(all[i].Id);
             }
 
@@ -449,7 +455,8 @@ namespace ARPG.Item
             return matched[RollRange(inRng, 0, matched.Count)];
         }
 
-        private EquipmentData? CreateEquipmentData(ItemTable inTable, HistoryRng? inRng = null)
+        private EquipmentData? CreateEquipmentData(ItemTable inTable, HistoryRng? inRng = null,
+            EquipmentRollOptions rollOptions = default)
         {
             if (inTable == null)
                 return null;
@@ -461,9 +468,11 @@ namespace ARPG.Item
             if (hasBaseStat == false && hasImplicit == false)
                 return null;
 
+            int itemLevel = ItemLevelModTierRules.ClampItemLevel(rollOptions.ItemLevel);
             EquipmentData equipmentData = new EquipmentData()
             {
                 Id = inTable.Id,
+                ItemLevel = itemLevel,
             };
 
             // EquipType 설정
@@ -477,12 +486,17 @@ namespace ARPG.Item
             equipmentData.InitImplicitMods(inTable.Id);
 
             // 3. Prefix Mod 랜덤 생성
-            RollRandomMods(equipmentData, GlobalEnum.ModSlot.Prefix, RollRange(inRng, 1, 4), equipmentData.EquipType, inRng);
+            RollRandomMods(equipmentData, GlobalEnum.ModSlot.Prefix, RollRange(inRng, 1, 4), equipmentData.EquipType,
+                itemLevel, inRng);
 
             // 4. Postfix Mod 랜덤 생성
-            RollRandomMods(equipmentData, GlobalEnum.ModSlot.Postfix, RollRange(inRng, 1, 4), equipmentData.EquipType, inRng);
+            RollRandomMods(equipmentData, GlobalEnum.ModSlot.Postfix, RollRange(inRng, 1, 4), equipmentData.EquipType,
+                itemLevel, inRng);
 
-            // 5. 생성된 Mod들의 테이블 참조 연결
+            // 5. T11·T12 특수 판정 (몬스터 드랍만 확률이 있다)
+            TryApplySpecialTier(equipmentData, itemLevel, rollOptions, inRng);
+
+            // 6. 생성된 Mod들의 테이블 참조 연결
             for (int i = 0; i < equipmentData.Mods.Count; i++)
             {
                 equipmentData.Mods[i].OnLoadCompleted();
@@ -610,9 +624,10 @@ namespace ARPG.Item
         }
 
         /// <summary>
-        /// 지정 슬롯에 랜덤 Mod를 롤링하여 추가
+        /// 지정 슬롯에 랜덤 Mod를 롤링하여 추가. 티어는 아이템 레벨의 일반 판정 후보(T1~T10)에서 가중치로 고른다.
         /// </summary>
-        private void RollRandomMods(EquipmentData equipment, GlobalEnum.ModSlot slot, int count, GlobalEnum.EquipmentTypeMask equipType, HistoryRng? inRng = null)
+        private void RollRandomMods(EquipmentData equipment, GlobalEnum.ModSlot slot, int count,
+            GlobalEnum.EquipmentTypeMask equipType, int itemLevel, HistoryRng? inRng = null)
         {
             List<ModTable> modPool = AR.s.Data.GetModPool(slot, equipType);
             for (int i = modPool.Count - 1; i >= 0; i--)
@@ -627,13 +642,17 @@ namespace ARPG.Item
                 int selectedIndex = RollRange(inRng, 0, modPool.Count);
                 ModTable selectedMod = modPool[selectedIndex];
                 List<ModTierTable> tiers = AR.s.Data.GetModTiers(selectedMod.Id);
-                if (tiers.Count == 0)
+                if (ItemLevelModTierRules.BuildNormalTierCandidates(tiers, itemLevel,
+                        _tierCandidateScratch, _tierWeightScratch) == 0)
                 {
                     modPool.RemoveAt(selectedIndex);
                     continue;
                 }
 
-                ModTierTable selectedTier = tiers[RollRange(inRng, 0, tiers.Count)];
+                // 난수 1회 — 결정론 RNG 경로(상점·NPC 전리품)의 뽑기 횟수는 이전과 같다
+                int tierRoll = RollRange(inRng, 0, ItemLevelModTierRules.GetTotalWeight(_tierWeightScratch));
+                ModTierTable selectedTier =
+                    _tierCandidateScratch[ItemLevelModTierRules.SelectWeightedIndex(_tierWeightScratch, tierRoll)];
 
                 // 값 롤링
                 ushort value1 = (ushort)RollRange(inRng, selectedTier.Min1, selectedTier.Max1 + 1);
@@ -658,6 +677,49 @@ namespace ARPG.Item
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// T11·T12 특수 판정: 장비 하나당 한 번 굴려 성공하면 이미 붙은 Prefix/Postfix 하나를 그 티어로 올리고 수치를 다시 뽑는다.
+        /// 확률이 없으면(몬스터 드랍 외 경로) 난수를 쓰지 않는다. 그 티어 행이 없거나 RequiredLevel(아이템 레벨 90)에
+        /// 못 미치는 옵션은 대상에서 빠지고, 대상이 없으면 아무것도 바꾸지 않는다.
+        /// </summary>
+        private void TryApplySpecialTier(EquipmentData equipment, int itemLevel, EquipmentRollOptions rollOptions,
+            HistoryRng? inRng)
+        {
+            if (rollOptions.HasSpecialTierChance == false)
+                return;
+
+            int targetTier = ItemLevelModTierRules.ResolveSpecialTier(rollOptions.Tier11ChanceBp,
+                rollOptions.Tier12ChanceBp, RollRange(inRng, 0, ItemLevelModTierRules.CHANCE_SCALE));
+            if (targetTier == 0)
+                return;
+
+            _tierCandidateScratch.Clear();
+            _specialModIndexScratch.Clear();
+            for (int i = 0; i < equipment.Mods.Count; i++)
+            {
+                ModInstance mod = equipment.Mods[i];
+                if (mod.Slot != GlobalEnum.ModSlot.Prefix && mod.Slot != GlobalEnum.ModSlot.Postfix)
+                    continue;
+                ModTierTable? special = ItemLevelModTierRules.FindSpecialTier(
+                    AR.s.Data.GetModTiers(mod.ModTableId), targetTier, itemLevel);
+                if (special == null)
+                    continue;
+                _tierCandidateScratch.Add(special);
+                _specialModIndexScratch.Add(i);
+            }
+            if (_specialModIndexScratch.Count == 0)
+                return;
+
+            int pick = RollRange(inRng, 0, _specialModIndexScratch.Count);
+            ModTierTable selectedTier = _tierCandidateScratch[pick];
+            ModInstance target = equipment.Mods[_specialModIndexScratch[pick]];
+            target.Tier = selectedTier.Tier;
+            target.Value1 = (ushort)RollRange(inRng, selectedTier.Min1, selectedTier.Max1 + 1);
+            target.Value2 = (ushort)RollRange(inRng, selectedTier.Min2, selectedTier.Max2 + 1);
+            Debug.Log($"[ItemManager] 특수 티어 T{selectedTier.Tier} 부여 — ItemId={equipment.Id}, " +
+                $"ItemLevel={itemLevel}, ModId={target.ModTableId}");
         }
 
     }

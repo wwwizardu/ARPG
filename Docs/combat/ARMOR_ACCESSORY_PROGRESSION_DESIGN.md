@@ -464,6 +464,8 @@ g(L) = 1.10^(L - 1)
 
 현행 마법부여는 ModTier.RequiredLevel<=PlayerData.Level, ModTier.Tier<=ItemTable.Tier, Weight>0 조건을 함께 적용한다. 위 주요 옵션의 현행 RequiredLevel은 Tier 1·2·3에서 1·20·40으로, 장비 DropLevel 1·10·20과 다른 축이다. 반면 ItemManager.RollRandomMods는 조회한 옵션 Tier 전체에서 골라 장비 Tier·플레이어 레벨 조건을 적용하지 않는다. 따라서 지금의 생성 결과가 위 구간별 예산으로 제한된 상태라고 판정하지 않는다. [src: Assets/Scripts/Item/ItemEnchantmentService.cs GetEligibleTiers, Assets/Scripts/Manager/ItemManager.cs RollRandomMods, Assets/_BinaryData/TableData/ModTierTable.bytes]
 
+2026-10-11 사용자 결정으로 드랍·NPC 전리품·상점 랜덤 매물의 MOD Tier는 아이템 레벨 기준 T1~T12 규칙으로 확정·구현됐다([ITEM_LEVEL_MOD_TIER_DESIGN.md](ITEM_LEVEL_MOD_TIER_DESIGN.md)). 위 Tier 1·2·3 표는 그대로 T1~T3 값이며 T4~T12가 추가됐다. 마법부여(추가·교체)의 재화별 Tier는 아래 보류를 유지한다.
+
 2026-10-06 사용자 결정으로 **재화에 따른 MOD Tier 규칙은 구현 때 다시 질문하는 보류 항목**이다. 앞선 장비 Tier 상한·요구 레벨 1/10/20·최고 자격 Tier 부여 제안은 확정 구현 정책으로 채택하지 않는다. 추가·교체·드랍/랜덤 매물의 적용 범위와 장비/플레이어 레벨 제한은 이때 함께 확인한다. 현재 코드는 위 현행 계약을 유지하고 기존 BasicItem·저장 값은 자동으로 재롤하지 않는다. 고정 Base/Implicit 연결과 일반 MOD Tier 정책은 구분한다. [src: Docs/combat/WEAPON_PROGRESSION_DESIGN.md §적용 항과 Tier 접근 정책]
 
 ### 전체 장비의 치명타와 시전 합계

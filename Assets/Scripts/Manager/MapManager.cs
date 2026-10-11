@@ -458,6 +458,16 @@ namespace ARPG.Map
         }
 
         /// <summary>
+        /// 월드 좌표가 속한 청크의 Zone 번호. 규칙은 GetZone과 같다.
+        /// </summary>
+        public int GetZoneAtWorld(Vector2 worldPosition)
+        {
+            int chunkX = Mathf.FloorToInt(worldPosition.x / chunkSize);
+            int chunkY = Mathf.FloorToInt(worldPosition.y / chunkSize);
+            return GetZone(new Vector2Int(chunkX, chunkY));
+        }
+
+        /// <summary>
         /// 청크의 대표 biome 조회. MAP_DESIGN.md §6.5.2.
         /// 활성 청크면 캐시 값(`chunk.chunkBiome`), 아니면 좌표로 즉시 계산 — 둘 다 결정론.
         /// </summary>

@@ -325,6 +325,7 @@ namespace ARPG.Npc
                     Description = PickDescription(GetPreferredJobType(obj.ObjectId)),
                 };
 
+                EnsureNpcGenderInitialized(saveData);
                 SeedNpcEquipment(saveData);
                 // 시드된 장비로 개인 상한 기준값·시작 Gold를 기록한다 (NPC_AMBITION_DESIGN D37, D38)
                 EnsureAmbitionInitialized(entityId, saveData);
@@ -410,6 +411,7 @@ namespace ARPG.Npc
                 Description = PickDescription(GetPreferredJobType(npcTableId)),
             };
 
+            EnsureNpcGenderInitialized(saveData);
             SeedNpcEquipment(saveData);
             // 시드된 장비로 개인 상한 기준값·시작 Gold를 기록한다 (NPC_AMBITION_DESIGN D37, D38)
             EnsureAmbitionInitialized(entityId, saveData);
@@ -1106,6 +1108,10 @@ namespace ARPG.Npc
                 // 구 세이브 호환 — Description 필드가 없던 시점의 데이터는 직업 풀에서 채워준다
                 if (string.IsNullOrEmpty(saveData.Description))
                     saveData.Description = PickDescription(GetPreferredJobType(saveData.NpcTableId));
+
+                // 구 세이브는 성별을 한 번 정한다. 아래 저장 스냅샷 등록에 포함되어 이후 로드에서 유지된다.
+                if (EnsureNpcGenderInitialized(saveData) == true)
+                    AR.s.Data.RequireNpcMemoryMigrationSave();
 
                 _npcSaveDict[entityId] = saveData;
                 MarkSaveDirty(entityId);
@@ -2015,6 +2021,16 @@ namespace ARPG.Npc
         /// </summary>
         public string GetDisplayName(int entityId) => ResolveNpcDisplayName(entityId);
 
+        private bool EnsureNpcGenderInitialized(NpcSaveData saveData)
+        {
+            if (saveData.Gender == NpcGender.Male || saveData.Gender == NpcGender.Female)
+                return false;
+
+            saveData.Gender = UnityEngine.Random.Range(0, 2) == 0 ? NpcGender.Male : NpcGender.Female;
+            _narrative.InvalidateDialogues(saveData.EntityId);
+            return true;
+        }
+
         private GlobalEnum.JobType GetPreferredJobType(int npcTableId)
         {
             Tables.NpcTable? table = AR.s.Data.GetNpc(npcTableId);
@@ -2023,7 +2039,7 @@ namespace ARPG.Npc
 
         // ========== 이름 풀 + 배정(셔플백 순환) ==========
         // NpcSaveData.Name 생성용. 같은 NpcTableId(공유 테이블 이름)라도 인스턴스마다 다른 이름 → "누가 누군지" 식별.
-        // 서양 판타지 + 순우리말 혼합. 종족/성별 분기는 v1 미적용(인스턴스에 데이터 없음).
+        // 서양 판타지 + 순우리말 혼합. 이름 풀은 종족/성별 구분 없이 공유한다.
         // 배정 방식: 풀을 셔플해 순차 소비 → 한 바퀴(=풀 크기) 안에서는 중복 0.
         //   풀이 300보다 크므로 300명 규모 월드도 첫 바퀴에서 동명이인 없음.
         //   셔플 순서·커서·사용집합은 매니저 인스턴스가 소유(Reset()에서 정리). static 금지(CLAUDE.md Logic Placement).

@@ -63,6 +63,7 @@ namespace ARPG.Manager
         // Equipment 컨텐츠 element 캐시
         private Label? _eqName;
         private Label? _eqTier;
+        private Label? _eqItemLevel;
         private Label? _eqDmgPhysics;
         private Label? _eqDmgFire;
         private Label? _eqDmgIce;
@@ -398,6 +399,8 @@ namespace ARPG.Manager
 
             ApplyTierName(_eqName, itemName, tier);
             ApplyTierLabel(_eqTier, tier);
+            // 아이템 레벨이 없는 장비(기본 아이템·시작 장비·구 장비)는 줄을 숨긴다
+            SetStatLine(_eqItemLevel, equip != null && equip.ItemLevel > 0 ? $"아이템 레벨 {equip.ItemLevel}" : null);
 
             bool isWeapon = equip != null && equip.EquipType == GlobalEnum.EquipmentTypeMask.Weapon;
             if (_eqBaseTitle != null)
@@ -819,6 +822,7 @@ namespace ARPG.Manager
 
             _eqName = root.Q<Label>("eq-name");
             _eqTier = root.Q<Label>("eq-tier");
+            _eqItemLevel = root.Q<Label>("eq-item-level");
             _eqDmgPhysics = root.Q<Label>("eq-dmg-physics");
             _eqDmgFire = root.Q<Label>("eq-dmg-fire");
             _eqDmgIce = root.Q<Label>("eq-dmg-ice");

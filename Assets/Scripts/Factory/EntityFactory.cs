@@ -37,9 +37,10 @@ namespace ARPG.Factory
         /// MonsterTable → Stat + State + Velocity + AI + Skill + Drop + MonsterTag + MonsterArchetype
         /// </summary>
         /// <param name="archetypeOverride">개체 등급. null이면 MonsterTable.Archetype (MONSTER_RARITY_DESIGN.md §5)</param>
+        /// <param name="affixes">무리 생성 때 굴린 접사 (MONSTER_AFFIX_DESIGN.md §4). 기본값은 접사 없음</param>
         /// <returns>(entityId, entity) 튜플. 실패 시 (-1, null)</returns>
         public static async UniTask<(int entityId, EntityBase? entity)> CreateMonster(int monsterTableId, Vector3 position, Transform? parent = null, int level = 0,
-            GlobalEnum.MonsterArchetype? archetypeOverride = null)
+            GlobalEnum.MonsterArchetype? archetypeOverride = null, MonsterAffixComponent affixes = default)
         {
             using var contextLoad = AR.s.Map.Context.BeginLoad();
             // 1. 테이블 로드
@@ -98,7 +99,8 @@ namespace ARPG.Factory
             {
                 ApplyMonsterArchetypeScaling(entityId, archetypeTable, effectiveLevel);
             }
-            // 무작위 접사는 등급 스케일링 다음, 이 컴포넌트를 붙이기 전에 적용한다 (MONSTER_RARITY_DESIGN.md §7).
+            // 접사는 등급 스케일링 다음에 적용한다 (MONSTER_AFFIX_DESIGN.md §6.1).
+            int affixCount = ApplyMonsterAffixes(entityId, affixes);
             AR.s.Component.AddComponent(entityId, new MonsterArchetypeComponent { Archetype = archetype });
 
             // MonsterTag (System_EntityDestroy에서 MonsterManager 연동에 사용)
@@ -120,13 +122,18 @@ namespace ARPG.Factory
             if (table.DropId > 0)
             {
                 // 등급 보상: 판정 횟수와 높은 Tier 보너스 (MONSTER_RARITY_DESIGN.md §3.2)
+                // 판정 횟수 = 등급 기본 판정 + 접사당 판정 × 접사 수 (MONSTER_AFFIX_DESIGN.md §8)
                 AR.s.Component.AddComponent(entityId, new DropComponent
                 {
                     DropId = table.DropId,
                     DropRateBonus = table.DropRateBonus,
                     DropRarityBonus = table.DropRarityBonus + (archetypeTable != null ? archetypeTable.DropRarityBonus : 0),
                     MonsterLevel = effectiveLevel,
-                    DropRolls = archetypeTable != null ? Mathf.Max(1, archetypeTable.DropRolls) : 1
+                    DropRolls = archetypeTable != null
+                        ? Mathf.Max(1, archetypeTable.DropRolls + archetypeTable.DropRollsPerAffix * affixCount)
+                        : 1,
+                    ModTier11ChanceBp = archetypeTable != null ? archetypeTable.ModTier11ChanceBp : 0,
+                    ModTier12ChanceBp = archetypeTable != null ? archetypeTable.ModTier12ChanceBp : 0,
                 });
             }
 
@@ -140,7 +147,7 @@ namespace ARPG.Factory
             // 자식 프리팹의 IEntityMessageHandler 자동 등록
             entity.AutoRegisterChildHandlers();
 
-            Debug.Log($"[EntityFactory] Monster created - EntityId: {entityId}, TableId: {monsterTableId}, Name: {table.Name}, Archetype: {archetype}");
+            Debug.Log($"[EntityFactory] Monster created - EntityId: {entityId}, TableId: {monsterTableId}, Name: {table.Name}, Archetype: {archetype}, Affixes: {affixCount}");
             return (entityId, entity);
         }
 
@@ -406,6 +413,62 @@ namespace ARPG.Factory
             // AddCreatureComponents가 HP바를 기다리는 동안 첫 재계산이 끝났을 수 있다.
             // 바뀐 저항이 피격 감소 캐시(DamageDefenseCacheComponent)에 반영되도록 다시 계산을 요청한다.
             AR.s.Component.AddComponent(entityId, new StatDirtyTag());
+        }
+
+        /// <summary>
+        /// 굴린 접사를 몬스터에 적용한다 (MONSTER_AFFIX_DESIGN.md §6.1).
+        /// 스탯형은 StatModifier(출처 MonsterAffix, SourceId = 접사 Id)로 등록하고, 오라형은 개수만 세어 System_MonsterAura가 처리한다.
+        /// 접사가 1개 이상이면 MonsterAffixComponent를 붙이고, 다음 재계산에서 HP를 가득 채우도록 SpawnHpRefillTag를 붙인다.
+        /// </summary>
+        /// <returns>실제로 적용된 접사 수 (시트에 없는 Id는 건너뛴다)</returns>
+        private static int ApplyMonsterAffixes(int entityId, MonsterAffixComponent rolled)
+        {
+            if (rolled.Count <= 0)
+                return 0;
+
+            ComponentManager cm = AR.s.Component;
+            DataManager data = AR.s.Data;
+            MonsterAffixComponent applied = default;
+            for (int i = 0; i < rolled.Count; i++)
+            {
+                int affixId = rolled.GetByIndex(i);
+                MonsterAffixTable? affix = data.GetMonsterAffix(affixId);
+                if (affix == null)
+                {
+                    Debug.LogWarning($"[EntityFactory] MonsterAffixTable not found: {affixId} (EntityId: {entityId})");
+                    continue;
+                }
+
+                if (affix.Kind == GlobalEnum.MonsterAffixKind.Stat)
+                {
+                    AddMonsterAffixStatModifier(data, entityId, affixId, affix.Stat1, affix.ModType1, affix.Value1);
+                    AddMonsterAffixStatModifier(data, entityId, affixId, affix.Stat2, affix.ModType2, affix.Value2);
+                    AddMonsterAffixStatModifier(data, entityId, affixId, affix.Stat3, affix.ModType3, affix.Value3);
+                }
+                else if (affix.Kind == GlobalEnum.MonsterAffixKind.Aura)
+                {
+                    applied.AuraCount++;
+                }
+
+                applied.Add(affixId);
+            }
+
+            if (applied.Count == 0)
+                return 0;
+
+            cm.AddComponent(entityId, applied);
+            cm.AddComponent(entityId, new SpawnHpRefillTag());
+            cm.AddComponent(entityId, new StatDirtyTag());
+            return applied.Count;
+        }
+
+        private static void AddMonsterAffixStatModifier(DataManager data, int entityId, int affixId,
+            GlobalEnum.Stat stat, StatModifierType modifierType, int value)
+        {
+            if (value == 0)
+                return;
+
+            data.AddStatModifier(entityId, StatModifierSource.MonsterAffix, affixId, stat, modifierType, value);
         }
 
         #region 공통 컴포넌트 추가 메서드

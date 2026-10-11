@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using ARPG.Component;
 using ARPG.Data;
 using ARPG.History;
+using ARPG.Item;
 using ARPG.Tables;
 using ARPG.Utility;
 using UnityEngine;
@@ -560,7 +561,10 @@ namespace ARPG.Npc
                 int itemId = dropTable.EquipmentPoolMode == 1
                     ? DropPoolBuilder.SelectWeightedRandom(DropPoolBuilder.GetEquipmentPool(zoneLevel), 0, rng)
                     : SelectFromDropList(AR.s.Data?.GetDropEquipment(dropTable.EquipmentId)?.DropList, rng);
-                return itemId > 0 ? AR.s.Item.CreateInventoryItemData(itemId, 1, rng) : null;
+                // 아이템 레벨 = 기준 레벨. T11·T12 특수 판정은 플레이어가 잡은 몬스터 드랍 전용이라 넣지 않는다
+                return itemId > 0
+                    ? AR.s.Item.CreateInventoryItemData(itemId, 1, rng, new EquipmentRollOptions(zoneLevel))
+                    : null;
             }
 
             pick -= equipmentRate;

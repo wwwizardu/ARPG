@@ -8,6 +8,12 @@ sources:
   - Docs/combat/WEAPON_PROGRESSION_DESIGN.md
   - Docs/combat/SKILLBOOK_DESIGN.md
   - Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md
+  - Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md
+  - Docs/ai_monster/MONSTER_RARITY_DESIGN.md
+  - Assets/Scripts/Item/ItemLevelModTierRules.cs
+  - Assets/Scripts/Common/Utility/DropHelper.cs
+  - Assets/Scripts/Editor/ItemEnchantmentDiagnostics_ItemLevel.cs
+  - Assets/_BinaryData/TableData/MonsterArchetypeTable.bytes
   - Assets/Scripts/Common/Component/SkillAttackProfileComponent.cs
   - Assets/Scripts/Common/Component/StatComponent.cs
   - Assets/Scripts/Common/Component/StatModifierBuffer.cs
@@ -42,7 +48,7 @@ sources:
   - Assets/_BinaryData/TableData/ModTierTable.bytes
   - Assets/_BinaryData/TableData/ItemEnchantmentCostTable.bytes
 last_synced: 2026-09-01
-last_updated: 2026-10-05
+last_updated: 2026-10-11
 status: implemented-contract-active-validation-pending
 ---
 
@@ -50,11 +56,13 @@ status: implemented-contract-active-validation-pending
 
 ## 한 줄 요약
 
-무기의 고정 기본 능력과 인스턴스별 고유 강화만 무기 캐시에 들어가며, 장비의 Implicit/Prefix/Postfix는 부위와 무관한 글로벌 Modifier로 합산된다. 미장착 인벤토리 장비의 Prefix/Postfix는 Tier 1 이상 제련소에서 랜덤 교체·추가할 수 있고, 스킬 공격 프로필은 변경된 옵션까지 태그에 맞춰 한 번 계산해 예상값과 실제 전투가 같은 값을 소비한다. [src: Docs/combat/combatSystem.md §장비 옵션 책임 경계·§스킬 공격 프로필 구성, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §0–§8, Assets/Scripts/Item/ItemEnchantmentService.cs, Assets/Scripts/Common/System/System_SkillAttackProfileCalculation.cs]
+무기의 고정 기본 능력과 인스턴스별 고유 강화만 무기 캐시에 들어가며, 장비의 Implicit/Prefix/Postfix는 부위와 무관한 글로벌 Modifier로 합산된다. 미장착 인벤토리 장비의 Prefix/Postfix는 Tier 1 이상 제련소에서 랜덤 교체·추가할 수 있고, 스킬 공격 프로필은 변경된 옵션까지 태그에 맞춰 한 번 계산해 예상값과 실제 전투가 같은 값을 소비한다. [src: Docs/combat/combatSystem.md §장비 옵션 책임 경계·§스킬 공격 프로필 구성, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §0–§8, Assets/Scripts/Item/ItemEnchantmentService.cs, Assets/Scripts/Common/System/System_SkillAttackProfileCalculation.cs] 새로 만드는 장비의 Prefix/Postfix 티어(T1~T12)는 장비에 저장된 아이템 레벨로 정해진다(2026-10-11). [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §1, Assets/Scripts/Item/ItemLevelModTierRules.cs]
 
 ## 문서 정본
 
 현행 설계 규칙은 `combatSystem.md`의 장비 옵션·공격 프로필 절에, 마이그레이션과 남은 과제는 `ModSystem_Changelog.md`의 2026-08-22 항목에 반영돼 있다. 변경 이력의 초기 Mod 리팩터링 절은 당시 구조를 기록한 역사이며, 실제 구현 여부는 현재 코드를 함께 확인한다. [src: Docs/combat/combatSystem.md §장비 옵션 책임 경계–§갱신·저장·표시, Docs/combat/ModSystem_Changelog.md §2026-08-22 — 장비 옵션 글로벌화와 무기 고유 강화 분리, Assets/Scripts/Data/ItemData.cs:L299-400]
+
+새 장비의 아이템 레벨과 옵션 티어(구간·가중치·T11·T12 특수 판정)는 `ITEM_LEVEL_MOD_TIER_DESIGN.md`가 정본이고, 티어별 값·열리는 레벨·등급별 특수 판정 확률은 ModTier·MonsterArchetype 시트가 정본이다. [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §2·§4·§5]
 
 일반 장비 마법부여의 작업·비용·후보·Forge 접근성 계약은 `ITEM_ENCHANTMENT_DESIGN.md`가 정본이며, 구현 여부는 `ItemEnchantmentService`, Forge UI, 비용·Mod 테이블을 함께 확인한다. 마법부여는 무기 고유 강화와 별도 경로다. [src: Docs/combat/ITEM_ENCHANTMENT_DESIGN.md, Assets/Scripts/Item/ItemEnchantmentService.cs, Assets/Scripts/UI/UIForge.cs, Assets/_BinaryData/TableData/ItemEnchantmentCostTable.bytes]
 
@@ -68,7 +76,7 @@ status: implemented-contract-active-validation-pending
 | §6.3 | 런타임 비용 조회는 구현됐지만, 신규 Google Sheet 등록·단건 다운로드 문장은 아직 운영 경로에 반영되지 않았다. [src: Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §6.3, Assets/Scripts/Data/DataManager_Table.cs, Assets/Scripts/Editor/DownloadTables.cs] |
 | §12 | 구현 여부가 아니라 회귀 검증 기준이다. Editor 진단 코드와 PlayMode 체크리스트의 근거로 계속 사용한다. [src: Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §12, Assets/Scripts/Editor/ItemEnchantmentDiagnostics.cs] |
 | §14 | 신성한/카오스/진화의 오브, 무기 고유 제련, 장착 장비 작업, Forge 상위 Tier의 후속 설계 경계다. [src: Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §14] |
-| §2.2·§2.4 | 구현 전 기준선이다. 옛 Tier 게이트·로그 전용 UI와 일반 Affix 14개 스냅샷은 현행 상태가 아니다. 현재 UI는 서비스를 실행하고, 테이블은 Prefix 10개·Postfix 13개와 Tier 행 91개를 가진다. [src: Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §2.2·§2.4, Assets/Scripts/UI/UIForge.cs, Assets/_BinaryData/TableData/ModTable.bytes, Assets/_BinaryData/TableData/ModTierTable.bytes] |
+| §2.2·§2.4 | 구현 전 기준선이다. 옛 Tier 게이트·로그 전용 UI와 일반 Affix 14개 스냅샷은 현행 상태가 아니다. 현재 UI는 서비스를 실행하고, 테이블은 Prefix 10개·Postfix 13개와 Tier 행 276개(일반 옵션 23종 × T1~T12, 2026-10-11)를 가진다. Base 옵션은 `EquipmentBaseStat`의 장비별 고정값과 Tier 0을 쓰므로 티어 행이 없다(쓰이지 않던 Base 티어 22행은 2026-10-11 삭제). [src: Assets/Scripts/Data/ItemData.cs `InitBaseMods`] [src: Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §2.2·§2.4, Assets/Scripts/UI/UIForge.cs, Assets/_BinaryData/TableData/ModTable.bytes, Assets/_BinaryData/TableData/ModTierTable.bytes] |
 | §10–§11·§13 | 파일별 구현 계획·콘텐츠 보강안·Phase 순서로서 구현 이력으로만 읽는다. 현재 파일 위치와 완료 여부는 코드·테이블이 정본이다. [src: Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §10–§11·§13, Assets/Scripts/Item/ItemEnchantmentService.cs, Assets/Scripts/Village/VillageInitialDevelopment.cs, Assets/_BinaryData/TableData/ModTable.bytes] |
 
 따라서 MVP 런타임 구현은 완료로 분류하되, 문서 안의 모든 시제와 “현행 기준선”을 현재 상태로 읽지는 않는다. 문서를 제거하거나 전체를 구현 현황 대시보드로 사용하는 대신, 확정 규칙·검증 기준·후속 경계의 원본으로 유지한다. [src: Docs/combat/ITEM_ENCHANTMENT_DESIGN.md, Assets/Scripts/Item/ItemEnchantmentService.cs, Assets/Scripts/Editor/ItemEnchantmentDiagnostics.cs] [추론: 구현 완료와 원본 문서의 보존 가치는 별개]
@@ -119,6 +127,20 @@ status: implemented-contract-active-validation-pending
 
 `AllowedEquipTypes`는 옵션이 롤 가능한 장비 종류만 제한하며 계산 경로를 바꾸지 않는다. `Group` 중복은 같은 `ModSlot` 안에서만 금지한다. Base·Implicit 초기화와 Prefix·Postfix 랜덤 롤 모두 자기 슬롯의 기존 Group만 검사하므로 서로 다른 슬롯 사이의 같은 Group은 허용된다. [src: Docs/combat/combatSystem.md §장비 옵션 책임 경계, Assets/Scripts/Data/ItemData.cs, Assets/Scripts/Manager/ItemManager.cs]
 
+## 새 장비의 아이템 레벨과 옵션 티어
+
+2026-10-11 사용자 결정으로 구현됐고 실제 플레이 확인은 남았다. 일반 옵션을 T3에서 T12까지 늘렸고, 장비를 만들 때 아이템 레벨(1~99)을 정해 `EquipmentData.ItemLevel`에 저장한다. 몬스터 드랍은 몬스터 레벨, NPC 사냥·던전 원정 전리품은 기준 레벨, 상점 랜덤 매물은 마을이 있는 청크의 지역 레벨이다. 기본 아이템·시작 장비·이전 장비는 0(없음)이며 저장을 생략하므로 세이브 버전은 그대로다. [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §1·§6, Assets/Scripts/Data/ItemData.cs `EquipmentData.ItemLevel`, Assets/Scripts/Common/Utility/DropHelper.cs, Assets/Scripts/Npc/NpcActivityResolver.cs `RollHuntLoot`, Assets/Scripts/Village/VillageManager.cs `RollMerchantStock`]
+
+**일반 판정(T1~T10)**: ModTier `RequiredLevel`은 이제 "티어가 열리는 아이템 레벨"이다(T1~T3 1, T4 11, T5 24, T6 37, T7 50, T8 63, T9 76, T10 90). 열린 가장 높은 티어가 상한이고 상한에서 4단계 아래까지만 후보라서, 아이템 레벨 1–10은 T1~T3, 90–99는 T6~T10이 나온다. [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §2, Assets/_BinaryData/TableData/ModTierTable.bytes, Assets/Scripts/Item/ItemLevelModTierRules.cs `BuildNormalTierCandidates`]
+
+후보 안에서는 `Weight`(T1 100 → T10 10)로 고르되, 구간 진행도에 따라 새로 열린 상한 티어는 30%에서 100%로(마지막 구간은 200%까지) 늘고, 다음 구간에서 빠질 최저 티어는 100%에서 30%로 준다. 그래서 같은 구간의 레벨 90과 99도 결과가 다르고(T10 약 2% → 약 16%), 구간 경계에서 티어가 서서히 들어오고 빠진다. 티어를 고를 때 난수를 한 번 쓰는 것은 이전과 같다. [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §3, Assets/Scripts/Item/ItemLevelModTierRules.cs, Assets/Scripts/Manager/ItemManager.cs `RollRandomMods`]
+
+**특수 판정(T11·T12)**: 일반 판정 뒤 장비 1개당 한 번 굴려, 성공하면 이미 붙은 옵션 하나를 T11 또는 T12로 올리고 수치를 다시 뽑는다. 아이템 레벨 90 이상인 몬스터 드랍에서만 일어나며, 확률은 몬스터 등급 시트 I·J열(만분율)로 일반 0.5%/0.1%에서 엔드게임 보스 10%/3%까지 오른다. NPC 전리품·상점 매물·마법부여에는 없다. [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §4, Docs/ai_monster/MONSTER_RARITY_DESIGN.md §3, Assets/_BinaryData/TableData/MonsterArchetypeTable.bytes, Assets/Scripts/Manager/ItemManager.cs `TryApplySpecialTier`]
+
+T1~T3 값은 바꾸지 않아 기존 장비와 상점 기본 아이템은 그대로다. T4~T12는 T3 최대값 기준으로 고정 수치형은 T10 6배·T12 9배, 퍼센트형은 T10 2.2배·T12 2.8배, 저항은 T10 44·T12 50까지 키운 초안이다. 고레벨 몬스터 곡선과의 대조는 하지 않았다. [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §5·§7, Assets/_BinaryData/TableData/ModTierTable.bytes]
+
+다운로드 검증은 Mod마다 T1부터 빈칸 없는 티어, 줄지 않는 `RequiredLevel`, T12 초과 금지를 확인한다. 진단 메뉴 `Item Enchantment MVP`는 구간표·레벨별 평균 티어 비감소·특수 판정·등급 확률·아이템 레벨 저장 왕복을 검사하며 2026-10-11 PASS였다. [src: Assets/Scripts/Editor/DownloadTables.cs `ValidateModSetup`, Assets/Scripts/Editor/ItemEnchantmentDiagnostics_ItemLevel.cs, Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §8]
+
 ## 일반 장비 마법부여 MVP
 
 ### 범위와 비용
@@ -130,7 +152,7 @@ status: implemented-contract-active-validation-pending
 
 ### 후보와 트랜잭션
 
-후보는 장비 종류 비트가 단일이고 `AllowedEquipTypes`에 포함되며, 실제 런타임 소비 경로가 허용 목록에 있는 Passive 효과여야 한다. 같은 Slot·Group 중복은 제외하고 구 세이브에 이미 중복이 있으면 실행을 거부한다. 선택된 Mod의 Tier는 `RequiredLevel <= Player Level`, `Tier <= Item Tier`, `Weight > 0`을 만족하는 행에서 Weight 가중치로 뽑고 값은 해당 범위에서 롤한다. [src: Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §3.2–§3.5, Assets/Scripts/Item/ItemEnchantmentService.cs]
+후보는 장비 종류 비트가 단일이고 `AllowedEquipTypes`에 포함되며, 실제 런타임 소비 경로가 허용 목록에 있는 Passive 효과여야 한다. 같은 Slot·Group 중복은 제외하고 구 세이브에 이미 중복이 있으면 실행을 거부한다. 선택된 Mod의 Tier는 `RequiredLevel <= Player Level`, `Tier <= Item Tier`, `Weight > 0`을 만족하는 행에서 Weight 가중치로 뽑고 값은 해당 범위에서 롤한다. [src: Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §3.2–§3.5, Assets/Scripts/Item/ItemEnchantmentService.cs] 이 규칙은 2026-10-11에도 그대로 두었다(마법부여는 별도 작업). 플레이어 레벨이 1에서 오르지 않으므로 이전에는 사실상 T1만 나왔고, `RequiredLevel` 재해석 뒤에는 T1~T3 중 장비 Tier 이하가 나온다. T11·T12는 요구 레벨 90이라 나오지 않는다. [src: Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §3.5 2026-10-11 갱신, Assets/Scripts/Data/PlayerData.cs `Level`]
 
 `Inspect`는 난수를 소비하지 않고 후보 수·재료·Gold·실패 원인만 반환한다. `Execute`는 모든 조건을 다시 확인한 뒤 변경 전 스냅샷을 만들고, 완성된 새 Mod를 교체/추가하며, 인벤토리 전체 스택에서 낮은 슬롯부터 재료를 소비하고 Gold를 차감한다. 성공 후 무기 캐시를 무효화하고 `SavePlayer()`를 한 번 요청하며 변경 전·후 불변 스냅샷을 반환한다. 원자성은 메모리 변경 범위이며 저장 요청 실패까지 되돌리는 디스크 트랜잭션은 아니다. [src: Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §7–§8, Assets/Scripts/Base/Inventory.cs, Assets/Scripts/Item/ItemEnchantmentService.cs]
 
@@ -183,7 +205,7 @@ FinalAttackSpeedPerSecond
 - 장착·해제 시 Modifier 변경 직후 소유 스킬 프로필을 다시 만들고, `StatDirtyTag` 계산 후에도 파생 프로필을 동기화한다. [src: Assets/Scripts/Common/Utility/EquipHelper.cs:L145-152, Assets/Scripts/Common/Utility/EquipHelper.cs:L290-297, Assets/Scripts/Common/System/System_StatCalculation.cs:L145-161]
 - 스탯 재계산으로 최대 HP/MP가 낮아지면 현재 HP/MP를 새 최대치 범위로 보정한 뒤 파생 컴포넌트와 공격 프로필을 동기화한다. [src: Assets/Scripts/Common/System/System_StatCalculation.cs]
 - 구 세이브는 `WeaponLocalEnhancements` null을 빈 목록으로 복구하고 무기 캐시를 무효화한다. 플레이어·NPC 인벤토리와 장비는 기존 ItemData 로드 경로를 사용하며 월드 드랍도 `WorldData.LoadCompleted`에서 복구한다. [src: Assets/Scripts/Data/ItemData.cs:L250-272, Assets/Scripts/Data/PlayerData.cs:L78-98, Assets/Scripts/Npc/NpcSaveData.cs:L142-151, Assets/Scripts/Data/WorldData.cs:L40-49]
-- 장비 툴팁은 기본 능력, 무기 고유 강화, 장비 옵션을 별도 영역으로 표시하며 고정 치명타와 증가 치명타 문구를 구분한다. 옵션 문구는 Forge 비교 화면과 같은 포맷터를 사용한다. [src: Docs/combat/combatSystem.md §갱신·저장·표시, Assets/UI/Tooltip/Tooltip.uxml, Assets/Scripts/Manager/TooltipManager.cs, Assets/Scripts/Item/EquipmentOptionText.cs]
+- 장비 툴팁은 기본 능력, 무기 고유 강화, 장비 옵션을 별도 영역으로 표시하며 고정 치명타와 증가 치명타 문구를 구분한다. 옵션 문구는 Forge 비교 화면과 같은 포맷터를 사용한다. [src: Docs/combat/combatSystem.md §갱신·저장·표시, Assets/UI/Tooltip/Tooltip.uxml, Assets/Scripts/Manager/TooltipManager.cs, Assets/Scripts/Item/EquipmentOptionText.cs] 아이템 레벨이 있는 장비는 등급 줄 아래에 "아이템 레벨 N"을 표시하고, 0이면 숨긴다(2026-10-11). [src: Assets/Scripts/Manager/TooltipManager.cs `BuildEquipmentContent`, Assets/UI/Tooltip/Tooltip.uxml `eq-item-level`]
 - 툴팁은 콘텐츠나 `display` 변경 직후 위치를 한 번 계산하고, 실제 크기가 확정되는 `GeometryChangedEvent`에서 보정해 화면 경계 배치를 갱신한다. [src: Assets/Scripts/Manager/TooltipManager.cs]
 - `ModTable` 5002는 `IncreasedStat/AttackSpeedMul`, 1003은 `IncreasedStat/CriRateMul`로 글로벌 증가 버킷에 연결된다. [src: Assets/_BinaryData/TableData/ModTable.bytes:L1, Assets/Scripts/Common/System/System_StatCalculation.cs:L232-257]
 
@@ -194,6 +216,9 @@ FinalAttackSpeedPerSecond
 
 ## 미해결 / 주의
 
+- 마법부여는 아이템 레벨 규칙과 연결되지 않아 결과가 T3 이하다. 아이템 레벨이 높은 장비의 옵션을 바꾸면 티어가 내려갈 수 있다. 아이템 레벨 연결 또는 재화별 Tier 규칙은 사용자가 따로 작업한다. [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §7, Docs/combat/WEAPON_PROGRESSION_DESIGN.md §적용 항과 Tier 접근 정책]
+- 던전 몬스터 레벨이 1, 보스가 5라서 던전 드랍 장비는 T1~T3이다. 던전 드랍 레벨도 사용자가 따로 작업한다. [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §7, Assets/_BinaryData/TableData/DungeonTable.bytes]
+- 아이템 레벨·옵션 티어의 플레이 확인(원거리 드랍 툴팁, 기본 아이템 툴팁에 줄 없음, 상점 매물의 마을 지역 레벨)은 남았다. 상점 매물·NPC 전리품은 같은 시드여도 이전과 다른 옵션이 나온다. [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §7·§8]
 - MVP 런타임 구현과 별개로 `ItemEnchantmentCostTable.bytes`의 Google Sheet 등록·단건 다운로드 메뉴는 아직 `DownloadTables`에 없다. 비용 데이터를 시트 정본으로 운영하려면 실제 gid를 확정해 등록해야 한다. [src: Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §6.3, Assets/_BinaryData/TableData/ItemEnchantmentCostTable.bytes, Assets/Scripts/Data/DataManager_Table.cs, Assets/Scripts/Editor/DownloadTables.cs]
 - `RerollAffixValues`, `RerollAllAffixes`, 분해, 장착 중 장비 마법부여, 무기 고유 제련은 지원하지 않는다. 현행 서비스는 랜덤 교체와 랜덤 추가만 승인한다. [src: Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §1.2·§14, Assets/Scripts/Item/ItemEnchantmentService.cs, Assets/Scripts/UI/UIForge.cs]
 - `ItemEnchantmentDiagnostics`에는 비용·후보·Group·상한·실패 무변경·성공 소비·신규 마을 Forge 보장 진단이 구현돼 있다. 실행 결과를 저장한 아티팩트는 저장소에 없으므로 Unity Editor 진단과 Tier 1/2/3·저장 왕복·장착 후 전투의 PlayMode 체크는 구현 완료 후 회귀 검증 항목으로 남긴다. [src: Assets/Scripts/Editor/ItemEnchantmentDiagnostics.cs, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §12] [추론: 저장소에 진단 실행 결과 파일이 없음]

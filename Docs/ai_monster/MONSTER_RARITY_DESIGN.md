@@ -1,6 +1,6 @@
 # 몬스터 등급 (마법·희귀) 설계
 
-> 상태: 필드 스폰 구현 (2026-10-11), 실제 플레이 확인 전. 같은 날 출현 확률을 8/4 → 15/8로 올렸다(R3·R7).
+> 상태: 필드 스폰 구현 (2026-10-11), 실제 플레이 확인 전. 같은 날 출현 확률을 8/4 → 15/8로 올렸다(R3·R7). 같은 날 무작위 접사를 구현하면서 드랍 판정을 "기본 + 접사당"으로 바꿨다([MONSTER_AFFIX_DESIGN.md](MONSTER_AFFIX_DESIGN.md) §8).
 > 작성일: 2026-10-11
 > 범위: 같은 종을 일반·마법·희귀로 나누는 개체 등급, 등급별 스탯·드랍 보상, 필드 스폰 판정, HP바 표시. 무작위 접사는 확장 지점만 정한다(§7).
 > 관련: [MONSTER_SPAWN_DESIGN.md](MONSTER_SPAWN_DESIGN.md) §3.4·§6.1(원래 등급 승격 계획), [BALANCE_DESIGN.md](../combat/BALANCE_DESIGN.md) §2·§3.3(TTK·등급 배율)
@@ -22,24 +22,27 @@
 | R2 | 등급은 **무리 단위**로 정한다. 마법 무리는 전원 마법, 희귀 무리는 첫 구성원 1마리만 희귀이고 나머지는 일반 호위다. |
 | R3 | 확률은 Zone 시트 `MagicPackRate`·`RarePackRate`(%)에 둔다. 값은 전 구역 15 / 8(처음 8 / 4에서 "잘 안 보인다"는 판단으로 상향). 평균 무리 크기가 2라서 몬스터 비율로는 마법 15%, 희귀 약 4%다. 희귀 무리는 평균 12.5무리마다, 절반 확률로는 8무리 안에 만난다. |
 | R4 | 1차 범위는 필드 스폰만이다. 던전은 후속 작업이다(§8). |
-| R5 | 보상은 **판정 횟수**(`DropRolls`)와 **높은 Tier 보너스**(`DropRarityBonus`)로 준다. `DropRateBonus`는 꽝 칸만 줄여 효과가 작으므로 등급에 넣지 않는다. |
-| R6 | 시간당 보상 목표는 일반 1.0 : 마법 약 1.4 : 희귀 약 1.6이다(원소 공격 기준, §3.3). 2026-10-11 마법 HP를 2 → 1.3으로 낮춰(마법 3마리 무리가 버겁다는 판단) 현재 마법은 약 2.1로 희귀보다 높다 — 판정 횟수 조정 여부 미정. |
-| R7 | 필드 드랍 총량을 유지하기 위해 ItemDrop 1번 행의 `NothingRate`를 10 → 43으로 올린다(확률 8/4 때는 27). |
+| R5 | 보상은 **판정 횟수**(`DropRolls`)와 **높은 Tier 보너스**(`DropRarityBonus`)로 준다. `DropRateBonus`는 꽝 칸만 줄여 효과가 작으므로 등급에 넣지 않는다. 판정 횟수는 2026-10-11부터 `DropRolls` + `DropRollsPerAffix` × 접사 수다(MONSTER_AFFIX_DESIGN A4). |
+| R6 | 시간당 보상 목표는 일반 1.0 : 마법 약 1.4 : 희귀 약 1.6이다(원소 공격 기준, §3.3). 2026-10-11 마법 HP를 2 → 1.3으로 낮춰 마법이 약 2.1로 희귀보다 높아졌다가, 같은 날 접사 도입으로 마법 평균 판정이 3 → 2.54회가 되어 약 1.76으로 내려왔다(접사 난이도 미포함). |
+| R7 | 필드 드랍 총량을 유지하기 위해 ItemDrop 1번 행의 `NothingRate`를 10 → 43으로 올렸다(확률 8/4 때는 27). 접사 도입으로 마리당 평균 판정이 1.66 → 1.68회가 되어 44로 다시 맞췄다(2026-10-11). |
 | R8 | 마법·희귀는 만피여도 HP바를 보여 주고, HP바를 등급 색(파랑·노랑)으로 칠한다. |
 
 ## 3. 등급 시트 (MonsterArchetype)
 
 값은 시트가 정본이다. 아래는 2026-10-11 기준 값이다.
 
-| 등급 | HpMul | DmgMul | ResistAdd | DropRolls | DropRarityBonus |
-|---|---|---|---|---|---|
-| Normal | 1 | 1.3 | 0 | 1 | 0 |
-| Magic | 1.3 | 1.56 | 10 | 3 | 50 |
-| Rare | 5 | 1.95 | 20 | 10 | 150 |
-| Boss | 20 | 2.6 | 0 | 1 | 0 |
-| EndgameBoss | 60 | 2.6 | 0 | 1 | 0 |
+| 등급 | HpMul | DmgMul | ResistAdd | DropRolls | DropRarityBonus | ModTier11ChanceBp | ModTier12ChanceBp | AffixBaseCount | AffixExtraChance | DropRollsPerAffix |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Normal | 1 | 1.3 | 0 | 1 | 0 | 50 | 10 | 0 | 10 | 1 |
+| Magic | 1.3 | 1.56 | 10 | 1 (예전 3) | 50 | 100 | 20 | 1 | 35 | 1 |
+| Rare | 5 | 1.95 | 20 | 6 (예전 10) | 150 | 200 | 50 | 1 | 50 | 2 |
+| Boss | 20 | 2.6 | 0 | 1 | 0 | 500 | 100 | 0 | 0 | 0 |
+| EndgameBoss | 60 | 2.6 | 0 | 1 | 0 | 1000 | 300 | 0 | 0 | 0 |
+
+- K~M열(`AffixBaseCount`·`AffixExtraChance`·`DropRollsPerAffix`, 2026-10-11 추가)은 접사 개수와 접사당 드랍 판정이다. 규칙은 [MONSTER_AFFIX_DESIGN.md](MONSTER_AFFIX_DESIGN.md) §3·§8.
 
 - Boss·EndgameBoss의 새 칸(저항·보상)은 쓰는 곳이 없어 중립값으로 두었다.
+- `ModTier11ChanceBp`·`ModTier12ChanceBp`(I·J열, 만분율, 2026-10-11 추가)는 드랍 장비 1개당 옵션 T11·T12 특수 판정 확률이다. 아이템 레벨 90 이상에서만 효과가 있다. 규칙은 [ITEM_LEVEL_MOD_TIER_DESIGN.md](../combat/ITEM_LEVEL_MOD_TIER_DESIGN.md) §4.
 - 시트의 Normal `DmgMul`은 1.3이고, BALANCE_DESIGN §3.3 표에는 1.0으로 적혀 있다. 등급 간 공격력 비율(1.2배·1.5배)은 같다.
 - 마법 `HpMul`은 2(BALANCE_DESIGN §3.3 예시값)였다가 2026-10-11 1.3으로 낮췄다.
 
@@ -52,23 +55,24 @@
 
 ### 3.2 보상
 
-- 사망 시 `DropRolls`번 판정한다. 판정마다 기존 드랍 규칙(꽝·화폐·장비·스킬북·페이지)을 그대로 쓴다.
+- 사망 시 `DropRolls` + `DropRollsPerAffix` × 접사 수만큼 판정한다. 판정마다 기존 드랍 규칙(꽝·화폐·장비·스킬북·페이지)을 그대로 쓴다.
 - 판정이 2회 이상이면 아이템이 한 점에 겹치지 않게 판정마다 반경 0.8칸 안으로 위치를 흩는다. 흩은 칸이 막혀 있으면 원래 위치에 떨군다.
 - `DropRarityBonus`는 몬스터 시트의 보너스에 더한다. 장비 후보 중 최저 Tier보다 높은 Tier의 가중치를 올린다. 효과가 없는 경우:
   - 화폐: 전부 Tier 1이라 효과 없음.
   - 장비: Tier 2는 DropLevel 10, Tier 3는 20부터 후보에 들어오므로 레벨 10 미만 구역에서는 효과 없음.
   - 스킬북·스킬 페이지: Tier가 드랍 시트에 고정돼 효과 없음.
+- 드랍 장비의 아이템 레벨은 몬스터 레벨이고, 옵션 티어는 아이템 레벨로 정해진다. 등급은 옵션 티어 중 T11·T12 특수 판정 확률만 올린다(§3 표, [ITEM_LEVEL_MOD_TIER_DESIGN.md](../combat/ITEM_LEVEL_MOD_TIER_DESIGN.md)).
 
-평균 드랍 개수 (`NothingRate` 43 → 판정 1번에 약 48%):
+평균 드랍 개수 (`NothingRate` 44 → 판정 1번에 약 47.6%, 접사 포함 평균):
 
-| 등급 | 판정 횟수 | 평균 개수 |
+| 등급 | 평균 판정 횟수 | 평균 개수 |
 |---|---|---|
-| Normal | 1 | 0.48 |
-| Magic | 3 | 1.45 |
-| Rare | 10 | 4.8 |
-| 필드 평균(마리당, R3 비율) | 1.66 | 0.80 (등급 도입 전 0.8과 같음) |
+| Normal | 1.11 | 0.53 |
+| Magic | 2.54 | 1.21 |
+| Rare | 10.0 | 4.76 |
+| 필드 평균(마리당, R3 비율) | 1.68 | 0.80 (등급 도입 전 0.8과 같음) |
 
-`NothingRate`를 다시 맞출 때: 판정 1번당 확률 p = 0.8 ÷ (마리당 평균 판정 횟수), 꽝 값 = 40 × (1 − p) ÷ p (나머지 칸 합계가 40일 때). 마리당 평균 판정 횟수 = 1 + 2 × 마법 비율 + 9 × 희귀 무리 확률 ÷ 평균 무리 크기.
+`NothingRate`를 다시 맞출 때: 판정 1번당 확률 p = 0.8 ÷ (마리당 평균 판정 횟수), 꽝 값 = 40 × (1 − p) ÷ p (나머지 칸 합계가 40일 때). 마리당 평균 판정 횟수는 접사를 포함해 [MONSTER_AFFIX_DESIGN.md](MONSTER_AFFIX_DESIGN.md) §8.3 식으로 구한다(`ARPG/Diagnostics/Monster Affix Distribution` 진단이 권장값을 계산한다).
 
 ### 3.3 시간당 보상 계산
 
@@ -79,6 +83,8 @@
 | Normal | 1 | 1 | 1.0 | 1.0 |
 | Magic | 약 1.44 | 3 | 약 2.1 | 2.3 |
 | Rare | 약 6.25 | 10 | 약 1.6 | 2.0 |
+
+위 표는 접사 도입 전 값이다. 접사 도입 후 평균 판정은 일반 1.11, 마법 2.54, 희귀 10.0회라 시간당 보상은 마법 약 1.76, 희귀 약 1.6이다(접사 난이도 미포함, MONSTER_AFFIX_DESIGN §8.4).
 
 레벨 10 이상 구역부터는 Tier 보너스만큼 질적인 보상이 더해진다.
 
@@ -95,9 +101,9 @@
 1. `AddCreatureComponents` — 스탯·HP바 등 공통 컴포넌트
 2. 등급 결정: `archetypeOverride ?? MonsterTable.Archetype`
 3. `ApplyMonsterArchetypeScaling` — HP·공격력 배율, 저항 가산, `StatDirtyTag` 재요청(HP바 대기 중 첫 재계산이 끝났어도 피격 감소 캐시가 새 저항을 반영하도록)
-4. (향후) 무작위 접사 적용 — §7
+4. 무작위 접사 적용 — 무리 생성 때 굴린 접사를 받아 스탯 보정 등록·`MonsterAffixComponent` 부착([MONSTER_AFFIX_DESIGN.md](MONSTER_AFFIX_DESIGN.md) §6)
 5. `MonsterArchetypeComponent { Archetype }` 부착 — 모든 몬스터
-6. `DropComponent` — `DropRolls`, `DropRarityBonus`(종 + 등급 합)
+6. `DropComponent` — `DropRolls`(등급 기본 + 접사당 × 접사 수), `DropRarityBonus`(종 + 등급 합), `ModTier11ChanceBp`·`ModTier12ChanceBp`(등급), `MonsterLevel`(드랍 장비의 아이템 레벨)
 7. `AutoRegisterChildHandlers` — `HpBarView`가 등급 컴포넌트를 읽는다
 
 던전 몬스터는 `archetypeOverride`를 넘기지 않아 종 등급(현재 전부 일반)을 쓴다.
@@ -108,6 +114,8 @@
 - 마법·희귀는 만피여도 HP바를 보여 교전 전에 등급을 알 수 있다. 시야 밖에서는 안개가 Visual째 숨긴다.
 
 ## 7. 무작위 접사 확장 지점 (미구현)
+
+> 2026-10-11 접사를 [MONSTER_AFFIX_DESIGN.md](MONSTER_AFFIX_DESIGN.md) 기준으로 구현했다. 아래는 구현 전 확장 지점 기록이다. 아래와 다른 점: 개체가 아니라 **무리 단위**로 판정하고(희귀는 따로), 개수는 `AffixBaseCount`·`AffixExtraChance` 두 칸으로 정한다. §3의 `DropRolls`(마법 3 → 1, 희귀 10 → 6, 접사당 판정 추가)와 R7 `NothingRate`(43 → 44)가 바뀌었다.
 
 이번 구현은 접사를 넣지 않았다. 붙일 때의 자리와 규칙만 정한다.
 

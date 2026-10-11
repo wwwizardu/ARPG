@@ -80,6 +80,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 21fcccf1711eca24eaa554c9192934fb
+    m_Address: Animation/WanderingKnight
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 26141100bb484924d856b7d4e1569224
     m_Address: Sprites/Items/SignalBrazier
     m_ReadOnly: 0
@@ -97,6 +102,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3866fb743eb1646478333e2966c3e710
     m_Address: Sprites/Tiles/UnderConstruction
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3a9834c03c5cb6b4e88cd1478a3b85f7
+    m_Address: Animation/DesertLancer
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -185,6 +195,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7fd8fc2bae2ae7c40833f580b6dabe2d
+    m_Address: Animation/ForestWitch
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8018c952922a8eb4bb1c3fc9c8404be9
     m_Address: Animation/GoblinShaman
     m_ReadOnly: 0
@@ -207,6 +222,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8915c31f92be31b428d8b7b217666895
     m_Address: Sprites/Items/Bed
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8b081d2f34c968648abf812864054e6f
+    m_Address: Animation/GreatswordWarrior
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -242,6 +262,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a776958e096edd3551633f4bb05adcec
     m_Address: Animation/StoneGolem
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a7b14cbf1f40af248b0523b737d32adb
+    m_Address: Animation/PilgrimPriestess
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -285,6 +310,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c0691a9e877ebff409eead7ba63cf1ae
+    m_Address: Animation/ElfScout
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c1310f69a2074e247a11b0f6060521f1
     m_Address: Sprites/Items/DryingRack
     m_ReadOnly: 0
@@ -307,6 +337,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: cfe764a98e2bec04485c292df4d162a2
     m_Address: Tile/Palisade
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d7027778bad3c34438ae75c19b12d427
+    m_Address: Animation/ElfRogue
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -342,6 +377,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e51b4ce57b4aa1b42b16b56ab5fb98af
     m_Address: Sprites/Items/ChoppingBlock
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e6adeabfba20cdd4895b783becaebde2
+    m_Address: Animation/DesertScorpion
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

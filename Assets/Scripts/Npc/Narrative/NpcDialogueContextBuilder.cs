@@ -29,6 +29,13 @@ namespace ARPG.Npc.Narrative
 
             StringBuilder npc = new();
             npc.AppendLine($"이름: {ctx.NpcName}");
+            string gender = save.Gender switch
+            {
+                NpcGender.Male => "남성",
+                NpcGender.Female => "여성",
+                _ => "미상",
+            };
+            npc.AppendLine($"성별: {gender}");
             npc.AppendLine($"직업: {save.JobType}");
             if (string.IsNullOrEmpty(save.Description) == false)
                 npc.AppendLine($"소개: {save.Description}");

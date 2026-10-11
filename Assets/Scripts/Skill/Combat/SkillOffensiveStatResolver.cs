@@ -27,6 +27,13 @@ namespace ARPG.Skill.Combat
         public int CharacterCritFlat;
         public int CritIncrease;
         public int AttackSpeedIncrease;
+
+        // 속성별 피해 증가율(%) — 속성 전용 증가 + 모든 피해 증가(DamageInc). 프로필의 속성별 피해 합계에 곱한다.
+        public int PhysDamageIncrease;
+        public int FireDamageIncrease;
+        public int IceDamageIncrease;
+        public int LightningDamageIncrease;
+        public int PoisonDamageIncrease;
     }
 
     /// <summary>
@@ -57,6 +64,9 @@ namespace ARPG.Skill.Combat
             GE.Stat.PoisonAttackMin,    GE.Stat.PoisonAttackMax,
             GE.Stat.CriRate,            GE.Stat.CriRateMul,
             GE.Stat.AttackSpeed,        GE.Stat.AttackSpeedMul,
+            GE.Stat.PhysDamageInc,      GE.Stat.FireDamageInc,
+            GE.Stat.IceDamageInc,       GE.Stat.LightningDamageInc,
+            GE.Stat.PoisonDamageInc,    GE.Stat.DamageInc,
         };
 
         /// <summary>
@@ -170,6 +180,19 @@ namespace ARPG.Skill.Combat
                     addedByStat, increasedByStat, overrideByStat, hasOverrideByStat);
             if (hasOverrideByStat[attackSpeedIndex] == true)
                 result.AttackSpeedIncrease = overrideByStat[attackSpeedIndex];
+
+            int allDamageIncrease = ResolveIncreaseBucket(GE.Stat.DamageInc,
+                addedByStat, increasedByStat, overrideByStat, hasOverrideByStat);
+            result.PhysDamageIncrease = allDamageIncrease + ResolveIncreaseBucket(GE.Stat.PhysDamageInc,
+                addedByStat, increasedByStat, overrideByStat, hasOverrideByStat);
+            result.FireDamageIncrease = allDamageIncrease + ResolveIncreaseBucket(GE.Stat.FireDamageInc,
+                addedByStat, increasedByStat, overrideByStat, hasOverrideByStat);
+            result.IceDamageIncrease = allDamageIncrease + ResolveIncreaseBucket(GE.Stat.IceDamageInc,
+                addedByStat, increasedByStat, overrideByStat, hasOverrideByStat);
+            result.LightningDamageIncrease = allDamageIncrease + ResolveIncreaseBucket(GE.Stat.LightningDamageInc,
+                addedByStat, increasedByStat, overrideByStat, hasOverrideByStat);
+            result.PoisonDamageIncrease = allDamageIncrease + ResolveIncreaseBucket(GE.Stat.PoisonDamageInc,
+                addedByStat, increasedByStat, overrideByStat, hasOverrideByStat);
 
             return result;
         }

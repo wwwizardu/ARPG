@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using ARPG.Component;
 using ARPG.Data;
+using ARPG.Item;
 using ARPG.Tables;
 using UnityEngine;
 
@@ -25,7 +26,8 @@ namespace ARPG.Utility
             for (int i = 0; i < rolls; i++)
             {
                 Vector3 rollPosition = rolls > 1 ? GetScatteredPosition(position) : position;
-                ProcessDrop(drop.DropId, rollPosition, drop.MonsterLevel, drop.DropRateBonus, drop.DropRarityBonus);
+                ProcessDrop(drop.DropId, rollPosition, drop.MonsterLevel, drop.DropRateBonus, drop.DropRarityBonus,
+                    drop.ModTier11ChanceBp, drop.ModTier12ChanceBp);
             }
         }
 
@@ -34,10 +36,13 @@ namespace ARPG.Utility
         /// </summary>
         /// <param name="dropId">DropTable ID</param>
         /// <param name="position">드랍 위치 (월드 좌표)</param>
-        /// <param name="monsterLevel">몬스터 레벨 (Pool 모드 필터링용)</param>
+        /// <param name="monsterLevel">몬스터 레벨 (Pool 모드 필터링용, 드랍 장비의 아이템 레벨)</param>
         /// <param name="dropRateBonus">드롭률 보너스 (%) - NothingRate 감소</param>
         /// <param name="dropRarityBonus">드롭 희귀도 보너스 (%) - 높은 Tier 가중치 증가</param>
-        public static void ProcessDrop(int dropId, Vector3 position, int monsterLevel, int dropRateBonus, int dropRarityBonus)
+        /// <param name="modTier11ChanceBp">드랍 장비의 옵션 T11 특수 판정 확률 (만분율)</param>
+        /// <param name="modTier12ChanceBp">드랍 장비의 옵션 T12 특수 판정 확률 (만분율)</param>
+        public static void ProcessDrop(int dropId, Vector3 position, int monsterLevel, int dropRateBonus, int dropRarityBonus,
+            int modTier11ChanceBp, int modTier12ChanceBp)
         {
             if (dropId <= 0)
                 return;
@@ -73,19 +78,21 @@ namespace ARPG.Utility
             if (randomValue < nothingRate + dropTable.CurrencyRate)
             {
                 int dropItemId = SelectCurrencyItem(dropTable, monsterLevel, dropRarityBonus);
-                if (dropItemId > 0) CreateDropItemAsync(dropItemId, position);
+                if (dropItemId > 0) CreateDropItemAsync(dropItemId, position, default);
                 return;
             }
 
-            // 장비
+            // 장비 — 아이템 레벨 = 몬스터 레벨. T11·T12 특수 판정은 몬스터 드랍만 한다
             if (randomValue < nothingRate + dropTable.CurrencyRate + dropTable.EquipmentRate)
             {
                 int dropItemId = SelectEquipmentItem(dropTable, monsterLevel, dropRarityBonus);
-                if (dropItemId > 0) CreateDropItemAsync(dropItemId, position);
+                if (dropItemId > 0)
+                    CreateDropItemAsync(dropItemId, position,
+                        new EquipmentRollOptions(monsterLevel, modTier11ChanceBp, modTier12ChanceBp));
                 return;
             }
 
-            // 스킬북 — DropTable.Tier에 매칭되는 책 + 같은 Tier 스킬 풀에서 랜덤 픽
+            // 스킬북 — DropTable.Tier에 매칭되는 책 + 같은 Tier의 DropEnabled 스킬 풀에서 랜덤 픽
             if (randomValue < nothingRate + dropTable.CurrencyRate + dropTable.EquipmentRate + dropTable.SkillBookRate)
             {
                 CreateSkillBookDropAsync(dropTable.Tier, position);
@@ -180,17 +187,17 @@ namespace ARPG.Utility
             return 0;
         }
 
-        private static async void CreateDropItemAsync(int itemId, Vector3 position)
+        private static async void CreateDropItemAsync(int itemId, Vector3 position, EquipmentRollOptions rollOptions)
         {
-            if (await AR.s.Item.CreateItem(itemId, 1, position) == false)
+            if (await AR.s.Item.CreateItem(itemId, 1, position, rollOptions) == false)
             {
                 Debug.LogError($"[DropHelper] Failed to create item with Id({itemId})");
             }
         }
 
         /// <summary>
-        /// 스킬북 드랍 (SKILLBOOK_DESIGN.md §10) — DropTable.Tier에 매칭되는 등급 책 + 같은 Tier 스킬 풀에서 랜덤 SkillId.
-        /// 풀이 비어 있으면 (책 ItemTable 행 없음 또는 SkillTable.Tier 미입력) 조용히 드랍 스킵.
+        /// 스킬북 드랍 — DropTable.Tier에 매칭되는 등급 책 + 같은 Tier의 DropEnabled 스킬 풀에서 랜덤 SkillId.
+        /// 책 또는 드롭 가능한 스킬이 없으면 드랍 스킵.
         /// </summary>
         private static async void CreateSkillBookDropAsync(int tier, Vector3 position)
         {

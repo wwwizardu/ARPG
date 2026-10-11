@@ -19,6 +19,8 @@ namespace ARPG.Monster
         private readonly Dictionary<Vector2Int, ChunkMonsterData> _chunkMonsters = new();
         private readonly Dictionary<int, MonsterSpawnOrigin> _monsterOrigins = new();
         private readonly List<PendingSpawnReservation> _pendingSpawnReservations = new();
+        // AssignGroupAffixes용 스크래치 — 사용 직전에 비운다
+        private readonly List<int> _affixMemberTableIdsScratch = new();
         private Transform? _monsterParent;
 
         [Header("Monster Spawn (Group-based)")]
@@ -231,6 +233,8 @@ namespace ARPG.Monster
                 return false;
             }
 
+            AssignGroupAffixes(spawnPlan, zone);
+
             slot.LastUsedTime = Time.time;
             for (int i = 0; i < spawnPlan.Count; i++)
             {
@@ -371,7 +375,7 @@ namespace ARPG.Monster
                     try
                     {
                         result = await CreateMonsterAsync(member.MonsterTableId, member.Position,
-                            chunkCoord, member.Archetype);
+                            chunkCoord, member.Archetype, member.Affixes);
                     }
                     catch (Exception exception)
                     {
@@ -425,14 +429,68 @@ namespace ARPG.Monster
 
         private async UniTask<(int entityId, EntityBase? entity)> CreateMonsterAsync(
             int monsterTableId, Vector3 position, Vector2Int chunkCoord,
-            GlobalEnum.MonsterArchetype archetype)
+            GlobalEnum.MonsterArchetype archetype, MonsterAffixComponent affixes)
         {
             if (AR.s.CurrentScene is GameScene gameScene == false)
                 return (-1, null);
 
             int monsterLevel = AR.s.Map.GetZone(chunkCoord);
             return await EntityFactory.CreateMonster(monsterTableId, position,
-                gameScene.MonsterRoot, monsterLevel, archetype);
+                gameScene.MonsterRoot, monsterLevel, archetype, affixes);
+        }
+
+        /// <summary>
+        /// 무리 단위 접사 판정 (MONSTER_AFFIX_DESIGN.md §4). 같은 등급 구성원끼리 한 번 굴려 같은 접사를 공유한다.
+        /// 희귀 무리의 희귀 1마리와 일반 호위는 등급이 달라 따로 굴린다. 종이 확정된 계획에서 굴려야 피해 종류 조건을 검사할 수 있다.
+        /// </summary>
+        private void AssignGroupAffixes(List<PlannedMonsterSpawn> spawnPlan, int zone)
+        {
+            List<int> memberTableIds = _affixMemberTableIdsScratch;
+            for (int i = 0; i < spawnPlan.Count; i++)
+            {
+                GlobalEnum.MonsterArchetype archetype = spawnPlan[i].Archetype;
+                if (IsArchetypeListedBefore(spawnPlan, i, archetype) == true)
+                    continue;
+
+                memberTableIds.Clear();
+                for (int j = i; j < spawnPlan.Count; j++)
+                {
+                    if (spawnPlan[j].Archetype == archetype)
+                        memberTableIds.Add(spawnPlan[j].MonsterTableId);
+                }
+
+                // EntityFactory.CreateMonster와 같은 기준: Zone이 없으면 종 레벨
+                int level = zone > 0 ? zone : ResolveMonsterTableLevel(spawnPlan[i].MonsterTableId);
+                MonsterAffixComponent affixes = MonsterAffixRoller.Roll(archetype, level, memberTableIds);
+                if (affixes.Count == 0)
+                    continue;
+
+                for (int j = i; j < spawnPlan.Count; j++)
+                {
+                    if (spawnPlan[j].Archetype == archetype)
+                        spawnPlan[j] = spawnPlan[j].WithAffixes(affixes);
+                }
+            }
+
+            memberTableIds.Clear();
+        }
+
+        private static bool IsArchetypeListedBefore(List<PlannedMonsterSpawn> spawnPlan, int index,
+            GlobalEnum.MonsterArchetype archetype)
+        {
+            for (int i = 0; i < index; i++)
+            {
+                if (spawnPlan[i].Archetype == archetype)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static int ResolveMonsterTableLevel(int monsterTableId)
+        {
+            var table = AR.s.Data != null ? AR.s.Data.GetMonster(monsterTableId) : null;
+            return table != null ? table.Level : 0;
         }
 
         /// <summary>
@@ -784,14 +842,21 @@ namespace ARPG.Monster
             public readonly Vector3 Position;
             public readonly float Radius;
             public readonly GlobalEnum.MonsterArchetype Archetype;
+            public readonly MonsterAffixComponent Affixes;
 
             public PlannedMonsterSpawn(int monsterTableId, Vector3 position, float radius,
-                GlobalEnum.MonsterArchetype archetype)
+                GlobalEnum.MonsterArchetype archetype, MonsterAffixComponent affixes = default)
             {
                 MonsterTableId = monsterTableId;
                 Position = position;
                 Radius = radius;
                 Archetype = archetype;
+                Affixes = affixes;
+            }
+
+            public PlannedMonsterSpawn WithAffixes(MonsterAffixComponent affixes)
+            {
+                return new PlannedMonsterSpawn(MonsterTableId, Position, Radius, Archetype, affixes);
             }
         }
 

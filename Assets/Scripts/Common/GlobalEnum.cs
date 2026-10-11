@@ -177,6 +177,15 @@ public class GlobalEnum
         BlockReduction,     // 막기 성공 시 피해 감소율 (%, 0이면 0.5 fallback)
         ProjectileCountAdd, // 발사체 추가 개수 (Add 합산만 의미 있음. SkillTable.BaseProjectileCount + 이 stat이 최종 발사 수)
 
+        // ===== 피해 % 증가 (MONSTER_AFFIX_DESIGN.md §6.2) =====
+        // 스킬 공격 프로필의 속성별 피해 합계(무기 + 스탯 + 스킬 표 + 페이지)에 곱한다. Add·Multiply 모두 증가율(%p)로 합산
+        PhysDamageInc,      // 물리 피해 증가 (%)
+        FireDamageInc,      // 화염 피해 증가 (%)
+        IceDamageInc,       // 냉기 피해 증가 (%)
+        LightningDamageInc, // 번개 피해 증가 (%)
+        PoisonDamageInc,    // 독 피해 증가 (%)
+        DamageInc,          // 모든 피해 증가 (%) — 속성별 증가에 더해진다
+
         // ===== SkillEffect 효과 종류 (구 SkillEffectType에서 통합) =====
         // 일반 stat과 같은 enum에 합쳐 SkillEffectTable.EffectType이 stat 가산도/효과 실행도 표현하도록 일원화
         LifeSteal,           // OnHit. Param1=흡혈 비율(%)
@@ -196,6 +205,29 @@ public class GlobalEnum
         Rare,           // 희귀/엘리트 (yellow) - HpMul 5
         Boss,           // 액트 보스 - HpMul 20
         EndgameBoss,    // 엔드게임 보스 (Pinnacle) - HpMul 60
+    }
+
+    /// <summary>
+    /// 몬스터 등급 비트 마스크. MonsterAffixTable.AllowedArchetypes가 접사가 붙을 수 있는 등급을 고를 때 쓴다.
+    /// </summary>
+    [Flags]
+    public enum MonsterArchetypeMask
+    {
+        None   = 0,
+        Normal = 1 << 0,
+        Magic  = 1 << 1,
+        Rare   = 1 << 2,
+
+        All    = Normal | Magic | Rare,
+    }
+
+    /// <summary>
+    /// 몬스터 접사 효과 종류 (MONSTER_AFFIX_DESIGN.md §5). 새 효과 종류를 넣으려면 코드가 필요하다.
+    /// </summary>
+    public enum MonsterAffixKind
+    {
+        Stat,   // 자기 스탯 보정 (Stat1~3)
+        Aura,   // 반경 안 같은 진영에게 AuraBuffId 버프
     }
 
     public enum EquipSlotType
@@ -476,6 +508,7 @@ public class GlobalEnum
         Poison,     // 중독 (독 DoT + HP 재생 감소, 스택 가능)
         Chill,      // 냉기 (이동/공격 속도 감소)
         Slow,       // 둔화 (이동 속도만 EffectValue% 감소, FadeOutTime 동안 서서히 회복. 여러 둔화는 가장 강한 하나만 적용)
+        StatModifier, // 시트의 Stat1~3 칸을 그대로 스탯 보정으로 건다 (몬스터 오라 등, MONSTER_AFFIX_DESIGN.md §6.3)
     }
 
     public enum InventoryType

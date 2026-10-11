@@ -10,6 +10,14 @@ using UnityEngine;
 
 namespace ARPG.Npc
 {
+    /// <summary>NPC 개인 성별. 저장되는 값이므로 기존 숫자를 바꾸지 않는다.</summary>
+    public enum NpcGender
+    {
+        Unknown = 0,
+        Male = 1,
+        Female = 2,
+    }
+
     /// <summary>
     /// NPC의 영구 저장 데이터.
     /// 청크 비활성화 시 ECS 컴포넌트에서 스냅샷하여 보관하고,
@@ -37,6 +45,9 @@ namespace ARPG.Npc
         // 인스턴스별 고유 이름 — 생성 시 이름 풀에서 랜덤 선택, 이후 고정.
         // 같은 NpcTableId(공유 테이블 이름)라도 NPC마다 다른 이름이 보이도록 인스턴스에 둔다.
         public string Name = string.Empty;
+
+        // 생성 시 남성/여성을 한 번 정해 저장한다. Unknown은 성별이 없던 구 세이브의 초기값이다.
+        public NpcGender Gender = NpcGender.Unknown;
 
         // 인스턴스별 flavor — 생성 시 직업 기반 풀에서 랜덤 선택, 이후 고정.
         // 같은 NpcTableId라도 NPC마다 다른 소개가 보이도록 데이터를 인스턴스에 둔다.

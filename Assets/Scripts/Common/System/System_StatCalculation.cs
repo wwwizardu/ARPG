@@ -70,6 +70,7 @@ namespace ARPG.Systems
                 {
                     // modifier가 없으면 Base = Final 그대로 저장
                     ClampCurrentResources(entityId, ref stat);
+                    RefillHpIfSpawned(entityId, ref stat);
                     AR.s.Component.SetComponent(entityId, stat);
                     SyncDerivedStatComponents(entityId, stat);
                     AR.s.Component.RemoveComponent<StatDirtyTag>(entityId);
@@ -138,6 +139,7 @@ namespace ARPG.Systems
 
                 // 7단계: 최대치가 내려간 경우 현재 자원을 새 최대치 안으로 보정 후 저장
                 ClampCurrentResources(entityId, ref stat);
+                RefillHpIfSpawned(entityId, ref stat);
                 AR.s.Component.SetComponent(entityId, stat);
 
                 // 7-2단계: 파생 컴포넌트/캐시 갱신
@@ -163,6 +165,22 @@ namespace ARPG.Systems
 
             int maxMp = Mathf.Max(0, stat.FinalMaxMp);
             stat.CurrentMp = Mathf.Clamp(stat.CurrentMp, 0, maxMp);
+        }
+
+        /// <summary>
+        /// 스폰 직후 붙은 보정(생명력 증가 접사 등)은 최대 HP만 늘리므로, 첫 재계산에서 현재 HP를 최대로 채운다
+        /// (MONSTER_AFFIX_DESIGN.md §6.1). 태그는 한 번 쓰고 제거한다.
+        /// </summary>
+        private void RefillHpIfSpawned(int entityId, ref StatComponent stat)
+        {
+            ComponentManager cm = AR.s.Component;
+            if (cm.HasComponent<SpawnHpRefillTag>(entityId) == false)
+                return;
+
+            cm.RemoveComponent<SpawnHpRefillTag>(entityId);
+            int maxHp = Mathf.Max(0, stat.FinalMaxHp);
+            if (stat.CurrentHp != maxHp)
+                stat.SetCurrentHp(entityId, maxHp);
         }
 
         /// <summary>

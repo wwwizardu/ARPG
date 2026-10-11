@@ -48,6 +48,7 @@ GameObject:
   - component: {fileID: 2900326859137017748}
   - component: {fileID: 8804500874611070128}
   - component: {fileID: 4508362620316388384}
+  - component: {fileID: 8484100164741330006}
   m_Layer: 0
   m_Name: UICanvas
   m_TagString: Untagged
@@ -117,6 +118,22 @@ MonoBehaviour:
   _hpBar: {fileID: 2920581260104536602}
   _mpBarContainer: {fileID: 4905665371416756284}
   _mpBar: {fileID: 2051157591502469625}
+  _monsterHpBarPadding: 0.15
+--- !u!114 &8484100164741330006
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1562271721161681088}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4dd78d431c197814d8e1e4779e602d68, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ARPG.UI.MonsterAffixLabelView
+  _labelY: 128
+  _fontSize: 9
+  _labelSize: {x: 300, y: 14}
 --- !u!1 &1650083163450732834
 GameObject:
   m_ObjectHideFlags: 0

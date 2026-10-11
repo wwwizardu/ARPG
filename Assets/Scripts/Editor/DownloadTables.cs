@@ -9,6 +9,7 @@ using UnityEngine;
 using UnityEngine.Networking;
 
 using ARPG.Component;
+using ARPG.Item;
 using ARPG.Tables;
 using ARPG.Utility;
 using Newtonsoft.Json;
@@ -46,7 +47,9 @@ namespace ARPG.Editor
             Register<NpcTable>(list, "1460299278&range=A:O");
             // NpcEquipTable — NPC 시작 장비 세트. Desc + 슬롯별 ItemId/Chance 쌍.
             Register<NpcEquipTable>(list, "1566085089&range=A:Z");
-            Register<MonsterArchetypeTable>(list, "1141585255&range=A:H");
+            Register<MonsterArchetypeTable>(list, "1141585255&range=A:M");
+            // 몬스터 접사 (MONSTER_AFFIX_DESIGN.md §5). A~S 데이터, T열 Note는 시트 가독성용(다운로드 제외)
+            Register<MonsterAffixTable>(list, "1703620452&range=A:S");
             Register<StatTable>(list, "318209064&range=A:AJ");
             Register<ItemTable>(list, "2064107837&range=A:S");
             Register<BuildableItemTable>(list, "534887250&range=A:AA");
@@ -55,14 +58,14 @@ namespace ARPG.Editor
             Register<DropTable>(list, "1241586373&range=A:K");
             Register<DropCurrencyTable>(list, "2071520432&range=A:V");
             Register<DropEquipmentTable>(list, "1267382287&range=A:V");
-            Register<SkillTable>(list, "92727160&range=A:AQ");
+            Register<SkillTable>(list, "92727160&range=A:AR");
             // Phase 1: SkillEffect 합성 시스템용 테이블 (+ 스킬 페이지 Tier/비용 메타데이터 + Kind 분류 컬럼)
             Register<SkillEffectTable>(list, "1681865950&range=A:N");
             Register<SkillPropagationTable>(list, "155977417&range=A:M");
             Register<SkillBookTable>(list, "1726438368&range=A:C");
             // 장판(지속 영역 효과) 테이블
             Register<AreaEffectTable>(list, "1891935594&range=A:M");
-            Register<BuffTable>(list, "127577579&range=A:K");
+            Register<BuffTable>(list, "127577579&range=A:T");
             Register<AnimationTable>(list, "747631090&range=A:G");
             Register<ProjectileTable>(list, "1810235418&range=A:G");
             Register<ModTable>(list, "1571193978&range=A:J");
@@ -272,6 +275,9 @@ namespace ARPG.Editor
 
         [MenuItem("ARPG/Download Table/MonsterArchetypeTable", false, 100)]
         private static async void DownloadMonsterArchetypeTable() => await DownloadSingleTable<MonsterArchetypeTable>();
+
+        [MenuItem("ARPG/Download Table/MonsterAffixTable", false, 100)]
+        private static async void DownloadMonsterAffixTable() => await DownloadSingleTable<MonsterAffixTable>();
 
         [MenuItem("ARPG/Download Table/MonsterTable", false, 100)]
         private static async void DownloadMonsterTable() => await DownloadSingleTable<MonsterTable>();
@@ -539,6 +545,48 @@ namespace ARPG.Editor
                     Debug.LogError($"[ValidateMod] ModTier Id={tier.Id}의 Tier/범위/레벨/가중치가 올바르지 않습니다.");
                     errors++;
                 }
+
+                if (tier.Tier > ItemLevelModTierRules.TOP_SPECIAL_TIER)
+                {
+                    Debug.LogError($"[ValidateMod] ModTier Id={tier.Id}의 Tier={tier.Tier}는 최고 티어 " +
+                        $"T{ItemLevelModTierRules.TOP_SPECIAL_TIER}를 넘습니다.");
+                    errors++;
+                }
+            }
+
+            // 아이템 레벨 티어 규칙(ItemLevelModTierRules)은 Mod마다 T1부터 빈칸 없이 이어지고,
+            // 티어가 올라갈수록 RequiredLevel(티어가 열리는 아이템 레벨)이 줄지 않는다고 가정한다.
+            Dictionary<int, List<ModTierTable>> tiersByMod = new Dictionary<int, List<ModTierTable>>();
+            for (int i = 0; i < tiers.Count; i++)
+            {
+                if (tiersByMod.TryGetValue(tiers[i].ModId, out List<ModTierTable> list) == false)
+                {
+                    list = new List<ModTierTable>();
+                    tiersByMod.Add(tiers[i].ModId, list);
+                }
+                list.Add(tiers[i]);
+            }
+            foreach (KeyValuePair<int, List<ModTierTable>> pair in tiersByMod)
+            {
+                List<ModTierTable> modTiers = pair.Value;
+                modTiers.Sort((a, b) => a.Tier.CompareTo(b.Tier));
+                for (int i = 0; i < modTiers.Count; i++)
+                {
+                    if (modTiers[i].Tier != i + 1)
+                    {
+                        Debug.LogError($"[ValidateMod] Mod Id={pair.Key}의 Tier가 1부터 이어지지 않습니다 " +
+                            $"(순서 {i + 1}번째가 T{modTiers[i].Tier}).");
+                        errors++;
+                        break;
+                    }
+                    if (i > 0 && modTiers[i].RequiredLevel < modTiers[i - 1].RequiredLevel)
+                    {
+                        Debug.LogError($"[ValidateMod] Mod Id={pair.Key}의 T{modTiers[i].Tier} RequiredLevel" +
+                            $"({modTiers[i].RequiredLevel})이 아래 티어보다 낮습니다.");
+                        errors++;
+                        break;
+                    }
+                }
             }
 
             for (int i = 0; i < mods.Count; i++)
@@ -602,7 +650,8 @@ namespace ARPG.Editor
         {
             var values = inTableData.Split('\t');
 
-            if (values.Length < 1)
+            // 체크박스/서식이 있는 빈 행도 TSV에 포함될 수 있으므로 ID 없는 행은 건너뛴다.
+            if (values.Length < 1 || string.IsNullOrWhiteSpace(values[0]) == true)
                 return false;
 
             T table = new T();
@@ -620,6 +669,10 @@ namespace ARPG.Editor
                 else if (table is MonsterArchetypeTable monsterArchetypeTable)
                 {
                     ParseMonsterArchetypeTable(monsterArchetypeTable, values);
+                }
+                else if (table is MonsterAffixTable monsterAffixTable)
+                {
+                    ParseMonsterAffixTable(monsterAffixTable, values);
                 }
                 else if (table is NpcTable npcTable)
                 {
@@ -1049,6 +1102,84 @@ namespace ARPG.Editor
             table.ResistAdd = ParseIntSafe(values, 5);
             table.DropRolls = Mathf.Max(1, ParseIntSafe(values, 6));
             table.DropRarityBonus = ParseIntSafe(values, 7);
+
+            // 장비 옵션 T11·T12 특수 판정 확률 (만분율). 빈 셀이면 0 = 판정 없음
+            table.ModTier11ChanceBp = Mathf.Clamp(ParseIntSafe(values, 8), 0, ItemLevelModTierRules.CHANCE_SCALE);
+            table.ModTier12ChanceBp = Mathf.Clamp(ParseIntSafe(values, 9), 0, ItemLevelModTierRules.CHANCE_SCALE);
+
+            // 접사 개수·접사당 드랍 판정 (MONSTER_AFFIX_DESIGN.md §3·§8). 빈 셀이면 접사 없음, 접사당 판정 0
+            table.AffixBaseCount = Mathf.Clamp(ParseIntSafe(values, 10), 0, MonsterAffixComponent.MAX_AFFIXES);
+            table.AffixExtraChance = Mathf.Clamp(ParseIntSafe(values, 11), 0, 100);
+            table.DropRollsPerAffix = Mathf.Max(0, ParseIntSafe(values, 12));
+        }
+
+        /// <summary>
+        /// MonsterAffixTable 파싱 (MONSTER_AFFIX_DESIGN.md §5.1).
+        /// 컬럼: Id, Name, Kind, Group, Weight, MinLevel, AllowedArchetypes, RequiredDamageType,
+        ///       Stat1, ModType1, Value1, Stat2, ModType2, Value2, Stat3, ModType3, Value3, AuraBuffId, AuraRadius
+        /// </summary>
+        private static void ParseMonsterAffixTable(MonsterAffixTable table, string[] values)
+        {
+            if (values.Length < 7)
+            {
+                Debug.LogError($"[ParseMonsterAffixTable] Invalid data length. Expected at least 7, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            table.Name = values[1].Trim();
+            table.Kind = ParseEnumSafe(values, 2, GlobalEnum.MonsterAffixKind.Stat, table.Id);
+            table.Group = values[3].Trim();
+            table.Weight = Mathf.Max(0, ParseIntSafe(values, 4));
+            table.MinLevel = Mathf.Max(0, ParseIntSafe(values, 5));
+            table.AllowedArchetypes = ParseMonsterArchetypeMask(values, 6, table.Id);
+
+            // 빈 칸 또는 None이면 피해 종류 제한 없음
+            string damageTypeRaw = values.Length > 7 ? values[7].Trim() : string.Empty;
+            table.HasRequiredDamageType = string.IsNullOrEmpty(damageTypeRaw) == false
+                && string.Equals(damageTypeRaw, "None", StringComparison.OrdinalIgnoreCase) == false;
+            table.RequiredDamageType = table.HasRequiredDamageType
+                ? ParseEnumSafe(values, 7, GlobalEnum.DamageType.Physics, table.Id)
+                : GlobalEnum.DamageType.Physics;
+
+            table.Stat1 = ParseEnumSafe(values, 8, GlobalEnum.Stat.Str, table.Id);
+            table.ModType1 = ParseEnumSafe(values, 9, StatModifierType.Add, table.Id);
+            table.Value1 = ParseIntSafe(values, 10);
+            table.Stat2 = ParseEnumSafe(values, 11, GlobalEnum.Stat.Str, table.Id);
+            table.ModType2 = ParseEnumSafe(values, 12, StatModifierType.Add, table.Id);
+            table.Value2 = ParseIntSafe(values, 13);
+            table.Stat3 = ParseEnumSafe(values, 14, GlobalEnum.Stat.Str, table.Id);
+            table.ModType3 = ParseEnumSafe(values, 15, StatModifierType.Add, table.Id);
+            table.Value3 = ParseIntSafe(values, 16);
+            table.AuraBuffId = ParseIntSafe(values, 17);
+            table.AuraRadius = ParseFloatSafe(values, 18);
+
+            if (string.IsNullOrEmpty(table.Name))
+                Debug.LogError($"[ParseMonsterAffixTable] Name is empty (Id={table.Id})");
+            if (table.AllowedArchetypes == GlobalEnum.MonsterArchetypeMask.None)
+                Debug.LogError($"[ParseMonsterAffixTable] AllowedArchetypes is empty — this affix never rolls (Id={table.Id})");
+            if (table.Kind == GlobalEnum.MonsterAffixKind.Stat && table.Value1 == 0 && table.Value2 == 0 && table.Value3 == 0)
+                Debug.LogError($"[ParseMonsterAffixTable] Stat affix has no stat value (Id={table.Id})");
+            if (table.Kind == GlobalEnum.MonsterAffixKind.Aura && (table.AuraBuffId <= 0 || table.AuraRadius <= 0f))
+                Debug.LogError($"[ParseMonsterAffixTable] Aura affix needs AuraBuffId and AuraRadius > 0 (Id={table.Id})");
+        }
+
+        /// <summary>
+        /// MonsterArchetypeMask 파싱. "All", "Magic|Rare", "Magic, Rare" 모두 허용. 빈 칸은 None.
+        /// </summary>
+        private static GlobalEnum.MonsterArchetypeMask ParseMonsterArchetypeMask(string[] values, int index, int tableId)
+        {
+            if (index >= values.Length || string.IsNullOrWhiteSpace(values[index]))
+                return GlobalEnum.MonsterArchetypeMask.None;
+
+            string raw = values[index].Trim().Replace("|", ",");
+            if (int.TryParse(raw, out _) == false
+                && Enum.TryParse(raw, true, out GlobalEnum.MonsterArchetypeMask mask))
+            {
+                return mask & GlobalEnum.MonsterArchetypeMask.All;
+            }
+
+            Debug.LogError($"[ParseMonsterAffixTable] Unknown AllowedArchetypes value: '{values[index]}' (Id={tableId})");
+            return GlobalEnum.MonsterArchetypeMask.None;
         }
 
         private static void ParseItemTable(ItemTable table, string[] values)
@@ -1392,6 +1523,8 @@ namespace ARPG.Editor
             table.AimTurnSpeedDegPerSec = ParseFloatSafe(values, 40);
             table.MovementMode = ParseEnumSafe(values, 41, GlobalEnum.SkillMovementMode.Default, table.Id);
             table.MoveSpeedWhileUsingMul = ParseFloatSafe(values, 42);
+            // AR열: 드롭을 명시적으로 허용한 스킬만 랜덤 스킬북 후보에 포함. 빈 셀/구 스키마는 false.
+            table.DropEnabled = ParseBoolSafe(values, 43);
 
             // 두 수치 컬럼은 0이 "미설정 → 런타임 기본값 사용"을 뜻한다(POE2_CURSOR_TRACKING_PLAN §4.1 빈 셀 기본값 표).
             // 따라서 범위를 벗어난 값을 0으로 되돌리면 로그가 말하는 값과 실제 적용값이 달라진다.
@@ -1641,7 +1774,7 @@ namespace ARPG.Editor
 
         private static void ParseBuffTable(BuffTable table, string[] values)
         {
-            // 전체 범위: A:K = 11개 컬럼 (K열 FadeOutTime은 비어 있으면 0)
+            // 전체 범위: A:T = 20개 컬럼 (K열 FadeOutTime은 비어 있으면 0, L~T열 스탯 칸은 비어 있으면 미사용)
             if (values.Length < 10)
             {
                 Debug.LogError($"[ParseBuffTable] Invalid data length. Expected at least 10, got {values.Length}. Id: {table.Id}");
@@ -1658,6 +1791,17 @@ namespace ARPG.Editor
             table.EffectType = (GlobalEnum.BuffEffectType)Enum.Parse(typeof(GlobalEnum.BuffEffectType), values[8]);
             table.EffectValue = int.Parse(values[9]);
             table.FadeOutTime = ParseFloatSafe(values, 10);
+
+            // L~T열: EffectType=StatModifier용 스탯 보정 3칸 (Stat, ModType, Value). 빈 칸이면 Value 0 = 미사용
+            table.Stat1 = ParseEnumSafe(values, 11, GlobalEnum.Stat.Str, table.Id);
+            table.ModType1 = ParseEnumSafe(values, 12, StatModifierType.Add, table.Id);
+            table.Value1 = ParseIntSafe(values, 13);
+            table.Stat2 = ParseEnumSafe(values, 14, GlobalEnum.Stat.Str, table.Id);
+            table.ModType2 = ParseEnumSafe(values, 15, StatModifierType.Add, table.Id);
+            table.Value2 = ParseIntSafe(values, 16);
+            table.Stat3 = ParseEnumSafe(values, 17, GlobalEnum.Stat.Str, table.Id);
+            table.ModType3 = ParseEnumSafe(values, 18, StatModifierType.Add, table.Id);
+            table.Value3 = ParseIntSafe(values, 19);
         }
 
         private static void ParseAnimationTable(AnimationTable table, string[] values)

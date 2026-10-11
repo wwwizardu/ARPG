@@ -22,6 +22,7 @@ namespace ARPG.Component
         Skill,      // 스킬에 의한 보정
         Terrain,    // 지형 효과
         Party,      // 파티 버프
+        MonsterAffix, // 몬스터 접사 (SourceId = MonsterAffixTable.Id, MONSTER_AFFIX_DESIGN.md §6.1)
     }
 
     /// <summary>

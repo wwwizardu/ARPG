@@ -75,7 +75,7 @@ namespace ARPG.Npc.Narrative
     {
         public int NpcId;
         public string NpcName = string.Empty;
-        public string NpcBlock = string.Empty;       // 이름/직업/성격/설명
+        public string NpcBlock = string.Empty;       // 이름/성별/직업/성격/설명
         public string HistoryBlock = string.Empty;   // 연대기 1줄들
         public string RelationsBlock = string.Empty; // 가족/스승/원한
         public string SentimentBlock = string.Empty; // 감정

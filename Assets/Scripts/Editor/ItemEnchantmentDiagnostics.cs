@@ -17,7 +17,7 @@ namespace ARPG.Editor
     /// 신규 게임 공통 Forge 후조건을 실제 로컬 bytes 데이터로 검증한다.
     /// 사용자 세이브와 PlayMode singleton은 변경하지 않는다.
     /// </summary>
-    public static class ItemEnchantmentDiagnostics
+    public static partial class ItemEnchantmentDiagnostics
     {
         private const string MENU_PATH = "ARPG/Diagnostics/Item Enchantment MVP";
 
@@ -52,6 +52,8 @@ namespace ARPG.Editor
                         "ItemEnchantmentCostTable.bytes");
                 List<BuildableItemTable> buildables =
                     LoadTable<BuildableItemTable>(assetsPath, "BuildableItemTable.bytes");
+                List<MonsterArchetypeTable> archetypes =
+                    LoadTable<MonsterArchetypeTable>(assetsPath, "MonsterArchetypeTable.bytes");
 
                 Dictionary<int, ItemTable> itemById = IndexById(items, errors);
                 Dictionary<int, ModTable> modById = IndexById(mods, errors);
@@ -64,6 +66,7 @@ namespace ARPG.Editor
                 VerifyEnchantmentRules(modById, tiers, errors, ref assertions);
                 VerifyTransactionsAndSaveRoundTrip(modById, tiers, costs, itemById,
                     errors, ref assertions);
+                VerifyItemLevelTierRules(modById, tiers, archetypes, errors, ref assertions);
                 villageCases = VerifyVillageForgeGuarantee(buildableById,
                     errors, ref assertions);
             }
@@ -141,7 +144,8 @@ namespace ARPG.Editor
             RequireCurveMatches(tiers, 1203, 1206, errors, ref assertions);
 
             for (int modId = 1200; modId <= 1208; modId++)
-                RequireTierCount(tiers, modId, 3, errors, ref assertions);
+                RequireTierCount(tiers, modId, ItemLevelModTierRules.TOP_SPECIAL_TIER,
+                    errors, ref assertions);
 
             int[] supportedMods =
             {
@@ -227,8 +231,7 @@ namespace ARPG.Editor
                 GlobalEnum.Stat.CastSpeedMul, castSpeedEquipment,
                 errors, ref assertions);
 
-            for (int modId = 1200; modId <= 1208; modId++)
-                RequireStandardThreeTierCurve(tiers, modId, errors, ref assertions);
+            // T1~T12 표준 곡선은 VerifyItemLevelTierRules가 모든 Prefix/Postfix에 대해 검사한다.
 
             Require(EquipmentOptionText.FormatModLine(
                     CreateMod(modById[1200], 1, 20, 0)) == "최대 마나 +20",
@@ -340,10 +343,17 @@ namespace ARPG.Editor
             Require(allEligible.Count == 3,
                 "Level 60 / Item Tier 3에서 기존 Mod 1100의 3개 Tier가 모두 자격이어야 함",
                 errors, ref assertions);
-            Require(ItemEnchantmentRules.SelectWeightedTier(allEligible, _ => 0)?.Tier == 1
-                && ItemEnchantmentRules.SelectWeightedTier(allEligible, _ => 100)?.Tier == 2
-                && ItemEnchantmentRules.SelectWeightedTier(allEligible, _ => 160)?.Tier == 3,
-                "ModTier.Weight 누적 경계 선택이 잘못됨", errors, ref assertions);
+            if (allEligible.Count == 3)
+            {
+                // 누적 경계는 시트 Weight에서 계산한다: [0, W1) → T1, [W1, W1+W2) → T2, 그 뒤 → T3
+                int firstBoundary = allEligible[0].Weight;
+                int secondBoundary = firstBoundary + allEligible[1].Weight;
+                Require(ItemEnchantmentRules.SelectWeightedTier(allEligible, _ => 0)?.Tier == 1
+                    && ItemEnchantmentRules.SelectWeightedTier(allEligible, _ => firstBoundary - 1)?.Tier == 1
+                    && ItemEnchantmentRules.SelectWeightedTier(allEligible, _ => firstBoundary)?.Tier == 2
+                    && ItemEnchantmentRules.SelectWeightedTier(allEligible, _ => secondBoundary)?.Tier == 3,
+                    "ModTier.Weight 누적 경계 선택이 잘못됨", errors, ref assertions);
+            }
         }
 
         private static void VerifyTransactionsAndSaveRoundTrip(
@@ -648,7 +658,7 @@ namespace ARPG.Editor
         {
             List<ModTierTable> source = FindTiers(tiers, sourceModId);
             List<ModTierTable> target = FindTiers(tiers, targetModId);
-            bool matches = source.Count == 3 && target.Count == 3;
+            bool matches = source.Count > 0 && target.Count == source.Count;
             if (matches == true)
             {
                 for (int i = 0; i < source.Count; i++)
@@ -664,7 +674,7 @@ namespace ARPG.Editor
                     }
                 }
             }
-            Require(matches, $"Mod {targetModId}의 3개 Tier가 Mod {sourceModId} 기존 곡선과 다름",
+            Require(matches, $"Mod {targetModId}의 Tier 곡선이 Mod {sourceModId}와 다름",
                 errors, ref assertions);
         }
 
@@ -698,35 +708,46 @@ namespace ARPG.Editor
                 errors, ref assertions);
         }
 
-        private static void RequireStandardThreeTierCurve(List<ModTierTable> tiers,
-            int modId, List<string> errors, ref int assertions)
+        /// <summary>
+        /// 일반 옵션 T1~T12 표준 곡선: 티어가 열리는 아이템 레벨은 확정 구간표와 같고, 수치는 티어마다 줄지 않으며,
+        /// 일반 판정 티어(T1~T10)의 Weight는 높은 티어일수록 커지지 않는다. Weight 값 자체는 시트에서 조정한다.
+        /// </summary>
+        private static void RequireStandardTierCurve(List<ModTierTable> tiers, int modId,
+            bool hasSecondValue, List<string> errors, ref int assertions)
         {
             List<ModTierTable> found = FindTiers(tiers, modId);
-            bool valid = found.Count == 3;
-            int[] requiredLevels = { 1, 20, 40 };
-            int[] weights = { 100, 60, 30 };
+            bool valid = found.Count == STANDARD_TIER_REQUIRED_LEVELS.Length;
             if (valid == true)
             {
                 for (int i = 0; i < found.Count; i++)
                 {
                     ModTierTable tier = found[i];
+                    bool secondValueValid = hasSecondValue == true
+                        ? tier.Min2 > 0 && tier.Max2 >= tier.Min2
+                        : tier.Min2 == 0 && tier.Max2 == 0;
                     if (tier.Tier != i + 1
                         || tier.Min1 <= 0 || tier.Max1 < tier.Min1
-                        || tier.Min2 != 0 || tier.Max2 != 0
-                        || tier.RequiredLevel != requiredLevels[i]
-                        || tier.Weight != weights[i])
+                        || secondValueValid == false
+                        || tier.RequiredLevel != STANDARD_TIER_REQUIRED_LEVELS[i]
+                        || tier.Weight <= 0)
                     {
                         valid = false;
                         break;
                     }
-                    if (i > 0 && tier.Min1 < found[i - 1].Max1)
+                    if (i > 0 && (tier.Min1 < found[i - 1].Max1 || tier.Min2 < found[i - 1].Max2))
+                    {
+                        valid = false;
+                        break;
+                    }
+                    if (i > 0 && tier.Tier < ItemLevelModTierRules.FIRST_SPECIAL_TIER
+                        && tier.Weight > found[i - 1].Weight)
                     {
                         valid = false;
                         break;
                     }
                 }
             }
-            Require(valid, $"Mod {modId}의 T1~T3 값/레벨/가중치 곡선이 올바르지 않음",
+            Require(valid, $"Mod {modId}의 T1~T12 값/레벨/가중치 곡선이 올바르지 않음",
                 errors, ref assertions);
         }
 

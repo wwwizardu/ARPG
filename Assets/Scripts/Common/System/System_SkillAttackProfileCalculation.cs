@@ -132,6 +132,18 @@ namespace ARPG.Systems
             profile.PoisonAddedMin = wPoisMin  + offensive.PoisonMin    + tPoisMin  + onHit.PoisonDamageAddBonusMin;
             profile.PoisonAddedMax = wPoisMax  + offensive.PoisonMax    + tPoisMax  + onHit.PoisonDamageAddBonusMax;
 
+            // 속성별 피해 % 증가는 합계 전체에 곱한다 (MONSTER_AFFIX_DESIGN.md §6.2). 증가가 없으면 값이 그대로다.
+            profile.PhysAddedMin   = ApplyDamageIncrease(profile.PhysAddedMin,   offensive.PhysDamageIncrease);
+            profile.PhysAddedMax   = ApplyDamageIncrease(profile.PhysAddedMax,   offensive.PhysDamageIncrease);
+            profile.FireAddedMin   = ApplyDamageIncrease(profile.FireAddedMin,   offensive.FireDamageIncrease);
+            profile.FireAddedMax   = ApplyDamageIncrease(profile.FireAddedMax,   offensive.FireDamageIncrease);
+            profile.IceAddedMin    = ApplyDamageIncrease(profile.IceAddedMin,    offensive.IceDamageIncrease);
+            profile.IceAddedMax    = ApplyDamageIncrease(profile.IceAddedMax,    offensive.IceDamageIncrease);
+            profile.LightAddedMin  = ApplyDamageIncrease(profile.LightAddedMin,  offensive.LightningDamageIncrease);
+            profile.LightAddedMax  = ApplyDamageIncrease(profile.LightAddedMax,  offensive.LightningDamageIncrease);
+            profile.PoisonAddedMin = ApplyDamageIncrease(profile.PoisonAddedMin, offensive.PoisonDamageIncrease);
+            profile.PoisonAddedMax = ApplyDamageIncrease(profile.PoisonAddedMax, offensive.PoisonDamageIncrease);
+
             int baseCritRate = isAttackSkill == true ? weaponCriRate : table.BaseCriRate;
             profile.TotalCritRate = Mathf.Clamp(
                 (baseCritRate + offensive.CharacterCritFlat + onHit.CriRateBonus)
@@ -163,6 +175,14 @@ namespace ARPG.Systems
             profile.DamageType     = table.DamageType;
 
             AR.s.Component.SetComponent(skillEntityId, profile);
+        }
+
+        private static int ApplyDamageIncrease(int value, int increasePercent)
+        {
+            if (increasePercent == 0)
+                return value;
+
+            return Mathf.Max(0, Mathf.RoundToInt(value * (1f + increasePercent / 100f)));
         }
     }
 }

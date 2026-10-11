@@ -206,6 +206,14 @@ namespace ARPG.Data
         /// </summary>
         public int BasicItemId;
 
+        /// <summary>
+        /// 아이템 레벨 (1~99). 랜덤 옵션을 굴려 만든 장비만 가지며 옵션 티어가 이 값으로 정해진다 (ItemLevelModTierRules).
+        /// 몬스터 드랍은 몬스터 레벨, NPC 전리품·상점 랜덤 매물은 지역 레벨이다.
+        /// 0 = 없음(기본 아이템·시작 장비·이 칸이 생기기 전 장비)이고 저장하지 않는다.
+        /// </summary>
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public int ItemLevel;
+
         // 테이블 분류(Category)에서 정해지는 계산값 — 저장하지 않고 OnLoadCompleted에서 다시 계산한다 (D122).
         [JsonIgnore] public GE.EquipmentTypeMask EquipType { get; set; }
 

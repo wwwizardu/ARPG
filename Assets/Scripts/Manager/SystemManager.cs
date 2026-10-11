@@ -148,6 +148,9 @@ namespace ARPG.Systems
             System_MonsterSpawn monsterSpawnSystem = new();
             RegisterSystems(monsterSpawnSystem);
 
+            // Priority 140: Monster Aura System (Update) - 오라 접사 주변 같은 진영에 오라 버프 부여·갱신 (0.5초 간격, MONSTER_AFFIX_DESIGN §6.3)
+            RegisterSystems(new System_MonsterAura());
+
             // Priority 150: Projectile System (FixedUpdate) - 발사체 이동 및 충돌
             System_Projectile projectileSystem = new();
             RegisterSystems(projectileSystem);

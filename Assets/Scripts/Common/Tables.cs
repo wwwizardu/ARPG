@@ -151,6 +151,39 @@ namespace ARPG.Tables
         [JsonProperty("ResistAdd")] public int ResistAdd;                 // 원소 저항 4종에 더하는 값 (%p). 상한은 몬스터의 최대 저항
         [JsonProperty("DropRolls")] public int DropRolls = 1;             // 사망 시 드랍 판정 횟수
         [JsonProperty("DropRarityBonus")] public int DropRarityBonus;     // MonsterTable.DropRarityBonus에 더하는 높은 Tier 가중치 보너스 (%)
+        [JsonProperty("ModTier11ChanceBp")] public int ModTier11ChanceBp; // 드랍 장비 1개당 옵션 T11 특수 판정 확률 (만분율, 10000=100%). 아이템 레벨 90 이상만
+        [JsonProperty("ModTier12ChanceBp")] public int ModTier12ChanceBp; // 드랍 장비 1개당 옵션 T12 특수 판정 확률 (만분율). 아이템 레벨 90 이상만
+        [JsonProperty("AffixBaseCount")] public int AffixBaseCount;       // 접사 기본 개수 (MONSTER_AFFIX_DESIGN.md §3)
+        [JsonProperty("AffixExtraChance")] public int AffixExtraChance;   // 접사 추가 판정 확률 (%). 성공할 때마다 1개 더, 실패하거나 상한이면 멈춤
+        [JsonProperty("DropRollsPerAffix")] public int DropRollsPerAffix; // 접사 1개당 더하는 드랍 판정 횟수 (§8)
+    }
+
+    /// <summary>
+    /// 몬스터 접사 정의 (MONSTER_AFFIX_DESIGN.md §5). 무리 생성 때 MonsterAffixRoller가 뽑고 EntityFactory.CreateMonster가 적용한다.
+    /// Kind=Stat이면 Stat1~3 칸을 자기 스탯 보정으로, Kind=Aura면 반경 안 같은 진영에게 AuraBuffId 버프를 건다.
+    /// </summary>
+    [Serializable]
+    public class MonsterAffixTable : TableBase
+    {
+        [JsonProperty("Name")] public string Name = string.Empty;                    // 이름표 표시 이름
+        [JsonProperty("Kind")] public GE.MonsterAffixKind Kind;
+        [JsonProperty("Group")] public string Group = string.Empty;                  // 같은 그룹은 한 몬스터에 중복 불가 (티어 구분)
+        [JsonProperty("Weight")] public int Weight;                                  // 뽑기 가중치. 0이면 뽑히지 않음
+        [JsonProperty("MinLevel")] public int MinLevel;                              // 몬스터 레벨이 이 값 이상일 때만 후보
+        [JsonProperty("AllowedArchetypes")] public GE.MonsterArchetypeMask AllowedArchetypes;
+        [JsonProperty("HasRequiredDamageType")] public bool HasRequiredDamageType;   // false면 피해 종류 제한 없음
+        [JsonProperty("RequiredDamageType")] public GE.DamageType RequiredDamageType; // 이 피해 종류 스킬이 있는 몬스터만 후보
+        [JsonProperty("Stat1")] public GE.Stat Stat1;
+        [JsonProperty("ModType1")] public StatModifierType ModType1;
+        [JsonProperty("Value1")] public int Value1;                                  // 0이면 빈 칸
+        [JsonProperty("Stat2")] public GE.Stat Stat2;
+        [JsonProperty("ModType2")] public StatModifierType ModType2;
+        [JsonProperty("Value2")] public int Value2;
+        [JsonProperty("Stat3")] public GE.Stat Stat3;
+        [JsonProperty("ModType3")] public StatModifierType ModType3;
+        [JsonProperty("Value3")] public int Value3;
+        [JsonProperty("AuraBuffId")] public int AuraBuffId;                          // Kind=Aura: 반경 안에 거는 BuffTable Id
+        [JsonProperty("AuraRadius")] public float AuraRadius;                        // Kind=Aura: 반경 (칸)
     }
 
     [Serializable]
@@ -494,7 +527,7 @@ namespace ARPG.Tables
         [JsonProperty("EquipmentId")] public int EquipmentId;               // Drop 장비 테이블 Id
         [JsonProperty("EquipmentPoolMode")] public int EquipmentPoolMode;   // 0=Explicit, 1=Pool
 
-        // 스킬북 드랍 (SKILLBOOK_DESIGN.md §10) — Pool 모드 전용. SkillTable.Tier == DropTable.Tier 매칭 풀에서 랜덤 픽
+        // 스킬북 드랍 — Pool 모드 전용. DropEnabled인 스킬 중 SkillTable.Tier == DropTable.Tier 매칭 풀에서 랜덤 픽
         [JsonProperty("SkillBookRate")] public int SkillBookRate;           // Drop 스킬북 가중치. 0=드랍 없음
 
         // 스킬 페이지 드랍 (SKILL_RUNE_DESIGN.md §8.1) — Pool 모드 전용. PageCost 범위로 Tier 매칭 후 랜덤 픽
@@ -525,6 +558,7 @@ namespace ARPG.Tables
         [JsonProperty("Desctiption")] public string Desctiption = string.Empty; // 설명
         // 스킬북 시스템 (SKILLBOOK_DESIGN.md §3.3) — ItemTable.Tier와 같은 등급 체계 공유
         [JsonProperty("Tier")] public int Tier;                                   // 이 스킬이 들어갈 스킬북 등급(=ItemTable.Tier). 1=Common, 2=Rare, 3=Epic. 0이면 책 드랍/상점 풀에서 제외
+        [JsonProperty("DropEnabled")] public bool DropEnabled;                    // 랜덤 스킬북 획득 허용 여부. 미입력은 false (몬스터 전용 스킬 등 제외)
         [JsonProperty("Tags")] public GE.SkillTag Tags;                           // 스킬 태그 (비트 플래그)
         [JsonProperty("SkillType")] public GE.SkillType SkillType;              // 스킬 타입
         [JsonProperty("SubType")] public GE.SkillSubType SubType;               // 스킬 서브 타입
@@ -802,6 +836,17 @@ namespace ARPG.Tables
         [JsonProperty("BuffEffectId")] public GE.BuffEffectType EffectType;     // 버프 이팩트 타입
         [JsonProperty("EffectValue")] public int EffectValue;                   // 버프 이팩트 값
         [JsonProperty("FadeOutTime")] public float FadeOutTime;                 // 끝나기 전 효과가 0까지 서서히 약해지는 시간 (초). 전체 수명 = Duration + FadeOutTime. 0이면 끝까지 그대로 (현재 Slow만 사용)
+
+        // EffectType=StatModifier일 때 거는 스탯 보정 3칸 (MONSTER_AFFIX_DESIGN.md §6.3). Value 0인 칸은 무시
+        [JsonProperty("Stat1")] public GE.Stat Stat1;
+        [JsonProperty("ModType1")] public StatModifierType ModType1;
+        [JsonProperty("Value1")] public int Value1;
+        [JsonProperty("Stat2")] public GE.Stat Stat2;
+        [JsonProperty("ModType2")] public StatModifierType ModType2;
+        [JsonProperty("Value2")] public int Value2;
+        [JsonProperty("Stat3")] public GE.Stat Stat3;
+        [JsonProperty("ModType3")] public StatModifierType ModType3;
+        [JsonProperty("Value3")] public int Value3;
 
         //[JsonIgnore] public BuffEffectTable? BuffEffectTable;
 

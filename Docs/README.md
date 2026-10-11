@@ -71,6 +71,7 @@
 | **[AI_SKILL_SELECTION_IMPLEMENTATION.md](combat/AI_SKILL_SELECTION_IMPLEMENTATION.md)** | AI 다중 스킬 가중치 선택 |
 | **[MONSTER_ATTACK_TELEGRAPH_DESIGN.md](combat/MONSTER_ATTACK_TELEGRAPH_DESIGN.md)** | 몬스터 공격 범위·피해 타이밍 예고와 중앙 배치 렌더링 — Phase 0~2 구현(2026-09-19), Phase 3 일부 |
 | **[ModSystem_Changelog.md](combat/ModSystem_Changelog.md)** | 장비/스탯 mod 시스템 변경 이력 |
+| **[ITEM_LEVEL_MOD_TIER_DESIGN.md](combat/ITEM_LEVEL_MOD_TIER_DESIGN.md)** | 아이템 레벨과 장비 옵션 티어 T1~T12: 레벨 구간·가중치, T11·T12 등급별 특수 판정 — 구현(2026-10-11), 플레이 확인 전 |
 
 ### 🤖 AI / 몬스터
 | 문서 | 내용 |
@@ -78,6 +79,7 @@
 | **[monsterAIPattern.md](ai_monster/monsterAIPattern.md)** | 몬스터 AI 패턴 |
 | **[MONSTER_SPAWN_DESIGN.md](ai_monster/MONSTER_SPAWN_DESIGN.md)** | 데이터 주도 스폰 풀 (Zone × 등급) |
 | **[MONSTER_RARITY_DESIGN.md](ai_monster/MONSTER_RARITY_DESIGN.md)** | 몬스터 등급(마법·희귀): 개체 등급·무리 단위 판정·등급별 스탯·드랍 보상·HP바 색, 무작위 접사 확장 지점 — 필드 구현(2026-10-11) |
+| **[MONSTER_AFFIX_DESIGN.md](ai_monster/MONSTER_AFFIX_DESIGN.md)** | 몬스터 접사: 등급별 추가 판정 개수(최대 10)·무리 단위 판정·스탯형/오라형 접사 시트·속성별 피해 증가 스탯·접사당 드랍 판정 — 필드 구현(2026-10-11), 플레이 확인 전 |
 | **[COLLISION_PATHFINDING_DESIGN.md](map/COLLISION_PATHFINDING_DESIGN.md)** | 축 분리 슬라이딩 + 타일 A* |
 
 ### 🏘️ 마을 / NPC 자가성장 ⭐

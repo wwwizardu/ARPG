@@ -76,6 +76,8 @@ namespace ARPG.Component
             { typeof(AICanSeeTargetTag), 500 },
             { typeof(PathfindingComponent), 500 },
             { typeof(MonsterArchetypeComponent), 256 }, // 모든 몬스터에 1개 (필드 최대 ~150 + 던전)
+            { typeof(MonsterAffixComponent), 256 },     // 접사가 있는 몬스터 (필드 몬스터의 약 27%, 등급 컴포넌트와 같은 상한)
+            { typeof(SpawnHpRefillTag), 64 },           // 접사 몬스터 스폰 직후 첫 재계산까지만 존재
 
             // 적게 사용되는 컴포넌트 (스킬 엔티티용)
             { typeof(SkillComponent), 50 },

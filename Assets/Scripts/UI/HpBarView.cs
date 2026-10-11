@@ -15,6 +15,7 @@ namespace ARPG.UI
     /// 일반 엔티티: 만피(CurrentHp == MaxHp) 일 때 자동 숨김 — 빌딩 등 평소엔 안 보이고 깎이면 표시되는 UX.
     /// 플레이어: 만피여도 캔버스 항상 표시 (MP바 상시 노출용).
     /// 마법·희귀 몬스터: 만피여도 표시하고 HP바를 등급 색으로 칠함 (MONSTER_RARITY_DESIGN.md §6).
+    /// 접사가 있는 몬스터: 만피여도 표시 — 같은 캔버스의 접사 이름표(MonsterAffixLabelView)가 보이도록.
     /// 데미지 텍스트는 DamageAmount > 0 일 때만 표시 (진행도 갱신용 0 데미지 메시지엔 미표시).
     /// </summary>
     public class HpBarView : MonoBehaviour, IEntityMessageHandler
@@ -69,8 +70,9 @@ namespace ARPG.UI
             else
             {
                 // 일반 엔티티는 초기 숨김 (만피 상태로 시작하는 경우가 많으므로)
-                // 마법·희귀 몬스터는 만피여도 보여 교전 전에 등급을 알린다
-                _showAtFullHp = ApplyArchetypeColor(entity.EntityId);
+                // 마법·희귀 몬스터와 접사가 있는 몬스터는 만피여도 보여 교전 전에 등급·접사 이름표를 알린다
+                bool isGradedMonster = ApplyArchetypeColor(entity.EntityId);
+                _showAtFullHp = isGradedMonster == true || HasMonsterAffixes(cm, entity.EntityId) == true;
                 if (_canvas != null && _canvas.activeSelf)
                 {
                     _mpBarContainer.SetActive(false); // 일반 엔티티는 MP바 숨김
@@ -127,6 +129,12 @@ namespace ARPG.UI
                 default:
                     return false;
             }
+        }
+
+        private static bool HasMonsterAffixes(ComponentManager cm, int entityId)
+        {
+            return cm.TryGetComponent<MonsterAffixComponent>(entityId, out MonsterAffixComponent affixes) == true &&
+                affixes.Count > 0;
         }
 
         private void OnDamage(DamageMessage msg)

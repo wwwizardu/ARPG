@@ -1797,6 +1797,9 @@ namespace ARPG.Village
             int facilityTier = GetPrimarySpecialFacilityTier(v);
             List<TradeStockPlanEntry> plan = VillageTradeStockRoller.RollStockPlan(
                 trade, v.ShopTier, facilityTier, items, rng);
+            // 랜덤 장비 매물의 아이템 레벨 = 마을이 있는 청크의 지역 레벨 (NPC 전리품과 같은 기준). 특수 티어 판정은 없다.
+            ARPG.Item.EquipmentRollOptions stockRollOptions =
+                new ARPG.Item.EquipmentRollOptions(AR.s.Map.GetZoneAtWorld(v.Position));
 
             for (int i = 0; i < plan.Count; i++)
             {
@@ -1805,7 +1808,7 @@ namespace ARPG.Village
                 // 인스턴스 데이터 채움까지 ItemManager.CreateInventoryItemData가 단일 진입점.
                 // 같은 rng를 이어 사용해 인스턴스(Mod/Quality/SkillId)도 회차 결정론에 포함된다.
                 ARPG.Data.ItemData? rolled =
-                    AR.s.Item.CreateInventoryItemData(planned.ItemId, 1, rng);
+                    AR.s.Item.CreateInventoryItemData(planned.ItemId, 1, rng, stockRollOptions);
                 if (rolled == null)
                 {
                     Debug.LogWarning($"[Shop] ItemId({planned.ItemId}) 매물 생성 실패 — 슬롯 스킵");

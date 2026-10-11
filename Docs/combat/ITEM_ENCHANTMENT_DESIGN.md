@@ -114,7 +114,7 @@
 - Shield/Helmet/Armor/Gloves/Belt는 후보가 각 2개뿐이다.
 - Boots는 후보가 3개다.
 - Necklace/Ring/Earring은 일반 옵션 후보가 0개다.
-- 현행 `ItemManager.RollRandomMods`는 `ModTierTable.Weight`와 `RequiredLevel`을 사용하지 않고 Mod와 티어를 균등 선택한다.
+- 현행 `ItemManager.RollRandomMods`는 `ModTierTable.Weight`와 `RequiredLevel`을 사용하지 않고 Mod와 티어를 균등 선택한다. (2026-10-11 변경: 새 장비는 아이템 레벨 기준 구간·가중치로 티어를 고른다 — [ITEM_LEVEL_MOD_TIER_DESIGN.md](ITEM_LEVEL_MOD_TIER_DESIGN.md))
 
 따라서 기능 코드만 연결하면 일부 장비에서 후보가 없거나 선택 폭이 지나치게 좁다. §11 콘텐츠 보강을 MVP 완료 조건에 포함한다.
 
@@ -179,6 +179,8 @@ ModTier.Weight > 0
 자격 티어가 하나도 없는 Mod는 UI 후보에서 제외하고 서비스 요청도 거부한다.
 
 이 규칙은 첫 버전에서 새 `ItemLevel` 저장 필드를 추가하지 않기 위한 최소 정책이다. 실제 드랍 레벨별 세밀한 아이템 레벨이 필요해지면 `ItemData.ItemLevel` 도입을 별도 설계한다.
+
+2026-10-11 갱신: `EquipmentData.ItemLevel`이 도입됐고 옵션은 T12까지 늘었다([ITEM_LEVEL_MOD_TIER_DESIGN.md](ITEM_LEVEL_MOD_TIER_DESIGN.md)). `ModTier.RequiredLevel`은 이제 "티어가 열리는 아이템 레벨"(T1~T3 = 1, T4 = 11 … T10~T12 = 90)이다. 마법부여 규칙은 위 세 조건 그대로 두었으므로(사용자 결정, 마법부여는 별도 작업) 플레이어 레벨 1 기준으로 T1~T3 중 장비 Tier 이하가 나온다. 아이템 레벨이 높은 장비의 옵션을 바꾸면 T3 이하로 내려갈 수 있다. T11·T12는 요구 레벨 90이라 마법부여에서 나오지 않는다.
 
 ### 3.6 재료와 골드
 

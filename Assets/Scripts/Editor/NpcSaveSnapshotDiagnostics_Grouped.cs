@@ -120,6 +120,13 @@ namespace ARPG.Editor
             object? bag = npcFields[nameof(NpcSaveData.Inventory)];
             object? equipment = npcFields[nameof(NpcSaveData.InventoryEquip)];
             object? deeds = npcFields[nameof(NpcSaveData.Deeds)];
+            npc.Gender = NpcGender.Female;
+            npcCache.MarkDirty(32, (ulong)NpcSaveGroup.Identity);
+            npcCache.Flush(NpcSource);
+            Require(Json(npcFields) == Json(copier.Capture(npc)) && ReferenceEquals(bag, npcFields[nameof(NpcSaveData.Inventory)]) &&
+                ReferenceEquals(equipment, npcFields[nameof(NpcSaveData.InventoryEquip)]), "NPC gender updates with Identity and retains inventory/equipment");
+            NpcSaveData genderRoundTrip = JsonConvert.DeserializeObject<NpcSaveData>(Json(npcFields), JsonSettings.Default)!;
+            Require(genderRoundTrip.Gender == NpcGender.Female, "NPC gender survives save/load");
             npc.Activity.TargetKey = "new route";
             npcCache.MarkDirty(32, (ulong)NpcSaveGroup.Activity);
             npcCache.Flush(NpcSource);

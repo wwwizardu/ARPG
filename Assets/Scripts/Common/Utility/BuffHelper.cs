@@ -464,6 +464,12 @@ namespace ARPG.Utility
                         FadeOutTime = Mathf.Max(0f, buffTable.FadeOutTime),
                     });
                     break;
+
+                case GE.BuffEffectType.StatModifier: // 시트의 Stat1~3 칸 그대로 (몬스터 오라 등, MONSTER_AFFIX_DESIGN.md §6.3)
+                    AddTableStatModifier(targetEntityId, buffEntityId, buffTable.Stat1, buffTable.ModType1, buffTable.Value1);
+                    AddTableStatModifier(targetEntityId, buffEntityId, buffTable.Stat2, buffTable.ModType2, buffTable.Value2);
+                    AddTableStatModifier(targetEntityId, buffEntityId, buffTable.Stat3, buffTable.ModType3, buffTable.Value3);
+                    break;
             }
 
             // ========== 일반 버프 (예시) ==========
@@ -482,6 +488,17 @@ namespace ARPG.Utility
                     AddStatModifier(targetEntityId, buffEntityId, GE.Stat.MoveSpeed, StatModifierType.Multiply, 30, 0); // 30% 증가
                     break;
             }
+        }
+
+        /// <summary>
+        /// 버프 시트 스탯 칸 한 세트를 StatModifier로 추가한다. 값이 0인 칸은 비어 있는 것으로 보고 건너뛴다.
+        /// </summary>
+        private static void AddTableStatModifier(int targetEntityId, int sourceBuffEntityId, GE.Stat statType, StatModifierType modifierType, int value)
+        {
+            if (value == 0)
+                return;
+
+            AddStatModifier(targetEntityId, sourceBuffEntityId, statType, modifierType, value, 0);
         }
 
         /// <summary>
