@@ -1,0 +1,7 @@
+interface:
+  display_name: "NPC 콘텐츠 제작"
+  short_description: "도트 NPC의 애니메이션과 Unity·테이블 연결을 완성합니다"
+  default_prompt: "$create-npc-content로 판타지 NPC를 생성하고 스프라이트 라이브러리와 NPC 테이블까지 연결해줘."
+
+policy:
+  allow_implicit_invocation: true
