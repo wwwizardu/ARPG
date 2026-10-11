@@ -192,7 +192,7 @@ public class GlobalEnum
     public enum MonsterArchetype
     {
         Normal,         // 일반 잡몹 (white) - HpMul 1
-        Magic,          // 마법몹 (blue) - HpMul 2
+        Magic,          // 마법몹 (blue) - HpMul 1.3
         Rare,           // 희귀/엘리트 (yellow) - HpMul 5
         Boss,           // 액트 보스 - HpMul 20
         EndgameBoss,    // 엔드게임 보스 (Pinnacle) - HpMul 60
@@ -475,6 +475,7 @@ public class GlobalEnum
         Ignite,     // 점화 (화염 DoT, 스택 가능)
         Poison,     // 중독 (독 DoT + HP 재생 감소, 스택 가능)
         Chill,      // 냉기 (이동/공격 속도 감소)
+        Slow,       // 둔화 (이동 속도만 EffectValue% 감소, FadeOutTime 동안 서서히 회복. 여러 둔화는 가장 강한 하나만 적용)
     }
 
     public enum InventoryType

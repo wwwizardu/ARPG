@@ -48,7 +48,8 @@ namespace ARPG.Systems
                 {
                     // 방향 설정 (정규화된 입력)
                     velocity.Direction = input.MoveDirection;
-                    velocity.Speed = stat.FinalMoveSpeedValue * SkillHelper.GetSkillMovementMultiplier(entityId);
+                    velocity.Speed = stat.FinalMoveSpeedValue * SkillHelper.GetSkillMovementMultiplier(entityId)
+                        * BuffHelper.GetMoveSlowMultiplier(entityId);
 
                     // TODO: 여기서 물리 충돌 검사 후 Direction 조정
                     // velocity.Direction = ApplyCollision(velocity.Direction, transform.Position);

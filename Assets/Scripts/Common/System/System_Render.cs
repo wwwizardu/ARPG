@@ -89,6 +89,7 @@ namespace ARPG.Systems
             SparseSet<VelocityComponent> velocityPool = _componentManager.GetComponentPool<VelocityComponent>();
             SparseSet<ColliderComponent> colliderPool = _componentManager.GetComponentPool<ColliderComponent>();
             SparseSet<JumpComponent> jumpPool = _componentManager.GetComponentPool<JumpComponent>();
+            SparseSet<ProjectileArcComponent> arcPool = _componentManager.GetComponentPool<ProjectileArcComponent>();
 
             // TransformComponent를 가진 모든 엔티티 순회
             for (int i = 0; i < transformPool.Count; i++)
@@ -147,7 +148,25 @@ namespace ARPG.Systems
 
                 // 점프 중이면 스프라이트만 위로 띄움 (그림자는 지면에 그대로)
                 ApplyJumpHeight(entityId, entityBase, jumpPool);
+
+                // 포물선 발사체는 Visual만 위로 띄움
+                ApplyProjectileArcHeight(entityId, entityBase, arcPool);
             }
+        }
+
+        /// <summary>
+        /// 포물선 발사체의 현재 높이를 Visual에 적용. 발사체 프리팹은 SpriteRenderer 없이 Visual 자식에
+        /// 파티클을 두므로 점프와 달리 Visual 전체를 띄운다. 루트(지면 위치)는 판정 기준이라 그대로 둔다.
+        /// </summary>
+        private void ApplyProjectileArcHeight(int entityId, EntityBase entityBase, SparseSet<ProjectileArcComponent> arcPool)
+        {
+            if (entityBase.Visual == null || arcPool.TryGet(entityId, out ProjectileArcComponent arc) == false)
+                return;
+
+            Transform visualTransform = entityBase.Visual.transform;
+            Vector3 localPos = visualTransform.localPosition;
+            localPos.y = arc.Height;
+            visualTransform.localPosition = localPos;
         }
 
         /// <summary>

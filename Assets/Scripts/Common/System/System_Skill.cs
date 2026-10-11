@@ -1219,7 +1219,8 @@ namespace ARPG.Systems
             // AreaEffect 시스템(priority 240)이 같은 FixedUpdate의 첫 틱을 처리한다.
             // 생성은 IsAreaEffectCreated로 한 실행에 1회만 보장하고, 직접 타격/발사체는 그대로 진행한다.
             // (장판과 직접 타격은 공존한다 — 예: 내려찍어 3연타 + 바닥에 불장판 1개)
-            if (skillTable.AreaEffectId > 0)
+            // 발사체가 장판을 운반하는 스킬은 여기서 만들지 않고 아래에서 던진 발사체가 착지할 때 깐다.
+            if (skillTable.AreaEffectId > 0 && skillTable.DeliversAreaByProjectile == false)
             {
                 if (skill.IsAreaEffectCreated == false)
                 {
@@ -1236,6 +1237,12 @@ namespace ARPG.Systems
             // 발사체 스킬인 경우 발사체 생성 (BaseProjectileCount + Stat.ProjectileCountAdd만큼 부채꼴 발사)
             if (skillTable.ProjectileId > 0)
             {
+                if (skillTable.DeliversAreaByProjectile == true)
+                {
+                    LaunchAreaDeliveryProjectile(skillEntityId, ref skill, commitPosition, in pools);
+                    return;
+                }
+
                 if (pools.Transform.TryGet(skill.OwnerEntityId, out var ownerTransform))
                 {
                     const float SPREAD_ANGLE_PER_SHOT = AttackTelegraphGeometryResolver.DefaultProjectileSpreadAngleDeg;
@@ -1300,6 +1307,37 @@ namespace ARPG.Systems
             }
 
             Debug.Log($"[System_Skill] ProcessSkillHit - SkillEntityId: {skillEntityId}, OwnerEntityId: {skill.OwnerEntityId}, HitCount: {hitEntities.Count}");
+        }
+
+        /// <summary>
+        /// 발사체가 장판을 운반하는 스킬(SkillTable.DeliversAreaByProjectile)의 발사체를 목표 지점으로 던진다.
+        /// 장판은 한 실행에 1개라는 규칙을 따라 발사체도 1발만 던진다 (추가 발사체 수는 적용하지 않음).
+        /// </summary>
+        private void LaunchAreaDeliveryProjectile(int skillEntityId, ref SkillComponent skill, Vector2 landingPosition, in SkillRuntimePools pools)
+        {
+            if (skill.IsAreaEffectCreated == true || skill.Table == null)
+                return;
+
+            if (pools.Transform.TryGet(skill.OwnerEntityId, out TransformComponent ownerTransform) == false)
+                return;
+
+            // 지면 경로는 발 위치에서 시작하고, 몸통 중심 높이(HitOffset.y)에서 출발해 착지 지점 바닥으로 내려앉는다.
+            float startHeight = 0f;
+            if (pools.Collider.TryGet(skill.OwnerEntityId, out ColliderComponent ownerCollider) == true)
+                startHeight = ownerCollider.HitOffset.y;
+
+            ProjectileHelper.SpawnArcProjectile(
+                skill.OwnerEntityId,
+                skillEntityId,
+                skill.Table.ProjectileId,
+                ownerTransform.Position,
+                startHeight,
+                landingPosition,
+                skill.Table.ArcHeight,
+                skill.Table.AreaEffectId,
+                skill.SkillId);
+            skill.IsAreaEffectCreated = true;
+            AR.s.Component.SetComponent(skillEntityId, skill);
         }
 
         /// <summary>

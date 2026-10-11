@@ -13,6 +13,8 @@
 > 풀 키로 직접 쓴다 — `BiomeType.Any`=공용(모든 biome 풀에 포함), 특정 biome=그 biome 전용.
 > 청크 biome의 풀 = **공용 ∪ 해당 biome 전용**에서 **그룹마다 균등 샘플링**하며, 풀이 비면 MonsterManager 인스펙터 fallback을 쓴다.
 > 가중치·MinZone/MaxZone·Archetype 승격·보스 청크는 여전히 미구현(향후 이 문서의 Phase 2~3로 확장).
+>
+> **2026-10-11** — Archetype 승격(마법·희귀)은 SpawnPool 테이블 없이 바이옴 풀 위에 먼저 구현했다. 정본은 [MONSTER_RARITY_DESIGN.md](MONSTER_RARITY_DESIGN.md)이고, 이 문서 §3.4·§6.1의 `EliteRate`·`RollEliteTier` 안 대신 Zone 시트 `MagicPackRate`·`RarePackRate`와 무리 단위 판정을 쓴다. 보스 청크·가중치·Zone×풀은 여전히 미구현.
 
 ---
 
@@ -98,6 +100,8 @@
 | BossChunkPeriod | int | N 청크마다 1개 보스 청크 (0이면 없음) |
 
 ### 3.4 Archetype 분포 정책
+
+> 2026-10-11 구현은 아래 안과 다르다 — [MONSTER_RARITY_DESIGN.md](MONSTER_RARITY_DESIGN.md) §2·§4 참조.
 
 기본적으로 MonsterTable.Archetype을 따르되, 다음 두 경로로 **개체 단위 등급 승격**이 가능하다.
 
@@ -228,6 +232,8 @@ LevelOffset의 의미:
 ## 6. Phase 3: 등급 승격 / 엘리트 / 보스
 
 ### 6.1 엘리트 승격
+
+> 2026-10-11 구현됨(방식 변경) — [MONSTER_RARITY_DESIGN.md](MONSTER_RARITY_DESIGN.md) 참조. 아래는 원래 계획이다.
 
 `SubGroup` 또는 `MainGroup` 그룹에서 일부 개체를 Magic/Rare로 승격.
 

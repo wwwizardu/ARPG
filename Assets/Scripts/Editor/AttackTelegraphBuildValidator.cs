@@ -22,6 +22,7 @@ namespace ARPG.Editor
         private const string SKILL_TABLE_PATH = "Assets/_BinaryData/TableData/SkillTable.bytes";
         private const string PROJECTILE_TABLE_PATH = "Assets/_BinaryData/TableData/ProjectileTable.bytes";
         private const string AREA_EFFECT_TABLE_PATH = "Assets/_BinaryData/TableData/AreaEffectTable.bytes";
+        private const string BUFF_TABLE_PATH = "Assets/_BinaryData/TableData/BuffTable.bytes";
         private const string AI_TABLE_PATH = "Assets/_BinaryData/TableData/AiTable.bytes";
         private const string MONSTER_TABLE_PATH = "Assets/_BinaryData/TableData/MonsterTable.bytes";
         private const float EPSILON = 0.0001f;
@@ -174,6 +175,27 @@ namespace ARPG.Editor
                 && Mathf.Abs(projectileGeometry.Range - 12f) <= EPSILON
                 && Mathf.Abs(projectileGeometry.Width - 1f) <= EPSILON,
                 "발사체 경로는 Speed × LifeTime과 projectile/player 반경을 사용해야 합니다.");
+
+            AttackTelegraphGeometry areaDeliveryGeometry = AttackTelegraphGeometryResolver.Resolve(
+                new AttackTelegraphGeometryInput(
+                    false,
+                    true,
+                    false,
+                    true,
+                    true,
+                    false,
+                    0f,
+                    360f,
+                    0.4f,
+                    0.3f,
+                    1.5f,
+                    6f,
+                    3f,
+                    0.2f,
+                    1,
+                    15f));
+            Require(errors, areaDeliveryGeometry.Shape == AttackTelegraphShape.None,
+                "발사체가 장판을 운반하는 위치 지정 스킬은 예고하지 않아야 합니다 (착지해 깔린 장판이 위험을 알림).");
         }
 
         private static void ValidateMonsterSkillTables(List<string> errors)
@@ -181,6 +203,7 @@ namespace ARPG.Editor
             List<SkillTable> skills = LoadRows<SkillTable>(SKILL_TABLE_PATH, errors);
             List<ProjectileTable> projectiles = LoadRows<ProjectileTable>(PROJECTILE_TABLE_PATH, errors);
             List<AreaEffectTable> areas = LoadRows<AreaEffectTable>(AREA_EFFECT_TABLE_PATH, errors);
+            List<BuffTable> buffs = LoadRows<BuffTable>(BUFF_TABLE_PATH, errors);
             List<AiTable> ais = LoadRows<AiTable>(AI_TABLE_PATH, errors);
             List<MonsterTable> monsters = LoadRows<MonsterTable>(MONSTER_TABLE_PATH, errors);
             if (errors.Count > 0)
@@ -189,6 +212,7 @@ namespace ARPG.Editor
             Dictionary<int, SkillTable> skillById = IndexRows(skills, errors, "Skill");
             Dictionary<int, ProjectileTable> projectileById = IndexRows(projectiles, errors, "Projectile");
             Dictionary<int, AreaEffectTable> areaById = IndexRows(areas, errors, "AreaEffect");
+            Dictionary<int, BuffTable> buffById = IndexRows(buffs, errors, "Buff");
             Dictionary<int, AiTable> aiById = IndexRows(ais, errors, "AI");
             HashSet<int> validatedSkillIds = new();
 
@@ -201,11 +225,11 @@ namespace ARPG.Editor
                     continue;
                 }
 
-                ValidateMonsterSkillReference(ai.SkillId1, ai.Id, skillById, projectileById, areaById,
+                ValidateMonsterSkillReference(ai.SkillId1, ai.Id, skillById, projectileById, areaById, buffById,
                     validatedSkillIds, errors);
-                ValidateMonsterSkillReference(ai.SkillId2, ai.Id, skillById, projectileById, areaById,
+                ValidateMonsterSkillReference(ai.SkillId2, ai.Id, skillById, projectileById, areaById, buffById,
                     validatedSkillIds, errors);
-                ValidateMonsterSkillReference(ai.SkillId3, ai.Id, skillById, projectileById, areaById,
+                ValidateMonsterSkillReference(ai.SkillId3, ai.Id, skillById, projectileById, areaById, buffById,
                     validatedSkillIds, errors);
             }
         }
@@ -216,6 +240,7 @@ namespace ARPG.Editor
             Dictionary<int, SkillTable> skillById,
             Dictionary<int, ProjectileTable> projectileById,
             Dictionary<int, AreaEffectTable> areaById,
+            Dictionary<int, BuffTable> buffById,
             HashSet<int> validatedSkillIds,
             List<string> errors)
         {
@@ -265,6 +290,10 @@ namespace ARPG.Editor
                 else if (area.Radius <= 0f || area.Duration <= 0f || area.TickInterval < 0f)
                 {
                     errors.Add($"AreaEffect {area.Id}({area.Name})의 Radius/Duration/TickInterval이 유효하지 않습니다.");
+                }
+                else if (area.OnTickBuffId > 0)
+                {
+                    ValidateAreaTickBuff(area, buffById, errors);
                 }
             }
 
@@ -323,6 +352,20 @@ namespace ARPG.Editor
             // 장판 자체의 비주얼이 위험을 알리고 예고는 직접 타격만 담당한다 (DESIGN §5.3).
             if (geometry.Shape == AttackTelegraphShape.None && hasArea == false)
                 errors.Add($"공격 Skill {skill.Id}({skill.Name})에서 예고 도형을 만들 수 없습니다.");
+        }
+
+        // 장판이 매 틱 다시 거는 버프는 틱 간격 이상 유지돼야 장판 안에서 효과가 끊기지 않는다.
+        // 둔화의 FadeOutTime 회복 구간은 Duration 뒤에 붙으므로 최대 효과 유지 시간인 Duration만 비교한다.
+        private static void ValidateAreaTickBuff(AreaEffectTable area, Dictionary<int, BuffTable> buffById, List<string> errors)
+        {
+            if (buffById.TryGetValue(area.OnTickBuffId, out BuffTable buff) == false)
+            {
+                errors.Add($"AreaEffect {area.Id}({area.Name})의 OnTickBuffId {area.OnTickBuffId}가 BuffTable에 없습니다.");
+                return;
+            }
+
+            if (buff.Duration < area.TickInterval)
+                errors.Add($"AreaEffect {area.Id}({area.Name})가 거는 Buff {buff.Id}({buff.Name})의 Duration {buff.Duration}이 장판 TickInterval {area.TickInterval}보다 짧아 장판 안에서 효과가 끊깁니다.");
         }
 
         private static List<T> LoadRows<T>(string assetPath, List<string> errors)

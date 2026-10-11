@@ -190,6 +190,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 833f1309cb6f2c140849be5e77e62247
+    m_Address: Prefabs/AreaEffect/SpiderWeb
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 846f62dbeb26f63a1ef8014bb5c5f5e6
     m_Address: Animation/Wolf
     m_ReadOnly: 0
@@ -240,6 +245,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a9313e50f0795934db47c09bf084bfa1
+    m_Address: Animation/Spider
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ac6768f8e2b34be4285ce2d4c8342f18
     m_Address: Sprites/Items/Anvil
     m_ReadOnly: 0
@@ -247,6 +257,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b24e7b3ae6aecb941ae6c2b9b8b29a7f
     m_Address: Humanoid/Dead
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b43010c2ceff6844498996a2708a2870
+    m_Address: Projectile/Projectile_SpiderWeb
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

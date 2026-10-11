@@ -34,10 +34,12 @@ namespace ARPG.Factory
 
         /// <summary>
         /// MonsterTable 기반 몬스터 엔티티 생성
-        /// MonsterTable → Stat + State + Velocity + AI + Skill + Drop + MonsterTag
+        /// MonsterTable → Stat + State + Velocity + AI + Skill + Drop + MonsterTag + MonsterArchetype
         /// </summary>
+        /// <param name="archetypeOverride">개체 등급. null이면 MonsterTable.Archetype (MONSTER_RARITY_DESIGN.md §5)</param>
         /// <returns>(entityId, entity) 튜플. 실패 시 (-1, null)</returns>
-        public static async UniTask<(int entityId, EntityBase? entity)> CreateMonster(int monsterTableId, Vector3 position, Transform? parent = null, int level = 0)
+        public static async UniTask<(int entityId, EntityBase? entity)> CreateMonster(int monsterTableId, Vector3 position, Transform? parent = null, int level = 0,
+            GlobalEnum.MonsterArchetype? archetypeOverride = null)
         {
             using var contextLoad = AR.s.Map.Context.BeginLoad();
             // 1. 테이블 로드
@@ -79,14 +81,25 @@ namespace ARPG.Factory
             // 4. ECS 컴포넌트 추가
             await AddCreatureComponents(entityId, table, entity);
 
-            // 4-1. Archetype × Level 스탯 스케일링 (HP / 모든 속성 공격력)
+            // 4-1. Archetype × Level 스탯 스케일링 (HP / 모든 속성 공격력 / 원소 저항)
             if (contextLoad.IsCurrent == false || entity == null || entity.IsCurrentEntity == false)
             {
                 ReleaseUnfinishedEntity(entity);
                 return (-1, null);
             }
             int effectiveLevel = level > 0 ? level : table.Level;
-            ApplyMonsterArchetypeScaling(entityId, table, effectiveLevel);
+            GlobalEnum.MonsterArchetype archetype = archetypeOverride ?? table.Archetype;
+            MonsterArchetypeTable? archetypeTable = AR.s.Data.GetMonsterArchetype(archetype);
+            if (archetypeTable == null)
+            {
+                Debug.LogWarning($"[EntityFactory] MonsterArchetypeTable not found for {archetype} (MonsterId: {table.Id})");
+            }
+            else
+            {
+                ApplyMonsterArchetypeScaling(entityId, archetypeTable, effectiveLevel);
+            }
+            // 무작위 접사는 등급 스케일링 다음, 이 컴포넌트를 붙이기 전에 적용한다 (MONSTER_RARITY_DESIGN.md §7).
+            AR.s.Component.AddComponent(entityId, new MonsterArchetypeComponent { Archetype = archetype });
 
             // MonsterTag (System_EntityDestroy에서 MonsterManager 연동에 사용)
             AR.s.Component.AddComponent(entityId, new MonsterTag());
@@ -106,12 +119,14 @@ namespace ARPG.Factory
 
             if (table.DropId > 0)
             {
+                // 등급 보상: 판정 횟수와 높은 Tier 보너스 (MONSTER_RARITY_DESIGN.md §3.2)
                 AR.s.Component.AddComponent(entityId, new DropComponent
                 {
                     DropId = table.DropId,
                     DropRateBonus = table.DropRateBonus,
-                    DropRarityBonus = table.DropRarityBonus,
-                    MonsterLevel = level > 0 ? level : table.Level
+                    DropRarityBonus = table.DropRarityBonus + (archetypeTable != null ? archetypeTable.DropRarityBonus : 0),
+                    MonsterLevel = effectiveLevel,
+                    DropRolls = archetypeTable != null ? Mathf.Max(1, archetypeTable.DropRolls) : 1
                 });
             }
 
@@ -125,7 +140,7 @@ namespace ARPG.Factory
             // 자식 프리팹의 IEntityMessageHandler 자동 등록
             entity.AutoRegisterChildHandlers();
 
-            Debug.Log($"[EntityFactory] Monster created - EntityId: {entityId}, TableId: {monsterTableId}, Name: {table.Name}");
+            Debug.Log($"[EntityFactory] Monster created - EntityId: {entityId}, TableId: {monsterTableId}, Name: {table.Name}, Archetype: {archetype}");
             return (entityId, entity);
         }
 
@@ -343,12 +358,6 @@ namespace ARPG.Factory
             return (entityId, entity);
         }
 
-        /// <summary>
-        /// 몬스터에 Archetype × Level 스케일링 적용. HP와 전체 스킬 데미지 배율에 곱연산.
-        /// MonsterTable.Archetype + effectiveLevel + BalanceConstants 곡선 사용.
-        /// finalHp  = BaseHp  × HpPerLevel^(Level-1)  × Archetype.HpMul
-        /// finalDmg = (StatDamage + SkillTableDamage) × DmgPerLevel^(Level-1) × Archetype.DmgMul
-        /// </summary>
         private static void ReleaseUnfinishedEntity(EntityBase? entity)
         {
             if (entity == null) return;
@@ -360,17 +369,17 @@ namespace ARPG.Factory
             Addressables.ReleaseInstance(entity.gameObject);
         }
 
-        private static void ApplyMonsterArchetypeScaling(int entityId, MonsterTable table, int effectiveLevel)
+        /// <summary>
+        /// 몬스터에 Archetype × Level 스케일링 적용. HP와 전체 스킬 데미지 배율에 곱연산, 원소 저항에 가산.
+        /// 개체 등급 행 + effectiveLevel + BalanceConstants 곡선 사용.
+        /// finalHp  = BaseHp  × HpPerLevel^(Level-1)  × Archetype.HpMul
+        /// finalDmg = (StatDamage + SkillTableDamage) × DmgPerLevel^(Level-1) × Archetype.DmgMul
+        /// resist   = BaseResist + Archetype.ResistAdd (상한은 DamageCalculator가 최대 저항으로 자름)
+        /// </summary>
+        private static void ApplyMonsterArchetypeScaling(int entityId, MonsterArchetypeTable archetype, int effectiveLevel)
         {
             if (effectiveLevel <= 0)
                 return;
-
-            MonsterArchetypeTable? archetype = AR.s.Data.GetMonsterArchetype(table.Archetype);
-            if (archetype == null)
-            {
-                Debug.LogWarning($"[EntityFactory] MonsterArchetypeTable not found for {table.Archetype} (MonsterId: {table.Id})");
-                return;
-            }
 
             if (AR.s.Component.TryGetComponent<StatComponent>(entityId, out var stat) == false)
                 return;
@@ -385,9 +394,18 @@ namespace ARPG.Factory
             int baseSkillDamage = stat.BaseSkillDamage > 0 ? stat.BaseSkillDamage : 100;
             stat.BaseSkillDamage = Mathf.Max(1, Mathf.RoundToInt(baseSkillDamage * dmgMul));
 
+            stat.BaseFireResist      += archetype.ResistAdd;
+            stat.BaseIceResist       += archetype.ResistAdd;
+            stat.BaseLightningResist += archetype.ResistAdd;
+            stat.BasePoisonResist    += archetype.ResistAdd;
+
             stat.CopyBaseToFinal();
             stat.SetCurrentHpDirect(stat.FinalMaxHp);
             AR.s.Component.SetComponent(entityId, stat);
+
+            // AddCreatureComponents가 HP바를 기다리는 동안 첫 재계산이 끝났을 수 있다.
+            // 바뀐 저항이 피격 감소 캐시(DamageDefenseCacheComponent)에 반영되도록 다시 계산을 요청한다.
+            AR.s.Component.AddComponent(entityId, new StatDirtyTag());
         }
 
         #region 공통 컴포넌트 추가 메서드
@@ -787,7 +805,9 @@ namespace ARPG.Factory
         /// PrefabKey가 지정되면 AddressablePool에서 GameObject를 로드하고 System_Render에 등록.
         /// 호출자는 await할 필요 없음 (fire-and-forget) — 컴포넌트는 즉시 부착되고 GameObject만 비동기 로드됨.
         /// </summary>
-        public static async void CreateAreaEffect(int casterEntityId, int areaEffectTableId, Vector2 position, int skillId = 0)
+        /// <param name="fallbackCasterFaction">caster가 이미 사라져 진영을 읽을 수 없을 때 쓸 진영 (포물선 발사체 비행 중 사망 등)</param>
+        public static async void CreateAreaEffect(int casterEntityId, int areaEffectTableId, Vector2 position, int skillId = 0,
+            Faction fallbackCasterFaction = Faction.Neutral)
         {
             using var contextLoad = AR.s.Map.Context.BeginLoad();
             ComponentManager cm = AR.s.Component;
@@ -802,8 +822,9 @@ namespace ARPG.Factory
             Faction faction = table.TargetFaction;
             if (faction == Faction.Neutral)
             {
-                if (cm.TryGetComponent<FactionComponent>(casterEntityId, out var casterFaction))
-                    faction = casterFaction.FactionId;
+                faction = cm.TryGetComponent<FactionComponent>(casterEntityId, out var casterFaction)
+                    ? casterFaction.FactionId
+                    : fallbackCasterFaction;
             }
 
             int entityId = AR.s.Entity.CreateEntity();

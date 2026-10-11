@@ -1,4 +1,5 @@
 using ARPG.Component;
+using ARPG.Factory;
 using ARPG.Skill.Combat;
 using ARPG.Skill.Propagation;
 using ARPG.Tables;
@@ -42,6 +43,7 @@ namespace ARPG.Systems
             SparseSet<JumpComponent> jumpPool = cm.GetComponentPool<JumpComponent>();
             SparseSet<ColliderComponent> colliderPool = cm.GetComponentPool<ColliderComponent>();
             SparseSet<ProjectileTag> projectileTagPool = cm.GetComponentPool<ProjectileTag>();
+            SparseSet<ProjectileArcComponent> arcPool = cm.GetComponentPool<ProjectileArcComponent>();
 
             for (int i = projectilePool.Count - 1; i >= 0; i--)
             {
@@ -55,6 +57,14 @@ namespace ARPG.Systems
                     continue;
 
                 ProjectileComponent proj = projectilePool.GetByIndex(i);
+
+                // 포물선 발사체는 수명·충돌 대신 정해진 경로를 날아가 착지 지점에 장판을 깐다.
+                if (arcPool.TryGet(entityId, out ProjectileArcComponent arc) == true)
+                {
+                    UpdateArcFlight(cm, entityId, proj.OwnerEntityId, ref arc, inFixedDeltaTime, transformPool);
+                    arcPool.Set(entityId, arc);
+                    continue;
+                }
 
                 proj.CurrentLifeTime += inFixedDeltaTime;
                 if (proj.CurrentLifeTime >= proj.LifeTime)
@@ -97,6 +107,32 @@ namespace ARPG.Systems
 
                 projectilePool.SetByIndex(i, proj);
             }
+        }
+
+        private static void UpdateArcFlight(
+            ComponentManager cm,
+            int entityId,
+            int ownerEntityId,
+            ref ProjectileArcComponent arc,
+            float inFixedDeltaTime,
+            SparseSet<TransformComponent> transformPool)
+        {
+            arc.Elapsed += inFixedDeltaTime;
+            float progress = arc.FlightDuration > 0f ? Mathf.Clamp01(arc.Elapsed / arc.FlightDuration) : 1f;
+
+            if (transformPool.TryGet(entityId, out TransformComponent transform) == true)
+            {
+                transform.Position = Vector2.Lerp(arc.StartPosition, arc.EndPosition, progress);
+                transformPool.Set(entityId, transform);
+            }
+
+            // 출발 높이(몸통 중심)는 착지까지 0으로 줄고, 그 위에 최대 ArcHeight인 포물선을 더한다.
+            arc.Height = Mathf.Lerp(arc.StartHeight, 0f, progress) + 4f * arc.ArcHeight * progress * (1f - progress);
+            if (progress < 1f)
+                return;
+
+            EntityFactory.CreateAreaEffect(ownerEntityId, arc.LandingAreaEffectId, arc.EndPosition, arc.SkillId, arc.CasterFaction);
+            cm.AddComponent(entityId, new DestroyTag());
         }
 
         private bool CheckCollision(

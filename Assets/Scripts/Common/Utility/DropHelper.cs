@@ -1,5 +1,6 @@
 #nullable enable
 using System.Collections.Generic;
+using ARPG.Component;
 using ARPG.Data;
 using ARPG.Tables;
 using UnityEngine;
@@ -11,6 +12,23 @@ namespace ARPG.Utility
     /// </summary>
     public static class DropHelper
     {
+        // 판정 2회 이상일 때 아이템을 흩는 반경 (타일)
+        private const float DROP_SCATTER_RADIUS = 0.8f;
+
+        /// <summary>
+        /// DropComponent의 판정 횟수만큼 ProcessDrop을 반복한다 (MONSTER_RARITY_DESIGN.md §3.2).
+        /// 2회 이상이면 아이템이 한 점에 겹치지 않게 판정마다 위치를 흩는다. 흩은 칸이 막혀 있으면 원래 위치에 떨군다.
+        /// </summary>
+        public static void ProcessDrops(DropComponent drop, Vector3 position)
+        {
+            int rolls = Mathf.Max(1, drop.DropRolls);
+            for (int i = 0; i < rolls; i++)
+            {
+                Vector3 rollPosition = rolls > 1 ? GetScatteredPosition(position) : position;
+                ProcessDrop(drop.DropId, rollPosition, drop.MonsterLevel, drop.DropRateBonus, drop.DropRarityBonus);
+            }
+        }
+
         /// <summary>
         /// DropTable을 기반으로 아이템을 드랍
         /// </summary>
@@ -76,6 +94,19 @@ namespace ARPG.Utility
 
             // 스킬 페이지 — DropTable.Tier에 매칭되는 등급 페이지 ItemId + PageCost 범위 매칭 SkillEffect 풀에서 랜덤 픽
             CreateSkillPageDropAsync(dropTable.Tier, position);
+        }
+
+        private static Vector3 GetScatteredPosition(Vector3 origin)
+        {
+            Vector2 offset = Random.insideUnitCircle * DROP_SCATTER_RADIUS;
+            Vector3 candidate = new Vector3(origin.x + offset.x, origin.y + offset.y, origin.z);
+            if (AR.s.Map != null &&
+                AR.s.Map.IsTileBlocked(Mathf.FloorToInt(candidate.x), Mathf.FloorToInt(candidate.y)) == true)
+            {
+                return origin;
+            }
+
+            return candidate;
         }
 
         private static int SelectCurrencyItem(DropTable dropTable, int monsterLevel, int dropRarityBonus)

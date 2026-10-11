@@ -14,6 +14,7 @@ namespace ARPG.UI
     ///
     /// 일반 엔티티: 만피(CurrentHp == MaxHp) 일 때 자동 숨김 — 빌딩 등 평소엔 안 보이고 깎이면 표시되는 UX.
     /// 플레이어: 만피여도 캔버스 항상 표시 (MP바 상시 노출용).
+    /// 마법·희귀 몬스터: 만피여도 표시하고 HP바를 등급 색으로 칠함 (MONSTER_RARITY_DESIGN.md §6).
     /// 데미지 텍스트는 DamageAmount > 0 일 때만 표시 (진행도 갱신용 0 데미지 메시지엔 미표시).
     /// </summary>
     public class HpBarView : MonoBehaviour, IEntityMessageHandler
@@ -22,14 +23,31 @@ namespace ARPG.UI
         [SerializeField] private Image _hpBar = null!;
         [SerializeField] private GameObject _mpBarContainer = null!; // MP바 전체 컨테이너 (MP바 숨김용)
         [SerializeField] private Image _mpBar = null!;
+        [SerializeField, Min(0f)] private float _monsterHpBarPadding = 0.15f;
+
+        // 등급 몬스터 HP바 색 (MONSTER_RARITY_DESIGN.md §6). 일반 몬스터·NPC·플레이어는 프리팹 색 유지
+        private static readonly Color MagicHpColor = new Color(0.45f, 0.55f, 1f, 1f);
+        private static readonly Color RareHpColor = new Color(1f, 0.85f, 0.25f, 1f);
 
         private bool _isPlayer;
+        private bool _showAtFullHp; // 마법·희귀 몬스터: 만피여도 HP바 표시
         private int _entityId = -1;
+        private EntityBase? _monster;
+        private float _monsterBodyTop;
 
         public void RegisterTo(EntityBase entity)
         {
+            ComponentManager cm = AR.s.Component;
             _entityId = entity.EntityId;
             _isPlayer = AR.s.Data != null && entity.EntityId == AR.s.Data.CurrentPlayerEntityId;
+            _monster = cm.HasComponent<MonsterTag>(_entityId) == true ? entity : null;
+            _monsterBodyTop = 0f;
+            if (_monster != null && cm.TryGetComponent<ColliderComponent>(_entityId, out ColliderComponent collider) == true)
+            {
+                // MonsterTable.HitOffsetY + HitRadius로 몸통 상단 높이를 구한다 (팩토리 fallback 포함).
+                _monsterBodyTop = collider.HitOffset.y + collider.HitRadius;
+            }
+            UpdateMonsterPosition();
 
             entity.RegisterMessageHandler<DamageMessage>(OnDamage);
             entity.RegisterMessageHandler<ManaChangedMessage>(OnManaChanged);
@@ -40,7 +58,7 @@ namespace ARPG.UI
                 if (_canvas != null && _canvas.activeSelf == false)
                     _canvas.SetActive(true);
 
-                if (AR.s.Component.TryGetComponent<StatComponent>(entity.EntityId, out var stat))
+                if (cm.TryGetComponent<StatComponent>(entity.EntityId, out var stat))
                 {
                     if (_hpBar != null)
                         _hpBar.fillAmount = stat.FinalMaxHp > 0 ? (float)stat.CurrentHp / stat.FinalMaxHp : 0f;
@@ -51,11 +69,63 @@ namespace ARPG.UI
             else
             {
                 // 일반 엔티티는 초기 숨김 (만피 상태로 시작하는 경우가 많으므로)
+                // 마법·희귀 몬스터는 만피여도 보여 교전 전에 등급을 알린다
+                _showAtFullHp = ApplyArchetypeColor(entity.EntityId);
                 if (_canvas != null && _canvas.activeSelf)
                 {
                     _mpBarContainer.SetActive(false); // 일반 엔티티는 MP바 숨김
-                    _canvas.SetActive(false);
+                    _canvas.SetActive(_showAtFullHp);
                 }
+            }
+        }
+
+        private void LateUpdate()
+        {
+            // System_Render의 이동/스케일/점프 반영 이후에 위치를 맞춘다.
+            UpdateMonsterPosition();
+        }
+
+        private void UpdateMonsterPosition()
+        {
+            if (_monster == null || _canvas == null || _hpBar == null)
+                return;
+
+            SpriteRenderer spriteRenderer = _monster.SpriteRenderer;
+            // 스프라이트 bounds에는 투명 여백도 포함되므로 높이는 테이블 값만 사용한다.
+            // 스프라이트 Transform은 점프 시 발 기준 위치를 따라가는 용도로만 사용한다.
+            float feetY = spriteRenderer != null ? spriteRenderer.transform.position.y : _monster.transform.position.y;
+            float top = feetY + _monsterBodyTop;
+
+            // 캔버스 내부 HP 이미지의 기존 오프셋을 빼고, 실제 HP바 중심을 목표 높이에 맞춘다.
+            // 월드 좌표로 보정하므로 부모 스케일이 적용되어도 높이가 중복 배율되지 않는다.
+            Transform canvasTransform = _canvas.transform;
+            Vector3 position = canvasTransform.position;
+            float padding = _monsterHpBarPadding * Mathf.Abs(_monster.transform.lossyScale.y);
+            position.y += top + padding - _hpBar.transform.position.y;
+            canvasTransform.position = position;
+        }
+
+        /// <summary>
+        /// 마법·희귀 몬스터면 HP바를 등급 색으로 칠하고 true. 등급 컴포넌트가 없거나 다른 등급이면 false.
+        /// </summary>
+        private bool ApplyArchetypeColor(int entityId)
+        {
+            if (_hpBar == null ||
+                AR.s.Component.TryGetComponent<MonsterArchetypeComponent>(entityId, out MonsterArchetypeComponent grade) == false)
+            {
+                return false;
+            }
+
+            switch (grade.Archetype)
+            {
+                case GlobalEnum.MonsterArchetype.Magic:
+                    _hpBar.color = MagicHpColor;
+                    return true;
+                case GlobalEnum.MonsterArchetype.Rare:
+                    _hpBar.color = RareHpColor;
+                    return true;
+                default:
+                    return false;
             }
         }
 
@@ -64,13 +134,15 @@ namespace ARPG.UI
             if (_hpBar == null)
                 return;
 
+            UpdateMonsterPosition();
+
             float ratio = msg.MaxHp > 0 ? (float)msg.CurrentHp / msg.MaxHp : 0f;
             _hpBar.fillAmount = ratio;
 
             // 일반 엔티티만 만피 시 캔버스 숨김. 플레이어는 MP바 상시 노출을 위해 캔버스 토글 안 함.
             if (_canvas != null && _isPlayer == false)
             {
-                bool shouldShow = msg.CurrentHp < msg.MaxHp;
+                bool shouldShow = _showAtFullHp == true || msg.CurrentHp < msg.MaxHp;
                 if (_canvas.activeSelf != shouldShow)
                     _canvas.SetActive(shouldShow);
             }

@@ -30,7 +30,7 @@ namespace ARPG.Component
         public int BasePoisonAttackMax;     // 기본 독 최대 공격력
         public int BaseCriRate;         // 기본 치명타 확률
         public int BaseCriDamage;       // 기본 치명타 피해
-        public int BaseMoveSpeed;       // 기본 이동 속도
+        public float BaseMoveSpeed;     // 기본 이동 속도 (1초당 이동 거리)
         public int BaseMoveSpeedMul;    // 기본 이동 속도 배율 (100 = 100%)
         public int BaseAttackSpeed;     // 레거시 테이블 값. 실제 공격 기본 속도는 장착 무기 EquipmentData가 정본
         public int BaseCastSpeed;       // 기본 시전 속도
@@ -83,7 +83,7 @@ namespace ARPG.Component
         public int FinalCriRateIncrease;  // 글로벌 치명타 확률 증가율 합계(%)
         public int FinalCriDamage;
         // 이동 속도는 두 필드를 직접 곱하지 말고 아래 FinalMoveSpeedValue를 사용한다 (공식 단일 출처).
-        public int FinalMoveSpeed;
+        public float FinalMoveSpeed;
         public int FinalMoveSpeedMul;   // 최종 이동 속도 배율 (100 = 100%)
         public int FinalAttackSpeed;
         public int FinalCastSpeed;

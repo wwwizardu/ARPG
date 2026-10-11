@@ -24,6 +24,8 @@ namespace ARPG.Monster
         [Header("Monster Spawn (Group-based)")]
         [SerializeField] private int _mainMonsterTableId = 1003;
         [SerializeField] private int _subMonsterTableId = 1003;
+        [SerializeField] private GroupMode _mainGroupMode = GroupMode.Homogeneous;
+        [SerializeField] private GroupMode _subGroupMode = GroupMode.Homogeneous;
         // x = min, y = max (둘 다 inclusive)
         [SerializeField] private Vector2Int _mainGroupCount = new Vector2Int(1, 2);
         [SerializeField] private Vector2Int _mainGroupSize = new Vector2Int(8, 12);
@@ -50,6 +52,12 @@ namespace ARPG.Monster
         {
             Uniform,
             GaussianFromCenter
+        }
+
+        public enum GroupMode
+        {
+            Homogeneous,
+            Mixed
         }
 
         public float MinimumSpawnDistanceSqr =>
@@ -206,30 +214,35 @@ namespace ARPG.Monster
             int fallbackMonsterId = slot.GroupKind == MonsterSpawnGroupKind.Main
                 ? _mainMonsterTableId
                 : _subMonsterTableId;
-            int monsterTableId = BiomeMonsterMapping.SampleMonsterId(chunkBiome, fallbackMonsterId);
-            float monsterRadius = ResolveMonsterMoveRadius(monsterTableId);
+            GroupMode groupMode = slot.GroupKind == MonsterSpawnGroupKind.Main
+                ? _mainGroupMode
+                : _subGroupMode;
+
+            GlobalEnum.MonsterArchetype packArchetype = RollPackArchetype(zone);
 
             // Addressables 요청 전에 슬롯을 예약한다.
             int pendingVersion = slot.BeginPending();
-            List<Vector3> positions = BuildGroupPositions(chunkCoord, generationId, slotIndex,
-                pendingVersion, anchorWorld, targetSize, groupRadius, monsterRadius);
-            if (positions.Count == 0)
+            List<PlannedMonsterSpawn> spawnPlan = BuildGroupSpawnPlan(chunkCoord, generationId,
+                slotIndex, pendingVersion, anchorWorld, targetSize, groupRadius,
+                groupMode, chunkBiome, fallbackMonsterId, packArchetype);
+            if (spawnPlan.Count == 0)
             {
                 slot.CancelPending();
                 return false;
             }
 
             slot.LastUsedTime = Time.time;
-            for (int i = 0; i < positions.Count; i++)
+            for (int i = 0; i < spawnPlan.Count; i++)
             {
+                PlannedMonsterSpawn member = spawnPlan[i];
                 _pendingSpawnReservations.Add(new PendingSpawnReservation(
                     chunkCoord, generationId, slotIndex, pendingVersion,
-                    positions[i], monsterRadius));
+                    member.Position, member.Radius));
             }
 
-            scheduledEntityCount = positions.Count;
-            SpawnSlotGroupAsync(chunkCoord, generationId, slotIndex, pendingVersion, monsterTableId,
-                positions, monsterRadius, interGroupMinDistance).Forget();
+            scheduledEntityCount = spawnPlan.Count;
+            SpawnSlotGroupAsync(chunkCoord, generationId, slotIndex, pendingVersion,
+                spawnPlan, interGroupMinDistance).Forget();
             return true;
         }
 
@@ -339,13 +352,13 @@ namespace ARPG.Monster
         }
 
         private async UniTaskVoid SpawnSlotGroupAsync(Vector2Int chunkCoord, int generationId,
-            int slotIndex, int pendingVersion, int monsterTableId, List<Vector3> positions,
-            float monsterRadius, float interGroupMinDistance)
+            int slotIndex, int pendingVersion, List<PlannedMonsterSpawn> spawnPlan,
+            float interGroupMinDistance)
         {
             int successfulSpawnCount = 0;
             try
             {
-                for (int i = 0; i < positions.Count; i++)
+                for (int i = 0; i < spawnPlan.Count; i++)
                 {
                     if (IsSpawnReservationValid(chunkCoord, generationId, slotIndex, pendingVersion,
                             interGroupMinDistance) == false)
@@ -353,10 +366,12 @@ namespace ARPG.Monster
                         break;
                     }
 
+                    PlannedMonsterSpawn member = spawnPlan[i];
                     (int entityId, EntityBase? entity) result;
                     try
                     {
-                        result = await CreateMonsterAsync(monsterTableId, positions[i], chunkCoord);
+                        result = await CreateMonsterAsync(member.MonsterTableId, member.Position,
+                            chunkCoord, member.Archetype);
                     }
                     catch (Exception exception)
                     {
@@ -370,8 +385,8 @@ namespace ARPG.Monster
                     if (IsSpawnReservationValid(chunkCoord, generationId, slotIndex, pendingVersion,
                             interGroupMinDistance) == false ||
                         AR.s.Map.IsMonsterSpawnWorldPositionValid(chunkCoord, generationId,
-                            positions[i]) == false ||
-                        CanPlaceMonsterAt(positions[i], monsterRadius,
+                            member.Position) == false ||
+                        CanPlaceMonsterAt(member.Position, member.Radius,
                             chunkCoord, generationId, slotIndex, pendingVersion) == false)
                     {
                         DestroyMonsterEntity(result.entityId, result.entity);
@@ -409,27 +424,73 @@ namespace ARPG.Monster
         }
 
         private async UniTask<(int entityId, EntityBase? entity)> CreateMonsterAsync(
-            int monsterTableId, Vector3 position, Vector2Int chunkCoord)
+            int monsterTableId, Vector3 position, Vector2Int chunkCoord,
+            GlobalEnum.MonsterArchetype archetype)
         {
             if (AR.s.CurrentScene is GameScene gameScene == false)
                 return (-1, null);
 
             int monsterLevel = AR.s.Map.GetZone(chunkCoord);
             return await EntityFactory.CreateMonster(monsterTableId, position,
-                gameScene.MonsterRoot, monsterLevel);
+                gameScene.MonsterRoot, monsterLevel, archetype);
         }
 
-        private List<Vector3> BuildGroupPositions(Vector2Int chunkCoord, int generationId,
-            int slotIndex, int pendingVersion, Vector2 anchorWorld, int targetSize,
-            float groupRadius, float monsterRadius)
+        /// <summary>
+        /// 무리 단위 등급 판정 (MONSTER_RARITY_DESIGN.md §4). 한 번 굴려 희귀·마법·일반 구간으로 나눈다.
+        /// Zone 행이 없으면(인스펙터 fallback) 일반.
+        /// </summary>
+        private static GlobalEnum.MonsterArchetype RollPackArchetype(int zone)
         {
-            List<Vector3> result = new List<Vector3>(targetSize);
+            var row = AR.s.Data != null ? AR.s.Data.GetZone(zone) : null;
+            if (row == null)
+                return GlobalEnum.MonsterArchetype.Normal;
+
+            int roll = UnityEngine.Random.Range(0, 100);
+            if (roll < row.RarePackRate)
+                return GlobalEnum.MonsterArchetype.Rare;
+            if (roll < row.RarePackRate + row.MagicPackRate)
+                return GlobalEnum.MonsterArchetype.Magic;
+            return GlobalEnum.MonsterArchetype.Normal;
+        }
+
+        /// <summary>
+        /// 무리 등급을 구성원 등급으로 바꾼다. 마법 무리는 전원 마법, 희귀 무리는 첫 구성원만 희귀이고 나머지는 일반 호위.
+        /// 종 자체가 일반이 아닌 몬스터(MonsterTable.Archetype)는 승격하지 않고 종 등급을 유지한다.
+        /// </summary>
+        private static GlobalEnum.MonsterArchetype ResolveMemberArchetype(int monsterTableId,
+            GlobalEnum.MonsterArchetype packArchetype, int memberIndex)
+        {
+            var table = AR.s.Data != null ? AR.s.Data.GetMonster(monsterTableId) : null;
+            GlobalEnum.MonsterArchetype speciesArchetype = table != null
+                ? table.Archetype
+                : GlobalEnum.MonsterArchetype.Normal;
+            if (speciesArchetype != GlobalEnum.MonsterArchetype.Normal)
+                return speciesArchetype;
+
+            if (packArchetype == GlobalEnum.MonsterArchetype.Rare)
+                return memberIndex == 0 ? GlobalEnum.MonsterArchetype.Rare : GlobalEnum.MonsterArchetype.Normal;
+            return packArchetype;
+        }
+
+        private List<PlannedMonsterSpawn> BuildGroupSpawnPlan(Vector2Int chunkCoord, int generationId,
+            int slotIndex, int pendingVersion, Vector2 anchorWorld, int targetSize,
+            float groupRadius, GroupMode groupMode, GlobalEnum.BiomeType chunkBiome,
+            int fallbackMonsterId, GlobalEnum.MonsterArchetype packArchetype)
+        {
+            List<PlannedMonsterSpawn> result = new List<PlannedMonsterSpawn>(targetSize);
             int attemptsPerMember = Mathf.Max(1, _anchorRejectionAttempts);
-            float memberMinimumDistance = monsterRadius * 2f;
-            float memberDistanceSqr = memberMinimumDistance * memberMinimumDistance;
+            bool isMixed = groupMode == GroupMode.Mixed;
+            int groupMonsterTableId = isMixed == false
+                ? BiomeMonsterMapping.SampleMonsterId(chunkBiome, fallbackMonsterId)
+                : fallbackMonsterId;
 
             for (int memberIndex = 0; memberIndex < targetSize; memberIndex++)
             {
+                // 종류와 반경을 위치 예약 전에 확정하고 비동기 생성까지 같은 계획을 사용한다.
+                int monsterTableId = isMixed == true
+                    ? BiomeMonsterMapping.SampleMonsterId(chunkBiome, fallbackMonsterId)
+                    : groupMonsterTableId;
+                float monsterRadius = ResolveMonsterMoveRadius(monsterTableId);
                 bool found = false;
                 for (int attempt = 0; attempt < attemptsPerMember; attempt++)
                 {
@@ -447,8 +508,9 @@ namespace ARPG.Monster
                     bool overlapsPlannedMember = false;
                     for (int i = 0; i < result.Count; i++)
                     {
-                        Vector2 delta = (Vector2)(result[i] - position);
-                        if (delta.sqrMagnitude < memberDistanceSqr)
+                        float minimumDistance = monsterRadius + result[i].Radius;
+                        Vector2 delta = (Vector2)(result[i].Position - position);
+                        if (delta.sqrMagnitude < minimumDistance * minimumDistance)
                         {
                             overlapsPlannedMember = true;
                             break;
@@ -458,7 +520,8 @@ namespace ARPG.Monster
                     if (overlapsPlannedMember == true)
                         continue;
 
-                    result.Add(position);
+                    result.Add(new PlannedMonsterSpawn(monsterTableId, position, monsterRadius,
+                        ResolveMemberArchetype(monsterTableId, packArchetype, memberIndex)));
                     found = true;
                     break;
                 }
@@ -504,18 +567,19 @@ namespace ARPG.Monster
         private bool CanPlaceMonsterAt(Vector3 position, float radius,
             Vector2Int chunkCoord, int generationId, int slotIndex, int pendingVersion)
         {
+            ComponentManager cm = AR.s.Component;
             for (int i = 0; i < _monsters.Count; i++)
             {
                 EntityBase entity = _monsters[i];
                 if (entity == null ||
-                    AR.s.Component.TryGetComponent<TransformComponent>(entity.EntityId,
+                    cm.TryGetComponent<TransformComponent>(entity.EntityId,
                         out var transform) == false)
                 {
                     continue;
                 }
 
                 float otherRadius = DefaultMoveRadius;
-                if (AR.s.Component.TryGetComponent<ColliderComponent>(entity.EntityId, out var collider))
+                if (cm.TryGetComponent<ColliderComponent>(entity.EntityId, out var collider))
                 {
                     otherRadius = collider.MoveRadius;
                 }
@@ -712,6 +776,23 @@ namespace ARPG.Monster
             }
 
             AR.s.Entity.DestroyEntity(entityId);
+        }
+
+        private readonly struct PlannedMonsterSpawn
+        {
+            public readonly int MonsterTableId;
+            public readonly Vector3 Position;
+            public readonly float Radius;
+            public readonly GlobalEnum.MonsterArchetype Archetype;
+
+            public PlannedMonsterSpawn(int monsterTableId, Vector3 position, float radius,
+                GlobalEnum.MonsterArchetype archetype)
+            {
+                MonsterTableId = monsterTableId;
+                Position = position;
+                Radius = radius;
+                Archetype = archetype;
+            }
         }
 
         private readonly struct MonsterSpawnOrigin

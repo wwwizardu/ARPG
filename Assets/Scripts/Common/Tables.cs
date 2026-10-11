@@ -74,7 +74,7 @@ namespace ARPG.Tables
         [JsonProperty("AttackMax")] public int AttackMax;
         [JsonProperty("CriRate")] public int CriRate;
         [JsonProperty("CriDamage")] public int CriDamage;
-        [JsonProperty("MoveSpeed")] public int MoveSpeed;
+        [JsonProperty("MoveSpeed")] public float MoveSpeed;
         [JsonProperty("AttackSpeed")] public int AttackSpeed;
         [JsonProperty("CastSpeed")] public int CastSpeed;
         [JsonProperty("Defense")] public int Defense;
@@ -137,7 +137,7 @@ namespace ARPG.Tables
     }
 
     /// <summary>
-    /// 몬스터 등급별 배율 정의. EntityFactory.CreateMonster가
+    /// 몬스터 등급별 배율·보상 정의 (MONSTER_RARITY_DESIGN.md §3). EntityFactory.CreateMonster가
     /// finalHp = BaseHp × HpPerLevel^(Level-1) × HpMul 공식에 사용.
     /// 곡선 상수(HpPerLevel 등)는 BalanceConstants.cs 참조.
     /// </summary>
@@ -148,6 +148,9 @@ namespace ARPG.Tables
         [JsonProperty("HpMul")] public float HpMul = 1f;
         [JsonProperty("DmgMul")] public float DmgMul = 1f;
         [JsonProperty("Note")] public string Note = string.Empty;
+        [JsonProperty("ResistAdd")] public int ResistAdd;                 // 원소 저항 4종에 더하는 값 (%p). 상한은 몬스터의 최대 저항
+        [JsonProperty("DropRolls")] public int DropRolls = 1;             // 사망 시 드랍 판정 횟수
+        [JsonProperty("DropRarityBonus")] public int DropRarityBonus;     // MonsterTable.DropRarityBonus에 더하는 높은 Tier 가중치 보너스 (%)
     }
 
     [Serializable]
@@ -587,6 +590,16 @@ namespace ARPG.Tables
             && ArcHeight > 0f
             && ExecutionType != SkillExecutionType.Channeling
             && HasDirectImpact == true;
+
+        /// <summary>
+        /// 발사체가 목표 지점까지 포물선(ArcHeight)으로 날아가 내려앉은 자리에 장판을 까는 스킬인지.
+        /// 위치 지정 + 발사체 + 장판 조합이면 장판을 커밋 위치에 바로 만들지 않고 발사체 착지에 맡긴다.
+        /// 비행 중에는 아무도 맞히지 않으며, 공격 예고도 그리지 않는다 (깔린 장판 자체가 위험을 알림).
+        /// </summary>
+        [JsonIgnore]
+        public bool DeliversAreaByProjectile => SkillTargetType == GE.SkillTargetType.Position
+            && ProjectileId > 0
+            && AreaEffectId > 0;
     }
 
     /// <summary>
@@ -788,7 +801,8 @@ namespace ARPG.Tables
         [JsonProperty("IsDispellable")] public bool IsDispellable;              // 해제 가능 여부. 패시브·영구 효과는 false
         [JsonProperty("BuffEffectId")] public GE.BuffEffectType EffectType;     // 버프 이팩트 타입
         [JsonProperty("EffectValue")] public int EffectValue;                   // 버프 이팩트 값
-        
+        [JsonProperty("FadeOutTime")] public float FadeOutTime;                 // 끝나기 전 효과가 0까지 서서히 약해지는 시간 (초). 전체 수명 = Duration + FadeOutTime. 0이면 끝까지 그대로 (현재 Slow만 사용)
+
         //[JsonIgnore] public BuffEffectTable? BuffEffectTable;
 
         // public override void LoadLate()
@@ -982,6 +996,9 @@ namespace ARPG.Tables
         [JsonProperty("SubGroupSizeMax")]   public int SubGroupSizeMax;
         [JsonProperty("GroupRadius")]           public float GroupRadius;
         [JsonProperty("InterGroupMinDistance")] public float InterGroupMinDistance;
+        // 무리 단위 등급 확률 (%, MONSTER_RARITY_DESIGN.md §4). 한 번 굴려 나누므로 두 값의 합은 100 이하.
+        [JsonProperty("MagicPackRate")] public int MagicPackRate;   // 무리 전체가 마법
+        [JsonProperty("RarePackRate")]  public int RarePackRate;    // 무리 중 1마리가 희귀, 나머지는 일반 호위
     }
 
     /// <summary>

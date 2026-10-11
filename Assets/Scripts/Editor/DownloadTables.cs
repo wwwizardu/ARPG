@@ -46,7 +46,7 @@ namespace ARPG.Editor
             Register<NpcTable>(list, "1460299278&range=A:O");
             // NpcEquipTable — NPC 시작 장비 세트. Desc + 슬롯별 ItemId/Chance 쌍.
             Register<NpcEquipTable>(list, "1566085089&range=A:Z");
-            Register<MonsterArchetypeTable>(list, "1141585255&range=A:E");
+            Register<MonsterArchetypeTable>(list, "1141585255&range=A:H");
             Register<StatTable>(list, "318209064&range=A:AJ");
             Register<ItemTable>(list, "2064107837&range=A:S");
             Register<BuildableItemTable>(list, "534887250&range=A:AA");
@@ -62,7 +62,7 @@ namespace ARPG.Editor
             Register<SkillBookTable>(list, "1726438368&range=A:C");
             // 장판(지속 영역 효과) 테이블
             Register<AreaEffectTable>(list, "1891935594&range=A:M");
-            Register<BuffTable>(list, "127577579&range=A:J");
+            Register<BuffTable>(list, "127577579&range=A:K");
             Register<AnimationTable>(list, "747631090&range=A:G");
             Register<ProjectileTable>(list, "1810235418&range=A:G");
             Register<ModTable>(list, "1571193978&range=A:J");
@@ -77,7 +77,7 @@ namespace ARPG.Editor
             Register<VillageTable>(list, "441028134&range=A:F");
             Register<VillageStageTable>(list, "467145019&range=A:Q");
             // 청크 Zone(시드 청크 (0,0) 기준 Chebyshev 거리+1)별 몬스터 스폰 파라미터
-            Register<ZoneTable>(list, "848445893&range=A:M");
+            Register<ZoneTable>(list, "848445893&range=A:O");
             // 절차적 역사 시스템 (Phase 1) — 카탈로그(재료) + 사건 템플릿
             Register<HistoryEntityTable>(list, "2122459380&range=A:J");
             Register<HistoryTemplateTable>(list, "948737654&range=A:I");
@@ -958,7 +958,7 @@ namespace ARPG.Editor
             table.AttackMax = int.Parse(values[11]);
             table.CriRate = int.Parse(values[12]);
             table.CriDamage = int.Parse(values[13]);
-            table.MoveSpeed = int.Parse(values[14]);
+            table.MoveSpeed = float.Parse(values[14]);
             table.AttackSpeed = int.Parse(values[15]);
             table.CastSpeed = int.Parse(values[16]);
             table.Defense = int.Parse(values[17]);
@@ -1027,7 +1027,7 @@ namespace ARPG.Editor
 
         /// <summary>
         /// MonsterArchetypeTable 파싱.
-        /// 컬럼: A=Id, B=Archetype, C=HpMul, D=DmgMul, E=Note
+        /// 컬럼: A=Id, B=Archetype, C=HpMul, D=DmgMul, E=Note, F=ResistAdd, G=DropRolls, H=DropRarityBonus
         /// </summary>
         private static void ParseMonsterArchetypeTable(MonsterArchetypeTable table, string[] values)
         {
@@ -1044,6 +1044,11 @@ namespace ARPG.Editor
             {
                 table.Note = values[4];
             }
+
+            // 등급 보정·보상 (MONSTER_RARITY_DESIGN.md §3). 빈 셀이면 저항 0, 드랍 1회, 보너스 0
+            table.ResistAdd = ParseIntSafe(values, 5);
+            table.DropRolls = Mathf.Max(1, ParseIntSafe(values, 6));
+            table.DropRarityBonus = ParseIntSafe(values, 7);
         }
 
         private static void ParseItemTable(ItemTable table, string[] values)
@@ -1226,9 +1231,10 @@ namespace ARPG.Editor
 
         private static void ParseZoneTable(ZoneTable table, string[] values)
         {
-            // 전체 범위: A:M = 13개 컬럼
+            // 전체 범위: A:O = 15개 컬럼
             // (Id=Zone, Name, Description(웹용), MainGroupCountMin/Max, MainGroupSizeMin/Max,
-            //  SubGroupCountMin/Max, SubGroupSizeMin/Max, GroupRadius, InterGroupMinDistance)
+            //  SubGroupCountMin/Max, SubGroupSizeMin/Max, GroupRadius, InterGroupMinDistance,
+            //  MagicPackRate, RarePackRate) — 마지막 2개는 빈 셀/누락 시 0(등급 무리 없음)
             if (values.Length < 13)
             {
                 Debug.LogError($"[ParseZoneTable] Invalid data length. Expected at least 13, got {values.Length}. Id: {table.Id}");
@@ -1246,6 +1252,8 @@ namespace ARPG.Editor
             table.SubGroupSizeMax       = ParseIntSafe(values, 10);
             table.GroupRadius           = ParseFloatSafe(values, 11);
             table.InterGroupMinDistance = ParseFloatSafe(values, 12);
+            table.MagicPackRate         = ParseIntSafe(values, 13);
+            table.RarePackRate          = ParseIntSafe(values, 14);
         }
 
         private static void ParseDropTable(DropTable table, string[] values)
@@ -1633,7 +1641,7 @@ namespace ARPG.Editor
 
         private static void ParseBuffTable(BuffTable table, string[] values)
         {
-            // 전체 범위: A:J = 10개 컬럼
+            // 전체 범위: A:K = 11개 컬럼 (K열 FadeOutTime은 비어 있으면 0)
             if (values.Length < 10)
             {
                 Debug.LogError($"[ParseBuffTable] Invalid data length. Expected at least 10, got {values.Length}. Id: {table.Id}");
@@ -1649,6 +1657,7 @@ namespace ARPG.Editor
             table.IsDispellable = values[7].Trim().ToUpper() == "TRUE";
             table.EffectType = (GlobalEnum.BuffEffectType)Enum.Parse(typeof(GlobalEnum.BuffEffectType), values[8]);
             table.EffectValue = int.Parse(values[9]);
+            table.FadeOutTime = ParseFloatSafe(values, 10);
         }
 
         private static void ParseAnimationTable(AnimationTable table, string[] values)

@@ -376,6 +376,27 @@ namespace ARPG.Systems
         }
 
         /// <summary>
+        /// 소수 스탯(이동 속도)용 ApplyValue. Multiply는 정수 나눗셈 버림 없이 백분율을 그대로 적용한다.
+        /// </summary>
+        private readonly float ApplyValue(float currentValue, StatModifier modifier)
+        {
+            switch (modifier.ModifierType)
+            {
+                case StatModifierType.Add:
+                    return currentValue + modifier.Value;
+
+                case StatModifierType.Multiply:
+                    return currentValue + (currentValue * modifier.Value / 100f);
+
+                case StatModifierType.Override:
+                    return modifier.Value;
+
+                default:
+                    return currentValue;
+            }
+        }
+
+        /// <summary>
         /// CriRateMul/AttackSpeedMul/CastSpeedMul은 최종 수치에 곱하는 대상이 아니라
         /// 프로필에서 한 번 소비할 증가율 버킷이다. Add와 Multiply 모두 퍼센트 포인트로 합산한다.
         /// </summary>

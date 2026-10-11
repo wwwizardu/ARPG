@@ -124,6 +124,10 @@ namespace ARPG.Systems
             System_SkillMovementPenalty skillMovementPenaltySystem = new();
             RegisterSystems(skillMovementPenaltySystem);
 
+            // Priority 95: Move Slow (FixedUpdate) - 둔화 버프의 현재 둔화율 계산 (가장 강한 하나, FadeOutTime 동안 서서히 회복)
+            System_MoveSlow moveSlowSystem = new();
+            RegisterSystems(moveSlowSystem);
+
             // Priority 100: Movement System (FixedUpdate) - 이동 로직
             System_Move moveSystem = new();
             RegisterSystems(moveSystem);

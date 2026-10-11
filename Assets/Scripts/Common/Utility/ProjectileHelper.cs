@@ -28,22 +28,116 @@ namespace ARPG.Utility
                 : Vector2.right;
             float releaseAngle = Mathf.Atan2(normalizedDirection.y, normalizedDirection.x) * Mathf.Rad2Deg;
 
-            // Release FixedUpdate에서 논리 엔티티를 먼저 만든다. Addressable 로딩은 게임플레이를 지연하지 않는다.
+            int entityId = CreateProjectileEntity(
+                ownerEntityId,
+                skillEntityId,
+                projectileTableId,
+                table,
+                spawnPosition,
+                normalizedDirection,
+                table.Speed,
+                releaseAngle,
+                out long visualRequestToken);
+            FinishSpawn(entityId, ownerEntityId, skillEntityId, projectileTableId, table, spawnPosition, releaseAngle, visualRequestToken);
+
+            Debug.Log($"[ProjectileHelper] Released projectile - EntityId: {entityId}, TableId: {projectileTableId}, Owner: {ownerEntityId}, Direction: {normalizedDirection}");
+            return entityId;
+        }
+
+        /// <summary>
+        /// 목표 지점까지 포물선으로 날아가 내려앉으면 장판을 까는 발사체를 만든다 (SkillTable.DeliversAreaByProjectile).
+        /// 비행 시간은 거리 / ProjectileTable.Speed이며 LifeTime은 쓰지 않는다. 비행 중에는 아무도 맞히지 않는다.
+        /// </summary>
+        /// <param name="startHeight">출발 높이 (시전자 몸통 중심). 착지할 때까지 0으로 줄어든다</param>
+        public static int SpawnArcProjectile(
+            int ownerEntityId,
+            int skillEntityId,
+            int projectileTableId,
+            Vector2 startPosition,
+            float startHeight,
+            Vector2 landingPosition,
+            float arcHeight,
+            int landingAreaEffectId,
+            int skillId)
+        {
+            Tables.ProjectileTable? table = AR.s.Data.GetProjectile(projectileTableId);
+            if (table == null)
+            {
+                Debug.LogError($"[ProjectileHelper] ProjectileTable not found - Id: {projectileTableId}");
+                return -1;
+            }
+
+            Vector2 toLanding = landingPosition - startPosition;
+            float distance = toLanding.magnitude;
+            Vector2 direction = distance > 0.0001f ? toLanding / distance : Vector2.right;
+            float flightDuration = table.Speed > 0f ? distance / table.Speed : 0f;
+
+            // 발사 시점 진영을 남겨 둔다. 비행 중 시전자가 죽어도 장판이 같은 편을 노린다.
+            Faction casterFaction = Faction.Neutral;
+            if (AR.s.Component.TryGetComponent<FactionComponent>(ownerEntityId, out FactionComponent ownerFaction) == true)
+                casterFaction = ownerFaction.FactionId;
+
+            // 위치는 System_Projectile이 경로로 직접 계산하므로 속도는 0으로 둔다 (System_Render의 속도 적분 제외).
+            // 회전도 0으로 둔다. 높이는 Visual의 로컬 Y로 띄우므로 루트가 돌아가 있으면 화면 위가 아닌 옆으로 뜬다.
+            int entityId = CreateProjectileEntity(
+                ownerEntityId,
+                skillEntityId,
+                projectileTableId,
+                table,
+                startPosition,
+                direction,
+                0f,
+                0f,
+                out long visualRequestToken);
+            AR.s.Component.AddComponent(entityId, new ProjectileArcComponent
+            {
+                StartPosition = startPosition,
+                EndPosition = landingPosition,
+                FlightDuration = flightDuration,
+                Elapsed = 0f,
+                StartHeight = Mathf.Max(0f, startHeight),
+                ArcHeight = Mathf.Max(0f, arcHeight),
+                Height = Mathf.Max(0f, startHeight),
+                LandingAreaEffectId = landingAreaEffectId,
+                SkillId = skillId,
+                CasterFaction = casterFaction,
+            });
+            FinishSpawn(entityId, ownerEntityId, skillEntityId, projectileTableId, table, startPosition, 0f, visualRequestToken);
+
+            Debug.Log($"[ProjectileHelper] Released arc projectile - EntityId: {entityId}, TableId: {projectileTableId}, Owner: {ownerEntityId}, Landing: {landingPosition}, Flight: {flightDuration:F2}s, AreaEffect: {landingAreaEffectId}");
+            return entityId;
+        }
+
+        /// <summary>
+        /// 발사체 논리 엔티티와 공통 컴포넌트를 만든다.
+        /// Release FixedUpdate에서 논리 엔티티를 먼저 만든다. Addressable 로딩은 게임플레이를 지연하지 않는다.
+        /// </summary>
+        private static int CreateProjectileEntity(
+            int ownerEntityId,
+            int skillEntityId,
+            int projectileTableId,
+            Tables.ProjectileTable table,
+            Vector2 spawnPosition,
+            Vector2 direction,
+            float speed,
+            float rotation,
+            out long visualRequestToken)
+        {
             int entityId = AR.s.Entity.CreateEntity();
-            long visualRequestToken = System.Diagnostics.Stopwatch.GetTimestamp() ^ ((long)entityId << 32);
+            visualRequestToken = System.Diagnostics.Stopwatch.GetTimestamp() ^ ((long)entityId << 32);
 
             // ECS 컴포넌트 추가
             AR.s.Component.AddComponent(entityId, new TransformComponent
             {
                 Position = spawnPosition,
-                Rotation = releaseAngle,
+                Rotation = rotation,
                 Scale = Vector2.one
             });
 
             AR.s.Component.AddComponent(entityId, new VelocityComponent
             {
-                Direction = normalizedDirection,
-                Speed = table.Speed
+                Direction = direction,
+                Speed = speed
             });
 
             AR.s.Component.AddComponent(entityId, new ProjectileComponent
@@ -67,6 +161,22 @@ namespace ARPG.Utility
                 AR.s.Component.AddComponent(entityId, new FogVisibilityComponent { IsVisible = AR.s.Fog.IsActive == false });
             }
 
+            return entityId;
+        }
+
+        /// <summary>
+        /// 모든 컴포넌트가 붙은 뒤 OnProjectileSpawn 효과를 발화하고 View 로드를 시작한다.
+        /// </summary>
+        private static void FinishSpawn(
+            int entityId,
+            int ownerEntityId,
+            int skillEntityId,
+            int projectileTableId,
+            Tables.ProjectileTable table,
+            Vector2 spawnPosition,
+            float releaseAngle,
+            long visualRequestToken)
+        {
             // [SkillEffect] OnProjectileSpawn 트리거
             if (AR.s.Component.TryGetComponent<SkillComponent>(skillEntityId, out var skill) == true
                 && skill.Table != null)
@@ -88,10 +198,7 @@ namespace ARPG.Utility
                 visualRequestToken,
                 table.PrefabKey,
                 spawnPosition,
-                normalizedDirection).Forget();
-
-            Debug.Log($"[ProjectileHelper] Released projectile - EntityId: {entityId}, TableId: {projectileTableId}, Owner: {ownerEntityId}, Direction: {normalizedDirection}");
-            return entityId;
+                releaseAngle).Forget();
         }
 
         private static async UniTaskVoid AttachProjectileViewAsync(
@@ -101,12 +208,11 @@ namespace ARPG.Utility
             long visualRequestToken,
             string prefabKey,
             Vector2 spawnPosition,
-            Vector2 releaseDirection)
+            float releaseAngle)
         {
             if (string.IsNullOrEmpty(prefabKey) == true)
                 return;
 
-            float releaseAngle = Mathf.Atan2(releaseDirection.y, releaseDirection.x) * Mathf.Rad2Deg;
             Vector3 requestedPosition = new(spawnPosition.x, spawnPosition.y, 0f);
             Quaternion requestedRotation = Quaternion.Euler(0f, 0f, releaseAngle);
             GameObject? obj = await AddressablePool.Get(prefabKey, requestedPosition, requestedRotation);
@@ -130,14 +236,12 @@ namespace ARPG.Utility
                 return;
             }
 
+            // 회전은 System_Render가 매 프레임 적용하는 Transform.Rotation과 맞춘다 (포물선 발사체는 0으로 고정).
             float currentAngle = releaseAngle;
             if (cm.TryGetComponent<TransformComponent>(entityId, out TransformComponent currentTransform) == true)
             {
                 obj.transform.position = new Vector3(currentTransform.Position.x, currentTransform.Position.y, 0f);
-            }
-            if (cm.TryGetComponent<VelocityComponent>(entityId, out VelocityComponent velocity) == true)
-            {
-                currentAngle = Mathf.Atan2(velocity.Direction.y, velocity.Direction.x) * Mathf.Rad2Deg;
+                currentAngle = currentTransform.Rotation;
             }
             obj.transform.rotation = Quaternion.Euler(0f, 0f, currentAngle);
 

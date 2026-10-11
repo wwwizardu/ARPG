@@ -120,12 +120,19 @@ namespace ARPG.Skill.Telegraph
             float spreadAngle = Mathf.Max(0f, input.ProjectileSpreadAngleDeg);
 
             // 장판은 예고 대상이 아니다. 커밋 시점에 즉시 생성되므로 장판 자체의 비주얼이 위험을 알리고,
-            // 예고를 또 그리면 같은 위험을 두 번 표시하게 된다. 그래서 여기서 HasAreaEffect를 보지 않고
-            // 도형은 직접 타격 기준으로만 결정한다. 장판+직접타격 스킬은 직접 타격 범위만 예고된다.
+            // 예고를 또 그리면 같은 위험을 두 번 표시하게 된다. 그래서 도형은 직접 타격 기준으로만 결정한다.
+            // 장판+직접타격 스킬은 직접 타격 범위만 예고된다.
             //
-            // HasAreaEffect / IsPositionTarget / AreaEffectRadius 입력과 TargetCircle / TargetPosition은
+            // 예외로 HasAreaEffect를 보는 곳은 발사체가 장판을 운반하는 스킬(위치 지정 + 발사체 + 장판)뿐이다.
+            // 발사체는 비행 중 아무도 맞히지 않고 착지 지점에 장판만 깔기 때문에 직선 경로 예고를 그리면 틀린
+            // 위험을 알리게 된다. 깔린 장판 자체가 위험을 알리므로 예고하지 않는다 (SkillTable.DeliversAreaByProjectile).
+            //
+            // IsPositionTarget / AreaEffectRadius 입력과 TargetCircle / TargetPosition은
             // "준비 시간이 있는 장판"(생성까지 대기가 필요한 장판) 예고용으로 예약해 둔 미사용 상태다.
             // 자세한 내용은 MONSTER_ATTACK_TELEGRAPH_DESIGN.md §5.3 참조.
+
+            if (input.HasProjectile == true && input.HasAreaEffect == true && input.IsPositionTarget == true)
+                return default;
 
             if (input.HasProjectile == true)
             {

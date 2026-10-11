@@ -64,6 +64,8 @@ namespace ARPG.Component
             { typeof(InputComponent), 100 },
             { typeof(SkillAimIndicatorComponent), 8 },
             { typeof(SkillMovementPenaltyComponent), 20 },
+            { typeof(MoveSlowComponent), 64 },        // 둔화 중인 엔티티 (장판 위 몬스터·플레이어)
+            { typeof(MoveSlowBuffComponent), 64 },    // 둔화(Slow) 버프 엔티티
             { typeof(AttackTelegraphComponent), 128 },
 
             // AI 컴포넌트 (NPC/몬스터용)
@@ -73,6 +75,7 @@ namespace ARPG.Component
             { typeof(AIStateComponent), 500 },
             { typeof(AICanSeeTargetTag), 500 },
             { typeof(PathfindingComponent), 500 },
+            { typeof(MonsterArchetypeComponent), 256 }, // 모든 몬스터에 1개 (필드 최대 ~150 + 던전)
 
             // 적게 사용되는 컴포넌트 (스킬 엔티티용)
             { typeof(SkillComponent), 50 },
@@ -136,6 +139,7 @@ namespace ARPG.Component
             // 발사체 컴포넌트
             { typeof(ProjectileComponent), 100 },
             { typeof(ProjectileTag), 100 },
+            { typeof(ProjectileArcComponent), 32 },   // 목표 지점에 내려앉아 장판을 까는 포물선 발사체
 
             // 장판(지속 영역 효과) 컴포넌트
             { typeof(AreaEffectComponent), 50 },

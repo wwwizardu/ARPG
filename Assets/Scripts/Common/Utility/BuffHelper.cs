@@ -92,6 +92,9 @@ namespace ARPG.Utility
                 return -1;
             }
 
+            // 효과가 서서히 약해지는 FadeOutTime 구간은 지속 시간 뒤에 붙는다 (0이면 기존과 동일)
+            duration += Mathf.Max(0f, buffTable.FadeOutTime);
+
             // 3. 이미 같은 버프가 존재하는지 먼저 확인
             int buffEntityId = EntityManager.GetDeterministicId(targetEntityId, EntityIdCategory.Buff, buffTableID);
 
@@ -292,6 +295,19 @@ namespace ARPG.Utility
         }
 
         /// <summary>
+        /// 이동 둔화 버프가 이 엔티티의 일반 이동에 적용하는 배율. 둔화가 없으면 1.
+        /// 둔화가 여러 개면 System_MoveSlow가 가장 강한 하나만 MoveSlowComponent에 남겨 둔다.
+        /// 배율은 회복 구간에서 매 틱 변하므로 스탯에 캐시하지 않고 이동 속도를 계산할 때 조회한다.
+        /// </summary>
+        public static float GetMoveSlowMultiplier(int entityId)
+        {
+            if (AR.s.Component.TryGetComponent<MoveSlowComponent>(entityId, out MoveSlowComponent slow) == false)
+                return 1f;
+
+            return 1f - slow.SlowRate;
+        }
+
+        /// <summary>
         /// 엔티티의 버프 개수 반환
         /// </summary>
         public static int GetBuffCount(int targetEntityId)
@@ -439,6 +455,14 @@ namespace ARPG.Utility
 
                 case GE.BuffEffectType.Poison: // 중독 (DoT + HP 재생 감소)
                     AddStatModifier(targetEntityId, buffEntityId, GE.Stat.HpGeneration, StatModifierType.Multiply, -50, 0); // HP 재생 -50%
+                    break;
+
+                case GE.BuffEffectType.Slow: // 둔화 (이동 속도만 감소). 서서히 회복되도록 StatModifier 대신 System_MoveSlow가 이동 배율로 적용
+                    AR.s.Component.AddComponent(buffEntityId, new MoveSlowBuffComponent
+                    {
+                        SlowRate = Mathf.Clamp01(buffTable.EffectValue / 100f),
+                        FadeOutTime = Mathf.Max(0f, buffTable.FadeOutTime),
+                    });
                     break;
             }
 

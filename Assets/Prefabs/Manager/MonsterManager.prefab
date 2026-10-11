@@ -46,6 +46,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _mainMonsterTableId: 1004
   _subMonsterTableId: 1004
+  _mainGroupMode: 1
+  _subGroupMode: 1
   _mainGroupCount: {x: 1, y: 2}
   _mainGroupSize: {x: 5, y: 8}
   _subGroupCount: {x: 2, y: 3}
