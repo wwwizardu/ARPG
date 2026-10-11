@@ -202,6 +202,10 @@ namespace ARPG.Systems
             System_Jump jumpSystem = new();
             RegisterSystems(jumpSystem);
 
+            // Priority 810: Forced Move System (Update) - 넉백·당기기 진행. Render(1000)의 이동 반영 전 (SKILL_DESIGN §6.10)
+            System_ForcedMove forcedMoveSystem = new();
+            RegisterSystems(forcedMoveSystem);
+
             // Priority 900: Attack Telegraph (Update) - 활성 공격 ECS를 단일 Combined Mesh로 메인 카메라에 제출
             System_AttackTelegraph attackTelegraphSystem = new();
             RegisterSystems(attackTelegraphSystem);

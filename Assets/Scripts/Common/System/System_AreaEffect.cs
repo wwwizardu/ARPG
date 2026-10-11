@@ -131,12 +131,12 @@ namespace ARPG.Systems
                 if ((candidateTransform.Position - center).sqrMagnitude > sqrRadius)
                     continue;
 
-                ApplyTickToTarget(cm, areaEntityId, area, candidateId, table);
+                ApplyTickToTarget(cm, areaEntityId, area, candidateId, table, center);
             }
         }
 
         private void ApplyTickToTarget(ComponentManager cm, int areaEntityId, AreaEffectComponent area,
-            int targetEntityId, AreaEffectTable table)
+            int targetEntityId, AreaEffectTable table, Vector2 center)
         {
             if (area.SingleShot == true)
             {
@@ -183,6 +183,10 @@ namespace ARPG.Systems
                     }
                 }
             }
+
+            // 넉백·당기기는 장판 중심이 기준점 (SKILL_DESIGN §6.10). 이번 틱 피해로 죽은 대상은 ForcedMoveStarter가 거른다
+            if (table.ForcedMoveEffectId > 0)
+                ForcedMoveStarter.TryStartFromArea(table.ForcedMoveEffectId, targetEntityId, center);
         }
     }
 }

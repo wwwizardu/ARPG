@@ -574,6 +574,8 @@ namespace ARPG.Systems
                 EndPosition = endPos,
             };
             cm.AddComponent(inSkill.OwnerEntityId, jump);
+            // 점프가 위치를 직접 제어하므로 진행 중인 넉백·당기기는 끝낸다 (점프 우선)
+            cm.RemoveComponent<ForcedMoveComponent>(inSkill.OwnerEntityId);
 
             // 이동 상태 변경
             if (pools.State.TryGet(inSkill.OwnerEntityId, out var state) == true)
@@ -1308,6 +1310,9 @@ namespace ARPG.Systems
                 SkillHitProcessor.Process(new SkillHitRequest(skillEntityId, skill.OwnerEntityId, hitEntityId, 1f)
                 {
                     IsProjectileDelivery = false,
+                    // 판정 범위 중심 = 넉백·당기기 기준점 (Direction=시전자, Position=지정 지점. SKILL_DESIGN §6.10)
+                    HitOriginKind = skillTable.SkillTargetType == GE.SkillTargetType.Position ? HitOriginKind.Point : HitOriginKind.Owner,
+                    HitOrigin = commitPosition,
                 }, skill);
             }
 

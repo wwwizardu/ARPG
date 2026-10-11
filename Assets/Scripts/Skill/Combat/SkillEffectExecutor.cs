@@ -73,6 +73,12 @@ namespace ARPG.Skill.Combat
                     ExecuteSkillPropagation(effect, ref ctx);
                     break;
 
+                case GE.Stat.Knockback:
+                case GE.Stat.Pull:
+                    // 판정 범위 중심(ctx.HitOrigin)에서 밀거나 당긴다. 판정·방향 계산은 ForcedMoveStarter가 정본
+                    ForcedMoveStarter.TryStartFromHit(effect, ctx);
+                    break;
+
                 default:
                     // 시트에서 Kind=EffectAction으로 분류됐는데 여기 case가 없음 = 미구현 액션.
                     Debug.LogWarning($"[SkillEffectExecutor] EffectAction case 누락: EffectType={effect.EffectType}, EffectId={effect.Id}");

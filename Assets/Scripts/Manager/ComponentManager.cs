@@ -60,6 +60,9 @@ namespace ARPG.Component
             // 점프 컴포넌트 (점프 중인 엔티티만)
             { typeof(JumpComponent), 50 },
 
+            // 넉백·당기기 중인 엔티티 (장판 하나가 여러 대상을 한 번에 밀 수 있음)
+            { typeof(ForcedMoveComponent), 128 },
+
             // 보통 사용되는 컴포넌트
             { typeof(InputComponent), 100 },
             { typeof(SkillAimIndicatorComponent), 8 },

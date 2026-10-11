@@ -65,7 +65,7 @@ SKILL_DESIGN.md §6.8 / [skill_effect_system.md](../../../../Users/peace/.claude
 
 ## B. 군중 제어 (CC) (4개)
 
-### 6. KnockbackOnHit → 설계 확정: [SKILL_DESIGN.md §6.10](SKILL_DESIGN.md) (2026-10-12, 미구현)
+### 6. KnockbackOnHit → 구현: [SKILL_DESIGN.md §6.10](SKILL_DESIGN.md) (2026-10-12, SkillEffect 1030/1031)
 - **EffectType**: `Knockback`(밀기) / `Pull`(당기기) 두 가지로 확정
 - **Trigger**: `OnHit`
 - **Param**: `Param1=거리(칸)`, `Param2=걸리는 시간(초)`. 확률은 `Probability` 칸을 쓴다.

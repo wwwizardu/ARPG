@@ -64,7 +64,7 @@ namespace ARPG.Editor
             Register<SkillPropagationTable>(list, "155977417&range=A:M");
             Register<SkillBookTable>(list, "1726438368&range=A:C");
             // 장판(지속 영역 효과) 테이블
-            Register<AreaEffectTable>(list, "1891935594&range=A:O");
+            Register<AreaEffectTable>(list, "1891935594&range=A:P");
             Register<BuffTable>(list, "127577579&range=A:T");
             Register<AnimationTable>(list, "747631090&range=A:G");
             Register<ProjectileTable>(list, "1810235418&range=A:G");
@@ -135,6 +135,7 @@ namespace ARPG.Editor
             }
 
             ValidateAiSetup();
+            ValidateForcedMoveSetup();
 
             if (SaveNarrativePack(narrative) == false) return;
             AssetDatabase.Refresh();
@@ -319,6 +320,40 @@ namespace ARPG.Editor
         /// AI 관련 테이블 정합성 검증 — 다운로드 완료 후 실행.
         /// 디자이너에게 시트 입력 실수를 즉시 피드백.
         /// </summary>
+        /// <summary>
+        /// AreaEffect.ForcedMoveEffectId가 Knockback/Pull SkillEffect 행을 가리키는지 확인 (SKILL_DESIGN §6.10).
+        /// 두 표를 함께 받는 전체 다운로드에서만 대조한다. 단일 다운로드의 잘못된 Id는 실행 시 오류 로그 후 무시된다.
+        /// </summary>
+        private static void ValidateForcedMoveSetup()
+        {
+            List<AreaEffectTable> areaEffectTables = GetTableList<AreaEffectTable>();
+            List<SkillEffectTable> skillEffectTables = GetTableList<SkillEffectTable>();
+            if (areaEffectTables == null || skillEffectTables == null)
+                return;
+
+            for (int i = 0; i < areaEffectTables.Count; i++)
+            {
+                AreaEffectTable area = areaEffectTables[i];
+                if (area.ForcedMoveEffectId <= 0)
+                    continue;
+
+                SkillEffectTable effect = null;
+                for (int j = 0; j < skillEffectTables.Count; j++)
+                {
+                    if (skillEffectTables[j].Id == area.ForcedMoveEffectId)
+                    {
+                        effect = skillEffectTables[j];
+                        break;
+                    }
+                }
+
+                if (effect == null)
+                    Debug.LogError($"[ValidateForcedMove] AreaEffect Id={area.Id}({area.Name}): ForcedMoveEffectId={area.ForcedMoveEffectId} 행이 SkillEffect에 없습니다.");
+                else if (effect.EffectType != GlobalEnum.Stat.Knockback && effect.EffectType != GlobalEnum.Stat.Pull)
+                    Debug.LogError($"[ValidateForcedMove] AreaEffect Id={area.Id}({area.Name}): ForcedMoveEffectId={area.ForcedMoveEffectId}는 Knockback/Pull이어야 합니다. (EffectType={effect.EffectType})");
+            }
+        }
+
         private static void ValidateAiSetup()
         {
             List<AiTable> aiTables = GetTableList<AiTable>();
@@ -1593,6 +1628,20 @@ namespace ARPG.Editor
             table.PageCost = ParseIntSafe(values, 11);
             table.Condition = ParseEnumSafe(values, 12, GlobalEnum.PageCondition.None);
             table.ConditionParam = ParseFloatSafe(values, 13);
+
+            if (table.EffectType == GlobalEnum.Stat.Knockback || table.EffectType == GlobalEnum.Stat.Pull)
+                ValidateForcedMoveEffect(table);
+        }
+
+        /// <summary>
+        /// 넉백·당기기 행 검사 (SKILL_DESIGN §6.10). 명중 시 발동하는 액션이어야 하고 거리·시간이 0보다 커야 한다.
+        /// </summary>
+        private static void ValidateForcedMoveEffect(SkillEffectTable table)
+        {
+            if (table.Kind != GlobalEnum.SkillEffectKind.EffectAction || table.Trigger != GlobalEnum.SkillTrigger.OnHit)
+                Debug.LogError($"[ParseSkillEffectTable] Id={table.Id}({table.Name}): {table.EffectType}는 Kind=EffectAction, Trigger=OnHit이어야 합니다. (Kind={table.Kind}, Trigger={table.Trigger})");
+            if (table.Param1 <= 0f || table.Param2 <= 0f)
+                Debug.LogError($"[ParseSkillEffectTable] Id={table.Id}({table.Name}): {table.EffectType}는 Param1(거리)과 Param2(시간)가 0보다 커야 합니다. (Param1={table.Param1}, Param2={table.Param2})");
         }
 
         /// <summary>
@@ -1606,6 +1655,8 @@ namespace ARPG.Editor
                 case GlobalEnum.Stat.ApplyBuff:
                 case GlobalEnum.Stat.DelegateToTotem:
                 case GlobalEnum.Stat.SkillPropagation:
+                case GlobalEnum.Stat.Knockback:
+                case GlobalEnum.Stat.Pull:
                     return GlobalEnum.SkillEffectKind.EffectAction;
                 default:
                     return GlobalEnum.SkillEffectKind.StatBonus;
@@ -1840,9 +1891,9 @@ namespace ARPG.Editor
 
         private static void ParseAreaEffectTable(AreaEffectTable table, string[] values)
         {
-            // 전체 범위: A:O = 15개 컬럼. 신규 칸이 없는 기존 행은 지연 없는 반복 장판.
+            // 전체 범위: A:P = 16개 컬럼. 신규 칸이 없는 기존 행은 지연 없는 반복 장판, 넉백 없음.
             // (Id, Name, Description, DamageType, Damage, Radius, Duration, TickInterval,
-            //  OnTickBuffId, OnEnterBuffId, TargetFaction, TickEffectName, PrefabKey, ActivationDelay, SingleShot)
+            //  OnTickBuffId, OnEnterBuffId, TargetFaction, TickEffectName, PrefabKey, ActivationDelay, SingleShot, ForcedMoveEffectId)
             if (values.Length < 12)
             {
                 Debug.LogError($"[ParseAreaEffectTable] Invalid data length. Expected at least 12, got {values.Length}. Id: {table.Id}");
@@ -1863,6 +1914,7 @@ namespace ARPG.Editor
             table.PrefabKey = values.Length > 12 ? values[12] : string.Empty;
             table.ActivationDelay = Mathf.Max(0f, ParseFloatSafe(values, 13));
             table.SingleShot = values.Length > 14 && values[14].Trim().Equals("TRUE", StringComparison.OrdinalIgnoreCase);
+            table.ForcedMoveEffectId = ParseIntSafe(values, 15);
         }
 
         private static void ParseModTable(ModTable table, string[] values)

@@ -528,7 +528,7 @@ void OnHit(Vector2 hitPosition)
 - [ ] 카메라 쉐이크
 
 ### Phase 5: 고급 전투
-- [ ] 넉백 시스템
+- [x] 넉백 시스템 — 넉백·당기기 구현 (2026-10-12, [SKILL_DESIGN.md §6.10](SKILL_DESIGN.md))
 - [ ] 콤보 시스템
 - [ ] 원거리 스킬 (발사체)
 - [ ] 범위 스킬 (AoE)

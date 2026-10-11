@@ -192,6 +192,8 @@ public class GlobalEnum
         ApplyBuff,           // OnHit. Param1=BuffId, Param2=스택, Param3=지속시간 오버라이드(0=기본)
         DelegateToTotem,     // OnSkillCommand. Param1=토템 생존시간(초)
         SkillPropagation,    // OnSkillCommit/OnHit. Param1=SkillPropagationTable Id
+        Knockback,           // OnHit. Param1=밀어내는 거리(칸), Param2=걸리는 시간(초). 판정 범위 중심에서 바깥으로 (SKILL_DESIGN §6.10)
+        Pull,                // OnHit. Param1=끌어당기는 최대 거리(칸), Param2=걸리는 시간(초). 기준점을 넘지 않는다 (SKILL_DESIGN §6.10)
     }
 
     /// <summary>

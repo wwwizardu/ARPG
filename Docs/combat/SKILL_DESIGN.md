@@ -322,7 +322,7 @@
   - **EffectAction** — `SkillEffectExecutor.Trigger(...)` 단일 진입점이 EffectType별 switch로 분기. 예: `ApplyBuff`, `DelegateToTotem`, `SkillPropagation`.
 - `SkillEffectContext` (OwnerId/TargetId/SkillId/TargetPos/DamageResult/IsCrit/CancelOriginalCast, 2026-09-24 `PropagationRootEntityId`/`SuppressDefaultImpact` 추가)
 - `SkillTable.SkillEffectIds: List<int>` 컬럼 + 구글 시트 SkillEffect 시트
-- 등록된 효과: 1001 LifeSteal_15% (StatBonus), 1002 OnHit_Bleed (EffectAction), 1010 Delegate_Totem_8s (EffectAction), 1020 ChainLightningPropagation (EffectAction, `SkillPropagation`·`OnSkillCommit`, S3), 2003 MultiShot_3 (StatBonus, R2)
+- 등록된 효과: 1001 LifeSteal_15% (StatBonus), 1002 OnHit_Bleed (EffectAction), 1010 Delegate_Totem_8s (EffectAction), 1020 ChainLightningPropagation (EffectAction, `SkillPropagation`·`OnSkillCommit`, S3), 1030 Knockback_Short·1031 Pull_Short (EffectAction, `OnHit`, §6.10), 2003 MultiShot_3 (StatBonus, R2)
 
 **옵션 합산 컨벤션**: 옵션은 두 종류로 나뉨.
 - **(1) 스킬 고유 속성**: `SkillTable` 컬럼으로 표현 (예: `ProjectileId`, `BaseProjectileCount`). 발사체 개수처럼 "스킬마다 다를 수 있지만 하나의 스킬 내에선 base 값"인 항목.
@@ -331,7 +331,7 @@
 
 **SkillEffect.SpawnProjectile은 별도 용도**: "스킬과 다른 종류의 발사체 스폰"(폭발 파편, 시체 폭발 등). 일반 Multi Shot에는 사용 안 함.
 
-**남은 작업**: SpawnProjectileOnHit(분리) / SpawnAreaEffectOnKill / ManaRestoreOnKill / Knockback·Pull(§6.10 설계 확정, 2026-10-12) / DelegateToMine·Trap 등 `SkillEffectType` enum 추가 + Executor case 추가. 연쇄·분열은 투사체 전용 Stat을 개별 추가하기 전에 [공용 스킬 전파 계획](SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md)의 `SkillPropagation` 모델로 구현한다. (2026-10-03 확인: `SkillPropagation` EffectAction 구현됨. Instant 연쇄는 S3로 사용 중이고, Projectile 연쇄·분열과 Instant 분열은 코드 경로만 있고 데이터·PlayMode 검증이 없다.)
+**남은 작업**: SpawnProjectileOnHit(분리) / SpawnAreaEffectOnKill / ManaRestoreOnKill / DelegateToMine·Trap 등 (Knockback·Pull은 2026-10-12 구현, §6.10) `SkillEffectType` enum 추가 + Executor case 추가. 연쇄·분열은 투사체 전용 Stat을 개별 추가하기 전에 [공용 스킬 전파 계획](SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md)의 `SkillPropagation` 모델로 구현한다. (2026-10-03 확인: `SkillPropagation` EffectAction 구현됨. Instant 연쇄는 S3로 사용 중이고, Projectile 연쇄·분열과 Instant 분열은 코드 경로만 있고 데이터·PlayMode 검증이 없다.)
 
 **문제 의식**: 현재는 새 옵션 1개 = `SkillTable` 컬럼 1개 + `System_Skill` 분기 1개. 옵션 N × 스킬 M 조합 폭발. `ApplySkillEffectToEntity`의 TODO 주석들이 이 한계를 드러냄.
 
@@ -396,7 +396,7 @@ SkillEffectTable                         // 새 테이블
 
 **영향**: 토템 위임은 데이터로 사용 가능하다. 지뢰·함정은 후속 카테고리로 남는다.
 
-### §6.10 넉백·당기기 (강제 이동) ○ *(설계 확정 2026-10-12, 미구현)*
+### §6.10 넉백·당기기 (강제 이동) ✅ *(2026-10-12 구현·검증, 실제 조작 확인 전)*
 **목적**: 명중한 대상을 짧게 밀어내거나(넉백) 끌어당긴다(당기기). 두 방식은 **멈출 거리 계산만 다르고** 이동 처리는 같은 경로를 쓴다. 나중에 갈고리처럼 끝까지 끌어오는 방식이 생겨도 멈춤 계산만 추가한다.
 
 **방향 규칙** — 판정 범위의 중심이 기준점이다. 위치는 발 위치(`TransformComponent.Position`)로 계산하고 몸통 보정(`HitOffset`)은 쓰지 않는다.
@@ -419,7 +419,7 @@ SkillEffectTable                         // 새 테이블
 - 스킬에 붙이기: `SkillTable.SkillEffectIds`에 행 Id를 넣는다. 직접 타격·발사체·연쇄는 모두 `SkillHitProcessor` → `OnHit`을 지나므로 별도 분기가 없다.
 - 장판·폭발에 붙이기: `AreaEffectTable.ForcedMoveEffectId`(새 열, `SkillEffect` 행 Id, 0=없음). 장판은 `SkillEffect` 트리거를 실행하지 않으므로 `System_AreaEffect`가 대상마다 피해·버프 뒤에 직접 적용한다. 반복 장판은 틱마다, 단발 폭발은 1회 적용한다.
 - 다운로드 검사: `Knockback`/`Pull` 행은 `Trigger=OnHit`·`Kind=EffectAction`·`Param1>0`·`Param2>0`이어야 한다. `ForcedMoveEffectId`가 가리키는 행은 `Knockback`/`Pull`이어야 하며, 다운로드 시점에 대조할 수 없으면 실행 시 오류 로그 후 무시한다.
-- 시험 기본값은 1칸·0.15초. 시험 연결은 Strike(Skill 1)에 밀기, 불의 고리(AreaEffect 2)에 밀기, 독구름(AreaEffect 1)에 당기기이며, 검증 뒤 유지 여부를 정한다.
+- 등록 행: 1030 `Knockback_Short`(밀기 1칸·0.15초), 1031 `Pull_Short`(당기기 최대 1칸·0.15초). 현재 이 두 행을 쓰는 스킬·장판은 없다. 검증용으로 Strike·불의 고리·독구름에 연결했다가 같은 날 사용자 결정으로 되돌렸다. 실제 콘텐츠에 붙이는 것은 후속 작업이다.
 
 **적용 규칙 (2026-10-12 확정)**:
 1. 밀리는 동안 대상의 스킬·공격 준비는 취소하지 않는다. 행동 중단은 기절의 역할로 남긴다.
@@ -444,6 +444,16 @@ SkillEffectTable                         // 새 테이블
 **후속 확장 (미구현)**: 등급별 넉백 배율, 벽 충돌 조건(`SKILL_RUNE_DESIGN.md` §5.2의 `WallNearby`·`KnockbackTarget`)은 `ForcedMoveComponent`에 "의도한 거리보다 덜 움직였는지"를 기록해 연결한다. 끝까지 끌어오는 갈고리형 당기기는 멈춤 계산 방식을 하나 추가한다.
 
 **검증 (구현 완료 후 1회)**: 런타임·에디터 컴파일, 표 다운로드 검사, PlayMode로 ① Strike 넉백 방향·거리 ② 벽에서 멈춤·미끄러짐·관통 없음 ③ 멀티샷 동시 적중 1회 ④ 장판 밀기·당기기와 중심 멈춤 ⑤ 직접 공격 당기기의 접촉 거리 멈춤 ⑥ 회피·사망·점프 중 미적용 ⑦ 밀리는 몬스터의 공격 계속 진행 ⑧ 몬스터에게 밀린 플레이어의 조작 복귀 ⑨ 밀리는 중 던전 출입. 전투 전용 진단 메뉴는 없어서 PlayMode로 확인한다.
+
+**검증 결과 (2026-10-12)**: 컴파일·표 다운로드 오류 없음. PlayMode에서 시간을 멈추고 실제 경로(`SkillHitProcessor` → `SkillEffectExecutor`, `System_AreaEffect` 틱)를 직접 호출해 측정했다.
+- ① 플레이어에서 1.2칸 떨어진 몬스터가 바깥으로 1칸 밀려 2.2칸에서 멈췄다. 0.03초 간격 위치는 1.56 → 1.84 → 2.04 → 2.16 → 2.20으로 처음 빠르고 끝에서 느려졌다.
+- ② 벽으로 밀면 벽 앞(x 58.64, 벽 59, 이동 반경 0.3)에서 멈췄고, 비스듬히 밀면 벽을 따라 미끄러졌다. 0.2초를 한 프레임에 진행해도 관통하지 않았다.
+- ③ 밀리는 중에 다시 맞히면 새 넉백이 무시됐다(경과 시간 0.03 유지).
+- ④ 불의 고리 중심에서 0.5칸 떨어진 대상은 1.5칸까지 밀렸다. 독구름은 0.5칸만 끌려와 중심(0.0)에서 멈췄다.
+- ⑤ 직접 공격 당기기는 1.5칸에서 접촉 거리 1.0(몸 반경 0.5+0.5)에서 멈췄고, 이미 접촉 거리 안이면 움직이지 않았다.
+- ⑥ 회피·사망·점프 중에는 적용되지 않았다.
+- 시간을 흐르게 한 상태에서도 확인했다. 몬스터에 초속 3의 자기 이동 속도가 걸려 있어도 그 방향으로는 움직이지 않았고, 넉백 방향으로만 이동했으며 상태는 `Idle`이었다. 점프 스킬을 가진 몬스터는 점프를 시작하자 넉백이 끝났다.
+- ⑦ 밀리는 몬스터의 공격 계속 진행, ⑧ 플레이어 조작 복귀, ⑨ 던전 출입, 손으로 공격할 때의 체감은 실제 조작으로 확인하지 않았다.
 
 ---
 
@@ -494,3 +504,4 @@ ProjectileId 대역도 동일 규칙 권장: 화살 100번대, 마법 200번대.
 - 2026-09-20: 코드·바이너리 테이블 재대조. 구현 판정을 `공용 런타임`과 `개별 콘텐츠 등록`으로 분리하고 21종을 구현 6종·런타임 준비 9종·코드 보강 필요 6종으로 재분류했다. 마나 소비, Position 즉발, Jump 착지 커밋, 관통, AreaEffect, ApplyBuff, 토템 위임의 완료 상태를 반영하고 로드맵을 남은 작업 기준으로 교체했다. S5/S6의 기존 예약 ID 204/205 충돌도 기록했다.
 - 2026-10-03: 코드·바이너리 테이블 재대조. S3 Chain Lightning을 구현됨으로 카탈로그에 다시 포함했다(SkillId 202 / SkillEffect 1020 / SkillPropagation 1, 2026-09-24 c87d5de) — 22종 중 구현 7종. §6.8에 `SkillTrigger.OnSkillCommit`(9종), `SkillPropagation` EffectAction, 효과 1020, `SkillEffectContext` 전파 필드를 반영했다. §1.3 `SkillTargetRange2`를 반각(180 이상=원)으로 정정했다. `SwampToadPoisonSpit`(205)이 `SkillTable`에서 빠졌는데 `AiTable` Id 4가 아직 참조해 빌드가 막히던 문제를 §2에 기록하고, 같은 날 205번 행을 복구했다. R2 분산 각도 상수의 정본 위치를 갱신했다.
 - 2026-10-12: §6.10 넉백·당기기(강제 이동) 설계 확정, 미구현. 판정 범위 중심을 기준점으로 밀거나 당기고, `SkillEffect` 행(`Knockback`/`Pull`)과 `AreaEffectTable.ForcedMoveEffectId`로 붙인다. §6.8의 `KnockbackOnHit` 표기를 갱신하고 `SKILL_EFFECT_IDEAS.md` #6 초안 메모를 대체했다.
+- 2026-10-12 (rev 2): §6.10 구현. `ForcedMoveComponent`·`ForcedMoveStarter`·`System_ForcedMove`(Update 810), SkillEffect 1030/1031, `AreaEffectTable.ForcedMoveEffectId`(시트 P열). 검증용 연결(Strike·불의 고리·독구름)은 측정 뒤 되돌려 현재 연결된 콘텐츠는 없다. PlayMode 측정 결과를 §6.10에 기록했고, 손으로 조작하는 확인은 콘텐츠에 붙일 때 한다.

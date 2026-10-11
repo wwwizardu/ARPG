@@ -168,10 +168,10 @@ UI/UX:       ██████████████░░░░░░░░�
 - [X] 애니메이션 속도 연동 (PlaybackSpeed → PlayableAnimator.SetSpeed)
 - [X] 쿨타임 감소 (FinalCooldownReduction 적용)
 - [ ] VFX/사운드 통합 (후순위)
-- [ ] 넉백 시스템 (후순위)
+- [X] 넉백 시스템 — 넉백·당기기 구현 (2026-10-12, `Docs/combat/SKILL_DESIGN.md` §6.10)
 - [ ] 히트/사망 이펙트 (후순위)
 - **현재 진행도**: 95%
-- **다음 작업**: VFX/사운드, 넉백 (후순위)
+- **다음 작업**: VFX/사운드 (후순위)
 - **파일**: `DamageCalculator.cs`, `System_Skill.cs`, `System_HpCheck.cs`, `System_Projectile.cs`, `AddressablePool.cs`
 - **문서**: `combatSystem.md`
 
@@ -579,7 +579,7 @@ NPC 일일 루틴 → 관계 시스템 → 상호작용 시스템 → 동료 시
 #### Task 6: 후순위로 이월
 - [ ] VFX (히트/사망/스킬 이펙트)
 - [ ] 사운드 통합
-- [ ] 넉백 시스템
+- [X] 넉백 시스템 (2026-10-12 구현)
 - [ ] 플레이어 사망 시 리스폰
 
 ---
@@ -628,7 +628,7 @@ NPC 일일 루틴 → 관계 시스템 → 상호작용 시스템 → 동료 시
 6. ✅ 발사체 시스템 + 오브젝트 풀링 (완료! - AddressablePool)
 7. ✅ 스킬 쿨타임 관리 (완료! - SkillStateComponent.CooldownRemaining)
 8. ⏳ 다중 스킬 선택 로직 / 몬스터 종류별 AI 패턴 (후순위)
-9. ⏳ VFX/사운드/넉백 (후순위)
+9. ⏳ VFX/사운드 (후순위) — 넉백은 2026-10-12 구현
 
 ---
 

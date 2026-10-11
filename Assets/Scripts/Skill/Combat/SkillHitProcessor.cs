@@ -27,6 +27,8 @@ namespace ARPG.Skill.Combat
         public int Generation;
         public bool IsProjectileDelivery;
         public Vector2 ImpactDirection;
+        public HitOriginKind HitOriginKind;   // 판정 범위 중심 종류. 발사체·연쇄는 None
+        public Vector2 HitOrigin;             // 판정 범위 중심 (발 위치 기준)
 
         public SkillHitRequest(int inSkillEntityId, int inOwnerEntityId, int inTargetEntityId, float inDamageMultiplier)
         {
@@ -39,6 +41,8 @@ namespace ARPG.Skill.Combat
             Generation = 0;
             IsProjectileDelivery = false;
             ImpactDirection = Vector2.zero;
+            HitOriginKind = HitOriginKind.None;
+            HitOrigin = Vector2.zero;
         }
     }
 
@@ -92,6 +96,8 @@ namespace ARPG.Skill.Combat
                 PropagationRootEntityId = inRequest.PropagationRootEntityId,
                 DamageResult = damageResult,
                 ImpactDirection = ResolveImpactDirection(inRequest),
+                HitOriginKind = inRequest.HitOriginKind,
+                HitOrigin = inRequest.HitOrigin,
             };
 
             if (inRequest.IsProjectileDelivery == true)

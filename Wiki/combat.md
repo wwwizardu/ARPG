@@ -47,8 +47,19 @@ sources:
   - Assets/_BinaryData/TableData/ModTable.bytes
   - Assets/_BinaryData/TableData/ModTierTable.bytes
   - Assets/_BinaryData/TableData/ItemEnchantmentCostTable.bytes
+  - Docs/combat/SKILL_DESIGN.md
+  - Docs/combat/SKILL_EFFECT_IDEAS.md
+  - Assets/Scripts/Skill/Combat/ForcedMoveStarter.cs
+  - Assets/Scripts/Skill/Combat/SkillEffectContext.cs
+  - Assets/Scripts/Skill/Combat/SkillHitProcessor.cs
+  - Assets/Scripts/Common/System/System_ForcedMove.cs
+  - Assets/Scripts/Common/System/System_AreaEffect.cs
+  - Assets/Scripts/Common/System/System_Render.cs
+  - Assets/Scripts/Common/System/System_Move.cs
+  - Assets/_BinaryData/TableData/SkillEffectTable.bytes
+  - Assets/_BinaryData/TableData/AreaEffectTable.bytes
 last_synced: 2026-09-01
-last_updated: 2026-10-11
+last_updated: 2026-10-12
 status: implemented-contract-active-validation-pending
 ---
 
@@ -56,7 +67,7 @@ status: implemented-contract-active-validation-pending
 
 ## 한 줄 요약
 
-무기의 고정 기본 능력과 인스턴스별 고유 강화만 무기 캐시에 들어가며, 장비의 Implicit/Prefix/Postfix는 부위와 무관한 글로벌 Modifier로 합산된다. 미장착 인벤토리 장비의 Prefix/Postfix는 Tier 1 이상 제련소에서 랜덤 교체·추가할 수 있고, 스킬 공격 프로필은 변경된 옵션까지 태그에 맞춰 한 번 계산해 예상값과 실제 전투가 같은 값을 소비한다. [src: Docs/combat/combatSystem.md §장비 옵션 책임 경계·§스킬 공격 프로필 구성, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §0–§8, Assets/Scripts/Item/ItemEnchantmentService.cs, Assets/Scripts/Common/System/System_SkillAttackProfileCalculation.cs] 새로 만드는 장비의 Prefix/Postfix 티어(T1~T12)는 장비에 저장된 아이템 레벨로 정해진다(2026-10-11). [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §1, Assets/Scripts/Item/ItemLevelModTierRules.cs]
+무기의 고정 기본 능력과 인스턴스별 고유 강화만 무기 캐시에 들어가며, 장비의 Implicit/Prefix/Postfix는 부위와 무관한 글로벌 Modifier로 합산된다. 미장착 인벤토리 장비의 Prefix/Postfix는 Tier 1 이상 제련소에서 랜덤 교체·추가할 수 있고, 스킬 공격 프로필은 변경된 옵션까지 태그에 맞춰 한 번 계산해 예상값과 실제 전투가 같은 값을 소비한다. [src: Docs/combat/combatSystem.md §장비 옵션 책임 경계·§스킬 공격 프로필 구성, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §0–§8, Assets/Scripts/Item/ItemEnchantmentService.cs, Assets/Scripts/Common/System/System_SkillAttackProfileCalculation.cs] 새로 만드는 장비의 Prefix/Postfix 티어(T1~T12)는 장비에 저장된 아이템 레벨로 정해진다(2026-10-11). [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §1, Assets/Scripts/Item/ItemLevelModTierRules.cs] 명중 시 넉백·당기기(2026-10-12 구현)도 이 페이지 뒤쪽에 정리한다. [src: Docs/combat/SKILL_DESIGN.md §6.10]
 
 ## 문서 정본
 
@@ -209,6 +220,25 @@ FinalAttackSpeedPerSecond
 - 툴팁은 콘텐츠나 `display` 변경 직후 위치를 한 번 계산하고, 실제 크기가 확정되는 `GeometryChangedEvent`에서 보정해 화면 경계 배치를 갱신한다. [src: Assets/Scripts/Manager/TooltipManager.cs]
 - `ModTable` 5002는 `IncreasedStat/AttackSpeedMul`, 1003은 `IncreasedStat/CriRateMul`로 글로벌 증가 버킷에 연결된다. [src: Assets/_BinaryData/TableData/ModTable.bytes:L1, Assets/Scripts/Common/System/System_StatCalculation.cs:L232-257]
 
+## 넉백·당기기 (강제 이동)
+
+2026-10-12 구현했고 사용자 커밋 전이다. 명중한 대상을 판정 범위의 중심에서 짧게 밀어내거나 중심 쪽으로 끌어당긴다. 정본은 `SKILL_DESIGN.md` §6.10이고, `SKILL_EFFECT_IDEAS.md` #6의 초안 메모(FixedUpdate·끝 위치 보간)는 이 설계로 대체됐다. [src: Docs/combat/SKILL_DESIGN.md §6.10, Docs/combat/SKILL_EFFECT_IDEAS.md #6]
+
+| 공격 | 기준점 | 밀기 | 당기기가 멈추는 곳 |
+|---|---|---|---|
+| 직접 공격(`Direction`) | 공격자 발 위치 | 공격자 반대쪽 | 두 몸이 닿는 거리 |
+| 지점 공격(`Position`) | 커밋 지점 | 지점 바깥쪽 | 지점 |
+| 장판·폭발 | 장판 중심 | 중심 바깥쪽 | 중심 |
+| 발사체·연쇄 | 없음 | 날아온 방향 | 쏜 사람과 닿는 거리 |
+
+[src: Docs/combat/SKILL_DESIGN.md §6.10 방향 규칙, Assets/Scripts/Skill/Combat/ForcedMoveStarter.cs `TryStartFromHit`·`TryStartFromArea`]
+
+- **데이터**: 효과는 SkillEffect 행(`Knockback`/`Pull`, `OnHit`, Param1=거리·Param2=시간)으로 정의한다. 스킬에는 `SkillEffectIds`로, 장판에는 `AreaEffectTable.ForcedMoveEffectId`로 붙인다. 장판은 SkillEffect 트리거를 실행하지 않으므로 `System_AreaEffect`가 피해·버프 뒤에 직접 적용하고 발동 확률도 따로 판정한다. 등록 행은 1030 `Knockback_Short`·1031 `Pull_Short`(1칸·0.15초)이며, 현재 연결된 스킬·장판은 없다. [src: Docs/combat/SKILL_DESIGN.md §6.10 데이터, Assets/Scripts/Common/System/System_AreaEffect.cs, Assets/_BinaryData/TableData/SkillEffectTable.bytes, Assets/_BinaryData/TableData/AreaEffectTable.bytes]
+- **적용 규칙**: 밀리는 대상의 스킬은 취소하지 않는다. 밀리는 중에 온 새 넉백은 무시한다. 회피, 이 타격으로 사망, 점프 중, 토템, 스스로 움직이지 않는 대상은 제외하고 막기는 밀린다. 몬스터 등급과 무관하며, 스킬 페이지 랜덤 풀에는 넣지 않는다(Tier 0). [src: Docs/combat/SKILL_DESIGN.md §6.10 적용 규칙, Assets/Scripts/Skill/Combat/ForcedMoveStarter.cs `CanStart`]
+- **런타임**: `ForcedMoveStarter`가 판정·방향·멈춤 거리를 계산해 `ForcedMoveComponent`를 붙인다. `System_ForcedMove`(Update 810)가 처음 빠르고 끝에 느린 곡선으로 진행하고, 이동량을 이동 반경 0.9배 이하로 나눠 축 분리 충돌을 적용한다. 넉백 중에는 `System_Render`가 자기 이동을 위치에 반영하지 않고, `System_Move`는 플레이어 입력 속도를 0으로·이동 상태를 Idle로 둔다. 점프 시작과 던전 출입 초기화가 넉백을 지우며, 세이브에는 저장하지 않는다. [src: Assets/Scripts/Common/System/System_ForcedMove.cs, Assets/Scripts/Common/System/System_Render.cs, Assets/Scripts/Common/System/System_Move.cs, Assets/Scripts/Common/System/System_Skill.cs `StartJump`, Assets/Scripts/Dungeon/DungeonManager.cs]
+- 적중 정보에 기준점 종류(`HitOriginKind`: None/Owner/Point)와 위치를 새로 실었다. `ImpactDirection`은 전파 탐색 축이라 이 용도로 덮어쓰지 않는다. [src: Assets/Scripts/Skill/Combat/SkillEffectContext.cs, Assets/Scripts/Skill/Combat/SkillHitProcessor.cs, Assets/Scripts/Common/System/System_Skill.cs `ProcessSkillHit`]
+- **검증**: 2026-10-12 컴파일·표 다운로드와 PlayMode 측정을 통과했다. 측정 항목은 방향·거리·곡선, 벽 정지·미끄러짐·무관통, 중복 무시, 장판 밀기·당기기, 접촉 거리 멈춤, 예외, 자기 이동 차단이다. 측정은 검증용으로 잠시 붙인 연결로 했고 그 연결은 되돌렸다. [src: Docs/combat/SKILL_DESIGN.md §6.10 검증 결과]
+
 ## 연결된 것들
 
 - 전체 구현 현황: [current_status.md](current_status.md)
@@ -216,6 +246,7 @@ FinalAttackSpeedPerSecond
 
 ## 미해결 / 주의
 
+- 넉백·당기기는 아직 어떤 스킬·장판에도 연결되지 않았다. 손 조작 확인(밀리는 몬스터의 공격 계속, 플레이어 조작 복귀, 던전 출입, 체감)은 콘텐츠에 붙일 때 한다. AreaEffect↔SkillEffect 참조 대조는 전체 다운로드에서만 돌고, 단일 다운로드의 잘못된 Id는 실행 시 오류 로그 후 무시된다. 등급별 배율, 벽 충돌 조건(`WallNearby`·`KnockbackTarget`), 갈고리형 당기기는 후속이다. [src: Docs/combat/SKILL_DESIGN.md §6.10, Assets/Scripts/Editor/DownloadTables.cs `ValidateForcedMoveSetup`, Docs/combat/SKILL_RUNE_DESIGN.md §5.2]
 - 마법부여는 아이템 레벨 규칙과 연결되지 않아 결과가 T3 이하다. 아이템 레벨이 높은 장비의 옵션을 바꾸면 티어가 내려갈 수 있다. 아이템 레벨 연결 또는 재화별 Tier 규칙은 사용자가 따로 작업한다. [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §7, Docs/combat/WEAPON_PROGRESSION_DESIGN.md §적용 항과 Tier 접근 정책]
 - 던전 몬스터 레벨이 1, 보스가 5라서 던전 드랍 장비는 T1~T3이다. 던전 드랍 레벨도 사용자가 따로 작업한다. [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §7, Assets/_BinaryData/TableData/DungeonTable.bytes]
 - 아이템 레벨·옵션 티어의 플레이 확인(원거리 드랍 툴팁, 기본 아이템 툴팁에 줄 없음, 상점 매물의 마을 지역 레벨)은 남았다. 상점 매물·NPC 전리품은 같은 시드여도 이전과 다른 옵션이 나온다. [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §7·§8]

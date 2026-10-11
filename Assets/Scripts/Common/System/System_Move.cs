@@ -40,11 +40,12 @@ namespace ARPG.Systems
 
                 InputComponent input = inputPool.GetByIndex(i);
 
-                // 점프(공중) 중에는 System_Jump가 위치를 직접 제어하므로 velocity 이동 정지
-                bool isAirborne = AR.s.Component.HasComponent<JumpComponent>(entityId);
+                // 점프(공중)·넉백 중에는 System_Jump·System_ForcedMove가 위치를 직접 제어하므로 velocity 이동 정지
+                bool isPositionControlled = AR.s.Component.HasComponent<JumpComponent>(entityId)
+                    || AR.s.Component.HasComponent<ForcedMoveComponent>(entityId);
 
                 // 이동 로직: Direction과 Speed 설정 (Position은 System_Render에서 계산)
-                if (isAirborne == false && input.MoveDirection.sqrMagnitude > 0.0001f)
+                if (isPositionControlled == false && input.MoveDirection.sqrMagnitude > 0.0001f)
                 {
                     // 방향 설정 (정규화된 입력)
                     velocity.Direction = input.MoveDirection;
@@ -81,7 +82,10 @@ namespace ARPG.Systems
                     continue;
 
                 StateComponent state = statePool.GetByIndex(i);
-                Creature.MovementStates nextState = velocity.Velocity.sqrMagnitude > 0.001f
+                // 넉백 중 AI는 추적 방향을 계속 쓰지만 실제로는 걷지 않으므로 Idle로 둔다
+                bool isWalking = velocity.Velocity.sqrMagnitude > 0.001f
+                    && AR.s.Component.HasComponent<ForcedMoveComponent>(entityId) == false;
+                Creature.MovementStates nextState = isWalking == true
                     ? Creature.MovementStates.Walking
                     : Creature.MovementStates.Idle;
 

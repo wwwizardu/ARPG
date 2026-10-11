@@ -90,6 +90,7 @@ namespace ARPG.Systems
             SparseSet<ColliderComponent> colliderPool = _componentManager.GetComponentPool<ColliderComponent>();
             SparseSet<JumpComponent> jumpPool = _componentManager.GetComponentPool<JumpComponent>();
             SparseSet<ProjectileArcComponent> arcPool = _componentManager.GetComponentPool<ProjectileArcComponent>();
+            SparseSet<ForcedMoveComponent> forcedMovePool = _componentManager.GetComponentPool<ForcedMoveComponent>();
 
             // TransformComponent를 가진 모든 엔티티 순회
             for (int i = 0; i < transformPool.Count; i++)
@@ -107,7 +108,8 @@ namespace ARPG.Systems
                 GameObject gameObject = entityBase.gameObject;
 
                 // Velocity를 이용해 Position 업데이트
-                if (velocityPool.TryGet(entityId, out var velocity))
+                // 넉백·당기기 중에는 System_ForcedMove가 위치를 정하므로 자기 이동(플레이어·AI·NPC 공통)을 반영하지 않는다
+                if (forcedMovePool.Contains(entityId) == false && velocityPool.TryGet(entityId, out var velocity))
                 {
                     if (0 < velocity.Speed)
                     {

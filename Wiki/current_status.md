@@ -2,8 +2,9 @@
 name: current-status
 description: 최근 구현 흐름과 재개 지점을 코드·정본 문서 기준으로 종합한 프로젝트 현황.
 type: status
-last_updated: 2026-10-11
+last_updated: 2026-10-12
 sources:
+  - Docs/combat/SKILL_DESIGN.md
   - Docs/npc/NPC_AMBITION_DESIGN.md
   - Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md
   - Docs/npc/NPC_COMBAT_DESIGN.md
@@ -39,7 +40,7 @@ sources:
   - Assets/_BinaryData/TableData/
 ---
 
-# 현재 개발 현황 — 2026-10-11
+# 현재 개발 현황 — 2026-10-12
 
 ## 1. 한눈에 보기
 
@@ -52,6 +53,8 @@ sources:
 **2026-10-10 (커밋 대기)**: NPC 행적·반응 새 구조 1·2단계를 구현했다. 던전 세대의 40%에 소문이 붙고, 그 마을 주민 1명이 소문 주인이 되어 플레이어에게 부탁한다. 보스 처치로 해결하고 부탁한 NPC에게 보고하면 반응과 의뢰 보답을 받는다. 그 뒤 `PlayerDeed` 소문이 같은 마을에 퍼지고, 들은 NPC가 관련도만큼 한 번 반응한다. 옛 던전 시나리오 코드와 번들은 삭제했고 구 형식은 호환하지 않는다. 진행 원장은 새 `narrative` 저장 파트(WorldDataVersion 21)다. 같은 날 3단계 소망 ItemGift도 구현했다. 호감 30 이상인 NPC가 소망을 털어놓고, 그 아이템(첫 콘텐츠는 구리 목걸이)을 선물로 건네면 소모·감사·의뢰 보답·행적 소문이 한 번에 저장된다. 반응 표에는 대상(All·Owner·Others) 열이 생겼다. LLM 소망 스파이크는 지웠고 저장 버전은 21 그대로다. 5단계로 호기심 반응을 고른 NPC가 아는 다른 던전 소문을 소개하고, 그 소문은 소개한 NPC의 부탁 칸에 들어간다(보고·보답도 그 NPC). 4단계로 최근 부상 화제의 기본 문구도 시트(3001)에서 읽는다("지난 던전 원정에서 호되게 당했소. 다음엔 더 조심해야겠소."). 저장소·생성 진단은 모두 PASS이고 실제 플레이 확인은 남았다. 상세는 [npc.md](npc.md). [src: Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md 머리말·§7.7·§8.1·§8.2·§8.3]
 
 **2026-10-11 (커밋 대기)**: 장비 일반 옵션을 T3에서 **T12**까지 늘리고 장비에 **아이템 레벨**을 저장했다. 몬스터 드랍은 몬스터 레벨, NPC 전리품·상점 랜덤 매물은 지역 레벨이 아이템 레벨이다. 아이템 레벨로 T1~T10 중 5단계 구간이 정해지고(1–10은 T1~T3, 90–99는 T6~T10) 구간 안에서도 레벨이 높을수록 높은 티어가 잘 나온다. T11·T12는 아이템 레벨 90 이상 몬스터 드랍에서만 등급별 확률로 붙는다. 세이브 버전은 그대로다. 컴파일·테이블 검증·진단·플레이 모드 생성 확인은 통과했고 실제 플레이 확인은 남았다. 마법부여와 던전 드랍 레벨은 사용자가 따로 작업한다. 상세는 [combat.md](combat.md). [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §1–§4·§7·§8, Wiki/combat.md]
+
+**2026-10-12 (커밋 대기)**: 명중 시 **넉백·당기기**를 구현했다. 판정 범위의 중심(직접 공격은 공격자, 범위 공격은 범위 중심, 발사체는 날아온 방향)을 기준으로 짧게 밀거나 중심 쪽으로 당긴다. 효과는 SkillEffect 행으로 정의해 스킬·장판에 붙이며, 지금은 어떤 콘텐츠에도 연결하지 않았다. PlayMode 측정은 통과했고 손 조작 확인은 콘텐츠에 붙일 때 한다. 상세는 [combat.md](combat.md). [src: Docs/combat/SKILL_DESIGN.md §6.10, Wiki/combat.md]
 
 **던전**: 마을마다 2~3개 슬롯, 마을 접근 시 입구 배치, E 입장, 분리된 맵 컨텍스트, ESC 퇴장, 사망 복귀, 보스 완료 트랜잭션, `dungeons` 저장 파티션이 구현됐다. 던전 안에서는 월드 시스템(NPC 시뮬·시간)이 멈춘다 — 이를 바꾸는 월드 시뮬 계속 실행안은 초안이다. [src: Docs/map/DUNGEON_RUNTIME_DESIGN.md 상태·§4, Docs/map/DUNGEON_WORLD_SIM_DESIGN.md 상태]
 
@@ -74,6 +77,7 @@ sources:
 | **장비 옵션·마법부여** | 무기 Base/고유 강화 분리, 옵션 글로벌화, 미장착 장비 Prefix/Postfix 교체·추가 MVP, 마법부여한 기본 아이템은 일반 아이템으로 전환 [src: Wiki/combat.md]. 아이템 레벨 저장과 옵션 티어 T1~T12(일반 판정 T1~T10 구간·가중치, T11·T12 몬스터 등급별 특수 판정), 툴팁 아이템 레벨 표시(2026-10-11) [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §1·§6] | Editor 진단 실행, Tier 1/2/3·저장 왕복·장착 후 실제 타격 PlayMode 검증, 분해·재롤·장착 장비 작업은 후속 [src: Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §12·§14]. 마법부여의 티어를 아이템 레벨·재화에 연결(현재 T3 이하), 던전 드랍 레벨(현재 T1~T3), T4 이상 고레벨 수치 밸런스, 아이템 레벨 드랍 실제 플레이 확인 [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §7·§8] |
 | **스킬 조준·이동 정책** | 커서 추적→효과 직전 커밋, 정책별 재커밋, 화살표 View, 감속·복구, Jump LaunchCommit [src: Wiki/skill_aim.md] | EditMode 테스트 추가·실행, 대표 스킬 PlayMode 실측 [src: Docs/combat/POE2_CURSOR_TRACKING_PLAN.md §0·§10.1] |
 | **스킬 전파** | 공용 연쇄·분열 런타임, Instant 4연쇄 Chain Lightning, 대기 주문, 결투 반영 적대 판정 [src: Wiki/skill_propagation.md, Docs/combat/SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md §0] | Projectile/분열/OnHit PlayMode 검증, EditMode 테스트 [src: Docs/combat/SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md §9] |
+| **넉백·당기기** | 판정 범위 중심 기준 밀기·당기기, SkillEffect `Knockback`/`Pull`(1030·1031), 장판 `ForcedMoveEffectId`, `System_ForcedMove`(2026-10-12) [src: Docs/combat/SKILL_DESIGN.md §6.10, Wiki/combat.md] | 콘텐츠 연결(현재 0건)과 손 조작 확인, 등급별 배율·벽 충돌 조건 [src: Docs/combat/SKILL_DESIGN.md §6.10] |
 | **스킬 페이지** | P-1 본체와 인스턴스 roll, 드랍·상점 일부 [src: Docs/combat/SKILL_RUNE_DESIGN.md §10] | Tier 2/3 콘텐츠, P-2 조건 처리, 장착 UI 폴리시 [src: Docs/combat/SKILL_RUNE_DESIGN.md §10] |
 | **경매장** | 설계와 기본값 확정 [src: Docs/economy/AUCTION_HOUSE_DESIGN.md §디자인] | GO 신호 전, 전부 미구현 [src: Docs/economy/AUCTION_HOUSE_DESIGN.md §구현 계획] |
 

@@ -29,6 +29,11 @@ namespace ARPG.Skill.Combat
         // Zero preserves unrestricted behavior when the hit has no meaningful direction.
         public Vector2 ImpactDirection;
 
+        // OnHit 전용 - 판정 범위 중심. 넉백·당기기의 기준점 (SKILL_DESIGN §6.10).
+        // ImpactDirection은 전파 탐색 축이라 이 용도로 덮어쓰지 않는다.
+        public HitOriginKind HitOriginKind;
+        public Vector2 HitOrigin;           // 발 위치 기준. HitOriginKind가 None이면 사용하지 않음
+
         // SkillPropagation root shared by a propagated child delivery. 0 means the hit
         // is an original delivery and may start an OnHit propagation root.
         public int PropagationRootEntityId;
@@ -39,5 +44,15 @@ namespace ARPG.Skill.Combat
 
         // OnSkillCommand 전용 - 디스패처가 true로 세팅하면 원래 시전을 캔슬
         public bool CancelOriginalCast;
+    }
+
+    /// <summary>
+    /// 타격 판정 범위의 중심이 무엇인지. 넉백은 이 중심에서 바깥으로, 당기기는 중심 쪽으로 움직인다 (SKILL_DESIGN §6.10).
+    /// </summary>
+    public enum HitOriginKind : byte
+    {
+        None,   // 범위 중심 없음 (발사체·연쇄). 밀기는 날아온 방향, 당기기는 공격자 쪽
+        Owner,  // 공격자 몸 (Direction형 직접 공격). 당기기는 두 몸이 닿는 거리에서 멈춤
+        Point,  // 지정 지점·장판 중심. 당기기는 그 지점에서 멈춤
     }
 }

@@ -472,6 +472,7 @@ namespace ARPG.Dungeon
                 NearestHubEntityId = -1, NearestGateVillageId = -1, NearestVillageId = -1,
             });
             _components.RemoveComponent<JumpComponent>(id);
+            _components.RemoveComponent<ForcedMoveComponent>(id);
             _components.RemoveComponent<DestroyTag>(id);
             _components.RemoveComponent<KillCreditComponent>(id);
             _components.SetComponent(id, new StateComponent

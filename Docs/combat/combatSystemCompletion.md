@@ -97,7 +97,7 @@
 - [ ] 데미지 텍스트 표시
 
 #### Phase 4: 고급 전투 기능 (10%)
-- [ ] 넉백 시스템
+- [X] 넉백 시스템 - **완료 (2026-10-12)**, 넉백·당기기 ([SKILL_DESIGN.md §6.10](SKILL_DESIGN.md))
 - [X] 상태이상 (점화, 냉기, 중독) - **완료 (2026-04-07)**
 - [ ] 발사체 스킬 (Projectile)
 - [ ] 범위 스킬 (AoE) 개선
@@ -724,9 +724,9 @@ private void UseAISkill(int entityId, int targetEntityId)
 - [ ] 카메라 쉐이크 (옵션)
 
 ### Day 7-8: 고급 전투 기능
-- [ ] KnockbackComponent
-- [ ] System_Knockback
-- [ ] 넉백 효과 구현
+- [X] KnockbackComponent → `ForcedMoveComponent`로 구현 (2026-10-12, 넉백·당기기 공용)
+- [X] System_Knockback → `System_ForcedMove`로 구현 (2026-10-12)
+- [X] 넉백 효과 구현 — SkillEffect `Knockback`/`Pull`, AreaEffect `ForcedMoveEffectId` ([SKILL_DESIGN.md §6.10](SKILL_DESIGN.md))
 - [ ] StatusEffectComponent
 - [ ] System_StatusEffect
 - [ ] 독 효과 구현
