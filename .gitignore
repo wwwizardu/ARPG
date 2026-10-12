@@ -15,6 +15,7 @@
 *.csproj
 *.csproj.lscache
 *.sln
+/ARPG.slnx
 *.user
 
 Temp
