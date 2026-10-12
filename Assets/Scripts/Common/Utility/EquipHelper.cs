@@ -91,15 +91,69 @@ namespace ARPG.Utility
             }
         }
 
-        private static GE.EquipSlotType GetDualSlot(ItemData?[] inEquippedItems, GE.EquipSlotType inLeftSlot, GE.EquipSlotType inRightSlot)
+        /// <summary>
+        /// 장비 화면에서 좌클릭(화면 왼쪽)·우클릭(화면 오른쪽)에 대응하는 장착 슬롯.
+        /// 캐릭터가 화면을 마주 보는 배치라 오른쪽 슬롯(WeaponRight·RingRight·EarringRight)이 화면 왼쪽에 있다 (CharacterUI.prefab).
+        /// 칸이 하나인 장비는 두 값 모두 그 슬롯이다.
+        /// </summary>
+        public static void GetScreenSideSlots(GE.EquipmentTypeMask inEquipType, out GE.EquipSlotType outScreenLeftSlot, out GE.EquipSlotType outScreenRightSlot)
         {
-            if (inEquippedItems[(int)inLeftSlot] == null)
-                return inLeftSlot;
+            switch (inEquipType)
+            {
+                case GE.EquipmentTypeMask.Weapon:
+                    outScreenLeftSlot = GE.EquipSlotType.WeaponRight;
+                    outScreenRightSlot = GE.EquipSlotType.WeaponLeft;
+                    return;
+                case GE.EquipmentTypeMask.Ring:
+                    outScreenLeftSlot = GE.EquipSlotType.RingRight;
+                    outScreenRightSlot = GE.EquipSlotType.RingLeft;
+                    return;
+                case GE.EquipmentTypeMask.Earring:
+                    outScreenLeftSlot = GE.EquipSlotType.EarringRight;
+                    outScreenRightSlot = GE.EquipSlotType.EarringLeft;
+                    return;
+                case GE.EquipmentTypeMask.Shield:
+                    outScreenLeftSlot = GE.EquipSlotType.WeaponLeft;
+                    outScreenRightSlot = GE.EquipSlotType.WeaponLeft;
+                    return;
+                case GE.EquipmentTypeMask.Helmet:
+                    outScreenLeftSlot = GE.EquipSlotType.Helmet;
+                    break;
+                case GE.EquipmentTypeMask.Armor:
+                    outScreenLeftSlot = GE.EquipSlotType.Armor;
+                    break;
+                case GE.EquipmentTypeMask.Gloves:
+                    outScreenLeftSlot = GE.EquipSlotType.Gloves;
+                    break;
+                case GE.EquipmentTypeMask.Boots:
+                    outScreenLeftSlot = GE.EquipSlotType.Boots;
+                    break;
+                case GE.EquipmentTypeMask.Necklace:
+                    outScreenLeftSlot = GE.EquipSlotType.Necklace;
+                    break;
+                case GE.EquipmentTypeMask.Belt:
+                    outScreenLeftSlot = GE.EquipSlotType.Belt;
+                    break;
+                default:
+                    Debug.LogError($"[EquipHelper] GetScreenSideSlots - Unhandled equip type: {inEquipType}");
+                    outScreenLeftSlot = GE.EquipSlotType.WeaponRight;
+                    break;
+            }
 
-            if (inEquippedItems[(int)inRightSlot] == null)
-                return inRightSlot;
+            outScreenRightSlot = outScreenLeftSlot;
+        }
 
-            return inLeftSlot;
+        // 먼저 받은 슬롯이 비었으면 그 슬롯, 다음 슬롯이 비었으면 다음 슬롯, 둘 다 차 있으면 먼저 받은 슬롯.
+        // GetBestSlot은 오른쪽 슬롯(화면 왼쪽)을 먼저 넘긴다.
+        private static GE.EquipSlotType GetDualSlot(ItemData?[] inEquippedItems, GE.EquipSlotType inPreferredSlot, GE.EquipSlotType inFallbackSlot)
+        {
+            if (inEquippedItems[(int)inPreferredSlot] == null)
+                return inPreferredSlot;
+
+            if (inEquippedItems[(int)inFallbackSlot] == null)
+                return inFallbackSlot;
+
+            return inPreferredSlot;
         }
 
         /// <summary>

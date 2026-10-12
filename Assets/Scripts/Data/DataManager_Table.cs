@@ -132,12 +132,12 @@ namespace ARPG.Data
                 }
                 else
                 {
-                    if (_monsterIdsByBiome.TryGetValue(table.Biome, out var biomeList) == false)
+                    AddMonsterToBiomePool(table.Id, table.Biome);
+                    if (table.AdditionalBiomes != null)
                     {
-                        biomeList = new List<int>();
-                        _monsterIdsByBiome.Add(table.Biome, biomeList);
+                        for (int i = 0; i < table.AdditionalBiomes.Length; i++)
+                            AddMonsterToBiomePool(table.Id, table.AdditionalBiomes[i]);
                     }
-                    biomeList.Add(table.Id);
                 }
             }
 
@@ -932,6 +932,18 @@ namespace ARPG.Data
                 new List<Tables.ItemEnchantmentCostTable>(_itemEnchantmentCostTable.Values);
             result.Sort((a, b) => a.Id.CompareTo(b.Id));
             return result;
+        }
+
+        private void AddMonsterToBiomePool(int monsterId, GlobalEnum.BiomeType biome)
+        {
+            if (_monsterIdsByBiome.TryGetValue(biome, out var biomeList) == false)
+            {
+                biomeList = new List<int>();
+                _monsterIdsByBiome.Add(biome, biomeList);
+            }
+
+            if (biomeList.Contains(monsterId) == false)
+                biomeList.Add(monsterId);
         }
 
         private async Task LoadTable<T>(string fileName, System.Action<ImmutableDictionary<int, T>> setTable) where T : Tables.TableBase

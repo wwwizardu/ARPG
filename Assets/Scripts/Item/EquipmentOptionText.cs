@@ -5,10 +5,68 @@ using ARPG.Tables;
 namespace ARPG.Item
 {
     /// <summary>
-    /// 장비 옵션을 Tooltip과 Forge 비교 UI에서 동일하게 표시하는 순수 포맷 책임.
+    /// 장비 능력·옵션을 Tooltip(단일·비교)과 Forge 비교 UI에서 동일하게 표시하는 순수 포맷 책임.
     /// </summary>
     public static class EquipmentOptionText
     {
+        public static string? FormatWeaponDamageLine(string label, DamageRange range)
+        {
+            return range.Max > 0 ? $"{label}: {range.Min}~{range.Max}" : null;
+        }
+
+        public static string? FormatWeaponCritLine(int criRate)
+        {
+            return criRate > 0 ? $"치명타 확률: {criRate}%" : null;
+        }
+
+        public static string? FormatWeaponAttackSpeedLine(float attackSpeed)
+        {
+            return attackSpeed > 0f ? $"초당 공격 횟수: {attackSpeed:F2}" : null;
+        }
+
+        public static string FormatWeaponEnhancementLine(WeaponLocalEnhancementInstance enhancement)
+        {
+            string label = enhancement.StatType switch
+            {
+                GlobalEnum.WeaponLocalStatType.PhysicsDamage => "물리 피해 강화",
+                GlobalEnum.WeaponLocalStatType.FireDamage => "화염 피해 강화",
+                GlobalEnum.WeaponLocalStatType.IceDamage => "냉기 피해 강화",
+                GlobalEnum.WeaponLocalStatType.LightningDamage => "번개 피해 강화",
+                GlobalEnum.WeaponLocalStatType.PoisonDamage => "독 피해 강화",
+                GlobalEnum.WeaponLocalStatType.CriticalRate => "치명타 확률 강화",
+                GlobalEnum.WeaponLocalStatType.AttackSpeed => "공격속도 강화",
+                _ => enhancement.StatType.ToString(),
+            };
+            return $"{label}: +{enhancement.Value}%";
+        }
+
+        /// <summary>
+        /// 옵션의 스킬 태그 적용 조건 문구. 태그가 모두 일치하는 스킬에만 적용된다 (SkillOffensiveStatResolver.MatchesSkillTags).
+        /// 태그가 없으면 빈 문자열.
+        /// </summary>
+        public static string FormatSkillTagCondition(GlobalEnum.SkillTag tags)
+        {
+            if (tags == GlobalEnum.SkillTag.None)
+                return string.Empty;
+
+            System.Text.StringBuilder sb = new();
+            AppendSkillTag(sb, tags, GlobalEnum.SkillTag.Attack, "공격");
+            AppendSkillTag(sb, tags, GlobalEnum.SkillTag.Spell, "주문");
+            AppendSkillTag(sb, tags, GlobalEnum.SkillTag.Melee, "근접");
+            AppendSkillTag(sb, tags, GlobalEnum.SkillTag.Ranged, "원거리");
+            AppendSkillTag(sb, tags, GlobalEnum.SkillTag.AoE, "범위");
+            AppendSkillTag(sb, tags, GlobalEnum.SkillTag.Projectile, "투사체");
+            AppendSkillTag(sb, tags, GlobalEnum.SkillTag.Physics, "물리");
+            AppendSkillTag(sb, tags, GlobalEnum.SkillTag.Fire, "화염");
+            AppendSkillTag(sb, tags, GlobalEnum.SkillTag.Ice, "냉기");
+            AppendSkillTag(sb, tags, GlobalEnum.SkillTag.Lightning, "번개");
+            AppendSkillTag(sb, tags, GlobalEnum.SkillTag.Poison, "독");
+            AppendSkillTag(sb, tags, GlobalEnum.SkillTag.Buff, "버프");
+            AppendSkillTag(sb, tags, GlobalEnum.SkillTag.Debuff, "디버프");
+            AppendSkillTag(sb, tags, GlobalEnum.SkillTag.Move, "이동");
+            return sb.Length > 0 ? $"{sb} 스킬 전용" : string.Empty;
+        }
+
         public static string FormatModLine(ModInstance mod)
         {
             if (mod == null || mod.Table == null)
@@ -104,7 +162,8 @@ namespace ARPG.Item
             }
         }
 
-        private static bool IsPercentFlatStat(GlobalEnum.Stat stat)
+        /// <summary>FlatStat 값이 확률·비율(%)인 스탯. 비교 차이는 %p로 표시한다.</summary>
+        public static bool IsPercentFlatStat(GlobalEnum.Stat stat)
         {
             return stat == GlobalEnum.Stat.CriRate
                 || stat == GlobalEnum.Stat.CriDamageMul
@@ -120,6 +179,15 @@ namespace ARPG.Item
                 || stat == GlobalEnum.Stat.IceResist
                 || stat == GlobalEnum.Stat.LightningResist
                 || stat == GlobalEnum.Stat.PoisonResist;
+        }
+
+        private static void AppendSkillTag(System.Text.StringBuilder sb, GlobalEnum.SkillTag tags, GlobalEnum.SkillTag tag, string name)
+        {
+            if ((tags & tag) == 0)
+                return;
+            if (sb.Length > 0)
+                sb.Append('·');
+            sb.Append(name);
         }
     }
 }

@@ -116,41 +116,18 @@ namespace ARPG.Skill.Telegraph
 
         public static AttackTelegraphGeometry Resolve(in AttackTelegraphGeometryInput input)
         {
-            int projectileCount = Mathf.Max(1, input.ProjectileCount);
-            float spreadAngle = Mathf.Max(0f, input.ProjectileSpreadAngleDeg);
+            // 투사체의 위험은 실제 투사체 비주얼로 알린다. 공격 예고는 범위 타격만 표시한다.
+            // 직접 타격/장판이 함께 설정되어 있어도 투사체 스킬의 발사 경로는 예고하지 않는다.
+            if (input.HasProjectile == true)
+                return default;
 
             // 장판은 예고 대상이 아니다. 커밋 시점에 즉시 생성되므로 장판 자체의 비주얼이 위험을 알리고,
             // 예고를 또 그리면 같은 위험을 두 번 표시하게 된다. 그래서 도형은 직접 타격 기준으로만 결정한다.
             // 장판+직접타격 스킬은 직접 타격 범위만 예고된다.
             //
-            // 예외로 HasAreaEffect를 보는 곳은 발사체가 장판을 운반하는 스킬(위치 지정 + 발사체 + 장판)뿐이다.
-            // 발사체는 비행 중 아무도 맞히지 않고 착지 지점에 장판만 깔기 때문에 직선 경로 예고를 그리면 틀린
-            // 위험을 알리게 된다. 깔린 장판 자체가 위험을 알리므로 예고하지 않는다 (SkillTable.DeliversAreaByProjectile).
-            //
             // 설치된 지연 장판의 TargetCircle은 EntityFactory가 별도 엔티티에 만든다.
             // 이 Resolver는 설치 전 시전 예고만 다루므로 IsPositionTarget / AreaEffectRadius로 장판 원을 추가하지 않는다.
             // 자세한 내용은 MONSTER_ATTACK_TELEGRAPH_DESIGN.md §5.3 참조.
-
-            if (input.HasProjectile == true && input.HasAreaEffect == true && input.IsPositionTarget == true)
-                return default;
-
-            if (input.HasProjectile == true)
-            {
-                AttackTelegraphShape shape = projectileCount > 1
-                    ? AttackTelegraphShape.ProjectileFan
-                    : AttackTelegraphShape.ProjectileLane;
-                float pathLength = Mathf.Max(0f, input.ProjectileSpeed) * Mathf.Max(0f, input.ProjectileLifetime);
-                float fullWidth = 2f * (Mathf.Max(0f, input.ProjectileHitRadius) + Mathf.Max(0f, input.PlayerHitRadius));
-                float halfSpread = (projectileCount - 1) * spreadAngle * 0.5f;
-                return new AttackTelegraphGeometry(
-                    shape,
-                    AttackTelegraphOriginMode.FollowOwner,
-                    pathLength,
-                    halfSpread,
-                    fullWidth,
-                    projectileCount,
-                    spreadAngle);
-            }
 
             if (input.HasDirectImpact == false)
                 return default;

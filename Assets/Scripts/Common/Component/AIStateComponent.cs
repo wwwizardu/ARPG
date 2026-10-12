@@ -22,5 +22,6 @@ namespace ARPG.Component
         public float PatrolArrivalTime; // 순찰 목적지 도착 시간 (대기 타이머용)
         public Vector2 PatrolTarget;    // 순찰 목표 지점
         public Vector2 SpawnPosition;   // 스폰 위치 (귀환용)
+        public float NextRetreatTime;   // 다음 후퇴 가능 시각 (원거리 Attack의 후퇴 쿨타임)
     }
 }

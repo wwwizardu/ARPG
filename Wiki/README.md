@@ -2,7 +2,7 @@
 name: wiki-map
 description: Docs/ 전체 주제를 얕고 넓게 조망하는 지도 페이지. 주제별 상세 위키 페이지의 진입점.
 type: map
-last_updated: 2026-10-12
+last_updated: 2026-10-13
 sources:
   - Wiki/current_status.md
   - Wiki/combat.md
@@ -41,9 +41,9 @@ sources:
 
 | 주제 | 한 줄 요약 | 문서 위치 | 흩어짐 | 코드 연결도 |
 |------|-----------|----------|:------:|:----------:|
-| **current_status** → [current_status.md](current_status.md) | 2026-10-12 기준 구현 현황·미검증 항목·권장 재개 순서 [src: Wiki/current_status.md] | 최신 관련 Docs + 코드·테이블 대조 | — | 상 |
+| **current_status** → [current_status.md](current_status.md) | 2026-10-13 기준 구현 현황·미검증 항목·권장 재개 순서 [src: Wiki/current_status.md] | 최신 관련 Docs + 코드·테이블 대조 | — | 상 |
 | **overview** | 게임 컨셉(3대 축)과 시스템별 구현 현황·로드맵 | `Docs/overview/` 2장 (gameOverview, implementationStatus) + `Docs/README.md`(대시보드) | 하 | 하 |
-| **combat** → [combat.md](combat.md) | 장비 옵션·마법부여·공격 프로필, 아이템 레벨과 옵션 티어 T1~T12(구현, 2026-10-11), 무기 범위·장착·쌍수·표창 제외·주문 무기 성장·책별 스킬 레벨과 골드 성장의 확정 방식(미구현), 계열별 기준 성능과 장비 공백 정리, 명중 시 넉백·당기기(구현, 2026-10-12) [src: Wiki/combat.md, Docs/combat/SKILL_DESIGN.md §6.10, Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md, Docs/combat/WEAPON_SKILL_RANGE_DESIGN.md, Docs/combat/WEAPON_PROGRESSION_DESIGN.md] | `Docs/combat/` + 마법부여·전투 코드와 테이블 [src: Docs/combat/, Assets/Scripts/Item/] | 상 | 상 |
+| **combat** → [combat.md](combat.md) | 장비 옵션·마법부여·공격 프로필, 아이템 레벨과 옵션 티어 T1~T12(구현, 2026-10-11), 무기 범위·장착·쌍수·표창 제외·주문 무기 성장·책별 스킬 레벨과 골드 성장의 확정 방식(미구현), 계열별 기준 성능과 장비 공백 정리, 명중 시 넉백·당기기(구현, 2026-10-12), 인벤토리 장비 비교 툴팁(구현, 2026-10-13) [src: Wiki/combat.md, Docs/combat/SKILL_DESIGN.md §6.10, Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md, Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md, Docs/combat/WEAPON_SKILL_RANGE_DESIGN.md, Docs/combat/WEAPON_PROGRESSION_DESIGN.md] | `Docs/combat/` + 마법부여·전투 코드와 테이블 [src: Docs/combat/, Assets/Scripts/Item/] | 상 | 상 |
 | **skill_aim** → [skill_aim.md](skill_aim.md) | 커서 조준 추적·효과 커밋, 플레이어 방향 화살표 View, 스킬 사용 중 이동 감속 [src: Wiki/skill_aim.md] | `Docs/combat/POE2_CURSOR_TRACKING_PLAN.md` + 조준·스킬·이동 코드 | 중 | 상 |
 | **skill_propagation** → [skill_propagation.md](skill_propagation.md) | 연쇄·분열 공용 전파 런타임, 대상에 붙는 대기 주문, Chain Lightning 수직 슬라이스 [src: Wiki/skill_propagation.md] | `Docs/combat/SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md` + `Skill/Propagation/`·전파 시스템 코드 | 하 | 상 |
 | **ai_monster** → [monster_spawn_runtime.md](monster_spawn_runtime.md) | 몬스터 AI·데이터 주도 종 풀, 거리 기반 스폰/Warm 청크 캐시(구현·대조 완료), 공격 예고(Phase 0~2 구현) [src: Wiki/monster_spawn_runtime.md, Docs/combat/MONSTER_ATTACK_TELEGRAPH_DESIGN.md 상태] | `Docs/ai_monster/` 2장 + 런타임 스폰 제안 | 중 | 상 |

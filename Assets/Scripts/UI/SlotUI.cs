@@ -10,7 +10,7 @@ using System;
 
 namespace ARPG.UI
 {
-    public class SlotUI : UIBase, IPointerEnterHandler, IPointerExitHandler, IPointerClickHandler
+    public class SlotUI : UIBase, IPointerEnterHandler, IPointerExitHandler, IPointerDownHandler, IPointerClickHandler
     {
         public enum UISlotType
         {
@@ -31,6 +31,11 @@ namespace ARPG.UI
 
         protected Action<SlotUI, PointerEventData>? _onClick = null;
 
+        // 소유 UI가 호버 표시를 직접 관리할 때만 설정한다 (인벤토리 장비 비교). 없으면 기본 툴팁 동작.
+        private Action<SlotUI>? _onHoverEnter = null;
+        private Action<SlotUI>? _onHoverExit = null;
+        private Action<SlotUI, PointerEventData>? _onPress = null;
+
         public int SlotIndex { get { return _slotIndex; } }
         public UISlotType SlotType { get { return _slotType; } }
 
@@ -42,6 +47,23 @@ namespace ARPG.UI
 
             _slotIndex = inSlotIndex;
             _onClick = onClick;
+        }
+
+        /// <summary>
+        /// 호버 진입·이탈과 버튼 누름을 소유 UI에 넘긴다. 설정하면 호버 툴팁 표시·숨김도 소유 UI가 맡는다.
+        /// 델리게이트는 소유 UI가 초기화 때 한 번 만들어 모든 슬롯에 같은 인스턴스를 넘긴다.
+        /// </summary>
+        public void SetPointerHandlers(Action<SlotUI> onHoverEnter, Action<SlotUI> onHoverExit, Action<SlotUI, PointerEventData> onPress)
+        {
+            _onHoverEnter = onHoverEnter;
+            _onHoverExit = onHoverExit;
+            _onPress = onPress;
+        }
+
+        /// <summary>툴팁 anchor용 스크린 사각형.</summary>
+        public Rect GetScreenRect()
+        {
+            return GetSlotScreenRect(_rectTransform);
         }
 
         public virtual void Reset()
@@ -68,6 +90,12 @@ namespace ARPG.UI
         // 마우스가 UI 요소 위로 들어올 때 (툴팁 활성화)
         public void OnPointerEnter(PointerEventData eventData)
         {
+            if (_onHoverEnter != null)
+            {
+                _onHoverEnter(this);
+                return;
+            }
+
             if (_itemData?.Table == null)
                 return;
 
@@ -108,7 +136,20 @@ namespace ARPG.UI
         // 마우스가 UI 요소 밖으로 나갈 때 (툴팁 비활성화)
         public void OnPointerExit(PointerEventData eventData)
         {
+            if (_onHoverExit != null)
+            {
+                _onHoverExit(this);
+                return;
+            }
+
             AR.s.Tooltip.Hide();
+        }
+
+        // 마우스 버튼을 누르는 순간 (비교 모드 판정용). 클릭 처리는 OnPointerClick에서 한다.
+        // UIBase.OnPointerDown(bool 반환, UIManager 경로)과 이름이 같아 인터페이스를 명시적으로 구현한다.
+        void IPointerDownHandler.OnPointerDown(PointerEventData eventData)
+        {
+            _onPress?.Invoke(this, eventData);
         }
 
         // 마우스 클릭 시

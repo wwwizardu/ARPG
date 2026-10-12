@@ -122,6 +122,43 @@ namespace ARPG.UI
             return true;
         }
 
+        public bool CanEquip(GlobalEnum.EquipSlotType inEquipType, Data.ItemData inItem)
+        {
+            int index = (int)inEquipType;
+            if (_slots == null || index < 0 || index >= _slots.Length || _slots[index] == null)
+                return false;
+
+            return _slots[index].CanEquip(inItem);
+        }
+
+        /// <summary>인벤토리 장비 비교 대상 슬롯만 테두리로 강조한다. 칸이 하나인 장비는 두 인자가 같다.</summary>
+        public void SetCompareHighlight(GlobalEnum.EquipSlotType inScreenLeftSlot, GlobalEnum.EquipSlotType inScreenRightSlot)
+        {
+            if (_slots == null)
+                return;
+
+            for (int i = 0; i < _slots.Length; i++)
+            {
+                if (_slots[i] == null)
+                    continue;
+                GlobalEnum.EquipSlotType slotType = _slots[i].EquipSlotType;
+                _slots[i].SetCompareHighlight(slotType == inScreenLeftSlot || slotType == inScreenRightSlot);
+            }
+        }
+
+        public void ClearCompareHighlight()
+        {
+            if (_slots == null)
+                return;
+
+            for (int i = 0; i < _slots.Length; i++)
+            {
+                if (_slots[i] == null)
+                    continue;
+                _slots[i].SetCompareHighlight(false);
+            }
+        }
+
         protected override void OnDestroy()
         {
             base.OnDestroy();

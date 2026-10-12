@@ -1109,8 +1109,37 @@ namespace ARPG.Editor
             table.Level = int.Parse(values[14]);
             // Archetype은 시트에 컬럼 있으면 읽음. 없으면 C# 기본값 Normal 유지.
             table.Archetype = ParseEnumSafe(values, 15, GlobalEnum.MonsterArchetype.Normal);
-            // 트랙 A: Biome은 시트에 컬럼 있으면 읽음. 빈 셀/누락이면 Any=공용(모든 biome 스폰).
-            table.Biome = ParseEnumSafe(values, 16, GlobalEnum.BiomeType.Any);
+            // Q열은 단일 바이옴 또는 쉼표로 구분한 서식지 목록. 빈 셀/누락은 Any=공용.
+            ParseMonsterBiomes(table, values);
+        }
+
+        private static void ParseMonsterBiomes(MonsterTable table, string[] values)
+        {
+            table.AdditionalBiomes = null;
+            if (values.Length <= 16 || values[16].Contains(",") == false)
+            {
+                table.Biome = ParseEnumSafe(values, 16, GlobalEnum.BiomeType.Any);
+                return;
+            }
+
+            string[] names = values[16].Split(',');
+            var biomes = new List<GlobalEnum.BiomeType>();
+            for (int i = 0; i < names.Length; i++)
+            {
+                if (Enum.TryParse(names[i].Trim(), out GlobalEnum.BiomeType biome) == false
+                    || Enum.IsDefined(typeof(GlobalEnum.BiomeType), biome) == false
+                    || biome == GlobalEnum.BiomeType.Any)
+                {
+                    throw new FormatException($"Monster {table.Id}: invalid biome list '{values[16]}'. Any must be used alone.");
+                }
+
+                if (biomes.Contains(biome) == false)
+                    biomes.Add(biome);
+            }
+
+            table.Biome = biomes[0];
+            if (biomes.Count > 1)
+                table.AdditionalBiomes = biomes.GetRange(1, biomes.Count - 1).ToArray();
         }
 
         /// <summary>

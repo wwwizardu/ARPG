@@ -82,6 +82,28 @@
                 <ui:Label name="it-desc" class="tooltip-desc"/>
             </ui:VisualElement>
 
+            <!-- 인벤토리 장비 전용 하단 안내 (INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md) -->
+            <ui:VisualElement name="compare-hint" class="tooltip-compare-hint" picking-mode="Ignore">
+                <ui:VisualElement class="tooltip-divider"/>
+                <ui:VisualElement class="tooltip-compare-hint-row" picking-mode="Ignore">
+                    <ui:Label text="Shift" class="tooltip-keycap" picking-mode="Ignore"/>
+                    <ui:Label text="비교" class="tooltip-compare-hint-text" picking-mode="Ignore"/>
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+
+        <!-- 인벤토리 장비 비교: [선택한 아이템][좌클릭 대상][우클릭 대상] 카드 묶음.
+             카드 행은 코드에서 만들며, 헤더·조작 안내는 고정하고 본문만 스크롤한다. -->
+        <ui:VisualElement name="compare" class="compare-frame" picking-mode="Ignore">
+            <ui:VisualElement name="compare-header" class="compare-header" picking-mode="Ignore"/>
+            <ui:ScrollView name="compare-body" class="compare-body" picking-mode="Ignore"/>
+            <ui:VisualElement name="compare-footer" class="compare-footer" picking-mode="Ignore">
+                <ui:VisualElement class="tooltip-divider"/>
+                <ui:Label name="compare-guide" class="compare-guide" picking-mode="Ignore"/>
+                <ui:Label text="교체 시: 아이템 능력 차이 (선택한 아이템 − 장착 아이템)" class="compare-note" picking-mode="Ignore"/>
+                <ui:Label name="compare-scroll-hint" text="마우스 휠로 옵션을 더 볼 수 있습니다" class="compare-note compare-scroll-hint" picking-mode="Ignore"/>
+            </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

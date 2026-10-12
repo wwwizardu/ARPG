@@ -117,6 +117,10 @@ namespace ARPG.Tables
         // 특정 biome 값이면 그 biome 전용 스폰 + 국지 위협 가중.
         [JsonProperty("Biome")] public GE.BiomeType Biome = GE.BiomeType.Any;
 
+        // 복수 서식지는 첫 바이옴을 Biome에 유지하고 나머지를 별도 스폰 풀에도 등록한다.
+        [JsonProperty("AdditionalBiomes", NullValueHandling = NullValueHandling.Ignore)]
+        public GE.BiomeType[]? AdditionalBiomes;
+
         [JsonIgnore] public AiTable? AiTable;
 
 

@@ -104,6 +104,150 @@
     margin-top: 1px;
 }
 
+/* 인벤토리 장비 단일 툴팁 하단 `[Shift] 비교` 안내 */
+.tooltip-compare-hint {
+    display: none;
+    flex-direction: column;
+}
+
+.tooltip-compare-hint-row {
+    flex-direction: row;
+    align-items: center;
+}
+
+/* USS로 그린 키캡 (별도 이미지 없음) */
+.tooltip-keycap {
+    font-size: 11px;
+    -unity-font-style: bold;
+    color: rgb(230, 230, 230);
+    padding: 1px 6px 1px 6px;
+    border-width: 1px;
+    border-bottom-width: 2px;
+    border-color: rgba(200, 200, 200, 0.8);
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+.tooltip-compare-hint-text {
+    font-size: 12px;
+    color: rgb(190, 190, 190);
+    margin-left: 6px;
+}
+
+/* 인벤토리 장비 비교 묶음. 폭·최대 높이는 TooltipManager가 카드 수와 화면 높이로 정한다. */
+.compare-frame {
+    position: absolute;
+    display: none;
+    flex-direction: column;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background-color: rgba(20, 20, 24, 0.96);
+    border-width: 1px;
+    border-color: rgba(180, 140, 80, 0.5);
+}
+
+.compare-header {
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.compare-body {
+    flex-grow: 0;
+    flex-shrink: 1;
+    min-height: 0;
+}
+
+.compare-footer {
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.compare-row {
+    flex-direction: row;
+    flex-shrink: 0;
+}
+
+/* 카드 한 장의 한 행. 같은 열의 칸이 이어져 카드처럼 보인다. */
+.compare-cell {
+    flex-shrink: 0;
+    flex-direction: column;
+    padding-left: 8px;
+    padding-right: 8px;
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+.compare-cell-top {
+    padding-top: 6px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+}
+
+.compare-cell-bottom {
+    padding-bottom: 6px;
+    border-bottom-left-radius: 4px;
+    border-bottom-right-radius: 4px;
+}
+
+.compare-table-gap {
+    height: 8px;
+    flex-shrink: 0;
+}
+
+.compare-card-title {
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: rgb(180, 140, 80);
+    margin-bottom: 2px;
+    white-space: normal;
+}
+
+.compare-empty {
+    font-size: 14px;
+    color: rgb(140, 140, 140);
+    white-space: normal;
+}
+
+.compare-section-title {
+    margin-top: 5px;
+}
+
+.compare-line {
+    font-size: 13px;
+    color: rgb(170, 200, 230);
+    margin-top: 1px;
+    white-space: normal;
+}
+
+.compare-line-implicit {
+    color: rgb(255, 215, 100);
+    -unity-font-style: bold;
+}
+
+.compare-line-enhancement {
+    color: rgb(120, 220, 180);
+}
+
+.compare-line-missing {
+    color: rgb(110, 110, 110);
+}
+
+.compare-guide {
+    font-size: 13px;
+    color: rgb(220, 220, 220);
+    white-space: normal;
+}
+
+.compare-note {
+    font-size: 11px;
+    color: rgb(150, 150, 150);
+    margin-top: 2px;
+    white-space: normal;
+}
+
+.compare-scroll-hint {
+    display: none;
+}
+
 /* 등급별 이름 색상 (1=Common, 2=Rare, 3=Epic) */
 .tooltip-tier-1 {
     color: rgb(220, 220, 220);

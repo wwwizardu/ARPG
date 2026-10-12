@@ -138,7 +138,9 @@ PickFireSkill → 슬롯 선택          →  GetSkillCommandComponent 발동
 선택 불가(쿨/사거리 전원 실패)        →  대기 (그 자리에 머무름)
 ```
 
-**Ranged만의 특이점**: `ATTACK_MIN_TIME` 경과 후에만 KeepDistance 기반 Retreat 허용
+**Ranged만의 특이점**: KeepDistance 기반 Retreat은 아래 두 조건을 모두 만족할 때만 허용
+- `ATTACK_MIN_TIME`(1.5초): Attack 진입 후 최소 유지 시간. 추격 직후 바로 도망가지 않게 한다.
+- `RETREAT_COOLDOWN`(4초): 후퇴를 시작한 시점부터 다음 후퇴까지의 최소 간격. `AIStateComponent.NextRetreatTime`에 기록하며, 쿨타임 중에는 가까이 붙어도 그 자리에서 공격한다. 붙으면 도망가기를 무한 반복하는 카이팅을 막기 위한 값이다.
 
 > ⚠️ **KeepDistance 주의**: 값이 교전 사거리(`attacker.HitRadius + SkillRangeMax + target.HitRadius`)보다 크면 Attack 진입과 동시에 Retreat이 발동되어 **Attack ↔ Retreat ↔ Chase 핑퐁**이 발생함. Melee는 보통 0, Ranged는 교전 사거리보다 의도적으로 작게 잡을 것.
 

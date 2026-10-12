@@ -1,4 +1,5 @@
 #nullable enable
+using System.Collections.Generic;
 using ARPG.Data;
 using ARPG.Item;
 using ARPG.Tables;
@@ -25,6 +26,35 @@ namespace ARPG.Manager
         {
             "tooltip-tier-1", "tooltip-tier-2", "tooltip-tier-3"
         };
+
+        private const float ANCHOR_OFFSET_X = 8f;
+
+        // 인벤토리 장비 비교 (INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md §화면 구성)
+        private const float COMPARE_CARD_WIDTH = 250f;
+        private const float COMPARE_CARD_GAP = 8f;
+        private const float COMPARE_FRAME_HORIZONTAL_EXTRA = 26f;   // .compare-frame 좌우 padding 12×2 + border 1×2
+        private const float COMPARE_MAX_HEIGHT_RATIO = 0.75f;
+        private const float COMPARE_SCROLL_STEP = 40f;
+        private const int COMPARE_MAX_COLUMNS = 3;
+        private const string DIFF_COLOR_BETTER = "#78DC78";
+        private const string DIFF_COLOR_WORSE = "#EB6464";
+        private const string DIFF_COLOR_NEUTRAL = "#C8C8C8";
+
+        /// <summary>비교 카드 한 장. 선택 카드는 Rows가 null이고, 장착 카드는 선택 아이템과의 비교 결과를 가진다.</summary>
+        private struct CompareColumn
+        {
+            public ItemData? Item;
+            public string Title;
+            public List<EquipmentComparisonRow>? Rows;
+        }
+
+        /// <summary>모든 카드가 맞춰 쓰는 행 키 (장착 카드별 비교 결과의 합집합).</summary>
+        private struct CompareKey
+        {
+            public long Key;
+            public EquipmentComparisonSection Section;
+            public bool IsImplicit;
+        }
 
         private GameObject? _tooltipObj;
         private UIDocument? _document;
@@ -85,9 +115,29 @@ namespace ARPG.Manager
         private Label? _itTier;
         private Label? _itDesc;
 
+        // 인벤토리 장비 비교 element 캐시
+        private VisualElement? _compareHint;
+        private VisualElement? _compareFrame;
+        private VisualElement? _compareHeader;
+        private ScrollView? _compareBody;
+        private Label? _compareGuide;
+        private Label? _compareScrollHint;
+
+        // 비교 콘텐츠를 만들 때마다 비우고 다시 채우는 버퍼
+        private readonly CompareColumn[] _compareColumns = new CompareColumn[COMPARE_MAX_COLUMNS];
+        private int _compareColumnCount = 0;
+        private readonly List<EquipmentComparisonRow> _compareRowsLeftClick = new();
+        private readonly List<EquipmentComparisonRow> _compareRowsRightClick = new();
+        private readonly List<CompareKey> _compareKeys = new();
+        private readonly List<VisualElement> _compareTableRows = new();
+
         private bool _isReady = false;
+        private VisualElement? _positionTarget;     // 위치를 맞출 패널 (단일 툴팁 또는 비교 묶음)
         private Rect _pendingAnchorScreenRect;
         private bool _hasPendingPositionUpdate = false;
+
+        public bool IsEquipmentComparisonVisible =>
+            _compareFrame != null && _compareFrame.style.display == DisplayStyle.Flex;
 
         public void Initialize()
         {
@@ -100,6 +150,129 @@ namespace ARPG.Manager
         }
 
         public void Show(ItemData? item, Rect anchorScreenRect)
+        {
+            ShowSingle(item, anchorScreenRect, false);
+        }
+
+        /// <summary>
+        /// 인벤토리 장비 전용 단일 툴팁. 맨 아래에 구분선과 `[Shift] 비교` 안내를 붙인다.
+        /// 장비가 아니면 Show와 같다. 비교 자체는 ShowEquipmentComparison이 표시한다.
+        /// </summary>
+        public void ShowWithCompareHint(ItemData? item, Rect anchorScreenRect)
+        {
+            ShowSingle(item, anchorScreenRect, true);
+        }
+
+        /// <summary>
+        /// 인벤토리 장비와 장착 아이템 비교 묶음을 표시한다.
+        /// 칸이 하나인 장비는 두 슬롯 인자가 같고 [선택한 아이템][현재 장착] 두 장,
+        /// 칸이 두 개인 장비는 [선택한 아이템][좌클릭 대상][우클릭 대상] 세 장이다. 빈 칸은 장착 아이템이 null이다.
+        /// 표시만 하며 아이템·장비·저장 상태를 바꾸지 않는다.
+        /// </summary>
+        public void ShowEquipmentComparison(ItemData selected,
+            GlobalEnum.EquipSlotType leftClickSlot, ItemData? leftClickItem,
+            GlobalEnum.EquipSlotType rightClickSlot, ItemData? rightClickItem,
+            Rect anchorScreenRect)
+        {
+            if (_isReady == false || _frame == null || _compareFrame == null
+                || _compareHeader == null || _compareBody == null) return;
+            if (selected == null || selected.Table == null || selected.Equipment == null)
+            {
+                Hide();
+                return;
+            }
+
+            bool isDualSlot = leftClickSlot != rightClickSlot;
+            EquipmentComparisonCalculator.Compare(selected, leftClickItem, _compareRowsLeftClick);
+            if (isDualSlot == true)
+                EquipmentComparisonCalculator.Compare(selected, rightClickItem, _compareRowsRightClick);
+            else
+                _compareRowsRightClick.Clear();
+
+            _compareColumnCount = 0;
+            AddCompareColumn(selected, "선택한 아이템", null);
+            if (isDualSlot == true)
+            {
+                AddCompareColumn(leftClickItem, $"좌클릭 — {GetSlotDisplayName(leftClickSlot)}", _compareRowsLeftClick);
+                AddCompareColumn(rightClickItem, $"우클릭 — {GetSlotDisplayName(rightClickSlot)}", _compareRowsRightClick);
+            }
+            else
+            {
+                AddCompareColumn(leftClickItem, $"현재 장착 — {GetSlotDisplayName(leftClickSlot)}", _compareRowsLeftClick);
+            }
+            CollectCompareKeys();
+
+            _compareHeader.Clear();
+            _compareBody.Clear();
+            VisualElement bodyRoot = _compareBody.contentContainer;
+            float frameWidth;
+            if (ShouldStackCompareCards(anchorScreenRect) == false)
+            {
+                _compareHeader.style.display = DisplayStyle.Flex;
+                BuildCompareTable(0, _compareColumnCount, _compareHeader, bodyRoot);
+                frameWidth = GetCompareTableWidth(_compareColumnCount);
+            }
+            else
+            {
+                // 가용 폭에 들어가지 않으면 선택한 아이템을 위에 두고 장착 카드를 아래에 좌클릭·우클릭 순서로 쌓는다.
+                // 두 표를 함께 스크롤하므로 고정 헤더는 쓰지 않는다.
+                _compareHeader.style.display = DisplayStyle.None;
+                BuildCompareTable(0, 1, bodyRoot, bodyRoot);
+                VisualElement gap = new VisualElement();
+                gap.pickingMode = PickingMode.Ignore;
+                gap.AddToClassList("compare-table-gap");
+                bodyRoot.Add(gap);
+                BuildCompareTable(1, _compareColumnCount, bodyRoot, bodyRoot);
+                frameWidth = GetCompareTableWidth(Mathf.Max(1, _compareColumnCount - 1));
+            }
+
+            if (_compareGuide != null)
+                _compareGuide.text = BuildCompareGuide(isDualSlot, leftClickSlot, leftClickItem, rightClickSlot, rightClickItem);
+
+            _frame.style.display = DisplayStyle.None;
+            _compareFrame.style.width = frameWidth + COMPARE_FRAME_HORIZONTAL_EXTRA;
+            float panelHeight = _root != null ? _root.resolvedStyle.height : float.NaN;
+            if (float.IsNaN(panelHeight) == false && panelHeight > 0f)
+                _compareFrame.style.maxHeight = panelHeight * COMPARE_MAX_HEIGHT_RATIO;
+            _compareBody.scrollOffset = Vector2.zero;
+            _compareFrame.style.display = DisplayStyle.Flex;
+            UpdateCompareScrollHint();
+            RequestPositionUpdate(_compareFrame, anchorScreenRect);
+        }
+
+        /// <summary>비교 본문을 휠 방향으로 한 단계 스크롤한다. 양수 = 휠을 위로(앞쪽 내용).</summary>
+        public void ScrollEquipmentComparison(float wheelDelta)
+        {
+            if (_compareBody == null || IsEquipmentComparisonVisible == false || wheelDelta == 0f) return;
+
+            float maxOffset = GetCompareScrollableHeight();
+            if (maxOffset <= 0f) return;
+
+            Vector2 offset = _compareBody.scrollOffset;
+            offset.y = Mathf.Clamp(offset.y - Mathf.Sign(wheelDelta) * COMPARE_SCROLL_STEP, 0f, maxOffset);
+            _compareBody.scrollOffset = offset;
+        }
+
+        public void Hide()
+        {
+            if (_frame == null) return;
+            _hasPendingPositionUpdate = false;
+            _frame.style.display = DisplayStyle.None;
+            HideCompareFrame();
+        }
+
+        /// <summary>
+        /// 슬롯의 스크린 좌표 사각형을 anchor로 받아 표시 중인 툴팁(단일 또는 비교 묶음)의 위치를 결정한다.
+        /// 1차: 슬롯 우측에 툴팁 좌측 정렬. 우측 화면 넘치면 슬롯 좌측에 툴팁 우측 정렬.
+        /// 하단 넘치면 위쪽으로 정렬, 상단/좌측 넘치면 0 클램프.
+        /// </summary>
+        public void UpdatePosition(Rect anchorScreenRect)
+        {
+            if (_isReady == false || _positionTarget == null) return;
+            PlaceElement(_positionTarget, anchorScreenRect);
+        }
+
+        private void ShowSingle(ItemData? item, Rect anchorScreenRect, bool withCompareHint)
         {
             if (_isReady == false || _frame == null) return;
             if (item == null || item.Table == null)
@@ -145,75 +318,70 @@ namespace ARPG.Manager
                 return;
             }
 
+            SetSectionVisible(_compareHint, withCompareHint == true && activeContent == _contentEquipment);
+            HideCompareFrame();
             ShowContent(activeContent);
             _frame.style.display = DisplayStyle.Flex;
-            RequestPositionUpdate(anchorScreenRect);
+            RequestPositionUpdate(_frame, anchorScreenRect);
         }
 
-        public void Hide()
+        private void PlaceElement(VisualElement target, Rect anchorScreenRect)
         {
-            if (_frame == null) return;
-            _hasPendingPositionUpdate = false;
-            _frame.style.display = DisplayStyle.None;
-        }
+            if (_root == null) return;
+            if (target.style.display == DisplayStyle.None) return;
+            if (TryGetPanelAnchor(anchorScreenRect, out Rect anchor) == false) return;
 
-        /// <summary>
-        /// 슬롯의 스크린 좌표 사각형을 anchor로 받아 툴팁 위치를 결정한다.
-        /// 1차: 슬롯 우측에 툴팁 좌측 정렬. 우측 화면 넘치면 슬롯 좌측에 툴팁 우측 정렬.
-        /// 하단 넘치면 위쪽으로 정렬, 상단/좌측 넘치면 0 클램프.
-        /// </summary>
-        public void UpdatePosition(Rect anchorScreenRect)
-        {
-            if (_isReady == false || _frame == null || _root == null) return;
-            if (_frame.style.display == DisplayStyle.None) return;
-
-            IPanel? panel = _root.panel;
-            if (panel == null) return;
-
-            // Screen Space(Y up, 좌하단 원점) → Panel Space(Y down, 좌상단 원점) 변환.
-            // Rect의 좌하단/우상단 두 점을 변환한 뒤 panel-space Rect로 재구성한다.
-            Vector2 slotBottomLeftScreen = new Vector2(anchorScreenRect.xMin, anchorScreenRect.yMin);
-            Vector2 slotTopRightScreen = new Vector2(anchorScreenRect.xMax, anchorScreenRect.yMax);
-
-            Vector2 flippedBL = new Vector2(slotBottomLeftScreen.x, Screen.height - slotBottomLeftScreen.y);
-            Vector2 flippedTR = new Vector2(slotTopRightScreen.x, Screen.height - slotTopRightScreen.y);
-
-            Vector2 panelBL = RuntimePanelUtils.ScreenToPanel(panel, flippedBL);
-            Vector2 panelTR = RuntimePanelUtils.ScreenToPanel(panel, flippedTR);
-
-            float anchorXMin = Mathf.Min(panelBL.x, panelTR.x);
-            float anchorXMax = Mathf.Max(panelBL.x, panelTR.x);
-            float anchorYMin = Mathf.Min(panelBL.y, panelTR.y);
-            float anchorYMax = Mathf.Max(panelBL.y, panelTR.y);
-
-            const float offsetX = 8f;
             const float offsetY = 0f;
 
             float panelW = _root.resolvedStyle.width;
             float panelH = _root.resolvedStyle.height;
-            float ttW = _frame.resolvedStyle.width;
-            float ttH = _frame.resolvedStyle.height;
+            float ttW = target.resolvedStyle.width;
+            float ttH = target.resolvedStyle.height;
 
             // 1차: 슬롯 우측에 툴팁 좌측 정렬, 슬롯 상단(panel Y down 기준 yMin)에 툴팁 상단 정렬
-            float x = anchorXMax + offsetX;
-            float y = anchorYMin + offsetY;
+            float x = anchor.xMax + ANCHOR_OFFSET_X;
+            float y = anchor.yMin + offsetY;
 
-            // 우측 넘침 → 슬롯 좌측에 툴팁 우측 붙이기
+            // 우측 넘침 → 슬롯 좌측에 툴팁 우측 붙이기 (비교 묶음은 카드 순서를 유지한 채 통째로 옮긴다)
             if (x + ttW > panelW)
             {
-                x = anchorXMin - ttW - offsetX;
+                x = anchor.xMin - ttW - ANCHOR_OFFSET_X;
             }
             // 하단 넘침 → 툴팁 하단을 슬롯 하단(yMax)에 정렬
             if (y + ttH > panelH)
             {
-                y = anchorYMax - ttH;
+                y = anchor.yMax - ttH;
             }
             // 좌측/상단 클램프
             if (x < 0f) x = 0f;
             if (y < 0f) y = 0f;
 
-            _frame.style.left = x;
-            _frame.style.top = y;
+            target.style.left = x;
+            target.style.top = y;
+        }
+
+        /// <summary>
+        /// Screen Space(Y up, 좌하단 원점) 사각형 → Panel Space(Y down, 좌상단 원점) 사각형.
+        /// Rect의 좌하단/우상단 두 점을 변환한 뒤 panel-space Rect로 재구성한다.
+        /// </summary>
+        private bool TryGetPanelAnchor(Rect anchorScreenRect, out Rect panelAnchor)
+        {
+            panelAnchor = Rect.zero;
+            IPanel? panel = _root?.panel;
+            if (panel == null) return false;
+
+            Vector2 flippedBL = new Vector2(anchorScreenRect.xMin, Screen.height - anchorScreenRect.yMin);
+            Vector2 flippedTR = new Vector2(anchorScreenRect.xMax, Screen.height - anchorScreenRect.yMax);
+
+            Vector2 panelBL = RuntimePanelUtils.ScreenToPanel(panel, flippedBL);
+            Vector2 panelTR = RuntimePanelUtils.ScreenToPanel(panel, flippedTR);
+
+            float xMin = Mathf.Min(panelBL.x, panelTR.x);
+            float xMax = Mathf.Max(panelBL.x, panelTR.x);
+            float yMin = Mathf.Min(panelBL.y, panelTR.y);
+            float yMax = Mathf.Max(panelBL.y, panelTR.y);
+            panelAnchor = Rect.MinMaxRect(xMin, yMin, xMax, yMax);
+            return true;
         }
 
         // ========== 컨텐츠 빌더 ==========
@@ -418,13 +586,13 @@ namespace ARPG.Manager
             if (isWeapon == true && equip != null)
             {
                 WeaponStatCache stats = equip.WeaponStats;
-                SetStatLine(_eqDmgPhysics, FormatDamageLine("물리 피해", stats.Physics));
-                SetStatLine(_eqDmgFire, FormatDamageLine("화염 피해", stats.Fire));
-                SetStatLine(_eqDmgIce, FormatDamageLine("냉기 피해", stats.Ice));
-                SetStatLine(_eqDmgLightning, FormatDamageLine("번개 피해", stats.Lightning));
-                SetStatLine(_eqDmgPoison, FormatDamageLine("독 피해", stats.Poison));
-                SetStatLine(_eqCrit, stats.CriRate > 0 ? $"치명타 확률: {stats.CriRate}%" : null);
-                SetStatLine(_eqAs, stats.AttackSpeed > 0f ? $"초당 공격 횟수: {stats.AttackSpeed:F2}" : null);
+                SetStatLine(_eqDmgPhysics, EquipmentOptionText.FormatWeaponDamageLine("물리 피해", stats.Physics));
+                SetStatLine(_eqDmgFire, EquipmentOptionText.FormatWeaponDamageLine("화염 피해", stats.Fire));
+                SetStatLine(_eqDmgIce, EquipmentOptionText.FormatWeaponDamageLine("냉기 피해", stats.Ice));
+                SetStatLine(_eqDmgLightning, EquipmentOptionText.FormatWeaponDamageLine("번개 피해", stats.Lightning));
+                SetStatLine(_eqDmgPoison, EquipmentOptionText.FormatWeaponDamageLine("독 피해", stats.Poison));
+                SetStatLine(_eqCrit, EquipmentOptionText.FormatWeaponCritLine(stats.CriRate));
+                SetStatLine(_eqAs, EquipmentOptionText.FormatWeaponAttackSpeedLine(stats.AttackSpeed));
                 hasBaseContent = stats.Physics.Max > 0
                     || stats.Fire.Max > 0
                     || stats.Ice.Max > 0
@@ -525,19 +693,13 @@ namespace ARPG.Manager
             }
         }
 
-        private static string? FormatDamageLine(string label, DamageRange range)
-        {
-            return range.Max > 0 ? $"{label}: {range.Min}~{range.Max}" : null;
-        }
-
         private static void AppendModLine(VisualElement? container, ModInstance mod, bool isImplicit)
         {
             if (container == null || mod.Table == null) return;
 
             string body = EquipmentOptionText.FormatModLine(mod);
 
-            Label line = new Label(body);
-            line.AddToClassList(isImplicit ? "tooltip-statline-implicit" : "tooltip-modline");
+            Label line = CreateIgnoredLabel(body, isImplicit ? "tooltip-statline-implicit" : "tooltip-modline");
             container.Add(line);
         }
 
@@ -547,21 +709,436 @@ namespace ARPG.Manager
         {
             if (container == null) return;
 
-            string label = enhancement.StatType switch
-            {
-                GlobalEnum.WeaponLocalStatType.PhysicsDamage => "물리 피해 강화",
-                GlobalEnum.WeaponLocalStatType.FireDamage => "화염 피해 강화",
-                GlobalEnum.WeaponLocalStatType.IceDamage => "냉기 피해 강화",
-                GlobalEnum.WeaponLocalStatType.LightningDamage => "번개 피해 강화",
-                GlobalEnum.WeaponLocalStatType.PoisonDamage => "독 피해 강화",
-                GlobalEnum.WeaponLocalStatType.CriticalRate => "치명타 확률 강화",
-                GlobalEnum.WeaponLocalStatType.AttackSpeed => "공격속도 강화",
-                _ => enhancement.StatType.ToString(),
-            };
-
-            Label line = new Label($"{label}: +{enhancement.Value}%");
-            line.AddToClassList("tooltip-enhancement-line");
+            Label line = CreateIgnoredLabel(EquipmentOptionText.FormatWeaponEnhancementLine(enhancement), "tooltip-enhancement-line");
             container.Add(line);
+        }
+
+        // ========== 인벤토리 장비 비교 빌더 ==========
+
+        private void AddCompareColumn(ItemData? item, string title, List<EquipmentComparisonRow>? rows)
+        {
+            if (_compareColumnCount >= _compareColumns.Length) return;
+            _compareColumns[_compareColumnCount] = new CompareColumn
+            {
+                Item = item,
+                Title = title,
+                Rows = rows,
+            };
+            _compareColumnCount++;
+        }
+
+        /// <summary>장착 카드별 비교 결과의 행 키를 합쳐 모든 카드가 같은 순서·위치로 쓰게 한다.</summary>
+        private void CollectCompareKeys()
+        {
+            _compareKeys.Clear();
+            for (int c = 0; c < _compareColumnCount; c++)
+            {
+                List<EquipmentComparisonRow>? rows = _compareColumns[c].Rows;
+                if (rows == null) continue;
+                for (int i = 0; i < rows.Count; i++)
+                {
+                    if (ContainsCompareKey(rows[i].Key) == true) continue;
+                    _compareKeys.Add(new CompareKey
+                    {
+                        Key = rows[i].Key,
+                        Section = rows[i].Section,
+                        IsImplicit = rows[i].IsImplicit,
+                    });
+                }
+            }
+
+            // 키 수가 적어 삽입 정렬로 충분하다 (비교 델리게이트를 만들지 않는다)
+            for (int i = 1; i < _compareKeys.Count; i++)
+            {
+                CompareKey current = _compareKeys[i];
+                int j = i - 1;
+                while (j >= 0 && _compareKeys[j].Key > current.Key)
+                {
+                    _compareKeys[j + 1] = _compareKeys[j];
+                    j--;
+                }
+                _compareKeys[j + 1] = current;
+            }
+        }
+
+        private bool ContainsCompareKey(long key)
+        {
+            for (int i = 0; i < _compareKeys.Count; i++)
+            {
+                if (_compareKeys[i].Key == key) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 카드 [firstColumn, endColumn)를 행 단위 표로 만든다. 같은 행의 칸은 높이가 같아 모든 카드의 항목 위치가 맞는다.
+        /// 이름·등급·아이템 레벨은 headerParent(고정), 능력·옵션은 bodyParent(스크롤)에 붙인다.
+        /// </summary>
+        private void BuildCompareTable(int firstColumn, int endColumn, VisualElement headerParent, VisualElement bodyParent)
+        {
+            _compareTableRows.Clear();
+
+            VisualElement titleRow = CreateCompareRow(headerParent);
+            for (int c = firstColumn; c < endColumn; c++)
+                CreateCompareCell(titleRow, c - firstColumn).Add(CreateIgnoredLabel(_compareColumns[c].Title, "compare-card-title"));
+
+            VisualElement nameRow = CreateCompareRow(headerParent);
+            bool hasTier = false;
+            bool hasItemLevel = false;
+            for (int c = firstColumn; c < endColumn; c++)
+            {
+                VisualElement cell = CreateCompareCell(nameRow, c - firstColumn);
+                ItemData? item = _compareColumns[c].Item;
+                if (item == null)
+                {
+                    cell.Add(CreateIgnoredLabel("장착된 아이템 없음", "compare-empty"));
+                    continue;
+                }
+
+                Label name = CreateIgnoredLabel(string.Empty, "tooltip-name");
+                ApplyTierName(name, item.Table?.Name ?? "장비", item.Table?.Tier ?? 0);
+                cell.Add(name);
+                hasTier |= (item.Table?.Tier ?? 0) > 0;
+                hasItemLevel |= (item.Equipment?.ItemLevel ?? 0) > 0;
+            }
+
+            // 이름·등급·아이템 레벨에는 우열 색을 붙이지 않는다
+            if (hasTier == true)
+            {
+                VisualElement tierRow = CreateCompareRow(headerParent);
+                for (int c = firstColumn; c < endColumn; c++)
+                {
+                    VisualElement cell = CreateCompareCell(tierRow, c - firstColumn);
+                    int tier = _compareColumns[c].Item?.Table?.Tier ?? 0;
+                    if (tier > 0) cell.Add(CreateIgnoredLabel($"Tier {tier}", "tooltip-tier"));
+                }
+            }
+
+            if (hasItemLevel == true)
+            {
+                VisualElement levelRow = CreateCompareRow(headerParent);
+                for (int c = firstColumn; c < endColumn; c++)
+                {
+                    VisualElement cell = CreateCompareCell(levelRow, c - firstColumn);
+                    int itemLevel = _compareColumns[c].Item?.Equipment?.ItemLevel ?? 0;
+                    if (itemLevel > 0) cell.Add(CreateIgnoredLabel($"아이템 레벨 {itemLevel}", "tooltip-tier"));
+                }
+            }
+
+            VisualElement dividerRow = CreateCompareRow(headerParent);
+            for (int c = firstColumn; c < endColumn; c++)
+            {
+                VisualElement divider = new VisualElement();
+                divider.pickingMode = PickingMode.Ignore;
+                divider.AddToClassList("tooltip-divider");
+                CreateCompareCell(dividerRow, c - firstColumn).Add(divider);
+            }
+
+            AppendCompareSection(EquipmentComparisonSection.Base, firstColumn, endColumn, bodyParent);
+            AppendCompareSection(EquipmentComparisonSection.Enhancement, firstColumn, endColumn, bodyParent);
+            AppendCompareSection(EquipmentComparisonSection.Options, firstColumn, endColumn, bodyParent);
+
+            // 같은 열의 첫 칸·마지막 칸에 카드 모서리를 붙인다
+            if (_compareTableRows.Count > 0)
+            {
+                AddClassToRowCells(_compareTableRows[0], "compare-cell-top");
+                AddClassToRowCells(_compareTableRows[_compareTableRows.Count - 1], "compare-cell-bottom");
+            }
+            _compareTableRows.Clear();
+        }
+
+        private void AppendCompareSection(EquipmentComparisonSection section, int firstColumn, int endColumn, VisualElement parent)
+        {
+            bool hasAnyRow = false;
+            for (int k = 0; k < _compareKeys.Count; k++)
+            {
+                if (_compareKeys[k].Section != section) continue;
+                if (HasCompareRowContent(_compareKeys[k].Key, firstColumn, endColumn) == false) continue;
+                hasAnyRow = true;
+                break;
+            }
+            if (hasAnyRow == false) return;
+
+            VisualElement titleRow = CreateCompareRow(parent);
+            for (int c = firstColumn; c < endColumn; c++)
+            {
+                VisualElement cell = CreateCompareCell(titleRow, c - firstColumn);
+                if (ColumnHasSectionContent(c, section) == false) continue;
+                Label title = CreateIgnoredLabel(GetCompareSectionTitle(section, _compareColumns[c].Item), "tooltip-section-title");
+                title.AddToClassList("compare-section-title");
+                if (section == EquipmentComparisonSection.Enhancement)
+                    title.AddToClassList("tooltip-section-title-enhancement");
+                cell.Add(title);
+            }
+
+            for (int k = 0; k < _compareKeys.Count; k++)
+            {
+                CompareKey key = _compareKeys[k];
+                if (key.Section != section) continue;
+                if (HasCompareRowContent(key.Key, firstColumn, endColumn) == false) continue;
+
+                VisualElement row = CreateCompareRow(parent);
+                for (int c = firstColumn; c < endColumn; c++)
+                {
+                    VisualElement cell = CreateCompareCell(row, c - firstColumn);
+                    if (TryGetCompareCellText(c, key.Key, out string? text, out string? diff, out EquipmentComparisonTone tone) == false)
+                        continue;
+                    cell.Add(CreateCompareLine(key, text, diff, tone));
+                }
+            }
+        }
+
+        /// <summary>
+        /// 카드 c의 행 문구. 장착된 아이템이 없는 카드는 비워 둔다(false).
+        /// 그 카드의 아이템에 없는 항목은 text가 null(—)이며, 장착 카드는 값 뒤에 `교체 시` 차이를 붙인다.
+        /// </summary>
+        private bool TryGetCompareCellText(int column, long key, out string? text, out string? diff, out EquipmentComparisonTone tone)
+        {
+            text = null;
+            diff = null;
+            tone = EquipmentComparisonTone.None;
+
+            CompareColumn info = _compareColumns[column];
+            if (info.Item == null) return false;
+
+            if (info.Rows == null)
+            {
+                text = FindSelectedCompareText(key);
+                return true;
+            }
+
+            for (int i = 0; i < info.Rows.Count; i++)
+            {
+                EquipmentComparisonRow row = info.Rows[i];
+                if (row.Key != key) continue;
+                text = row.EquippedText;
+                diff = row.DiffText;
+                tone = row.Tone;
+                return true;
+            }
+            return true;
+        }
+
+        private string? FindSelectedCompareText(long key)
+        {
+            for (int c = 0; c < _compareColumnCount; c++)
+            {
+                List<EquipmentComparisonRow>? rows = _compareColumns[c].Rows;
+                if (rows == null) continue;
+                for (int i = 0; i < rows.Count; i++)
+                {
+                    if (rows[i].Key == key) return rows[i].SelectedText;
+                }
+            }
+            return null;
+        }
+
+        private bool HasCompareRowContent(long key, int firstColumn, int endColumn)
+        {
+            for (int c = firstColumn; c < endColumn; c++)
+            {
+                if (TryGetCompareCellText(c, key, out string? text, out string? diff, out _) == false) continue;
+                if (text != null || diff != null) return true;
+            }
+            return false;
+        }
+
+        private bool ColumnHasSectionContent(int column, EquipmentComparisonSection section)
+        {
+            for (int k = 0; k < _compareKeys.Count; k++)
+            {
+                if (_compareKeys[k].Section != section) continue;
+                if (TryGetCompareCellText(column, _compareKeys[k].Key, out string? text, out string? diff, out _) == false) return false;
+                if (text != null || diff != null) return true;
+            }
+            return false;
+        }
+
+        private static Label CreateCompareLine(CompareKey key, string? text, string? diff, EquipmentComparisonTone tone)
+        {
+            string body = text ?? "—";
+            // `교체 시 …`는 한 덩어리로 줄바꿈한다 (한글은 글자 단위로 끊겨 `교체 시 제/거`처럼 갈라진다)
+            if (diff != null)
+                body = $"{body} · <nobr><color={GetDiffColor(tone)}>{diff}</color></nobr>";
+
+            Label line = CreateIgnoredLabel(body, "compare-line");
+            if (text == null)
+                line.AddToClassList("compare-line-missing");
+            else if (key.Section == EquipmentComparisonSection.Enhancement)
+                line.AddToClassList("compare-line-enhancement");
+            else if (key.IsImplicit == true)
+                line.AddToClassList("compare-line-implicit");
+            return line;
+        }
+
+        private VisualElement CreateCompareRow(VisualElement parent)
+        {
+            VisualElement row = new VisualElement();
+            row.pickingMode = PickingMode.Ignore;
+            row.AddToClassList("compare-row");
+            parent.Add(row);
+            _compareTableRows.Add(row);
+            return row;
+        }
+
+        private static VisualElement CreateCompareCell(VisualElement row, int positionInRow)
+        {
+            VisualElement cell = new VisualElement();
+            cell.pickingMode = PickingMode.Ignore;
+            cell.AddToClassList("compare-cell");
+            cell.style.width = COMPARE_CARD_WIDTH;
+            if (positionInRow > 0)
+                cell.style.marginLeft = COMPARE_CARD_GAP;
+            row.Add(cell);
+            return cell;
+        }
+
+        private static void AddClassToRowCells(VisualElement row, string className)
+        {
+            for (int i = 0; i < row.childCount; i++)
+                row[i].AddToClassList(className);
+        }
+
+        private static float GetCompareTableWidth(int columnCount)
+        {
+            return columnCount * COMPARE_CARD_WIDTH + Mathf.Max(0, columnCount - 1) * COMPARE_CARD_GAP;
+        }
+
+        /// <summary>카드를 한 줄로 놓을 폭이 슬롯 오른쪽에도 왼쪽에도 없으면 쌓는다.</summary>
+        private bool ShouldStackCompareCards(Rect anchorScreenRect)
+        {
+            if (_root == null || _compareColumnCount <= 1) return false;
+            if (TryGetPanelAnchor(anchorScreenRect, out Rect anchor) == false) return false;
+
+            float panelW = _root.resolvedStyle.width;
+            if (float.IsNaN(panelW) == true || panelW <= 0f) return false;
+
+            float bundleWidth = GetCompareTableWidth(_compareColumnCount) + COMPARE_FRAME_HORIZONTAL_EXTRA;
+            float rightSpace = panelW - (anchor.xMax + ANCHOR_OFFSET_X);
+            float leftSpace = anchor.xMin - ANCHOR_OFFSET_X;
+            return bundleWidth > rightSpace && bundleWidth > leftSpace;
+        }
+
+        private float GetCompareScrollableHeight()
+        {
+            if (_compareBody == null) return 0f;
+            float contentHeight = _compareBody.contentContainer.layout.height;
+            float viewportHeight = _compareBody.contentViewport.layout.height;
+            if (float.IsNaN(contentHeight) == true || float.IsNaN(viewportHeight) == true) return 0f;
+            return Mathf.Max(0f, contentHeight - viewportHeight);
+        }
+
+        private void UpdateCompareScrollHint()
+        {
+            if (_compareScrollHint == null || IsEquipmentComparisonVisible == false) return;
+
+            DisplayStyle display = GetCompareScrollableHeight() > 0.5f ? DisplayStyle.Flex : DisplayStyle.None;
+            if (_compareScrollHint.style.display == display) return;
+
+            // 안내 줄이 생기거나 사라지면 묶음 높이가 바뀌므로 위치를 다시 맞춘다
+            _compareScrollHint.style.display = display;
+            _hasPendingPositionUpdate = true;
+        }
+
+        private void HideCompareFrame()
+        {
+            if (_compareFrame == null) return;
+            _compareFrame.style.display = DisplayStyle.None;
+        }
+
+        private static string GetCompareSectionTitle(EquipmentComparisonSection section, ItemData? item)
+        {
+            switch (section)
+            {
+                case EquipmentComparisonSection.Base:
+                    return item?.Equipment?.EquipType == GlobalEnum.EquipmentTypeMask.Weapon ? "무기 기본 능력" : "기본 능력";
+                case EquipmentComparisonSection.Enhancement:
+                    return "무기 고유 강화";
+                default:
+                    return "장비 옵션";
+            }
+        }
+
+        private static string GetDiffColor(EquipmentComparisonTone tone)
+        {
+            switch (tone)
+            {
+                case EquipmentComparisonTone.Better: return DIFF_COLOR_BETTER;
+                case EquipmentComparisonTone.Worse: return DIFF_COLOR_WORSE;
+                default: return DIFF_COLOR_NEUTRAL;
+            }
+        }
+
+        /// <summary>
+        /// 하단 조작 안내. 칸이 두 개면 `좌클릭: 오른쪽 반지와 교체 · 우클릭: 왼쪽 반지에 장착`,
+        /// 칸이 하나면 `클릭: 갑옷과 교체`. 부위만 적고, 왼손 방패는 교체 대상을 `왼손 방패`로 밝힌다.
+        /// </summary>
+        private static string BuildCompareGuide(bool isDualSlot,
+            GlobalEnum.EquipSlotType leftClickSlot, ItemData? leftClickItem,
+            GlobalEnum.EquipSlotType rightClickSlot, ItemData? rightClickItem)
+        {
+            if (isDualSlot == false)
+                return $"클릭: {DescribeEquipAction(leftClickSlot, leftClickItem)}";
+
+            return $"좌클릭: {DescribeEquipAction(leftClickSlot, leftClickItem)} · 우클릭: {DescribeEquipAction(rightClickSlot, rightClickItem)}";
+        }
+
+        private static string DescribeEquipAction(GlobalEnum.EquipSlotType slot, ItemData? equipped)
+        {
+            string slotName = GetSlotDisplayName(slot);
+            if (equipped == null)
+                return $"{slotName}에 장착";
+
+            // 왼손에는 무기와 방패가 모두 들어가므로 방패는 교체 대상을 함께 적는다
+            string target = equipped.Equipment?.EquipType == GlobalEnum.EquipmentTypeMask.Shield
+                ? $"{slotName} 방패"
+                : slotName;
+            return $"{target}{GetWithParticle(target)} 교체";
+        }
+
+        /// <summary>마지막 글자의 받침 유무로 `과`/`와`를 고른다. 한글이 아니면 `와`.</summary>
+        private static string GetWithParticle(string word)
+        {
+            if (string.IsNullOrEmpty(word) == true) return "와";
+            char last = word[word.Length - 1];
+            if (last < '가' || last > '힣') return "와";
+            return (last - '가') % 28 != 0 ? "과" : "와";
+        }
+
+        private static string GetSlotDisplayName(GlobalEnum.EquipSlotType slot)
+        {
+            switch (slot)
+            {
+                case GlobalEnum.EquipSlotType.WeaponRight: return "오른손";
+                case GlobalEnum.EquipSlotType.WeaponLeft: return "왼손";
+                case GlobalEnum.EquipSlotType.Helmet: return "투구";
+                case GlobalEnum.EquipSlotType.Armor: return "갑옷";
+                case GlobalEnum.EquipSlotType.Gloves: return "장갑";
+                case GlobalEnum.EquipSlotType.Boots: return "장화";
+                case GlobalEnum.EquipSlotType.Necklace: return "목걸이";
+                case GlobalEnum.EquipSlotType.RingRight: return "오른쪽 반지";
+                case GlobalEnum.EquipSlotType.RingLeft: return "왼쪽 반지";
+                case GlobalEnum.EquipSlotType.Belt: return "허리띠";
+                case GlobalEnum.EquipSlotType.EarringRight: return "오른쪽 귀걸이";
+                case GlobalEnum.EquipSlotType.EarringLeft: return "왼쪽 귀걸이";
+                default: return slot.ToString();
+            }
+        }
+
+        /// <summary>툴팁은 포인터를 가로채지 않는다 (슬롯 호버·클릭 유지).</summary>
+        private static Label CreateIgnoredLabel(string text, string className)
+        {
+            Label label = new Label(text);
+            label.pickingMode = PickingMode.Ignore;
+            label.AddToClassList(className);
+            return label;
+        }
+
+        private static void IgnorePickingRecursive(VisualElement element)
+        {
+            element.pickingMode = PickingMode.Ignore;
+            for (int i = 0; i < element.hierarchy.childCount; i++)
+                IgnorePickingRecursive(element.hierarchy[i]);
         }
 
         private static void SetSectionVisible(VisualElement? section, bool visible)
@@ -675,9 +1252,11 @@ namespace ARPG.Manager
             }
 
             BuildSkillPageContentFromEffect(effect);
+            SetSectionVisible(_compareHint, false);
+            HideCompareFrame();
             ShowContent(_contentSkillPage);
             _frame.style.display = DisplayStyle.Flex;
-            RequestPositionUpdate(anchorScreenRect);
+            RequestPositionUpdate(_frame, anchorScreenRect);
         }
 
         private static string DescribeEffect(Tables.SkillEffectTable effect)
@@ -726,27 +1305,41 @@ namespace ARPG.Manager
             }
         }
 
-        private void RequestPositionUpdate(Rect anchorScreenRect)
+        private void RequestPositionUpdate(VisualElement target, Rect anchorScreenRect)
         {
+            _positionTarget = target;
             _pendingAnchorScreenRect = anchorScreenRect;
             _hasPendingPositionUpdate = true;
 
             // 이미 레이아웃이 계산된 툴팁은 즉시 이동하고,
             // display 복원이나 콘텐츠 변경으로 크기가 바뀌면 GeometryChangedEvent에서 보정한다.
-            UpdatePosition(anchorScreenRect);
+            PlaceElement(target, anchorScreenRect);
         }
 
         private void OnTooltipGeometryChanged(GeometryChangedEvent evt)
         {
-            if (_hasPendingPositionUpdate == false || _frame == null) return;
-            if (_frame.style.display == DisplayStyle.None)
+            if (_hasPendingPositionUpdate == false || _positionTarget == null) return;
+            if (evt.target != _positionTarget) return;
+            if (_positionTarget.style.display == DisplayStyle.None)
             {
                 _hasPendingPositionUpdate = false;
                 return;
             }
 
             _hasPendingPositionUpdate = false;
-            UpdatePosition(_pendingAnchorScreenRect);
+            PlaceElement(_positionTarget, _pendingAnchorScreenRect);
+        }
+
+        private void OnCompareGeometryChanged(GeometryChangedEvent evt)
+        {
+            OnTooltipGeometryChanged(evt);
+            // 안내 줄을 토글하면 다음 GeometryChangedEvent에서 바뀐 높이로 다시 배치한다
+            UpdateCompareScrollHint();
+        }
+
+        private void OnCompareContentGeometryChanged(GeometryChangedEvent evt)
+        {
+            UpdateCompareScrollHint();
         }
 
         private static void SetStatLine(Label? label, string? text)
@@ -842,6 +1435,26 @@ namespace ARPG.Manager
             _itName = root.Q<Label>("it-name");
             _itTier = root.Q<Label>("it-tier");
             _itDesc = root.Q<Label>("it-desc");
+
+            _compareHint = root.Q<VisualElement>("compare-hint");
+            _compareFrame = root.Q<VisualElement>("compare");
+            _compareHeader = root.Q<VisualElement>("compare-header");
+            _compareBody = root.Q<ScrollView>("compare-body");
+            _compareGuide = root.Q<Label>("compare-guide");
+            _compareScrollHint = root.Q<Label>("compare-scroll-hint");
+            _compareFrame?.RegisterCallback<GeometryChangedEvent>(OnCompareGeometryChanged);
+            if (_compareBody != null)
+            {
+                // 본문은 인벤토리 슬롯 위 휠 입력으로만 스크롤한다 (ScrollEquipmentComparison)
+                _compareBody.mode = ScrollViewMode.Vertical;
+                _compareBody.verticalScrollerVisibility = ScrollerVisibility.Hidden;
+                _compareBody.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+                _compareBody.contentContainer.RegisterCallback<GeometryChangedEvent>(OnCompareContentGeometryChanged);
+                _compareBody.contentViewport.RegisterCallback<GeometryChangedEvent>(OnCompareContentGeometryChanged);
+            }
+
+            // UXML 기본 Label·ScrollView 내부 요소도 포인터를 가로채지 않게 한다 (슬롯 호버·클릭 유지)
+            IgnorePickingRecursive(root);
 
             Hide();
         }

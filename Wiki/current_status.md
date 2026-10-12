@@ -2,9 +2,10 @@
 name: current-status
 description: 최근 구현 흐름과 재개 지점을 코드·정본 문서 기준으로 종합한 프로젝트 현황.
 type: status
-last_updated: 2026-10-12
+last_updated: 2026-10-13
 sources:
   - Docs/combat/SKILL_DESIGN.md
+  - Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md
   - Docs/npc/NPC_AMBITION_DESIGN.md
   - Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md
   - Docs/npc/NPC_COMBAT_DESIGN.md
@@ -40,7 +41,7 @@ sources:
   - Assets/_BinaryData/TableData/
 ---
 
-# 현재 개발 현황 — 2026-10-12
+# 현재 개발 현황 — 2026-10-13
 
 ## 1. 한눈에 보기
 
@@ -55,6 +56,8 @@ sources:
 **2026-10-11 (커밋 대기)**: 장비 일반 옵션을 T3에서 **T12**까지 늘리고 장비에 **아이템 레벨**을 저장했다. 몬스터 드랍은 몬스터 레벨, NPC 전리품·상점 랜덤 매물은 지역 레벨이 아이템 레벨이다. 아이템 레벨로 T1~T10 중 5단계 구간이 정해지고(1–10은 T1~T3, 90–99는 T6~T10) 구간 안에서도 레벨이 높을수록 높은 티어가 잘 나온다. T11·T12는 아이템 레벨 90 이상 몬스터 드랍에서만 등급별 확률로 붙는다. 세이브 버전은 그대로다. 컴파일·테이블 검증·진단·플레이 모드 생성 확인은 통과했고 실제 플레이 확인은 남았다. 마법부여와 던전 드랍 레벨은 사용자가 따로 작업한다. 상세는 [combat.md](combat.md). [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §1–§4·§7·§8, Wiki/combat.md]
 
 **2026-10-12 (커밋 대기)**: 명중 시 **넉백·당기기**를 구현했다. 판정 범위의 중심(직접 공격은 공격자, 범위 공격은 범위 중심, 발사체는 날아온 방향)을 기준으로 짧게 밀거나 중심 쪽으로 당긴다. 효과는 SkillEffect 행으로 정의해 스킬·장판에 붙이며, 지금은 어떤 콘텐츠에도 연결하지 않았다. PlayMode 측정은 통과했고 손 조작 확인은 콘텐츠에 붙일 때 한다. 상세는 [combat.md](combat.md). [src: Docs/combat/SKILL_DESIGN.md §6.10, Wiki/combat.md]
+
+**2026-10-13 (커밋 대기)**: 인벤토리 **장비 비교 툴팁**을 구현했다. 인벤토리 장비 툴팁 아래에 `[Shift] 비교` 안내가 붙고, Shift를 누르고 있는 동안 현재 장착 아이템(칸이 둘이면 두 칸 모두)과 수치·옵션 차이를 카드로 나란히 보여준다. 비교 중 좌클릭은 화면 왼쪽 칸, 우클릭은 화면 오른쪽 칸에 바로 장착하고, Shift 없는 클릭은 기존 자동 선택 그대로다. PlayMode 확인 일부와 묶음 배치 검토가 남았다. 상세는 [combat.md](combat.md). [src: Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md §이용 흐름과 조작, Wiki/combat.md]
 
 **던전**: 마을마다 2~3개 슬롯, 마을 접근 시 입구 배치, E 입장, 분리된 맵 컨텍스트, ESC 퇴장, 사망 복귀, 보스 완료 트랜잭션, `dungeons` 저장 파티션이 구현됐다. 던전 안에서는 월드 시스템(NPC 시뮬·시간)이 멈춘다 — 이를 바꾸는 월드 시뮬 계속 실행안은 초안이다. [src: Docs/map/DUNGEON_RUNTIME_DESIGN.md 상태·§4, Docs/map/DUNGEON_WORLD_SIM_DESIGN.md 상태]
 
@@ -74,7 +77,7 @@ sources:
 | **관찰 반응** | 전리품→소스 몬스터 식별 인터페이스 [src: Assets/Scripts/Common/Utility/MonsterTrophyIdentifier.cs] | 현행 `ItemTable`에 `SourceMonsterId>0` 아이템 0건. 감지·Trust·영속화·대사·보상 전체 [src: Assets/_BinaryData/TableData/ItemTable.bytes, Docs/npc/PLAYER_RECOGNITION_DESIGN.md §구현 계획] |
 | **몬스터 스폰** | 거리 링·청크 슬롯·슬롯 쿨타임·Active/Warm/Expired 캐시, 마을 스폰 금지 영역(5타일), 던전 안 정지 [src: Wiki/monster_spawn_runtime.md, Assets/Scripts/Map/MapManager_Generator.cs `MarkVillageSpawnExclusion`, Assets/Scripts/Common/System/System_MonsterSpawn.cs `IWorldMapSystem`] | 실제 biome 분류 데이터(11종 모두 Any), 가중치, Zone×풀, 엘리트·보스 [src: Assets/_BinaryData/TableData/MonsterTable.bytes, Docs/ai_monster/MONSTER_SPAWN_DESIGN.md §7.2.1] |
 | **몬스터 공격 예고** | Phase 0~2 구현(타이밍 해석·배치 렌더·셰이더), Phase 3 일부 [src: Docs/combat/MONSTER_ATTACK_TELEGRAPH_DESIGN.md 상태, Assets/Scripts/Common/System/System_AttackTelegraph.cs] | Phase 4, 취소 페이드·경고음·LOD·최소 가독 시간 진단 [src: Docs/combat/MONSTER_ATTACK_TELEGRAPH_DESIGN.md] |
-| **장비 옵션·마법부여** | 무기 Base/고유 강화 분리, 옵션 글로벌화, 미장착 장비 Prefix/Postfix 교체·추가 MVP, 마법부여한 기본 아이템은 일반 아이템으로 전환 [src: Wiki/combat.md]. 아이템 레벨 저장과 옵션 티어 T1~T12(일반 판정 T1~T10 구간·가중치, T11·T12 몬스터 등급별 특수 판정), 툴팁 아이템 레벨 표시(2026-10-11) [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §1·§6] | Editor 진단 실행, Tier 1/2/3·저장 왕복·장착 후 실제 타격 PlayMode 검증, 분해·재롤·장착 장비 작업은 후속 [src: Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §12·§14]. 마법부여의 티어를 아이템 레벨·재화에 연결(현재 T3 이하), 던전 드랍 레벨(현재 T1~T3), T4 이상 고레벨 수치 밸런스, 아이템 레벨 드랍 실제 플레이 확인 [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §7·§8] |
+| **장비 옵션·마법부여** | 무기 Base/고유 강화 분리, 옵션 글로벌화, 미장착 장비 Prefix/Postfix 교체·추가 MVP, 마법부여한 기본 아이템은 일반 아이템으로 전환 [src: Wiki/combat.md]. 아이템 레벨 저장과 옵션 티어 T1~T12(일반 판정 T1~T10 구간·가중치, T11·T12 몬스터 등급별 특수 판정), 툴팁 아이템 레벨 표시(2026-10-11) [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §1·§6]. 인벤토리 장비 비교 툴팁(Shift 유지 비교, 화면 위치 기준 좌·우클릭 장착, 2026-10-13) [src: Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md, Wiki/combat.md] | Editor 진단 실행, Tier 1/2/3·저장 왕복·장착 후 실제 타격 PlayMode 검증, 분해·재롤·장착 장비 작업은 후속 [src: Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §12·§14]. 마법부여의 티어를 아이템 레벨·재화에 연결(현재 T3 이하), 던전 드랍 레벨(현재 T1~T3), T4 이상 고레벨 수치 밸런스, 아이템 레벨 드랍 실제 플레이 확인 [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §7·§8]. 비교 툴팁의 남은 PlayMode 확인과 묶음 배치·옵션 비교 키 검토, 후속 1~6 [src: Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md §첫 구현 범위와 후속 확장, Wiki/combat.md] |
 | **스킬 조준·이동 정책** | 커서 추적→효과 직전 커밋, 정책별 재커밋, 화살표 View, 감속·복구, Jump LaunchCommit [src: Wiki/skill_aim.md] | EditMode 테스트 추가·실행, 대표 스킬 PlayMode 실측 [src: Docs/combat/POE2_CURSOR_TRACKING_PLAN.md §0·§10.1] |
 | **스킬 전파** | 공용 연쇄·분열 런타임, Instant 4연쇄 Chain Lightning, 대기 주문, 결투 반영 적대 판정 [src: Wiki/skill_propagation.md, Docs/combat/SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md §0] | Projectile/분열/OnHit PlayMode 검증, EditMode 테스트 [src: Docs/combat/SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md §9] |
 | **넉백·당기기** | 판정 범위 중심 기준 밀기·당기기, SkillEffect `Knockback`/`Pull`(1030·1031), 장판 `ForcedMoveEffectId`, `System_ForcedMove`(2026-10-12) [src: Docs/combat/SKILL_DESIGN.md §6.10, Wiki/combat.md] | 콘텐츠 연결(현재 0건)과 손 조작 확인, 등급별 배율·벽 충돌 조건 [src: Docs/combat/SKILL_DESIGN.md §6.10] |
@@ -87,7 +90,7 @@ sources:
 2. ~~**데이터 정리**: `AiTable` 4번(SwampToad)이 SkillTable에서 빠진 SkillId 205를 참조~~ → 2026-10-03 205번 행 복구, 빌드 검증기 통과. [src: Docs/combat/SKILL_DESIGN.md §2, Assets/_BinaryData/TableData/SkillTable.bytes, Assets/Scripts/Editor/AttackTelegraphBuildValidator.cs]
 3. **마을 골드 밸런스** (D109 ②): 매입 거절로 NPC 가방이 차는 문제, 가방 전리품에 따른 세이브 증가, 절도 빈도, 첫 며칠에 몰리는 NPC 구매를 함께 본다. [src: Docs/npc/NPC_AMBITION_DESIGN.md D109, Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §7·§11.2]
 4. **대화 사연 밸런스** (D109 ①): 자랑 토픽이 사연 자리에서 밀리는 문제. [src: Docs/npc/NPC_AMBITION_DESIGN.md D109]
-5. **PlayMode 검증 묶음**: 던전 Profiler·입구 배치 실패율, 마법부여 Tier·저장 왕복, 마을 V7 A~F, 스킬 조준·전파 대표 스킬, 공격 예고 가독성, 아이템 레벨 드랍(원거리 드랍 툴팁·기본 아이템 툴팁·상점 매물 레벨). [src: Docs/map/DUNGEON_RUNTIME_DESIGN.md §7, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §12, Docs/village/VILLAGE_REWORK_PLAN.md §V7, Docs/combat/POE2_CURSOR_TRACKING_PLAN.md, Docs/combat/MONSTER_ATTACK_TELEGRAPH_DESIGN.md, Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §8]
+5. **PlayMode 검증 묶음**: 던전 Profiler·입구 배치 실패율, 마법부여 Tier·저장 왕복, 마을 V7 A~F, 스킬 조준·전파 대표 스킬, 공격 예고 가독성, 아이템 레벨 드랍(원거리 드랍 툴팁·기본 아이템 툴팁·상점 매물 레벨), 장비 비교 툴팁 남은 항목(비교 중 장비 변경·UI 닫기, 저장 상태 불변, 안내 없는 호버, 줄바꿈). [src: Docs/map/DUNGEON_RUNTIME_DESIGN.md §7, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §12, Docs/village/VILLAGE_REWORK_PLAN.md §V7, Docs/combat/POE2_CURSOR_TRACKING_PLAN.md, Docs/combat/MONSTER_ATTACK_TELEGRAPH_DESIGN.md, Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §8, Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md §구현 연결과 완료 기준, Wiki/combat.md]
 6. **NPC 행적·반응 마무리**: 설계 문서 §8의 1~5단계는 모두 구현됐다. 남은 것은 커밋과 실제 플레이 확인(대화 화면의 부탁·보고 표시, 소문 교환 속도, 소망 공개·선물 목록·전달 대사, 부상 문구, 후속 소개와 이어지는 부탁)이다. 마을 평판은 보류다. [src: Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md 머리말·§8·§8.1~§8.4]
 7. **다음 설계 후보**: 던전 중 월드 시뮬(초안 검토 대기), NPC 장비 강화(P6a), 평판(Renown), P3 협력·배신 재개, 관찰 반응 데이터. 경매장은 착수 승인이 없다. [src: Docs/map/DUNGEON_WORLD_SIM_DESIGN.md, Docs/npc/NPC_AMBITION_DESIGN.md §13·§14, Docs/npc/PLAYER_RECOGNITION_DESIGN.md, Docs/economy/AUCTION_HOUSE_DESIGN.md]
 

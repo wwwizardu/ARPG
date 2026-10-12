@@ -64,6 +64,17 @@ namespace ARPG.UI
             Debug.LogError("[UIInventory] Initialize called, use Initialize(string inName, int inSlotMaxCount)");
         }
 
+        /// <summary>모든 슬롯의 호버·버튼 누름을 소유 UI에 넘긴다 (인벤토리 장비 비교). 슬롯 로드 후 한 번 호출한다.</summary>
+        public void SetSlotPointerHandlers(Action<SlotUI> onHoverEnter, Action<SlotUI> onHoverExit, Action<SlotUI, PointerEventData> onPress)
+        {
+            if (_slotUIs == null) return;
+
+            for (int i = 0; i < _slotUIs.Length; i++)
+            {
+                _slotUIs[i]?.SetPointerHandlers(onHoverEnter, onHoverExit, onPress);
+            }
+        }
+
         public bool AddItem(Data.ItemData inItem)
         {
             int slotIndex = _inventory.AddItem(inItem);

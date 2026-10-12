@@ -43,7 +43,7 @@ namespace ARPG.Skill.Combat
             float inPlayerHitRadius)
         {
             SkillTable? table = inSkill.Table;
-            if (table == null)
+            if (table == null || table.ProjectileId > 0)
                 return default;
 
             float ownerHitRadius = 0f;

@@ -841,6 +841,15 @@ namespace ARPG.Input
                     ""processors"": """",
                     ""interactions"": """",
                     ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""CompareEquipment"",
+                    ""type"": ""Button"",
+                    ""id"": ""4b794d32-4c1e-4269-b877-1179ef5f5681"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": true
                 }
             ],
             ""bindings"": [
@@ -1272,6 +1281,28 @@ namespace ARPG.Input
                     ""action"": ""CloseInventory"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""038ce3ef-c0bf-4861-b78e-4ff38902bffa"",
+                    ""path"": ""<Keyboard>/leftShift"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": "";Keyboard&Mouse"",
+                    ""action"": ""CompareEquipment"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""6be561d8-ed83-4b47-9797-850bd7cb313f"",
+                    ""path"": ""<Keyboard>/rightShift"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": "";Keyboard&Mouse"",
+                    ""action"": ""CompareEquipment"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
                 }
             ]
         }
@@ -1369,6 +1400,7 @@ namespace ARPG.Input
             m_UI_TrackedDevicePosition = m_UI.FindAction("TrackedDevicePosition", throwIfNotFound: true);
             m_UI_TrackedDeviceOrientation = m_UI.FindAction("TrackedDeviceOrientation", throwIfNotFound: true);
             m_UI_CloseInventory = m_UI.FindAction("CloseInventory", throwIfNotFound: true);
+            m_UI_CompareEquipment = m_UI.FindAction("CompareEquipment", throwIfNotFound: true);
         }
 
         ~@ArpgInputAction()
@@ -1711,6 +1743,7 @@ namespace ARPG.Input
         private readonly InputAction m_UI_TrackedDevicePosition;
         private readonly InputAction m_UI_TrackedDeviceOrientation;
         private readonly InputAction m_UI_CloseInventory;
+        private readonly InputAction m_UI_CompareEquipment;
         /// <summary>
         /// Provides access to input actions defined in input action map "UI".
         /// </summary>
@@ -1766,6 +1799,10 @@ namespace ARPG.Input
             /// Provides access to the underlying input action "UI/CloseInventory".
             /// </summary>
             public InputAction @CloseInventory => m_Wrapper.m_UI_CloseInventory;
+            /// <summary>
+            /// Provides access to the underlying input action "UI/CompareEquipment".
+            /// </summary>
+            public InputAction @CompareEquipment => m_Wrapper.m_UI_CompareEquipment;
             /// <summary>
             /// Provides access to the underlying input action map instance.
             /// </summary>
@@ -1825,6 +1862,9 @@ namespace ARPG.Input
                 @CloseInventory.started += instance.OnCloseInventory;
                 @CloseInventory.performed += instance.OnCloseInventory;
                 @CloseInventory.canceled += instance.OnCloseInventory;
+                @CompareEquipment.started += instance.OnCompareEquipment;
+                @CompareEquipment.performed += instance.OnCompareEquipment;
+                @CompareEquipment.canceled += instance.OnCompareEquipment;
             }
 
             /// <summary>
@@ -1869,6 +1909,9 @@ namespace ARPG.Input
                 @CloseInventory.started -= instance.OnCloseInventory;
                 @CloseInventory.performed -= instance.OnCloseInventory;
                 @CloseInventory.canceled -= instance.OnCloseInventory;
+                @CompareEquipment.started -= instance.OnCompareEquipment;
+                @CompareEquipment.performed -= instance.OnCompareEquipment;
+                @CompareEquipment.canceled -= instance.OnCompareEquipment;
             }
 
             /// <summary>
@@ -2164,6 +2207,13 @@ namespace ARPG.Input
             /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
             /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
             void OnCloseInventory(InputAction.CallbackContext context);
+            /// <summary>
+            /// Method invoked when associated input action "CompareEquipment" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+            /// </summary>
+            /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+            /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+            /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+            void OnCompareEquipment(InputAction.CallbackContext context);
         }
     }
 }

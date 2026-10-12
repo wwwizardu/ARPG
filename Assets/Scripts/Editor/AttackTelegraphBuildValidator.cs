@@ -295,29 +295,29 @@ namespace ARPG.Editor
                 && Mathf.Abs(directGeometry.HalfAngleDeg - 45f) <= EPSILON,
                 "직접 공격 범위는 owner/player Collider 반경과 부채꼴 반각을 정확히 포함해야 합니다.");
 
-            AttackTelegraphGeometry projectileGeometry = AttackTelegraphGeometryResolver.Resolve(
-                new AttackTelegraphGeometryInput(
-                    true,
-                    false,
-                    true,
-                    false,
-                    true,
-                    false,
-                    5f,
-                    0f,
-                    0.4f,
-                    0.3f,
-                    0f,
-                    8f,
-                    1.5f,
-                    0.2f,
-                    3,
-                    15f));
-            Require(errors,
-                projectileGeometry.Shape == AttackTelegraphShape.ProjectileFan
-                && Mathf.Abs(projectileGeometry.Range - 12f) <= EPSILON
-                && Mathf.Abs(projectileGeometry.Width - 1f) <= EPSILON,
-                "발사체 경로는 Speed × LifeTime과 projectile/player 반경을 사용해야 합니다.");
+            for (int projectileCount = 1; projectileCount <= 3; projectileCount++)
+            {
+                AttackTelegraphGeometry projectileGeometry = AttackTelegraphGeometryResolver.Resolve(
+                    new AttackTelegraphGeometryInput(
+                        true,
+                        false,
+                        true,
+                        false,
+                        true,
+                        false,
+                        5f,
+                        0f,
+                        0.4f,
+                        0.3f,
+                        0f,
+                        8f,
+                        1.5f,
+                        0.2f,
+                        projectileCount,
+                        15f));
+                Require(errors, projectileGeometry.Shape == AttackTelegraphShape.None,
+                    $"발사체 스킬은 발사체 수({projectileCount})와 무관하게 공격 범위를 예고하지 않아야 합니다.");
+            }
 
             AttackTelegraphGeometry areaDeliveryGeometry = AttackTelegraphGeometryResolver.Resolve(
                 new AttackTelegraphGeometryInput(
@@ -533,9 +533,9 @@ namespace ARPG.Editor
                     projectile != null ? projectile.HitRadius : 0f,
                     Mathf.Max(1, skill.BaseProjectileCount),
                     AttackTelegraphGeometryResolver.DefaultProjectileSpreadAngleDeg));
-            // 장판 스킬은 예고 도형이 없어도 정상이다. 장판은 커밋 시점에 즉시 생성되므로
-            // 장판 자체의 비주얼이 위험을 알리고 예고는 직접 타격만 담당한다 (DESIGN §5.3).
-            if (geometry.Shape == AttackTelegraphShape.None && hasArea == false)
+            // 투사체와 장판 스킬은 자체 비주얼이 위험을 알리므로 예고 도형이 없어도 정상이다.
+            // 공격 예고는 직접 범위 타격과 설치된 지연 장판만 담당한다.
+            if (geometry.Shape == AttackTelegraphShape.None && hasArea == false && hasProjectile == false)
                 errors.Add($"공격 Skill {skill.Id}({skill.Name})에서 예고 도형을 만들 수 없습니다.");
         }
 

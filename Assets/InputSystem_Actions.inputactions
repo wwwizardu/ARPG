@@ -753,6 +753,15 @@
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false
+                },
+                {
+                    "name": "CompareEquipment",
+                    "type": "Button",
+                    "id": "4b794d32-4c1e-4269-b877-1179ef5f5681",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true
                 }
             ],
             "bindings": [
@@ -1182,6 +1191,28 @@
                     "processors": "",
                     "groups": ";Keyboard&Mouse",
                     "action": "CloseInventory",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "038ce3ef-c0bf-4861-b78e-4ff38902bffa",
+                    "path": "<Keyboard>/leftShift",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": ";Keyboard&Mouse",
+                    "action": "CompareEquipment",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "6be561d8-ed83-4b47-9797-850bd7cb313f",
+                    "path": "<Keyboard>/rightShift",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": ";Keyboard&Mouse",
+                    "action": "CompareEquipment",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }

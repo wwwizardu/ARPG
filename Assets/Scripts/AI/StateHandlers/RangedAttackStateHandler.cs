@@ -5,11 +5,12 @@ using UnityEngine;
 namespace ARPG.AI.StateHandlers
 {
     /// <summary>
-    /// 원거리 Attack 상태: 정지 + 스킬 사용, KeepDistance 체크 + ATTACK_MIN_TIME 이후 Retreat
+    /// 원거리 Attack 상태: 정지 + 스킬 사용, KeepDistance 체크 + ATTACK_MIN_TIME·RETREAT_COOLDOWN 이후 Retreat
     /// </summary>
     public class RangedAttackStateHandler : IAIStateHandler
     {
         private const float ATTACK_MIN_TIME = 1.5f;
+        private const float RETREAT_COOLDOWN = 4f; // 후퇴 시작 시점부터 다음 후퇴까지 최소 간격
 
         public void OnEnter(int entityId)
         {
@@ -47,15 +48,19 @@ namespace ARPG.AI.StateHandlers
                 return;
             }
 
-            // KeepDistance 체크 — Attack 최소 유지 시간 이후에만 Retreat
+            // KeepDistance 체크 — Attack 최소 유지 시간이 지나고 후퇴 쿨타임이 풀렸을 때만 Retreat
             float keepDistSqr = behavior.KeepDistance * behavior.KeepDistance;
             if (keepDistSqr > 0 && sqrDistance < keepDistSqr * 0.5f)
             {
                 if (cm.TryGetComponent<AIStateComponent>(entityId, out var stateComp))
                 {
-                    float timeInAttack = Time.time - stateComp.StateEnterTime;
-                    if (timeInAttack >= ATTACK_MIN_TIME)
+                    float now = Time.time;
+                    float timeInAttack = now - stateComp.StateEnterTime;
+                    if (timeInAttack >= ATTACK_MIN_TIME && now >= stateComp.NextRetreatTime)
                     {
+                        // TransitionToState가 컴포넌트를 다시 읽어 쓰므로 전환 전에 기록한다
+                        stateComp.NextRetreatTime = now + RETREAT_COOLDOWN;
+                        cm.SetComponent(entityId, stateComp);
                         AIStateHelper.TransitionToState(entityId, AIState.Retreat);
                         return;
                     }

@@ -58,8 +58,16 @@ sources:
   - Assets/Scripts/Common/System/System_Move.cs
   - Assets/_BinaryData/TableData/SkillEffectTable.bytes
   - Assets/_BinaryData/TableData/AreaEffectTable.bytes
+  - Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md
+  - Assets/Scripts/Item/EquipmentComparisonCalculator.cs
+  - Assets/Scripts/UI/UICharacter.cs
+  - Assets/Scripts/UI/SlotUI.cs
+  - Assets/Scripts/UI/SlotUI_Equip.cs
+  - Assets/UI/Tooltip/Tooltip.uss
+  - Assets/UI/PanelSettings/PS_Tooltip.asset
+  - Assets/InputSystem_Actions.inputactions
 last_synced: 2026-09-01
-last_updated: 2026-10-12
+last_updated: 2026-10-13
 status: implemented-contract-active-validation-pending
 ---
 
@@ -67,7 +75,7 @@ status: implemented-contract-active-validation-pending
 
 ## 한 줄 요약
 
-무기의 고정 기본 능력과 인스턴스별 고유 강화만 무기 캐시에 들어가며, 장비의 Implicit/Prefix/Postfix는 부위와 무관한 글로벌 Modifier로 합산된다. 미장착 인벤토리 장비의 Prefix/Postfix는 Tier 1 이상 제련소에서 랜덤 교체·추가할 수 있고, 스킬 공격 프로필은 변경된 옵션까지 태그에 맞춰 한 번 계산해 예상값과 실제 전투가 같은 값을 소비한다. [src: Docs/combat/combatSystem.md §장비 옵션 책임 경계·§스킬 공격 프로필 구성, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §0–§8, Assets/Scripts/Item/ItemEnchantmentService.cs, Assets/Scripts/Common/System/System_SkillAttackProfileCalculation.cs] 새로 만드는 장비의 Prefix/Postfix 티어(T1~T12)는 장비에 저장된 아이템 레벨로 정해진다(2026-10-11). [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §1, Assets/Scripts/Item/ItemLevelModTierRules.cs] 명중 시 넉백·당기기(2026-10-12 구현)도 이 페이지 뒤쪽에 정리한다. [src: Docs/combat/SKILL_DESIGN.md §6.10]
+무기의 고정 기본 능력과 인스턴스별 고유 강화만 무기 캐시에 들어가며, 장비의 Implicit/Prefix/Postfix는 부위와 무관한 글로벌 Modifier로 합산된다. 미장착 인벤토리 장비의 Prefix/Postfix는 Tier 1 이상 제련소에서 랜덤 교체·추가할 수 있고, 스킬 공격 프로필은 변경된 옵션까지 태그에 맞춰 한 번 계산해 예상값과 실제 전투가 같은 값을 소비한다. [src: Docs/combat/combatSystem.md §장비 옵션 책임 경계·§스킬 공격 프로필 구성, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §0–§8, Assets/Scripts/Item/ItemEnchantmentService.cs, Assets/Scripts/Common/System/System_SkillAttackProfileCalculation.cs] 새로 만드는 장비의 Prefix/Postfix 티어(T1~T12)는 장비에 저장된 아이템 레벨로 정해진다(2026-10-11). [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §1, Assets/Scripts/Item/ItemLevelModTierRules.cs] 명중 시 넉백·당기기(2026-10-12 구현)도 이 페이지 뒤쪽에 정리한다. [src: Docs/combat/SKILL_DESIGN.md §6.10] 인벤토리 장비는 Shift를 누르고 있는 동안 현재 장착 아이템과 수치·옵션 차이를 비교하고, 비교 중 좌·우클릭으로 화면 왼쪽·오른쪽 칸에 바로 장착한다(2026-10-13 구현). [src: Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md, Assets/Scripts/UI/UICharacter.cs]
 
 ## 문서 정본
 
@@ -217,8 +225,19 @@ FinalAttackSpeedPerSecond
 - 스탯 재계산으로 최대 HP/MP가 낮아지면 현재 HP/MP를 새 최대치 범위로 보정한 뒤 파생 컴포넌트와 공격 프로필을 동기화한다. [src: Assets/Scripts/Common/System/System_StatCalculation.cs]
 - 구 세이브는 `WeaponLocalEnhancements` null을 빈 목록으로 복구하고 무기 캐시를 무효화한다. 플레이어·NPC 인벤토리와 장비는 기존 ItemData 로드 경로를 사용하며 월드 드랍도 `WorldData.LoadCompleted`에서 복구한다. [src: Assets/Scripts/Data/ItemData.cs:L250-272, Assets/Scripts/Data/PlayerData.cs:L78-98, Assets/Scripts/Npc/NpcSaveData.cs:L142-151, Assets/Scripts/Data/WorldData.cs:L40-49]
 - 장비 툴팁은 기본 능력, 무기 고유 강화, 장비 옵션을 별도 영역으로 표시하며 고정 치명타와 증가 치명타 문구를 구분한다. 옵션 문구는 Forge 비교 화면과 같은 포맷터를 사용한다. [src: Docs/combat/combatSystem.md §갱신·저장·표시, Assets/UI/Tooltip/Tooltip.uxml, Assets/Scripts/Manager/TooltipManager.cs, Assets/Scripts/Item/EquipmentOptionText.cs] 아이템 레벨이 있는 장비는 등급 줄 아래에 "아이템 레벨 N"을 표시하고, 0이면 숨긴다(2026-10-11). [src: Assets/Scripts/Manager/TooltipManager.cs `BuildEquipmentContent`, Assets/UI/Tooltip/Tooltip.uxml `eq-item-level`]
-- 툴팁은 콘텐츠나 `display` 변경 직후 위치를 한 번 계산하고, 실제 크기가 확정되는 `GeometryChangedEvent`에서 보정해 화면 경계 배치를 갱신한다. [src: Assets/Scripts/Manager/TooltipManager.cs]
+- 툴팁(단일 툴팁과 비교 묶음)은 콘텐츠나 `display` 변경 직후 위치를 한 번 계산하고, 실제 크기가 확정되는 `GeometryChangedEvent`에서 보정해 화면 경계 배치를 갱신한다. [src: Assets/Scripts/Manager/TooltipManager.cs `RequestPositionUpdate`·`PlaceElement`]
 - `ModTable` 5002는 `IncreasedStat/AttackSpeedMul`, 1003은 `IncreasedStat/CriRateMul`로 글로벌 증가 버킷에 연결된다. [src: Assets/_BinaryData/TableData/ModTable.bytes:L1, Assets/Scripts/Common/System/System_StatCalculation.cs:L232-257]
+
+## 인벤토리 장비 비교 툴팁
+
+2026-10-13 구현했고 사용자 커밋 전이다. 정본은 `INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md`의 첫 구현 범위이며, 문서 머리말 상태 줄은 아직 "제안 초안, 구현 전"이다. 후속 1~6(교체 후 능력치·공격 프로필 미리보기, 양손·쌍수, 상점 비교, 드래그 앤 드롭, 컨트롤러)은 구현하지 않았다. [src: Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md 머리말·§첫 구현 범위와 후속 확장]
+
+- **조작**: 인벤토리 장비의 단일 툴팁 맨 아래에만 `[Shift] 비교` 안내를 붙인다(장착 칸·스킬북·스킬 페이지는 기존 툴팁). 좌·우 Shift(UI 맵 `CompareEquipment`)를 누르고 있는 동안만 비교로 바꾸며, 모드는 마우스 버튼을 누르는 순간의 상태로 정한다. 비교 중 좌클릭은 화면 왼쪽 칸(`WeaponRight`·`RingRight`·`EarringRight`), 우클릭은 화면 오른쪽 칸에 장착하고, 칸이 하나인 장비는 두 버튼 모두 그 칸, 휠 클릭은 장착하지 않는다. Shift 없는 클릭은 기존 `GetBestSlot` 그대로다. 다른 UI가 전면이거나 입력 필드에 포커스가 있으면 비교하지 않는다. [src: Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md §이용 흐름과 조작·§비교 대상 슬롯, Assets/InputSystem_Actions.inputactions `CompareEquipment`, Assets/Scripts/UI/UICharacter.cs `IsCompareRequested`·`OnPressInventorySlot`, Assets/Scripts/Common/Utility/EquipHelper.cs `GetScreenSideSlots`]
+- **장착과 갱신**: 장착 직전에 인벤토리 칸·`ItemInstanceId`·대상 칸 장착 가능 여부·현재 장착 아이템을 다시 확인하고, 달라졌으면 장착하지 않고 비교만 다시 그린다. 장착한 뒤(Shift 없는 클릭 포함)에는 포인터가 있는 칸의 현재 아이템으로 다시 표시하고 칸이 비면 닫는다. 표시는 호버 진입·Shift 변화·칸 아이템 변경·비교 대상 장착 변경 때만 다시 만들며 매 프레임은 참조 비교만 한다. [src: Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md §구현 연결과 완료 기준, Assets/Scripts/UI/UICharacter.cs `EquipFromComparison`·`IsHoverDisplayStale`·`RefreshHoverDisplay`]
+- **카드와 차이**: 칸이 하나면 `[선택한 아이템][현재 장착]`, 둘이면 `[선택한 아이템][좌클릭 대상][우클릭 대상]`이며 같은 항목은 모든 카드에서 같은 행에 놓는다. 차이(선택 − 장착)는 장착 카드 값 뒤에 `교체 시`로 붙이고, 빈 칸 카드는 `장착된 아이템 없음`이며 차이가 없다. 무기 수치는 `WeaponStats`를 그대로 써서 고유 강화를 다시 더하지 않는다. 옵션은 같은 ModTableId + 같은 ModSlot끼리만 비교한다. Passive의 고정값·추가 피해·증가율은 수치 차이(%·증가율은 %p)를, 한쪽에만 있으면 `교체 시 추가`·`교체 시 제거`를 붙인다. 발동형·계산 시 조회 옵션은 추가·제거·변경만 중립 색으로 표시하고, 최소·최대 피해의 이점이 섞여도 중립 색이다. [src: Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md §화면 구성·§능력 차이 표시, Assets/Scripts/Item/EquipmentComparisonCalculator.cs `Compare`·`GetValueKind`·`SetChangedDiff`]
+- **구현 중 사용자 결정 (2026-10-13, 설계 문서에는 아직 없음)**: 공격 전용처럼 스킬 태그 조건이 붙은 옵션도 일반 녹색·붉은색으로 표시하고, 조건은 `(공격 스킬 전용)`처럼 문구에 붙인다. 하단 조작 안내는 부위만 적고(`좌클릭: 오른쪽 반지와 교체 · 우클릭: 왼쪽 반지에 장착`, `클릭: 갑옷과 교체`), 왼손에 방패가 있을 때만 `왼손 방패와 교체`로 교체 대상을 밝힌다. [src: Assets/Scripts/Item/EquipmentComparisonCalculator.cs `SetChangedDiff`, Assets/Scripts/Item/EquipmentOptionText.cs `FormatSkillTagCondition`, Assets/Scripts/Manager/TooltipManager.cs `BuildCompareGuide`·`DescribeEquipAction`]
+- **배치**: 카드 폭 250·간격 8의 묶음을 슬롯 옆에 두고, 오른쪽이 넘치면 카드 순서를 유지한 채 슬롯 왼쪽으로 옮긴다. 높이는 패널 높이의 75%로 제한하고 헤더·조작 안내를 고정한 채 본문만 인벤토리 슬롯 위의 휠로 스크롤한다(스크롤바는 숨김). 슬롯 양쪽 모두 폭이 모자라면 선택 카드를 위, 장착 카드를 아래에 쌓는다. [src: Assets/Scripts/Manager/TooltipManager.cs `ShowEquipmentComparison`·`ShouldStackCompareCards`·`PlaceElement`·`ScrollEquipmentComparison`, Assets/Scripts/UI/UICharacter.cs `UpdateHoverDisplay`] 툴팁 패널은 가로 1920 기준으로 맞춰지므로 실제 슬롯에서는 쌓기가 일어나지 않는다. [src: Assets/UI/PanelSettings/PS_Tooltip.asset] [추론: 세 장 묶음(약 818)이 슬롯 양옆 중 넓은 쪽(최소 약 920)에 항상 들어감]
+- **책임**: 비교 계산은 두 아이템 데이터만 읽는 상태 없는 `EquipmentComparisonCalculator`가 장착 카드마다 한 번 맡고, 호버·비교 상태와 버튼별 장착은 `UICharacter`, 표시·배치·스크롤은 `TooltipManager`(`ShowWithCompareHint`·`ShowEquipmentComparison`), 비교 대상 칸 테두리는 `SlotUI_Equip`이 런타임에 만든다. 무기 기본 능력·고유 강화 문구는 단일 툴팁과 비교가 `EquipmentOptionText`를 공유한다. 툴팁 안의 모든 요소는 포인터를 받지 않는다(기존 단일 툴팁 포함). [src: Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md §구현 연결과 완료 기준, Assets/Scripts/Item/EquipmentComparisonCalculator.cs, Assets/Scripts/UI/UICharacter.cs, Assets/Scripts/Manager/TooltipManager.cs `IgnorePickingRecursive`, Assets/Scripts/UI/SlotUI_Equip.cs `SetCompareHighlight`, Assets/Scripts/Item/EquipmentOptionText.cs]
 
 ## 넉백·당기기 (강제 이동)
 
@@ -246,6 +265,8 @@ FinalAttackSpeedPerSecond
 
 ## 미해결 / 주의
 
+- 인벤토리 장비 비교 툴팁의 PlayMode 확인 결과는 원본 문서에 기록되지 않았다. 완료 기준 중 비교 중 장비 변경·UI 닫기 뒤 잔상, 비교만 열고 닫았을 때 저장 상태 불변, 스킬북·소비 아이템·장착 칸 호버의 안내 없음, `교체 시` 문구 줄바꿈(`<nobr>`) 화면은 아직 확인하지 않았다. 귀걸이는 아이템 테이블에 귀걸이 아이템이 없어 플레이로 확인할 수 없다. [src: Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md §구현 연결과 완료 기준, Assets/_BinaryData/TableData/ItemTable.bytes] [추론: 2026-10-13 작업 보고 기준]
+- 비교 묶음 배치와 옵션 비교 키는 처리 방향이 정해지지 않았다. 인벤토리가 화면 아래에 있어 세 장 묶음이 위로 자라면 장비 화면과 강조한 칸을 덮는다. 옵션 비교 키가 ModTableId + ModSlot뿐이라 같은 능력이 다른 행의 옵션이면 추가·제거 두 줄로 갈라진다. [src: Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md §장비 옵션, Assets/Scripts/Manager/TooltipManager.cs `PlaceElement`] [추론: 2026-10-13 PlayMode 화면 기준]
 - 넉백·당기기는 아직 어떤 스킬·장판에도 연결되지 않았다. 손 조작 확인(밀리는 몬스터의 공격 계속, 플레이어 조작 복귀, 던전 출입, 체감)은 콘텐츠에 붙일 때 한다. AreaEffect↔SkillEffect 참조 대조는 전체 다운로드에서만 돌고, 단일 다운로드의 잘못된 Id는 실행 시 오류 로그 후 무시된다. 등급별 배율, 벽 충돌 조건(`WallNearby`·`KnockbackTarget`), 갈고리형 당기기는 후속이다. [src: Docs/combat/SKILL_DESIGN.md §6.10, Assets/Scripts/Editor/DownloadTables.cs `ValidateForcedMoveSetup`, Docs/combat/SKILL_RUNE_DESIGN.md §5.2]
 - 마법부여는 아이템 레벨 규칙과 연결되지 않아 결과가 T3 이하다. 아이템 레벨이 높은 장비의 옵션을 바꾸면 티어가 내려갈 수 있다. 아이템 레벨 연결 또는 재화별 Tier 규칙은 사용자가 따로 작업한다. [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §7, Docs/combat/WEAPON_PROGRESSION_DESIGN.md §적용 항과 Tier 접근 정책]
 - 던전 몬스터 레벨이 1, 보스가 5라서 던전 드랍 장비는 T1~T3이다. 던전 드랍 레벨도 사용자가 따로 작업한다. [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §7, Assets/_BinaryData/TableData/DungeonTable.bytes]
