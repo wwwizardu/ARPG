@@ -28,6 +28,8 @@ namespace ARPG.Map
             map._themeEntries = _themeEntries;
             map._groundTileSet = _groundTileSet;
             map._ruleTile_Hill = _ruleTile_Hill;
+            map._hillCollisionInsetTop = _hillCollisionInsetTop;
+            map._hillCollisionInsetSide = _hillCollisionInsetSide;
             map._ruleTile_Object = _ruleTile_Object;
             map._tileMap = CloneEmptyTilemap(_tileMap, root.transform);
             map._tileMap_Hill = CloneEmptyTilemap(_tileMap_Hill, root.transform);

@@ -1,4 +1,5 @@
 using ARPG.Component;
+using ARPG.Map;
 using UnityEngine;
 
 namespace ARPG.Utility
@@ -6,7 +7,7 @@ namespace ARPG.Utility
     /// <summary>
     /// 정적 충돌(지형 Blocked + 건물 footprint) 해결.
     /// 축 분리(Axis-separated) 슬라이딩: X축·Y축을 독립 검사하여 한 축이 막혀도 다른 축은 진행.
-    /// 1 Unity unit = 1 tile, 원형 충돌체.
+    /// 1 Unity unit = 1 tile, 원형 충돌체. 언덕 칸은 바닥 쪽 테두리를 그림만큼 줄인 상자로 검사한다.
     /// </summary>
     public static class CollisionUtil
     {
@@ -162,29 +163,29 @@ namespace ARPG.Utility
 
         /// <summary>
         /// 원이 (pos, radius)에 위치할 때 차단 타일과 겹치는지 검사.
-        /// 원이 걸치는 모든 타일 셀을 순회하며 원-AABB 거리 검사.
+        /// 원이 걸치는 모든 타일 셀을 순회하며 원-AABB 거리 검사. 상자는 MapManager.GetBlockedTileBounds (언덕 테두리는 그림만큼 줄어듦).
         /// </summary>
         public static bool IsBlockedAt(Vector2 pos, float radius)
         {
+            MapManager map = AR.s.Map;
             int minX = Mathf.FloorToInt(pos.x - radius);
             int maxX = Mathf.FloorToInt(pos.x + radius);
             int minY = Mathf.FloorToInt(pos.y - radius);
             int maxY = Mathf.FloorToInt(pos.y + radius);
 
-            float radiusSqr = radius * radius;
-
             for (int tx = minX; tx <= maxX; tx++)
             {
                 for (int ty = minY; ty <= maxY; ty++)
                 {
-                    if (AR.s.Map.IsTileBlocked(tx, ty) == false)
+                    if (map.IsTileBlocked(tx, ty) == false)
                         continue;
 
-                    float closestX = Mathf.Clamp(pos.x, tx, tx + 1f);
-                    float closestY = Mathf.Clamp(pos.y, ty, ty + 1f);
-                    float dx = pos.x - closestX;
-                    float dy = pos.y - closestY;
-                    if (dx * dx + dy * dy < radiusSqr)
+                    // 칸 전체와 먼저 비교해 겹치지 않는 칸은 이웃 조회 없이 넘긴다 (줄어든 상자는 칸 전체 안쪽)
+                    if (CircleOverlapsAabb(pos, radius, new Vector2(tx, ty), new Vector2(tx + 1f, ty + 1f)) == false)
+                        continue;
+
+                    map.GetBlockedTileBounds(tx, ty, out Vector2 boundsMin, out Vector2 boundsMax);
+                    if (CircleOverlapsAabb(pos, radius, boundsMin, boundsMax) == true)
                         return true;
                 }
             }
@@ -210,6 +211,7 @@ namespace ARPG.Utility
 
         private static float GetStaticPenetration(Vector2 pos, float radius)
         {
+            MapManager map = AR.s.Map;
             int minX = Mathf.FloorToInt(pos.x - radius);
             int maxX = Mathf.FloorToInt(pos.x + radius);
             int minY = Mathf.FloorToInt(pos.y - radius);
@@ -220,11 +222,12 @@ namespace ARPG.Utility
             {
                 for (int ty = minY; ty <= maxY; ty++)
                 {
-                    if (AR.s.Map.IsTileBlocked(tx, ty) == false)
+                    if (map.IsTileBlocked(tx, ty) == false)
                         continue;
 
-                    float closestX = Mathf.Clamp(pos.x, tx, tx + 1f);
-                    float closestY = Mathf.Clamp(pos.y, ty, ty + 1f);
+                    map.GetBlockedTileBounds(tx, ty, out Vector2 boundsMin, out Vector2 boundsMax);
+                    float closestX = Mathf.Clamp(pos.x, boundsMin.x, boundsMax.x);
+                    float closestY = Mathf.Clamp(pos.y, boundsMin.y, boundsMax.y);
                     float dx = pos.x - closestX;
                     float dy = pos.y - closestY;
                     float distSqr = dx * dx + dy * dy;
@@ -237,10 +240,10 @@ namespace ARPG.Utility
                     else
                     {
                         // 중심이 AABB 내부인 경우 최근접 면까지의 거리 + 반경이 탈출 침투량이다.
-                        float horizontalDistance = Mathf.Min(pos.x - tx,
-                            tx + 1f - pos.x);
-                        float verticalDistance = Mathf.Min(pos.y - ty,
-                            ty + 1f - pos.y);
+                        float horizontalDistance = Mathf.Min(pos.x - boundsMin.x,
+                            boundsMax.x - pos.x);
+                        float verticalDistance = Mathf.Min(pos.y - boundsMin.y,
+                            boundsMax.y - pos.y);
                         float edgeDistance = Mathf.Min(horizontalDistance,
                             verticalDistance);
                         penetration = radius + Mathf.Max(0f, edgeDistance);

@@ -442,7 +442,9 @@ namespace ARPG.Dungeon
             AR.s.Fog.OnMapChanged();
             var p = AR.s.Data.Player;
             Vector2 position = new Vector2(p.DungeonPositionX, p.DungeonPositionY);
-            if (DungeonLayout.IsFloor(record, Mathf.FloorToInt(position.x), Mathf.FloorToInt(position.y)) == false)
+            // 벽 테두리 띠에 서서 저장했어도 맞닿은 바닥 칸으로 판정한다
+            Vector2Int standingTile = ActiveMap.GetStandingTile(position);
+            if (DungeonLayout.IsFloor(record, standingTile.x, standingTile.y) == false)
                 position = new Vector2(record.Rooms[0].X + 2.5f, record.Rooms[0].Y + 2.5f);
             MovePlayer(position, false);
             ActiveMap.UpdateChunksAroundPlayer(new Vector3(position.x, position.y));

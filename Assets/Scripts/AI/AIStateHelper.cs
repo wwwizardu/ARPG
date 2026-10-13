@@ -164,9 +164,8 @@ namespace ARPG.AI
             // PathfindingComponent에 Goal 반영
             if (cm.TryGetComponent<PathfindingComponent>(entityId, out var pf))
             {
-                Vector2Int targetTile = new Vector2Int(
-                    Mathf.FloorToInt(targetPosition.x),
-                    Mathf.FloorToInt(targetPosition.y));
+                // 대상이 언덕 테두리 띠에 서 있으면 맞닿은 바닥 칸을 목표로 한다
+                Vector2Int targetTile = AR.s.Map.GetStandingTile(targetPosition);
 
                 bool changed = false;
                 if (pf.Goal != targetTile)

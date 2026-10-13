@@ -55,15 +55,18 @@ namespace ARPG.Systems
 
             Vector2 position = transform.Position;
             fog.SetVisionCenter(position, vision.Radius);
-            int cellX = Mathf.FloorToInt(position.x);
-            int cellY = Mathf.FloorToInt(position.y);
+            // 언덕 테두리 띠에 발이 들어가 있어도 바닥 칸에서 비춘다. 벽 칸에서 비추면 벽을 따라 양옆이 가려진다
+            MapManager map = AR.s.Map;
+            Vector2Int standingTile = map.GetStandingTile(position);
+            int cellX = standingTile.x;
+            int cellY = standingTile.y;
             if (fog.NeedsVisionUpdate(cellX, cellY) == false) return;
 
             // 실제 위치와 칸 중심의 차이·바이리니어 보간을 위해 세 칸 여유를 둔다. 셰이더는 그림자를 거리 밝기에서 안개 밝기 쪽으로
             // 끌어내리므로, 계산 범위 밖의 0(가림)이 섞이는 곳은 거리 밝기가 이미 안개 밝기와 같은 곳(실제 거리 약 11.3칸 밖)이어야
             // 트인 곳의 시야 가장자리에 어두운 띠가 생기지 않는다. 두 칸 여유면 약 10칸에서 0.8%p 어두워진다.
             int castRadius = Mathf.CeilToInt(vision.Radius) + 3;
-            bool hasFacility = FillBlockers(AR.s.Map, cellX, cellY, castRadius);
+            bool hasFacility = FillBlockers(map, cellX, cellY, castRadius);
             fog.BeginVisionUpdate(cellX, cellY, castRadius);
 
             // 1차: 벽만 막는다. 시설이 없으면 같은 결과를 "지금 보임"으로 함께 표시하고 2차를 건너뛴다.

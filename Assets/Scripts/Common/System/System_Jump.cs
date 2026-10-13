@@ -105,8 +105,10 @@ namespace ARPG.Systems
                 {
                     Vector2 reachable = CollisionUtil.ClipTrajectory(transform.Position, jump.EndPosition, collider.MoveRadius);
 
-                    int tx = Mathf.FloorToInt(reachable.x);
-                    int ty = Mathf.FloorToInt(reachable.y);
+                    // 발이 언덕 테두리 띠에 있으면 맞닿은 바닥 칸이 발 밑이다
+                    Vector2Int standingTile = AR.s.Map.GetStandingTile(reachable);
+                    int tx = standingTile.x;
+                    int ty = standingTile.y;
                     if (AR.s.Map.IsTileBlocked(tx, ty) == true)
                     {
                         if (CollisionUtil.TryFindNearestFree(reachable, collider.MoveRadius, out Vector2 fallback) == true)

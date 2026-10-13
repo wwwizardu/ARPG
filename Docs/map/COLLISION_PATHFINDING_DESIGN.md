@@ -178,7 +178,7 @@ return false;
 | **터널링** (한 프레임 이동량 > 타일 크기) | Player 속도 ≤ 8 unit/s, dt ≤ 1/30 → 0.27 unit/frame. 반경 0.3 보다 작아 안전. 보스 돌진 같은 고속 케이스가 생기면 sweep 도입 |
 | **모서리 끼임** (대각선에서 두 축 동시 차단) | X·Y 둘 다 차단되면 정지 (정상 동작) |
 | **반경이 겹친 시작 상태** (스폰 위치가 벽 안쪽) | 검사를 무시하고 통과 허용 (빠져나가는 방향). 근본 해결은 스폰 검증 — 별도 이슈로 분리 |
-| **계단/언덕 (Hill 비트)** | 본 문서 범위 외. Hill은 시각 효과·지각 거리에만 영향, 충돌 무관 |
+| **계단/언덕 (Hill 비트)** | Hill 비트 자체는 막지 않는다(막힘은 Blocked 비트). 다만 Hill+Blocked 칸(던전 벽·월드 언덕)의 충돌 상자는 테두리 그림에 맞춰 줄인다 → §4.5 |
 
 ### 4.4 적용 지점
 
@@ -208,6 +208,21 @@ else
 `CollisionUtil`은 `Assets/Scripts/Common/Utility/`에 신규 정적 클래스로 추가.
 
 > **System_Render 비대화 우려**: 위치 적분 로직만 같은 파일 내 별도 메서드(`ApplyVelocityWithCollision`)로 분리. 대규모 분기 시 추후 `System_PositionIntegration`으로 추출.
+
+### 4.5 언덕 테두리 충돌 상자 (2026-10-13)
+
+**문제**: 던전 벽과 월드 언덕은 같은 `RuleTile_Hill`(그림 `TileCliffFall.png`, 32px)로 그린다. 바닥과 맞닿은 테두리 그림은 바닥 쪽이 비어 있다(위 테두리 14px, 좌우 테두리 12~13px, 아래 테두리 0px). 칸 전체를 막으면 방 아래쪽 벽 앞에서 발과 눈에 보이는 벽 사이가 약 0.74칸(반경 0.3 + 빈 폭 0.44) 떨어진 채 멈춘다.
+
+**결정**: 막힌 칸의 충돌 상자를 `MapManager.GetBlockedTileBounds`가 정한다. §4.2의 원-AABB 검사는 칸 전체 대신 이 상자를 쓴다(`CollisionUtil.IsBlockedAt`·침투량 계산). 길찾기·`IsTileBlocked`는 칸 단위 그대로다.
+
+| 칸 | 상자 |
+|----|------|
+| 언덕 칸 (Hill+Blocked, 오브젝트·건물 없음) | 이웃이 언덕이 아닌 면 중 **막히지 않은 칸과 맞닿은 면**만 줄인다. 위 면 `_hillCollisionInsetTop`(14/32), 왼쪽·오른쪽 면 `_hillCollisionInsetSide`(12/32). 아래 면은 줄이지 않는다 |
+| 그 밖의 막힌 칸 (맵 밖·오브젝트·건물) | 칸 전체 |
+
+줄이는 면은 룰 타일이 실제로 고르는 그림을 따른다. 테두리 면이 셋 이상이면 기본 그림(칸 전체)이라 줄이지 않고, 좌우가 모두 테두리면 왼쪽 테두리 그림이 쓰여 왼쪽만 줄인다. 이웃 8칸 256가지 조합을 규칙 순서대로 대조해 일치를 확인했다. 대각선만 바닥인 안쪽 모서리 그림의 작은 홈은 상자로 표현하지 않는다. 빈 폭 값은 `MapManager`의 `_ruleTile_Hill` 옆 직렬화 필드이며, 던전 맵은 `CreateDungeonMap`에서 복사한다. 그림을 바꾸면 이 값과 규칙 해석을 함께 고친다.
+
+**발이 서 있는 칸**: 빈 폭이 반경보다 커서 발 중심이 언덕 칸 안쪽 띠(최대 0.44 − 반경)에 들어갈 수 있다. 칸 단위로 발 위치를 보는 판정은 `MapManager.GetStandingTile`로 그 면과 맞닿은 바닥 칸을 쓴다: 시야 기준 칸(`System_FogVision`), 길찾기 시작·목표 칸(`System_Pathfinding`·`AIStateHelper.MoveToward`), 착지 탈출(§10.1), 던전 진입 시 저장 위치 검사(`DungeonManager.ActivateInterior`).
 
 ---
 
@@ -381,7 +396,7 @@ ARPG 관행상 보류. 도입 시 quadtree/grid hash 필요. 본 문서 범위 �
 
 착지 시 (`System_Jump.Land`):
 1. `reachable = ClipTrajectory(currentPos, EndPosition, radius)` — EndPosition까지 도달 가능한 곳까지만
-2. `reachable`의 중심 타일(`floor(x), floor(y)`)이 Blocked인지 검사
+2. `reachable`의 중심 타일(`MapManager.GetStandingTile` — 보통 `floor(x), floor(y)`, 언덕 테두리 띠면 맞닿은 바닥 칸, §4.5)이 Blocked인지 검사
 3. Blocked → `TryFindNearestFree`로 spiral 탐색하여 빈 타일로 push
 4. Blocked 아님 → `reachable` 유지
 

@@ -81,9 +81,7 @@ namespace ARPG.Systems
                         continue;
                     }
 
-                    Vector2Int startTile = new Vector2Int(
-                        Mathf.FloorToInt(startTransform.Position.x),
-                        Mathf.FloorToInt(startTransform.Position.y));
+                    Vector2Int startTile = AR.s.Map.GetStandingTile(startTransform.Position);
 
                     if (pf.Waypoints == null) pf.Waypoints = new List<Vector2Int>();
 
@@ -147,10 +145,9 @@ namespace ARPG.Systems
                             else if (Time.time - pf.LastProgressTime >= STUCK_TIMEOUT)
                             {
                                 // STUCK_TIMEOUT 동안 진행 없음 → 재계산 트리거
-                                int currentTileX = Mathf.FloorToInt(transform.Position.x);
-                                int currentTileY = Mathf.FloorToInt(transform.Position.y);
-                                bool blockedCenter = AR.s.Map.IsTileBlocked(currentTileX,
-                                    currentTileY);
+                                Vector2Int currentTile = AR.s.Map.GetStandingTile(transform.Position);
+                                bool blockedCenter = AR.s.Map.IsTileBlocked(currentTile.x,
+                                    currentTile.y);
                                 bool blockedAtRadius = blockedCenter;
                                 float speed = 0f;
                                 if (cm.TryGetComponent<VelocityComponent>(entityId,

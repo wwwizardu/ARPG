@@ -512,10 +512,85 @@ namespace ARPG.Map
             if ((tile & (ulong)GlobalEnum.TileFlag.Blocked) != 0)
                 return true;
 
-            if (Context.Kind == MapKind.World && AR.s.Building != null && AR.s.Building.IsTileOccupied(worldTileX, worldTileY) == true)
+            if (IsBuildingTile(worldTileX, worldTileY) == true)
                 return true;
 
             return false;
+        }
+
+        /// <summary>
+        /// 막힌 칸의 충돌 상자 (COLLISION_PATHFINDING_DESIGN §4.5). IsTileBlocked가 true인 칸에만 호출한다.
+        /// 언덕 칸은 테두리 그림이 비어 있는 바닥 쪽 면을 그 폭만큼 줄이고, 나머지 막힌 칸은 칸 전체다.
+        /// </summary>
+        public void GetBlockedTileBounds(int worldTileX, int worldTileY, out Vector2 min, out Vector2 max)
+        {
+            min = new Vector2(worldTileX, worldTileY);
+            max = new Vector2(worldTileX + 1f, worldTileY + 1f);
+            if (IsWorldTileInBounds(worldTileX, worldTileY) == false)
+                return;
+
+            // 오브젝트·건물이 올라간 칸은 그 그림이 칸을 덮으므로 줄이지 않는다
+            ulong tile = GetTileAt(worldTileX, worldTileY);
+            if ((tile & (ulong)GlobalEnum.TileFlag.Hill) == 0 ||
+                (tile & (ulong)GlobalEnum.TileFlag.ObjectLayerMask) != 0 ||
+                IsBuildingTile(worldTileX, worldTileY) == true)
+                return;
+
+            // RuleTile_Hill은 이웃이 언덕이 아닌 면에 테두리 그림을 쓴다. 규칙 순서상 테두리 면이 셋 이상이면 기본 그림(칸 전체),
+            // 좌우가 모두 테두리면 왼쪽 테두리 그림이 쓰이고, 아래 테두리 그림은 칸을 꽉 채운다
+            bool upEdge = IsHillTile(worldTileX, worldTileY + 1) == false;
+            bool downEdge = IsHillTile(worldTileX, worldTileY - 1) == false;
+            bool leftEdge = IsHillTile(worldTileX - 1, worldTileY) == false;
+            bool rightEdge = IsHillTile(worldTileX + 1, worldTileY) == false;
+            int edgeCount = (upEdge == true ? 1 : 0) + (downEdge == true ? 1 : 0)
+                + (leftEdge == true ? 1 : 0) + (rightEdge == true ? 1 : 0);
+            if (edgeCount > 2)
+                return;
+
+            // 막히지 않은 칸과 맞닿은 면만 줄인다. 막힌 이웃 쪽을 줄이면 작은 반경이 끼어들 틈만 생긴다
+            if (upEdge == true && IsTileBlocked(worldTileX, worldTileY + 1) == false)
+                max.y -= _hillCollisionInsetTop;
+            if (leftEdge == true && IsTileBlocked(worldTileX - 1, worldTileY) == false)
+                min.x += _hillCollisionInsetSide;
+            if (rightEdge == true && leftEdge == false && IsTileBlocked(worldTileX + 1, worldTileY) == false)
+                max.x -= _hillCollisionInsetSide;
+        }
+
+        /// <summary>
+        /// 발이 서 있는 칸. 보통은 위치가 속한 칸이고, 발이 언덕 칸의 줄어든 면(GetBlockedTileBounds) 바깥 띠에 있으면
+        /// 그 면과 맞닿은 바닥 칸이다. 칸 단위 판정(시야 기준점·길찾기·착지 탈출)이 충돌 상자와 어긋나지 않게 쓴다.
+        /// </summary>
+        public Vector2Int GetStandingTile(Vector2 worldPosition)
+        {
+            int tileX = Mathf.FloorToInt(worldPosition.x);
+            int tileY = Mathf.FloorToInt(worldPosition.y);
+            Vector2Int result = new Vector2Int(tileX, tileY);
+            if (IsTileBlocked(tileX, tileY) == false)
+                return result;
+
+            // 두 띠가 겹치는 모서리에서는 칸 경계가 더 가까운 쪽 이웃을 고른다
+            GetBlockedTileBounds(tileX, tileY, out Vector2 min, out Vector2 max);
+            float bestDistance = float.MaxValue;
+            if (worldPosition.y >= max.y && tileY + 1f - worldPosition.y < bestDistance)
+            {
+                bestDistance = tileY + 1f - worldPosition.y;
+                result = new Vector2Int(tileX, tileY + 1);
+            }
+            if (worldPosition.y < min.y && worldPosition.y - tileY < bestDistance)
+            {
+                bestDistance = worldPosition.y - tileY;
+                result = new Vector2Int(tileX, tileY - 1);
+            }
+            if (worldPosition.x < min.x && worldPosition.x - tileX < bestDistance)
+            {
+                bestDistance = worldPosition.x - tileX;
+                result = new Vector2Int(tileX - 1, tileY);
+            }
+            if (worldPosition.x >= max.x && tileX + 1f - worldPosition.x < bestDistance)
+            {
+                result = new Vector2Int(tileX + 1, tileY);
+            }
+            return result;
         }
 
         /// <summary>
@@ -531,7 +606,7 @@ namespace ARPG.Map
             if ((tile & (ulong)GlobalEnum.TileFlag.Blocked) != 0)
                 return VisionBlocker.Wall;
 
-            if (Context.Kind == MapKind.World && AR.s.Building != null && AR.s.Building.IsTileOccupied(worldTileX, worldTileY) == true)
+            if (IsBuildingTile(worldTileX, worldTileY) == true)
                 return VisionBlocker.Facility;
 
             return VisionBlocker.None;
@@ -841,6 +916,14 @@ namespace ARPG.Map
                 _tileModifications[chunkCoord] = new List<TileModification>(data.Modifications);
             }
         }
+
+        private bool IsBuildingTile(int worldTileX, int worldTileY)
+            => Context.Kind == MapKind.World && AR.s.Building != null
+               && AR.s.Building.IsTileOccupied(worldTileX, worldTileY) == true;
+
+        // 맵 밖에는 언덕 타일이 그려지지 않으므로 언덕이 아니다
+        private bool IsHillTile(int worldTileX, int worldTileY)
+            => IsWorldTileInBounds(worldTileX, worldTileY) == true && IsHillAt(worldTileX, worldTileY) == true;
 
     }
 }

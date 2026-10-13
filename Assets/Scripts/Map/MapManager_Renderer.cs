@@ -25,6 +25,10 @@ namespace ARPG.Map
 
         [Header("언덕 룰 타일")]
         [SerializeField] private RuleTile _ruleTile_Hill;
+        // 언덕 테두리 그림이 바닥 쪽으로 비어 있는 폭 (타일 단위). 충돌 상자의 그 면을 이만큼 줄인다 (COLLISION_PATHFINDING_DESIGN §4.5)
+        // TileCliffFall 32px 기준: 위 테두리 14px, 좌우 테두리 12px. 아래 테두리는 칸을 꽉 채운다
+        [SerializeField] private float _hillCollisionInsetTop = 14f / 32f;
+        [SerializeField] private float _hillCollisionInsetSide = 12f / 32f;
 
         [Header("오브젝트 룰 타일")]
         [SerializeField] private RuleTile _ruleTile_Object;
