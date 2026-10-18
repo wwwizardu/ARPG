@@ -1286,6 +1286,9 @@ namespace ARPG.Editor
             table.ItemType = (GlobalEnum.ItemType)Enum.Parse(typeof(GlobalEnum.ItemType), values[3]);
             table.Category = (GlobalEnum.ItemCategory)Enum.Parse(typeof(GlobalEnum.ItemCategory), values[4]);
             table.Stackable = values[5].Trim().ToUpper() == "TRUE";
+            // 장비는 인스턴스마다 옵션이 달라 겹치면 두 번째 옵션이 사라진다 (Inventory.AddItem은 같은 Id를 수량으로 합친다).
+            if (table.ItemType == GlobalEnum.ItemType.Equipment && table.Stackable == true)
+                Debug.LogError($"[ParseItemTable] Id={table.Id}({table.Name}): 장비는 Stackable이 FALSE여야 합니다.");
             table.MaxStack = int.Parse(values[6]);
             table.Description = values[7];
             table.DropRate = int.Parse(values[8]);

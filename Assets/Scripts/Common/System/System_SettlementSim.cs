@@ -66,7 +66,7 @@ namespace ARPG.Systems
             AR.s.Village.RefreshAllPopulationsFromAbstract();
 
             // 5) 세계 물가 지수 — 게임일 경계를 지났을 때만 갱신한다 (GOLD_BALANCE_DESIGN D126·D130).
-            //    기준값이 0이면(새 게임·구 세이브) 첫 갱신 때 그 순간의 세계 Gold로 정한다.
+            //    기준값이 0이면(새 게임·구 세이브) NPC가 배치된 뒤 첫 갱신 때 그 순간의 세계 Gold로 정한다.
             if (GoldPriceRules.IndexEnabled == true)
                 AR.s.Village.UpdateGoldPriceIndex(now);
         }

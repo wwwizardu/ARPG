@@ -15,20 +15,25 @@ namespace ARPG.Village
 
     /// <summary>
     /// 세계 물가 지수 저장 상태 (GOLD_BALANCE_DESIGN D126·D127·D130, World 파티션).
-    /// 기준값이 0이면 아직 정하지 않은 것이다 — 처음 갱신할 때 그 순간의 세계 Gold로 정하고 지수 1.0에서 시작한다
+    /// 기준값이 0이면 아직 정하지 않은 것이다 — NPC가 배치된 뒤 처음 갱신할 때 그 순간의 세계 Gold로 정하고 지수 1.0에서 시작한다
     /// (새 게임·기존 세이브 공통, Q6). 저장 복사기가 공개 속성도 저장하므로 속성은 두지 않는다.
     /// </summary>
     [Serializable]
     public sealed class GoldPriceIndexState
     {
+        // 기준값 1은 새 게임 첫 갱신이 NPC 배치보다 먼저 돌아 세계 Gold 0으로 굳은 값이다(2026-10-18 수정 전 세이브).
+        // NPC 한 명만 있어도 세계 Gold가 30G를 넘으므로 정상 흐름에서는 나오지 않는다.
+        private const long BrokenNewGameBaseline = 1;
+
         public long BaselineWorldGold;
         public float Index = 1f;
         public int LastUpdateDay = -1;
 
-        /// <summary>로드 보정 — 손상 값이면 처음 상태로 되돌린다.</summary>
+        /// <summary>로드 보정 — 손상 값이나 잘못 굳은 기준값이면 처음 상태로 되돌린다(다음 갱신 때 다시 정한다).</summary>
         public void Sanitize()
         {
-            if (BaselineWorldGold < 0 || float.IsNaN(Index) || float.IsInfinity(Index) || Index <= 0f)
+            if (BaselineWorldGold < 0 || BaselineWorldGold == BrokenNewGameBaseline ||
+                float.IsNaN(Index) || float.IsInfinity(Index) || Index <= 0f)
             {
                 BaselineWorldGold = 0;
                 Index = 1f;

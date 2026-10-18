@@ -201,12 +201,26 @@ namespace ARPG.EditorTools
                 wishItem != null && (wishItem.BasePrice > 0 || wishItem.DropRate > 0) && string.IsNullOrEmpty(wishRow.SignText) &&
                 wishRow.IntroText.Contains("{targetItemName}"), "one obtainable ItemGift wish (2001) without an entrance sign");
             NarrativeContentDefinition storyRow = StoryRow(pack);
-            Require(pack.Contents.Count == 5 && storyRow != null && storyRow.ContentId == 3001 && storyRow.TargetType == NarrativeTargetType.RecentWound &&
+            Require(storyRow != null && storyRow.ContentId == 3001 && storyRow.TargetType == NarrativeTargetType.RecentWound &&
                 storyRow.TargetId == 0 && storyRow.IntroText.Contains(NarrativeContentCatalog.KnownWoundSummaryToken) &&
                 string.IsNullOrEmpty(storyRow.SignText) && string.IsNullOrEmpty(storyRow.ResolvedText),
                 "one recent-wound personal story (3001) with only the {knownWoundSummary} line");
-            Require(pack.Reactions.Count == 10 && pack.Reactions.FindAll(r => r.Requirement == NarrativeReactionRequirement.WishFulfilled).Count == 3,
-                "ten common reactions (101~107 dungeon, 201~203 wish)");
+            // 네임드 위협 (NAMED_THREAT_DESIGN §11.3): 템플릿 1~3마다 문구 행 하나(4000 + 템플릿 Id), 처치 목표·흔적·보고 문구
+            List<NarrativeContentDefinition> threats = pack.Contents.FindAll(c => c.Kind == NarrativeContentKind.NamedThreat);
+            Require(threats.Count == 3 && threats.TrueForAll(c => c.ContentId == 4000 + c.TargetId && c.TargetId >= 1 && c.TargetId <= 3 &&
+                c.TargetType == NarrativeTargetType.NamedThreat && c.GoalType == NarrativeGoalType.DefeatTarget &&
+                string.IsNullOrWhiteSpace(c.SignText) == false && string.IsNullOrWhiteSpace(c.ResolvedText) == false) &&
+                threats.Exists(c => c.TargetId == 1) && threats.Exists(c => c.TargetId == 2) && threats.Exists(c => c.TargetId == 3),
+                "three named threat rows (4001~4003 → templates 1~3) with DefeatTarget, trace and report lines");
+            int wishCount = pack.Contents.FindAll(c => c.Kind == NarrativeContentKind.Wish).Count;
+            int storyCount = pack.Contents.FindAll(c => c.Kind == NarrativeContentKind.PersonalStory).Count;
+            int otherCount = pack.Contents.Count - rumors.Count - wishCount - storyCount - threats.Count;
+            Require(wishCount == 1 && storyCount == 1 && otherCount == 0,
+                $"content rows by kind: rumors {rumors.Count}/3, wish {wishCount}/1, story {storyCount}/1, named threats {threats.Count}/3, other {otherCount}/0");
+            Require(pack.Reactions.Count == 11 && pack.Reactions.FindAll(r => r.Requirement == NarrativeReactionRequirement.WishFulfilled).Count == 3 &&
+                pack.Reactions.Exists(r => r.ReactionRuleId == 301 && r.Requirement == NarrativeReactionRequirement.ThreatSlain &&
+                    r.Audience == NarrativeReactionAudience.Victim),
+                "eleven common reactions (101~107 dungeon, 201~203 wish, 301 named threat victim)");
             // Audience 기본값(All)은 쓰지 않으므로 이 열이 생기기 전에 저장된 정책 스냅샷의 해시가 그대로다.
             var legacyPolicy = NarrativeContentCatalog.CreatePolicySnapshot(pack.Reactions.FindAll(r => r.ReactionRuleId < 200));
             Require(JsonConvert.SerializeObject(legacyPolicy.Reactions).Contains("Audience") == false && NarrativeContentCatalog.IsSupported(legacyPolicy),
@@ -245,7 +259,7 @@ namespace ARPG.EditorTools
             oldPolicy.PolicyVersion = NarrativeReactionRules.PolicyVersion + 1;
             oldPolicy.Hash = NarrativeContentCatalog.PolicyHash(oldPolicy);
             Require(NarrativeContentCatalog.IsSupported(oldPolicy) == false, "unknown policy version rejected");
-            report.AppendLine($"PASS: three rumor contents + one wish + one recent-wound story, {placements} real monster placements, deterministic selection, " +
+            report.AppendLine($"PASS: three rumor contents + one wish + one recent-wound story + three named threats, eleven reactions, {placements} real monster placements, deterministic selection, " +
                               "snapshot hash/version checks, legacy policy hash kept.");
         }
 

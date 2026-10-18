@@ -34,6 +34,10 @@ namespace ARPG.Village
             if (AR.s.Data == null)
                 return;
             var price = AR.s.Data.GoldPrice;
+            // 기준값은 월드 생성 직후의 세계 Gold다 (D126). 새 게임은 이 갱신이 NPC 배치(MapManager.CreateMap)보다 먼저 돌아
+            // 세계 Gold가 0이므로, NPC Gold가 생길 때까지 기준값을 정하지 않는다. 기존 세이브는 로드 때 NPC가 이미 있다.
+            if (price.BaselineWorldGold <= 0 && (AR.s.Npc == null || AR.s.Npc.SumLivingNpcGold() <= 0))
+                return;
             long baseline = price.BaselineWorldGold;
             float index = price.Index;
             int day = price.LastUpdateDay;

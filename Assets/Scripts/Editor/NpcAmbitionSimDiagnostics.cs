@@ -5084,15 +5084,19 @@ namespace ARPG.EditorTools
                 thief.EnsureSlotsInitialized();
                 thief.Inventory[0] = null;
 
-                // 훔칠 물건 견본: 장착 장비(인스턴스 있음, 비스택)의 복제본. 인스턴스 ID는 라이브와 겹치지 않는 대역을 쓴다.
+                // 훔칠 물건 견본: 장착 장비 중 훔칠 수 있는 것(인스턴스 있음, 비스택, D99)의 복제본. 인스턴스 ID는 라이브와 겹치지 않는 대역을 쓴다.
                 ItemData? template = null;
+                int templateSlot = -1;
                 for (int i = 0; i < sim.NpcIds.Count && template == null; i++)
                 {
                     ItemData?[] equip = sim.Npcs[sim.NpcIds[i]].InventoryEquip;
                     for (int s = 0; s < equip.Length && template == null; s++)
                     {
-                        if (equip[s] != null && equip[s]!.Equipment != null && equip[s]!.ItemInstanceId != 0)
+                        if (equip[s] != null && equip[s]!.Equipment != null && NpcManager.IsStealableBagItem(equip[s]) == true)
+                        {
                             template = equip[s];
+                            templateSlot = s;
+                        }
                     }
                 }
                 if (template == null)
@@ -5489,15 +5493,18 @@ namespace ARPG.EditorTools
                 thief.InitialPower = thiefInitialPower;
                 npc.InvalidateNpcPower(thiefId);
 
-                // ⑦ 안 들킴 — 업그레이드 → 바로 장착 (D45 문턱·상한, 출처 Theft). 장비를 모두 벗긴 뒤 원래 가장 강한 장비의 복제본을 훔친다.
+                // ⑦ 안 들킴 — 업그레이드 후보여도 가방행 (D119). 장비를 모두 벗긴 뒤 원래 가장 강한 장비의 복제본을 훔친다.
+                // 훔칠 수 있는 장비(D99 비스택)만 고른다. 도둑이 그런 장비를 차고 있지 않으면 견본을 견본이 있던 칸의 장비로 쓴다.
                 NpcSaveData equipVictim = sim.Npcs[equipVictimId];
                 ItemData?[] scratch = new ItemData?[thief.InventoryEquip.Length];
                 int bestSlot = -1;
                 float bestPower = 0f;
+                ItemData? bestSource = null;
+                bool usedTemplate = false;
                 for (int s = 0; s < thief.InventoryEquip.Length; s++)
                 {
                     ItemData? equipped = thief.InventoryEquip[s];
-                    if (equipped == null || equipped.Equipment == null)
+                    if (equipped == null || equipped.Equipment == null || NpcManager.IsStealableBagItem(equipped) == false)
                         continue;
                     Array.Clear(scratch, 0, scratch.Length);
                     scratch[s] = equipped;
@@ -5506,14 +5513,25 @@ namespace ARPG.EditorTools
                     {
                         bestSlot = s;
                         bestPower = power;
+                        bestSource = equipped;
                     }
                 }
-                ItemData? stolenEquipItem = null;
                 if (bestSlot < 0)
-                    Check(false, "도둑에게 장착 장비가 없어 장착 경로를 검증하지 못함");
+                {
+                    Array.Clear(scratch, 0, scratch.Length);
+                    scratch[templateSlot] = template;
+                    bestSlot = templateSlot;
+                    bestPower = NpcPowerEvaluator.EvaluateBreakdown(scratch, thief.SkillLevel).Total;
+                    bestSource = template;
+                    usedTemplate = true;
+                }
+                ItemData? stolenEquipItem = null;
+                if (bestSource == null)
+                    Check(false, "훔칠 수 있는 장비가 없어 장착 경로를 검증하지 못함");
                 else
                 {
-                    ItemData equipItem = MakeCopy(thief.InventoryEquip[bestSlot]!, 400);
+                    ItemData equipItem = MakeCopy(bestSource, 400);
+                    log.AppendLine($"  ⑦ 훔칠 장비: {(usedTemplate == true ? "견본" : "도둑 장비")} Id {equipItem.Id}, 칸 {bestSlot}");
                     stolenEquipItem = equipItem;
                     for (int s = 0; s < thief.InventoryEquip.Length; s++)
                         thief.InventoryEquip[s] = null;
@@ -5534,10 +5552,13 @@ namespace ARPG.EditorTools
                         AmbitionMultiplier = 1f, VictimCandidateCount = 1, Detected = false,
                     }, t0 + 50f);
                     bool held = HoldsInstance(thief, equipItem.ItemInstanceId, out bool equippedNow);
+                    bool victimStillHolds = HoldsInstance(equipVictim, equipItem.ItemInstanceId, out _);
+                    float powerAfter = NpcPowerEvaluator.Evaluate(thief);
                     Check(equipOutcome == NpcTheftOutcome.StolenToBag && held == true && equippedNow == false &&
-                          HoldsInstance(equipVictim, equipItem.ItemInstanceId, out _) == false &&
-                          Mathf.Abs(NpcPowerEvaluator.Evaluate(thief) - strippedPower) <= PowerEpsilon,
-                        "안 들킴 + 업그레이드 후보여도 가방행, 장착하지 않음 (NPC_SHOP_EQUIPMENT D119)");
+                          victimStillHolds == false && Mathf.Abs(powerAfter - strippedPower) <= PowerEpsilon,
+                        "안 들킴 + 업그레이드 후보여도 가방행, 장착하지 않음 (NPC_SHOP_EQUIPMENT D119) — " +
+                        $"결과 {equipOutcome}, 도둑 보유 {held}·장착 {equippedNow}, 피해자 보유 {victimStillHolds}, " +
+                        $"전투력 {strippedPower:F3} → {powerAfter:F3}");
                     bool hasOwnerRumor = false;
                     for (int i = 0; i < thief.Rumors.Count; i++)
                     {

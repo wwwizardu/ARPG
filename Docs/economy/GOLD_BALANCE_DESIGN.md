@@ -413,6 +413,7 @@
 
 **구현 메모**
 - **물가 지수 켜기 (D126~D130)**: `GoldPriceRules.IndexEnabled` = true. 기준값이 0이면 System_SettlementSim 5단계의 첫 갱신 때 그 순간 세계 Gold로 정한다(라이브 세이브: 143,896, 지수 1.0에서 시작).
+  - **새 게임 기준값 수정 (2026-10-18)**: 새 게임은 첫 갱신이 NPC 배치(`MapManager.CreateMap`)보다 먼저 돌아 세계 Gold 0 → 기준값 1로 굳었다. 그 결과 통화량 비율이 상한 100에 묶여 지수가 30일에 약 50까지 올랐고, 생활비·매입이 끊겨 Trade 1%·Hunt 48%가 됐다. 지금은 NPC Gold가 생길 때까지 기준값을 정하지 않고(`VillageManager.UpdateGoldPriceIndex`), 로드 보정이 기준값 1을 "아직 안 정함"으로 되돌린다(`GoldPriceIndexState.Sanitize`).
 - **생활비·생활비 소멸 (D131·D132 B-주)**: `NpcManager_LivingExpense.ResolveLivingExpenseOnRestEnd` — `ResolveRestEnd`의 `allowTheft` 분기 안, 절도 판정 다음(파티 합류 경로는 자동 제외). 예비금 = `GetTreatmentFee()` × 3, 초과분 ≤ 0이거나 소속 마을이 없으면 아무것도 하지 않는다. 비율은 정수로 계산한다(쓰는 양 = 초과분 × 70 / 100 내림, 소멸 = 쓰는 양 × 18 / 1000 내림 + 나머지/1000 확률로 1, salt 180 — `NpcActivityResolver.LivingExpenseBurnSalt`). 입금이 실패하면 NPC Gold를 빼지 않는다. 즉시 저장 없음(D47). 시설 판정 없이 소속 마을이면 낸다(D135).
 - **금고 유지비 (D132 B-보조·D135)**: `VillageResourceSimulation.AdvanceWholeHours`가 시간마다 "Gold 생산 → 유지비"를 돌리고 지운 양을 돌려준다. 시간당 비율 h = 1 − 0.95^(1/24), 소수분은 새 저장 필드 `VillageData.VaultUpkeepCarry`(기본값 0은 저장 생략). 기준선 = `GetServicePrice(300)`를 한 번의 진행 동안 고정한다(플레이 중이 아니면 300). Food·Wood·Stone·Iron은 지금처럼 한 번에 계산한다.
   - 인구 0 마을: `AdvanceWholeHours`가 생산 없이 유지비만 적용한다. `System_VillagePassiveProduction`도 인구 0 마을을 건너뛰지 않게 바꿨다.
