@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace ARPG.Npc
 {
-    /// <summary>NPC 개인 성별. 저장되는 값이므로 기존 숫자를 바꾸지 않는다.</summary>
+    /// <summary>NPC 성별. 정본은 NpcTable.Gender(종류별 고정)이고 세이브에는 저장하지 않는다. Unknown은 표 미입력 표시다.</summary>
     public enum NpcGender
     {
         Unknown = 0,
@@ -45,9 +45,6 @@ namespace ARPG.Npc
         // 인스턴스별 고유 이름 — 생성 시 이름 풀에서 랜덤 선택, 이후 고정.
         // 같은 NpcTableId(공유 테이블 이름)라도 NPC마다 다른 이름이 보이도록 인스턴스에 둔다.
         public string Name = string.Empty;
-
-        // 생성 시 남성/여성을 한 번 정해 저장한다. Unknown은 성별이 없던 구 세이브의 초기값이다.
-        public NpcGender Gender = NpcGender.Unknown;
 
         // 인스턴스별 flavor — 생성 시 직업 기반 풀에서 랜덤 선택, 이후 고정.
         // 같은 NpcTableId라도 NPC마다 다른 소개가 보이도록 데이터를 인스턴스에 둔다.
@@ -116,6 +113,9 @@ namespace ARPG.Npc
         // 마지막 원정 부상을 입은 던전 (NPC_NARRATIVE_CONTENT_DESIGN §4.2 피해자 판정). 사냥 부상이면 비운다. 비어 있으면 저장하지 않는다.
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore, DefaultValueHandling = DefaultValueHandling.Ignore)]
         public string? LastWoundDungeonId;
+        // 마지막 원정 부상을 입힌 네임드 위협 (NAMED_THREAT_DESIGN §6.3·§9.3 피해자 판정). 다른 부상이면 0. 0은 저장하지 않는다.
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public int LastWoundThreatId;
         // 마지막 절도 시도 게임시각 (NPC_AMBITION_DESIGN D100 — 도둑 쿨다운 168h, 시도 기준). -1 = 시도 없음.
         // 같은 마을 쿨다운(72h)은 새 필드 없이 마을 명단의 이 값 최댓값으로 계산한다. 기본값은 저장하지 않는다.
         [System.ComponentModel.DefaultValue(-1f)]
@@ -232,6 +232,9 @@ namespace ARPG.Npc
             // 피해자 판정용 던전은 마지막 부상이 던전 원정일 때만 남긴다 (§4.2).
             if (LastWoundActivity != NpcActivityKind.DungeonDelve || string.IsNullOrEmpty(LastWoundDungeonId) == true)
                 LastWoundDungeonId = null;
+            // 네임드 부상은 사냥 부상이다 (§6.1). 다른 활동이거나 음수면 비운다.
+            if (LastWoundActivity != NpcActivityKind.Hunt || LastWoundThreatId < 0)
+                LastWoundThreatId = 0;
             // 절도 시도 시각 보정 (D100). 음수·NaN은 "시도 없음"(-1)으로 본다.
             if (float.IsNaN(LastTheftGameTime) == true || LastTheftGameTime < 0f)
                 LastTheftGameTime = -1f;
@@ -262,7 +265,9 @@ namespace ARPG.Npc
         /// <summary>
         /// 원정 부상 1건을 누적 요약에 반영한다 (D91 ①·②, 가벼운 부상·중상 공통).
         /// </summary>
-        public void RecordExpeditionWound(float when, NpcActivityKind activity, bool severe = false, string? dungeonId = null)
+        /// <param name="threatId">네임드 위협에게 입은 부상이면 그 네임드 ID (NAMED_THREAT_DESIGN §6.3). 아니면 0</param>
+        public void RecordExpeditionWound(float when, NpcActivityKind activity, bool severe = false, string? dungeonId = null,
+            int threatId = 0)
         {
             WoundCount++;
             if (when >= LastWoundGameTime)
@@ -276,6 +281,8 @@ namespace ARPG.Npc
                 LastWoundDungeonId = LastWoundActivity == NpcActivityKind.DungeonDelve && string.IsNullOrEmpty(dungeonId) == false
                     ? dungeonId
                     : null;
+                // 마지막 부상이 네임드에게서 온 것일 때만 값이 있다 (LastWoundDungeonId와 같은 방식)
+                LastWoundThreatId = LastWoundActivity == NpcActivityKind.Hunt && threatId > 0 ? threatId : 0;
             }
         }
 

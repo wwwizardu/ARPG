@@ -73,6 +73,8 @@ namespace ARPG.Data
         public NpcCompanionState? NpcCompanion;
         // GOLD_BALANCE_DESIGN D126 — 세계 물가 지수. 구 세이브는 null (로드 때 기본 상태).
         public GoldPriceIndexState? GoldPrice;
+        // NAMED_THREAT_DESIGN §10.1 — 네임드 위협 기록. 구 세이브는 null (로드 때 빈 상태, NextAppearGameTime = -1이라 곧 첫 출현).
+        public NamedThreatWorldState? NamedThreats;
     }
 
     [Serializable]

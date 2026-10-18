@@ -29,7 +29,8 @@ namespace ARPG.Npc.Narrative
 
             StringBuilder npc = new();
             npc.AppendLine($"이름: {ctx.NpcName}");
-            string gender = save.Gender switch
+            NpcGender npcGender = AR.s.Npc != null ? AR.s.Npc.GetGender(npcId) : NpcGender.Unknown;
+            string gender = npcGender switch
             {
                 NpcGender.Male => "남성",
                 NpcGender.Female => "여성",

@@ -84,7 +84,9 @@ namespace ARPG.Skill.Combat
                     table.BaseProjectileCount,
                     ownerAdditionalProjectiles,
                     skillAdditionalProjectiles),
-                AttackTelegraphGeometryResolver.DefaultProjectileSpreadAngleDeg);
+                AttackTelegraphGeometryResolver.DefaultProjectileSpreadAngleDeg,
+                table.UsesDash,
+                table.DashDistance);
             return AttackTelegraphGeometryResolver.Resolve(input);
         }
 

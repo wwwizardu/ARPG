@@ -148,6 +148,15 @@ namespace ARPG.Systems
             System_MonsterSpawn monsterSpawnSystem = new();
             RegisterSystems(monsterSpawnSystem);
 
+            // Priority 135: Named Threat Director (FixedUpdate, World, 1초) - 네임드 위협 출현·단계·사라짐·소문 주인 재배정 (NAMED_THREAT_DESIGN §12.2)
+            RegisterSystems(new System_NamedThreatDirector());
+
+            // Priority 136: Named Threat Presence (FixedUpdate, World, 0.5초) - 청크 활성에 따른 네임드 엔티티 생성·제거, 순찰 기준점 갱신
+            RegisterSystems(new System_NamedThreatPresence());
+
+            // Priority 137: Named Threat Trail (FixedUpdate, World, 0.5초) - 영역 안 흔적 자막
+            RegisterSystems(new System_NamedThreatTrail());
+
             // Priority 140: Monster Aura System (Update) - 오라 접사 주변 같은 진영에 오라 버프 부여·갱신 (0.5초 간격, MONSTER_AFFIX_DESIGN §6.3)
             RegisterSystems(new System_MonsterAura());
 
@@ -201,6 +210,10 @@ namespace ARPG.Systems
             // Priority 800: Jump System (Update) - 확정된 점프 궤적 갱신 및 착지 처리
             System_Jump jumpSystem = new();
             RegisterSystems(jumpSystem);
+
+            // Priority 805: Dash System (Update) - 돌진 직선 이동·벽 정지. 경로 판정은 System_Skill (SKILL_DESIGN §6.11)
+            System_Dash dashSystem = new();
+            RegisterSystems(dashSystem);
 
             // Priority 810: Forced Move System (Update) - 넉백·당기기 진행. Render(1000)의 이동 반영 전 (SKILL_DESIGN §6.10)
             System_ForcedMove forcedMoveSystem = new();

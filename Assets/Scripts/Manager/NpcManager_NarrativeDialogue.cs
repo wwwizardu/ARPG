@@ -79,9 +79,11 @@ namespace ARPG.Npc
                     if (instance == null || npc == null || instance.EndNoticePending == false || instance.RequesterNpcId != npcId)
                         return null;
                     string location = DescribeNarrativeLocation(instance, npc.VillageId);
+                    string notice = instance.Kind == NarrativeContentKind.NamedThreat
+                        ? NamedThreatEndNotice(instance)
+                        : $"{location} 일은 다른 사람들이 처리했다더군. 신경 써 줘서 고맙네.";
                     return new NarrativeDialogueResult { Kind = conversation.Kind, InstanceId = instance.InstanceId,
-                        Text = $"{ResolveNpcDisplayName(npc)}: {location} 일은 다른 사람들이 처리했다더군. 신경 써 줘서 고맙네.",
-                        NeedsDisplayCommit = true };
+                        Text = $"{ResolveNpcDisplayName(npc)}: {notice}", NeedsDisplayCommit = true };
                 }
                 case NarrativeConversationKind.DeedReactions:
                     return await RunDeedReactionsAsync(npcId);
@@ -298,6 +300,8 @@ namespace ARPG.Npc
                 NarrativeContentInstance? held = GetNarrativeInstance(save.NarrativeRequest.InstanceId);
                 if (held == null || held.IsOpen == false)
                     return null;
+                if (held.Kind == NarrativeContentKind.NamedThreat)
+                    return BuildNamedThreatProgressTopic(save, held);
                 string heldLocation = DescribeNarrativeLocation(held, save.VillageId);
                 var progress = new DialogueTopic
                 {
@@ -312,6 +316,8 @@ namespace ARPG.Npc
             NarrativeContentDefinition? content = GetNarrativeContent(best);
             if (best == null || content == null)
                 return null;
+            if (best.Kind == NarrativeContentKind.NamedThreat)
+                return BuildNamedThreatRequestTopic(save, best, content);
             string location = DescribeNarrativeLocation(best, save.VillageId);
             var request = new DialogueTopic
             {
@@ -365,7 +371,10 @@ namespace ARPG.Npc
                     instance.EntranceY = y;
                 }
                 npc.NarrativeRequest = new NpcNarrativeRequest { InstanceId = instance.InstanceId, RequestedGameTime = now };
-                committed = await AR.s.Data.SaveAsync(SaveScope.Narrative | SaveScope.NpcState);
+                // 네임드 부탁은 칭호 공개 뒤에만 생기므로 그 기록(World)을 같은 저장에 싣는다 — 부탁 칸만 남고 공개가 빠지지 않게
+                committed = await AR.s.Data.SaveAsync(instance.Kind == NarrativeContentKind.NamedThreat
+                    ? SaveScope.Narrative | SaveScope.NpcState | SaveScope.World
+                    : SaveScope.Narrative | SaveScope.NpcState);
                 return committed && lifetime == _narrative.Lifetime;
             }
             finally
@@ -404,15 +413,26 @@ namespace ARPG.Npc
 
         // 부탁은 소문 주인만, 칸이 비어 있고, 미해결이고, 입구가 있고, 아직 아무에게도 부탁하지 않았을 때 (§4.1).
         // 이미 해결된 소문은 새로 부탁하지 않는다 — 모든 소문은 사실이어야 한다 (D72).
+        // 네임드 위협 (NAMED_THREAT_DESIGN §8.4): 입구 대신 네임드가 활성이고 칭호가 공개됐을 때(첫 마주침 뒤 — 부탁 대사가 피해를 말한다).
         private bool IsRequestable(int npcId, NpcSaveData npc, NarrativeContentInstance instance)
-            => instance.Kind == NarrativeContentKind.DungeonRumor && instance.OwnerNpcId == npcId && npc.NarrativeRequest == null && instance.IsOpen == true &&
-               instance.RequesterNpcId < 0 && IsNpcAlive(npcId) == true && GetNarrativeContent(instance) != null &&
-               AR.s.Dungeon.TryGetNarrativeEntrance(instance.DungeonId, out _, out _) == true;
+        {
+            if (instance.OwnerNpcId != npcId || npc.NarrativeRequest != null || instance.IsOpen == false || instance.RequesterNpcId >= 0 ||
+                IsNpcAlive(npcId) == false || GetNarrativeContent(instance) == null)
+                return false;
+            if (instance.Kind == NarrativeContentKind.NamedThreat)
+            {
+                NamedThreatRecord? record = AR.s.NamedThreat != null ? AR.s.NamedThreat.GetActive(instance.ThreatId) : null;
+                return record != null && record.TitleRevealed == true;
+            }
+            return instance.Kind == NarrativeContentKind.DungeonRumor &&
+                   AR.s.Dungeon.TryGetNarrativeEntrance(instance.DungeonId, out _, out _) == true;
+        }
 
         // ================= 보고 (§4.1 보고와 전파·§4.5) =================
 
         private bool IsDirectTellAvailable(NarrativeContentInstance instance, int npcId)
-            => instance.Kind == NarrativeContentKind.DungeonRumor && instance.OwnerNpcId == npcId && instance.Progress == NarrativeRumorProgress.Resolved &&
+            => (instance.Kind == NarrativeContentKind.DungeonRumor || instance.Kind == NarrativeContentKind.NamedThreat) &&
+               instance.OwnerNpcId == npcId && instance.Progress == NarrativeRumorProgress.Resolved &&
                instance.Reported == false && instance.RequesterNpcId < 0;
 
         /// <summary>
@@ -445,7 +465,9 @@ namespace ARPG.Npc
                 metBefore = HasMetPlayer(npcId);
                 var input = new NarrativeReactionRules.Input(npc.NpcStat, relationBefore, IsGloryAmbition(npc));
                 // 보고·소문 전 해결 말하기는 소문 주인이 직접 반응한다 (Audience Owner·All 행).
-                NarrativeReactionDefinition? rule = NarrativeReactionRules.Select(policy.Reactions, PlayerDeedKind.RumorResolved, true, input);
+                bool namedThreat = instance.Kind == NarrativeContentKind.NamedThreat;
+                PlayerDeedKind deedKind = namedThreat == true ? PlayerDeedKind.ThreatSlain : PlayerDeedKind.RumorResolved;
+                NarrativeReactionDefinition? rule = NarrativeReactionRules.Select(policy.Reactions, deedKind, true, input);
                 if (rule == null) return null;
                 NarrativeRelevance relevance = requested == true ? NarrativeRelevance.Requester : NarrativeRelevance.SameVillage;
                 NarrativeReactionRules.RelationChange(rule.RelationLevel, relevance, out int affinity, out int trust, out int intimacy);
@@ -458,7 +480,9 @@ namespace ARPG.Npc
                         NarrativeReactionRules.PromiseScore(npc.NpcStat, relationBefore) < 0)
                         refused = true;
                     else
-                        reward = NarrativeReactionRules.RewardAmount(instance.InstanceId);
+                        reward = namedThreat == true
+                            ? NamedThreat.NamedThreatRules.GetRequestReward(instance.InstanceId)   // 기존 보답의 3배 (Q5)
+                            : NarrativeReactionRules.RewardAmount(instance.InstanceId);
                 }
 
                 // 후속 소개 (§4.6): "아는 다른 소문 소개"를 골랐고 이 행적이 아직 소개하지 않았으면, 이 NPC가 아는 다른 소문을 고른다.
@@ -504,8 +528,11 @@ namespace ARPG.Npc
                     npc.NarrativeRequest = null;
                 }
                 // 이 NPC가 행적을 알게 됐다. 이미 반응했으므로 "반응함"으로 넣고, 소문 교환으로 퍼진다 (§4.1).
-                PutReactedDeedRumor(npc, CreateDeedRumor(PlayerDeedKind.RumorResolved, instance.InstanceId, instance.VillageId,
-                    instance.SlotIndex, instance.Generation, instance.ProgressGameTime, DeedValue(instance), -1, true), now);
+                NpcRumor deedRumor = namedThreat == true
+                    ? CreateThreatDeedRumor(instance, DeedValue(instance), -1, true)
+                    : CreateDeedRumor(PlayerDeedKind.RumorResolved, instance.InstanceId, instance.VillageId,
+                        instance.SlotIndex, instance.Generation, instance.ProgressGameTime, DeedValue(instance), -1, true);
+                PutReactedDeedRumor(npc, deedRumor, now);
 
                 committed = await AR.s.Data.SaveAsync(SaveScope.Player | SaveScope.World | SaveScope.Narrative | SaveScope.NpcState);
                 if (committed == false || lifetime != _narrative.Lifetime) return null;
@@ -550,13 +577,27 @@ namespace ARPG.Npc
             NarrativeContentDefinition? content = GetNarrativeContent(instance);
             string location = DescribeNarrativeLocation(instance, npc.VillageId);
             var text = new StringBuilder();
-            text.Append("플레이어: ").Append(location);
-            text.Append(instance.ReportRelevance == NarrativeRelevance.Requester
-                ? "의 보스를 쓰러뜨려 던전을 닫았소."
-                : "은 내가 이미 정리했소.");
-            text.Append('\n').Append(ResolveNpcDisplayName(npc)).Append(": ");
-            if (content != null)
-                text.Append(content.ResolvedText.Replace("{location}", location)).Append(' ');
+            if (instance.Kind == NarrativeContentKind.NamedThreat)
+            {
+                // 네임드 보고 (NAMED_THREAT_DESIGN §8.4): 칭호로 말한다. 기록이 정리됐으면 "그 짐승".
+                string title = ThreatTitleOrDefault(instance.ThreatId);
+                text.Append("플레이어: ").Append(instance.ReportRelevance == NarrativeRelevance.Requester
+                    ? $"{title}, 그놈은 내가 쓰러뜨렸소."
+                    : $"{NamedThreat.NamedThreatManager.Josa(title, "은", "는")} 내가 이미 처리했소.");
+                text.Append('\n').Append(ResolveNpcDisplayName(npc)).Append(": ");
+                if (content != null)
+                    text.Append(content.ResolvedText.Replace("{location}", location).Replace("{threatTitle}", title)).Append(' ');
+            }
+            else
+            {
+                text.Append("플레이어: ").Append(location);
+                text.Append(instance.ReportRelevance == NarrativeRelevance.Requester
+                    ? "의 보스를 쓰러뜨려 던전을 닫았소."
+                    : "은 내가 이미 정리했소.");
+                text.Append('\n').Append(ResolveNpcDisplayName(npc)).Append(": ");
+                if (content != null)
+                    text.Append(content.ResolvedText.Replace("{location}", location)).Append(' ');
+            }
             text.Append(FindReactionText(GetNarrativePolicy(instance), instance.ReactionRuleId));
             // 표시를 기다리는 후속 소개. 그사이 대상이 무효가 됐으면 붙이지 않는다(표시 뒤 확정에서 취소된다).
             if (instance.FollowUpState == NarrativeFollowUpState.Pending)
@@ -592,7 +633,7 @@ namespace ARPG.Npc
         {
             if (rumor.Kind != NpcRumorKind.PlayerDeed || rumor.Reacted == true ||
                 (rumor.DeedKind != PlayerDeedKind.RumorResolved && rumor.DeedKind != PlayerDeedKind.DungeonCleared &&
-                 rumor.DeedKind != PlayerDeedKind.WishFulfilled))
+                 rumor.DeedKind != PlayerDeedKind.WishFulfilled && rumor.DeedKind != PlayerDeedKind.ThreatSlain))
                 return false;
             float age = now - rumor.EventGameTime;
             if (age < -0.01f || age > NarrativeReactionRules.DeedReactionWindowHours)
@@ -614,6 +655,11 @@ namespace ARPG.Npc
             // 소망 행적에는 동행·피해자가 없다. 슬롯·세대 칸이 비어 있어 던전 ID로 비교하지 않는다.
             if (rumor.DeedKind == PlayerDeedKind.WishFulfilled)
                 return relevance;
+            // 네임드 처치 (NAMED_THREAT_DESIGN §9.3): 그 네임드에게 다친 NPC는 피해자(×3). 필드에는 동행이 없다(D97).
+            if (rumor.DeedKind == PlayerDeedKind.ThreatSlain)
+                return IsNamedThreatVictim(npc, rumor.ThreatId) == true
+                    ? NarrativeReactionRules.Stronger(relevance, NarrativeRelevance.Victim)
+                    : relevance;
             if (rumor.SourceNpcId < 0)
                 relevance = NarrativeReactionRules.Stronger(relevance, NarrativeRelevance.Companion);
             if (string.IsNullOrEmpty(npc.LastWoundDungeonId) == false &&
@@ -661,7 +707,10 @@ namespace ARPG.Npc
                     // 사건이 고정한 정책을 쓴다. 사건 기록이 없는 던전 클리어는 현재 정책을 쓴다.
                     NarrativePolicySnapshot? policy = GetNarrativePolicy(GetNarrativeInstance(rumor.InstanceId)) ??
                                                       AR.s.Data.NarrativeCatalog.CurrentPolicy;
-                    NarrativeReactionDefinition? rule = policy != null ? NarrativeReactionRules.Select(policy.Reactions, rumor.DeedKind, false, input) : null;
+                    NarrativeReactionDefinition? rule = policy != null
+                        ? NarrativeReactionRules.Select(policy.Reactions, rumor.DeedKind, false, input,
+                            candidates[i].Relevance == NarrativeRelevance.Victim)
+                        : null;
                     if (rule != null)
                         picks.Add((candidates[i].Index, candidates[i].Relevance, rule));
                 }
@@ -740,6 +789,13 @@ namespace ARPG.Npc
                 NpcSaveData? owner = wish != null ? GetSaveData(wish.OwnerNpcId) : null;
                 return owner != null ? ResolveNpcDisplayName(owner) + "의 소망을 네가 들어줬다더군." : "누군가의 소망을 네가 들어줬다더군.";
             }
+            if (rumor.DeedKind == PlayerDeedKind.ThreatSlain)
+            {
+                string title = ThreatTitleOrDefault(rumor.ThreatId);
+                return relevance == NarrativeRelevance.Victim
+                    ? $"나를 다치게 한 {NamedThreat.NamedThreatManager.Josa(title, "을", "를")} 네가 쓰러뜨렸다더군."
+                    : $"{NamedThreat.NamedThreatManager.Josa(title, "이라는", "라는")} 짐승을 네가 쓰러뜨렸다더군.";
+            }
             if (relevance == NarrativeRelevance.Companion)
                 return "그 던전에서 함께 싸운 일 말이야.";
             if (relevance == NarrativeRelevance.Victim)
@@ -770,9 +826,13 @@ namespace ARPG.Npc
             _rumorCounters.CreatedPlayerDeed++;
         }
 
-        // 행적 소문의 가치 = 그 던전의 완료 골드 (사용자 결정 2026-10-10).
+        // 행적 소문의 가치 = 그 던전의 완료 골드 (사용자 결정 2026-10-10). 네임드 처치는 전리품 판매 기준가 (NAMED_THREAT_DESIGN §9.3).
         private static int DeedValue(NarrativeContentInstance instance)
-            => AR.s.Dungeon != null ? AR.s.Dungeon.GetSlotCompletionGold(instance.VillageId, instance.SlotIndex) : 0;
+        {
+            if (instance.Kind == NarrativeContentKind.NamedThreat)
+                return AR.s.NamedThreat != null ? AR.s.NamedThreat.GetTrophyValue(instance.ThreatId) : 0;
+            return AR.s.Dungeon != null ? AR.s.Dungeon.GetSlotCompletionGold(instance.VillageId, instance.SlotIndex) : 0;
+        }
 
         private void RestorePlayerRelation(int npcId, PlayerRelation previous, bool previouslyMet)
         {
@@ -784,6 +844,11 @@ namespace ARPG.Npc
         /// <summary>위치 표현. 입구가 있으면 지금 좌표, 던전이 닫혔으면 사건에 남긴 좌표를 쓴다.</summary>
         public string DescribeNarrativeLocation(NarrativeContentInstance instance, int speakerVillageId)
         {
+            if (instance.Kind == NarrativeContentKind.NamedThreat)
+            {
+                NamedThreatRecord? record = AR.s.NamedThreat?.FindRecord(instance.ThreatId);
+                return record != null ? DescribeThreatLocation(record, speakerVillageId) : "근처";
+            }
             if (AR.s.Dungeon != null && AR.s.Dungeon.TryGetNarrativeEntrance(instance.DungeonId, out int x, out int y) == true)
                 return AR.s.Dungeon.DescribeLocation(instance.VillageId, x, y, speakerVillageId);
             if (instance.HasEntranceContext == true && AR.s.Dungeon != null)

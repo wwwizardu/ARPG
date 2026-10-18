@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using ARPG.Data;
 using ARPG.Tables;
 
@@ -7,7 +8,7 @@ namespace ARPG.Dungeon
     /// <summary>Versioned, bounded room graph generation. Saved geometry is the authority.</summary>
     public static class DungeonLayout
     {
-        public const int GeneratorVersion = 3;
+        public const int GeneratorVersion = 4;
 
         private const int MONSTER_OBJECT_STRIDE = 10;
         private const int CHEST_OBJECT_OFFSET = 1;
@@ -116,8 +117,13 @@ namespace ARPG.Dungeon
             return changed;
         }
 
-        public static DungeonRecord Generate(int seed, int village, DungeonSlot slot, DungeonTable table)
+        public static DungeonRecord Generate(int seed, int village, DungeonSlot slot, DungeonTable table,
+            IReadOnlyList<int> eliteMonsterIds)
         {
+            if (eliteMonsterIds == null || eliteMonsterIds.Count == 0)
+                throw new InvalidOperationException("마을 던전 보스로 사용할 Elite 몬스터가 없습니다.");
+            int bossIndex = (int)(Hash(seed, village, slot.SlotIndex, slot.Generation, 43) % (uint)eliteMonsterIds.Count);
+            int bossTableId = eliteMonsterIds[bossIndex];
             var result = new DungeonRecord { DungeonId = slot.DungeonId, VillageId = village,
                 SlotIndex = slot.SlotIndex, Generation = slot.Generation,
                 DungeonTableId = table.Id,
@@ -164,7 +170,7 @@ namespace ARPG.Dungeon
                             RoomId = i,
                             Kind = isBossRoom ? DungeonObjectKind.Boss : DungeonObjectKind.Monster,
                             TableId = isBossRoom
-                                ? table.BossTableId
+                                ? bossTableId
                                 : SelectMonsterTableId(table, result.Seed, i, monsterIndex),
                             Level = isBossRoom ? table.BossLevel : table.MonsterLevel,
                             X = monsterX, Y = monsterY });

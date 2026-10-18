@@ -190,10 +190,42 @@ namespace ARPG.Tables
         [JsonProperty("AuraRadius")] public float AuraRadius;                        // Kind=Aura: 반경 (칸)
     }
 
+    /// <summary>
+    /// 네임드 위협 템플릿 (NAMED_THREAT_DESIGN §11.1). 기존 몬스터 종에 Named 등급·고정 접사·칭호를 얹는다.
+    /// 전용 몬스터 행을 만들지 않는다 — 모든 MonsterTable 행이 필드 종 풀에 들어가기 때문이다 (§14).
+    /// </summary>
+    [Serializable]
+    public class NamedThreatTable : TableBase
+    {
+        [JsonProperty("Name")] public string Name = string.Empty;                // 관리용 이름
+        [JsonProperty("Kind")] public GE.NamedThreatKind Kind;                    // 1차는 Predator만
+        [JsonProperty("MonsterId")] public int MonsterId;                         // 기본 종 (MonsterTable)
+        [JsonProperty("AiTableId")] public int AiTableId;                         // 전용 AI 행 (감지·순찰 반경)
+        [JsonProperty("MinZone")] public int MinZone;
+        [JsonProperty("MaxZone")] public int MaxZone;
+        [JsonProperty("Biome")] public GE.BiomeType Biome;                        // 영역 중심 청크 바이옴 조건 (Any = 어디든)
+        [JsonProperty("Weight")] public int Weight;
+        [JsonProperty("Title1")] public string Title1 = string.Empty;
+        [JsonProperty("Title2")] public string Title2 = string.Empty;
+        [JsonProperty("Title3")] public string Title3 = string.Empty;
+        [JsonProperty("Affix1")] public int Affix1;                               // 1단계 고정 접사 (스탯형만)
+        [JsonProperty("Affix2")] public int Affix2;
+        [JsonProperty("Stage2Affix")] public int Stage2Affix;
+        [JsonProperty("Stage3Affix")] public int Stage3Affix;
+        [JsonProperty("TrophyItemId")] public int TrophyItemId;                   // 확정 전리품 (ItemTable)
+        [JsonProperty("NarrativeContentId")] public int NarrativeContentId;       // 부탁·흔적·보고 문구 (NarrativeContent)
+        [JsonProperty("Enabled")] public bool Enabled;
+
+        /// <summary>칭호 후보 (비어 있지 않은 것만, 순서 유지). index는 0~2.</summary>
+        public string GetTitle(int index) => index switch { 0 => Title1, 1 => Title2, 2 => Title3, _ => string.Empty };
+    }
+
     [Serializable]
     public class NpcTable : CreatureTable
     {
         [JsonProperty("JobType")] public GE.JobType JobType;
+        // NPC 성별의 정본. 종류마다 Male/Female 중 하나로 고정하며 세이브에는 저장하지 않는다 (범용·Unknown 금지).
+        [JsonProperty("Gender")] public ARPG.Npc.NpcGender Gender;
         // NPC 시작 장비 세트 — NpcEquipTable.Id 참조. 0이면 무장 없음.
         [JsonProperty("EquipTableId")] public int EquipTableId;
         [JsonProperty("AiTableId")] public int AiTableId;
@@ -216,6 +248,11 @@ namespace ARPG.Tables
             {
                 AiTable = null;
             }
+
+#if UNITY_EDITOR
+            if (Gender != ARPG.Npc.NpcGender.Male && Gender != ARPG.Npc.NpcGender.Female)
+                UnityEngine.Debug.LogError($"[NpcTable] Id={Id}({Name}): Gender={Gender} — Npc 시트 Gender 열에 Male 또는 Female을 입력하세요.");
+#endif
         }
     }
 
@@ -605,6 +642,8 @@ namespace ARPG.Tables
         [JsonProperty("ChannelingInterval")] public float ChannelingInterval;            // Channeling: 효과 적용 간격(초)
         [JsonProperty("MaxChargeTime")] public float MaxChargeTime;                      // Charge: 최대 차징 시간(초)
         [JsonProperty("MinChargeRatio")] public float MinChargeRatio;                    // Charge: 최소 차징 비율(0~1)
+        // AS열: 참이면 실행(Process) 단계 동안 시전자가 넉백·당기기를 받지 않는다 (SKILL_DESIGN §6.10 적용 규칙 7)
+        [JsonProperty("ForcedMoveImmune")] public bool ForcedMoveImmune;
 
         /// <summary>
         /// 커밋 시점에 직접 타격 판정을 수행하는지. 커밋 스케줄과 예고 도형이 공유하는 단일 정본.
@@ -638,6 +677,16 @@ namespace ARPG.Tables
         public bool DeliversAreaByProjectile => SkillTargetType == GE.SkillTargetType.Position
             && ProjectileId > 0
             && AreaEffectId > 0;
+
+        /// <summary>
+        /// 땅 위 직선 돌진 스킬인지 (SKILL_DESIGN §6.11). 돌진 출발이 커밋이고, 피해는 돌진 중 경로 판정이 담당한다.
+        /// </summary>
+        [JsonIgnore]
+        public bool UsesDash => SkillType == GE.SkillType.Dash;
+
+        /// <summary>돌진 거리(칸). Dash에서는 SkillTargetRange2를 각도가 아니라 거리로 쓴다.</summary>
+        [JsonIgnore]
+        public float DashDistance => UsesDash == true ? SkillTargetRange2 : 0f;
     }
 
     /// <summary>
@@ -828,6 +877,9 @@ namespace ARPG.Tables
         [JsonProperty("SkillId3")] public int SkillId3;             // 스킬 3
         [JsonProperty("SkillWeight3")] public int SkillWeight3;     // 스킬 3 선택 가중치
         [JsonProperty("KeepDistance")] public float KeepDistance;   // 유지 거리 (Attack에서 더 가까우면 Retreat. 0=후퇴 안함)
+        // 순찰 반경 (NAMED_THREAT_DESIGN §5.5). 0 = 순찰 안 함(몬스터는 Idle 대기). 0보다 크면 몬스터도 목표가 없을 때
+        // 순찰 기준점 주변을 돌고, 목표를 잃으면 기준점으로 돌아간다. NPC는 이 값과 무관하게 기본 순찰을 쓴다.
+        [JsonProperty("PatrolRadius")] public float PatrolRadius;
     }
 
     [Serializable]

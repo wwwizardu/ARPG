@@ -1,5 +1,6 @@
 #nullable enable
 using ARPG.Data;
+using ARPG.NamedThreat;
 using ARPG.Npc;
 using ARPG.Scene;
 using ARPG.Creature;
@@ -374,10 +375,18 @@ namespace ARPG.Systems
             NpcHuntOutcome[] outcomes = new NpcHuntOutcome[members.Count];
             int successCount = 0;
             int survivorCount = 0;
+            // 네임드 위협 마주침 (NAMED_THREAT_DESIGN §6.1·§6.2): 주 마을 파티면 결과 판정 앞에 파티당 한 번. 마주치면 구성원마다 부상 또는 도망
+            int threatId = AR.s.Npc.RollNamedThreatEncounter(members[0].VillageId, party.PartyId,
+                partyActivity.OutcomeSeedGameTime, worldSeed, NamedThreatRules.PartyEncounterSalt);
+            int threatWounded = 0;
             for (int i = 0; i < members.Count; i++)
             {
-                NpcHuntOutcome outcome = NpcActivityResolver.ResolvePartyMemberHunt(capabilities[i], partyPower,
-                    members.Count, party.PartyId, partyActivity.OutcomeSeedGameTime, worldSeed, i);
+                NpcHuntOutcome outcome = threatId > 0
+                    ? NamedThreatRules.RollEncounterOutcome(
+                        NpcActivityResolver.GetPartyMemberCapability(capabilities[i], partyPower, members.Count),
+                        party.PartyId, partyActivity.OutcomeSeedGameTime, worldSeed, NamedThreatRules.PartyResultSaltBase + i)
+                    : NpcActivityResolver.ResolvePartyMemberHunt(capabilities[i], partyPower,
+                        members.Count, party.PartyId, partyActivity.OutcomeSeedGameTime, worldSeed, i);
                 outcomes[i] = outcome;
                 if (outcome == NpcHuntOutcome.Success)
                     successCount++;
@@ -409,16 +418,26 @@ namespace ARPG.Systems
 
                 if (outcomes[i] == NpcHuntOutcome.Wounded)
                 {
-                    // 부상 시점 1회 중상·추상 치료 판정 + 상태 전이·기록 (NPC_AMBITION_DESIGN D36·D91)
+                    // 부상 시점 1회 중상·추상 치료 판정 + 상태 전이·기록 (NPC_AMBITION_DESIGN D36·D91). 네임드는 중상 30%
                     AR.s.Npc.ApplyExpeditionWound(memberIds[i], member, NpcActivityKind.Hunt, party.PartyId,
                         partyActivity.OutcomeSeedGameTime, worldSeed, NpcActivityResolver.PartyTreatmentSaltBase + i,
-                        NpcActivityResolver.PartySevereWoundHuntSaltBase + i, outcomeGameTime, out _, out _);
+                        threatId > 0 ? NamedThreatRules.PartySevereSaltBase + i : NpcActivityResolver.PartySevereWoundHuntSaltBase + i,
+                        outcomeGameTime, out _, out bool severe, null,
+                        threatId > 0 ? NamedThreatRules.SevereWoundChance : -1f, threatId);
+                    if (threatId > 0)
+                    {
+                        AR.s.Npc.RecordNamedThreatEncounter(memberIds[i], member, threatId, true, severe, outcomeGameTime);
+                        threatWounded++;
+                    }
                 }
                 else if (outcomes[i] != NpcHuntOutcome.Dead)
                 {
                     memberActivity.Phase = NpcActivityPhase.Idle;
                     memberActivity.Kind = NpcActivityKind.None;
                     memberActivity.PhaseEndGameTime = 0f;
+                    // 네임드에게서 도망쳐 온 구성원도 소문을 직접 겪은 것으로 얻는다 (§6.2)
+                    if (threatId > 0)
+                        AR.s.Npc.RecordNamedThreatEncounter(memberIds[i], member, threatId, false, false, outcomeGameTime);
                 }
             }
 
@@ -447,13 +466,21 @@ namespace ARPG.Systems
                     AR.s.Npc.ResumeMaterializedNpcActivity(memberId);
             }
 
-            NotifyPartyHuntOutcome(party, successCount, survivorCount, foodYield);
+            NotifyPartyHuntOutcome(party, successCount, survivorCount, foodYield, threatId, threatWounded);
         }
 
         private static void NotifyPartyHuntOutcome(NpcPartyState party, int successCount, int survivorCount,
-            int foodYield)
+            int foodYield, int threatId, int threatWounded)
         {
             NpcSaveData? leader = AR.s.Npc.GetSaveData(party.LeaderId);
+            // 네임드에게 당한 파티는 보이는 곳이 아니어도 강조색으로 알린다 (NAMED_THREAT_DESIGN §6.5)
+            NamedThreatRecord? threat = threatId > 0 && threatWounded > 0 ? AR.s.NamedThreat.GetActive(threatId) : null;
+            if (leader != null && threat != null)
+            {
+                AR.s.UI.PushWorldFeed($"{AR.s.Npc.GetDisplayName(party.LeaderId)} 원정대: 사냥 중 " +
+                    $"{NamedThreatManager.GetFeedName(threat)}에게 당해 {threatWounded}명이 부상을 입었습니다.", true);
+                return;
+            }
             if (leader == null || leader.IsActive == false)
                 return;
 
@@ -476,8 +503,12 @@ namespace ARPG.Systems
                 : huntStartedGameTime;
             // 장비 반영 전투력(용기 제외)을 판정 곡선의 capability로 옮긴다 (NPC_AMBITION_DESIGN §5.1, D31)
             float capability = AR.s.Npc.GetNpcHuntCapability(entityId);
-            NpcHuntOutcome outcome = NpcActivityResolver.ResolveHunt(capability, entityId,
-                outcomeSeedGameTime, worldSeed);
+            // 네임드 위협 마주침 (NAMED_THREAT_DESIGN §6.1·§6.2): 주 마을 사냥이면 결과 판정 앞에 한 번. 마주치면 부상 또는 도망(사망 없음)
+            int threatId = AR.s.Npc.RollNamedThreatEncounter(saveData.VillageId, entityId, outcomeSeedGameTime, worldSeed,
+                NamedThreatRules.SoloEncounterSalt);
+            NpcHuntOutcome outcome = threatId > 0
+                ? NamedThreatRules.RollEncounterOutcome(capability, entityId, outcomeSeedGameTime, worldSeed, NamedThreatRules.SoloResultSalt)
+                : NpcActivityResolver.ResolveHunt(capability, entityId, outcomeSeedGameTime, worldSeed);
 
             activity.LastHuntOutcome = outcome;
             activity.LastHuntFoodYield = 0;
@@ -500,11 +531,14 @@ namespace ARPG.Systems
             if (outcome == NpcHuntOutcome.Wounded)
             {
                 // 부상자는 회복 종료시각까지 다음 Hunt 선택에서 제외된다.
-                NotifyHuntOutcome(saveData, entityId, outcome, 0);
-                // 부상 시점 1회 중상·추상 치료 판정 + 상태 전이·기록 (NPC_AMBITION_DESIGN D36·D91)
+                NotifyHuntOutcome(saveData, entityId, outcome, 0, threatId);
+                // 부상 시점 1회 중상·추상 치료 판정 + 상태 전이·기록 (NPC_AMBITION_DESIGN D36·D91). 네임드는 중상 30%
                 AR.s.Npc.ApplyExpeditionWound(entityId, saveData, NpcActivityKind.Hunt, entityId, outcomeSeedGameTime,
-                    worldSeed, NpcActivityResolver.TreatmentSalt, NpcActivityResolver.SevereWoundHuntSalt, outcomeGameTime,
-                    out _, out _);
+                    worldSeed, NpcActivityResolver.TreatmentSalt,
+                    threatId > 0 ? NamedThreatRules.SoloSevereSalt : NpcActivityResolver.SevereWoundHuntSalt, outcomeGameTime,
+                    out _, out bool severe, null, threatId > 0 ? NamedThreatRules.SevereWoundChance : -1f, threatId);
+                if (threatId > 0)
+                    AR.s.Npc.RecordNamedThreatEncounter(entityId, saveData, threatId, true, severe, outcomeGameTime);
                 return;
             }
 
@@ -525,6 +559,10 @@ namespace ARPG.Systems
             if (outcome == NpcHuntOutcome.Success)
                 GrantHuntLoot(saveData, entityId, entityId, outcomeSeedGameTime, worldSeed,
                     NpcActivityResolver.HuntLootSalt, outcomeGameTime);
+
+            // 네임드에게서 도망쳐 왔다 (빈손). 소문은 직접 겪은 것으로 얻는다 (§6.2)
+            if (threatId > 0)
+                AR.s.Npc.RecordNamedThreatEncounter(entityId, saveData, threatId, false, false, outcomeGameTime);
 
             NotifyHuntOutcome(saveData, entityId, outcome, activity.LastHuntFoodYield);
         }
@@ -626,8 +664,17 @@ namespace ARPG.Systems
         }
 
         private static void NotifyHuntOutcome(NpcSaveData saveData, int entityId,
-            NpcHuntOutcome outcome, int foodYield)
+            NpcHuntOutcome outcome, int foodYield, int threatId = 0)
         {
+            // 네임드에게 당한 부상은 칭호(들은 뒤) 또는 "큰 짐승"(듣기 전)으로 강조색 줄을 띄운다 (NAMED_THREAT_DESIGN §6.5)
+            NamedThreatRecord? threat = threatId > 0 && outcome == NpcHuntOutcome.Wounded ? AR.s.NamedThreat.GetActive(threatId) : null;
+            if (threat != null)
+            {
+                AR.s.UI.PushWorldFeed($"{AR.s.Npc.GetDisplayName(entityId)}: 사냥 중 {NamedThreatManager.GetFeedName(threat)}에게 당해 " +
+                    "부상을 입었습니다.", true);
+                return;
+            }
+
             // 보이지 않는 NPC의 평범한 성공·실패는 피드를 채우지 않는다.
             // 부상과 사망은 위치와 관계없이 중요한 세계 변화이므로 항상 알린다.
             if (saveData.IsActive == false && outcome != NpcHuntOutcome.Wounded && outcome != NpcHuntOutcome.Dead)

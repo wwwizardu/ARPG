@@ -44,6 +44,8 @@ namespace ARPG.Npc.Narrative
         private readonly List<NarrativeDefinitionSnapshot> _dungeonRumors = new();
         private readonly List<NarrativeDefinitionSnapshot> _wishes = new();
         private readonly List<NarrativeContentDefinition> _personalStories = new();
+        // 네임드 위협 부탁·흔적·보고 문구 (NAMED_THREAT_DESIGN §11.3). NamedThreat 탭의 NarrativeContentId가 가리킨다.
+        private readonly List<NarrativeDefinitionSnapshot> _namedThreats = new();
         // 선정 때마다 비우고 쓰는 후보 목록. 선정 사이에 상태를 남기지 않는다.
         private readonly List<NarrativeDefinitionSnapshot> _candidateScratch = new();
         private NarrativePolicySnapshot? _policy;
@@ -97,6 +99,8 @@ namespace ARPG.Npc.Narrative
                     _wishes.Add(snapshot);
                 else if (content.Kind == NarrativeContentKind.PersonalStory)
                     _personalStories.Add(content);
+                else if (content.Kind == NarrativeContentKind.NamedThreat)
+                    _namedThreats.Add(snapshot);
             }
             _policy = CreatePolicySnapshot(pack.Reactions);
         }
@@ -106,6 +110,7 @@ namespace ARPG.Npc.Narrative
             _dungeonRumors.Clear();
             _wishes.Clear();
             _personalStories.Clear();
+            _namedThreats.Clear();
             _candidateScratch.Clear();
             _policy = null;
         }
@@ -119,6 +124,24 @@ namespace ARPG.Npc.Narrative
             for (int i = 0; i < _personalStories.Count; i++)
                 if (_personalStories[i].TargetType == target)
                     return _personalStories[i];
+            return null;
+        }
+
+        /// <summary>네임드 위협 문구 정의 (읽기 전용 — 흔적 자막처럼 사건이 아닌 표시용). 없으면 null.</summary>
+        public NarrativeContentDefinition? FindNamedThreatContent(int contentId)
+        {
+            for (int i = 0; i < _namedThreats.Count; i++)
+                if (_namedThreats[i].Content.ContentId == contentId)
+                    return _namedThreats[i].Content;
+            return null;
+        }
+
+        /// <summary>네임드 위협 문구의 독립 복사본. 새 네임드 부탁 사건이 고정해 저장한다. 없으면 null.</summary>
+        public NarrativeDefinitionSnapshot? CopyNamedThreat(int contentId)
+        {
+            for (int i = 0; i < _namedThreats.Count; i++)
+                if (_namedThreats[i].Content.ContentId == contentId)
+                    return Clone(_namedThreats[i]);
             return null;
         }
 
@@ -197,6 +220,7 @@ namespace ARPG.Npc.Narrative
             var storyTargets = new HashSet<NarrativeTargetType>();
             int rumors = 0;
             int wishes = 0;
+            int namedThreats = 0;
             for (int i = 0; i < pack!.Contents.Count; i++)
             {
                 NarrativeContentDefinition c = pack.Contents[i];
@@ -217,6 +241,11 @@ namespace ARPG.Npc.Narrative
                 {
                     // 같은 대상 종류의 사연이 둘이면 어느 문구를 쓸지 정할 수 없다.
                     Require(storyTargets.Add(c.TargetType), where + " TargetType: only one PersonalStory row per target type (" + c.TargetType + ").");
+                }
+                else if (c.Kind == NarrativeContentKind.NamedThreat)
+                {
+                    // 템플릿 연결(NamedThreat 탭의 NarrativeContentId)은 표 다운로드의 ValidateNamedThreatSetup이 확인한다.
+                    namedThreats++;
                 }
                 else
                 {
@@ -240,7 +269,8 @@ namespace ARPG.Npc.Narrative
                 ValidateReactionShape(r, where);
             }
             // 로드 검증(IsSupported)과 같은 기준: 소망 콘텐츠나 소망 반응 행이 있으면 소망 기본 후보도 요구한다.
-            RequireSafeDefaults(pack.Reactions, wishes > 0 || HasRequirement(pack.Reactions, NarrativeReactionRequirement.WishFulfilled));
+            RequireSafeDefaults(pack.Reactions, wishes > 0 || HasRequirement(pack.Reactions, NarrativeReactionRequirement.WishFulfilled),
+                namedThreats > 0 || HasRequirement(pack.Reactions, NarrativeReactionRequirement.ThreatSlain));
         }
 
         /// <summary>저장된 정의 스냅샷이 이 코드로 실행 가능한가 (로드 검증, 표 조회 없음).</summary>
@@ -273,7 +303,8 @@ namespace ARPG.Npc.Narrative
                     ValidateReactionShape(r, "snapshot");
                 }
                 // 소망 열이 생기기 전 정책에는 소망 행이 없다. 소망 행이 있는 정책만 소망 기본 후보를 요구한다.
-                RequireSafeDefaults(policy.Reactions, HasRequirement(policy.Reactions, NarrativeReactionRequirement.WishFulfilled));
+                RequireSafeDefaults(policy.Reactions, HasRequirement(policy.Reactions, NarrativeReactionRequirement.WishFulfilled),
+                    HasRequirement(policy.Reactions, NarrativeReactionRequirement.ThreatSlain));
                 return true;
             }
             catch (InvalidOperationException) { return false; }
@@ -310,6 +341,19 @@ namespace ARPG.Npc.Narrative
                     Require(string.IsNullOrWhiteSpace(c.ResolvedText) == false, where + " ResolvedText: required for Wish.");
                     RequireSlots(c.IntroText, TargetItemNameSlot, where + " IntroText");
                     RequireSlots(c.ResolvedText, TargetItemNameSlot, where + " ResolvedText");
+                    break;
+                case NarrativeContentKind.NamedThreat:
+                    // 네임드 부탁 (NAMED_THREAT_DESIGN §11.3): TargetId = NamedThreat 탭 템플릿 Id, 목표 = 플레이어 측 처치.
+                    // IntroText = 부탁, SignText = 흔적 자막(슬롯 없음), ResolvedText = 보고 대사. 슬롯은 {location}·{threatTitle}.
+                    Require(c.TargetType == NarrativeTargetType.NamedThreat && c.TargetId > 0,
+                        where + " TargetType/TargetId: NamedThreat needs a NamedThreat template id.");
+                    Require(c.GoalType == NarrativeGoalType.Default || c.GoalType == NarrativeGoalType.DefeatTarget,
+                        where + " GoalType: NamedThreat supports Default/DefeatTarget only.");
+                    Require(string.IsNullOrWhiteSpace(c.SignText) == false, where + " SignText: required for NamedThreat.");
+                    Require(string.IsNullOrWhiteSpace(c.ResolvedText) == false, where + " ResolvedText: required for NamedThreat.");
+                    RequireSlotsAny(c.IntroText, NamedThreatSlots, where + " IntroText");
+                    RequireSlotsAny(c.ResolvedText, NamedThreatSlots, where + " ResolvedText");
+                    RequireSlots(c.SignText, null, where + " SignText");
                     break;
                 case NarrativeContentKind.PersonalStory:
                     // 첫 사연은 그 NPC의 최근 부상 하나다 (4단계). TargetId 0 = 말하는 NPC 자신의 최신 기록. 목표·후속이 없어 다른 문구 칸은 비운다.
@@ -356,7 +400,7 @@ namespace ARPG.Npc.Narrative
 
         // 행적 종류와 반응하는 쪽(부탁한 사람·소망 주인 / 소문으로 들은 NPC)마다 필터에 걸리지 않는 후보가 하나는 있어야
         // 반응을 항상 고를 수 있다 (§4.3). 던전 클리어는 부탁한 사람이 없어 들은 쪽만 본다.
-        private static void RequireSafeDefaults(List<NarrativeReactionDefinition> reactions, bool wishes)
+        private static void RequireSafeDefaults(List<NarrativeReactionDefinition> reactions, bool wishes, bool namedThreats)
         {
             RequireSafeDefault(reactions, PlayerDeedKind.RumorResolved, true);
             RequireSafeDefault(reactions, PlayerDeedKind.RumorResolved, false);
@@ -365,6 +409,11 @@ namespace ARPG.Npc.Narrative
             {
                 RequireSafeDefault(reactions, PlayerDeedKind.WishFulfilled, true);
                 RequireSafeDefault(reactions, PlayerDeedKind.WishFulfilled, false);
+            }
+            if (namedThreats == true)
+            {
+                RequireSafeDefault(reactions, PlayerDeedKind.ThreatSlain, true);
+                RequireSafeDefault(reactions, PlayerDeedKind.ThreatSlain, false);
             }
         }
 
@@ -390,6 +439,8 @@ namespace ARPG.Npc.Narrative
         private const string LocationSlot = "location";
         private const string TargetItemNameSlot = "targetItemName";
         private const string KnownWoundSummarySlot = "knownWoundSummary";
+        // 네임드 부탁·보고 문구 슬롯 (NAMED_THREAT_DESIGN §11.3): {location} = 영역 위치, {threatTitle} = 칭호
+        private static readonly string[] NamedThreatSlots = { LocationSlot, "threatTitle" };
 
         /// <summary>최근 부상 사연 문구의 슬롯. 말하는 NPC가 실제로 겪은 최신 부상 요약으로 바꾼다 (DialogueTopicSelector).</summary>
         public const string KnownWoundSummaryToken = "{" + KnownWoundSummarySlot + "}";
@@ -405,6 +456,22 @@ namespace ARPG.Npc.Narrative
                 Require(close > i, where + ": unclosed slot.");
                 string slot = text.Substring(i + 1, close - i - 1);
                 Require(allowedSlot != null && slot == allowedSlot, where + ": unsupported slot {" + slot + "}.");
+                i = close;
+            }
+        }
+
+        // RequireSlots의 여러 슬롯 허용판. allowed에 없는 슬롯이 있으면 실패한다.
+        private static void RequireSlotsAny(string text, string[] allowed, string where)
+        {
+            for (int i = 0; i < text.Length; i++)
+            {
+                Require(text[i] != '}', where + ": stray '}'.");
+                if (text[i] != '{')
+                    continue;
+                int close = text.IndexOf('}', i + 1);
+                Require(close > i, where + ": unclosed slot.");
+                string slot = text.Substring(i + 1, close - i - 1);
+                Require(Array.IndexOf(allowed, slot) >= 0, where + ": unsupported slot {" + slot + "}.");
                 i = close;
             }
         }

@@ -437,6 +437,7 @@ namespace ARPG.Npc
         /// 더 쓰이지 않는 기록을 지운다 (DungeonManager가 세대 갱신 뒤 부른다). 던전 소문은 현재 세대의 사건(같은 세대 재선정 방지)·보고 대기·
         /// 재생 대기·알림 대기·부탁 칸이 가리키는 사건·해결 뒤 14일 안의 사건(아직 반응하지 않은 행적의 정책 고정)을 남긴다.
         /// 소망은 주인이 살아 있는 동안(같은 콘텐츠를 다시 주지 않는 기록), 주인이 죽었으면 충족 뒤 14일 안일 때만 남긴다.
+        /// 네임드 부탁은 네임드가 활성인 동안 현재 사건이고, 끝난 뒤에는 던전 소문과 같은 대기 조건(보고·재생·알림·14일)으로 남긴다.
         /// 현재 세대가 아닌 선정 기록과 아무 사건도 참조하지 않는 정의·정책도 지운다. 무언가 바뀌었으면 true.
         /// </summary>
         public bool PruneNarrativeLedger(float now)
@@ -461,6 +462,18 @@ namespace ARPG.Npc
                     {
                         // 원장 갱신 없이 세대가 넘어간 사건은 미해결 종료로 고친다 (플레이어 결과가 없다).
                         EndDungeonNarrativeUnresolved(instance.DungeonId, false, 0, 0, now);
+                        changed = true;
+                    }
+                }
+                else if (instance.Kind == NarrativeContentKind.NamedThreat)
+                {
+                    // 네임드가 활성인 동안은 현재 사건이다 (NAMED_THREAT_DESIGN §10.3). 기록 소유자가 아직 초기화 전이면 지우지 않는다.
+                    current = AR.s.NamedThreat == null || AR.s.NamedThreat.IsInitialized == false ||
+                              AR.s.NamedThreat.IsActive(instance.ThreatId) == true;
+                    if (instance.IsOpen == true && current == false)
+                    {
+                        // 끝 처리 없이 기록이 끝난 사건은 미해결 종료로 고친다.
+                        EndNamedThreatNarrative(instance.ThreatId, false, now);
                         changed = true;
                     }
                 }

@@ -75,6 +75,51 @@
       "StartConditionGroupId": 0,
       "Revision": 1,
       "Enabled": true
+    },
+    {
+      "ContentId": 4001,
+      "Name": "잿빛 송곳니류 늑대",
+      "Kind": "NamedThreat",
+      "TargetType": "NamedThreat",
+      "TargetId": 1,
+      "IntroText": "{location} 사냥터에서 {threatTitle}에게 벌써 여럿이 당했소. 그놈을 잡아 주겠소?",
+      "SignText": "나무 밑동마다 깊은 이빨 자국이 나 있다.",
+      "ResolvedText": "그 늑대를 정말 잡았단 말이오? 이제 사냥꾼들도 숨을 돌리겠군.",
+      "GoalType": "DefeatTarget",
+      "TargetCount": 1,
+      "StartConditionGroupId": 0,
+      "Revision": 1,
+      "Enabled": true
+    },
+    {
+      "ContentId": 4002,
+      "Name": "붉은 발톱류 곰",
+      "Kind": "NamedThreat",
+      "TargetType": "NamedThreat",
+      "TargetId": 2,
+      "IntroText": "{location} 숲에서 {threatTitle} 때문에 아무도 사냥을 못 나가오. 부탁하오, 그놈을 잡아 주시오.",
+      "SignText": "굵은 나무 껍질이 길게 할퀴어져 벗겨져 있다.",
+      "ResolvedText": "그 곰이 쓰러졌다니… 고맙소. 숲이 다시 조용해지겠군.",
+      "GoalType": "DefeatTarget",
+      "TargetCount": 1,
+      "StartConditionGroupId": 0,
+      "Revision": 1,
+      "Enabled": true
+    },
+    {
+      "ContentId": 4003,
+      "Name": "바위 엄니류 멧돼지",
+      "Kind": "NamedThreat",
+      "TargetType": "NamedThreat",
+      "TargetId": 3,
+      "IntroText": "{location} 들판에서 {threatTitle}, 그놈이 날뛰고 있소. 그놈만 없으면 좋겠소.",
+      "SignText": "땅이 길게 파헤쳐진 자국이 이어져 있다.",
+      "ResolvedText": "그 멧돼지를 잡았다고? 들판이 이제야 평온해지겠소.",
+      "GoalType": "DefeatTarget",
+      "TargetCount": 1,
+      "StartConditionGroupId": 0,
+      "Revision": 1,
+      "Enabled": true
     }
   ],
   "Reactions": [
@@ -190,6 +235,18 @@
       "RelationLevel": "Resentful",
       "Text": "흥, 선물 하나로 환심을 사려고?",
       "Audience": "Others"
+    },
+    {
+      "ReactionRuleId": 301,
+      "Note": "네임드 처치(피해자)",
+      "Requirement": "ThreatSlain",
+      "Kind": "Grateful",
+      "BaseScore": 40,
+      "ScoreProfile": "Grateful",
+      "Response": "Thank",
+      "RelationLevel": "Standard",
+      "Text": "그놈한테 물린 데가 아직도 욱신거리오. 고맙소, 정말로.",
+      "Audience": "Victim"
     }
   ]
 }

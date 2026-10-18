@@ -79,12 +79,15 @@ namespace ARPG.Npc
         /// <param name="expedition">Hunt 또는 DungeonDelve</param>
         /// <param name="rngOwnerId">솔로 = NPC EntityId, 파티원 = PartyId</param>
         /// <param name="dungeonId">던전 원정이면 그 던전 (피해자 판정용 LastWoundDungeonId, NPC_NARRATIVE_CONTENT_DESIGN §4.2)</param>
+        /// <param name="severeChance">중상 확률. 음수면 기본 10% (D91). 네임드 위협 마주침은 30% (NAMED_THREAT_DESIGN §6.2)</param>
+        /// <param name="threatId">네임드 위협에게 입은 부상이면 그 네임드 ID (피해자 판정용 LastWoundThreatId, §6.3)</param>
         public float ApplyExpeditionWound(int entityId, NpcSaveData saveData, NpcActivityKind expedition, int rngOwnerId,
             float seedGameTime, int worldSeed, int treatmentSalt, int severeSalt, float outcomeGameTime,
-            out bool treated, out bool severe, string? dungeonId = null)
+            out bool treated, out bool severe, string? dungeonId = null, float severeChance = -1f, int threatId = 0)
         {
             MarkSaveDirty(entityId, NpcSaveGroup.Condition | NpcSaveGroup.Activity | NpcSaveGroup.Stories);
-            severe = NpcActivityResolver.RollSevereWound(rngOwnerId, seedGameTime, worldSeed, severeSalt);
+            severe = NpcActivityResolver.RollSevereWound(rngOwnerId, seedGameTime, worldSeed, severeSalt,
+                severeChance >= 0f ? severeChance : NpcActivityResolver.SevereWoundChance);
             float recoveryHours = ResolveWoundedTreatment(entityId, saveData, rngOwnerId, seedGameTime, worldSeed,
                 treatmentSalt, severe, out treated);
 
@@ -93,7 +96,7 @@ namespace ARPG.Npc
             activity.Kind = NpcActivityKind.None;
             activity.PhaseEndGameTime = outcomeGameTime + recoveryHours;
 
-            saveData.RecordExpeditionWound(outcomeGameTime, expedition, severe, dungeonId);
+            saveData.RecordExpeditionWound(outcomeGameTime, expedition, severe, dungeonId, threatId);
             if (severe == true)
                 AddSevereWoundDeed(entityId, outcomeGameTime);
             else

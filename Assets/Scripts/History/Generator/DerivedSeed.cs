@@ -42,6 +42,10 @@ namespace ARPG.History
         // NPC_SHOP_EQUIPMENT D118·D121 — NPC 기본 장비 변형 선택 (entityId·장비 슬롯 해시, worldSeed 비의존)
         public const ulong ChannelNpcBasicEquipment = 0x4E_50_43_42_53_45_51_50UL; // "NPCBSEQP"
 
+        // NAMED_THREAT_DESIGN §12.3 — 네임드 위협 감독의 선택(템플릿·칭호·영역·소문 주인·먼 소문·배회 지점).
+        // worldSeed + 네임드 일련번호 + 용도(NamedThreatRules.Purpose*)를 섞는다. NPC 활동 채널 salt와 따로다.
+        public const ulong ChannelNamedThreat = 0x4E_41_4D_45_44_54_48_52UL; // "NAMEDTHR"
+
         public static ulong Derive(int worldSeed, ulong channel)
         {
             ulong x = unchecked((ulong)worldSeed * 0x9E3779B97F4A7C15UL) ^ channel;

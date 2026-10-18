@@ -42,6 +42,9 @@ namespace ARPG.Systems
             public readonly SparseSet<AttackTelegraphComponent> AttackTelegraph;
             public readonly SparseSet<JumpComponent> Jump;
             public readonly SparseSet<SkillLandingCommitComponent> LandingCommit;
+            public readonly SparseSet<DashComponent> Dash;
+            public readonly SparseSet<SkillDashHitComponent> DashHit;
+            public readonly SparseSet<AIComponent> AI;
 
             public SkillRuntimePools(ComponentManager cm)
             {
@@ -62,6 +65,9 @@ namespace ARPG.Systems
                 AttackTelegraph = cm.GetComponentPool<AttackTelegraphComponent>();
                 Jump = cm.GetComponentPool<JumpComponent>();
                 LandingCommit = cm.GetComponentPool<SkillLandingCommitComponent>();
+                Dash = cm.GetComponentPool<DashComponent>();
+                DashHit = cm.GetComponentPool<SkillDashHitComponent>();
+                AI = cm.GetComponentPool<AIComponent>();
             }
         }
 
@@ -98,7 +104,13 @@ namespace ARPG.Systems
 
                 cm.RemoveComponent<AttackTelegraphComponent>(skillEntityId);
                 cm.RemoveComponent<SkillLandingCommitComponent>(skillEntityId);
+                cm.RemoveComponent<SkillDashHitComponent>(skillEntityId);
             }
+
+            // 넉백 저항 표시는 시전자에 붙어 있으므로 풀 전체에서 지운다
+            SparseSet<ForcedMoveImmuneTag> immunePool = cm.GetComponentPool<ForcedMoveImmuneTag>();
+            for (int i = immunePool.Count - 1; i >= 0; i--)
+                cm.RemoveComponent<ForcedMoveImmuneTag>(immunePool.GetEntityId(i));
 
             Debug.Log("System_Skill Reset called");
         }
@@ -411,6 +423,14 @@ namespace ARPG.Systems
         /// </summary>
         private void ProcessProcessState(int skillEntityId, ref SkillComponent skill, ref SkillStateComponent state, ref SkillTimingComponent timing, in SkillRuntimePools pools)
         {
+            // 돌진은 실행 시간이 아니라 돌진 종료(거리 도달·벽·밀림)가 후딜 전환을 정한다 (SKILL_DESIGN §6.11)
+            if (skill.Table != null && skill.Table.UsesDash == true)
+            {
+                ProcessDashSkill(skillEntityId, ref state, ref skill, in pools);
+                AR.s.Component.SetComponent(skillEntityId, skill);
+                return;
+            }
+
             // 스킬 실행 타입에 따라 분기 처리
             switch (skill.ExecutionType)
             {
@@ -496,7 +516,7 @@ namespace ARPG.Systems
                     break;
 
                 case SkillState.End:
-                    OnEnterEndState(skillEntityId, ref skill);
+                    OnEnterEndState(skillEntityId, ref skill, in pools);
                     break;
 
                 case SkillState.None:
@@ -602,6 +622,10 @@ namespace ARPG.Systems
             };
             SkillEffectExecutor.Trigger(GE.SkillTrigger.OnSkillStart, ref startCtx, inSkill.EffectiveSkillEffectIds);
 
+            // 넉백 저항은 실행 단계 동안만 건다. 후딜 진입·완료·취소에서 뗀다 (SKILL_DESIGN §6.10 적용 규칙 7)
+            if (inSkill.Table != null && inSkill.Table.ForcedMoveImmune == true)
+                AR.s.Component.SetComponent(inSkill.OwnerEntityId, new ForcedMoveImmuneTag());
+
             // SkillTarget 컴포넌트에서 타겟 정보 가져오기
             if (pools.SkillTarget.TryGet(skillEntityId, out var target) == false)
                 return;
@@ -609,7 +633,8 @@ namespace ARPG.Systems
             bool isJumpLaunch = inSkill.Table != null
                 && inSkill.Table.SkillType == GlobalEnum.SkillType.Jump
                 && inSkill.Table.ArcHeight > 0f;
-            if (isJumpLaunch == true)
+            bool isDashLaunch = inSkill.Table != null && inSkill.Table.UsesDash == true;
+            if (isJumpLaunch == true || isDashLaunch == true)
             {
                 target = CommitAim(skillEntityId, ref inSkill, target, "LaunchCommit", in pools);
             }
@@ -618,6 +643,10 @@ namespace ARPG.Systems
             if (isJumpLaunch == true)
             {
                 StartJump(skillEntityId, ref inSkill, in pools);
+            }
+            else if (isDashLaunch == true)
+            {
+                StartDash(skillEntityId, ref inSkill, target, in pools);
             }
 
             // Process 기간 동안 애니메이션 재생 요청
@@ -648,14 +677,86 @@ namespace ARPG.Systems
         }
 
         /// <summary>
+        /// 돌진 시작 - 출발 방향을 고정한 DashComponent를 시전자에, 경로 판정 상태를 스킬 엔티티에 붙인다 (SKILL_DESIGN §6.11)
+        /// 돌진 시간은 SkillTiming의 ProcessDuration, 거리는 SkillTable.DashDistance(SkillTargetRange2)
+        /// </summary>
+        private void StartDash(int skillEntityId, ref SkillComponent inSkill, SkillTargetComponent inTarget, in SkillRuntimePools pools)
+        {
+            ComponentManager cm = AR.s.Component;
+            if (inSkill.Table == null)
+                return;
+
+            if (pools.Transform.TryGet(inSkill.OwnerEntityId, out TransformComponent ownerTransform) == false)
+            {
+                Debug.LogError($"[System_Skill] StartDash - Owner TransformComponent not found, OwnerEntityId: {inSkill.OwnerEntityId}");
+                return;
+            }
+
+            if (pools.SkillTiming.TryGet(skillEntityId, out SkillTimingComponent timing) == false)
+            {
+                Debug.LogError($"[System_Skill] StartDash - SkillTimingComponent not found, SkillEntityId: {skillEntityId}");
+                return;
+            }
+
+            // 0이면 System_Dash가 첫 프레임에 거리를 한 번에 이동한다. 다운로드 검사가 저작 시점에 막는다
+            const float MIN_DASH_DURATION = 0.01f;
+            Vector2 direction = SkillAimResolver.NormalizeOrFallback(inTarget.TargetDirection, Vector2.right);
+            float distance = inSkill.Table.DashDistance;
+            cm.SetComponent(inSkill.OwnerEntityId, new DashComponent
+            {
+                SkillEntityId = skillEntityId,
+                Direction = direction,
+                Distance = distance,
+                Duration = Mathf.Max(MIN_DASH_DURATION, timing.ProcessDuration),
+            });
+            // 돌진이 위치를 직접 제어하므로 진행 중인 넉백·당기기는 끝낸다 (돌진 우선)
+            cm.RemoveComponent<ForcedMoveComponent>(inSkill.OwnerEntityId);
+
+            // 출발이 이 스킬의 커밋이다. 예고는 여기서 끝나고 달려오는 몸이 위험을 알린다
+            cm.RemoveComponent<AttackTelegraphComponent>(skillEntityId);
+
+            Vector2 startPosition = ownerTransform.Position;
+            if (string.IsNullOrEmpty(inSkill.Table.ActivateName) == false
+                && inSkill.Table.ActivateName.StartsWith("Effects/", System.StringComparison.Ordinal) == true)
+            {
+                AR.s.Effect.Spawn(inSkill.Table.ActivateName, new Vector3(startPosition.x, startPosition.y, 0f), Quaternion.identity).Forget();
+            }
+
+            SkillEffectContext commitContext = new()
+            {
+                SkillEntityId = skillEntityId,
+                SkillId = inSkill.SkillId,
+                OwnerEntityId = inSkill.OwnerEntityId,
+                TargetPosition = startPosition + direction * distance,
+            };
+            SkillEffectExecutor.Trigger(GE.SkillTrigger.OnSkillCommit, ref commitContext, inSkill.EffectiveSkillEffectIds);
+            // 기본 전달이 억제되면 돌진은 하되 아무도 맞히지 않는다
+            if (commitContext.SuppressDefaultImpact == true || inSkill.Table.HasDirectImpact == false)
+                return;
+
+            Vector2 ownerHitOffset = pools.Collider.TryGet(inSkill.OwnerEntityId, out ColliderComponent ownerCollider) == true
+                ? ownerCollider.HitOffset
+                : Vector2.zero;
+            cm.SetComponent(skillEntityId, new SkillDashHitComponent
+            {
+                LastSweepPosition = startPosition + ownerHitOffset,
+            });
+
+            Debug.Log($"[System_Skill] StartDash - EntityId: {inSkill.OwnerEntityId}, Start: {startPosition}, Direction: {direction}, Distance: {distance}, Duration: {timing.ProcessDuration:F2}s");
+        }
+
+        /// <summary>
         /// End 상태 진입 시 호출
         /// </summary>
-        private void OnEnterEndState(int skillEntityId, ref SkillComponent inSkill)
+        private void OnEnterEndState(int skillEntityId, ref SkillComponent inSkill, in SkillRuntimePools pools)
         {
             ComponentManager cm = AR.s.Component;
             // 채널 종료 등 남은 커밋이 실행되지 않는 경우에도 후딜에는 예고를 남기지 않는다.
             cm.RemoveComponent<AttackTelegraphComponent>(skillEntityId);
             cm.RemoveComponent<SkillLandingCommitComponent>(skillEntityId);
+            // 넉백 저항은 실행 단계에만 있다. 후딜에는 밀린다
+            RemoveForcedMoveImmunity(inSkill);
+            RemoveDashRuntime(skillEntityId, inSkill, in pools);
 
             // [SkillEffect] OnSkillEnd 트리거
             SkillEffectContext endCtx = new()
@@ -706,6 +807,10 @@ namespace ARPG.Systems
                 AR.s.Component.RemoveComponent<JumpComponent>(inSkill.OwnerEntityId);
             }
 
+            // 실행 단계 중 취소(사망·기절)되면 후딜 진입을 거치지 않으므로 여기서도 정리한다
+            RemoveForcedMoveImmunity(inSkill);
+            RemoveDashRuntime(skillEntityId, inSkill, in pools);
+
             // 스킬 상태 초기화
             inSkillState.Reset();
 
@@ -742,6 +847,29 @@ namespace ARPG.Systems
             AR.s.Component.SetComponent(inSkill.OwnerEntityId, charState);
 
             Debug.Log($"[System_Skill] Skill Complete - SkillEntityId: {skillEntityId}");
+        }
+
+        /// <summary>
+        /// 이 스킬이 건 넉백 저항을 뗀다. 한 시전자는 한 번에 한 스킬만 실행하므로 소유자 단위 태그로 충분하다.
+        /// </summary>
+        private static void RemoveForcedMoveImmunity(in SkillComponent inSkill)
+        {
+            if (inSkill.Table != null && inSkill.Table.ForcedMoveImmune == true)
+                AR.s.Component.RemoveComponent<ForcedMoveImmuneTag>(inSkill.OwnerEntityId);
+        }
+
+        /// <summary>
+        /// 이 스킬의 돌진 상태를 지운다. 시전자의 DashComponent는 이 스킬이 시작한 것일 때만 지운다.
+        /// </summary>
+        private static void RemoveDashRuntime(int skillEntityId, in SkillComponent inSkill, in SkillRuntimePools pools)
+        {
+            ComponentManager cm = AR.s.Component;
+            cm.RemoveComponent<SkillDashHitComponent>(skillEntityId);
+            if (pools.Dash.TryGet(inSkill.OwnerEntityId, out DashComponent dash) == true
+                && dash.SkillEntityId == skillEntityId)
+            {
+                cm.RemoveComponent<DashComponent>(inSkill.OwnerEntityId);
+            }
         }
 
         private void ActivateSkillRuntime(int skillEntityId, SkillComponent skill, in SkillRuntimePools pools)
@@ -794,15 +922,34 @@ namespace ARPG.Systems
             target.TargetDirection = SkillAimResolver.NormalizeOrFallback(target.TargetDirection, Vector2.right);
             if (skill.Table != null
                 && skill.Table.SkillTargetType == GlobalEnum.SkillTargetType.Position
-                && pools.Transform.TryGet(skill.OwnerEntityId, out TransformComponent ownerTransform) == true
-                && pools.Input.TryGet(skill.OwnerEntityId, out InputComponent input) == true)
+                && pools.Transform.TryGet(skill.OwnerEntityId, out TransformComponent ownerTransform) == true)
             {
-                target.TargetPosition = SkillAimResolver.ResolveTargetPosition(
-                    ownerTransform.Position,
-                    input.MouseWorldPosition,
-                    target.TargetDirection,
-                    skill.Table.SkillRangeMin,
-                    skill.Table.SkillRangeMax);
+                if (pools.Input.TryGet(skill.OwnerEntityId, out InputComponent input) == true)
+                {
+                    target.TargetPosition = SkillAimResolver.ResolveTargetPosition(
+                        ownerTransform.Position,
+                        input.MouseWorldPosition,
+                        target.TargetDirection,
+                        skill.Table.SkillRangeMin,
+                        skill.Table.SkillRangeMax);
+                }
+                else if (trackingMode != GlobalEnum.SkillAimTrackingMode.SnapshotOnCommand
+                    && pools.AI.TryGet(skill.OwnerEntityId, out AIComponent ai) == true
+                    && ai.TargetEntityId != -1
+                    && pools.Transform.TryGet(ai.TargetEntityId, out TransformComponent aiTargetTransform) == true)
+                {
+                    // AI는 회전된 방향 + 노리는 대상까지의 현재 거리로 지점을 정한다 (POE2_CURSOR_TRACKING_PLAN §15).
+                    // 거리 상한은 AI가 스킬을 고르는 사거리(시전자 몸 + SkillRangeMax + 대상 몸)와 같다
+                    float maxRange = skill.Table.SkillRangeMax > 0f
+                        ? SkillHelper.GetEntityHitRadius(skill.OwnerEntityId) + skill.Table.SkillRangeMax + SkillHelper.GetEntityHitRadius(ai.TargetEntityId)
+                        : 0f;
+                    target.TargetPosition = SkillAimResolver.ResolveTargetPosition(
+                        ownerTransform.Position,
+                        aiTargetTransform.Position,
+                        target.TargetDirection,
+                        skill.Table.SkillRangeMin,
+                        maxRange);
+                }
             }
 
             skill.IsAimCommitted = keepsSingleCommit;
@@ -880,7 +1027,8 @@ namespace ARPG.Systems
                 skill.Table.HasDirectImpact,
                 skill.Table.ProjectileId > 0,
                 skill.Table.AreaEffectId > 0,
-                skill.Table.UsesLandingCommit);
+                skill.Table.UsesLandingCommit,
+                skill.Table.UsesDash);
             return SkillImpactTimingResolver.Resolve(input);
         }
 
@@ -1159,6 +1307,108 @@ namespace ARPG.Systems
         }
 
         /// <summary>
+        /// 돌진 실행 단계 처리 (SKILL_DESIGN §6.11).
+        /// System_Dash가 Update에서 옮긴 만큼 지나온 선분을 판정하고, 돌진이 끝났으면 마지막 구간까지 판정한 뒤 후딜로 넘긴다.
+        /// </summary>
+        private void ProcessDashSkill(int skillEntityId, ref SkillStateComponent state, ref SkillComponent skill, in SkillRuntimePools pools)
+        {
+            bool hasDash = pools.Dash.TryGet(skill.OwnerEntityId, out DashComponent dash) == true
+                && dash.SkillEntityId == skillEntityId;
+
+            if (hasDash == true && pools.DashHit.TryGet(skillEntityId, out SkillDashHitComponent dashHit) == true)
+            {
+                SweepDashPath(skillEntityId, ref skill, ref dashHit, dash.Direction, in pools);
+                AR.s.Component.SetComponent(skillEntityId, dashHit);
+            }
+
+            // 거리 도달·벽·밀림으로 끝났거나 돌진이 시작되지 못했으면 남은 실행 시간을 버리고 후딜로 넘어간다
+            if (hasDash == false || dash.IsFinished == true)
+            {
+                OnChangeState(skillEntityId, ref state, ref skill, SkillState.End, in pools);
+            }
+        }
+
+        /// <summary>
+        /// 지난 판정 이후 돌진자 몸 중심이 지나온 선분에 닿은 적을 한 번씩 맞힌다 (관통, SKILL_DESIGN §6.11).
+        /// 대상을 먼저 모은 뒤 맞힌다 — 피해 처리 중 풀이 바뀌어도 순회가 깨지지 않게 한다.
+        /// </summary>
+        private void SweepDashPath(int skillEntityId, ref SkillComponent skill, ref SkillDashHitComponent dashHit, Vector2 dashDirection, in SkillRuntimePools pools)
+        {
+            if (skill.Table == null || pools.Transform.TryGet(skill.OwnerEntityId, out TransformComponent ownerTransform) == false)
+                return;
+
+            Vector2 ownerHitOffset = Vector2.zero;
+            float ownerHitRadius = 0f;
+            if (pools.Collider.TryGet(skill.OwnerEntityId, out ColliderComponent ownerCollider) == true)
+            {
+                ownerHitOffset = ownerCollider.HitOffset;
+                ownerHitRadius = ownerCollider.HitRadius;
+            }
+
+            Vector2 sweepStart = dashHit.LastSweepPosition;
+            Vector2 sweepEnd = ownerTransform.Position + ownerHitOffset;
+            dashHit.LastSweepPosition = sweepEnd;
+            float sweepRadius = ownerHitRadius + Mathf.Max(0f, skill.Table.SkillTargetRange1);
+
+            _hitEntitiesCache.Clear();
+            SparseSet<TransformComponent> transformPool = pools.Transform;
+            SparseSet<FactionComponent> factionPool = pools.Faction;
+            bool ownerHasFaction = factionPool.TryGet(skill.OwnerEntityId, out FactionComponent ownerFaction);
+            for (int i = 0; i < transformPool.Count; i++)
+            {
+                int entityId = transformPool.GetEntityId(i);
+                if (entityId == skill.OwnerEntityId || dashHit.HitTargets.Contains(entityId) == true)
+                    continue;
+                if (IsHostileToOwner(skill.OwnerEntityId, ownerHasFaction, ownerFaction, entityId, factionPool) == false)
+                    continue;
+                if (pools.Stat.TryGet(entityId, out StatComponent targetStat) == false || targetStat.CurrentHp <= 0f)
+                    continue;
+
+                Vector2 entityCenter = transformPool.GetByIndex(i).Position;
+                float entityRadius = 0f;
+                if (pools.Collider.TryGet(entityId, out ColliderComponent entityCollider) == true)
+                {
+                    entityCenter += entityCollider.HitOffset;
+                    entityRadius = entityCollider.HitRadius;
+                }
+
+                if (HitboxMath.SegmentVsCircle(sweepStart, sweepEnd, sweepRadius, entityCenter, entityRadius) == false)
+                    continue;
+
+                // 같은 돌진에서 다시 맞지 않게 먼저 기록한다. 목록이 가득 차면 더 맞히지 않는다
+                if (dashHit.HitTargets.TryAdd(entityId) == false)
+                    continue;
+
+                _hitEntitiesCache.Add(entityId);
+            }
+
+            for (int i = 0; i < _hitEntitiesCache.Count; i++)
+            {
+                int hitEntityId = _hitEntitiesCache[i];
+                Vector2 contactCenter = sweepEnd;
+                if (pools.Transform.TryGet(hitEntityId, out TransformComponent hitTransform) == true)
+                {
+                    Vector2 hitCenter = hitTransform.Position;
+                    if (pools.Collider.TryGet(hitEntityId, out ColliderComponent hitCollider) == true)
+                        hitCenter += hitCollider.HitOffset;
+                    contactCenter = HitboxMath.ClosestPointOnSegment(hitCenter, sweepStart, sweepEnd);
+                }
+
+                SkillHitProcessor.Process(new SkillHitRequest(skillEntityId, skill.OwnerEntityId, hitEntityId, 1f)
+                {
+                    IsProjectileDelivery = false,
+                    ImpactDirection = dashDirection,
+                    // 돌진 경로가 넉백·당기기 기준이다. 기준점은 부딪힌 순간 돌진자 발 위치 (SKILL_DESIGN §6.10 돌진 행)
+                    HitOriginKind = HitOriginKind.Path,
+                    HitOrigin = contactCenter - ownerHitOffset,
+                }, skill);
+            }
+
+            if (_hitEntitiesCache.Count > 0)
+                Debug.Log($"[System_Skill] Dash hit - SkillEntityId: {skillEntityId}, OwnerEntityId: {skill.OwnerEntityId}, HitCount: {_hitEntitiesCache.Count}");
+        }
+
+        /// <summary>
         /// 스킬 히트 처리 - 충돌 판정 후 타겟에 스킬 효과 적용
         /// </summary>
         private void ProcessSkillHit(int skillEntityId, ref SkillComponent skill, in SkillRuntimePools pools)
@@ -1416,13 +1666,8 @@ namespace ARPG.Systems
                 if (entityId == skill.OwnerEntityId)
                     continue;
 
-                if (ownerHasFaction)
-                {
-                    if (factionPool.TryGet(entityId, out var targetFaction) == false)
-                        continue;
-                    if (FactionHelper.IsEntityHostile(skill.OwnerEntityId, ownerFaction.FactionId, entityId, targetFaction.FactionId) == false)
-                        continue;
-                }
+                if (IsHostileToOwner(skill.OwnerEntityId, ownerHasFaction, ownerFaction, entityId, factionPool) == false)
+                    continue;
 
                 TransformComponent entityTransform = transformPool.GetByIndex(i);
                 Vector2 entityCenter;
@@ -1443,6 +1688,21 @@ namespace ARPG.Systems
                     outHitEntities.Add(entityId);
                 }
             }
+        }
+
+        /// <summary>
+        /// 시전자에게 적대인 대상인지. 시전자에 진영이 없으면 모두 대상으로 본다(마이그레이션 안전 동작 보존).
+        /// 직접 범위 타격과 돌진 경로 판정이 같은 규칙을 쓴다.
+        /// </summary>
+        private static bool IsHostileToOwner(int inOwnerEntityId, bool inOwnerHasFaction, in FactionComponent inOwnerFaction,
+            int inEntityId, SparseSet<FactionComponent> inFactionPool)
+        {
+            if (inOwnerHasFaction == false)
+                return true;
+            if (inFactionPool.TryGet(inEntityId, out FactionComponent targetFaction) == false)
+                return false;
+
+            return FactionHelper.IsEntityHostile(inOwnerEntityId, inOwnerFaction.FactionId, inEntityId, targetFaction.FactionId);
         }
 
         /// <summary>

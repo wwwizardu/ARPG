@@ -1,5 +1,6 @@
 #nullable enable
 using ARPG.Component;
+using ARPG.Skill;
 using UnityEngine;
 
 namespace ARPG.Systems
@@ -51,7 +52,9 @@ namespace ARPG.Systems
 
                 // 감속하지 않는 모드(FullSpeed/OwnedMotion)는 SkillUsePolicyResolver.ResolveMovementMultiplier가
                 // 이미 BaseMultiplier=1f로 해석해 두므로 여기서 모드를 다시 분기하지 않는다 (규칙 단일 출처).
-                if (skillState.State == SkillState.End)
+                // 후딜 복구 여부도 SkillUsePolicyResolver가 정한다. 복구하지 않는 모드는 후딜 내내 실행 단계 배율을 유지한다.
+                if (skillState.State == SkillState.End
+                    && SkillUsePolicyResolver.RecoversMovementDuringEnd(penalty.MovementMode) == true)
                 {
                     penalty.EndRecoveryProgress = timing.EndDuration > 0f ? Mathf.Clamp01(skillState.ElapsedTime / timing.EndDuration) : 1f;
                     penalty.CurrentMultiplier = Mathf.Lerp(penalty.BaseMultiplier, 1f, penalty.EndRecoveryProgress);

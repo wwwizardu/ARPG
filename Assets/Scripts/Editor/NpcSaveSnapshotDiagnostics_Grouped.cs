@@ -120,13 +120,13 @@ namespace ARPG.Editor
             object? bag = npcFields[nameof(NpcSaveData.Inventory)];
             object? equipment = npcFields[nameof(NpcSaveData.InventoryEquip)];
             object? deeds = npcFields[nameof(NpcSaveData.Deeds)];
-            npc.Gender = NpcGender.Female;
+            npc.Name = "새 이름";
             npcCache.MarkDirty(32, (ulong)NpcSaveGroup.Identity);
             npcCache.Flush(NpcSource);
             Require(Json(npcFields) == Json(copier.Capture(npc)) && ReferenceEquals(bag, npcFields[nameof(NpcSaveData.Inventory)]) &&
-                ReferenceEquals(equipment, npcFields[nameof(NpcSaveData.InventoryEquip)]), "NPC gender updates with Identity and retains inventory/equipment");
-            NpcSaveData genderRoundTrip = JsonConvert.DeserializeObject<NpcSaveData>(Json(npcFields), JsonSettings.Default)!;
-            Require(genderRoundTrip.Gender == NpcGender.Female, "NPC gender survives save/load");
+                ReferenceEquals(equipment, npcFields[nameof(NpcSaveData.InventoryEquip)]), "NPC name updates with Identity and retains inventory/equipment");
+            NpcSaveData identityRoundTrip = JsonConvert.DeserializeObject<NpcSaveData>(Json(npcFields), JsonSettings.Default)!;
+            Require(identityRoundTrip.Name == "새 이름", "NPC identity survives save/load");
             npc.Activity.TargetKey = "new route";
             npcCache.MarkDirty(32, (ulong)NpcSaveGroup.Activity);
             npcCache.Flush(NpcSource);
@@ -209,10 +209,19 @@ namespace ARPG.Editor
                         "same-reference basic-to-regular restores omitted equipment fields in contract order");
                 }
                 finally { arDataField.SetValue(AR.s, liveData); }
-                WorldSaveRoot world = new() { NpcCompanion = new(), GoldPrice = new() };
+                WorldSaveRoot world = new() { NpcCompanion = new(), GoldPrice = new(), NamedThreats = new() };
                 Require(Json(Capture("CaptureOwnedWorld", world)) == Json(copier.Capture(world)), "world metadata/companion/price");
                 world.NpcCompanion.ReservedNpcId = 4;
                 Require(Json(Capture("CaptureOwnedWorld", world)) == Json(copier.Capture(world)), "small world group change");
+                // 네임드 위협 기록 (NAMED_THREAT_DESIGN §10.1): 기록 안 목록은 소유자가 NamedThreat 묶음을 표시해야 다시 찍힌다.
+                data.MarkWorldSaveDirty(WorldSaveGroup.NamedThreat);
+                world.NamedThreats.Active.Add(new NamedThreatRecord { ThreatId = 1, TemplateId = 1, Title = "test", State = NamedThreatState.Active,
+                    Victims = new() { new NamedThreatVictim { NpcId = 3, Name = "a", Severe = true, When = 2f } }, FarRumorNpcIds = new() { 5 } });
+                Require(Json(Capture("CaptureOwnedWorld", world)) == Json(copier.Capture(world)), "named threat record add");
+                data.MarkWorldSaveDirty(WorldSaveGroup.NamedThreat);
+                world.NamedThreats.Active[0].HarmCount++;
+                world.NamedThreats.Ended.Add(world.NamedThreats.Active[0]); world.NamedThreats.Active.Clear();
+                Require(Json(Capture("CaptureOwnedWorld", world)) == Json(copier.Capture(world)), "named threat record move to ended");
                 var drop = new WorldDropItemData { ItemData = retainedItem };
                 MapSaveRoot map = new() { WorldDropItems = new() { drop }, TileModifications = new() { new ChunkModificationData { ChunkX = 1, ChunkY = 2 } } };
                 Require(Json(Capture("CaptureOwnedMap", map)) == Json(copier.Capture(map)), "map drop identity and chunk keys");

@@ -93,7 +93,7 @@ PoE 2의 모든 스킬 내부 규칙을 그대로 복제하는 것이 아니라,
 | 값 | 의미 | 대표 용도 |
 | --- | --- | --- |
 | `Default` | 실행·타깃 타입별 프로젝트 기본값 사용 | 대부분의 플레이어 스킬 |
-| `SnapshotOnCommand` | 입력 명령 처리 시 즉시 고정 | AI 스킬, 예외 스킬 |
+| `SnapshotOnCommand` | 입력 명령 처리 시 즉시 고정 | 빈 칸인 AI 스킬, 예외 스킬 (2026-10-13부터 AI도 명시값을 따른다 — §15) |
 | `TrackUntilCommit` | 효과 확정 직전까지 추적 | 일반 방향/위치 스킬 |
 | `TrackPerCommit` | 각 다단 히트 직전까지 다시 추적 | 방향 전환이 허용된 연속 공격 |
 | `TrackContinuously` | 채널 종료까지 회전을 계속하고 각 틱에 현재 유효 조준 사용 | 지속 채널링 |
@@ -112,7 +112,7 @@ PoE 2의 모든 스킬 내부 규칙을 그대로 복제하는 것이 아니라,
 - 플레이어의 Direction/Position 단발 스킬: `TrackUntilCommit`
 - 플레이어의 MultiHit: 첫 타격까지 `TrackUntilCommit`
 - 플레이어의 Channeling: `TrackContinuously`
-- AI 또는 입력 컴포넌트가 없는 시전자: `SnapshotOnCommand`
+- AI 또는 입력 컴포넌트가 없는 시전자: `SnapshotOnCommand` (2026-10-13 개정: 빈 칸일 때만. 명시값은 AI에도 적용하고 AI가 노리는 대상을 추적한다 — §15)
 - 자기 중심 360도 스킬: 조준 추적 없음
 - 점프·이동 스킬: 1차에서는 `SnapshotOnCommand`, 이동 스킬 단계 완료 후 전환
 
@@ -310,6 +310,7 @@ PoE 2의 수치를 코드에 전역 상수로 고정하지 않는다. PoE 2의 �
 | `Reduced` | 동작 중 지정된 배율로 감속 | 이동 가능한 공격·주문 |
 | `Locked` | 동작 중 일반 이동 정지 | 제자리 고정이 필요한 강한 스킬 |
 | `OwnedMotion` | 일반 이동 대신 스킬 자체 이동 시스템 사용 | 점프, 대시, 돌진 |
+| `LockedThroughEnd` | `Locked`처럼 정지하고 후딜(End) 동안에도 풀지 않음. 스킬이 끝나는 순간 정상 속도 | 착지 뒤 완전히 멈춰야 하는 몬스터 점프 (Skill 6) |
 
 `MoveSpeedWhileUsingMul`은 `Reduced`일 때 유지할 최종 이동 속도의 백분율이다.
 
@@ -350,6 +351,7 @@ PoE 2의 수치를 코드에 전역 상수로 고정하지 않는다. PoE 2의 �
 - Start와 Process에서는 스킬의 유지 속도 배율을 적용한다.
 - End에서는 `EndDuration` 진행률에 따라 유지 속도에서 100%까지 선형 복구한다.
 - EndDuration이 0이면 즉시 100%로 복구한다.
+- 예외: `LockedThroughEnd`는 End에서도 복구하지 않고 0을 유지하며, 스킬이 끝나 컴포넌트가 제거될 때 100%가 된다. 복구 여부는 `SkillUsePolicyResolver.RecoversMovementDuringEnd`가 정한다(2026-10-15 사용자 결정).
 - Channeling은 입력을 유지하는 동안 Process 배율을 계속 적용한다.
 - 취소, 사망, 스킬 강제 중단, 소유자 제거, Reset에서는 컴포넌트를 제거한다.
 
@@ -454,7 +456,7 @@ Windup: 커서 추적 + 방향 화살표 회전
 - `System_SkillAim`을 Priority 190 FixedUpdate에 등록한다.
 - 스킬 Start에서 최초 방향은 현재 마우스 방향으로 즉시 초기화하고 이후 변경부터 속도 제한을 적용한다.
 - 일반 Direction/Position 비이동 스킬의 선딜 중 `TargetDirection`이 회전 속도로 마우스 방향을 추적하게 한다.
-- AI 스킬은 기존 스냅샷 방식을 유지한다.
+- AI 스킬은 기존 스냅샷 방식을 유지한다. (2026-10-13 개정으로 §15의 AI 추적이 이 제외를 대체했다.)
 
 완료 조건: 선딜 중 마우스를 빠르게 옮기면 `TargetDirection`이 설정된 초당 각도로 최단 경로를 따라 회전한다. 이 단계에서는 대표 단발 스킬만 연결하고, 다단 히트·채널링·차지의 확정/재확정 규칙은 단계 2에서 활성화한다.
 
@@ -560,7 +562,7 @@ Unity 검증은 현재 프로젝트와 기존 에디터 경로에서 수행한�
 
 `SkillUsePolicyResolver`의 `Default` 해석 규칙은 §12의 결정에 따라 EditMode 자동 테스트 대상이 아니다. 자동 테스트를 대체해 아래 항목을 PlayMode에서 실측한다.
 
-24. AI 몬스터가 스킬을 사용하면 조준은 `SnapshotOnCommand`, 이동은 `FullSpeed`로 해석돼야 한다.
+24. AI 몬스터가 `AimTrackingMode`·`MovementMode`가 빈 칸인 스킬을 사용하면 조준은 `SnapshotOnCommand`, 이동은 `FullSpeed`로 해석돼야 한다. 명시값이 있으면 AI에도 명시값이 적용돼야 한다(§15).
 25. `AimTrackingMode`가 빈 셀인 플레이어 스킬은 일반 실행에서 `TrackUntilCommit`, Channeling 실행에서 `TrackContinuously`로 동작해야 한다.
 26. `MovementMode`가 빈 셀일 때 Jump·`Move` 태그 스킬은 감속되지 않고, Toggle·Buff 스킬도 감속되지 않으며, Attack·Spell 스킬만 감속돼야 한다.
 27. `AimTurnSpeedDegPerSec`와 `MoveSpeedWhileUsingMul`이 빈 셀(0)인 행은 각각 초당 720도와 30%로 동작해야 한다.
@@ -633,3 +635,32 @@ Unity 검증은 현재 프로젝트와 기존 에디터 경로에서 수행한�
 - 취소·사망·Reset 뒤 `SkillMovementPenaltyComponent`가 남지 않는다.
 - 순수 조준 계산 EditMode 자동 테스트와 수동 PlayMode 검증 시나리오가 통과한다.
 - 대표 전투에서 프레임당 할당과 유의미한 Update/FixedUpdate 비용 증가가 없다.
+
+## 15. AI 조준 추적 (2026-10-13 사용자 결정·구현)
+
+멧돼지 돌진(SKILL_DESIGN §6.11)을 만들면서 "몬스터도 방향을 갱신하되 느리게 돌아서, 넉백으로 밀어내면 피할 수 있게" 하기로 했다. 같은 날 다른 몬스터 스킬도 시작 때 고정이 아니라 회전하도록 바꿨다.
+
+**바뀐 규칙**
+- 지금까지: 입력이 없는 시전자(AI)는 표 값과 상관없이 `SnapshotOnCommand`였다. 몬스터 스킬 표의 `AimTrackingMode`·`AimTurnSpeedDegPerSec`는 효과가 없었다.
+- 바뀐 뒤: `AimTrackingMode`가 명시된 스킬은 AI에도 그 값을 적용한다. 빈 칸(`Default`)이면 AI는 지금처럼 `SnapshotOnCommand`다.
+- 추적 대상: AI가 노리는 대상(`AIComponent.TargetEntityId`)의 현재 발 위치. 대상이 없거나 사라지면 방향을 그대로 둔다. `AIComponent`가 없는 시전자(토템)는 추적하지 않는다.
+- 회전: 플레이어와 같은 `System_SkillAim`(FixedUpdate 190)이 `AimTurnSpeedDegPerSec`로 제한해 돌린다. 확정(커밋) 규칙도 플레이어와 같다.
+- 위치 지정 스킬: 커밋 때 방향은 회전된 값을 쓰고, 거리는 대상까지의 현재 거리를 `SkillRangeMin` ~ `시전자 HitRadius + SkillRangeMax + 대상 HitRadius`(AI 사용 거리와 같은 기준)로 제한해 쓴다. 플레이어가 커서 거리를 쓰는 것과 같은 방식이다.
+- 공격 예고는 이미 매 프레임 현재 방향을 따라 그리므로 부채꼴·띠가 함께 돈다.
+
+**적용한 스킬 (2026-10-13 시트)**
+
+| 스킬 | 조준 방식 | 회전 속도 |
+|---|---|---|
+| 2 몬스터 평타 | `TrackUntilCommit` | 90°/초 |
+| 4 몬스터 원거리, 204 고블린 화염구, 205 두꺼비 독액, 207 거미줄, 208 냉기 폭발 | `TrackUntilCommit` | 180°/초 |
+| 52 멧돼지 돌진 | `TrackUntilCommit` | 45°/초 |
+
+- 바꾸지 않은 것: 3 자폭(360도 원형이라 방향 무관), 5·6 빠른 점프(준비 시간 0).
+- 원거리 스킬은 시작 0.1~0.2초 뒤에 발사해 체감 차이가 작다. 회전을 체감하게 하려면 준비 시간(`StartTime`)을 늘린다.
+- NPC도 같은 AI(1·2번)와 스킬(2·4번)을 써서 함께 바뀐다.
+- 같은 날 AI 1번(일반 몬스터·NPC)의 두 번째 스킬을 플레이어용 빠른 점프(5)에서 몬스터용(6, 쿨타임 3초)으로 바꿨다.
+
+**예시 (몬스터 평타 90°/초, 1.5칸 거리, 플레이어 이동 속도 5)**: 지금까지는 옆으로 약 0.25초만 움직이면 부채꼴을 벗어났다. 바뀐 뒤에는 몬스터가 따라 돌아 약 0.45초가 걸린다. 몸 크기를 뺀 근사값이다.
+
+**검증 결과 (2026-10-13 PlayMode)**: 늑대(AI 1번) 평타 중 플레이어를 옆으로 1.5칸 옮기자 조준이 고정 틱마다 1.8°(초당 90°)씩 돌았고, 부채꼴 예고도 같은 각도로 돌다가 타격 순간 확정·제거됐다. 멧돼지 돌진은 초당 45°로 돌았다(SKILL_DESIGN §6.11 검증 결과). 손으로 피해 보는 체감 확인은 하지 않았다.

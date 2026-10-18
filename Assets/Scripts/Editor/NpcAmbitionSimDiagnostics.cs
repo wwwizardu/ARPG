@@ -10,6 +10,7 @@ using ARPG.Creature;
 using ARPG.Data;
 using ARPG.Dungeon;
 using ARPG.History;
+using ARPG.NamedThreat;
 using ARPG.Npc;
 using ARPG.Npc.Narrative;
 using ARPG.Village;
@@ -42,7 +43,7 @@ namespace ARPG.EditorTools
         private const float CowardFraction = 0.10f;
         private const int MaxExampleCases = 5;
         private const int MaxPhaseTransitionsPerNpc = 4;
-        private const int DeedKindCount = (int)NpcDeedKind.TheftExposed + 1;
+        private const int DeedKindCount = (int)NpcDeedKind.MauledByThreat + 1;
         private const int MaxTheftAuditFailures = 8;
         private const int MaxTopicExamplesPerKind = 4;
 
@@ -402,6 +403,8 @@ namespace ARPG.EditorTools
             public readonly int[] DiscoveryOk = new int[2];
             public int DiscoveryTriggerFails, DiscoveryUnaudited, DiscoveryNewGrudges, DiscoveryKinTotal;
             public readonly List<string> DiscoveryAuditFailures = new();
+            // 네임드 위협 (NAMED_THREAT_DESIGN §13, NpcAmbitionSimDiagnostics_NamedThreat)
+            public NamedThreatSimStats Named = new NamedThreatSimStats();
         }
 
         private static Dictionary<int, float>[] CreateTheftCooldownTables()
@@ -450,6 +453,10 @@ namespace ARPG.EditorTools
             public readonly int[] TheftRepertoireIn = new int[2];
             public readonly int[] TheftRepertoireBase = new int[2];
             public readonly List<string> TheftExamples = new();
+            // 네임드 위협 소문 토픽 (NAMED_THREAT_DESIGN §8.3): 활성·칭호 공개 여부·방향 대조
+            public long NamedTopics, NamedOk, NamedFail;
+            public readonly List<string> NamedFailures = new();
+            public readonly List<string> NamedExamples = new();
         }
 
         /// <summary>한 번에 바꿔 끼운 private 필드. 끝나면 역순으로 되돌린다.</summary>
@@ -484,15 +491,16 @@ namespace ARPG.EditorTools
         }
 
         /// <summary>진단 실행. 요약 문자열을 돌려주고 콘솔에도 찍는다 (execute_code에서 직접 호출 가능).</summary>
-        public static string Run(int days) => RunCore(days, false);
+        public static string Run(int days) => RunCore(days, false, false);
 
         /// <summary>
         /// D62 검증용 변형: 복제본에서 모든 마을의 슬롯 0에 플레이어 DungeonRecord(가짜)를 심어 두고 같은 시뮬을 돌린다.
         /// 그 던전들의 NPC 완료가 0건이어야 한다. 라이브 상태는 바꾸지 않는다.
         /// </summary>
-        public static string RunPlayerEnteredProbe(int days) => RunCore(days, true);
+        public static string RunPlayerEnteredProbe(int days) => RunCore(days, true, false);
 
-        private static string RunCore(int days, bool probePlayerEntered)
+        /// <param name="namedThreatScenario">true면 빈 네임드 기록에서 시작해 플레이어가 마을을 옮겨 다니는 것을 흉내 낸다 (NAMED_THREAT §13)</param>
+        private static string RunCore(int days, bool probePlayerEntered, bool namedThreatScenario)
         {
             if (EditorApplication.isPlaying == false || AR.s == null || AR.s.Npc == null || AR.s.Village == null ||
                 AR.s.Item == null || AR.s.Time == null || AR.s.Map == null)
@@ -555,6 +563,8 @@ namespace ARPG.EditorTools
                 Debug.unityLogger.logHandler = capture;
                 SwapInClones(sim, swaps);
                 AttachRumorProbes(sim, swaps);
+                // 네임드 기록·narrative 원장·네임드 런타임 필드 (시뮬 중 출현·마주침·부탁 인스턴스가 복제본만 바꾼다)
+                SwapInNamedThreatClones(sim, swaps, namedThreatScenario);
                 // P4-0: 시작 가방·관계 지표 (매각 판정이 마을 복제본을 보므로 교체 뒤에 잰다)
                 sim.BagStart = MeasureBags(sim);
                 sim.SocialStart = MeasureSocial(sim);
@@ -592,6 +602,8 @@ namespace ARPG.EditorTools
                         AR.s.Npc.RefreshSimulationSaveSnapshots(SaveScope.All);
                         AR.s.Village.FlushSaveSnapshot();
                     }
+                    // 게임의 System_NamedThreatDirector와 같은 감독 판정 (플레이어 위치는 흉내)
+                    AdvanceNamedThreats(sim, now);
                     UpdateRumorPropagation(sim, now);
                     SampleActivityStates(sim);
                     AR.s.Village.UpdateGoldPriceIndex(now);
@@ -666,14 +678,16 @@ namespace ARPG.EditorTools
             string directory = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Logs", "NpcAmbitionSim"));
             Directory.CreateDirectory(directory);
             string stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
-            string dailyPath = Path.Combine(directory, $"ambition_sim_{stamp}_{days}d_daily.csv");
-            string villagePath = Path.Combine(directory, $"ambition_sim_{stamp}_{days}d_villages.csv");
-            string summaryPath = Path.Combine(directory, $"ambition_sim_{stamp}_{days}d_summary.txt");
+            string mode = namedThreatScenario == true ? "_named" : string.Empty;
+            string dailyPath = Path.Combine(directory, $"ambition_sim_{stamp}_{days}d{mode}_daily.csv");
+            string villagePath = Path.Combine(directory, $"ambition_sim_{stamp}_{days}d{mode}_villages.csv");
+            string summaryPath = Path.Combine(directory, $"ambition_sim_{stamp}_{days}d{mode}_summary.txt");
             File.WriteAllText(dailyPath, BuildDailyCsv(rows), new UTF8Encoding(true));
             File.WriteAllText(villagePath, BuildVillageCsv(sim), new UTF8Encoding(true));
 
             string summary = BuildSummary(sim, rows, cowardIds, cowardCourageMax, ambitionCounts, days,
                 watch.ElapsedMilliseconds, hashBefore, hashAfter, capture);
+            summary += BuildNamedThreatSummary(sim, days);
             summary += $"\n[NpcSaveSnapshot] 표시 누락={sim.UnmarkedSaveChanges} 끝 비교 누락={snapshotMismatches} " +
                 $"tick끝 정리 평균={snapshotFlushAverageMs:F3}ms 최대={snapshotFlushMaxMs:F3}ms\n";
             summary += $"\n[VillageSaveSnapshot] 표시 누락={sim.UnmarkedVillageSaveChanges} 끝 비교 누락={villageSnapshotMismatches}\n";
@@ -1700,9 +1714,19 @@ namespace ARPG.EditorTools
             NpcActivityState activity = saveData.Activity;
             float seedGameTime = activity.OutcomeSeedGameTime > 0f ? activity.OutcomeSeedGameTime : activity.PhaseStartedGameTime;
             float capability = AR.s.Npc.GetNpcHuntCapability(entityId);
-            NpcHuntOutcome outcome = NpcActivityResolver.ResolveHunt(capability, entityId, seedGameTime, sim.WorldSeed);
-            NpcActivityResolver.GetSoloHuntChances(capability, out float soloDeathChance, out _, out _);
-            sim.Today.ExpectedDeaths += soloDeathChance;
+            // System_NpcSim과 같은 네임드 마주침 판정 (NAMED_THREAT_DESIGN §6.1). 마주치면 부상 또는 도망 — 사망 확률 0
+            int threatId = AR.s.Npc.RollNamedThreatEncounter(saveData.VillageId, entityId, seedGameTime, sim.WorldSeed,
+                NamedThreatRules.SoloEncounterSalt);
+            NpcHuntOutcome outcome = threatId > 0
+                ? NamedThreatRules.RollEncounterOutcome(capability, entityId, seedGameTime, sim.WorldSeed, NamedThreatRules.SoloResultSalt)
+                : NpcActivityResolver.ResolveHunt(capability, entityId, seedGameTime, sim.WorldSeed);
+            if (threatId > 0)
+                CountNamedEncounterEvent(sim, threatId);
+            else
+            {
+                NpcActivityResolver.GetSoloHuntChances(capability, out float soloDeathChance, out _, out _);
+                sim.Today.ExpectedDeaths += soloDeathChance;
+            }
 
             activity.LastHuntOutcome = outcome;
             activity.LastHuntFoodYield = 0;
@@ -1717,18 +1741,33 @@ namespace ARPG.EditorTools
 
             if (outcome == NpcHuntOutcome.Dead)
             {
+                if (threatId > 0)
+                    CountNamedEncounterResult(sim, threatId, outcome, false);
                 MarkDead(sim, saveData, entityId, outcomeGameTime);
                 return;
             }
             if (outcome == NpcHuntOutcome.Wounded)
             {
-                // 실제 System_NpcSim과 같은 공용 부상 처리 (중상·치료·상태 전이·기록, D91)
+                // 실제 System_NpcSim과 같은 공용 부상 처리 (중상·치료·상태 전이·기록, D91). 네임드는 중상 30%
                 AR.s.Npc.ApplyExpeditionWound(entityId, saveData, NpcActivityKind.Hunt, entityId, seedGameTime,
-                    sim.WorldSeed, NpcActivityResolver.TreatmentSalt, NpcActivityResolver.SevereWoundHuntSalt,
-                    outcomeGameTime, out bool treated, out bool severe);
+                    sim.WorldSeed, NpcActivityResolver.TreatmentSalt,
+                    threatId > 0 ? NamedThreatRules.SoloSevereSalt : NpcActivityResolver.SevereWoundHuntSalt,
+                    outcomeGameTime, out bool treated, out bool severe, null,
+                    threatId > 0 ? NamedThreatRules.SevereWoundChance : -1f, threatId);
                 CountTreatment(sim, saveData, treated);
                 CountSevere(sim, severe);
+                if (threatId > 0)
+                {
+                    AR.s.Npc.RecordNamedThreatEncounter(entityId, saveData, threatId, true, severe, outcomeGameTime);
+                    CountNamedEncounterResult(sim, threatId, outcome, severe);
+                }
                 return;
+            }
+            if (threatId > 0)
+            {
+                // 네임드에게서 도망쳐 왔다 (빈손) — 소문은 직접 겪은 것으로 얻는다 (§6.2)
+                AR.s.Npc.RecordNamedThreatEncounter(entityId, saveData, threatId, false, false, outcomeGameTime);
+                CountNamedEncounterResult(sim, threatId, outcome, false);
             }
 
             activity.Phase = NpcActivityPhase.Idle;
@@ -1772,14 +1811,24 @@ namespace ARPG.EditorTools
 
             NpcHuntOutcome[] outcomes = new NpcHuntOutcome[members.Count];
             int successCount = 0;
+            // System_NpcSim과 같은 네임드 마주침 판정 (파티당 한 번, NAMED_THREAT_DESIGN §6.1)
+            int threatId = AR.s.Npc.RollNamedThreatEncounter(members[0].VillageId, party.PartyId, seedGameTime, sim.WorldSeed,
+                NamedThreatRules.PartyEncounterSalt);
+            if (threatId > 0)
+                CountNamedEncounterEvent(sim, threatId);
             for (int i = 0; i < members.Count; i++)
             {
-                outcomes[i] = NpcActivityResolver.ResolvePartyMemberHunt(capabilities[i], partyPower, members.Count,
-                    party.PartyId, seedGameTime, sim.WorldSeed, i);
-                NpcActivityResolver.GetPartyMemberHuntChances(
-                    NpcActivityResolver.GetPartyMemberCapability(capabilities[i], partyPower, members.Count),
-                    out float memberDeathChance, out _, out _);
-                sim.Today.ExpectedDeaths += memberDeathChance;
+                float memberCapability = NpcActivityResolver.GetPartyMemberCapability(capabilities[i], partyPower, members.Count);
+                outcomes[i] = threatId > 0
+                    ? NamedThreatRules.RollEncounterOutcome(memberCapability, party.PartyId, seedGameTime, sim.WorldSeed,
+                        NamedThreatRules.PartyResultSaltBase + i)
+                    : NpcActivityResolver.ResolvePartyMemberHunt(capabilities[i], partyPower, members.Count,
+                        party.PartyId, seedGameTime, sim.WorldSeed, i);
+                if (threatId == 0)
+                {
+                    NpcActivityResolver.GetPartyMemberHuntChances(memberCapability, out float memberDeathChance, out _, out _);
+                    sim.Today.ExpectedDeaths += memberDeathChance;
+                }
                 if (outcomes[i] == NpcHuntOutcome.Success)
                     successCount++;
                 CountHuntOutcome(sim, outcomes[i]);
@@ -1806,17 +1855,30 @@ namespace ARPG.EditorTools
                 {
                     AR.s.Npc.ApplyExpeditionWound(memberIds[i], member, NpcActivityKind.Hunt, party.PartyId, seedGameTime,
                         sim.WorldSeed, NpcActivityResolver.PartyTreatmentSaltBase + i,
-                        NpcActivityResolver.PartySevereWoundHuntSaltBase + i, outcomeGameTime, out bool treated,
-                        out bool severe);
+                        threatId > 0 ? NamedThreatRules.PartySevereSaltBase + i : NpcActivityResolver.PartySevereWoundHuntSaltBase + i,
+                        outcomeGameTime, out bool treated, out bool severe, null,
+                        threatId > 0 ? NamedThreatRules.SevereWoundChance : -1f, threatId);
                     CountTreatment(sim, member, treated);
                     CountSevere(sim, severe);
+                    if (threatId > 0)
+                    {
+                        AR.s.Npc.RecordNamedThreatEncounter(memberIds[i], member, threatId, true, severe, outcomeGameTime);
+                        CountNamedEncounterResult(sim, threatId, outcomes[i], severe);
+                    }
                 }
                 else if (outcomes[i] != NpcHuntOutcome.Dead)
                 {
                     activity.Phase = NpcActivityPhase.Idle;
                     activity.Kind = NpcActivityKind.None;
                     activity.PhaseEndGameTime = 0f;
+                    if (threatId > 0)
+                    {
+                        AR.s.Npc.RecordNamedThreatEncounter(memberIds[i], member, threatId, false, false, outcomeGameTime);
+                        CountNamedEncounterResult(sim, threatId, outcomes[i], false);
+                    }
                 }
+                else if (threatId > 0)
+                    CountNamedEncounterResult(sim, threatId, outcomes[i], false);
             }
 
             AR.s.Npc.DissolveParty(party.PartyId);
@@ -3863,6 +3925,12 @@ namespace ARPG.EditorTools
                 AddFailure(a, $"npc={npcId} {topic.Type} 근거 소문 없음");
                 return;
             }
+            // 네임드 소문은 당사자 NPC가 없고 사실을 네임드 기록에서 읽으므로 따로 감사한다 (NpcAmbitionSimDiagnostics_NamedThreat)
+            if (rumor.Kind == NpcRumorKind.NamedThreat)
+            {
+                AuditNamedThreatTopic(sim, a, npcId, save, topic, rumor);
+                return;
+            }
 
             if (AuditRumorValidity(sim, rumor, out int reason) == false)
                 failure = $"독립 감사 무효(reason={reason})";
@@ -4245,12 +4313,25 @@ namespace ARPG.EditorTools
                 reason = ok ? 0 : 1;
                 return ok;
             }
+            // 네임드 위협 소문은 그 네임드가 활성일 때만 유효하다 — 바꿔 낀 기록의 활성 목록을 직접 본다 (NAMED_THREAT_DESIGN §8.3)
+            if (rumor.Kind == NpcRumorKind.NamedThreat)
+            {
+                List<NamedThreatRecord> active = AR.s.Data.NamedThreats.Active;
+                for (int i = 0; i < active.Count; i++)
+                    if (active[i].ThreatId == rumor.ThreatId && active[i].State == NamedThreatState.Active)
+                        return true;
+                reason = 1;
+                return false;
+            }
             reason = 1;
             return false;
         }
 
         private static void TrackRumorEvent(SimContext sim, int holderId, NpcRumor rumor)
         {
+            // 네임드 소문의 전파는 네임드 시나리오 요약(소문 보유 NPC 수)이 따로 잰다 — 원정 성공 분류에 섞지 않는다.
+            if (rumor.Kind == NpcRumorKind.NamedThreat)
+                return;
             int villageId = rumor.Kind == NpcRumorKind.DungeonInfo
                 ? rumor.VillageId
                 : sim.Npcs.TryGetValue(holderId, out NpcSaveData? holder) ? holder.VillageId : -1;

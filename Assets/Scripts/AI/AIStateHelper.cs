@@ -73,6 +73,7 @@ namespace ARPG.AI
         /// 결투 중 NPC → Idle (상대를 다시 인식하면 Chase. Patrol의 겁많음 Flee 전환·Follow 추종을 타지 않게 한다)
         /// 동행 NPC → Follow (Chase/Attack에서 타겟을 잃으면 추종으로 복귀)
         /// NPC → Patrol
+        /// 순찰 반경이 있는 몬스터(네임드) → Return (순찰 기준점으로 돌아간 뒤 Patrol, NAMED_THREAT_DESIGN §5.5)
         /// 몬스터 → Idle
         /// </summary>
         public static AIState GetDefaultState(int entityId)
@@ -83,6 +84,8 @@ namespace ARPG.AI
                 return AIState.Follow;
             if (IsNpc(entityId))
                 return AIState.Patrol;
+            if (AR.s.Component.TryGetComponent<AIBehaviorTypeComponent>(entityId, out var behavior) && behavior.PatrolRadius > 0f)
+                return AIState.Return;
             return AIState.Idle;
         }
 

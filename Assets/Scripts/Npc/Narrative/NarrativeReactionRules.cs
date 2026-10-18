@@ -60,23 +60,29 @@ namespace ARPG.Npc.Narrative
         public static NarrativeRelevance Stronger(NarrativeRelevance a, NarrativeRelevance b)
             => RelevanceTenths(b) > RelevanceTenths(a) ? b : a;
 
-        /// <summary>기본 결과 조건이 이 행적에 적용되는가 (§4.3).</summary>
+        /// <summary>
+        /// 기본 결과 조건이 이 행적에 적용되는가 (§4.3). 네임드 처치(ThreatSlain)는 소문 해결 행(감사·감탄·질투·의심)을 그대로 쓰고
+        /// ThreatSlain 전용 행(피해자 감사)을 더한다 (NAMED_THREAT_DESIGN §9.3). 던전 클리어도 받는 AnyKnownReport 행은 "안에서 있었던 일"처럼
+        /// 던전 문구가 있어 쓰지 않는다 (2026-10-18 플레이 확인).
+        /// </summary>
         public static bool Applies(NarrativeReactionRequirement requirement, PlayerDeedKind deed) => requirement switch
         {
             NarrativeReactionRequirement.AnyKnownReport => deed == PlayerDeedKind.RumorResolved || deed == PlayerDeedKind.DungeonCleared,
-            NarrativeReactionRequirement.RumorResolved => deed == PlayerDeedKind.RumorResolved,
+            NarrativeReactionRequirement.RumorResolved => deed == PlayerDeedKind.RumorResolved || deed == PlayerDeedKind.ThreatSlain,
             NarrativeReactionRequirement.WishFulfilled => deed == PlayerDeedKind.WishFulfilled,
+            NarrativeReactionRequirement.ThreatSlain => deed == PlayerDeedKind.ThreatSlain,
             _ => false,
         };
 
         /// <summary>
         /// 이 반응 행을 지금 반응하는 쪽이 쓸 수 있는가. owner = 부탁한 사람·소망 주인이 직접 반응(보고·소문 전 해결·소망 전달),
-        /// 아니면 소문으로 행적을 들은 NPC (사용자 결정 2026-10-10).
+        /// 아니면 소문으로 행적을 들은 NPC (사용자 결정 2026-10-10). victim = 소문으로 들은 NPC가 그 행적의 피해자(네임드에게 다친 NPC)다.
         /// </summary>
-        public static bool MatchesAudience(NarrativeReactionAudience audience, bool owner) => audience switch
+        public static bool MatchesAudience(NarrativeReactionAudience audience, bool owner, bool victim = false) => audience switch
         {
             NarrativeReactionAudience.Owner => owner,
             NarrativeReactionAudience.Others => owner == false,
+            NarrativeReactionAudience.Victim => owner == false && victim == true,
             _ => true,
         };
 
@@ -140,14 +146,15 @@ namespace ARPG.Npc.Narrative
         /// <summary>
         /// 이 행적에 적용되고 반응하는 쪽(owner)이 쓸 수 있는 후보 중 점수가 가장 높은 반응. 동점이면 ReactionRuleId가 작은 쪽 (§4.3).
         /// </summary>
-        public static NarrativeReactionDefinition? Select(List<NarrativeReactionDefinition> rules, PlayerDeedKind deed, bool owner, in Input input)
+        public static NarrativeReactionDefinition? Select(List<NarrativeReactionDefinition> rules, PlayerDeedKind deed, bool owner, in Input input,
+            bool victim = false)
         {
             NarrativeReactionDefinition? best = null;
             int bestScore = int.MinValue;
             for (int i = 0; i < rules.Count; i++)
             {
                 NarrativeReactionDefinition rule = rules[i];
-                if (Applies(rule.Requirement, deed) == false || MatchesAudience(rule.Audience, owner) == false ||
+                if (Applies(rule.Requirement, deed) == false || MatchesAudience(rule.Audience, owner, victim) == false ||
                     PassesFilter(rule.Kind, input) == false)
                     continue;
                 int score = Score(rule, input);

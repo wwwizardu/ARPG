@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.IO;
 using System.Reflection;
 using System.Security.Cryptography;
@@ -19,6 +20,8 @@ namespace ARPG.EditorTools
     /// <summary>Real partition writer/reader fault tests in a unique Temp directory; never the player slot.</summary>
     public static partial class DungeonRuntimeDiagnostics
     {
+        private static readonly int[] _diagnosticEliteIds = { 1019, 1020, 1021, 1022, 1023 };
+
         [MenuItem("ARPG/Dungeon/Run Storage and Generation Diagnostics")]
         public static async void Run()
         {
@@ -26,6 +29,7 @@ namespace ARPG.EditorTools
             try
             {
                 ValidateDungeonTable(report);
+                ValidateEliteEncounters(report);
                 ValidateLayouts(report);
                 ValidateSparseSuspension(report);
                 ValidateContextLifetime(report);
@@ -63,6 +67,90 @@ namespace ARPG.EditorTools
             report.AppendLine($"PASS: DungeonTable contains {rows.Count} structurally valid row(s).");
         }
 
+        private static void ValidateEliteEncounters(StringBuilder report)
+        {
+            Require((int)GlobalEnum.MonsterArchetype.Normal == 0 &&
+                (int)GlobalEnum.MonsterArchetype.Magic == 1 && (int)GlobalEnum.MonsterArchetype.Rare == 2 &&
+                (int)GlobalEnum.MonsterArchetype.Boss == 3 && (int)GlobalEnum.MonsterArchetype.EndgameBoss == 4,
+                "existing archetype numeric values remain compatible");
+            string folder = Path.Combine("Assets", "_BinaryData", "TableData");
+            var monsters = JsonConvert.DeserializeObject<List<MonsterTable>>(File.ReadAllText(Path.Combine(folder, "MonsterTable.bytes")));
+            var grades = JsonConvert.DeserializeObject<List<MonsterArchetypeTable>>(File.ReadAllText(Path.Combine(folder, "MonsterArchetypeTable.bytes")));
+            MonsterArchetypeTable rare = grades.Find(g => g.Archetype == GlobalEnum.MonsterArchetype.Rare);
+            MonsterArchetypeTable elite = grades.Find(g => g.Archetype == GlobalEnum.MonsterArchetype.Elite);
+            MonsterArchetypeTable boss = grades.Find(g => g.Archetype == GlobalEnum.MonsterArchetype.Boss);
+            Require(rare != null && elite != null && boss != null &&
+                rare.HpMul < elite.HpMul && elite.HpMul < boss.HpMul &&
+                rare.DmgMul < elite.DmgMul && elite.DmgMul < boss.DmgMul,
+                "Elite HP and damage multipliers lie between Rare and Boss");
+
+            var go = new GameObject("ElitePoolDiagnostic") { hideFlags = HideFlags.HideAndDontSave };
+            try
+            {
+                var data = go.AddComponent<DataManager>();
+                Set(data, "_monsterTable", monsters.ToImmutableDictionary(m => m.Id));
+                MethodInfo rebuild = typeof(DataManager).GetMethod("RebuildMonsterSpawnPools", BindingFlags.Instance | BindingFlags.NonPublic);
+                rebuild.Invoke(data, null);
+                IReadOnlyList<int> eliteIds = data.GetEliteMonsterIds();
+                int eliteCount = monsters.FindAll(m => m.Archetype == GlobalEnum.MonsterArchetype.Elite).Count;
+                Require(eliteCount > 0 && eliteIds.Count == eliteCount, "live Elite candidate pool is complete");
+                for (int i = 0; i < eliteIds.Count; i++)
+                    Require(data.GetMonster(eliteIds[i]).Archetype == GlobalEnum.MonsterArchetype.Elite &&
+                        (i == 0 || eliteIds[i - 1] < eliteIds[i]), "Elite candidates are sorted, unique and Elite only");
+
+                var selected = new HashSet<int>();
+                for (int seed = 0; seed < 256; seed++)
+                {
+                    VillageDungeonSlots slots = DungeonLayout.CreateSlots(seed, 7);
+                    DungeonRecord layout = DungeonLayout.Generate(seed, 7, slots.Slots[0], CreateDungeonTable(), eliteIds);
+                    DungeonObject encounter = layout.Objects.Find(o => o.Kind == DungeonObjectKind.Boss);
+                    Require(data.GetMonster(encounter.TableId).Archetype == GlobalEnum.MonsterArchetype.Elite,
+                        "village dungeon boss comes from live Elite candidates");
+                    selected.Add(encounter.TableId);
+                    string saved = JsonConvert.SerializeObject(layout);
+                    Require(saved == JsonConvert.SerializeObject(DungeonLayout.Generate(seed, 7, slots.Slots[0], CreateDungeonTable(), eliteIds)),
+                        "boss selection is deterministic");
+                    DungeonRecord restored = JsonConvert.DeserializeObject<DungeonRecord>(saved);
+                    Require(restored.Objects.Find(o => o.Kind == DungeonObjectKind.Boss).TableId == encounter.TableId,
+                        "selected boss survives save/load");
+                }
+                Require(eliteCount == 1 || selected.Count > 1, "different dungeon seeds select different Elite bosses");
+
+                var legacySlot = DungeonLayout.CreateSlots(42, 7).Slots[0];
+                DungeonRecord legacy = DungeonLayout.Generate(42, 7, legacySlot, CreateDungeonTable(), eliteIds);
+                legacy.GeneratorVersion = 3;
+                legacy.Objects.Find(o => o.Kind == DungeonObjectKind.Boss).TableId = 1008;
+                legacy = JsonConvert.DeserializeObject<DungeonRecord>(JsonConvert.SerializeObject(legacy));
+                Require(DungeonLayout.Validate(legacy, out _) && legacy.Objects.Find(o => o.Kind == DungeonObjectKind.Boss).TableId == 1008,
+                    "previously saved non-Elite bosses remain valid and unchanged");
+                bool rejectedEmpty = false;
+                try { DungeonLayout.Generate(42, 7, legacySlot, CreateDungeonTable(), Array.Empty<int>()); }
+                catch (InvalidOperationException) { rejectedEmpty = true; }
+                Require(rejectedEmpty, "empty Elite pool does not fall back to a normal boss");
+
+                // 바이옴 전용·복수 서식지 Elite도 공용 필드 풀과 동일하게 제외한다.
+                int syntheticEliteId = int.MaxValue;
+                monsters.Add(new MonsterTable { Id = syntheticEliteId, Archetype = GlobalEnum.MonsterArchetype.Elite,
+                    Biome = GlobalEnum.BiomeType.Forest, AdditionalBiomes = new[] { GlobalEnum.BiomeType.Desert } });
+                Set(data, "_monsterTable", monsters.ToImmutableDictionary(m => m.Id));
+                rebuild.Invoke(data, null);
+                rebuild.Invoke(data, null);
+                Require(data.GetEliteMonsterIds().Count == eliteCount + 1, "pool rebuild replaces cached entries without duplicates");
+                IReadOnlyList<int> common = data.GetCommonMonsterIds();
+                for (int i = 0; i < common.Count; i++)
+                    Require(data.GetMonster(common[i]).Archetype != GlobalEnum.MonsterArchetype.Elite, "common field pool excludes Elite");
+                foreach (GlobalEnum.BiomeType biome in Enum.GetValues(typeof(GlobalEnum.BiomeType)))
+                {
+                    IReadOnlyList<int> specific = data.GetBiomeSpecificMonsterIds(biome);
+                    for (int i = 0; i < specific.Count; i++)
+                        Require(data.GetMonster(specific[i]).Archetype != GlobalEnum.MonsterArchetype.Elite,
+                            "biome and additional-biome field pools exclude Elite");
+                }
+                report.AppendLine($"PASS: {eliteCount} live Elite bosses; Rare < Elite < Boss multipliers; 256 deterministic selections/save round trips; legacy bosses preserved; empty pool rejected; field pools exclude Elite across rebuilds.");
+            }
+            finally { UnityEngine.Object.DestroyImmediate(go); }
+        }
+
         private static void ValidateLayouts(StringBuilder report)
         {
             int two = 0, three = 0;
@@ -79,14 +167,14 @@ namespace ARPG.EditorTools
                 if (v >= 32) continue;
                 for (int i = 0; i < slots.SlotCount; i++)
                 {
-                    var layout = DungeonLayout.Generate(12345, v, slots.Slots[i], CreateDungeonTable());
+                    var layout = DungeonLayout.Generate(12345, v, slots.Slots[i], CreateDungeonTable(), _diagnosticEliteIds);
                     var roundtrip = JsonConvert.DeserializeObject<DungeonRecord>(JsonConvert.SerializeObject(layout));
                     Require(DungeonLayout.Validate(roundtrip, out _), "layout round trip");
                     Require(roundtrip.DungeonTableId == 1 &&
                         Math.Abs(roundtrip.ReplacementCooldownHours - 12f) < 0.001f,
                         "dungeon table snapshot");
                     Require(JsonConvert.SerializeObject(layout) == JsonConvert.SerializeObject(
-                        DungeonLayout.Generate(12345, v, slots.Slots[i], CreateDungeonTable())), "layout determinism");
+                        DungeonLayout.Generate(12345, v, slots.Slots[i], CreateDungeonTable(), _diagnosticEliteIds)), "layout determinism");
                     ValidateRasterConnectivity(layout);
                     var first = layout.Rooms[0];
                     for (int x = -8; x < 80; x++)
@@ -106,7 +194,7 @@ namespace ARPG.EditorTools
             tunedTable.RoomWidthMin = tunedTable.RoomWidthMax = 15;
             tunedTable.RoomHeightMin = tunedTable.RoomHeightMax = 17;
             VillageDungeonSlots tunedSlots = DungeonLayout.CreateSlots(12345, 776);
-            DungeonRecord tunedLayout = DungeonLayout.Generate(12345, 776, tunedSlots.Slots[0], tunedTable);
+            DungeonRecord tunedLayout = DungeonLayout.Generate(12345, 776, tunedSlots.Slots[0], tunedTable, _diagnosticEliteIds);
             int[] roomMonsterCounts = new int[tunedLayout.Rooms.Count];
             for (int i = 0; i < tunedLayout.Rooms.Count; i++)
                 Require(tunedLayout.Rooms[i].Width == 15 && tunedLayout.Rooms[i].Height == 17,
@@ -126,7 +214,7 @@ namespace ARPG.EditorTools
             VillageDungeonSlots legacySlots = DungeonLayout.CreateSlots(12345, 777);
             legacySlots.Slots[0].DungeonTableId = 0;
             legacyRoot.Villages.Add(legacySlots);
-            DungeonRecord legacyRecord = DungeonLayout.Generate(12345, 777, legacySlots.Slots[0], defaultTable);
+            DungeonRecord legacyRecord = DungeonLayout.Generate(12345, 777, legacySlots.Slots[0], defaultTable, _diagnosticEliteIds);
             legacyRecord.DungeonTableId = 0;
             legacyRecord.ReplacementCooldownHours = 0f;
             legacyRoot.Dungeons.Add(legacyRecord);
@@ -299,7 +387,7 @@ namespace ARPG.EditorTools
                 Set(data, "_activeSaveManifest", first);
                 report.AppendLine("PASS: Reset during an in-flight save cancels its manifest commit and preserves the previous revision.");
 
-                var record = DungeonLayout.Generate(world.WorldSeed, 0, slots.Slots[0], CreateDungeonTable());
+                var record = DungeonLayout.Generate(world.WorldSeed, 0, slots.Slots[0], CreateDungeonTable(), _diagnosticEliteIds);
                 world.Dungeons.Dungeons.Add(record);
                 player.CurrentMapKind = MapKind.Dungeon;
                 player.ActiveDungeonId = record.DungeonId;
@@ -705,7 +793,7 @@ namespace ARPG.EditorTools
                 data.DiagnosticWorkerStage = stage => Require(Thread.CurrentThread.ManagedThreadId != captureThread, "Unity background stage: " + stage);
                 var dungeonSlots = DungeonLayout.CreateSlots(world.WorldSeed, 0);
                 world.Dungeons.Villages.Add(dungeonSlots);
-                var dungeon = DungeonLayout.Generate(world.WorldSeed, 0, dungeonSlots.Slots[0], CreateDungeonTable());
+                var dungeon = DungeonLayout.Generate(world.WorldSeed, 0, dungeonSlots.Slots[0], CreateDungeonTable(), _diagnosticEliteIds);
                 world.Dungeons.Dungeons.Add(dungeon);
                 player.CurrentMapKind = MapKind.Dungeon;
                 player.ActiveDungeonId = dungeon.DungeonId;

@@ -81,7 +81,7 @@ namespace ARPG.UI
             if (slotIndex == -1)
                 return false;
 
-            _slotUIs?[slotIndex]?.SetItem(inItem);
+            RefreshSlot(slotIndex);
             return true;
         }
 
@@ -90,7 +90,7 @@ namespace ARPG.UI
             if(_inventory.AddItem(inItem, slotIndex, out replacedItem) == false)
                 return false;
 
-            _slotUIs?[slotIndex]?.SetItem(inItem);
+            RefreshSlot(slotIndex);
             return true;
         }
 
@@ -153,7 +153,18 @@ namespace ARPG.UI
             }
             return false;
         }
-        
+
+        // 슬롯 UI를 데이터의 현재 아이템으로 맞춘다. 수량을 합쳤으면 넘겨받은 아이템이 아니라 기존 스택이 그 칸에 있다.
+        private void RefreshSlot(int inSlotIndex)
+        {
+            SlotUI? slot = _slotUIs?[inSlotIndex];
+            if (slot == null) return;
+
+            Data.ItemData? item = _inventory.GetItemBySlotIndex(inSlotIndex);
+            if (item != null) slot.SetItem(item);
+            else slot.Reset();
+        }
+
         private async Task<bool> LoadSlots(Action<SlotUI, PointerEventData> onClickSlot)
         {
             try

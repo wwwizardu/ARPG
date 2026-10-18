@@ -14,7 +14,7 @@ namespace ARPG.UI
     ///
     /// 일반 엔티티: 만피(CurrentHp == MaxHp) 일 때 자동 숨김 — 빌딩 등 평소엔 안 보이고 깎이면 표시되는 UX.
     /// 플레이어: 만피여도 캔버스 항상 표시 (MP바 상시 노출용).
-    /// 마법·희귀 몬스터: 만피여도 표시하고 HP바를 등급 색으로 칠함 (MONSTER_RARITY_DESIGN.md §6).
+    /// 마법·희귀·네임드 몬스터: 만피여도 표시하고 HP바를 등급 색으로 칠함 (MONSTER_RARITY_DESIGN.md §6, NAMED_THREAT_DESIGN §5.6).
     /// 접사가 있는 몬스터: 만피여도 표시 — 같은 캔버스의 접사 이름표(MonsterAffixLabelView)가 보이도록.
     /// 데미지 텍스트는 DamageAmount > 0 일 때만 표시 (진행도 갱신용 0 데미지 메시지엔 미표시).
     /// </summary>
@@ -29,6 +29,8 @@ namespace ARPG.UI
         // 등급 몬스터 HP바 색 (MONSTER_RARITY_DESIGN.md §6). 일반 몬스터·NPC·플레이어는 프리팹 색 유지
         private static readonly Color MagicHpColor = new Color(0.45f, 0.55f, 1f, 1f);
         private static readonly Color RareHpColor = new Color(1f, 0.85f, 0.25f, 1f);
+        // 네임드 위협 (NAMED_THREAT_DESIGN §5.6) — 주황, 만피여도 표시
+        private static readonly Color NamedHpColor = new Color(1f, 0.55f, 0.15f, 1f);
 
         private bool _isPlayer;
         private bool _showAtFullHp; // 마법·희귀 몬스터: 만피여도 HP바 표시
@@ -125,6 +127,9 @@ namespace ARPG.UI
                     return true;
                 case GlobalEnum.MonsterArchetype.Rare:
                     _hpBar.color = RareHpColor;
+                    return true;
+                case GlobalEnum.MonsterArchetype.Named:
+                    _hpBar.color = NamedHpColor;
                     return true;
                 default:
                     return false;

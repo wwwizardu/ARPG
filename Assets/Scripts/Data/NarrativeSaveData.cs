@@ -56,6 +56,10 @@ namespace ARPG.Data
         [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
         public int TargetItemId;
 
+        // ── 실제 대상 연결: 네임드 위협 (NAMED_THREAT_DESIGN §10.3). VillageId = 주 마을 ──
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public int ThreatId;
+
         // ── 소문 주인·소망 주인·부탁 ──
         // 소문 주인 또는 소망 주인. 소문은 -1 = 아직 고르지 못함(그 마을에 고를 주민이 없었음) — 새 주민이 등록되면 다시 고른다.
         [DefaultValue(-1)]
@@ -150,6 +154,9 @@ namespace ARPG.Data
 
         /// <summary>소망 인스턴스 ID. 같은 콘텐츠는 NPC당 한 번이라 (주인, 콘텐츠)마다 하나다 (사용자 결정 2026-10-10).</summary>
         public static string WishId(int ownerNpcId, int contentId) => "wish/" + ownerNpcId + "/" + contentId;
+
+        /// <summary>네임드 위협 부탁 인스턴스 ID. 네임드마다 하나다 (NAMED_THREAT_DESIGN §8.4).</summary>
+        public static string NamedThreatId(int threatId) => "threat/" + threatId;
     }
 
     /// <summary>

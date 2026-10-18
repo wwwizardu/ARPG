@@ -33,6 +33,8 @@ namespace ARPG
 
         private PlayerManager _playerManager = new PlayerManager();
         private readonly Dungeon.DungeonManager _dungeonManager = new();
+        // 네임드 위협 (NAMED_THREAT_DESIGN §12.1). plain class — 세계 저장 기록의 소유자
+        private readonly ARPG.NamedThreat.NamedThreatManager _namedThreatManager = new();
         // 시야·안개와 탐험 기억 (FOG_OF_WAR_DESIGN). plain class, 덮개 GameObject는 Initialize에서 AR 아래에 만든다
         private FogOfWarManager _fogManager = new();
         private PlayerSkillManager _playerSkillManager = new PlayerSkillManager();
@@ -49,6 +51,7 @@ namespace ARPG
         public MapManager Map => _dungeonManager.ActiveMap ?? _mapManager;
         public MapManager WorldMap => _mapManager;
         public Dungeon.DungeonManager Dungeon => _dungeonManager;
+        public ARPG.NamedThreat.NamedThreatManager NamedThreat => _namedThreatManager;
         public FogOfWarManager Fog => _fogManager;
         public UIManager UI => _uiManager;
         public Monster.MonsterManager Monster => _monsterManager;
@@ -104,6 +107,8 @@ namespace ARPG
             _effectManager.Initialize();
             _historyManager.Initialize();
             _dungeonManager.Initialize();
+            // NPC·마을·narrative 원장을 읽어 로드 보정을 하므로 그 매니저들 다음
+            _namedThreatManager.Initialize();
             // 로드된 탐험 기억과 게임 시각(던전 탐험 만료)을 읽으므로 데이터·시간·던전 다음
             _fogManager.Initialize();
 
@@ -121,6 +126,7 @@ namespace ARPG
             _systemManager.Reset();
             _itemManager.UnloadContextDrops();
             _dungeonManager.Reset();
+            _namedThreatManager.Reset();
             _fogManager.Reset();
 
             _dataManager.Reset();

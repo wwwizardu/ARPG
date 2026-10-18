@@ -73,6 +73,9 @@ namespace ARPG.Systems
                         cm.RemoveComponent<HpDirtyTag>(entityId);
                         continue;
                     }
+                    // 네임드 위협 처치 (NAMED_THREAT_DESIGN §9.1): 드랍 처리 전에 기록을 끝내고 처치 묶음을 확정한다.
+                    // 네임드가 아니면 아무것도 하지 않는다. 사망·드랍·파괴는 아래 원래 경로가 그대로 처리한다.
+                    AR.s.NamedThreat.HandleDeath(entityId, credit);
                     // 상태 변경 (죽음)
                     if (cm.TryGetComponent<StateComponent>(entityId, out StateComponent state))
                     {

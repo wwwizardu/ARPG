@@ -18,6 +18,9 @@ namespace ARPG.Npc.Narrative
         Wish = 2,
         PersonalStory = 3,
         SmallTalk = 4,
+        // 5는 다짐(NPC_VOW_DESIGN Vow)이 예약했다 — 쓰지 않는다.
+        // 네임드 위협 부탁 (NAMED_THREAT_DESIGN §8.4·§10.3). 인스턴스 = threat/{네임드 ID}, 목표 = DefeatTarget(플레이어 측 처치)
+        NamedThreat = 6,
     }
 
     /// <summary>콘텐츠가 가리키는 대상 종류 (§2.1).</summary>
@@ -28,6 +31,8 @@ namespace ARPG.Npc.Narrative
         Item = 2,
         Npc = 3,
         RecentWound = 4,
+        // NamedThreat 탭의 템플릿 Id (NAMED_THREAT_DESIGN §11.3)
+        NamedThreat = 5,
     }
 
     /// <summary>진행 방식 (§2.2). DungeonRumor의 Default 목표는 그 던전의 보스 처치(던전 종료)다.</summary>
@@ -91,8 +96,8 @@ namespace ARPG.Npc.Narrative
     }
 
     /// <summary>
-    /// 반응 기본 결과 조건 (§4.3). AnyKnownReport = 소문 해결 또는 던전 클리어, RumorResolved = 소문 해결,
-    /// WishFulfilled = 소망 충족.
+    /// 반응 기본 결과 조건 (§4.3). AnyKnownReport = 소문 해결·던전 클리어, RumorResolved = 소문 해결·네임드 처치,
+    /// WishFulfilled = 소망 충족, ThreatSlain = 네임드 처치만.
     /// </summary>
     public enum NarrativeReactionRequirement
     {
@@ -100,6 +105,8 @@ namespace ARPG.Npc.Narrative
         AnyKnownReport = 1,
         RumorResolved = 2,
         WishFulfilled = 3,
+        // 네임드 처치 행적에만 적용되는 행 (NAMED_THREAT_DESIGN §9.3, 피해자 감사). 기존 RumorResolved 행도 이 행적에 적용된다.
+        ThreatSlain = 4,
     }
 
     /// <summary>NPC 대응 방식 (§4.5).</summary>
@@ -145,6 +152,8 @@ namespace ARPG.Npc.Narrative
         All = 0,
         Owner = 1,
         Others = 2,
+        // 그 행적의 피해자(네임드에게 다친 NPC)가 소문으로 들었을 때만 (NAMED_THREAT_DESIGN §9.3)
+        Victim = 3,
     }
 
     /// <summary>

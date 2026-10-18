@@ -322,10 +322,9 @@ namespace ARPG.Npc
                 {
                     EntityId = entityId,  // 일관성 — 다른 생성 경로(SpawnNewNpc)도 채워줌
                     Name = PickName(),
-                    Description = PickDescription(GetPreferredJobType(obj.ObjectId)),
+                    Description = PickDescription(obj.ObjectId),
                 };
 
-                EnsureNpcGenderInitialized(saveData);
                 SeedNpcEquipment(saveData);
                 // 시드된 장비로 개인 상한 기준값·시작 Gold를 기록한다 (NPC_AMBITION_DESIGN D37, D38)
                 EnsureAmbitionInitialized(entityId, saveData);
@@ -408,10 +407,9 @@ namespace ARPG.Npc
                 EntityId = entityId,
                 VillageId = villageId,
                 Name = PickName(),
-                Description = PickDescription(GetPreferredJobType(npcTableId)),
+                Description = PickDescription(npcTableId),
             };
 
-            EnsureNpcGenderInitialized(saveData);
             SeedNpcEquipment(saveData);
             // 시드된 장비로 개인 상한 기준값·시작 Gold를 기록한다 (NPC_AMBITION_DESIGN D37, D38)
             EnsureAmbitionInitialized(entityId, saveData);
@@ -1107,11 +1105,7 @@ namespace ARPG.Npc
 
                 // 구 세이브 호환 — Description 필드가 없던 시점의 데이터는 직업 풀에서 채워준다
                 if (string.IsNullOrEmpty(saveData.Description))
-                    saveData.Description = PickDescription(GetPreferredJobType(saveData.NpcTableId));
-
-                // 구 세이브는 성별을 한 번 정한다. 아래 저장 스냅샷 등록에 포함되어 이후 로드에서 유지된다.
-                if (EnsureNpcGenderInitialized(saveData) == true)
-                    AR.s.Data.RequireNpcMemoryMigrationSave();
+                    saveData.Description = PickDescription(saveData.NpcTableId);
 
                 _npcSaveDict[entityId] = saveData;
                 MarkSaveDirty(entityId);
@@ -2021,14 +2015,13 @@ namespace ARPG.Npc
         /// </summary>
         public string GetDisplayName(int entityId) => ResolveNpcDisplayName(entityId);
 
-        private bool EnsureNpcGenderInitialized(NpcSaveData saveData)
+        /// <summary>NPC 성별 — 정본은 NpcTable.Gender(종류별 고정). 세이브나 표가 없으면 Unknown.</summary>
+        public NpcGender GetGender(int entityId)
         {
-            if (saveData.Gender == NpcGender.Male || saveData.Gender == NpcGender.Female)
-                return false;
-
-            saveData.Gender = UnityEngine.Random.Range(0, 2) == 0 ? NpcGender.Male : NpcGender.Female;
-            _narrative.InvalidateDialogues(saveData.EntityId);
-            return true;
+            if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
+                return NpcGender.Unknown;
+            NpcTable? table = AR.s.Data.GetNpc(saveData.NpcTableId);
+            return table != null ? table.Gender : NpcGender.Unknown;
         }
 
         private GlobalEnum.JobType GetPreferredJobType(int npcTableId)
@@ -2219,13 +2212,46 @@ namespace ARPG.Npc
         };
 
         /// <summary>
-        /// 직업 기반 소개 문구를 풀에서 랜덤 선택. NPC 생성 시 1회 호출하여 NpcSaveData.Description에 박는다.
+        /// 캐릭터 고유 소개가 있으면 사용하고, 나머지는 직업 풀에서 한 번 선택해 저장한다.
         /// </summary>
-        private static string PickDescription(GlobalEnum.JobType jobType)
+        private string PickDescription(int npcTableId)
         {
+            if (IsRedbeardBlacksmith(npcTableId) == true)
+                return "붉은 땋은 수염과 가죽 앞치마, 묵직한 망치를 지닌 호탕한 대장장이. "
+                    + "장비 제작과 수리가 특기지만, 실패한 작품도 버리지 못한다.";
+
+            NpcTable? table = AR.s.Data.GetNpc(npcTableId);
+            if (table != null && table.AnimationData != null
+                && table.AnimationData.SpriteLibraryPath == "Animation/ForestHerbalist")
+                return "붉은 땋은 머리와 초록 망토, 커다란 약초 바구니를 지닌 여성 약초꾼. "
+                    + "물약을 팔고 약초 채집을 부탁한다. 사람에게는 무뚝뚝하지만 식물에는 다정하게 말을 건다.";
+
+            if (table != null && table.AnimationData != null
+                && table.AnimationData.SpriteLibraryPath == "Animation/VenombladeMercenary")
+                return "짧은 가죽 망토와 비대칭 어깨 보호대, 허리 뒤의 쌍단검을 지닌 남성 독칼 용병. "
+                    + "보수를 먼저 요구하고, 불리해지면 동료도 버리는 냉정한 기회주의자다.";
+
+            if (table != null && table.AnimationData != null
+                && table.AnimationData.SpriteLibraryPath == "Animation/BackAlleySmuggler")
+                return "눌러쓴 챙모자와 헐렁한 긴 코트, 품에 끼고 있는 수상한 상자를 지닌 남성 밀수업자. "
+                    + "늘 친근하게 말을 걸지만 거래 조건을 조금씩 바꾸며, 위협받으면 숨겨둔 단검으로 대응한다.";
+
+            if (table != null && table.AnimationData != null
+                && table.AnimationData.SpriteLibraryPath == "Animation/RavenHunter")
+                return "검은 깃털 어깨장식과 짧은 후드, 석궁을 지닌 과묵한 사냥꾼. "
+                    + "숲의 이상 징후를 추적하며 실종 사건의 흔적을 쫓는다.";
+
+            GlobalEnum.JobType jobType = GetPreferredJobType(npcTableId);
             if (_descriptionPool.TryGetValue(jobType, out string[]? pool) == false || pool.Length == 0)
                 pool = _descriptionPool[GlobalEnum.JobType.None];
             return pool[Random.Range(0, pool.Length)];
+        }
+
+        private bool IsRedbeardBlacksmith(int npcTableId)
+        {
+            NpcTable? table = AR.s.Data.GetNpc(npcTableId);
+            return table != null && table.AnimationData != null
+                && table.AnimationData.SpriteLibraryPath == "Animation/RedbeardBlacksmith";
         }
 
         #endregion

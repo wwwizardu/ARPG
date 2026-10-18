@@ -51,6 +51,13 @@ sources:
   - Docs/combat/SKILL_EFFECT_IDEAS.md
   - Assets/Scripts/Skill/Combat/ForcedMoveStarter.cs
   - Assets/Scripts/Skill/Combat/SkillEffectContext.cs
+  - Assets/Scripts/Common/System/System_Dash.cs
+  - Assets/Scripts/Common/Component/DashComponent.cs
+  - Assets/Scripts/Common/Component/SkillDashHitComponent.cs
+  - Assets/Scripts/Common/Component/ForcedMoveImmuneTag.cs
+  - Assets/Scripts/Common/Utility/HitboxMath.cs
+  - Assets/_BinaryData/TableData/SkillTable.bytes
+  - Assets/_BinaryData/TableData/AiTable.bytes
   - Assets/Scripts/Skill/Combat/SkillHitProcessor.cs
   - Assets/Scripts/Common/System/System_ForcedMove.cs
   - Assets/Scripts/Common/System/System_AreaEffect.cs
@@ -75,7 +82,7 @@ status: implemented-contract-active-validation-pending
 
 ## 한 줄 요약
 
-무기의 고정 기본 능력과 인스턴스별 고유 강화만 무기 캐시에 들어가며, 장비의 Implicit/Prefix/Postfix는 부위와 무관한 글로벌 Modifier로 합산된다. 미장착 인벤토리 장비의 Prefix/Postfix는 Tier 1 이상 제련소에서 랜덤 교체·추가할 수 있고, 스킬 공격 프로필은 변경된 옵션까지 태그에 맞춰 한 번 계산해 예상값과 실제 전투가 같은 값을 소비한다. [src: Docs/combat/combatSystem.md §장비 옵션 책임 경계·§스킬 공격 프로필 구성, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §0–§8, Assets/Scripts/Item/ItemEnchantmentService.cs, Assets/Scripts/Common/System/System_SkillAttackProfileCalculation.cs] 새로 만드는 장비의 Prefix/Postfix 티어(T1~T12)는 장비에 저장된 아이템 레벨로 정해진다(2026-10-11). [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §1, Assets/Scripts/Item/ItemLevelModTierRules.cs] 명중 시 넉백·당기기(2026-10-12 구현)도 이 페이지 뒤쪽에 정리한다. [src: Docs/combat/SKILL_DESIGN.md §6.10] 인벤토리 장비는 Shift를 누르고 있는 동안 현재 장착 아이템과 수치·옵션 차이를 비교하고, 비교 중 좌·우클릭으로 화면 왼쪽·오른쪽 칸에 바로 장착한다(2026-10-13 구현). [src: Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md, Assets/Scripts/UI/UICharacter.cs]
+무기의 고정 기본 능력과 인스턴스별 고유 강화만 무기 캐시에 들어가며, 장비의 Implicit/Prefix/Postfix는 부위와 무관한 글로벌 Modifier로 합산된다. 미장착 인벤토리 장비의 Prefix/Postfix는 Tier 1 이상 제련소에서 랜덤 교체·추가할 수 있고, 스킬 공격 프로필은 변경된 옵션까지 태그에 맞춰 한 번 계산해 예상값과 실제 전투가 같은 값을 소비한다. [src: Docs/combat/combatSystem.md §장비 옵션 책임 경계·§스킬 공격 프로필 구성, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §0–§8, Assets/Scripts/Item/ItemEnchantmentService.cs, Assets/Scripts/Common/System/System_SkillAttackProfileCalculation.cs] 새로 만드는 장비의 Prefix/Postfix 티어(T1~T12)는 장비에 저장된 아이템 레벨로 정해진다(2026-10-11). [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §1, Assets/Scripts/Item/ItemLevelModTierRules.cs] 명중 시 넉백·당기기(2026-10-12 구현)와 땅 위 직선 돌진·넉백 저항(2026-10-13 구현, 첫 콘텐츠는 멧돼지 돌진)도 이 페이지 뒤쪽에 정리한다. [src: Docs/combat/SKILL_DESIGN.md §6.10·§6.11] 인벤토리 장비는 Shift를 누르고 있는 동안 현재 장착 아이템과 수치·옵션 차이를 비교하고, 비교 중 좌·우클릭으로 화면 왼쪽·오른쪽 칸에 바로 장착한다(2026-10-13 구현). [src: Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md, Assets/Scripts/UI/UICharacter.cs]
 
 ## 문서 정본
 
@@ -249,14 +256,35 @@ FinalAttackSpeedPerSecond
 | 지점 공격(`Position`) | 커밋 지점 | 지점 바깥쪽 | 지점 |
 | 장판·폭발 | 장판 중심 | 중심 바깥쪽 | 중심 |
 | 발사체·연쇄 | 없음 | 날아온 방향 | 쏜 사람과 닿는 거리 |
+| 돌진(2026-10-13) | 돌진 경로(선) | 경로 옆쪽(대상이 선 쪽, 정가운데면 돌진 방향 기준 오른쪽) | 경로 선 위 |
 
-[src: Docs/combat/SKILL_DESIGN.md §6.10 방향 규칙, Assets/Scripts/Skill/Combat/ForcedMoveStarter.cs `TryStartFromHit`·`TryStartFromArea`]
+[src: Docs/combat/SKILL_DESIGN.md §6.10 방향 규칙, Assets/Scripts/Skill/Combat/ForcedMoveStarter.cs `TryStartFromHit`·`TryStartFromArea`·`ResolvePathSideDirection`]
 
-- **데이터**: 효과는 SkillEffect 행(`Knockback`/`Pull`, `OnHit`, Param1=거리·Param2=시간)으로 정의한다. 스킬에는 `SkillEffectIds`로, 장판에는 `AreaEffectTable.ForcedMoveEffectId`로 붙인다. 장판은 SkillEffect 트리거를 실행하지 않으므로 `System_AreaEffect`가 피해·버프 뒤에 직접 적용하고 발동 확률도 따로 판정한다. 등록 행은 1030 `Knockback_Short`·1031 `Pull_Short`(1칸·0.15초)이며, 현재 연결된 스킬·장판은 없다. [src: Docs/combat/SKILL_DESIGN.md §6.10 데이터, Assets/Scripts/Common/System/System_AreaEffect.cs, Assets/_BinaryData/TableData/SkillEffectTable.bytes, Assets/_BinaryData/TableData/AreaEffectTable.bytes]
+- **데이터**: 효과는 SkillEffect 행(`Knockback`/`Pull`, `OnHit`, Param1=거리·Param2=시간)으로 정의한다. 스킬에는 `SkillEffectIds`로, 장판에는 `AreaEffectTable.ForcedMoveEffectId`로 붙인다. 장판은 SkillEffect 트리거를 실행하지 않으므로 `System_AreaEffect`가 피해·버프 뒤에 직접 적용하고 발동 확률도 따로 판정한다. 등록 행은 1030 `Knockback_Short`·1031 `Pull_Short`(1칸·0.15초)이며 연결된 스킬·장판은 없다. 2026-10-13 추가한 1032 `Knockback_Charge`(밀기 2칸·0.2초)는 멧돼지 돌진(52)이 쓰는 첫 실사용 행이다. [src: Docs/combat/SKILL_DESIGN.md §6.10 데이터, Assets/Scripts/Common/System/System_AreaEffect.cs, Assets/_BinaryData/TableData/SkillEffectTable.bytes, Assets/_BinaryData/TableData/AreaEffectTable.bytes]
 - **적용 규칙**: 밀리는 대상의 스킬은 취소하지 않는다. 밀리는 중에 온 새 넉백은 무시한다. 회피, 이 타격으로 사망, 점프 중, 토템, 스스로 움직이지 않는 대상은 제외하고 막기는 밀린다. 몬스터 등급과 무관하며, 스킬 페이지 랜덤 풀에는 넣지 않는다(Tier 0). [src: Docs/combat/SKILL_DESIGN.md §6.10 적용 규칙, Assets/Scripts/Skill/Combat/ForcedMoveStarter.cs `CanStart`]
+- **넉백 저항(2026-10-13 사용자 결정)**: Skill 시트 AS열 `ForcedMoveImmune`이 참인 스킬은 실행(Process) 단계 동안만 시전자를 밀리지 않게 한다. 준비·후딜에는 밀린다. 실행 단계 진입 때 시전자에 `ForcedMoveImmuneTag`를 붙이고 후딜 진입·완료·취소·Reset에서 떼며, `CanStart`가 이 태그를 거른다. 저항 없이 돌진 중인 대상은 밀리는 순간 돌진이 끝난다. [src: Docs/combat/SKILL_DESIGN.md §6.10 적용 규칙 6~8, Assets/Scripts/Common/System/System_Skill.cs `OnEnterProcessState`·`RemoveForcedMoveImmunity`, Assets/Scripts/Skill/Combat/ForcedMoveStarter.cs `Attach`]
 - **런타임**: `ForcedMoveStarter`가 판정·방향·멈춤 거리를 계산해 `ForcedMoveComponent`를 붙인다. `System_ForcedMove`(Update 810)가 처음 빠르고 끝에 느린 곡선으로 진행하고, 이동량을 이동 반경 0.9배 이하로 나눠 축 분리 충돌을 적용한다. 넉백 중에는 `System_Render`가 자기 이동을 위치에 반영하지 않고, `System_Move`는 플레이어 입력 속도를 0으로·이동 상태를 Idle로 둔다. 점프 시작과 던전 출입 초기화가 넉백을 지우며, 세이브에는 저장하지 않는다. [src: Assets/Scripts/Common/System/System_ForcedMove.cs, Assets/Scripts/Common/System/System_Render.cs, Assets/Scripts/Common/System/System_Move.cs, Assets/Scripts/Common/System/System_Skill.cs `StartJump`, Assets/Scripts/Dungeon/DungeonManager.cs]
-- 적중 정보에 기준점 종류(`HitOriginKind`: None/Owner/Point)와 위치를 새로 실었다. `ImpactDirection`은 전파 탐색 축이라 이 용도로 덮어쓰지 않는다. [src: Assets/Scripts/Skill/Combat/SkillEffectContext.cs, Assets/Scripts/Skill/Combat/SkillHitProcessor.cs, Assets/Scripts/Common/System/System_Skill.cs `ProcessSkillHit`]
+- 적중 정보에 기준점 종류(`HitOriginKind`: None/Owner/Point, 2026-10-13 Path 추가)와 위치를 새로 실었다. `ImpactDirection`은 전파 탐색 축이라 이 용도로 덮어쓰지 않는다. 단 돌진 적중(`Path`)은 `ImpactDirection`이 곧 돌진 방향이라 그대로 싣는다. [src: Assets/Scripts/Skill/Combat/SkillEffectContext.cs, Assets/Scripts/Skill/Combat/SkillHitProcessor.cs, Assets/Scripts/Common/System/System_Skill.cs `ProcessSkillHit`·`SweepDashPath`]
 - **검증**: 2026-10-12 컴파일·표 다운로드와 PlayMode 측정을 통과했다. 측정 항목은 방향·거리·곡선, 벽 정지·미끄러짐·무관통, 중복 무시, 장판 밀기·당기기, 접촉 거리 멈춤, 예외, 자기 이동 차단이다. 측정은 검증용으로 잠시 붙인 연결로 했고 그 연결은 되돌렸다. [src: Docs/combat/SKILL_DESIGN.md §6.10 검증 결과]
+
+## 돌진 (Dash)
+
+2026-10-13 사용자 결정으로 구현했고 커밋 전이다. 점프처럼 뜨지 않고 땅 위를 직선으로 달려 지나가는 길의 적을 들이받는다. 점프는 높이 0.5 이상에서 무적이고 착지 지점에서만 판정하지만, 돌진은 무적이 없고 경로 전체에서 판정한다. 정본은 `SKILL_DESIGN.md` §6.11이다. [src: Docs/combat/SKILL_DESIGN.md §6.11, Assets/Scripts/Common/System/System_Jump.cs `InvincibleHeight`]
+
+| 단계 | 하는 일 | 쓰는 칸 |
+|---|---|---|
+| 준비(Start) | 조준 방식대로 대상 쪽으로 회전 속도까지만 방향을 돌리고 직선 띠로 예고한다. 이때는 밀리며, 밀리면 띠도 따라간다 | `StartTime` |
+| 돌진(Process) | 진입 순간 방향을 고정(`LaunchCommit`)하고 일정한 속도로 직진한다. 예고는 이때 사라진다 | `ProcessTime`(시간), `SkillTargetRange2`(거리) |
+| 후딜(End) | 멈춰 선다 | `EndTime` |
+
+[src: Docs/combat/SKILL_DESIGN.md §6.11 흐름]
+
+- **판정**: FixedUpdate마다 지난 판정 이후 돌진자 몸 중심이 지나온 선분과 적의 몸 원 거리를 잰다(`HitboxMath.SegmentVsCircle`, 반경 = 돌진자 `HitRadius` + `SkillTargetRange1` + 대상 `HitRadius`). 관통이라 멈추지 않고, 한 번의 돌진에서 같은 대상은 한 번만 맞는다(최대 16명). 맞은 대상은 경로 옆쪽으로 밀린다(넉백 절 표의 돌진 행). [src: Docs/combat/SKILL_DESIGN.md §6.11 판정, Assets/Scripts/Common/System/System_Skill.cs `SweepDashPath`, Assets/Scripts/Common/Utility/HitboxMath.cs]
+- **벽**: 막힌 칸에 닿으면 미끄러지지 않고 그 자리에서 멈추고, 남은 돌진 시간을 버리고 바로 후딜로 넘어간다. 넉백으로 밀리는 쪽의 미끄러짐은 그대로다. [src: Docs/combat/SKILL_DESIGN.md §6.11 벽, Assets/Scripts/Common/System/System_Dash.cs]
+- **사용 거리와 돌진 거리**: AI가 쓰기 시작하는 거리는 `SkillRangeMin`/`SkillRangeMax`, 실제로 달리는 거리는 `SkillTargetRange2`다. 돌진 거리를 더 길게 두면 대상을 지나쳐 뒤로 빠진다. `Attack` 태그면 시간은 공격 속도로 줄고 거리는 그대로다. [src: Docs/combat/SKILL_DESIGN.md §6.11]
+- **런타임**: 돌진자의 `DashComponent`를 `System_Dash`(Update 805)가 옮기고 벽에서 끝남을 표시한다. 스킬 엔티티의 `SkillDashHitComponent`(마지막 판정 위치·맞은 대상)로 `System_Skill`이 판정하고, 끝나면 마지막 구간을 판정한 뒤 후딜로 넘긴다. 돌진 중 `System_Render`·`System_Move`는 자기 이동을 반영하지 않는다. 예고는 직선 띠(`ProjectileLane`, 커밋 `SkillImpactKind.DashLaunch`)다. [src: Docs/combat/SKILL_DESIGN.md §6.11 런타임 구조, Docs/combat/MONSTER_ATTACK_TELEGRAPH_DESIGN.md §5.8, Assets/Scripts/Common/System/System_Dash.cs, Assets/Scripts/Skill/Telegraph/AttackTelegraphGeometryResolver.cs]
+- **멧돼지 돌진(Skill 52)**: 멧돼지 전용 AI 6번(평타 70 : 돌진 30)이 쓴다. 사용 거리 2~4칸, 0.6초 준비(조준 45°/초, 제자리 `Locked`) → 0.5초에 6칸 → 0.8초 후딜, 쿨타임 6초, 피해 평타의 1.5배, 넉백 저항 켬, 맞으면 옆으로 2칸(1032). 처음 제안한 "0.4초 5칸·사용 2~5칸"은 최대 거리에서 출발하면 대상 앞에서 멈춰 관통이 안 돼 바꿨다. [src: Docs/combat/SKILL_DESIGN.md §4 M4, Assets/_BinaryData/TableData/SkillTable.bytes, Assets/_BinaryData/TableData/AiTable.bytes] [추론: 수치 변경 사유는 2026-10-13 작업 보고 기준]
+- **검증**: 2026-10-13 컴파일·단일 표 다운로드·공격 예고 빌드 검증과 PlayMode 측정을 통과했다. 준비 중 45°/초 회전, 준비 중 밀려 빗나감(경로가 약 2.5칸 비켜 감), 0.5초 6.00칸 일정 속도, 대상당 1회·옆 2칸 넉백·관통, 돌진 중 밀기 무시, 벽 앞 즉시 멈춤(4.19칸·0.36초), 돌진 중 피해를 확인했다. 손 조작 체감은 확인하지 않았다. [src: Docs/combat/SKILL_DESIGN.md §6.11 검증 결과]
 
 ## 연결된 것들
 
@@ -267,7 +295,7 @@ FinalAttackSpeedPerSecond
 
 - 인벤토리 장비 비교 툴팁의 PlayMode 확인 결과는 원본 문서에 기록되지 않았다. 완료 기준 중 비교 중 장비 변경·UI 닫기 뒤 잔상, 비교만 열고 닫았을 때 저장 상태 불변, 스킬북·소비 아이템·장착 칸 호버의 안내 없음, `교체 시` 문구 줄바꿈(`<nobr>`) 화면은 아직 확인하지 않았다. 귀걸이는 아이템 테이블에 귀걸이 아이템이 없어 플레이로 확인할 수 없다. [src: Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md §구현 연결과 완료 기준, Assets/_BinaryData/TableData/ItemTable.bytes] [추론: 2026-10-13 작업 보고 기준]
 - 비교 묶음 배치와 옵션 비교 키는 처리 방향이 정해지지 않았다. 인벤토리가 화면 아래에 있어 세 장 묶음이 위로 자라면 장비 화면과 강조한 칸을 덮는다. 옵션 비교 키가 ModTableId + ModSlot뿐이라 같은 능력이 다른 행의 옵션이면 추가·제거 두 줄로 갈라진다. [src: Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md §장비 옵션, Assets/Scripts/Manager/TooltipManager.cs `PlaceElement`] [추론: 2026-10-13 PlayMode 화면 기준]
-- 넉백·당기기는 아직 어떤 스킬·장판에도 연결되지 않았다. 손 조작 확인(밀리는 몬스터의 공격 계속, 플레이어 조작 복귀, 던전 출입, 체감)은 콘텐츠에 붙일 때 한다. AreaEffect↔SkillEffect 참조 대조는 전체 다운로드에서만 돌고, 단일 다운로드의 잘못된 Id는 실행 시 오류 로그 후 무시된다. 등급별 배율, 벽 충돌 조건(`WallNearby`·`KnockbackTarget`), 갈고리형 당기기는 후속이다. [src: Docs/combat/SKILL_DESIGN.md §6.10, Assets/Scripts/Editor/DownloadTables.cs `ValidateForcedMoveSetup`, Docs/combat/SKILL_RUNE_DESIGN.md §5.2]
+- 넉백 콘텐츠는 멧돼지 돌진의 1032 하나뿐이고 1030·1031과 장판 연결은 없다. 손 조작 확인(밀리는 몬스터의 공격 계속, 플레이어 조작 복귀, 던전 출입, 체감)과 돌진의 실제 키보드 체감은 아직 하지 않았다. M3 Dash Strike(플레이어 돌진)는 공용 장치만 있고 콘텐츠가 없다. [src: Docs/combat/SKILL_DESIGN.md §4 M3·§6.11 검증 결과, Assets/_BinaryData/TableData/SkillEffectTable.bytes] AreaEffect↔SkillEffect 참조 대조는 전체 다운로드에서만 돌고, 단일 다운로드의 잘못된 Id는 실행 시 오류 로그 후 무시된다. 등급별 배율, 벽 충돌 조건(`WallNearby`·`KnockbackTarget`), 갈고리형 당기기는 후속이다. [src: Docs/combat/SKILL_DESIGN.md §6.10, Assets/Scripts/Editor/DownloadTables.cs `ValidateForcedMoveSetup`, Docs/combat/SKILL_RUNE_DESIGN.md §5.2]
 - 마법부여는 아이템 레벨 규칙과 연결되지 않아 결과가 T3 이하다. 아이템 레벨이 높은 장비의 옵션을 바꾸면 티어가 내려갈 수 있다. 아이템 레벨 연결 또는 재화별 Tier 규칙은 사용자가 따로 작업한다. [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §7, Docs/combat/WEAPON_PROGRESSION_DESIGN.md §적용 항과 Tier 접근 정책]
 - 던전 몬스터 레벨이 1, 보스가 5라서 던전 드랍 장비는 T1~T3이다. 던전 드랍 레벨도 사용자가 따로 작업한다. [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §7, Assets/_BinaryData/TableData/DungeonTable.bytes]
 - 아이템 레벨·옵션 티어의 플레이 확인(원거리 드랍 툴팁, 기본 아이템 툴팁에 줄 없음, 상점 매물의 마을 지역 레벨)은 남았다. 상점 매물·NPC 전리품은 같은 시드여도 이전과 다른 옵션이 나온다. [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §7·§8]

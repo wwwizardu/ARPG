@@ -10,6 +10,7 @@ namespace ARPG.Skill.Telegraph
         AreaActivation,
         ChannelImpact,
         LandingImpact,
+        DashLaunch,     // 돌진 출발(실행 단계 첫 틱). 피해는 돌진 중 경로 판정이 담당 (SKILL_DESIGN §6.11)
     }
 
     public enum SkillImpactExecutionMode : byte
@@ -32,6 +33,7 @@ namespace ARPG.Skill.Telegraph
         public readonly bool HasProjectile;
         public readonly bool HasAreaEffect;
         public readonly bool UsesLandingCommit;
+        public readonly bool UsesDash;
 
         public SkillImpactTimingInput(
             SkillImpactExecutionMode executionMode,
@@ -44,7 +46,8 @@ namespace ARPG.Skill.Telegraph
             bool hasDirectImpact,
             bool hasProjectile,
             bool hasAreaEffect,
-            bool usesLandingCommit)
+            bool usesLandingCommit,
+            bool usesDash = false)
         {
             ExecutionMode = executionMode;
             StartDuration = startDuration;
@@ -57,6 +60,7 @@ namespace ARPG.Skill.Telegraph
             HasProjectile = hasProjectile;
             HasAreaEffect = hasAreaEffect;
             UsesLandingCommit = usesLandingCommit;
+            UsesDash = usesDash;
         }
     }
 
@@ -118,6 +122,17 @@ namespace ARPG.Skill.Telegraph
             float processDuration = Mathf.Max(0f, input.ProcessDuration);
             float damageOffset = Mathf.Clamp01(input.DamageTime) * processDuration;
             int hitCount = Mathf.Max(1, input.HitCount);
+
+            // 돌진은 실행 단계 첫 틱에 출발하는 1회 커밋이다. 돌진 중 경로 판정은 이 스케줄을 쓰지 않는다
+            if (input.UsesDash == true && input.HasDirectImpact == true)
+            {
+                return new SkillImpactSchedule(
+                    SkillImpactKind.DashLaunch,
+                    input.StartDuration,
+                    0f,
+                    0f,
+                    1);
+            }
 
             if (input.UsesLandingCommit == true && input.HasDirectImpact == true)
             {

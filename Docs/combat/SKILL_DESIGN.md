@@ -23,7 +23,7 @@
 | 컬럼 | 의미 | 비고 |
 |---|---|---|
 | `Tags` (`SkillTag`) | Attack/Spell/Physics/Fire/Ice/Lightning/Poison/Melee/Ranged/AoE/Projectile/Buff/Debuff/Move | 비트 플래그. 속도 배율(Attack=공속, Spell=시전속도) 분기에 사용 |
-| `SkillType` | Melee/Range/Buff/Summon/Jump | `Jump`는 `JumpComponent` 자동 생성 분기 |
+| `SkillType` | Melee/Range/Buff/Summon/Jump/Dash | `Jump`는 `JumpComponent` 자동 생성 분기, `Dash`는 땅 위 직선 돌진(§6.11) |
 | `SubType` | None/SelfDestroy | 현재 SelfDestroy만 정의 |
 | `DamageType` | Physics/Fire/Ice/Lightning/Poison | `DamageCalculator`에서 속성 저항 적용 |
 
@@ -37,6 +37,7 @@
 | `BaseAttackSpeedMul` | Attack 스킬의 공속 보정(100=1.0x) |
 | `Cooltime` | 쿨다운(초). `FinalCooldownReduction`(최대 90%) 적용 |
 | `Mana` | 플레이어 시전 명령 승인 후 실제 실행 직전에 소모. 마나 부족 시 명령을 거절하며, AI는 소비하지 않음 |
+| `ForcedMoveImmune` | 참이면 이 스킬의 실행(Process) 단계 동안 시전자가 넉백·당기기를 받지 않음. 준비·후딜에는 밀림. 빈 칸은 거짓(§6.10, 2026-10-13) |
 
 ### 1.3 타겟/범위 컬럼
 
@@ -45,7 +46,7 @@
 | `SkillTargetType` | `Direction` / `Position` |
 | `SkillRangeMin` / `SkillRangeMax` | 시전 가능 사거리 (AI/UI용) |
 | `SkillTargetRange1` | 히트 판정 거리 (즉발) |
-| `SkillTargetRange2` | 히트 판정 **반각**(forward 기준 한쪽 각도, 전체 각 = 2배). 180 이상이면 원(각도 검사 생략), 그 외=부채꼴. 기존 행의 `360`도 원으로 동작한다 (2026-10-03 정정: `HitboxMath.PointInSector`의 `halfAngleDeg`) |
+| `SkillTargetRange2` | 히트 판정 **반각**(forward 기준 한쪽 각도, 전체 각 = 2배). 180 이상이면 원(각도 검사 생략), 그 외=부채꼴. 기존 행의 `360`도 원으로 동작한다 (2026-10-03 정정: `HitboxMath.PointInSector`의 `halfAngleDeg`). `SkillType=Dash`에서는 각도가 아니라 **돌진 거리(칸)**다(§6.11) |
 
 ### 1.4 데미지 컬럼
 
@@ -75,15 +76,15 @@
 | 카테고리 | 구현된 콘텐츠 | 런타임 준비 완료·콘텐츠 미등록 | 코드 보강 필요 |
 |---|---|---|---|
 | 근접 평타·광역 | A1·A3·A5 | A2·A4 | — |
-| 이동/돌진 | M1 | M2 | M3 라인 히트 |
+| 이동/돌진 | M1 | M2·M3 | — |
 | 원거리 발사체 | R2 | R1·R3 | R4 투사체 포물선 |
 | 원소 스펠 | S3·S4 | S1·S2·S5·S6 | — |
 | 버프/디버프 | — | — | B2 토글 자기 버프·B3 아군 범위 버프 |
 | 채널링/차징 | — | — | C1 라인 히트·C2 차지 해제 발동 |
 
-총 **22종 초안**(2026-10-03 S3 재포함) 중 현재 테이블과 런타임이 함께 존재하는 스킬은 A1·A3·A5·M1·R2·S3·S4의 7종이다. A2·A4·M2·R1·R3·S1·S2·S5·S6의 9종은 공용 메커니즘이 이미 있어 콘텐츠 데이터 작성이 주 작업이다. 실제 코드 보강이 필요한 스킬은 M3·R4·B2·B3·C1·C2의 6종이다. 한 캐릭터/직업이 모두 가지는 것은 아니며, 상위 시스템(스킬 트리/장비 그란트 등)이 슬롯에 매핑한다.
+총 **22종 초안**(2026-10-03 S3 재포함) 중 현재 테이블과 런타임이 함께 존재하는 스킬은 A1·A3·A5·M1·R2·S3·S4의 7종이다. A2·A4·M2·M3·R1·R3·S1·S2·S5·S6의 10종은 공용 메커니즘이 이미 있어 콘텐츠 데이터 작성이 주 작업이다(M3는 2026-10-13 돌진 장치 §6.11로 이동). 실제 코드 보강이 필요한 스킬은 R4·B2·B3·C1·C2의 5종이다. 한 캐릭터/직업이 모두 가지는 것은 아니며, 상위 시스템(스킬 트리/장비 그란트 등)이 슬롯에 매핑한다.
 
-`SkillTable`에는 이 카탈로그 외에도 몬스터 전용 `StrikeMonster`, `GoblinFirebolt`과 추가 스킬 `FireRing`이 있다. 이들은 카탈로그 구현 수에 포함하지 않는다.
+`SkillTable`에는 이 카탈로그 외에도 몬스터 전용 `StrikeMonster`, `GoblinFirebolt`, `BoarCharge`(52, 멧돼지 돌진 §4 M4)와 추가 스킬 `FireRing`이 있다. 이들은 카탈로그 구현 수에 포함하지 않는다.
 
 > 2026-10-03 확인: 몬스터 전용 `SwampToadPoisonSpit`(SkillId 205)은 2026-09-24 커밋 "연쇄 스킬 추가"(c87d5de)에서 `SkillTable.bytes`에서 빠졌다. 그런데 `AiTable` Id 4(SwampToad, `MonsterTable` 1010의 AI)는 아직 `SkillId1=205`를 참조한다. 의도한 삭제인지 확인되지 않았으며, 시트 행을 복구하든 AI 참조를 바꾸든 데이터 정리가 필요하다. 이 상태에서는 `AttackTelegraphBuildValidator`가 "AI 4의 SkillId 205가 SkillTable에 없습니다"로 빌드를 중단했다(메뉴 실행으로 확인). → **2026-10-03 복구**: 삭제 직전 커밋의 205번 행을 시트 `Skill` 탭에 다시 넣고 다운로드했다. 값은 그대로이고 `MoveSpeedWhileUsingMul`만 같은 커밋의 일괄 변경(30 → 75)에 맞췄다. 빌드 검증기 통과.
 
@@ -140,6 +141,7 @@
 - `SkillType`: Jump, `SkillTargetType`: Direction, `SkillRangeMax`: 4.0
 - 현행 데이터: `ArcHeight=0.8`, `ProcessTime=0.6`, `Cooltime=2`
 - 특징: 회피용. `JumpComponent.InvincibleHeight` 이상에서 무적.
+- 몬스터용 SkillId=6 (AI 1번 슬롯 2, 2026-10-15 변경): `SkillTargetType=Position`(명령 시점 대상 위치에 착지, 최대 4칸), `SkillRangeMin=1.5`(붙어 있으면 쓰지 않음), `EndTime=1`, `MovementMode=LockedThroughEnd`(후딜 1초 동안 완전히 정지). 4칸 고정 도약이 대상을 지나쳐 착지한 뒤 바로 걸어와 평타를 잇던 어색함을 없앤다.
 
 ### M2. Leap Slam — 위치 도약 + 착지 광역 *(런타임 준비 완료, 콘텐츠 미등록)*
 - `SkillType`: Jump, `SkillTargetType`: Position
@@ -148,10 +150,16 @@
 - `Cooltime`: 6
 - 현행: `Position` 중심 원형 판정, 점프 착지 위치 보정, `SkillLandingCommitComponent`를 통한 착지 시점 피해 커밋이 구현되어 있다. `SkillTable` 행과 착지 연출만 추가하면 된다.
 
-### M3. Dash Strike — 방향 돌진 + 경로 적 타격 *(코드 보강 필요: §6.3)*
-- `SkillType`: Jump (혹은 Move 전용 시스템), `SkillTargetType`: Direction
-- `ArcHeight`: 0.1 (지면 부근), `SkillRangeMax`: 3.0
-- 경로상 적 1회 타격. 새로운 "라인 히트박스" 분기 필요(§6.3).
+### M3. Dash Strike — 방향 돌진 + 경로 적 타격 *(런타임 준비 완료: §6.11, 콘텐츠 미등록)*
+- `SkillType`: Dash, `SkillTargetType`: Direction, `SkillTargetRange2`: 3.0 (돌진 거리)
+- 경로상 적을 한 번씩 타격(관통). 공용 돌진 장치(§6.11)가 2026-10-13 구현돼 `SkillTable` 행과 연출만 추가하면 된다.
+- 플레이어 사용 시 확인할 것: 돌진 중 플레이어 이동 입력은 무시되고(점프와 같음), 넉백 저항(`ForcedMoveImmune`) 여부를 정해야 한다.
+
+### M4. Boar Charge — 멧돼지 돌진 *(구현됨, SkillId=52, 몬스터 전용, 2026-10-13)*
+- 멧돼지(`MonsterTable` 1016) 전용 AI 6번이 평타(2)와 함께 쓴다.
+- 0.6초 준비 동안 대상 쪽으로 초당 45°까지만 방향을 돌리고, 준비가 끝나는 순간 방향을 고정해 0.5초에 6칸을 일정한 속도로 직진한다. 사용 거리는 2~4칸이라 대상 뒤로 2칸 이상 지나간다.
+- 지나가는 길의 적은 모두 한 번씩 평타의 1.5배 피해를 받고 돌진 경로 옆으로 2칸 밀려난다(효과 1032). 멧돼지는 돌진 중에도 맞지만 넉백 저항이 켜져 있어 밀리지 않는다. 준비 중에는 밀리며, 밀리면 예고 띠도 함께 움직여 빗나간다.
+- 벽에 닿으면 미끄러지지 않고 그 자리에서 멈춘 뒤 바로 후딜(0.8초)로 넘어간다. 쿨타임 6초.
 
 ---
 
@@ -294,7 +302,8 @@
 ### §6.3 Position/라인 즉발 히트 분기 ◐ *(Position·착지 완료, 라인 히트 남음)*
 - 완료: `GetEntitiesInSkillRange`가 `SkillTargetType.Position`을 `TargetPosition` 중심 원형으로 판정한다. 이 경로는 S5 Lightning Strike를 데이터만으로 표현할 수 있다.
 - 완료: 비채널링 Jump 직접 피해는 `System_Jump`가 보정된 실제 착지 위치를 `SkillLandingCommitComponent`로 전달하고, 다음 스킬 FixedUpdate에서 한 번 커밋한다. M2 Leap Slam의 공용 런타임 의존성은 해결됐다.
-- 남음: M3 Dash Strike와 C1 Beam Cast에 필요한 선분/캡슐 형태의 라인 히트. 현재 `Direction`과 `Position` 모두 `HitboxMath.CircleVsSector`만 사용한다.
+- 완료(2026-10-13): 움직이는 몸의 경로 판정. 돌진(§6.11)은 지난 판정 이후 지나온 선분과 대상 원의 거리로 판정한다(`HitboxMath.SegmentVsCircle`). M3 Dash Strike의 의존성은 해결됐다.
+- 남음: C1 Beam Cast에 필요한 정지 라인 히트(시전자에서 뻗는 빔). 일반 `Direction`과 `Position` 즉발 판정은 여전히 `HitboxMath.CircleVsSector`만 사용한다.
 
 ### §6.4 발사체 다중/관통/포물선 확장 ◐ *(다중·관통 완료, 포물선 남음)*
 - ~~다중 발사~~: `SkillTable.BaseProjectileCount` 컬럼 + `Stat.ProjectileCountAdd` 합산으로 처리 (R2 완료). System_Skill의 ProjectileId 분기가 N발 부채꼴 발사로 확장. **임의의 발사체 스킬에 자동 적용** — 장비 mod/버프가 +N 부여하면 R1·R2·S1 등 모든 스킬이 자동으로 다중 발사. ProjectileTable에는 컬럼 추가 없음, SkillEffect 행도 필요 없음.
@@ -407,6 +416,7 @@ SkillEffectTable                         // 새 테이블
 | 지점 공격 (`Position` 직접 타격) | 커밋된 지정 지점 | 지점 바깥쪽 | 지점 쪽, 지점 |
 | 장판·폭발 (`AreaEffect`) | 장판 중심 | 중심 바깥쪽 | 중심 쪽, 중심 |
 | 발사체·연쇄 | 없음 | 날아온 방향(`ImpactDirection`) | 쏜 사람(Owner) 쪽, 두 몸이 닿는 거리 |
+| 돌진 (`Dash`, §6.11, 2026-10-13) | 돌진 경로(선) | 경로 옆쪽(대상이 서 있는 쪽). 정가운데면 돌진 방향 기준 오른쪽 | 경로 선 쪽, 선 위 |
 
 - 직접·지점 공격의 기준점은 `System_Skill.ProcessSkillHit`가 이미 계산하는 `commitPosition`이다(Direction=시전자 위치, Position=지정 지점). 다단 타격은 타격마다 다시 계산된 값을 쓴다.
 - "두 몸이 닿는 거리" = 공격자 `HitRadius` + 대상 `HitRadius`. 이미 그 안쪽(장판은 중심)이면 움직이지 않는다. 설정 거리는 상한이며 기준점을 넘어가지 않는다.
@@ -419,7 +429,7 @@ SkillEffectTable                         // 새 테이블
 - 스킬에 붙이기: `SkillTable.SkillEffectIds`에 행 Id를 넣는다. 직접 타격·발사체·연쇄는 모두 `SkillHitProcessor` → `OnHit`을 지나므로 별도 분기가 없다.
 - 장판·폭발에 붙이기: `AreaEffectTable.ForcedMoveEffectId`(새 열, `SkillEffect` 행 Id, 0=없음). 장판은 `SkillEffect` 트리거를 실행하지 않으므로 `System_AreaEffect`가 대상마다 피해·버프 뒤에 직접 적용한다. 반복 장판은 틱마다, 단발 폭발은 1회 적용한다.
 - 다운로드 검사: `Knockback`/`Pull` 행은 `Trigger=OnHit`·`Kind=EffectAction`·`Param1>0`·`Param2>0`이어야 한다. `ForcedMoveEffectId`가 가리키는 행은 `Knockback`/`Pull`이어야 하며, 다운로드 시점에 대조할 수 없으면 실행 시 오류 로그 후 무시한다.
-- 등록 행: 1030 `Knockback_Short`(밀기 1칸·0.15초), 1031 `Pull_Short`(당기기 최대 1칸·0.15초). 현재 이 두 행을 쓰는 스킬·장판은 없다. 검증용으로 Strike·불의 고리·독구름에 연결했다가 같은 날 사용자 결정으로 되돌렸다. 실제 콘텐츠에 붙이는 것은 후속 작업이다.
+- 등록 행: 1030 `Knockback_Short`(밀기 1칸·0.15초), 1031 `Pull_Short`(당기기 최대 1칸·0.15초). 현재 이 두 행을 쓰는 스킬·장판은 없다. 검증용으로 Strike·불의 고리·독구름에 연결했다가 같은 날 사용자 결정으로 되돌렸다. 실제 콘텐츠에 붙이는 것은 후속 작업이다. 2026-10-13 추가한 1032 `Knockback_Charge`(밀기 2칸·0.2초)는 멧돼지 돌진(52)이 쓰는 첫 실사용 행이다.
 
 **적용 규칙 (2026-10-12 확정)**:
 1. 밀리는 동안 대상의 스킬·공격 준비는 취소하지 않는다. 행동 중단은 기절의 역할로 남긴다.
@@ -427,15 +437,18 @@ SkillEffectTable                         // 새 테이블
 3. 발사체·연쇄의 밀기는 날아온 방향, 당기기는 쏜 사람 쪽이다.
 4. 몬스터 등급과 무관하게 모두 같은 거리로 밀린다. 등급별 배율은 후속(`MonsterArchetypeTable` 열 후보)이다.
 5. 스킬 페이지(룬)로 드랍하지 않는다.
-6. 적용하지 않는 경우: 회피(`OnHit`은 회피해도 실행되므로 효과 쪽에서 `DamageResult.IsEvaded`를 확인), 이 타격으로 사망(HP 0), 점프 중(`JumpComponent`), 토템(`TotemTag`), 스스로 움직이지 않는 대상(`VelocityComponent` 없음). 막기(Block)는 밀린다.
+6. 적용하지 않는 경우: 회피(`OnHit`은 회피해도 실행되므로 효과 쪽에서 `DamageResult.IsEvaded`를 확인), 이 타격으로 사망(HP 0), 점프 중(`JumpComponent`), 토템(`TotemTag`), 스스로 움직이지 않는 대상(`VelocityComponent` 없음), **넉백 저항이 켜진 스킬의 실행 단계에 있는 대상**(`ForcedMoveImmuneTag`, 2026-10-13). 막기(Block)는 밀린다.
+7. 넉백 저항(2026-10-13 사용자 결정): `SkillTable.ForcedMoveImmune`(AS열)이 참인 스킬은 실행(Process) 단계 동안만 시전자를 밀리지 않게 한다. 준비(Start)와 후딜(End)에는 밀린다. 실행 단계에 들어설 때 이미 밀리는 중이었다면 그 밀림은 그대로 끝까지 진행된다(돌진은 예외로 밀림을 끝내고 출발한다).
+8. 돌진 중인 대상(`DashComponent`): 넉백 저항이 켜져 있으면 7번에 따라 밀리지 않는다. 꺼져 있으면 밀리면서 돌진이 그 자리에서 끝난다(돌진과 넉백이 동시에 위치를 움직이지 않도록).
 
 **런타임 구조**:
 - `ForcedMoveComponent`(대상 엔티티): 방향, 총 거리(당기기는 멈춤 거리로 잘라 둔 값), 시간, 경과 시간, 지금까지 이동한 거리. 세이브에 저장하지 않는다. `ComponentManager._poolSizes` 128.
 - `ForcedMoveStarter`(정적·상태 없음): 적용 판정, 방향, 멈춤 거리를 계산해 컴포넌트를 붙인다. `SkillEffectExecutor`와 `System_AreaEffect`가 같이 쓴다.
 - `System_ForcedMove`(`IUpdateSystem`, Priority 810 — `System_Jump` 800 뒤, `System_Render` 1000 전): 처음 빠르고 끝에 느린 곡선으로 진행한다. 한 프레임 이동량을 `MoveRadius × 0.9` 이하 조각으로 나눠 `CollisionUtil.ResolveAxisSeparated`로 처리해 벽을 따라 미끄러지고 프레임이 떨어져도 벽을 뚫지 않는다. 끝나면 컴포넌트를 제거하고, `OnReset`에서 모두 제거한다.
-- 적중 정보: `SkillHitRequest`·`SkillEffectContext`에 기준점(`HitOrigin`, `HasHitOrigin`)을 추가한다. `ImpactDirection`은 전파의 첫 탐색 축으로 쓰이므로 기준점 용도로 덮어쓰지 않는다.
+- 적중 정보: `SkillHitRequest`·`SkillEffectContext`에 기준점(`HitOrigin`, `HasHitOrigin`)을 추가한다. `ImpactDirection`은 전파의 첫 탐색 축으로 쓰이므로 기준점 용도로 덮어쓰지 않는다. 돌진 적중은 기준점 종류 `Path`(2026-10-13)를 쓰며, `HitOrigin`은 부딪힌 순간의 돌진자 발 위치, `ImpactDirection`은 돌진 방향이다. 밀기 방향은 `대상 − HitOrigin`에서 돌진 방향 성분을 뺀 옆 방향이다.
 - 자기 이동 차단: `System_Render`의 속도→위치 반영에서 `ForcedMoveComponent` 대상을 건너뛴다(플레이어·AI·NPC 공통 한 곳). `System_Move`는 점프 중과 같이 플레이어 입력 속도를 0으로 두고, 이동 상태를 `Idle`로 둔다(AI는 넉백 중에도 추적 방향을 쓰므로 걷기 애니메이션 방지).
-- 정리: 점프 시작(`System_Skill.StartJump`) 때 넉백을 끝낸다(점프 우선). 던전 출입 때 `DungeonManager`가 `JumpComponent`를 지우는 곳에서 함께 지운다.
+- 정리: 점프 시작(`System_Skill.StartJump`)과 돌진 시작 때 넉백을 끝낸다(점프·돌진 우선). 던전 출입 때 `DungeonManager`가 `JumpComponent`를 지우는 곳에서 함께 지운다.
+- 넉백 저항: 실행 단계 진입 때 시전자에게 `ForcedMoveImmuneTag`를 붙이고 후딜 진입·완료·취소·Reset에서 뗀다. `ForcedMoveStarter.CanStart`가 이 태그를 거른다.
 
 **Update에서 처리하는 이유**: 자기 이동은 `System_Render`(Update)에서 위치에 반영되고 보간이 없어서, FixedUpdate에서만 움직이면 화면에서 끊겨 보인다(`System_Jump`도 같은 이유로 Update). 끝 위치를 정해 두고 보간하는 방식은 벽을 따라 미끄러지지 못한다. 이 결정으로 `SKILL_EFFECT_IDEAS.md` #6의 초안 메모(FixedUpdate 110~120, 끝 위치 보간)를 대체한다.
 
@@ -455,6 +468,59 @@ SkillEffectTable                         // 새 테이블
 - 시간을 흐르게 한 상태에서도 확인했다. 몬스터에 초속 3의 자기 이동 속도가 걸려 있어도 그 방향으로는 움직이지 않았고, 넉백 방향으로만 이동했으며 상태는 `Idle`이었다. 점프 스킬을 가진 몬스터는 점프를 시작하자 넉백이 끝났다.
 - ⑦ 밀리는 몬스터의 공격 계속 진행, ⑧ 플레이어 조작 복귀, ⑨ 던전 출입, 손으로 공격할 때의 체감은 실제 조작으로 확인하지 않았다.
 
+### §6.11 돌진 (Dash) ✅ *(2026-10-13 사용자 결정·구현)*
+**목적**: 점프처럼 공중에 뜨지 않고 땅 위를 직선으로 달려, 지나가는 길의 적을 들이받는다. 점프는 높이 0.5 이상에서 무적이고 착지 지점에서만 판정하지만, 돌진은 무적이 없고 경로 전체에서 판정한다. 첫 콘텐츠는 멧돼지 돌진(§4 M4)이다.
+
+**흐름**
+
+| 단계 | 하는 일 | 쓰는 칸 |
+|---|---|---|
+| 준비(Start) | 조준 방식(`AimTrackingMode`)에 따라 대상 쪽으로 `AimTurnSpeedDegPerSec`까지만 방향을 돌린다. 바닥에 직선 띠로 예고한다. 이 단계에서는 밀릴 수 있고, 밀리면 띠도 함께 움직인다 | `StartTime` |
+| 돌진(Process) | 진입 순간 방향을 고정(`LaunchCommit`)하고 일정한 속도로 직진한다. 예고 띠는 이때 사라진다 | `ProcessTime`(돌진 시간), `SkillTargetRange2`(돌진 거리) |
+| 후딜(End) | 멈춰 선다 | `EndTime` |
+
+- 몬스터도 표의 조준 방식과 회전 속도를 따른다(2026-10-13 개정, [POE2_CURSOR_TRACKING_PLAN.md](POE2_CURSOR_TRACKING_PLAN.md) §15). 몬스터의 추적 대상은 AI가 노리는 대상이다.
+- 사용 거리(AI가 쓰기 시작하는 거리)는 기존 의미대로 `SkillRangeMin`/`SkillRangeMax`다. 돌진 거리를 사용 거리보다 길게 두면 대상을 지나쳐 뒤로 빠져나간다.
+- `Attack` 태그면 준비·돌진·후딜 시간이 다른 공격처럼 공격 속도로 함께 줄어든다. 돌진 거리는 그대로라 속도가 빨라진다.
+
+**판정**
+- 돌진 중 FixedUpdate마다, 지난 판정 이후 돌진자 몸 중심(발 위치 + `HitOffset`)이 지나온 선분과 적의 몸 원 사이 거리를 잰다. 거리가 `돌진자 HitRadius + SkillTargetRange1 + 대상 HitRadius` 이하면 맞는다. 선분으로 재므로 프레임이 떨어져도 건너뛰지 않는다.
+- **관통**: 부딪혀도 멈추지 않는다. 한 번의 돌진에서 같은 대상은 한 번만 맞는다(최대 16명).
+- 적 판별은 일반 직접 공격과 같다(진영이 적대인 대상만). 회피·막기·점프 무적은 일반 타격과 같이 피해 계산이 처리한다. 점프로 피한 대상도 "이미 맞은 대상"으로 기록되어 같은 돌진에 다시 맞지 않는다.
+- 피해와 효과는 `SkillHitProcessor`를 그대로 거친다. `OnSkillCommit`은 돌진 출발 때 한 번 발화하며, 전파 등으로 기본 전달이 억제되면 돌진은 하되 아무도 맞히지 않는다.
+- 맞은 대상의 넉백 방향은 §6.10 표의 돌진 행(경로 옆쪽)을 따른다.
+
+**벽** (2026-10-13 사용자 결정): 돌진이 막힌 칸에 닿으면 미끄러지지 않고 그 자리에서 멈춘다. 남은 돌진 시간은 버리고 바로 후딜로 넘어간다. 넉백으로 밀리는 쪽의 벽 처리(미끄러짐)는 바꾸지 않는다.
+
+**넉백 저항**: 돌진 스킬은 보통 `ForcedMoveImmune`을 켠다. 켜면 돌진 중 밀리지 않고, 끄면 밀리는 순간 돌진이 끝난다(§6.10 적용 규칙 7·8). 준비 중에는 저항과 무관하게 밀린다.
+
+**예시 (멧돼지 돌진, 플레이어가 3칸 앞)**: 멧돼지가 0.6초 동안 플레이어 쪽 6칸짜리 띠를 띄우고 초당 45°씩 방향을 맞춘다. 플레이어가 그 사이 멧돼지를 옆으로 밀면 띠가 같이 옮겨져 빗나가고, 남은 준비 시간에 다 따라오지 못한 채 띠가 고정된다. 고정된 뒤 0.5초 동안 6칸을 달리며, 띠 안에 있던 플레이어는 피해를 받고 옆으로 2칸 밀려난다. 멧돼지는 플레이어 뒤로 3칸 더 달린 뒤 멈춰 0.8초 동안 쉰다. 도중에 바위에 닿으면 바로 멈춰 쉰다.
+
+**데이터 제약 (다운로드 검사)**: `SkillType=Dash`는 `SkillTargetType=Direction`, `SkillTargetRange2>0`, `ProcessTime>0`, `ProjectileId=0`, `AreaEffectId=0`, `ExecutionType`은 `Single` 또는 `MultiHit`이어야 한다(`HitCount`·`DamageTime`·`HitInterval`은 쓰지 않는다). 준비 중 자기 이동을 막으려면 `MovementMode=Locked`를 쓴다.
+
+**런타임 구조**
+- `DashComponent`(돌진자): 스킬 엔티티 Id, 방향, 거리, 시간, 경과, 이동한 거리, 끝남 여부. 세이브에 저장하지 않는다.
+- `System_Dash`(`IUpdateSystem`, Priority 805 — 점프 800 뒤·넉백 810 전): 일정한 속도로 옮기고 `CollisionUtil.ClipTrajectory`로 벽 앞에서 멈춘다. 벽에 닿거나 거리를 다 가면 끝남으로 표시만 하고, 제거는 스킬 시스템이 마지막 판정 뒤에 한다.
+- `SkillDashHitComponent`(스킬 엔티티): 마지막으로 판정한 몸 중심 위치와 이미 맞은 대상 목록.
+- `System_Skill`: 실행 단계 진입 때 방향 고정·넉백 정리·두 컴포넌트 생성·예고 제거, 실행 중 매 FixedUpdate 경로 판정, 돌진이 끝나면 마지막 구간을 판정하고 후딜로 넘긴다. 실행 단계의 시간 만료로 끝내지 않고 돌진 종료가 끝을 정한다. 취소·Reset 때 두 컴포넌트를 지운다.
+- 자기 이동 차단: `System_Render`가 돌진 중 속도를 위치에 반영하지 않고, `System_Move`는 플레이어 입력 속도를 0으로 둔다(넉백과 같은 자리).
+- 예고: 직선 띠(`ProjectileLane`, 시전자 몸 중심에서 시작, 길이=돌진 거리, 폭=2×(돌진자 `HitRadius`+`SkillTargetRange1`+플레이어 `HitRadius`)). 커밋 시점은 돌진 출발(`SkillImpactKind.DashLaunch`).
+- 정리: 던전 출입 때 `DungeonManager`가 점프·넉백과 함께 지운다.
+
+**검증 (구현 완료 후 1회)**: 런타임·에디터 컴파일, 표 다운로드 검사, 공격 예고 빌드 검증 메뉴, PlayMode로 ① 준비 중 조준 회전 속도 ② 준비 중 밀림과 띠 이동 ③ 돌진 거리·일정 속도 ④ 관통·대상당 1회 ⑤ 맞은 대상의 옆 넉백 ⑥ 돌진 중 넉백 무시 ⑦ 벽 즉시 멈춤과 후딜 ⑧ 돌진 중 멈춘 멧돼지의 피해.
+
+**검증 결과 (2026-10-13)**: 컴파일·단일 표 다운로드(Skill·SkillEffect·AI·Monster) 오류 없음, `ARPG/Validation/Attack Telegraph Build Contract` 통과(돌진 스케줄·띠 계약 추가). PlayMode에서 실제 AI 멧돼지를 플레이어 옆 3칸에 만들어 프레임마다 기록했다.
+- ① 플레이어를 옆으로 옮기자 조준이 고정 틱(0.02초)마다 0.9°씩, 즉 초당 45°로 돌았고 예고 띠 방향도 같은 값이었다.
+- ② 준비 0.32초에 멧돼지를 밀자 넉백이 걸려 2칸 밀렸다(저항 없음). 원하는 방향이 53°로 벌어졌지만 출발 때 조준은 22.5°에서 고정돼, 경로가 플레이어에게서 약 2.5칸 떨어져 지나갔다.
+- ③ 0.5초에 6.00칸을 일정한 속도(초당 약 12칸)로 이동했고, 출발 순간 예고가 사라졌다.
+- ④⑤ 플레이어는 한 번만 맞았고, 경로 정가운데라 돌진 방향 기준 오른쪽으로 2칸 밀렸다. 멧돼지는 멈추지 않고 지나갔다.
+- ⑥ 돌진 중에는 넉백 저항 표시가 붙어 밀기가 무시됐고, 후딜 진입과 함께 표시가 떨어졌다.
+- ⑦ 벽 앞(x −137.41, 벽면 −137, 이동 반경 0.4)에서 미끄러지지 않고 멈췄고, 4.19칸·0.36초 만에 후딜로 넘어갔다.
+- ⑧ 돌진 중 멧돼지가 플레이어 평타에 맞아 HP 100→55가 됐다(무적 없음).
+- 같은 세션에서 몬스터 평타(2번)가 초당 90°로 대상을 따라 돌고 타격 순간 확정되는 것, AI 1번 몬스터의 두 번째 스킬이 6번인 것을 확인했다.
+- 함정: Skill 시트 다운로드는 `DownloadTables`의 등록 범위(`range=A:AR`)로 잘려서 AS열이 처음엔 빠졌다. 등록 범위를 `A:AS`로 늘렸다. 시트 격자도 44칸이라 열을 직접 추가해야 했다. 열을 더 늘릴 때는 두 곳 모두 고친다.
+- 손 조작 확인(실제 키보드로 밀어 피하기, 체감)은 하지 않았다.
+
 ---
 
 ## 10. 스킬 ID 예약 (제안)
@@ -464,7 +530,7 @@ SkillEffectTable                         // 새 테이블
 | 대역 | 카테고리 | 예약 슬롯 |
 |---|---|---|
 | 1 ~ 49 | 근접 (A) | A1=1 (기존), A2=10, A3=11, A4=12, A5=13 |
-| 50 ~ 99 | 이동 (M) | M1=5 (기존, QuickHop), M2=50, M3=51 |
+| 50 ~ 99 | 이동 (M) | M1=5 (기존, QuickHop), M2=50, M3=51, M4=52 (기존, BoarCharge 몬스터 전용) |
 | 100 ~ 199 | 원거리 (R) | R1=100, R2=101, R3=102, R4=103 |
 | 200 ~ 299 | 스펠 (S) | S1=200, S2=201, S3=202 (기존, ChainLightning), S4=203 (기존), S5/S6=미정 |
 | 300 ~ 399 | 버프 (B) | B2=301, B3=302 |
@@ -480,8 +546,8 @@ ProjectileId 대역도 동일 규칙 권장: 화살 100번대, 마법 200번대.
 
 현행 공용 런타임을 재사용하고, 필요한 새 메커니즘을 묶어 추가하는 순서다.
 
-1. **데이터 전용 스킬 추가**: A2 Cleave, A4 Heavy Slam, M2 Leap Slam, R1 Power Shot, R3 Piercing Bolt, S1 Fireball, S2 Ice Nova, S5 Lightning Strike, S6 Frost Bolt. 스킬·투사체·효과·프리팹을 연결하고 S5/S6에는 충돌하지 않는 새 ID를 배정한다.
-2. **라인 히트 공용화**: 선분/캡슐 판정을 하나의 런타임 경로로 추가한 뒤 M3 Dash Strike와 C1 Beam Cast가 공유한다.
+1. **데이터 전용 스킬 추가**: A2 Cleave, A4 Heavy Slam, M2 Leap Slam, M3 Dash Strike, R1 Power Shot, R3 Piercing Bolt, S1 Fireball, S2 Ice Nova, S5 Lightning Strike, S6 Frost Bolt. 스킬·투사체·효과·프리팹을 연결하고 S5/S6에는 충돌하지 않는 새 ID를 배정한다.
+2. **정지 라인 히트**: 돌진의 이동 경로 판정(§6.11)은 2026-10-13 구현됐다. C1 Beam Cast에 필요한, 시전자에서 뻗는 정지 선분 판정이 남았다(`HitboxMath.SegmentVsCircle` 재사용 가능).
 3. **포물선 투사체**: Projectile 런타임에 높이 진행과 충돌 정책을 추가해 R4 Arc Shot을 구현한다.
 4. **자기·아군 버프**: 자기 자신과 동일 진영 범위 선택, 적용·제거 수명주기를 추가해 B2 Iron Skin과 B3 Battle Roar를 구현한다. B2는 토글 OFF와 지속 마나 소비까지 포함한다.
 5. **차지 해제 발동**: `ProcessChargeSkill`에 입력 해제 감지, 최소/최대 차지 비율, 피해 스케일을 추가해 C2 Charged Bolt를 구현한다.
@@ -505,3 +571,4 @@ ProjectileId 대역도 동일 규칙 권장: 화살 100번대, 마법 200번대.
 - 2026-10-03: 코드·바이너리 테이블 재대조. S3 Chain Lightning을 구현됨으로 카탈로그에 다시 포함했다(SkillId 202 / SkillEffect 1020 / SkillPropagation 1, 2026-09-24 c87d5de) — 22종 중 구현 7종. §6.8에 `SkillTrigger.OnSkillCommit`(9종), `SkillPropagation` EffectAction, 효과 1020, `SkillEffectContext` 전파 필드를 반영했다. §1.3 `SkillTargetRange2`를 반각(180 이상=원)으로 정정했다. `SwampToadPoisonSpit`(205)이 `SkillTable`에서 빠졌는데 `AiTable` Id 4가 아직 참조해 빌드가 막히던 문제를 §2에 기록하고, 같은 날 205번 행을 복구했다. R2 분산 각도 상수의 정본 위치를 갱신했다.
 - 2026-10-12: §6.10 넉백·당기기(강제 이동) 설계 확정, 미구현. 판정 범위 중심을 기준점으로 밀거나 당기고, `SkillEffect` 행(`Knockback`/`Pull`)과 `AreaEffectTable.ForcedMoveEffectId`로 붙인다. §6.8의 `KnockbackOnHit` 표기를 갱신하고 `SKILL_EFFECT_IDEAS.md` #6 초안 메모를 대체했다.
 - 2026-10-12 (rev 2): §6.10 구현. `ForcedMoveComponent`·`ForcedMoveStarter`·`System_ForcedMove`(Update 810), SkillEffect 1030/1031, `AreaEffectTable.ForcedMoveEffectId`(시트 P열). 검증용 연결(Strike·불의 고리·독구름)은 측정 뒤 되돌려 현재 연결된 콘텐츠는 없다. PlayMode 측정 결과를 §6.10에 기록했고, 손으로 조작하는 확인은 콘텐츠에 붙일 때 한다.
+- 2026-10-13: §6.11 돌진(`SkillType.Dash`) 신설·구현. 경로 선분 판정·관통·대상당 1회, 벽 즉시 멈춤, 돌진 경로 옆 넉백(`HitOriginKind.Path`), 직선 띠 예고. `SkillTable.ForcedMoveImmune`(AS열, 실행 단계 넉백 저항)을 추가하고 §6.10 적용 규칙 6~8을 갱신했다. 멧돼지 돌진 `BoarCharge`(52)·효과 1032 `Knockback_Charge`·멧돼지 전용 AI 6번 추가, M3를 런타임 준비 완료로 옮기고 §2·§6.3·§10·§11을 갱신했다. 같은 날 몬스터도 표의 조준 방식을 따르게 바꿨다(POE2_CURSOR_TRACKING_PLAN §15).

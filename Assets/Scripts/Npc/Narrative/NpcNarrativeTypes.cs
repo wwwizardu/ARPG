@@ -11,6 +11,9 @@ namespace ARPG.Npc.Narrative
     /// <summary>호감도 단계 (interactionSystem §4.2). 스파이크는 디버그로 강제 전환.</summary>
     public enum AffinityTier { Stranger, Acquaintance, Friend, Confidant }
 
+    /// <summary>대화 직전 관계 스냅샷으로 판정한 만남 상황. 인사 문구와 LLM 대사 캐시 키에 쓴다.</summary>
+    public enum GreetingEncounter { FirstMeeting, FamiliarFace, Regular, LongAbsent, ImmediateRepeat }
+
     /// <summary>대화 토픽 갈래. NARRATIVE_ENGINE_SPIKE §4.5 + 사연(NARRATIVE_DIALOGUE_VARIETY Phase 1).</summary>
     public enum DialogueTopicCategory { Neutral, Need, Rumor, Flavor, Personal }
 
@@ -34,6 +37,8 @@ namespace ARPG.Npc.Narrative
         DungeonRequest, DungeonRequestProgress,
         // 소망 (§2.2 Wish + Item): 털어놓기 / 열린 소망 떠올리기. 둘 다 대화 후보 고정(Pinned).
         WishReveal, WishReminder,
+        // 네임드 위협 (NAMED_THREAT_DESIGN §8): 가까운·먼 소문(야망 소문 1개 규칙 D82 안에서 먼저 고름) / 소문 주인의 부탁 / 진행 확인(고정).
+        NamedThreatRumor, NamedThreatRequest, NamedThreatRequestProgress,
     }
 
     /// <summary>대화 토픽 1건 — 시스템이 상태·백본에서 산출. LLM 없으면 BaseLine, 있으면 이 토픽을 풍부하게 서술.</summary>
@@ -52,6 +57,7 @@ namespace ARPG.Npc.Narrative
         public int NarrativeContentId;       // 소망 털어놓기 화제의 콘텐츠 (표시 뒤 이 콘텐츠로 소망 사건을 만든다)
         public NpcRumorPlace RumorPlace;     // 던전 소문의 장소 표현 종류 (P2c)
         public int RumorBearing = -1;        // 던전 소문의 8방위 (0 북 … 7 북서, -1 = 방향 없음)
+        public int NamedThreatId;            // 네임드 소문·부탁·진행 확인 화제가 가리키는 네임드 (표시되면 "플레이어가 들었다"로 기록)
     }
 
     /// <summary>소망 종류 (QUEST §2.1). 지금 실행하는 것은 ItemGift(콘텐츠 Wish + Item)뿐이다.</summary>
@@ -110,5 +116,6 @@ namespace ARPG.Npc.Narrative
         public bool IsNarrativeRequest;
         public bool IsWishReveal;            // 소망 털어놓기 화제였음 — 실제 표시 뒤 NarrativeContentId로 소망 사건을 만든다
         public int NarrativeContentId;
+        public int NamedThreatId;            // 네임드 화제였으면 그 네임드 — 실제 표시 뒤 PlayerHeard를 켠다 (NAMED_THREAT_DESIGN §6.5)
     }
 }

@@ -548,6 +548,10 @@ namespace ARPG.Monster
                 int monsterTableId = isMixed == true
                     ? BiomeMonsterMapping.SampleMonsterId(chunkBiome, fallbackMonsterId)
                     : groupMonsterTableId;
+                // 빈 biome 풀의 인스펙터 fallback도 Elite를 필드에 생성할 수 없다.
+                var monsterTable = AR.s.Data.GetMonster(monsterTableId);
+                if (monsterTable == null || monsterTable.Archetype == GlobalEnum.MonsterArchetype.Elite)
+                    break;
                 float monsterRadius = ResolveMonsterMoveRadius(monsterTableId);
                 bool found = false;
                 for (int attempt = 0; attempt < attemptsPerMember; attempt++)

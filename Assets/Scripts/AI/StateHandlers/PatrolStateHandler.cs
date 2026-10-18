@@ -4,8 +4,8 @@ using UnityEngine;
 namespace ARPG.AI.StateHandlers
 {
     /// <summary>
-    /// Patrol 상태: 스폰 위치 근처 배회, 위협 감지 시 Flee 또는 Chase
-    /// NPC 기본 상태
+    /// Patrol 상태: 스폰 위치(순찰 기준점) 근처 배회, 위협 감지 시 Flee 또는 Chase
+    /// NPC 기본 상태. 순찰 반경이 있는 몬스터(네임드)도 쓴다 — 반경은 AIBehaviorTypeComponent.PatrolRadius (NAMED_THREAT_DESIGN §5.5)
     /// </summary>
     public class PatrolStateHandler : IAIStateHandler
     {
@@ -81,7 +81,10 @@ namespace ARPG.AI.StateHandlers
             ComponentManager cm = AR.s.Component;
             if (cm.TryGetComponent<AIStateComponent>(entityId, out var aiState) == false) return;
 
-            Vector2 offset = Random.insideUnitCircle * PATROL_RADIUS;
+            float radius = cm.TryGetComponent<AIBehaviorTypeComponent>(entityId, out var behavior) && behavior.PatrolRadius > 0f
+                ? behavior.PatrolRadius
+                : PATROL_RADIUS;
+            Vector2 offset = Random.insideUnitCircle * radius;
             aiState.PatrolTarget = aiState.SpawnPosition + offset;
             aiState.PatrolArrivalTime = 0f;
             cm.SetComponent(entityId, aiState);

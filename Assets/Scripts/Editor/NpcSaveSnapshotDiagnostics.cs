@@ -260,6 +260,7 @@ namespace ARPG.Editor
                 int priorCandidate = slots.Slots[0].NextCandidate;
                 int priorEvents = world.Chronicle.Events.Count;
                 float priorPrice = world.GoldPrice.Index;
+                int priorThreatSerial = world.NamedThreats.NextSerial;
                 Task<bool>? ownedQueued = null;
                 data.DiagnosticAfterCapture = () =>
                 {
@@ -270,6 +271,11 @@ namespace ARPG.Editor
                     data.MarkDungeonSlotsSaveDirty(42); slots.Slots[0].NextCandidate++;
                     world.Chronicle.Events.Add(new History.ChronicleEvent { EventId = 2 }); data.MarkChronicleEventSaveDirty(2);
                     data.MarkWorldSaveDirty(WorldSaveGroup.GoldPrice); world.GoldPrice.Index += 1f;
+                    // 네임드 위협 기록도 World 파트에 함께 실린다 (NAMED_THREAT_DESIGN §10.1 — 새 파트·버전 올림 없음)
+                    data.MarkWorldSaveDirty(WorldSaveGroup.NamedThreat);
+                    world.NamedThreats.NextSerial++;
+                    world.NamedThreats.Active.Add(new NamedThreatRecord { ThreatId = priorThreatSerial, TemplateId = 1, Title = "test",
+                        State = NamedThreatState.Active, PrimaryVillageId = 42 });
                     data.FlushOwnedSaveSnapshots();
                     ownedQueued = data.SaveAsync(ownedScope);
                 };
@@ -283,13 +289,17 @@ namespace ARPG.Editor
                     Part<BuildingSaveRoot>(ownedPrior, "Buildings").Buildings[99].FacilityTier == priorTier &&
                     Part<DungeonSaveRoot>(ownedPrior, "Dungeons").Villages[0].Slots[0].NextCandidate == priorCandidate &&
                     Part<ChronicleSaveRoot>(ownedPrior, "Chronicle").Chronicle.Events.Count == priorEvents &&
-                    Part<WorldSaveRoot>(ownedPrior, "World").GoldPrice.Index == priorPrice, "all six owned roots remain frozen during worker reads");
+                    Part<WorldSaveRoot>(ownedPrior, "World").GoldPrice.Index == priorPrice &&
+                    Part<WorldSaveRoot>(ownedPrior, "World").NamedThreats!.Active.Count == 0, "all six owned roots remain frozen during worker reads");
                 Require(Part<PlayerSaveRoot>(ownedLatest, "Player").Players[0]._inventory[0]!.Quantity == priorQuantity + 1 &&
                     Part<MapSaveRoot>(ownedLatest, "Map").WorldDropItems[0].ItemData.Quantity == priorDropQuantity + 1 &&
                     Part<BuildingSaveRoot>(ownedLatest, "Buildings").Buildings[99].FacilityTier == priorTier + 1 &&
                     Part<DungeonSaveRoot>(ownedLatest, "Dungeons").Villages[0].Slots[0].NextCandidate == priorCandidate + 1 &&
                     Part<ChronicleSaveRoot>(ownedLatest, "Chronicle").Chronicle.Events.Count == priorEvents + 1 &&
-                    Part<WorldSaveRoot>(ownedLatest, "World").GoldPrice.Index == priorPrice + 1, "queued owned roots include every deferred change");
+                    Part<WorldSaveRoot>(ownedLatest, "World").GoldPrice.Index == priorPrice + 1 &&
+                    Part<WorldSaveRoot>(ownedLatest, "World").NamedThreats!.NextSerial == priorThreatSerial + 1 &&
+                    Part<WorldSaveRoot>(ownedLatest, "World").NamedThreats!.Active.Count == 1 &&
+                    Part<WorldSaveRoot>(ownedLatest, "World").NamedThreats!.Active[0].Title == "test", "queued owned roots include every deferred change");
                 before = JsonConvert.DeserializeObject<SaveManifest>(File.ReadAllText(Path.Combine(slot, "manifest.prev.json")), JsonSettings.Default)!;
                 ChangedFiles(before, Manifest(), "player", "world", "map", "buildings", "chronicle", "dungeons"); before = Manifest();
                 data.MarkWorldDropSaveDirty(drop); world.WorldDropItemDatas.Clear();

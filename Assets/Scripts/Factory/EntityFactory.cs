@@ -38,9 +38,10 @@ namespace ARPG.Factory
         /// </summary>
         /// <param name="archetypeOverride">개체 등급. null이면 MonsterTable.Archetype (MONSTER_RARITY_DESIGN.md §5)</param>
         /// <param name="affixes">무리 생성 때 굴린 접사 (MONSTER_AFFIX_DESIGN.md §4). 기본값은 접사 없음</param>
+        /// <param name="aiTableIdOverride">0보다 크면 MonsterTable.AiTableId 대신 쓸 AI 행 (네임드 전용 AI, NAMED_THREAT_DESIGN §5.5)</param>
         /// <returns>(entityId, entity) 튜플. 실패 시 (-1, null)</returns>
         public static async UniTask<(int entityId, EntityBase? entity)> CreateMonster(int monsterTableId, Vector3 position, Transform? parent = null, int level = 0,
-            GlobalEnum.MonsterArchetype? archetypeOverride = null, MonsterAffixComponent affixes = default)
+            GlobalEnum.MonsterArchetype? archetypeOverride = null, MonsterAffixComponent affixes = default, int aiTableIdOverride = 0)
         {
             using var contextLoad = AR.s.Map.Context.BeginLoad();
             // 1. 테이블 로드
@@ -109,14 +110,17 @@ namespace ARPG.Factory
             // 진영 (적대) - 스킬·발사체·AI 타겟 필터에 사용
             AR.s.Component.AddComponent(entityId, new FactionComponent { FactionId = Faction.Hostile });
 
-            if (table.AiTableId > 0)
+            int aiTableId = aiTableIdOverride > 0 ? aiTableIdOverride : table.AiTableId;
+            if (aiTableId > 0)
             {
-                AddAIComponents(entityId, table.AiTableId);
+                AddAIComponents(entityId, aiTableId);
             }
 
-            if (table.AiTable != null)
+            // 전용 AI 행을 쓰면 그 행의 스킬을 쓴다 (네임드 AI 행은 종 기본 행의 스킬을 그대로 복사해 둔다)
+            AiTable? skillAiTable = aiTableIdOverride > 0 ? AR.s.Data.GetAiTable(aiTableIdOverride) ?? table.AiTable : table.AiTable;
+            if (skillAiTable != null)
             {
-                AddSkillsFromAiTable(entityId, table.AiTable);
+                AddSkillsFromAiTable(entityId, skillAiTable);
             }
 
             if (table.DropId > 0)
@@ -617,14 +621,17 @@ namespace ARPG.Factory
                     ? AIBehaviorType.PatrolRanged
                     : AIBehaviorType.Patrol;
             }
-            AIState initialState = isNpc ? AIState.Patrol : AIState.Idle;
+            // 순찰 반경이 있는 몬스터(네임드, NAMED_THREAT_DESIGN §5.5)는 순찰로 시작한다. 반경 0인 몬스터는 지금처럼 Idle 대기
+            float patrolRadius = aiTable != null && isNpc == false ? Mathf.Max(0f, aiTable.PatrolRadius) : 0f;
+            AIState initialState = isNpc || patrolRadius > 0f ? AIState.Patrol : AIState.Idle;
 
             AR.s.Component.AddComponent(entityId, new AIBehaviorTypeComponent
             {
                 BehaviorType = finalBehaviorType,
                 AggroRange = detectionRange,
                 AttackRange = attackRange,
-                KeepDistance = keepDistance
+                KeepDistance = keepDistance,
+                PatrolRadius = patrolRadius,
             });
 
             // TransformComponent에서 현재 위치 가져오기

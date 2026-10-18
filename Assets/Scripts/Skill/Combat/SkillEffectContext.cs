@@ -54,5 +54,6 @@ namespace ARPG.Skill.Combat
         None,   // 범위 중심 없음 (발사체·연쇄). 밀기는 날아온 방향, 당기기는 공격자 쪽
         Owner,  // 공격자 몸 (Direction형 직접 공격). 당기기는 두 몸이 닿는 거리에서 멈춤
         Point,  // 지정 지점·장판 중심. 당기기는 그 지점에서 멈춤
+        Path,   // 돌진 경로 (SKILL_DESIGN §6.11). HitOrigin=부딪힌 순간 돌진자 발 위치, ImpactDirection=돌진 방향. 밀기는 경로 옆쪽, 당기기는 경로 선에서 멈춤
     }
 }

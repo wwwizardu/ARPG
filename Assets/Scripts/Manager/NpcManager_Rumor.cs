@@ -71,6 +71,9 @@ namespace ARPG.Npc
                 case NpcRumorKind.PlayerDeed:
                     // 이미 일어난 플레이어 행적이라 거짓이 되지 않는다 (NPC_NARRATIVE_CONTENT_DESIGN §4.1).
                     return rumor.DeedKind != PlayerDeedKind.None;
+                case NpcRumorKind.NamedThreat:
+                    // 네임드가 활성일 때만 사실이다. 처치·사라짐 뒤에는 무효가 되어 다음 표시·교환 때 정리된다 (NAMED_THREAT_DESIGN §8.3).
+                    return AR.s.NamedThreat != null && AR.s.NamedThreat.IsActive(rumor.ThreatId) == true;
                 default:
                     return false;
             }
@@ -374,7 +377,8 @@ namespace ARPG.Npc
 
         /// <summary>
         /// 같은 대상인가: DungeonInfo = (마을, 슬롯), ItemOwner = (소유자, 장비 슬롯), ItemSold = (판매자, 인스턴스),
-        /// Betrayal = (가해자, 피해자, 사건 시각), PlayerDeed = (세부 종류, 인스턴스 — 소문 없는 클리어는 던전 세대). 같은 행적은 NPC당 1개다.
+        /// Betrayal = (가해자, 피해자, 사건 시각), PlayerDeed = (세부 종류, 인스턴스 — 소문 없는 클리어는 던전 세대),
+        /// NamedThreat = 네임드 ID. 같은 행적은 NPC당 1개다.
         /// </summary>
         public static bool IsSameRumorTarget(NpcRumor a, NpcRumor b)
         {
@@ -387,6 +391,7 @@ namespace ARPG.Npc
                 NpcRumorKind.ItemSold => a.SubjectNpcId == b.SubjectNpcId && a.ItemInstanceId == b.ItemInstanceId,
                 NpcRumorKind.Betrayal => a.SubjectNpcId == b.SubjectNpcId && a.VictimNpcId == b.VictimNpcId &&
                                          a.EventGameTime == b.EventGameTime,
+                NpcRumorKind.NamedThreat => a.ThreatId == b.ThreatId,
                 NpcRumorKind.PlayerDeed => a.DeedKind == b.DeedKind && a.InstanceId == b.InstanceId &&
                                            (string.IsNullOrEmpty(a.InstanceId) == false ||
                                             (a.VillageId == b.VillageId && a.SlotIndex == b.SlotIndex && a.Generation == b.Generation)),
@@ -501,7 +506,8 @@ namespace ARPG.Npc
                     continue;
                 }
 
-                bool promising = HasPromisingFacts(rumor, now);
+                // 네임드 소문은 유망한 사실처럼 먼저 건넨다 (NAMED_THREAT_DESIGN §8.1)
+                bool promising = HasPromisingFacts(rumor, now) || rumor.Kind == NpcRumorKind.NamedThreat;
                 if (best == null || (promising == true && bestPromising == false) ||
                     (promising == bestPromising && (rumor.Value > best.Value ||
                         (rumor.Value == best.Value && rumor.EventGameTime > best.EventGameTime))))
@@ -544,6 +550,8 @@ namespace ARPG.Npc
                 _rumorCounters.AcceptedBetrayal++;
             else if (copy.Kind == NpcRumorKind.PlayerDeed)
                 _rumorCounters.AcceptedPlayerDeed++;
+            else if (copy.Kind == NpcRumorKind.NamedThreat)
+                _rumorCounters.AcceptedNamedThreat++;
 
             if ((copy.Kind == NpcRumorKind.ItemOwner || copy.Kind == NpcRumorKind.ItemSold) && receiver.TheftClues.Count > 0)
                 TryDiscoverTheftFromRumor(receiver, copy, now);
@@ -662,6 +670,9 @@ namespace ARPG.Npc
         {
             if (IsRumorValid(rumor) == false)
                 return 0;
+            // 네임드 소문은 상한 8(D73)에 밀리지 않게 유망 소문과 같은 순위로 둔다 (NAMED_THREAT_DESIGN §8.1)
+            if (rumor.Kind == NpcRumorKind.NamedThreat)
+                return 2;
             return IsPromisingRumor(holder, rumor, now) == true ? 2 : 1;
         }
 

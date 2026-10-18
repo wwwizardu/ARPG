@@ -91,9 +91,9 @@ namespace ARPG.EditorTools
                 Require(manager.LoadAffinity(manager.SaveAffinity()) == false &&
                     JsonConvert.SerializeObject(npc, JsonSettings.Default) == migrated, "migration is idempotent");
 
-                manager.Narrative.SetDialogue(1, AffinityTier.Stranger, DialogueTopicType.Boast, 0, "old");
+                manager.Narrative.SetDialogue(1, AffinityTier.Stranger, GreetingEncounter.Regular, DialogueTopicType.Boast, 0, "old");
                 manager.AddNotableItemDeed(1, 11, "최신 도끼", 15f);
-                Require(manager.Narrative.TryGetDialogue(1, AffinityTier.Stranger, DialogueTopicType.Boast, 0, out _) == false,
+                Require(manager.Narrative.TryGetDialogue(1, AffinityTier.Stranger, GreetingEncounter.Regular, DialogueTopicType.Boast, 0, out _) == false,
                     "new personal episode invalidates dialogue cache");
                 DialogueTopic newBoast = Topics(npc).First(t => t.Type == DialogueTopicType.Boast);
                 Require(newBoast.BaseLine.Contains("최신 도끼") && newBoast.CacheVariant != first[1].CacheVariant,
@@ -147,14 +147,14 @@ namespace ARPG.EditorTools
                 manager.LoadAffinity(manager.SaveAffinity());
                 Require(manager.TryGetLatestSharedActivity(1, out partner, out _, out memory) && partner == 2 && memory != null,
                     "archived companion index restored after reload");
-                manager.Narrative.SetDialogue(1, AffinityTier.Stranger, DialogueTopicType.TheftVictim, 0, "old theft");
+                manager.Narrative.SetDialogue(1, AffinityTier.Stranger, GreetingEncounter.Regular, DialogueTopicType.TheftVictim, 0, "old theft");
                 typeof(NpcManager).GetMethod("AddTheftDeed", System.Reflection.BindingFlags.Instance |
                     System.Reflection.BindingFlags.NonPublic)!.Invoke(manager, new object[]
                     { 1, NpcDeedKind.TheftDiscovered, NpcKnowledgeLevel.Heard, 3, 14, "도난 도끼", 1022f });
                 Require(restored.PersonalStories!.TheftVictim!.Kind == NpcDeedKind.TheftDiscovered &&
                     restored.PersonalStories.TheftVictim.ParticipantSnapshots.Single().DisplayName == "C" &&
                     restored.Deeds.Count == npc.Deeds.Count && manager.Narrative.TryGetDialogue(1, AffinityTier.Stranger,
-                        DialogueTopicType.TheftVictim, 0, out _) == false,
+                        GreetingEncounter.Regular, DialogueTopicType.TheftVictim, 0, out _) == false,
                     "theft writer replaces story, preserves names and invalidates cached dialogue");
                 Require(Topics(restored)[0].Type == DialogueTopicType.TheftVictim &&
                     Topics(restored)[0].BaseLine.Contains("C") && Topics(restored)[0].Facts[0].Contains("소문"),

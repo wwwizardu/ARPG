@@ -23,6 +23,9 @@ namespace ARPG.Npc
         // 플레이어가 한 일 (NPC_NARRATIVE_CONTENT_DESIGN §4.1). 세부 종류(PlayerDeedKind)로 구분한다 — 소문 해결·던전 클리어,
         // NPC_AMBITION P5 "살인자" 소문도 세부 종류 끝에 추가한다. 이미 일어난 일이라 항상 유효하다.
         PlayerDeed = 5,
+        // 네임드 위협 (NAMED_THREAT_DESIGN §8). 대상 = 네임드 ID(ThreatId)만 저장하고, 문구의 사실은 표시할 때 네임드 기록에서 읽는다.
+        // IsDistant = 주변 마을의 먼 소문(주 마을 방향만 안다). 네임드가 활성일 때만 유효하다.
+        NamedThreat = 6,
     }
 
     /// <summary>
@@ -37,6 +40,8 @@ namespace ARPG.Npc
         DungeonCleared = 2,
         // NPC의 소망을 실제로 채웠다 (3단계)
         WishFulfilled = 3,
+        // 플레이어 측이 네임드 위협을 쓰러뜨렸다 (NAMED_THREAT_DESIGN §9.3). InstanceId = 그 네임드의 narrative 인스턴스
+        ThreatSlain = 4,
     }
 
     /// <summary>Betrayal 소문의 세부 종류 (D105). 끝에만 추가한다 (P3 배신 유형).</summary>
@@ -107,6 +112,13 @@ namespace ARPG.Npc
         [DefaultValue(-1)]
         [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
         public int ItemId = -1;
+        // ---- 네임드 위협 (NAMED_THREAT_DESIGN §8, §10.2). 기본값이면 저장하지 않는다. ----
+        // NamedThreat·ThreatSlain 행적: 네임드 ID. 0 = 없음.
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public int ThreatId;
+        // NamedThreat: 주변 마을의 먼 소문 — 주 마을의 방향과 거리만 안다. 부탁하지 않는다.
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public bool IsDistant;
 
         public NpcRumor Clone()
         {
@@ -169,6 +181,8 @@ namespace ARPG.Npc
         public long CreatedItemSold;                                   // 훔친 물건 판매 (D104)
         public long CreatedPlayerDeed;                                 // 플레이어 행적 (보고·동행·소문 전 해결)
         public long AcceptedPlayerDeed;
+        public long CreatedNamedThreat;                                // 네임드 소문 (소문 주인·먼 소문·마주친 NPC, NAMED_THREAT §8)
+        public long AcceptedNamedThreat;
         public readonly long[] CreatedBetrayal = new long[3];          // NpcBetrayalKind 인덱스 (D105)
         public long AcceptedItemSold;
         public long AcceptedBetrayal;

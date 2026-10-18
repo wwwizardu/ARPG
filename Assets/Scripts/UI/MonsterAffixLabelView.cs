@@ -27,6 +27,7 @@ namespace ARPG.UI
         private static readonly Color NormalTextColor = new Color(0.9f, 0.9f, 0.9f, 1f);
         private static readonly Color MagicTextColor = new Color(0.55f, 0.65f, 1f, 1f);
         private static readonly Color RareTextColor = new Color(1f, 0.85f, 0.25f, 1f);
+        private static readonly Color NamedTextColor = new Color(1f, 0.6f, 0.25f, 1f);
 
         private TextMeshProUGUI? _label;
         private readonly StringBuilder _textBuilder = new StringBuilder(64);
@@ -110,6 +111,7 @@ namespace ARPG.UI
             {
                 case GlobalEnum.MonsterArchetype.Magic: return MagicTextColor;
                 case GlobalEnum.MonsterArchetype.Rare: return RareTextColor;
+                case GlobalEnum.MonsterArchetype.Named: return NamedTextColor;
                 default: return NormalTextColor;
             }
         }

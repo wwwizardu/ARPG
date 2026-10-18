@@ -598,8 +598,11 @@ namespace ARPG
                 });
         }
 
-        // 좌하단 피드에 한 줄을 추가한다. 빈 슬롯이 없으면 가장 오래된 줄을 재사용한다.
-        public void PushWorldFeed(string inText)
+        // 네임드 위협 줄 강조색 (NAMED_THREAT_DESIGN §6.5) — 세계 모든 NPC의 부상 줄 속에서 묻히지 않게
+        private static readonly Color WorldFeedHighlightColor = new Color(1f, 0.62f, 0.25f, 1f);
+
+        // 좌하단 피드에 한 줄을 추가한다. 빈 슬롯이 없으면 가장 오래된 줄을 재사용한다. highlight면 강조색으로 쓴다.
+        public void PushWorldFeed(string inText, bool highlight = false)
         {
             if (_worldFeedLines == null || _worldFeedLines.Length == 0)
                 return;
@@ -611,7 +614,7 @@ namespace ARPG
             _worldFeedActive.Add(line);
 
             line.text = inText;
-            line.color = Color.white;
+            line.color = highlight == true ? WorldFeedHighlightColor : Color.white;
             line.gameObject.SetActive(true);
             line.transform.SetAsLastSibling(); // 최신 줄을 맨 아래에 배치
 

@@ -421,12 +421,30 @@ namespace ARPG.UI
                        $"{what} · {source} · {ago}{checkedMark}";
             }
 
+            // 네임드 위협 (NAMED_THREAT_DESIGN §8.3): 사실은 지금 네임드 기록에서 읽는다. 칭호 공개 전에는 칭호를 보이지 않는다.
+            if (rumor.Kind == NpcRumorKind.NamedThreat)
+            {
+                NamedThreatRecord? threat = AR.s.NamedThreat != null ? AR.s.NamedThreat.GetActive(rumor.ThreatId) : null;
+                if (threat == null)
+                    return $"사라진 짐승 소문 [네임드 {rumor.ThreatId}] · {source} · {ago}";
+                string who = threat.TitleRevealed == true ? threat.Title : "큰 짐승";
+                string where = rumor.IsDistant == true && _saveData != null
+                    ? NpcManager.DescribeDistantThreatVillage(threat, _saveData.VillageId) + "의"
+                    : NpcManager.DescribeThreatLocation(threat, _saveData != null ? _saveData.VillageId : threat.PrimaryVillageId) + " 사냥터의";
+                return $"{where} {who} [{(rumor.IsDistant == true ? "먼 소문" : "가까운 소문")}·단계 {threat.Stage}·부상 {threat.HarmCount}] · {source} · {ago}";
+            }
+
             // 플레이어 행적 (NPC_NARRATIVE_CONTENT_DESIGN §4.1): 반응 여부도 검증용으로 보인다.
             if (rumor.Kind == NpcRumorKind.PlayerDeed)
             {
                 string reacted = rumor.Reacted == true ? " · 반응함" : string.Empty;
                 if (rumor.DeedKind == PlayerDeedKind.WishFulfilled)
                     return $"플레이어의 소망 충족 [마을 {rumor.VillageId}] · {source} · {ago}{reacted}";
+                if (rumor.DeedKind == PlayerDeedKind.ThreatSlain)
+                {
+                    string title = AR.s.NamedThreat != null ? AR.s.NamedThreat.GetTitle(rumor.ThreatId) : string.Empty;
+                    return $"플레이어의 네임드 처치 [{(string.IsNullOrEmpty(title) == false ? title : "네임드 " + rumor.ThreatId)}] · {source} · {ago}{reacted}";
+                }
                 string deed = rumor.DeedKind == PlayerDeedKind.RumorResolved ? "소문 던전 해결" : "던전 클리어";
                 return $"플레이어의 {deed} [마을 {rumor.VillageId}·슬롯 {rumor.SlotIndex}·세대 {rumor.Generation}] · {source} · {ago}{reacted}";
             }
@@ -945,6 +963,9 @@ namespace ARPG.UI
 
             if (_dialogueLabel != null) _dialogueLabel.text = line;
             Debug.Log($"[Narrative] npc={npcId} {line}");
+            // 네임드 화제가 실제로 표시됐으면 "플레이어가 들었다"로 기록한다 — 소식창이 칭호·강조 줄을 쓰기 시작한다 (NAMED_THREAT_DESIGN §6.5)
+            if (r.NamedThreatId > 0 && AR.s.NamedThreat != null)
+                AR.s.NamedThreat.MarkPlayerHeard(r.NamedThreatId);
             // 소문 주인의 부탁이 실제로 표시됐으면 부탁 칸에 넣는다 (NPC_NARRATIVE_CONTENT_DESIGN §2.4·§4.1).
             if (r.IsNarrativeRequest == true && string.IsNullOrEmpty(r.NarrativeInstanceId) == false &&
                 await AR.s.Npc.CommitNarrativeRequestAsync(npcId, r.NarrativeInstanceId) == true &&

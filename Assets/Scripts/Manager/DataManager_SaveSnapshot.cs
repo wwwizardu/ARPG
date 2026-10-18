@@ -80,7 +80,8 @@ namespace ARPG.Data
             }
             if (part == PART_WORLD) return new WorldSaveRoot { WorldDataVersion = CURRENT_WORLD_DATA_VERSION,
                 WorldSeed = _worldData.WorldSeed, NextItemInstanceId = _nextItemInstanceId,
-                ElapsedWorldGameHours = _worldData.ElapsedWorldGameHours, NpcCompanion = _worldData.NpcCompanion, GoldPrice = _worldData.GoldPrice };
+                ElapsedWorldGameHours = _worldData.ElapsedWorldGameHours, NpcCompanion = _worldData.NpcCompanion, GoldPrice = _worldData.GoldPrice,
+                NamedThreats = _worldData.NamedThreats };
             if (part == PART_MAP)
             {
                 if (key is WorldDropItemData drop) return _worldData.WorldDropItemDatas.Contains(drop) == true ? drop : null;
@@ -205,13 +206,15 @@ namespace ARPG.Data
 
         private object? CaptureOwnedWorld(WorldSaveRoot live, bool rebuild)
         {
-            // Four scalar metadata values are sampled at capture; companion/price changes have their own marks.
+            // Four scalar metadata values are sampled at capture; companion/price/named-threat changes have their own marks.
+            // Named-threat lists change through NamedThreatManager, which marks WorldSaveGroup.NamedThreat itself.
             MarkWorldSaveDirty(WorldSaveGroup.Metadata);
             var cache = GetOwnedSaveCache(PART_WORLD);
             if (cache.TryGetSnapshot(0, out object? prior) == true && prior is Dictionary<string, object?> old)
             {
                 ObserveWorldGroup(live.NpcCompanion, old, nameof(WorldSaveRoot.NpcCompanion), WorldSaveGroup.Companion);
                 ObserveWorldGroup(live.GoldPrice, old, nameof(WorldSaveRoot.GoldPrice), WorldSaveGroup.GoldPrice);
+                ObserveWorldGroup(live.NamedThreats, old, nameof(WorldSaveRoot.NamedThreats), WorldSaveGroup.NamedThreat);
             }
             return PrepareOwnedSaveCache(PART_WORLD, new() { { 0, live } }, rebuild).Get(0);
         }

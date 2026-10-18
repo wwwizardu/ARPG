@@ -24,15 +24,6 @@ namespace ARPG.Npc.Narrative
         // 야망 소문 토픽(DungeonRumor·ItemOwnerRumor·BetrayalRumor)의 레퍼토리 우선순위 (P2c). 낮은 관계 단계의 잡담(Flavor)과 같다.
         private const int AmbitionRumorPriority = 4;
 
-        private enum GreetingEncounter
-        {
-            FirstMeeting,
-            FamiliarFace,
-            Regular,
-            LongAbsent,
-            ImmediateRepeat,
-        }
-
         private enum GreetingTone
         {
             Friendly,
@@ -70,7 +61,9 @@ namespace ARPG.Npc.Narrative
                 Type = DialogueTopicType.Greeting,
                 Category = DialogueTopicCategory.Neutral,
                 MinTier = AffinityTier.Stranger,
-                BaseLine = $"{ctx.NpcName}이오. 무슨 일이시오?",
+                BaseLine = AR.s.Npc != null && AR.s.Npc.GetGender(npcId) == NpcGender.Female
+                    ? $"{NpcRumorPhrasing.Josa(ctx.NpcName, "이에요", "예요")}. 무슨 일이세요?"
+                    : $"{ctx.NpcName}이오. 무슨 일이시오?",
             });
 
             AddNeeds(topics, save, village, threat);
@@ -187,14 +180,16 @@ namespace ARPG.Npc.Narrative
         /// <summary>
         /// 대화 전 관계 스냅샷으로 첫 만남·재방문 상태를 판정하고 NPC 성격에 맞는 인사를 고른다.
         /// 본문 토픽과 분리해 인사가 실제 화제를 밀어내지 않도록 한다.
+        /// LLM 대사는 이 인사를 말투 예시로 받아 인사까지 새로 쓴다. 고정 문구 대사와 LLM 실패 시에는 이 인사를 그대로 붙인다.
         /// </summary>
-        public static string SelectGreeting(int npcId, PlayerRelation relation, float currentGameTime)
+        public static string SelectGreeting(int npcId, PlayerRelation relation, float currentGameTime, out GreetingEncounter encounter)
         {
-            GreetingEncounter encounter = GetGreetingEncounter(relation, currentGameTime);
+            encounter = GetGreetingEncounter(relation, currentGameTime);
             NpcSaveData? save = AR.s.Npc?.GetSaveData(npcId);
             GreetingTone tone = GetGreetingTone(save, relation);
             int variant = StableHash(StableHash(npcId, (int)encounter), relation.TalkCount) % 2;
-            return GreetingLine(encounter, tone, GetAffinityTier(relation.Affinity), variant);
+            bool female = AR.s.Npc != null && AR.s.Npc.GetGender(npcId) == NpcGender.Female;
+            return GreetingLine(encounter, tone, GetAffinityTier(relation.Affinity), variant, female);
         }
 
         /// <summary>NPC별 화제 레퍼토리(2~5) — 관계가 깊을수록 넓어지고 성격에 맞는 화제가 선점한다.</summary>
@@ -246,7 +241,8 @@ namespace ARPG.Npc.Narrative
             // 야망 소문은 지금 확인할 수 있는 실제 사건(유효 검증 통과)이라 연대기 소문보다 앞세운다 (P2c) — 낯선 사이에서도 일상 화제와 겨룬다.
             if (topic.Type == DialogueTopicType.DungeonRumor || topic.Type == DialogueTopicType.ItemOwnerRumor ||
                 topic.Type == DialogueTopicType.BetrayalRumor || topic.Type == DialogueTopicType.DungeonRequest ||
-                topic.Type == DialogueTopicType.DungeonRequestProgress)
+                topic.Type == DialogueTopicType.DungeonRequestProgress || topic.Type == DialogueTopicType.NamedThreatRumor ||
+                topic.Type == DialogueTopicType.NamedThreatRequest || topic.Type == DialogueTopicType.NamedThreatRequestProgress)
                 return AmbitionRumorPriority;
 
             return topic.Category switch
@@ -284,6 +280,8 @@ namespace ARPG.Npc.Narrative
                 // P4b: 배신 소문은 수다(Gossip)와 같은 성향, 도난 사연은 자존심이 세고 참을성이 없을수록 꺼낸다
                 DialogueTopicType.BetrayalRumor => (save.NpcStat.Friendliness + save.NpcStat.Curiosity) / 10,
                 DialogueTopicType.TheftVictim => (save.NpcStat.Pride + (100 - save.NpcStat.Patience)) / 10,
+                // 네임드 소문: 던전 소문과 같은 성향 (NAMED_THREAT_DESIGN §8.3)
+                DialogueTopicType.NamedThreatRumor => (save.NpcStat.Curiosity + save.NpcStat.Courage) / 10,
                 _ => 0,
             };
         }
@@ -355,22 +353,23 @@ namespace ARPG.Npc.Narrative
             return result;
         }
 
+        // 남성(성별 미상 포함)은 '자네'·하게체/하오체, 여성은 '당신'·해요체 또는 '너'·부드러운 반말 문구를 쓴다.
         private static string GreetingLine(
-            GreetingEncounter encounter, GreetingTone tone, AffinityTier tier, int variant)
+            GreetingEncounter encounter, GreetingTone tone, AffinityTier tier, int variant, bool female)
         {
             if (encounter == GreetingEncounter.Regular && tier == AffinityTier.Confidant)
-                return ConfidantLine(tone, variant);
+                return female ? FemaleConfidantLine(tone, variant) : ConfidantLine(tone, variant);
             if (encounter == GreetingEncounter.Regular && tier == AffinityTier.Friend)
-                return FriendLine(tone, variant);
+                return female ? FemaleFriendLine(tone, variant) : FriendLine(tone, variant);
 
             return encounter switch
             {
-                GreetingEncounter.FirstMeeting => FirstMeetingLine(tone, variant),
-                GreetingEncounter.FamiliarFace => FamiliarFaceLine(tone, variant),
-                GreetingEncounter.Regular => RegularLine(tone, variant),
-                GreetingEncounter.LongAbsent => LongAbsentLine(tone, variant),
-                GreetingEncounter.ImmediateRepeat => ImmediateRepeatLine(tone, variant),
-                _ => "무슨 일이오?",
+                GreetingEncounter.FirstMeeting => female ? FemaleFirstMeetingLine(tone, variant) : FirstMeetingLine(tone, variant),
+                GreetingEncounter.FamiliarFace => female ? FemaleFamiliarFaceLine(tone, variant) : FamiliarFaceLine(tone, variant),
+                GreetingEncounter.Regular => female ? FemaleRegularLine(tone, variant) : RegularLine(tone, variant),
+                GreetingEncounter.LongAbsent => female ? FemaleLongAbsentLine(tone, variant) : LongAbsentLine(tone, variant),
+                GreetingEncounter.ImmediateRepeat => female ? FemaleImmediateRepeatLine(tone, variant) : ImmediateRepeatLine(tone, variant),
+                _ => female ? "무슨 일이세요?" : "무슨 일이오?",
             };
         }
 
@@ -470,6 +469,105 @@ namespace ARPG.Npc.Narrative
             GreetingTone.Patient => Variant(variant, "괜찮네. 더 이야기해 보게.", "시간은 있으니 천천히 말하게."),
             GreetingTone.Guarded => Variant(variant, "아직도 할 말이 남았소?", "무슨 일인지 분명히 말하시오."),
             _ => "할 말이 더 있나?",
+        };
+
+        // ── 여성 인사 — 말투는 성격별로 고정: 용기·호기심·자존심은 '너'·반말, 나머지는 '당신'·해요체 ──
+        private static string FemaleFriendLine(GreetingTone tone, int variant) => tone switch
+        {
+            GreetingTone.Friendly => Variant(variant, "왔군요! 당신을 보면 마음이 놓여요.", "어서 와요. 당신과 이야기하면 늘 즐거워요."),
+            GreetingTone.Direct => Variant(variant, "왔네요. 당신이라면 바로 본론을 말해도 되겠죠.", "당신이군요. 우리 사이에 돌려 말할 건 없죠."),
+            GreetingTone.Greedy => Variant(variant, "오셨네요. 당신과는 장사 말고도 나눌 이야기가 있죠.", "어서 와요. 좋은 친구한테까지 값을 매기진 않아요."),
+            GreetingTone.Loyal => Variant(variant, "왔군요, 친구. 당신이라면 믿을 수 있어요.", "잘 왔어요. 당신이 곁에 있으면 든든해요."),
+            GreetingTone.Courageous => Variant(variant, "왔네, 친구. 다음엔 같이 길을 나서도 좋겠어.", "너구나. 믿고 등을 맡길 사람이 와서 반가워."),
+            GreetingTone.Curious => Variant(variant, "왔구나! 너한테 묻고 싶은 게 많았어.", "잘 왔어. 오늘은 밤새 이야기해도 모자라겠다."),
+            GreetingTone.Proud => Variant(variant, "왔어? 너 정도라면 내 친구라 불러도 부끄럽지 않지.", "너구나. 내가 인정한 사람은 흔치 않아."),
+            GreetingTone.Patient => Variant(variant, "왔군요, 친구. 편히 쉬면서 이야기해요.", "잘 왔어요. 당신 이야기라면 오래 들어도 좋아요."),
+            GreetingTone.Guarded => Variant(variant, "왔군요. 아직 조심스럽지만 당신은 믿어 볼게요.", "당신이군요. 다른 사람보다는 마음이 놓이네요."),
+            _ => "왔군요, 친구.",
+        };
+
+        private static string FemaleConfidantLine(GreetingTone tone, int variant) => tone switch
+        {
+            GreetingTone.Friendly => Variant(variant, "왔군요. 당신 앞에서는 굳이 마음을 숨길 필요가 없네요.", "기다리고 있었어요. 당신한테만 할 수 있는 이야기가 있어요."),
+            GreetingTone.Direct => Variant(variant, "왔네요. 당신한테는 솔직하게 말할게요.", "당신이군요. 숨김없이 이야기해도 되겠죠."),
+            GreetingTone.Greedy => Variant(variant, "오셨네요. 재물보다 귀한 신뢰를 나눌 사람은 당신뿐이에요.", "당신한테만은 손익을 따지고 싶지 않아요."),
+            GreetingTone.Loyal => Variant(variant, "왔군요. 끝까지 믿을 수 있는 사람은 당신뿐이에요.", "잘 왔어요. 당신한테 맡기지 못할 이야기는 없어요."),
+            GreetingTone.Courageous => Variant(variant, "왔네. 너랑 함께라면 어떤 위험도 두렵지 않아.", "너구나. 내 등을 맡길 사람은 역시 너뿐이야."),
+            GreetingTone.Curious => Variant(variant, "왔구나! 너랑 나눌 이야기를 계속 생각하고 있었어.", "잘 왔어. 너라면 내 속마음까지 이해해 주겠지."),
+            GreetingTone.Proud => Variant(variant, "왔어? 내가 속을 터놓는 사람은 너뿐이야.", "너구나. 내 신뢰를 얻은 걸 자랑스럽게 여겨도 좋아."),
+            GreetingTone.Patient => Variant(variant, "왔군요. 오늘도 마음 놓고 이야기해 봐요.", "잘 왔어요. 당신 앞에서는 서두를 것도 숨길 것도 없네요."),
+            GreetingTone.Guarded => Variant(variant, "당신이군요. 다른 사람은 몰라도 당신한테는 말할 수 있어요.", "왔어요? 당신 앞에서만큼은 경계를 내려놓아도 되겠죠."),
+            _ => "왔군요. 당신한테만 할 이야기가 있어요.",
+        };
+
+        private static string FemaleFirstMeetingLine(GreetingTone tone, int variant) => tone switch
+        {
+            GreetingTone.Friendly => Variant(variant, "어머, 처음 보는 얼굴이네요. 이 마을엔 처음이에요?", "낯선 분이지만 반가워요. 여행 중이세요?"),
+            GreetingTone.Direct => Variant(variant, "처음 보는 얼굴이네요. 용건이 뭐죠?", "마을 사람은 아닌 것 같은데, 무슨 일이죠?"),
+            GreetingTone.Greedy => Variant(variant, "새 손님이세요? 팔 만한 물건은 있나요?", "처음 뵙네요. 돈이 될 만한 이야기라면 언제든 환영이에요."),
+            GreetingTone.Loyal => Variant(variant, "낯선 분이네요. 이 마을에는 무슨 일로 오셨어요?", "처음 보는 분인데, 마을에 해를 끼칠 생각은 없으시겠죠?"),
+            GreetingTone.Courageous => Variant(variant, "처음 보는 얼굴이네. 험한 길을 지나왔나 봐?", "낯선 얼굴인데 눈빛이 살아 있네. 모험가야?"),
+            GreetingTone.Curious => Variant(variant, "처음 보는 얼굴이네! 어디서 왔어?", "여기선 못 보던 사람이구나. 어떤 길로 왔어?"),
+            GreetingTone.Proud => Variant(variant, "처음 보는 사람이네. 내 앞에서는 예의를 갖추도록 해.", "낯선 얼굴이구나. 누구와 이야기하는지는 알고 있겠지?"),
+            GreetingTone.Patient => Variant(variant, "처음 보는 분이네요. 천천히 이야기해 보세요.", "낯선 분이시네요. 급할 것 없으니 용건을 말씀해 보세요."),
+            GreetingTone.Guarded => Variant(variant, "누구세요? 마을 사람은 아닌 것 같은데요.", "거기서 말씀하세요. 처음 보는 분이라 조심스럽네요."),
+            _ => "처음 보는 얼굴이네요.",
+        };
+
+        private static string FemaleFamiliarFaceLine(GreetingTone tone, int variant) => tone switch
+        {
+            GreetingTone.Friendly => Variant(variant, "또 오셨네요. 반가워요.", "이제 얼굴이 익숙하네요. 오늘은 어때요?"),
+            GreetingTone.Direct => Variant(variant, "또 오셨네요. 이번 용건은 뭐죠?", "전에 본 분이네요. 하실 말씀 있어요?"),
+            GreetingTone.Greedy => Variant(variant, "또 오셨어요? 이번엔 좋은 물건이라도 있나요?", "낯이 익네요. 돈 될 이야기를 가져오셨겠죠?"),
+            GreetingTone.Loyal => Variant(variant, "다시 오셨네요. 마을은 좀 둘러보셨어요?", "전에 뵌 분이네요. 별일은 없으셨죠?"),
+            GreetingTone.Courageous => Variant(variant, "또 만났네. 밖에서 별일은 없었어?", "낯이 익다 했어. 이번에도 험한 길을 다녀왔어?"),
+            GreetingTone.Curious => Variant(variant, "또 왔구나! 지난번 이야기가 계속 궁금했어.", "또 만났네. 이번엔 어디 다녀왔어?"),
+            GreetingTone.Proud => Variant(variant, "또 찾아왔구나. 내 이야기가 꽤 마음에 들었나 봐?", "낯이 익네. 다시 나를 찾아온 이유가 있겠지?"),
+            GreetingTone.Patient => Variant(variant, "다시 오셨네요. 오늘도 천천히 이야기해요.", "전에 뵌 분이네요. 서두르지 말고 말씀하세요."),
+            GreetingTone.Guarded => Variant(variant, "또 오셨어요? 무슨 일인지 먼저 말씀하세요.", "전에 본 분이네요. 그래도 아직은 마음을 놓을 수 없어요."),
+            _ => "또 오셨네요.",
+        };
+
+        private static string FemaleRegularLine(GreetingTone tone, int variant) => tone switch
+        {
+            GreetingTone.Friendly => Variant(variant, "오셨어요? 얼굴 보니 반갑네요.", "오늘도 들르셨네요. 잘 지내셨어요?"),
+            GreetingTone.Direct => Variant(variant, "오셨네요. 무슨 이야기죠?", "당신이군요. 용건을 말씀하세요."),
+            GreetingTone.Greedy => Variant(variant, "오셨네요. 오늘은 어떤 거래가 될까요?", "자주 보는 손님이니 좋은 이야기를 기대해도 되겠죠?"),
+            GreetingTone.Loyal => Variant(variant, "오셨어요. 당신이라면 마을 이야기를 해도 되겠네요.", "자주 와 주시네요. 마을에 정이 드셨나 봐요."),
+            GreetingTone.Courageous => Variant(variant, "왔네. 오늘도 멀쩡한 걸 보니 잘 싸우고 다니나 봐?", "너구나. 바깥일은 어땠어?"),
+            GreetingTone.Curious => Variant(variant, "왔구나! 오늘은 무슨 이야기를 들려줄 거야?", "네가 오면 늘 새로운 이야기가 생기더라."),
+            GreetingTone.Proud => Variant(variant, "또 나를 찾아왔구나. 보는 눈은 여전하네.", "왔어? 너 정도면 내 시간을 조금 내줄게."),
+            GreetingTone.Patient => Variant(variant, "오셨네요. 편히 앉아서 이야기하세요.", "오늘도 오셨군요. 천천히 듣고 있을게요."),
+            GreetingTone.Guarded => Variant(variant, "당신이군요. 아직 긴장을 풀 수는 없네요.", "오셨어요? 익숙한 얼굴이어도 조심해서 나쁠 건 없죠."),
+            _ => "오셨네요.",
+        };
+
+        private static string FemaleLongAbsentLine(GreetingTone tone, int variant) => tone switch
+        {
+            GreetingTone.Friendly => Variant(variant, "오랜만이에요! 어디 다친 데는 없어요?", "한동안 안 보이더니 돌아오셨네요. 반가워요."),
+            GreetingTone.Direct => Variant(variant, "오랜만이네요. 어디 계셨어요?", "한동안 안 보이더니 이제 오셨네요?"),
+            GreetingTone.Greedy => Variant(variant, "오랜만이에요. 먼 곳에서 귀한 거라도 가져오셨어요?", "한동안 안 보이셨는데, 빈손으로 오신 건 아니겠죠?"),
+            GreetingTone.Loyal => Variant(variant, "돌아오셨네요. 마을을 잊으신 줄 알았어요.", "오랜만이에요. 다시 와 주셔서 다행이에요."),
+            GreetingTone.Courageous => Variant(variant, "살아서 돌아왔네. 꽤 먼 길이었어?", "오랜만이야. 또 험한 일을 겪고 온 얼굴이네."),
+            GreetingTone.Curious => Variant(variant, "드디어 돌아왔구나! 어디 다녀온 거야?", "오랜만이야. 들려줄 이야기가 잔뜩 있겠지?"),
+            GreetingTone.Proud => Variant(variant, "이제야 다시 왔구나. 내 이야기가 그리웠어?", "한동안 뜸하더니 결국 돌아왔네."),
+            GreetingTone.Patient => Variant(variant, "오랜만이네요. 돌아오셨으니 천천히 이야기하세요.", "한동안 못 뵀네요. 잘 지내셨다면 그걸로 됐어요."),
+            GreetingTone.Guarded => Variant(variant, "오랜만이네요. 갑자기 돌아온 이유가 뭐죠?", "한동안 안 보이더니 다시 나타나셨네요. 무슨 일이죠?"),
+            _ => "오랜만이에요.",
+        };
+
+        private static string FemaleImmediateRepeatLine(GreetingTone tone, int variant) => tone switch
+        {
+            GreetingTone.Friendly => Variant(variant, "더 이야기하고 싶은 게 있어요?", "네, 무슨 이야기가 더 남았어요?"),
+            GreetingTone.Direct => Variant(variant, "할 말이 더 있어요?", "아직 용건이 남았나요?"),
+            GreetingTone.Greedy => Variant(variant, "또 무슨 좋은 제안이라도 있나요?", "더 볼 일이 있다면 값어치 있는 이야기겠죠?"),
+            GreetingTone.Loyal => Variant(variant, "마을에 관해 더 궁금한 게 있어요?", "네, 제가 아는 거라면 더 말씀드릴게요."),
+            GreetingTone.Courageous => Variant(variant, "아직 모험담이 부족해?", "더 묻고 싶은 게 있으면 말해 봐."),
+            GreetingTone.Curious => Variant(variant, "잠깐, 나도 더 물어볼 게 있었어.", "좋아, 이야기를 조금 더 해 보자."),
+            GreetingTone.Proud => Variant(variant, "내 이야기를 더 듣고 싶은가 보네.", "아직도 나한테 배울 게 남았어?"),
+            GreetingTone.Patient => Variant(variant, "괜찮아요. 더 이야기해 보세요.", "시간은 있으니 천천히 말씀하세요."),
+            GreetingTone.Guarded => Variant(variant, "아직도 할 말이 남았어요?", "무슨 일인지 분명히 말씀하세요."),
+            _ => "할 말이 더 있어요?",
         };
 
         private static string Variant(int variant, string first, string second) => variant == 0 ? first : second;
@@ -667,6 +765,7 @@ namespace ARPG.Npc.Narrative
             List<DialogueTopic> dungeon = new();
             List<DialogueTopic> item = new();
             List<DialogueTopic> betrayal = new();
+            List<DialogueTopic> named = new();
             List<NpcRumor> rumors = save.Rumors;
             for (int i = 0; i < rumors.Count; i++)
             {
@@ -679,11 +778,14 @@ namespace ARPG.Npc.Narrative
                     NpcRumorKind.DungeonInfo => BuildDungeonRumorTopic(npcId, save, rumor, now),
                     NpcRumorKind.ItemOwner => BuildItemOwnerRumorTopic(npcId, rumor, now),
                     NpcRumorKind.Betrayal => BuildBetrayalRumorTopic(npcId, rumor, now),
+                    NpcRumorKind.NamedThreat => BuildNamedThreatRumorTopic(npcId, save, rumor),
                     _ => null,
                 };
                 if (t == null)
                     continue;
-                if (t.Type == DialogueTopicType.DungeonRumor)
+                if (t.Type == DialogueTopicType.NamedThreatRumor)
+                    named.Add(t);
+                else if (t.Type == DialogueTopicType.DungeonRumor)
                     dungeon.Add(t);
                 else if (t.Type == DialogueTopicType.ItemOwnerRumor)
                     item.Add(t);
@@ -693,6 +795,7 @@ namespace ARPG.Npc.Narrative
 
             if (pickAll == true)
             {
+                AddAllRumorTopics(topics, named);
                 AddAllRumorTopics(topics, dungeon);
                 AddAllRumorTopics(topics, item);
                 AddAllRumorTopics(topics, betrayal);
@@ -701,6 +804,14 @@ namespace ARPG.Npc.Narrative
 
             // 대화 1회분에는 야망 소문 토픽을 최대 1개만 넣는다 (D82) — 소문을 가진 NPC가 대부분이라 여럿 넣으면
             // 낮은 관계 단계의 좁은 레퍼토리(2~3)를 소문이 모두 차지한다. 후보가 있는 종류(던전·장비·배신) 중 균등하게 고르고 그 안에서 1개.
+            // 네임드 소문은 같은 한 자리를 쓰되 다른 소문보다 먼저 고른다 (NAMED_THREAT_DESIGN §8.3).
+            if (named.Count > 0)
+            {
+                DialogueTopic namedPick = named[Random.Range(0, named.Count)];
+                AR.s.Npc.RecordRumorExposure(namedPick.Rumor!);
+                topics.Add(namedPick);
+                return;
+            }
             int kindCount = (dungeon.Count > 0 ? 1 : 0) + (item.Count > 0 ? 1 : 0) + (betrayal.Count > 0 ? 1 : 0);
             if (kindCount == 0)
                 return;
@@ -899,6 +1010,108 @@ namespace ARPG.Npc.Narrative
             return t;
         }
 
+        /// <summary>
+        /// 네임드 소문 화제 (NAMED_THREAT_DESIGN §8.3). 소문에는 대상만 있고 사실은 지금 네임드 기록에서 읽는다.
+        /// 칭호 공개 전에는 칭호·종 이름을 말하지 않고 흔적만, 공개 뒤에는 칭호·다친 사람 수·중상자·단계를 말한다.
+        /// 먼 소문(주변 마을)은 주 마을의 방향·거리만 안다. 소문 주인이 부탁·진행 확인 화제로 말하는 중이면 따로 내지 않는다.
+        /// </summary>
+        private static DialogueTopic? BuildNamedThreatRumorTopic(int npcId, NpcSaveData save, NpcRumor rumor)
+        {
+            NamedThreatRecord? record = AR.s.NamedThreat != null ? AR.s.NamedThreat.GetActive(rumor.ThreatId) : null;
+            if (record == null)
+                return null;
+            NarrativeContentInstance? instance = AR.s.Npc.GetNarrativeInstance(NarrativeContentInstance.NamedThreatId(record.ThreatId));
+            if (instance != null && AR.s.Npc.IsNarrativeOwnTopic(npcId, instance) == true)
+                return null;
+
+            string prefix = NpcRumorPhrasing.HeardPrefix(rumor);
+            string title = record.Title;
+            string titleNamed = NpcRumorPhrasing.Josa(title, "이라는", "라는");
+            int victims = CountDistinctVictims(record);
+            DialogueTopic t = new()
+            {
+                Type = DialogueTopicType.NamedThreatRumor,
+                Category = DialogueTopicCategory.Rumor,
+                MinTier = AffinityTier.Stranger,
+                CacheVariant = StableHash(StableHash(RumorCacheVariant(rumor), record.TitleRevealed == true ? victims + 1 : 0), record.Stage),
+                Rumor = rumor,
+                NamedThreatId = record.ThreatId,
+            };
+            if (rumor.IsDistant == true || save.VillageId != record.PrimaryVillageId)
+            {
+                string where = NpcManager.DescribeDistantThreatVillage(record, save.VillageId);
+                t.BaseLine = record.TitleRevealed == false
+                    ? $"{prefix}{where} 근처 숲에 큰 짐승이 자리 잡았다더군."
+                    : victims > 0
+                        ? $"{prefix}{where} 사냥꾼들이 {titleNamed} 짐승에게 당하고 있다더군."
+                        : $"{prefix}{where} 근처에 {titleNamed} 짐승이 나타났다더군.";
+                t.Facts.Add($"위치: {where}. 그 마을의 방향과 거리만 안다. 짐승이 사는 곳의 정확한 위치는 모른다. 마을에는 이름이 없으니 이름을 지어내지 말 것.");
+                if (record.TitleRevealed == true)
+                    t.Facts.Add($"그 마을 사냥꾼들은 그 짐승을 '{title}'라고 부른다. 다친 사냥꾼 {victims}명. 죽은 사람은 없다.");
+                else
+                    t.Facts.Add("짐승의 생김새와 이름은 아직 알려지지 않았다.");
+            }
+            else
+            {
+                string place = NpcManager.DescribeThreatLocation(record, save.VillageId) + " 사냥터";
+                string sign = AR.s.NamedThreat!.GetSignText(record);
+                if (record.TitleRevealed == false)
+                {
+                    t.BaseLine = $"{prefix}{place}에 뭔가 큰 짐승이 자리 잡았다더군. {Hearsay(sign)}";
+                    t.Facts.Add($"위치: {place}. 알려진 흔적: {sign} 짐승의 이름과 종류는 아직 모른다 — 지어내지 말 것.");
+                }
+                else
+                {
+                    if (record.HasVictim(npcId) == true)
+                        t.BaseLine = $"{place}의 {title} 말이오. 나도 그놈한테 당했소.";
+                    else if (victims > 0)
+                        t.BaseLine = $"{prefix}{place}에서 {titleNamed} 짐승에게 벌써 {victims}명이 다쳤소.";
+                    else
+                        t.BaseLine = $"{prefix}{place}에 {titleNamed} 짐승이 나타났다더군. 마주친 사냥꾼들이 겨우 도망쳐 왔소.";
+                    string severeName = LatestSevereVictimName(record, npcId);
+                    if (severeName.Length > 0)
+                        t.BaseLine += $" {severeName}도 크게 다쳤지.";
+                    if (record.Stage == 2)
+                        t.BaseLine += " 점점 대담해진다더군.";
+                    else if (record.Stage >= 3)
+                        t.BaseLine += " 이제는 사냥터 어디서나 나타난다오.";
+                    t.Facts.Add($"위치: {place}. 그곳의 짐승을 사냥꾼들이 '{title}'라고 부른다. 알려진 흔적: {sign}");
+                    t.Facts.Add($"그 짐승에게 다친 사냥꾼 {victims}명{(severeName.Length > 0 ? $", 그중 {severeName}은(는) 크게 다쳤다" : string.Empty)}. 죽은 사람은 없다.");
+                }
+            }
+            // 먼 소문을 처음 받은 사람은 직접 본 것이 아니라 오가는 사람에게 들었다 (§8.2 — 시스템이 세계 사실을 1명에게 준다)
+            t.Facts.Add(rumor.IsDistant == true && rumor.SourceNpcId < 0
+                ? "출처: 오가는 사람들에게 들은 이야기 (직접 보지 않았다)."
+                : $"출처: {NpcRumorPhrasing.SourceNote(rumor)}.");
+            return t;
+        }
+
+        private static int CountDistinctVictims(NamedThreatRecord record)
+        {
+            int count = 0;
+            for (int i = 0; i < record.Victims.Count; i++)
+            {
+                bool seen = false;
+                for (int j = 0; j < i && seen == false; j++)
+                    seen = record.Victims[j].NpcId == record.Victims[i].NpcId;
+                if (seen == false)
+                    count++;
+            }
+            return count;
+        }
+
+        // 가장 최근의 중상 피해자 이름 (말하는 NPC 자신은 뺀다). 없으면 빈 문자열.
+        private static string LatestSevereVictimName(NamedThreatRecord record, int speakerId)
+        {
+            for (int i = record.Victims.Count - 1; i >= 0; i--)
+            {
+                NamedThreatVictim victim = record.Victims[i];
+                if (victim.Severe == true && victim.NpcId != speakerId && string.IsNullOrEmpty(victim.Name) == false)
+                    return victim.Name;
+            }
+            return string.Empty;
+        }
+
         // 소문 내용·출처가 바뀌면 다른 값 → 다른 대화 캐시 항목 (같은 토픽 타입 안의 구분자)
         private static int RumorCacheVariant(NpcRumor rumor)
         {
@@ -916,6 +1129,12 @@ namespace ARPG.Npc.Narrative
                 h = StableHash(h, rumor.VictimNpcId);
                 h = StableHash(h, (int)rumor.BetrayalKind);
                 h = StableHash(h, rumor.ItemId);
+            }
+            // 네임드 소문은 대상과 먼 소문 여부를 더한다 (기존 종류의 캐시 키는 그대로)
+            if (rumor.Kind == NpcRumorKind.NamedThreat)
+            {
+                h = StableHash(h, rumor.ThreatId);
+                h = StableHash(h, rumor.IsDistant == true ? 1 : 0);
             }
             return StableHash(h, rumor.Hops);
         }
@@ -1020,8 +1239,12 @@ namespace ARPG.Npc.Narrative
             bool delve = save.LastWoundActivity == NpcActivityKind.DungeonDelve;
             bool severe = save.PersonalStories?.LastWoundSevere == true;
             string where = delve ? "던전 원정" : "사냥";
+            // 마지막 부상이 네임드에게서 왔으면 그 칭호로 말한다 (NAMED_THREAT_DESIGN §6.3). 다친 본인은 칭호를 안다.
+            string threatTitle = save.LastWoundThreatId > 0 ? FindWoundThreatTitle(save) : string.Empty;
             // {knownWoundSummary}: 이 NPC가 실제로 겪은 최신 부상 요약 (§3.2 — 겪은 사실만 말한다)
-            string summary = severe ? $"지난 {where}에서 죽다 살아났소." : $"지난 {where}에서 호되게 당했소.";
+            string summary = threatTitle.Length > 0
+                ? (severe ? $"지난 사냥에서 {threatTitle}에게 물려 죽다 살아났소." : $"지난 사냥에서 {threatTitle}에게 물려 호되게 당했소.")
+                : severe ? $"지난 {where}에서 죽다 살아났소." : $"지난 {where}에서 호되게 당했소.";
             NarrativeContentDefinition? story = AR.s.Data?.NarrativeCatalog.FindPersonalStory(NarrativeTargetType.RecentWound);
             DialogueTopic t = new()
             {
@@ -1038,7 +1261,24 @@ namespace ARPG.Npc.Narrative
                 ? $"게임 시간 {save.LastWoundGameTime:F1}에 {where}을 나갔다가 죽을 뻔한 중상을 입었다 ({KnowledgeHint(NpcKnowledgeLevel.Did)})."
                 : $"게임 시간 {save.LastWoundGameTime:F1}에 {where}을 나갔다가 부상을 입었다 ({KnowledgeHint(NpcKnowledgeLevel.Did)}).");
             t.Facts.Add($"지금까지 원정에서 다친 횟수: {save.WoundCount}회.");
+            if (threatTitle.Length > 0)
+                t.Facts.Add($"그 부상은 사냥터의 이름난 짐승 '{threatTitle}'에게 입었다. 살아 돌아왔다.");
             return t;
+        }
+
+        // 네임드 기록이 정리됐으면 Deed의 칭호 스냅샷을 쓴다 (드문 경우라 이때만 이력을 끝에서부터 본다).
+        private static string FindWoundThreatTitle(NpcSaveData save)
+        {
+            string title = AR.s.NamedThreat != null ? AR.s.NamedThreat.GetTitle(save.LastWoundThreatId) : string.Empty;
+            if (title.Length > 0)
+                return title;
+            for (int i = save.Deeds.Count - 1; i >= 0; i--)
+            {
+                NpcDeedEntry deed = save.Deeds[i];
+                if (deed.Kind == NpcDeedKind.MauledByThreat && deed.ParticipantSnapshots.Count > 0)
+                    return deed.ParticipantSnapshots[0].DisplayName ?? string.Empty;
+            }
+            return string.Empty;
         }
 
         /// <summary>

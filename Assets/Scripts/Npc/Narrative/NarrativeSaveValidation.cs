@@ -63,6 +63,8 @@ namespace ARPG.Npc.Narrative
                 return false;
             if (instance.Kind == NarrativeContentKind.Wish)
                 return IsWishConsistent(instance, definition.Content);
+            if (instance.Kind == NarrativeContentKind.NamedThreat)
+                return IsNamedThreatConsistent(instance);
             if (instance.Kind != NarrativeContentKind.DungeonRumor || instance.WishState != WishState.Hidden || instance.TargetItemId != 0)
                 return false;
             if (instance.SlotIndex < 0 || instance.Generation < 0 || instance.Revision < 0 ||
@@ -108,6 +110,36 @@ namespace ARPG.Npc.Narrative
             if (string.IsNullOrEmpty(instance.FollowUpInstanceId) == true || instance.FollowUpInstanceId == instance.InstanceId)
                 return false;
             return instance.FollowUpState != NarrativeFollowUpState.Pending || instance.Reported == true;
+        }
+
+        // 네임드 위협 부탁 (NAMED_THREAT_DESIGN §10.3): 인스턴스 ID = threat/{네임드 ID}, 던전·소망 칸은 비어 있다.
+        // 소문 주인은 바뀔 수 있으므로(이전 주인이 죽음) 부탁한 NPC가 지금 주인과 달라도 된다. 후속 소개 대상이 되지 않는다.
+        private static bool IsNamedThreatConsistent(NarrativeContentInstance instance)
+        {
+            if (instance.ThreatId <= 0 || instance.InstanceId != NarrativeContentInstance.NamedThreatId(instance.ThreatId) ||
+                string.IsNullOrEmpty(instance.DungeonId) == false || instance.SlotIndex != 0 || instance.Generation != 0 ||
+                instance.TargetMonsterId != 0 || instance.TargetItemId != 0 || instance.HasEntranceContext == true ||
+                instance.WishState != WishState.Hidden || instance.Revision < 0 ||
+                string.IsNullOrEmpty(instance.IntroducedFromInstanceId) == false || IsFollowUpConsistent(instance) == false)
+                return false;
+            if (instance.Ended == true && instance.Progress != NarrativeRumorProgress.Unresolved)
+                return false;
+            if (instance.EndNoticePending == true && (instance.Ended == false || instance.RequesterNpcId < 0))
+                return false;
+            if (instance.Reported == true)
+            {
+                if (instance.Progress != NarrativeRumorProgress.Resolved || instance.ReportNpcId < 0 ||
+                    (instance.ReportRelevance != NarrativeRelevance.Requester && instance.ReportRelevance != NarrativeRelevance.SameVillage))
+                    return false;
+                // 의뢰 보답은 부탁한 사람에게 보고할 때만, 기존 10~20골드의 3배 (§8.4)
+                int multiplier = NamedThreat.NamedThreatRules.RequestRewardMultiplier;
+                bool rewardRange = instance.RewardGold == 0 ||
+                    (instance.RewardGold >= NarrativeReactionRules.RewardGoldMin * multiplier &&
+                     instance.RewardGold <= NarrativeReactionRules.RewardGoldMax * multiplier);
+                return rewardRange == true && (instance.RewardGold == 0 || instance.ReportRelevance == NarrativeRelevance.Requester) &&
+                       (instance.RewardRefused == false || instance.RewardGold == 0);
+            }
+            return instance.RewardGold == 0 && instance.RewardRefused == false && instance.ReportDisplayed == false;
         }
 
         // 소망 (3단계): 털어놓은 주인 = 부탁한 사람, 던전 칸은 비어 있고, 충족(전달)과 보고 기록이 함께 있다.

@@ -59,6 +59,30 @@ namespace ARPG.Utility
         }
 
         /// <summary>
+        /// 선분 a→b 위에서 점 p에 가장 가까운 점. 선분 길이가 0이면 a.
+        /// </summary>
+        public static Vector2 ClosestPointOnSegment(Vector2 p, Vector2 a, Vector2 b)
+        {
+            Vector2 ab = b - a;
+            float sqrLength = ab.sqrMagnitude;
+            if (sqrLength <= 0.000001f)
+                return a;
+
+            float t = Mathf.Clamp01(Vector2.Dot(p - a, ab) / sqrLength);
+            return a + ab * t;
+        }
+
+        /// <summary>
+        /// 반경 segmentRadius로 쓸고 지나간 선분 a→b(캡슐)와 원(c, r)의 교차 판정.
+        /// 움직이는 몸의 경로 판정에 쓴다 (돌진 SKILL_DESIGN §6.11).
+        /// </summary>
+        public static bool SegmentVsCircle(Vector2 a, Vector2 b, float segmentRadius, Vector2 c, float r)
+        {
+            float threshold = segmentRadius + r;
+            return (ClosestPointOnSegment(c, a, b) - c).sqrMagnitude <= threshold * threshold;
+        }
+
+        /// <summary>
         /// 비교용 제곱 거리 — sqrt 회피.
         /// </summary>
         public static float SqrDistance(Vector2 a, Vector2 b)

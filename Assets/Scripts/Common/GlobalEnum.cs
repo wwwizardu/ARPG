@@ -198,15 +198,24 @@ public class GlobalEnum
 
     /// <summary>
     /// 몬스터 등급 (Archetype). MonsterArchetypeTable에서 HpMul/DmgMul 정의.
-    /// PoE2 톤: Normal(white) < Magic(blue) < Rare(yellow/엘리트) < Boss(액트보스) < EndgameBoss(Pinnacle)
+    /// Normal < Magic < Rare < Elite(마을 던전 우두머리) < Boss < EndgameBoss.
     /// </summary>
     public enum MonsterArchetype
     {
-        Normal,         // 일반 잡몹 (white) - HpMul 1
-        Magic,          // 마법몹 (blue) - HpMul 1.3
-        Rare,           // 희귀/엘리트 (yellow) - HpMul 5
-        Boss,           // 액트 보스 - HpMul 20
-        EndgameBoss,    // 엔드게임 보스 (Pinnacle) - HpMul 60
+        Normal = 0,     // 일반 잡몹 (white)
+        Magic = 1,      // 마법몹 (blue)
+        Rare = 2,       // 희귀 몬스터 (yellow)
+        Elite = 5,      // 마을 소속 던전 우두머리. 기존 등급의 저장 숫자는 유지한다.
+        Boss = 3,
+        EndgameBoss = 4,
+        Named = 6,      // 네임드 위협 (NAMED_THREAT_DESIGN §5.1). 주황 HP바, 무작위 접사 없음(고정 접사)
+    }
+
+    /// <summary>네임드 위협 형식 (NAMED_THREAT_DESIGN §1.3). 1차는 전설의 포식자(Predator)만. 2차 타락한 영웅은 끝에 추가한다.</summary>
+    public enum NamedThreatKind
+    {
+        None = 0,
+        Predator = 1,
     }
 
     /// <summary>
@@ -382,6 +391,7 @@ public class GlobalEnum
         Buff,
         Summon,
         Jump,       // 점프 스킬 (시전자를 포물선 궤적으로 이동)
+        Dash,       // 돌진 스킬 (시전자를 땅 위 직선으로 이동, 경로의 적 타격. SKILL_DESIGN §6.11)
     }
 
     public enum SkillSubType
@@ -412,6 +422,7 @@ public class GlobalEnum
         Reduced,
         Locked,
         OwnedMotion,
+        LockedThroughEnd,   // Locked처럼 일반 이동을 막고, 후딜(End) 동안에도 풀지 않는다. 스킬이 끝나면 바로 정상 속도
     }
 
     /// <summary>

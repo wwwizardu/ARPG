@@ -26,6 +26,10 @@ namespace ARPG.UI
         private Button? _addItemBtn;
         private Button? _addGoldBtn;
         private Button? _addSkillBookBtn;
+        // 네임드 위협 개발 치트 (NAMED_THREAT_DESIGN §13)
+        private Button? _namedAppearBtn;
+        private Button? _namedStageBtn;
+        private Button? _namedVanishBtn;
         private IconButton? _closeBtn;
         private Text? _popupText;
 
@@ -86,12 +90,18 @@ namespace ARPG.UI
             _addItemBtn = root.Q<Button>("add-item-btn");
             _addGoldBtn = root.Q<Button>("add-gold-btn");
             _addSkillBookBtn = root.Q<Button>("add-skillbook-btn");
+            _namedAppearBtn = root.Q<Button>("named-appear-btn");
+            _namedStageBtn = root.Q<Button>("named-stage-btn");
+            _namedVanishBtn = root.Q<Button>("named-vanish-btn");
             _closeBtn = root.Q<IconButton>("close-btn");
             _popupText = root.Q<Text>("popup-text");
 
             if (_addItemBtn != null) _addItemBtn.clicked += OnAddItem;
             if (_addGoldBtn != null) _addGoldBtn.clicked += OnAddGold;
             if (_addSkillBookBtn != null) _addSkillBookBtn.clicked += OnAddSkillBook;
+            if (_namedAppearBtn != null) _namedAppearBtn.clicked += OnNamedAppear;
+            if (_namedStageBtn != null) _namedStageBtn.clicked += OnNamedStage;
+            if (_namedVanishBtn != null) _namedVanishBtn.clicked += OnNamedVanish;
             if (_closeBtn != null) _closeBtn.clicked += () => Close();
         }
 
@@ -214,6 +224,24 @@ namespace ARPG.UI
             {
                 ShowPopup("인벤토리가 가득 찼습니다");
             }
+        }
+
+        /// <summary>플레이어와 가장 가까운 마을에 출현 간격을 무시하고 네임드를 낸다.</summary>
+        public void OnNamedAppear()
+        {
+            ShowPopup(AR.s.NamedThreat != null ? AR.s.NamedThreat.CheatAppearNearPlayer() : "NamedThreatManager 없음");
+        }
+
+        /// <summary>가까운 네임드의 단계를 1 올린다 (다음에 새로 만들 때 반영).</summary>
+        public void OnNamedStage()
+        {
+            ShowPopup(AR.s.NamedThreat != null ? AR.s.NamedThreat.CheatAdvanceStage() : "NamedThreatManager 없음");
+        }
+
+        /// <summary>가까운 네임드를 바로 사라지게 한다 (부탁한 NPC 끝 알림 확인용).</summary>
+        public void OnNamedVanish()
+        {
+            ShowPopup(AR.s.NamedThreat != null ? AR.s.NamedThreat.CheatVanishNow() : "NamedThreatManager 없음");
         }
 
         private void ShowPopup(string message)

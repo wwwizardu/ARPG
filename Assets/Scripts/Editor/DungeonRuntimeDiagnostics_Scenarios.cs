@@ -51,7 +51,8 @@ namespace ARPG.EditorTools
             ValidateReactionRules(pack, report);
             var context = new NpcDialogueContext { NpcBlock = "테스트 NPC", SituationBlock = "숨겨진 외부 몬스터 경고" };
             var topic = new DialogueTopic { Type = DialogueTopicType.Greeting, BaseLine = "안녕하세요." };
-            Require(NpcNarrativeService.BuildDialoguePrompt(context, AffinityTier.Stranger, PlayerRelation.Default, topic).Contains("숨겨진") == false,
+            Require(NpcNarrativeService.BuildDialoguePrompt(context, AffinityTier.Stranger, PlayerRelation.Default, topic,
+                    GreetingEncounter.FirstMeeting, string.Empty).Contains("숨겨진") == false,
                 "unselected threat context cannot enter general dialogue");
 
             using var fixture = new NarrativeDiagnosticFixture(tables, monsters, items);
@@ -226,7 +227,7 @@ namespace ARPG.EditorTools
                 for (int c = 0; c < rumors.Count; c++)
                 {
                     NarrativeContentDefinition content = rumors[c];
-                    DungeonRecord layout = DungeonLayout.Generate(seed, 0, slots.Slots[0], tables[0]);
+                    DungeonRecord layout = DungeonLayout.Generate(seed, 0, slots.Slots[0], tables[0], _diagnosticEliteIds);
                     Require(NarrativeContentCatalog.IsApplicable(content, tables[0]) && DungeonManager.PlaceNarrativeTarget(layout, content),
                         "rumor monster placement for content " + content.ContentId);
                     Require(layout.Objects.Exists(o => (o.Kind == DungeonObjectKind.Monster || o.Kind == DungeonObjectKind.Boss) &&
@@ -427,7 +428,7 @@ namespace ARPG.EditorTools
             // 3. 던전: 늑대만 잡으면 미해결, 동행 단독 보스 처치는 해결, 플레이어 측이 아니면 미해결 종료
             instance = npc.GetNarrativeInstance(rumorId);
             content = npc.GetNarrativeContent(instance);
-            DungeonRecord record = DungeonLayout.Generate(seed, fixture.RumorVillage, rumorSlot, table);
+            DungeonRecord record = DungeonLayout.Generate(seed, fixture.RumorVillage, rumorSlot, table, _diagnosticEliteIds);
             Require(DungeonManager.PlaceNarrativeTarget(record, content) &&
                 record.Objects.Exists(o => o.TableId == content.TargetId), "first entry places the rumor monster");
             fixture.World.Dungeons.Dungeons.Add(record);
@@ -489,7 +490,7 @@ namespace ARPG.EditorTools
             // 플레이어 측이 아닌 보스 처치: 미해결 종료로 기록된다 (되돌려 다음 검사에 쓴다).
             DungeonSlot secondSlot = fixture.Slot(fixture.SecondVillage, 0);
             string secondId = npc.GetDungeonNarrative(secondSlot.DungeonId).InstanceId;
-            DungeonRecord secondRecord = DungeonLayout.Generate(seed, fixture.SecondVillage, secondSlot, table);
+            DungeonRecord secondRecord = DungeonLayout.Generate(seed, fixture.SecondVillage, secondSlot, table, _diagnosticEliteIds);
             fixture.World.Dungeons.Dungeons.Add(secondRecord);
             secondRecord.KilledObjects.Add(secondRecord.Objects.Find(o => o.Kind == DungeonObjectKind.Boss).Id);
             secondRecord.BossKilledByPlayerParty = false;
@@ -1212,7 +1213,7 @@ namespace ARPG.EditorTools
                         World.Dungeons.Villages.Add(slots);
                         TotalSlots += slots.Slots.Count;
                     }
-                    World.Dungeons.Dungeons.Add(DungeonLayout.Generate(World.WorldSeed, VisitedVillage, Slot(VisitedVillage, 0), Table));
+                    World.Dungeons.Dungeons.Add(DungeonLayout.Generate(World.WorldSeed, VisitedVillage, Slot(VisitedVillage, 0), Table, _diagnosticEliteIds));
                     AddResident(10, RumorVillage, 90, 40);
                     AddResident(11, RumorVillage, 30, 85);
                     AddResident(12, RumorVillage, 40, 30, pride: 85);

@@ -42,6 +42,10 @@ namespace ARPG.Skill.Combat
                         direction = targetPosition - ownerPosition;
                     }
                 }
+                else if (inContext.HitOriginKind == HitOriginKind.Path)
+                {
+                    direction = ResolvePathSideDirection(targetPosition, inContext.HitOrigin, inContext.ImpactDirection);
+                }
                 else
                 {
                     direction = targetPosition - inContext.HitOrigin;
@@ -62,6 +66,12 @@ namespace ARPG.Skill.Combat
             if (inContext.HitOriginKind == HitOriginKind.Point)
             {
                 origin = inContext.HitOrigin;
+                stopDistance = 0f;
+            }
+            else if (inContext.HitOriginKind == HitOriginKind.Path)
+            {
+                // 돌진 경로 선 위의 가장 가까운 점까지 끌어온다. 이미 선 위면 움직이지 않는다
+                origin = ResolveClosestPointOnPath(targetPosition, inContext.HitOrigin, inContext.ImpactDirection);
                 stopDistance = 0f;
             }
             else
@@ -110,6 +120,7 @@ namespace ARPG.Skill.Combat
         /// <summary>
         /// 밀 수 있는 대상인지. 살아 있고 스스로 움직이며, 점프 중이거나 이미 밀리는 중이 아니어야 한다.
         /// 밀리는 중에 온 새 넉백·당기기는 무시한다 (멀티샷 동시 적중이 한 번만 밀리도록).
+        /// 넉백 저항이 켜진 스킬의 실행 단계에 있는 대상(ForcedMoveImmuneTag)도 밀지 않는다 (§6.10 적용 규칙 7).
         /// </summary>
         private static bool CanStart(ComponentManager inCm, int inTargetEntityId, out Vector2 outPosition)
         {
@@ -124,6 +135,7 @@ namespace ARPG.Skill.Combat
                 || inCm.HasComponent<ForcedMoveComponent>(inTargetEntityId) == true
                 || inCm.HasComponent<JumpComponent>(inTargetEntityId) == true
                 || inCm.HasComponent<TotemTag>(inTargetEntityId) == true
+                || inCm.HasComponent<ForcedMoveImmuneTag>(inTargetEntityId) == true
                 || inCm.HasComponent<VelocityComponent>(inTargetEntityId) == false)
             {
                 return false;
@@ -158,6 +170,45 @@ namespace ARPG.Skill.Combat
                 Distance = inDistance,
                 Duration = inDuration,
             });
+
+            // 넉백 저항 없이 돌진 중이던 대상은 밀리는 순간 돌진이 끝난다 (§6.10 적용 규칙 8).
+            // 돌진과 넉백이 같은 프레임에 위치를 함께 움직이지 않게 한다. 돌진 정리는 System_Skill이 한다.
+            if (inCm.TryGetComponent<DashComponent>(inTargetEntityId, out DashComponent dash) == true
+                && dash.IsFinished == false)
+            {
+                dash.IsFinished = true;
+                inCm.SetComponent(inTargetEntityId, dash);
+            }
+        }
+
+        /// <summary>
+        /// 돌진 경로 옆쪽 밀기 방향. 대상 위치에서 돌진 방향 성분을 뺀 옆 성분이며,
+        /// 대상이 경로 정가운데에 있으면 돌진 방향 기준 오른쪽으로 민다 (§6.10 표의 돌진 행).
+        /// </summary>
+        private static Vector2 ResolvePathSideDirection(Vector2 inTargetPosition, Vector2 inPathPoint, Vector2 inPathDirection)
+        {
+            Vector2 offset = inTargetPosition - inPathPoint;
+            if (inPathDirection.sqrMagnitude < MIN_DIRECTION_SQR)
+                return offset;
+
+            Vector2 forward = inPathDirection.normalized;
+            Vector2 side = offset - forward * Vector2.Dot(offset, forward);
+            if (side.sqrMagnitude < MIN_DIRECTION_SQR)
+                return new Vector2(forward.y, -forward.x);
+
+            return side;
+        }
+
+        /// <summary>
+        /// 돌진 경로 선(inPathPoint를 지나고 inPathDirection 방향) 위에서 대상에 가장 가까운 점.
+        /// </summary>
+        private static Vector2 ResolveClosestPointOnPath(Vector2 inTargetPosition, Vector2 inPathPoint, Vector2 inPathDirection)
+        {
+            if (inPathDirection.sqrMagnitude < MIN_DIRECTION_SQR)
+                return inPathPoint;
+
+            Vector2 forward = inPathDirection.normalized;
+            return inPathPoint + forward * Vector2.Dot(inTargetPosition - inPathPoint, forward);
         }
 
         private static bool TryGetPosition(ComponentManager inCm, int inEntityId, out Vector2 outPosition)

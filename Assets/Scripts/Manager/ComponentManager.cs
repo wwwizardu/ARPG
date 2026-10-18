@@ -63,6 +63,10 @@ namespace ARPG.Component
             // 넉백·당기기 중인 엔티티 (장판 하나가 여러 대상을 한 번에 밀 수 있음)
             { typeof(ForcedMoveComponent), 128 },
 
+            // 돌진 중인 엔티티와 넉백 저항 스킬 실행 중인 시전자 (SKILL_DESIGN §6.10·§6.11)
+            { typeof(DashComponent), 32 },
+            { typeof(ForcedMoveImmuneTag), 32 },
+
             // 보통 사용되는 컴포넌트
             { typeof(InputComponent), 100 },
             { typeof(SkillAimIndicatorComponent), 8 },
@@ -79,6 +83,7 @@ namespace ARPG.Component
             { typeof(AICanSeeTargetTag), 500 },
             { typeof(PathfindingComponent), 500 },
             { typeof(MonsterArchetypeComponent), 256 }, // 모든 몬스터에 1개 (필드 최대 ~150 + 던전)
+            { typeof(NamedThreatComponent), 4 },        // 네임드 위협 엔티티 (마을당 1마리, 플레이어 근처만 실체화 — NAMED_THREAT §12.1)
             { typeof(MonsterAffixComponent), 256 },     // 접사가 있는 몬스터 (필드 몬스터의 약 27%, 등급 컴포넌트와 같은 상한)
             { typeof(SpawnHpRefillTag), 64 },           // 접사 몬스터 스폰 직후 첫 재계산까지만 존재
 
@@ -90,6 +95,7 @@ namespace ARPG.Component
             { typeof(SkillAttackProfileComponent), 128 }, // 스킬 캐시 + 설치된 단발 장판의 공격 스냅샷
             { typeof(SkillAttackProfileDirtyTag), 50 },  // 재계산 요청 태그 (처리 후 즉시 제거)
             { typeof(SkillLandingCommitComponent), 32 }, // 점프 착지 후 다음 FixedUpdate까지 유지되는 일회성 신호
+            { typeof(SkillDashHitComponent), 32 },       // 돌진 중인 스킬 엔티티의 경로 판정 상태
             { typeof(SkillPropagationComponent), 32 },
             { typeof(SkillPropagationBranchComponent), 256 },
             { typeof(SkillPropagationRequestComponent), 128 },

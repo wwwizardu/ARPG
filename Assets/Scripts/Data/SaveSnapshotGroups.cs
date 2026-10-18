@@ -44,7 +44,8 @@ namespace ARPG.Data
     [Flags]
     public enum WorldSaveGroup : ulong
     {
-        Metadata = 1, Companion = 2, GoldPrice = 4, All = 7,
+        // NamedThreat: 네임드 위협 기록 (NAMED_THREAT_DESIGN §10.1). 기록 안 목록이 바뀌면 소유자 NamedThreatManager가 표시한다.
+        Metadata = 1, Companion = 2, GoldPrice = 4, NamedThreat = 8, All = 15,
     }
 
     [Flags]
@@ -59,7 +60,7 @@ namespace ARPG.Data
         public static ulong Npc(string field) => (ulong)(field switch
         {
             "PositionX" or "PositionY" or "VillageId" or "IsActive" or "AbandonedSiteSinceGameTime" => NpcSaveGroup.Location,
-            "Condition" or "WoundCount" or "LastWoundGameTime" or "LastWoundActivity" or "LastWoundDungeonId" => NpcSaveGroup.Condition,
+            "Condition" or "WoundCount" or "LastWoundGameTime" or "LastWoundActivity" or "LastWoundDungeonId" or "LastWoundThreatId" => NpcSaveGroup.Condition,
             "Activity" or "LastSimGameTime" => NpcSaveGroup.Activity,
             "Gold" or "LastTradeGameTime" => NpcSaveGroup.Wallet,
             "Inventory" => NpcSaveGroup.Inventory,
@@ -101,6 +102,7 @@ namespace ARPG.Data
         {
             "NpcCompanion" => WorldSaveGroup.Companion,
             "GoldPrice" => WorldSaveGroup.GoldPrice,
+            "NamedThreats" => WorldSaveGroup.NamedThreat,
             _ => WorldSaveGroup.Metadata,
         });
         public static ulong Party(string field) => (ulong)(field == "Activity" ? PartySaveGroup.Activity : PartySaveGroup.Members);
@@ -116,7 +118,7 @@ namespace ARPG.Data
         public static ulong Narrative(string field) => (ulong)(field switch
         {
             "DungeonId" or "VillageId" or "SlotIndex" or "Generation" or "TargetMonsterId" or
-                "HasEntranceContext" or "EntranceX" or "EntranceY" or "TargetItemId" or "OwnerNpcId" => NarrativeSaveGroup.Target,
+                "HasEntranceContext" or "EntranceX" or "EntranceY" or "TargetItemId" or "ThreatId" or "OwnerNpcId" => NarrativeSaveGroup.Target,
             "Progress" or "WishState" or "ProgressGameTime" or "Ended" or "EndNoticePending" or "Revision" => NarrativeSaveGroup.Progress,
             "RequesterNpcId" or "RequestedGameTime" or "IntroducedFromInstanceId" => NarrativeSaveGroup.Introductions,
             "FollowUpInstanceId" or "FollowUpState" => NarrativeSaveGroup.Continuations,

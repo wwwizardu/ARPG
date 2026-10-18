@@ -5,6 +5,7 @@
 > - 부분: 마지막 펄스는 셰이더에 있으나 경고음 없음(§4.1), LOD enum만 있고 항상 `Full`(§11.3)  
 > - 미구현: 취소 페이드(§4.1), 최소 가독 시간 진단(§7.5), EditMode 테스트(§13.1, 빌드 검증기가 대체), Phase 4 프로파일  
 > - 2026-10-10 변경: 마지막 타격·발사·착지 커밋 직후 예고 제거. 다단·채널은 다음 커밋이 있을 때만 유지하고 `End` 진입 시 정리(§1, §4.1, §8.2).
+> - 2026-10-13 변경: 돌진 직선 띠 예고(§5.8, `DashLaunch` §7.3), 몬스터 스킬 조준 회전과 예고 방향 추종(§5.1·§6.3).
 > 작성일: 2026-09-14  
 > 범위: 몬스터 스킬 시작부터 마지막 타격·발사·착지 커밋까지의 바닥 공격 예고, 공통 배치 렌더링, 취소·다단히트·지속 장판 처리
 
@@ -153,7 +154,7 @@ nextHitOffset = firstHitOffset + CurrentHitIndex × HitInterval
 
 - 시전자 발 위치를 중심으로 한다.
 - 방향은 `SkillTargetComponent.TargetDirection`을 사용한다.
-- 현행 몬스터 `SnapshotOnCommand`에서는 방향을 명령 시점에 고정한다.
+- 몬스터 스킬은 2026-10-13부터 표의 조준 방식을 따른다(POE2_CURSOR_TRACKING_PLAN §15). `TrackUntilCommit`이면 타격 직전까지 회전 속도 제한으로 대상을 따라 돌고, 예고 방향도 매 프레임 같이 돈다. `SnapshotOnCommand`이면 명령 시점에 고정한다.
 - 실제 판정이 타격 순간 시전자 위치를 읽으므로 중심은 기본적으로 시전자를 따라간다.
 - 타격 시점에 진행 면이 외곽선에 닿는다. 마지막 타격 직후 제거하며, 다단 공격은 다음 타격을 예고한다.
 
@@ -214,6 +215,13 @@ nextHitOffset = firstHitOffset + CurrentHitIndex × HitInterval
 - 피해가 착지와 동시에 발생하도록 실제 타격 커밋을 `Landing`에 연결한다.
 - 비행 중 충돌 또는 경로 타격이 있는 별도 스킬은 Line/Capsule 형태를 추가한다.
 
+### 5.8 돌진 (2026-10-13)
+
+- 돌진(`SkillType=Dash`, SKILL_DESIGN §6.11)은 준비 동안 직선 띠(`ProjectileLane` 모양 재사용)로 예고한다.
+- 띠는 시전자 몸 중심(발 위치 + `HitOffset`)에서 시작해 돌진 거리만큼 뻗는다. 폭은 `2 × (시전자 HitRadius + SkillTargetRange1 + 플레이어 HitRadius)`로, 플레이어 중심이 띠 안이면 돌진에 맞는다.
+- 중심은 시전자를 따라가고(`FollowOwner`), 방향은 회전 중인 조준을 매 프레임 따른다. 준비 중 시전자가 밀리면 띠도 함께 옮겨진다.
+- 커밋은 돌진 출발(`SkillImpactKind.DashLaunch`, 실행 단계 첫 틱)이며, 출발하는 순간 예고를 제거한다. 돌진 중에는 달려오는 몸 자체가 위험을 알린다.
+
 ---
 
 ## 6. 실제 판정과 범위 표시의 일치
@@ -249,7 +257,7 @@ halfAngle >= 180 → 원형
 | 항목 | 정책 | 예시 |
 |---|---|---|
 | 중심 | `FollowOwner` / `SnapshotOwner` / `TargetPosition` / `LandingPosition` | 근접은 FollowOwner, 장판은 TargetPosition |
-| 방향 | `SnapshotOnCommand` / `FollowCommittedAim` | 일반 몬스터는 SnapshotOnCommand |
+| 방향 | `SnapshotOnCommand` / `FollowCommittedAim` | 표에 `TrackUntilCommit`이 적힌 몬스터 스킬은 FollowCommittedAim (2026-10-13) |
 
 판정이 시전자의 현재 위치를 읽는데 표시만 시작 위치에 남는 상태, 또는 판정 방향은 고정인데 표시가 플레이어를 계속 추적하는 상태를 금지한다.
 
@@ -259,6 +267,7 @@ MVP는 기존 테이블에서 공통 형태를 자동 결정한다.
 
 ```text
 ProjectileId > 0                    → ProjectileLane 또는 ProjectileFan
+SkillType == Dash && HasDirectImpact → ProjectileLane (돌진 띠, §5.8)
 SkillType == Jump && HasDirectImpact
   && ExecutionType != Channeling    → LandingCircle
 HasDirectImpact == false            → None
@@ -321,6 +330,7 @@ public static class SkillImpactTimingResolver
 | AreaEffect | 위와 동일한 시점에 Area 활성화 및 첫 틱 | `AreaEffect.TickInterval`은 활성 장판 책임 |
 | Channeling | 기본적으로 `StartDuration + DamageTime × ProcessDuration` | `ChannelingInterval` |
 | Landing | 실제 착지 완료 | 단발 (Single/MultiHit 전용) |
+| DashLaunch | `StartDuration` (실행 단계 첫 틱, 돌진 출발) | 단발. 실제 피해는 돌진 중 경로 판정이 담당 (2026-10-13) |
 
 Landing 커밋은 Single/MultiHit에만 적용한다(`SkillTable.UsesLandingCommit`). 채널 틱은 `ChannelingInterval`
 주기로 발생해 착지라는 한 시점에 정렬할 수 없고, 착지 커밋을 소비하는 경로도 `ProcessMultiHitSkill`뿐이라

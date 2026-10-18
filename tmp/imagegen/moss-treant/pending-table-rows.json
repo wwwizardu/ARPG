@@ -1,0 +1,92 @@
+{
+  "status": "awaiting_explicit_google_sheets_write_approval",
+  "spreadsheetId": "13j0_AI_6nSHHEkAHK2w9oRd-98xYYiUoP5spAv0U4TA",
+  "spreadsheetTitle": "ARPG Tables",
+  "source": "Assets/Scripts/Editor/DownloadTables.cs:654",
+  "monster": "MossTreant",
+  "displayName": "이끼나무 정령",
+  "writes": [
+    {
+      "sheet": "Animation",
+      "range": "A25:G25",
+      "values": [
+        24,
+        "MossTreant",
+        "Animation/MossTreant",
+        0.45,
+        0.22,
+        0.2,
+        0.25
+      ]
+    },
+    {
+      "sheet": "Stat",
+      "range": "A32:AF32",
+      "values": [
+        1018,
+        "Monster",
+        "MossTreant",
+        14,
+        3,
+        2,
+        160,
+        20,
+        1,
+        2,
+        3,
+        5,
+        5,
+        10,
+        2.8,
+        1,
+        1,
+        25,
+        0,
+        5,
+        5,
+        15,
+        5,
+        0,
+        0,
+        0,
+        0,
+        50,
+        100,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "sheet": "Monster",
+      "range": "A18:Q18",
+      "values": [
+        1018,
+        "MossTreant",
+        "이끼나무 정령 - 숲의 짧은 뿌리 다리와 굵은 나무팔, 얼굴 틈에서 빛나는 눈. 느리게 접근해 크게 내려찍고 공격 후 빈틈이 드러나는 일반 근접 몬스터. 기본 근접 AI·스킬 사용",
+        1018,
+        0.45,
+        0.8,
+        0.85,
+        "temp",
+        24,
+        1001,
+        1,
+        1,
+        0,
+        0,
+        1,
+        "Normal",
+        "Forest"
+      ]
+    }
+  ],
+  "localStatus": {
+    "png": "13/13 validated, 128x128 RGBA; magenta chroma removed",
+    "spriteLibrary": "Assets/Art/Animation/MossTreant.spriteLib; 13/13 missing 0",
+    "addressable": "Animation/MossTreant; actual load passed",
+    "localTables": "Animation 24 / Stat 1018 / Monster 1018 appended locally, NOT downloaded from Sheet",
+    "runtime": "CreateMonster, Forest-only pool, perception, Skill 2 direct hit, Attack animation, telegraph, 1.15s recovery passed; diagnostics removed",
+    "pending": "Google Sheet writes rejected by automatic approval review; no external rows changed. Re-read live target IDs and blank rows before approved write, then download Animation/Stat/Monster via Unity menus."
+  }
+}

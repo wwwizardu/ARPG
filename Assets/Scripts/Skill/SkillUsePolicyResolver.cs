@@ -15,14 +15,21 @@ namespace ARPG.Skill
 
         public static GE.SkillAimTrackingMode ResolveAimTrackingMode(SkillComponent skill, bool hasPlayerInput)
         {
-            if (skill.Table == null || hasPlayerInput == false)
+            if (skill.Table == null)
             {
                 return GE.SkillAimTrackingMode.SnapshotOnCommand;
             }
 
+            // 명시값은 시전자 종류와 무관하게 적용한다. AI도 표에 적힌 방식으로 대상을 추적한다
+            // (POE2_CURSOR_TRACKING_PLAN §15, 2026-10-13). 빈 칸인 AI 스킬만 명령 시점에 고정한다.
             if (skill.Table.AimTrackingMode != GE.SkillAimTrackingMode.Default)
             {
                 return skill.Table.AimTrackingMode;
+            }
+
+            if (hasPlayerInput == false)
+            {
+                return GE.SkillAimTrackingMode.SnapshotOnCommand;
             }
 
             if (RequiresDirectionalAim(skill.Table) == false)
@@ -55,7 +62,9 @@ namespace ARPG.Skill
                 return GE.SkillMovementMode.FullSpeed;
             }
 
-            if (skill.Table.SkillType == GE.SkillType.Jump || (skill.Table.Tags & GE.SkillTag.Move) != 0)
+            if (skill.Table.SkillType == GE.SkillType.Jump
+                || skill.Table.SkillType == GE.SkillType.Dash
+                || (skill.Table.Tags & GE.SkillTag.Move) != 0)
             {
                 return GE.SkillMovementMode.OwnedMotion;
             }
@@ -90,11 +99,21 @@ namespace ARPG.Skill
                         : DefaultMoveSpeedWhileUsingMultiplier;
 
                 case GE.SkillMovementMode.Locked:
+                case GE.SkillMovementMode.LockedThroughEnd:
                     return 0f;
 
                 default:
                     return 1f;
             }
+        }
+
+        /// <summary>
+        /// 후딜(End) 동안 이동 배율을 정상 속도로 서서히 되돌리는지 여부.
+        /// false면 후딜 내내 실행 단계 배율을 유지하고, 스킬이 끝나는 순간 정상 속도로 돌아간다.
+        /// </summary>
+        public static bool RecoversMovementDuringEnd(GE.SkillMovementMode movementMode)
+        {
+            return movementMode != GE.SkillMovementMode.LockedThroughEnd;
         }
 
         /// <summary>

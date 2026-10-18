@@ -12,33 +12,34 @@ namespace ARPG.Npc.Narrative
     /// </summary>
     public class NpcNarrativeRuntime
     {
-        // 대화 캐시: npcId → (tier, topic, variant) → 생성 대사.
+        // 대화 캐시: npcId → (tier, encounter, topic, variant) → 생성 대사.
         // npcId를 최상위 키로 둬 새 사건(Deed·사별) 발생 시 NPC 단위 무효화가 O(1).
+        // encounter는 생성 대사 첫머리의 인사가 만남 상황과 맞도록 나눈다 (첫 만남 인사를 단골에게 다시 쓰지 않음).
         // variant는 같은 토픽 타입 안의 내용 구분자(DialogueTopic.CacheVariant) — 새 사건이면 새 대사.
-        private readonly Dictionary<int, Dictionary<(AffinityTier, DialogueTopicType, int), string>> _dialogueCache = new();
+        private readonly Dictionary<int, Dictionary<(AffinityTier, GreetingEncounter, DialogueTopicType, int), string>> _dialogueCache = new();
         // 화제 셔플백: npcId → 최근 말한 토픽(중복 회피, 소진 시 리셋)
         private readonly Dictionary<int, HashSet<DialogueTopicType>> _recentTopics = new();
         // 세계 교체(Reset)마다 올라간다. 늦게 도착한 대화 응답·저장 결과가 새 세계에 적용되지 않게 비교한다.
         public int Lifetime { get; private set; }
 
         // ── 대화 캐시 ──
-        public bool TryGetDialogue(int npcId, AffinityTier tier, DialogueTopicType topic, int variant,
+        public bool TryGetDialogue(int npcId, AffinityTier tier, GreetingEncounter encounter, DialogueTopicType topic, int variant,
             [MaybeNullWhen(false)] out string text)
         {
-            if (_dialogueCache.TryGetValue(npcId, out Dictionary<(AffinityTier, DialogueTopicType, int), string> perNpc))
-                return perNpc.TryGetValue((tier, topic, variant), out text);
+            if (_dialogueCache.TryGetValue(npcId, out Dictionary<(AffinityTier, GreetingEncounter, DialogueTopicType, int), string> perNpc))
+                return perNpc.TryGetValue((tier, encounter, topic, variant), out text);
             text = null!;
             return false;
         }
 
-        public void SetDialogue(int npcId, AffinityTier tier, DialogueTopicType topic, int variant, string text)
+        public void SetDialogue(int npcId, AffinityTier tier, GreetingEncounter encounter, DialogueTopicType topic, int variant, string text)
         {
-            if (_dialogueCache.TryGetValue(npcId, out Dictionary<(AffinityTier, DialogueTopicType, int), string> perNpc) == false)
+            if (_dialogueCache.TryGetValue(npcId, out Dictionary<(AffinityTier, GreetingEncounter, DialogueTopicType, int), string> perNpc) == false)
             {
-                perNpc = new Dictionary<(AffinityTier, DialogueTopicType, int), string>();
+                perNpc = new Dictionary<(AffinityTier, GreetingEncounter, DialogueTopicType, int), string>();
                 _dialogueCache[npcId] = perNpc;
             }
-            perNpc[(tier, topic, variant)] = text;
+            perNpc[(tier, encounter, topic, variant)] = text;
         }
 
         /// <summary>

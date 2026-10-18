@@ -96,8 +96,8 @@ namespace ARPG.Item
             if (slotIndex < 0 || slotIndex >= _items.Count)
                 return false;
 
-            // 해당 슬롯에 같은 ID의 아이템이 있으면 수량 증가
-            if (_items[slotIndex] != null && _items[slotIndex]!.Id == inItem.Id)
+            // Stackable이고 해당 슬롯에 같은 ID의 아이템이 있으면 수량 증가 (장비는 같은 ID여도 교체)
+            if (inItem.Table != null && inItem.Table.Stackable && _items[slotIndex] != null && _items[slotIndex]!.Id == inItem.Id)
             {
                 _changed?.Invoke();
                 _items[slotIndex]!.Quantity += inItem.Quantity;

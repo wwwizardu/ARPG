@@ -636,9 +636,13 @@ namespace ARPG.Npc
         /// 중상 결정론 판정 (D91 ②). 결과 판정과 따로 만든 RNG를 쓰므로 호출 순서와 무관하게 다른 판정의 난수열을 바꾸지 않는다.
         /// </summary>
         public static bool RollSevereWound(int rngOwnerId, float startGameTime, int worldSeed, int salt)
+            => RollSevereWound(rngOwnerId, startGameTime, worldSeed, salt, SevereWoundChance);
+
+        /// <summary>중상 판정의 확률 지정판. 네임드 위협 마주침은 30%를 넘긴다 (NAMED_THREAT_DESIGN §6.2).</summary>
+        public static bool RollSevereWound(int rngOwnerId, float startGameTime, int worldSeed, int salt, float chance)
         {
             HistoryRng rng = CreateRng(rngOwnerId, startGameTime, worldSeed, salt);
-            return rng.NextDouble() < SevereWoundChance;
+            return rng.NextDouble() < Mathf.Clamp01(chance);
         }
 
         /// <summary>부상 등급·치료 여부에 따른 회복 시간 (D36·D91).</summary>
@@ -827,6 +831,8 @@ namespace ARPG.Npc
             // 120~125는 소문 교환(Rumor*Salt 상수). 126~129는 비워 둔 P2b 예비 번호 — 재사용 금지.
             // 130은 파티 모집 시도, 131은 파티 수락 난수열(리더 EntityId·리더 결정 시각 기준, PartyRecruit*/PartyAccept* 상수).
             // 132~139는 파티 모집 예비 — 재사용 금지.
+            // 210~239는 네임드 위협 (NamedThreatRules — 210 솔로 마주침, 211 솔로 결과, 212 파티 마주침, 213 솔로 중상, 220+i 파티원 결과,
+            // 230+i 파티원 중상). 200~209는 다짐(NPC_VOW_DESIGN) 예약.
             // 140은 솔로 Hunt 중상, 141은 솔로 Delve 중상 (EntityId 기준), 150+i는 파티원 Hunt 중상, 160+i는 파티원 Delve 중상
             // (PartyId 기준, SevereWound*Salt 상수, D91). 142~149는 부상 예비.
             // 170은 절도 시도 난수열(시도 확률 → 피해자 → 물건), 171은 절도 발각 (도둑 EntityId·도둑의 Rest 시작 시각 기준,

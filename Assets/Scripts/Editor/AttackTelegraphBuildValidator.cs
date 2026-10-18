@@ -339,6 +339,52 @@ namespace ARPG.Editor
                     15f));
             Require(errors, areaDeliveryGeometry.Shape == AttackTelegraphShape.None,
                 "발사체가 장판을 운반하는 위치 지정 스킬은 예고하지 않아야 합니다 (착지해 깔린 장판이 위험을 알림).");
+
+            // 돌진 (SKILL_DESIGN §6.11): 출발이 커밋이고, 예고는 몸 중심에서 돌진 거리만큼 뻗는 띠다
+            SkillImpactSchedule dash = SkillImpactTimingResolver.Resolve(new SkillImpactTimingInput(
+                SkillImpactExecutionMode.Single,
+                0.6f,
+                0.5f,
+                0f,
+                0f,
+                0f,
+                1,
+                true,
+                false,
+                false,
+                false,
+                true));
+            Require(errors, dash.Kind == SkillImpactKind.DashLaunch && dash.CommitCount == 1,
+                "돌진은 출발 1회 커밋(DashLaunch)이어야 합니다.");
+            RequireApproximately(errors, dash.FirstCommitOffset, 0.6f,
+                "돌진 커밋은 준비(StartDuration)가 끝나는 실행 단계 첫 틱이어야 합니다.");
+
+            AttackTelegraphGeometry dashGeometry = AttackTelegraphGeometryResolver.Resolve(
+                new AttackTelegraphGeometryInput(
+                    true,
+                    false,
+                    true,
+                    false,
+                    false,
+                    false,
+                    0.2f,
+                    6f,
+                    0.4f,
+                    0.3f,
+                    0f,
+                    0f,
+                    0f,
+                    0f,
+                    1,
+                    15f,
+                    true,
+                    6f));
+            Require(errors,
+                dashGeometry.Shape == AttackTelegraphShape.ProjectileLane
+                && dashGeometry.OriginMode == AttackTelegraphOriginMode.FollowOwner
+                && Mathf.Abs(dashGeometry.Range - 6f) <= EPSILON
+                && Mathf.Abs(dashGeometry.Width - 1.8f) <= EPSILON,
+                "돌진 예고는 시전자를 따라가는 띠이며, 길이는 돌진 거리, 폭은 2×(시전자 + 추가 폭 + 플레이어 반경)이어야 합니다.");
         }
 
         private static void ValidateMonsterSkillTables(List<string> errors)
@@ -500,6 +546,10 @@ namespace ARPG.Editor
             }
 
             bool usesLanding = skill.UsesLandingCommit;
+            bool usesDash = skill.UsesDash;
+            if (usesDash == true && (skill.DashDistance <= 0f || skill.ProcessTime <= 0f || hasProjectile == true || hasArea == true))
+                errors.Add($"돌진 Skill {skill.Id}({skill.Name})는 돌진 거리(SkillTargetRange2)·ProcessTime이 0보다 크고 발사체·장판이 없어야 합니다.");
+
             SkillImpactSchedule schedule = SkillImpactTimingResolver.Resolve(new SkillImpactTimingInput(
                 executionMode,
                 skill.StartTime,
@@ -511,7 +561,8 @@ namespace ARPG.Editor
                 hasDirectImpact,
                 hasProjectile,
                 hasArea,
-                usesLanding));
+                usesLanding,
+                usesDash));
             if (schedule.HasCommit == false)
                 errors.Add($"공격 Skill {skill.Id}({skill.Name})에서 커밋 스케줄을 만들 수 없습니다.");
 
@@ -532,7 +583,9 @@ namespace ARPG.Editor
                     projectile != null ? projectile.LifeTime : 0f,
                     projectile != null ? projectile.HitRadius : 0f,
                     Mathf.Max(1, skill.BaseProjectileCount),
-                    AttackTelegraphGeometryResolver.DefaultProjectileSpreadAngleDeg));
+                    AttackTelegraphGeometryResolver.DefaultProjectileSpreadAngleDeg,
+                    usesDash,
+                    skill.DashDistance));
             // 투사체와 장판 스킬은 자체 비주얼이 위험을 알리므로 예고 도형이 없어도 정상이다.
             // 공격 예고는 직접 범위 타격과 설치된 지연 장판만 담당한다.
             if (geometry.Shape == AttackTelegraphShape.None && hasArea == false && hasProjectile == false)

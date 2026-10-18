@@ -19,5 +19,6 @@ namespace ARPG.Component
         public float AttackRange;       // 공격 범위
         public float RetreatThreshold;  // 후퇴 체력 임계값
         public float KeepDistance;      // 유지 거리 (0=겹침 허용, >0=해당 거리 유지)
+        public float PatrolRadius;      // 몬스터 순찰 반경 (AiTable.PatrolRadius, 0=순찰 안 함). 기준점은 AIStateComponent.SpawnPosition
     }
 }

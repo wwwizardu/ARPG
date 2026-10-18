@@ -10,6 +10,7 @@ using UnityEngine.Networking;
 
 using ARPG.Component;
 using ARPG.Item;
+using ARPG.Npc;
 using ARPG.Tables;
 using ARPG.Utility;
 using Newtonsoft.Json;
@@ -42,14 +43,17 @@ namespace ARPG.Editor
         {
             var list = new List<TableEntry>();
             Register<CreatureTable>(list, "0&range=A:I");
-            Register<AiTable>(list, "947794841&range=A:L");
+            // M열 PatrolRadius (NAMED_THREAT_DESIGN §5.5) — 빈칸 = 0 = 순찰 안 함
+            Register<AiTable>(list, "947794841&range=A:M");
             Register<MonsterTable>(list, "483012127&range=A:Q");
-            Register<NpcTable>(list, "1460299278&range=A:O");
+            Register<NpcTable>(list, "1460299278&range=A:P");
             // NpcEquipTable — NPC 시작 장비 세트. Desc + 슬롯별 ItemId/Chance 쌍.
             Register<NpcEquipTable>(list, "1566085089&range=A:Z");
             Register<MonsterArchetypeTable>(list, "1141585255&range=A:M");
             // 몬스터 접사 (MONSTER_AFFIX_DESIGN.md §5). A~S 데이터, T열 Note는 시트 가독성용(다운로드 제외)
             Register<MonsterAffixTable>(list, "1703620452&range=A:S");
+            // 네임드 위협 템플릿 (NAMED_THREAT_DESIGN §11.1). A~S 데이터, T열 Note는 시트 가독성용(다운로드 제외)
+            Register<NamedThreatTable>(list, "1768678022&range=A:S");
             Register<StatTable>(list, "318209064&range=A:AJ");
             Register<ItemTable>(list, "2064107837&range=A:S");
             Register<BuildableItemTable>(list, "534887250&range=A:AA");
@@ -58,7 +62,7 @@ namespace ARPG.Editor
             Register<DropTable>(list, "1241586373&range=A:K");
             Register<DropCurrencyTable>(list, "2071520432&range=A:V");
             Register<DropEquipmentTable>(list, "1267382287&range=A:V");
-            Register<SkillTable>(list, "92727160&range=A:AR");
+            Register<SkillTable>(list, "92727160&range=A:AS");
             // Phase 1: SkillEffect 합성 시스템용 테이블 (+ 스킬 페이지 Tier/비용 메타데이터 + Kind 분류 컬럼)
             Register<SkillEffectTable>(list, "1681865950&range=A:N");
             Register<SkillPropagationTable>(list, "155977417&range=A:M");
@@ -136,6 +140,7 @@ namespace ARPG.Editor
 
             ValidateAiSetup();
             ValidateForcedMoveSetup();
+            ValidateNamedThreatSetup(narrative);
 
             if (SaveNarrativePack(narrative) == false) return;
             AssetDatabase.Refresh();
@@ -279,6 +284,9 @@ namespace ARPG.Editor
 
         [MenuItem("ARPG/Download Table/MonsterAffixTable", false, 100)]
         private static async void DownloadMonsterAffixTable() => await DownloadSingleTable<MonsterAffixTable>();
+
+        [MenuItem("ARPG/Download Table/NamedThreatTable", false, 100)]
+        private static async void DownloadNamedThreatTable() => await DownloadSingleTable<NamedThreatTable>();
 
         [MenuItem("ARPG/Download Table/MonsterTable", false, 100)]
         private static async void DownloadMonsterTable() => await DownloadSingleTable<MonsterTable>();
@@ -709,6 +717,10 @@ namespace ARPG.Editor
                 {
                     ParseMonsterAffixTable(monsterAffixTable, values);
                 }
+                else if (table is NamedThreatTable namedThreatTable)
+                {
+                    ParseNamedThreatTable(namedThreatTable, values);
+                }
                 else if (table is NpcTable npcTable)
                 {
                     ParseNpcTable(npcTable, values);
@@ -955,9 +967,9 @@ namespace ARPG.Editor
 
         private static void ParseNpcTable(NpcTable table, string[] values)
         {
-            if (values.Length < 15)
+            if (values.Length < 16)
             {
-                Debug.LogError($"[ParseNpcTable] Invalid data length. Expected at least 15, got {values.Length}. Id: {table.Id}");
+                Debug.LogError($"[ParseNpcTable] Invalid data length. Expected at least 16, got {values.Length}. Id: {table.Id}");
                 return;
             }
 
@@ -976,6 +988,11 @@ namespace ARPG.Editor
             table.DropId = int.Parse(values[12]);
             table.DropRateBonus = int.Parse(values[13]);
             table.DropRarityBonus = int.Parse(values[14]);
+            // P열 Gender: NPC 종류마다 Male/Female 중 하나. 범용(빈칸·Unknown)은 허용하지 않는다.
+            if (Enum.TryParse(values[15].Trim(), out NpcGender gender) == false ||
+                (gender != NpcGender.Male && gender != NpcGender.Female))
+                Debug.LogError($"[ParseNpcTable] Id={table.Id}({table.Name}): Gender='{values[15]}' — Male 또는 Female이어야 합니다.");
+            table.Gender = gender;
         }
 
         /// <summary>
@@ -1589,6 +1606,8 @@ namespace ARPG.Editor
             table.MoveSpeedWhileUsingMul = ParseFloatSafe(values, 42);
             // AR열: 드롭을 명시적으로 허용한 스킬만 랜덤 스킬북 후보에 포함. 빈 셀/구 스키마는 false.
             table.DropEnabled = ParseBoolSafe(values, 43);
+            // AS열: 실행 단계 넉백 저항 (SKILL_DESIGN §6.10 적용 규칙 7). 빈 셀/구 스키마는 false.
+            table.ForcedMoveImmune = ParseBoolSafe(values, 44);
 
             // 두 수치 컬럼은 0이 "미설정 → 런타임 기본값 사용"을 뜻한다(POE2_CURSOR_TRACKING_PLAN §4.1 빈 셀 기본값 표).
             // 따라서 범위를 벗어난 값을 0으로 되돌리면 로그가 말하는 값과 실제 적용값이 달라진다.
@@ -1629,6 +1648,27 @@ namespace ARPG.Editor
                                $"현재 값이면 포물선 없이 착지 지점으로 즉시 이동합니다. " +
                                $"(StartTime={table.StartTime}, ProcessTime={table.ProcessTime}, EndTime={table.EndTime})");
             }
+
+            if (table.UsesDash == true)
+                ValidateDashSkill(table);
+        }
+
+        /// <summary>
+        /// 돌진(SkillType=Dash) 데이터 제약 (SKILL_DESIGN §6.11). 값은 고치지 않고 저작 시점에 드러낸다.
+        /// </summary>
+        private static void ValidateDashSkill(SkillTable table)
+        {
+            string prefix = $"[ParseSkillTable] Skill Id={table.Id}({table.Name}): SkillType=Dash";
+            if (table.SkillTargetType != GlobalEnum.SkillTargetType.Direction)
+                Debug.LogError($"{prefix}는 SkillTargetType=Direction이어야 합니다. (현재 {table.SkillTargetType})");
+            if (table.SkillTargetRange2 <= 0f)
+                Debug.LogError($"{prefix}의 돌진 거리 SkillTargetRange2는 0보다 커야 합니다. (현재 {table.SkillTargetRange2})");
+            if (table.ProcessTime <= 0f)
+                Debug.LogError($"{prefix}의 돌진 시간 ProcessTime은 0보다 커야 합니다. 0이면 첫 프레임에 거리를 한 번에 이동합니다.");
+            if (table.ProjectileId > 0 || table.AreaEffectId > 0)
+                Debug.LogError($"{prefix}는 ProjectileId·AreaEffectId를 쓸 수 없습니다. (현재 {table.ProjectileId}/{table.AreaEffectId})");
+            if (table.ExecutionType != SkillExecutionType.Single && table.ExecutionType != SkillExecutionType.MultiHit)
+                Debug.LogError($"{prefix}의 ExecutionType은 Single 또는 MultiHit이어야 합니다. (현재 {table.ExecutionType})");
         }
 
         /// <summary>
@@ -1850,6 +1890,98 @@ namespace ARPG.Editor
             table.SkillWeight2 = int.Parse(values[9]);
             table.SkillId3 = int.Parse(values[10]);
             table.SkillWeight3 = int.Parse(values[11]);
+            // M열 (NAMED_THREAT_DESIGN §5.5). 빈칸 = 0 = 순찰 안 함
+            table.PatrolRadius = Mathf.Max(0f, ParseFloatSafe(values, 12));
+        }
+
+        /// <summary>
+        /// NamedThreatTable 파싱 (NAMED_THREAT_DESIGN §11.1). A:S = Id, Name, Kind, MonsterId, AiTableId, MinZone, MaxZone, Biome,
+        /// Weight, Title1~3, Affix1, Affix2, Stage2Affix, Stage3Affix, TrophyItemId, NarrativeContentId, Enabled.
+        /// 다른 표를 보는 검증은 전체 다운로드의 ValidateNamedThreatSetup이 한다.
+        /// </summary>
+        private static void ParseNamedThreatTable(NamedThreatTable table, string[] values)
+        {
+            if (values.Length < 18)
+            {
+                Debug.LogError($"[ParseNamedThreatTable] Invalid data length. Expected at least 18, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            table.Name = values[1].Trim();
+            table.Kind = ParseEnumSafe(values, 2, GlobalEnum.NamedThreatKind.Predator, table.Id);
+            table.MonsterId = ParseIntSafe(values, 3);
+            table.AiTableId = ParseIntSafe(values, 4);
+            table.MinZone = ParseIntSafe(values, 5, 1);
+            table.MaxZone = ParseIntSafe(values, 6, 51);
+            table.Biome = ParseEnumSafe(values, 7, GlobalEnum.BiomeType.Any, table.Id);
+            table.Weight = Mathf.Max(0, ParseIntSafe(values, 8));
+            table.Title1 = values[9].Trim();
+            table.Title2 = values[10].Trim();
+            table.Title3 = values[11].Trim();
+            table.Affix1 = ParseIntSafe(values, 12);
+            table.Affix2 = ParseIntSafe(values, 13);
+            table.Stage2Affix = ParseIntSafe(values, 14);
+            table.Stage3Affix = ParseIntSafe(values, 15);
+            table.TrophyItemId = ParseIntSafe(values, 16);
+            table.NarrativeContentId = ParseIntSafe(values, 17);
+            table.Enabled = ParseBoolSafe(values, 18, true);
+
+            if (string.IsNullOrEmpty(table.Title1) == true && string.IsNullOrEmpty(table.Title2) == true &&
+                string.IsNullOrEmpty(table.Title3) == true)
+                Debug.LogError($"[ParseNamedThreatTable] Id={table.Id}: 칭호 후보(Title1~3)가 모두 비어 있습니다.");
+            if (table.MinZone < 1 || table.MaxZone > 51 || table.MinZone > table.MaxZone)
+                Debug.LogError($"[ParseNamedThreatTable] Id={table.Id}: 구역 범위 {table.MinZone}~{table.MaxZone}는 1~51 안이어야 합니다.");
+        }
+
+        /// <summary>
+        /// 네임드 템플릿이 가리키는 종·AI·전리품·문구 행과 고정 접사 종류를 확인한다 (NAMED_THREAT_DESIGN §11.1).
+        /// 오라 접사는 같은 무리에게 주는 효과라 혼자인 네임드에 쓰지 않는다 (§5.2). 오류는 콘솔에 남긴다.
+        /// </summary>
+        private static void ValidateNamedThreatSetup(ARPG.Npc.Narrative.NarrativeContentPack narrative)
+        {
+            List<NamedThreatTable> threats = GetTableList<NamedThreatTable>();
+            List<MonsterTable> monsters = GetTableList<MonsterTable>();
+            List<AiTable> ais = GetTableList<AiTable>();
+            List<ItemTable> items = GetTableList<ItemTable>();
+            List<MonsterAffixTable> affixes = GetTableList<MonsterAffixTable>();
+            List<MonsterArchetypeTable> archetypes = GetTableList<MonsterArchetypeTable>();
+            if (threats == null || monsters == null || ais == null || items == null || affixes == null || archetypes == null)
+                return;
+
+            int errors = 0;
+            if (archetypes.Exists(a => a.Archetype == GlobalEnum.MonsterArchetype.Named) == false)
+            {
+                Debug.LogError("[ValidateNamedThreat] MonsterArchetype에 Named 행이 없습니다.");
+                errors++;
+            }
+            for (int i = 0; i < threats.Count; i++)
+            {
+                NamedThreatTable t = threats[i];
+                string where = $"[ValidateNamedThreat] NamedThreat Id={t.Id}({t.Name})";
+                if (monsters.Exists(m => m.Id == t.MonsterId) == false) { Debug.LogError($"{where}: MonsterId={t.MonsterId} 행이 없습니다."); errors++; }
+                AiTable ai = ais.Find(a => a.Id == t.AiTableId);
+                if (ai == null) { Debug.LogError($"{where}: AiTableId={t.AiTableId} 행이 없습니다."); errors++; }
+                else if (ai.PatrolRadius <= 0f) Debug.LogWarning($"{where}: AiTableId={t.AiTableId}의 PatrolRadius가 0이라 순찰·귀환하지 않습니다.");
+                ItemTable trophy = items.Find(it => it.Id == t.TrophyItemId);
+                if (trophy == null) { Debug.LogError($"{where}: TrophyItemId={t.TrophyItemId} 행이 없습니다."); errors++; }
+                else if (trophy.SourceMonsterId != t.MonsterId) Debug.LogWarning($"{where}: 전리품 SourceMonsterId({trophy.SourceMonsterId})가 기본 종({t.MonsterId})과 다릅니다.");
+                if (narrative != null && narrative.Contents.Exists(c => c.ContentId == t.NarrativeContentId &&
+                        c.Kind == ARPG.Npc.Narrative.NarrativeContentKind.NamedThreat) == false)
+                {
+                    Debug.LogError($"{where}: NarrativeContentId={t.NarrativeContentId}에 NamedThreat 문구 행이 없습니다.");
+                    errors++;
+                }
+                int[] fixedAffixes = { t.Affix1, t.Affix2, t.Stage2Affix, t.Stage3Affix };
+                for (int a = 0; a < fixedAffixes.Length; a++)
+                {
+                    if (fixedAffixes[a] <= 0) continue;
+                    MonsterAffixTable affix = affixes.Find(x => x.Id == fixedAffixes[a]);
+                    if (affix == null) { Debug.LogError($"{where}: 접사 {fixedAffixes[a]} 행이 없습니다."); errors++; }
+                    else if (affix.Kind != GlobalEnum.MonsterAffixKind.Stat) { Debug.LogError($"{where}: 접사 {fixedAffixes[a]}는 스탯형이 아닙니다(오라 금지)."); errors++; }
+                }
+            }
+            if (errors == 0)
+                Debug.Log($"[ValidateNamedThreat] PASS — templates={threats.Count}");
         }
 
         private static void ParseBuffTable(BuffTable table, string[] values)

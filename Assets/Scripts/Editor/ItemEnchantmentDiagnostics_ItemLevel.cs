@@ -133,7 +133,18 @@ namespace ARPG.Editor
         {
             int previous11 = 0;
             int previous12 = 0;
-            foreach (GlobalEnum.MonsterArchetype archetype in Enum.GetValues(typeof(GlobalEnum.MonsterArchetype)))
+            // 저장 호환을 위해 Elite·Named의 enum 숫자는 뒤쪽이다. 확률은 실제 등급 순서로 비교한다.
+            // 네임드 위협(NAMED_THREAT_DESIGN §5.1, T11 400·T12 100)은 마을 던전 우두머리와 액트 보스 사이다.
+            GlobalEnum.MonsterArchetype[] progression =
+            {
+                GlobalEnum.MonsterArchetype.Normal, GlobalEnum.MonsterArchetype.Magic,
+                GlobalEnum.MonsterArchetype.Rare, GlobalEnum.MonsterArchetype.Elite,
+                GlobalEnum.MonsterArchetype.Named,
+                GlobalEnum.MonsterArchetype.Boss, GlobalEnum.MonsterArchetype.EndgameBoss,
+            };
+            Require(progression.Length == Enum.GetValues(typeof(GlobalEnum.MonsterArchetype)).Length,
+                "몬스터 등급별 특수 판정 검증 순서에 누락된 등급이 있음", errors, ref assertions);
+            foreach (GlobalEnum.MonsterArchetype archetype in progression)
             {
                 MonsterArchetypeTable? row = null;
                 for (int r = 0; r < archetypes.Count; r++)

@@ -435,6 +435,7 @@ namespace ARPG.Data
                 NpcPopulation = snapshot.NpcMeta.Population ?? new(),
                 NpcCompanion = snapshot.World.NpcCompanion ?? new(),
                 GoldPrice = snapshot.World.GoldPrice ?? new(),
+                NamedThreats = snapshot.World.NamedThreats ?? new(),
                 WorldSim = snapshot.WorldSim.WorldSim ?? new(),
             };
 
@@ -832,6 +833,7 @@ namespace ARPG.Data
                     ElapsedWorldGameHours = _worldData.ElapsedWorldGameHours,
                     NpcCompanion = _worldData.NpcCompanion,
                     GoldPrice = _worldData.GoldPrice,
+                    NamedThreats = _worldData.NamedThreats,
                 };
                 if (captureRuntimeManagers == true && GroupedSaveSnapshotEnabled == true)
                     AddPendingSnapshotPart(pending, PART_WORLD, CaptureOwnedWorld(root, rebuildSaveSnapshots));

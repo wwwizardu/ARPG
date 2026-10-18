@@ -114,7 +114,14 @@ namespace ARPG.Dungeon
                         Notify($"DungeonTable Id {tableId}를 찾을 수 없어 입장을 취소했습니다.");
                         return false;
                     }
-                    record = DungeonLayout.Generate(AR.s.Data.WorldSeed, villageSlots.VillageId, slot, table);
+                    var eliteMonsterIds = AR.s.Data.GetEliteMonsterIds();
+                    if (eliteMonsterIds.Count == 0)
+                    {
+                        Notify("마을 던전 보스로 사용할 Elite 몬스터가 없어 입장을 취소했습니다.");
+                        return false;
+                    }
+                    record = DungeonLayout.Generate(AR.s.Data.WorldSeed, villageSlots.VillageId, slot, table,
+                        eliteMonsterIds);
                     if (EnsureNarrativeTargetPlacement(record) == false)
                     {
                         Notify("소문에 나온 몬스터를 배치할 수 없어 입장을 취소했습니다.");
@@ -475,6 +482,8 @@ namespace ARPG.Dungeon
             });
             _components.RemoveComponent<JumpComponent>(id);
             _components.RemoveComponent<ForcedMoveComponent>(id);
+            _components.RemoveComponent<DashComponent>(id);
+            _components.RemoveComponent<ForcedMoveImmuneTag>(id);
             _components.RemoveComponent<DestroyTag>(id);
             _components.RemoveComponent<KillCreditComponent>(id);
             _components.SetComponent(id, new StateComponent

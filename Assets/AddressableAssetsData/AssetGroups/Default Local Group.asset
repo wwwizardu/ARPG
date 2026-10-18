@@ -25,6 +25,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0e878892e52f55d4d9bb50c5e461deff
+    m_Address: Effects/GoblinFireboltHit
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 109379a8d1252184fb128a7533daee84
     m_Address: UI/Shrine
     m_ReadOnly: 0
@@ -55,6 +60,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 15b2c4d4f27b3ff4383965610073cf5e
+    m_Address: Animation/GraveRobber
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 174fc71b52ca4a141ae303fdcf091d59
     m_Address: Sprites/Items/TownPost
     m_ReadOnly: 0
@@ -80,6 +90,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 204a41ae4a777ee40810872e6523b9e5
+    m_Address: Animation/RuinLibrarian
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 206f5d6b047a4094cb009545d978aa05
     m_Address: Sprites/Items/Well
     m_ReadOnly: 0
@@ -100,6 +115,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2a2cc739e3bb200448109763a7cd15b0
+    m_Address: Animation/CoffinGiant
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2af892c1ee45a06499f732044f66da8b
     m_Address: Prefabs/Entity
     m_ReadOnly: 0
@@ -107,6 +127,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3525a999834a52e4fbe344acd64748ef
     m_Address: UI/UIMainMenu
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 364e558a9d6dbe849ab6fc96810ed571
+    m_Address: Animation/EmberKnight
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -185,6 +210,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5f8bbb7083d80b0459519437b537b949
+    m_Address: Animation/ChainOgre
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 655633fc0242a184188ff0b68704521a
     m_Address: Tile/WoodWall
     m_ReadOnly: 0
@@ -220,6 +250,16 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 80569785a8c152442a2846d66825ac63
+    m_Address: Effects/SpiderVenomHit
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 80d22397b930d684c975e458093a455d
+    m_Address: Animation/ForestHerbalist
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 833f1309cb6f2c140849be5e77e62247
     m_Address: Prefabs/AreaEffect/SpiderWeb
     m_ReadOnly: 0
@@ -232,6 +272,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 866a25d384bd4ad41809716fb6fd09e7
     m_Address: Animation/Npc
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 886a61adfbfbfc54a8ddb767bf3c996a
+    m_Address: Projectile/Projectile_SpiderVenom
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -250,6 +295,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8b30e43fd7451cc4aaa4a65a999e2c76
+    m_Address: Effects/CoffinGiantShockwave
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8e2b6f4a9c1d4e3a8b6c2d1e7f5a9bd3
     m_Address: UI/UIVillage
     m_ReadOnly: 0
@@ -257,6 +307,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8fe71ad63d2ad69469b43d5aeb1d0605
     m_Address: UI/SkillBook
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 90309790bed02e642ad9038441b3a21c
+    m_Address: Animation/VenombladeMercenary
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -277,6 +332,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a3bf84c16fde1d64cad785459e1ed179
     m_Address: Sprites/Items/Shrine
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a4386f46b79235f43ad27c23a1f2ce8b
+    m_Address: Projectile/Projectile_GoblinFirebolt
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -310,6 +370,16 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b45756919bbc6db47bd1be0b619f2a3c
+    m_Address: Animation/GraveyardExecutioner
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b48624689d8df584c8c0501639b60e30
+    m_Address: Projectile/Projectile_SkeletonArrow
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b536f7e2169fcfe43ae7f12fbc83ff0f
     m_Address: UI/NpcInspect
     m_ReadOnly: 0
@@ -327,6 +397,16 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: bbbaad6afcfd6284097fbbef99aa9fa5
     m_Address: Effect/HitNormal
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bc6e69fc166936d4984b4e770743e784
+    m_Address: Animation/SwampMaw
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bd3e810fd244e1443b3d5007bb5eea6b
+    m_Address: Animation/SkeletonArcher
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -400,6 +480,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e597d749bcb82c340b55d353fe4a5775
+    m_Address: Animation/RavenHunter
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e6adeabfba20cdd4895b783becaebde2
     m_Address: Animation/DesertScorpion
     m_ReadOnly: 0
@@ -415,8 +500,23 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ea35d1fc6e520ce449972281b14ee231
+    m_Address: Animation/BackAlleySmuggler
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ebc22afd90a53724ca8398f0e49aa462
+    m_Address: Animation/RedbeardBlacksmith
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ef0eaf139fc4856438136f2ab4b6c5ff
     m_Address: UI/UICheat
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ef3fbf6383f622a4f95993a51fc762ab
+    m_Address: Animation/MossTreant
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

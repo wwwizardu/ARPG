@@ -26,14 +26,17 @@ namespace ARPG.AI
             var flee = new FleeStateHandler();
             var stationaryAttack = new StationaryAttackStateHandler();
             var follow = new FollowStateHandler();
+            var returnHome = new ReturnStateHandler();
 
             // AIState enum 순서: Idle=0, Patrol=1, Chase=2, Attack=3, Retreat=4, Flee=5, Return=6, Follow=7
             // Follow는 NPC 프로필(Patrol/PatrolRanged)에만 둔다 — 동행 NPC 전용
+            // 몬스터 프로필의 Patrol·Return은 순찰 반경이 있는 몬스터(네임드, NAMED_THREAT_DESIGN §5.5)만 쓴다.
+            // 반경 0인 몬스터는 기본 상태가 Idle이라 두 상태에 들어가지 않는다.
             _profiles[AIBehaviorType.Melee] = new IAIStateHandler[]
-                { idle, null, chase, meleeAttack, retreat, null, null, null };
+                { idle, patrol, chase, meleeAttack, retreat, null, returnHome, null };
 
             _profiles[AIBehaviorType.Ranged] = new IAIStateHandler[]
-                { idle, null, chase, rangedAttack, retreat, null, null, null };
+                { idle, patrol, chase, rangedAttack, retreat, null, returnHome, null };
 
             _profiles[AIBehaviorType.Patrol] = new IAIStateHandler[]
                 { idle, patrol, chase, meleeAttack, retreat, flee, null, follow };

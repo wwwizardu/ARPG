@@ -39,6 +39,8 @@ namespace ARPG.Skill.Telegraph
         public readonly float ProjectileHitRadius;
         public readonly int ProjectileCount;
         public readonly float ProjectileSpreadAngleDeg;
+        public readonly bool UsesDash;
+        public readonly float DashDistance;
 
         public AttackTelegraphGeometryInput(
             bool isDirectionTarget,
@@ -56,7 +58,9 @@ namespace ARPG.Skill.Telegraph
             float projectileLifetime,
             float projectileHitRadius,
             int projectileCount,
-            float projectileSpreadAngleDeg)
+            float projectileSpreadAngleDeg,
+            bool usesDash = false,
+            float dashDistance = 0f)
         {
             IsDirectionTarget = isDirectionTarget;
             IsPositionTarget = isPositionTarget;
@@ -74,6 +78,8 @@ namespace ARPG.Skill.Telegraph
             ProjectileHitRadius = projectileHitRadius;
             ProjectileCount = projectileCount;
             ProjectileSpreadAngleDeg = projectileSpreadAngleDeg;
+            UsesDash = usesDash;
+            DashDistance = dashDistance;
         }
     }
 
@@ -135,6 +141,20 @@ namespace ARPG.Skill.Telegraph
             float directRange = Mathf.Max(0f, input.OwnerHitRadius)
                 + Mathf.Max(0f, input.SkillTargetRange)
                 + Mathf.Max(0f, input.PlayerHitRadius);
+
+            // 돌진: 시전자 몸 중심에서 돌진 거리만큼 뻗는 띠. 반폭은 경로 판정 반경(시전자 + 추가 폭 + 플레이어)이다
+            // (MONSTER_ATTACK_TELEGRAPH_DESIGN §5.8, SKILL_DESIGN §6.11)
+            if (input.UsesDash == true)
+            {
+                return new AttackTelegraphGeometry(
+                    AttackTelegraphShape.ProjectileLane,
+                    AttackTelegraphOriginMode.FollowOwner,
+                    Mathf.Max(0f, input.DashDistance),
+                    0f,
+                    directRange * 2f,
+                    1,
+                    0f);
+            }
 
             if (input.UsesLandingCommit == true)
             {
