@@ -832,7 +832,7 @@ namespace ARPG.Npc
             // 130은 파티 모집 시도, 131은 파티 수락 난수열(리더 EntityId·리더 결정 시각 기준, PartyRecruit*/PartyAccept* 상수).
             // 132~139는 파티 모집 예비 — 재사용 금지.
             // 210~239는 네임드 위협 (NamedThreatRules — 210 솔로 마주침, 211 솔로 결과, 212 파티 마주침, 213 솔로 중상, 220+i 파티원 결과,
-            // 230+i 파티원 중상). 200~209는 다짐(NPC_VOW_DESIGN) 예약.
+            // 230+i 파티원 중상). 200~209는 단기 목표(NPC_OBJECTIVE_DESIGN) 예약.
             // 140은 솔로 Hunt 중상, 141은 솔로 Delve 중상 (EntityId 기준), 150+i는 파티원 Hunt 중상, 160+i는 파티원 Delve 중상
             // (PartyId 기준, SevereWound*Salt 상수, D91). 142~149는 부상 예비.
             // 170은 절도 시도 난수열(시도 확률 → 피해자 → 물건), 171은 절도 발각 (도둑 EntityId·도둑의 Rest 시작 시각 기준,

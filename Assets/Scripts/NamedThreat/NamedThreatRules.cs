@@ -66,7 +66,7 @@ namespace ARPG.NamedThreat
         public const float TrailNearDistance = 12f;
         public const float TrailRefreshSeconds = 15f;
 
-        // ===== RNG salt (§12.3, NPC 활동 채널 210~239 예약. 200~209는 다짐 예약) =====
+        // ===== RNG salt (§12.3, NPC 활동 채널 210~239 예약. 200~209는 단기 목표 예약) =====
         public const int SoloEncounterSalt = 210;
         public const int SoloResultSalt = 211;
         public const int PartyEncounterSalt = 212;

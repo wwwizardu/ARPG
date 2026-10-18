@@ -18,7 +18,7 @@ namespace ARPG.Npc.Narrative
         Wish = 2,
         PersonalStory = 3,
         SmallTalk = 4,
-        // 5는 다짐(NPC_VOW_DESIGN Vow)이 예약했다 — 쓰지 않는다.
+        // 5는 단기 목표(NPC_OBJECTIVE_DESIGN Objective)가 예약했다 — 쓰지 않는다.
         // 네임드 위협 부탁 (NAMED_THREAT_DESIGN §8.4·§10.3). 인스턴스 = threat/{네임드 ID}, 목표 = DefeatTarget(플레이어 측 처치)
         NamedThreat = 6,
     }

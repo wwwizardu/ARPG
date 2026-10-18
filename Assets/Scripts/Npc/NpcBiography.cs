@@ -39,7 +39,7 @@ namespace ARPG.Npc
         TheftDiscovered = 14,
         // 늦은 발각 — 도둑: 훔친 것이 들통남 (도둑 쪽 기록은 이때 처음 생긴다). 참가자 = 피해자 1명.
         TheftExposed = 15,
-        // 16·17은 다짐(NPC_VOW_DESIGN VowFulfilled·VowAbandoned)이 예약했다 — 쓰지 않는다.
+        // 16·17은 단기 목표(NPC_OBJECTIVE_DESIGN ObjectiveFulfilled·ObjectiveAbandoned)가 예약했다 — 쓰지 않는다.
         // 네임드 위협에게 다침 (NAMED_THREAT_DESIGN §6.3). Kind·When + 참가자 스냅샷 1개(EntityId -1, 칭호)만 남긴다.
         MauledByThreat = 18,
     }
