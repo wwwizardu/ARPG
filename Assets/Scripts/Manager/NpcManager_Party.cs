@@ -57,9 +57,11 @@ namespace ARPG.Npc
             _partyCounters.Attempts[kindIndex]++;
 
             // ① 모집 시도 확률 (D85 ②). 실패하면 후보를 보지 않고 솔로.
+            // 단기 목표 원정(AlwaysRecruit)은 시도 확률을 건너뛰고 항상 모집한다 (NPC_OBJECTIVE_DESIGN §7.2). 난수열은 따로라 영향이 없다.
             HistoryRng attemptRng = NpcActivityResolver.CreateRng(leaderId, startGameTime, worldSeed,
                 NpcActivityResolver.PartyRecruitAttemptSalt);
-            if (attemptRng.NextDouble() >= NpcActivityResolver.GetPartyRecruitAttemptChance(leader.NpcStat))
+            if (ShouldAlwaysRecruitForObjective(leader, kind, startGameTime) == false &&
+                attemptRng.NextDouble() >= NpcActivityResolver.GetPartyRecruitAttemptChance(leader.NpcStat))
                 return false;
             _partyCounters.AttemptsPassed[kindIndex]++;
 
@@ -71,7 +73,7 @@ namespace ARPG.Npc
                 int candidateId = villageNpcIds[i];
                 if (candidateId == leaderId || _npcSaveDict.TryGetValue(candidateId, out NpcSaveData? candidate) == false)
                     continue;
-                NpcPartyRejectReason reason = GetPartyCandidateRejectReason(leaderId, leader, candidate, startGameTime);
+                NpcPartyRejectReason reason = GetPartyCandidateRejectReason(leaderId, leader, candidate, kind, startGameTime);
                 if (reason != NpcPartyRejectReason.None)
                 {
                     _partyCounters.Rejections[(int)reason]++;
@@ -111,6 +113,10 @@ namespace ARPG.Npc
                 bool closeRelation = HasClosePartyRelation(leaderId, candidateId);
                 float chance = NpcActivityResolver.GetPartyAcceptChance(affinity, closeRelation, candidate.NpcStat.Courage,
                     GetPartyRestedFraction(candidate, startGameTime));
+                // 원수 갚기 원정: 그 사망자를 기억하는 후보 +0.20, 상한 그대로 (NPC_OBJECTIVE_DESIGN §7.2)
+                float objectiveBonus = GetObjectiveAcceptBonus(leader, candidate, kind, startGameTime);
+                if (objectiveBonus > 0f)
+                    chance = Mathf.Min(NpcActivityResolver.PartyAcceptChanceMax, chance + objectiveBonus);
                 int bucket = NpcPartyCounters.GetAcceptBucket(affinity, closeRelation);
                 _partyCounters.AcceptRolls[bucket]++;
                 _partyCounters.AcceptChanceSum[bucket] += chance;
@@ -191,9 +197,10 @@ namespace ARPG.Npc
         /// 후보 자격 (D85 ①): 사망·파티 소속·동행 예약·결투 중·다른 마을·20타일 밖·Rival/Grudge는 제외.
         /// 대기(Phase Idle) 중 Kind None 또는 Rest만 인정한다(Trade 제외). 리더의 결정 시각보다 늦게 시작한 휴식은 제외한다
         /// (시간 점프 뒤 과거 구간을 결제하는 리더가 "아직 시작하지 않은" 휴식을 끊지 않게).
+        /// 실행 단계 단기 목표 주인(SkipOtherParties)은 빠진다 — 같은 던전을 노리는 리더의 던전 원정만 예외 (NPC_OBJECTIVE_DESIGN §7.2).
         /// </summary>
         private NpcPartyRejectReason GetPartyCandidateRejectReason(int leaderId, NpcSaveData leader, NpcSaveData candidate,
-            float startGameTime)
+            NpcActivityKind kind, float startGameTime)
         {
             NpcActivityState activity = candidate.Activity;
             if (candidate.Condition == CharacterConditions.Dead || activity.Phase == NpcActivityPhase.Dead)
@@ -220,6 +227,8 @@ namespace ARPG.Npc
                 return NpcPartyRejectReason.Distance;
             if (IsHostilePartyRelation(leaderId, candidate.EntityId) == true)
                 return NpcPartyRejectReason.Hostile;
+            if (IsObjectiveBusyForParty(leader, candidate, kind, startGameTime) == true)
+                return NpcPartyRejectReason.ObjectiveFocus;
             return NpcPartyRejectReason.None;
         }
 
@@ -347,6 +356,7 @@ namespace ARPG.Npc
         Hostile,
         Declined,         // 수락 확률 롤 실패
         PartyFull,        // 이미 3명이 수락해 보지 않은 후보
+        ObjectiveFocus,   // 실행 단계 단기 목표 주인 (다른 리더의 모집에서 빠짐, NPC_OBJECTIVE_DESIGN §7.2)
         Count,
     }
 

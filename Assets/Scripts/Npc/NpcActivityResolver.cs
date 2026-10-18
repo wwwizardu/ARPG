@@ -21,7 +21,12 @@ namespace ARPG.Npc
         public bool RecentlyRecovered;   // Wounded 종료 후 RecentRecoveryHours 이내
         public bool TradeAvailable;      // 소속 마을 Shop이 있고 할 일(판매 또는 구매 후보)이 있음
         public bool DelveAvailable;      // 소속 마을에 던전 슬롯(DungeonId)이 있음 (D56, 입구 배치 여부 무관 D57)
-        public bool HasPromisingRumor;   // "유망한 소문" 보유 (§6.2, D56·D76) — Delve 필요 배율
+        // 단기 목표 배율 (NPC_OBJECTIVE_DESIGN §7.1). 목표 단계의 정의 행 배율이고 목표가 없으면 1이다.
+        // 옛 "유망한 소문" Delve 필요 배율(D76 ×1.5)은 소문 확인 목표의 실행 단계 Delve 배율이 대신한다.
+        public float ObjectiveRestMultiplier;
+        public float ObjectiveHuntMultiplier;
+        public float ObjectiveTradeMultiplier;
+        public float ObjectiveDelveMultiplier;
     }
 
     /// <summary>
@@ -178,8 +183,7 @@ namespace ARPG.Npc
         public const int PartyDelveCompletionLootSaltBase = 110;
 
         // ===== 소문 (NPC_AMBITION_DESIGN §5.2·§6.2·§7.4, P2b D70~D77) =====
-        // "유망한 소문" 필요 배율 (D76). 성향 ±20% 클램프 밖에서 곱한다 (필요는 성향과 별개, D40).
-        public const float PromisingRumorDelveMultiplier = 1.5f;
+        // 옛 "유망한 소문" 필요 배율(D76 ×1.5)은 NpcObjective 표의 소문 확인(1) ActDelve로 옮겼다 (NPC_OBJECTIVE_DESIGN §5.1).
         // Rest 종료 시 교환 확률 (D74 개정: 항상이 아니라 확률적으로). 친화력 0 → Min, 100 → Max 선형.
         // 세계 교환 시도 하루 약 1,000~1,500건을 목표로 진단(Ambition Sim)으로 맞춘 개발 튜닝 상수다.
         public const float RumorExchangeChanceAtMinFriendliness = 0.30f;
@@ -290,11 +294,13 @@ namespace ARPG.Npc
                     baseScore = RestBaseScore;
                     if (context.RecentlyRecovered == true)
                         needMultiplier *= RecentRecoveryRestMultiplier;
+                    needMultiplier *= context.ObjectiveRestMultiplier;
                     break;
                 case NpcActivityKind.Hunt:
                     baseScore = HuntBaseScore;
                     if (context.GoldShort == true)
                         needMultiplier *= GoldShortHuntMultiplier;
+                    needMultiplier *= context.ObjectiveHuntMultiplier;
                     break;
                 case NpcActivityKind.Trade:
                     if (context.TradeAvailable == false)
@@ -304,14 +310,14 @@ namespace ARPG.Npc
                         needMultiplier *= GoldShortTradeMultiplier;
                     if (context.BagFull == true)
                         needMultiplier *= BagFullTradeMultiplier;
+                    needMultiplier *= context.ObjectiveTradeMultiplier;
                     break;
                 case NpcActivityKind.DungeonDelve:
                     if (context.DelveAvailable == false)
                         return 0f;
                     baseScore = DelveBaseScore;
-                    // "유망한 소문" 필요 배율 (§6.2, D56·D76)
-                    if (context.HasPromisingRumor == true)
-                        needMultiplier *= PromisingRumorDelveMultiplier;
+                    // 단기 목표 배율 (NPC_OBJECTIVE_DESIGN §7.1). 소문 확인 목표 실행 단계 ×1.5가 옛 "유망한 소문" 필요를 대신한다.
+                    needMultiplier *= context.ObjectiveDelveMultiplier;
                     break;
                 default:
                     return 0f;
@@ -393,7 +399,7 @@ namespace ARPG.Npc
             }
         }
 
-        private static float CenteredTrait(int value)
+        internal static float CenteredTrait(int value)
         {
             return Mathf.Clamp((value - 50) / 50f, -1f, 1f);
         }

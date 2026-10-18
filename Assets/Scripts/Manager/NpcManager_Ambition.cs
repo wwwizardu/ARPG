@@ -82,13 +82,15 @@ namespace ARPG.Npc
         /// </summary>
         public NpcActivityKind SelectNextActivity(int entityId, NpcSaveData saveData, float startGameTime, int worldSeed)
         {
+            // Idle 전환 = 단기 목표 평가 시점 (NPC_OBJECTIVE_DESIGN §4.7): 조건형 계기·기한·대상 유효·같은 종류 갱신·다시 계산.
+            EvaluateObjectiveOnIdle(entityId, saveData, startGameTime);
             NpcActivityChoiceContext context = BuildActivityChoiceContext(entityId, saveData, startGameTime);
             return NpcActivityResolver.SelectNextActivity(saveData, context, entityId, startGameTime, worldSeed);
         }
 
         /// <summary>
-        /// §6.2 필요(골드 부족·가방 가득·부상 회복 직후·유망한 소문)와 Trade·Delve 기회. 장비 부족·라이벌 필요는
-        /// 기준 데이터가 생기는 P3 이후에 추가한다.
+        /// §6.2 필요(골드 부족·가방 가득·부상 회복 직후)와 Trade·Delve 기회, 단기 목표 배율(NPC_OBJECTIVE_DESIGN §7.1).
+        /// 장비 부족·라이벌 필요는 기준 데이터가 생기는 P3 이후에 추가한다.
         /// </summary>
         public NpcActivityChoiceContext BuildActivityChoiceContext(int entityId, NpcSaveData saveData, float gameTime)
         {
@@ -101,17 +103,16 @@ namespace ARPG.Npc
                     freeSlots++;
             }
 
-            bool delveAvailable = HasDelveOpportunity(saveData);
-            return new NpcActivityChoiceContext
+            NpcActivityChoiceContext context = new NpcActivityChoiceContext
             {
                 GoldShort = saveData.Gold < GetTreatmentFee(),
                 BagFull = freeSlots <= NpcActivityResolver.BagFullFreeSlotThreshold,
                 RecentlyRecovered = NpcActivityResolver.IsRecentlyRecovered(saveData.Activity, gameTime),
                 TradeAvailable = HasTradeOpportunity(entityId, saveData),
-                DelveAvailable = delveAvailable,
-                // "유망한 소문" 필요 (§6.2, D76). Delve 후보일 때만 본다.
-                HasPromisingRumor = delveAvailable == true && TryGetPromisingRumor(saveData, gameTime, out _) == true,
+                DelveAvailable = HasDelveOpportunity(saveData),
             };
+            ApplyObjectiveActivityMultipliers(saveData, gameTime, ref context);
+            return context;
         }
 
         /// <summary>장비가 바뀐 뒤 호출한다. 다음 조회 때 다시 계산된다.</summary>

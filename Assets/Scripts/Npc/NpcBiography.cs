@@ -39,7 +39,10 @@ namespace ARPG.Npc
         TheftDiscovered = 14,
         // 늦은 발각 — 도둑: 훔친 것이 들통남 (도둑 쪽 기록은 이때 처음 생긴다). 참가자 = 피해자 1명.
         TheftExposed = 15,
-        // 16·17은 단기 목표(NPC_OBJECTIVE_DESIGN ObjectiveFulfilled·ObjectiveAbandoned)가 예약했다 — 쓰지 않는다.
+        // 단기 목표 결말 (NPC_OBJECTIVE_DESIGN §4.5·§9.1, D152). 정의 행의 RecordDeed가 Y인 목표(극적)만 남긴다.
+        // Kind·When + ObjectiveDefinitionId + 대상 DungeonId. 원수 갚기는 참가자에 죽은 NPC(스냅샷 포함)를 넣는다.
+        ObjectiveFulfilled = 16,
+        ObjectiveAbandoned = 17,
         // 네임드 위협에게 다침 (NAMED_THREAT_DESIGN §6.3). Kind·When + 참가자 스냅샷 1개(EntityId -1, 칭호)만 남긴다.
         MauledByThreat = 18,
     }
@@ -57,7 +60,7 @@ namespace ARPG.Npc
     /// NPC가 직접 겪거나 목격한 단일 에피소드. 정착지 매크로 사건은 RefEventId로 참조한다.
     /// 저장 크기 (D91 후속): Kind·When 외의 필드는 기본값이면 저장하지 않고(빈 리스트 포함), 로드 때 필드 초기값으로 되돌아온다.
     /// 기본값: RefEventId -1, 리스트 빈 목록, HowKnown Lived, AffinityDelta 0, RecoveryEndGameTime 0, Treated false,
-    /// Activity None, ItemId -1, ItemDisplayName "". 구 세이브(모든 필드 저장)도 그대로 읽힌다.
+    /// Activity None, ItemId -1, ItemDisplayName "", DungeonId "", ObjectiveDefinitionId 0. 구 세이브(모든 필드 저장)도 그대로 읽힌다.
     /// </summary>
     [Serializable]
     public class NpcDeedEntry
@@ -88,6 +91,14 @@ namespace ARPG.Npc
         [DefaultValue("")]
         [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
         public string ItemDisplayName = string.Empty;
+        // 던전 원정 사망(Fell)·중상(SevereWound)과 단기 목표 결말이 남기는 던전 (DungeonLayout.Id, NPC_OBJECTIVE_DESIGN §9.1).
+        // 사냥 사망·중상과 그 밖의 Deed는 비운다. 원수 갚기·설욕의 대상과 "이미 끝난 목표" 판별(§4.8)에 쓴다.
+        [DefaultValue("")]
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public string DungeonId = string.Empty;
+        // 단기 목표 결말 Deed(ObjectiveFulfilled·ObjectiveAbandoned)가 어떤 목표였는지 (NpcObjective 표 Id). 0 = 없음.
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public int ObjectiveDefinitionId;
 
         public NpcDeedEntry() { }
 
@@ -107,6 +118,8 @@ namespace ARPG.Npc
                 ParticipantSnapshots = new List<NpcDeedParticipant>();
             if (ItemDisplayName == null)
                 ItemDisplayName = string.Empty;
+            if (DungeonId == null)
+                DungeonId = string.Empty;
         }
 
         // Newtonsoft 조건부 직렬화 규약: 빈 참가자 목록은 저장하지 않는다 (로드 때 필드 초기값 = 빈 목록).

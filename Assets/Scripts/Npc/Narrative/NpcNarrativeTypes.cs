@@ -39,6 +39,9 @@ namespace ARPG.Npc.Narrative
         WishReveal, WishReminder,
         // 네임드 위협 (NAMED_THREAT_DESIGN §8): 가까운·먼 소문(야망 소문 1개 규칙 D82 안에서 먼저 고름) / 소문 주인의 부탁 / 진행 확인(고정).
         NamedThreatRumor, NamedThreatRequest, NamedThreatRequestProgress,
+        // 단기 목표 (NPC_OBJECTIVE_DESIGN §8.2·§8.3): 진행 중 화제(극적 목표는 고정) / 결말 화제(일반) /
+        // 목표 주인의 부탁(고정, 표시 뒤 부탁 인스턴스를 만든다) / 부탁 칸이 찬 동안의 진행 확인(고정).
+        ObjectiveStatus, ObjectiveOutcome, ObjectiveRequest, ObjectiveRequestProgress,
     }
 
     /// <summary>대화 토픽 1건 — 시스템이 상태·백본에서 산출. LLM 없으면 BaseLine, 있으면 이 토픽을 풍부하게 서술.</summary>

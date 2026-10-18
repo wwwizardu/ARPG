@@ -69,6 +69,8 @@ namespace ARPG.Npc
             activity.OutboundFraction = 1f;
             activity.OutcomeSeedGameTime = startGameTime;
             saveData.LastSimGameTime = startGameTime;
+            // 이주 시작 → 단기 목표는 빠짐 (NPC_OBJECTIVE_DESIGN §4.6). 대상이 옛 마을이라 다시 계산해도 돌아오지 않는다.
+            DropObjectiveOnRelocation(entityId, saveData, startGameTime);
             return true;
         }
 

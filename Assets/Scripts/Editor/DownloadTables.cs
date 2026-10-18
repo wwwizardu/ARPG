@@ -54,6 +54,8 @@ namespace ARPG.Editor
             Register<MonsterAffixTable>(list, "1703620452&range=A:S");
             // 네임드 위협 템플릿 (NAMED_THREAT_DESIGN §11.1). A~S 데이터, T열 Note는 시트 가독성용(다운로드 제외)
             Register<NamedThreatTable>(list, "1768678022&range=A:S");
+            // NPC 단기 목표 정의 (NPC_OBJECTIVE_DESIGN §4.1, D147). 33열 A~AG — 새 탭은 33열 격자로 만들었다.
+            Register<NpcObjectiveTable>(list, "182851152&range=A:AG");
             Register<StatTable>(list, "318209064&range=A:AJ");
             Register<ItemTable>(list, "2064107837&range=A:S");
             Register<BuildableItemTable>(list, "534887250&range=A:AA");
@@ -296,6 +298,9 @@ namespace ARPG.Editor
 
         [MenuItem("ARPG/Download Table/NpcEquipTable", false, 100)]
         private static async void DownloadNpcEquipTable() => await DownloadSingleTable<NpcEquipTable>();
+
+        [MenuItem("ARPG/Download Table/NpcObjectiveTable", false, 100)]
+        private static async void DownloadNpcObjectiveTable() => await DownloadSingleTable<NpcObjectiveTable>();
 
         [MenuItem("ARPG/Download Table/ProjectileTable", false, 100)]
         private static async void DownloadProjectileTable() => await DownloadSingleTable<ProjectileTable>();
@@ -720,6 +725,10 @@ namespace ARPG.Editor
                 else if (table is NamedThreatTable namedThreatTable)
                 {
                     ParseNamedThreatTable(namedThreatTable, values);
+                }
+                else if (table is NpcObjectiveTable npcObjectiveTable)
+                {
+                    ParseNpcObjectiveTable(npcObjectiveTable, values);
                 }
                 else if (table is NpcTable npcTable)
                 {
@@ -1369,6 +1378,30 @@ namespace ARPG.Editor
             return defaultValue;
         }
 
+        /// <summary>
+        /// Y/N bool 컬럼 파서 (NpcObjective 표). "Y"/"N" (대소문자 무관)와 ParseBoolSafe가 받는 값을 모두 허용한다.
+        /// 해석할 수 없는 값은 시트 저작 오류로 기록하고 defaultValue를 쓴다.
+        /// </summary>
+        private static bool ParseYesNoSafe(string[] values, int index, bool defaultValue, int rowId)
+        {
+            if (index >= values.Length) return defaultValue;
+            string s = values[index]?.Trim();
+            if (string.IsNullOrEmpty(s)) return defaultValue;
+            if (string.Equals(s, "Y", StringComparison.OrdinalIgnoreCase)) return true;
+            if (string.Equals(s, "N", StringComparison.OrdinalIgnoreCase)) return false;
+            if (bool.TryParse(s, out bool v)) return v;
+            if (s == "1") return true;
+            if (s == "0") return false;
+            Debug.LogError($"[ParseYesNoSafe] Id={rowId}: '{s}' is not Y/N. Defaulting to {defaultValue}.");
+            return defaultValue;
+        }
+
+        /// <summary>문자열 컬럼. 줄 끝 빈 칸이 TSV에서 빠져도 빈 문자열로 읽는다.</summary>
+        private static string ParseTextSafe(string[] values, int index)
+        {
+            return index < values.Length ? values[index]?.Trim() ?? string.Empty : string.Empty;
+        }
+
         private static void ParseHistoryEntityTable(HistoryEntityTable table, string[] values)
         {
             if (values.Length < 10)
@@ -1931,6 +1964,64 @@ namespace ARPG.Editor
                 Debug.LogError($"[ParseNamedThreatTable] Id={table.Id}: 칭호 후보(Title1~3)가 모두 비어 있습니다.");
             if (table.MinZone < 1 || table.MaxZone > 51 || table.MinZone > table.MaxZone)
                 Debug.LogError($"[ParseNamedThreatTable] Id={table.Id}: 구역 범위 {table.MinZone}~{table.MaxZone}는 1~51 안이어야 합니다.");
+        }
+
+        /// <summary>
+        /// NpcObjectiveTable 파싱 (NPC_OBJECTIVE_DESIGN §4.1). A:AG = Id, Name, Category, Priority, Trigger, Target, Complete,
+        /// SameKindRefresh, ReactChance, ReactProfile, PrepHours, DeadlineHours, TimeFrom, MaxAttempts, PrepRest·Hunt·Trade·Delve,
+        /// ActRest·Hunt·Trade·Delve, AlwaysRecruit, SkipOtherParties, RequestAffinity, RecordDeed, OutcomeTopicHours,
+        /// InspectText, StatusText, RequestText, FulfilledText, FulfilledByOtherText, AbandonedText. bool 칸은 Y/N.
+        /// </summary>
+        private static void ParseNpcObjectiveTable(NpcObjectiveTable table, string[] values)
+        {
+            if (values.Length < 27)
+            {
+                Debug.LogError($"[ParseNpcObjectiveTable] Invalid data length. Expected at least 27, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            table.Name = ParseTextSafe(values, 1);
+            table.Category = ParseEnumSafe(values, 2, ARPG.Npc.NpcObjectiveCategory.None, table.Id);
+            table.Priority = ParseIntSafe(values, 3);
+            table.Trigger = ParseEnumSafe(values, 4, ARPG.Npc.NpcObjectiveTrigger.None, table.Id);
+            table.Target = ParseEnumSafe(values, 5, ARPG.Npc.NpcObjectiveTargetKind.None, table.Id);
+            table.Complete = ParseEnumSafe(values, 6, ARPG.Npc.NpcObjectiveComplete.None, table.Id);
+            table.SameKindRefresh = ParseYesNoSafe(values, 7, false, table.Id);
+            table.ReactChance = Mathf.Clamp01(ParseFloatSafe(values, 8, 1f));
+            table.ReactProfile = ParseEnumSafe(values, 9, ARPG.Npc.NpcObjectiveReactProfile.None, table.Id);
+            table.PrepHours = Mathf.Max(0f, ParseFloatSafe(values, 10));
+            table.DeadlineHours = Mathf.Max(0f, ParseFloatSafe(values, 11));
+            table.TimeFrom = ParseEnumSafe(values, 12, ARPG.Npc.NpcObjectiveTimeFrom.Created, table.Id);
+            table.MaxAttempts = Mathf.Max(0, ParseIntSafe(values, 13));
+            table.PrepRest = Mathf.Max(0f, ParseFloatSafe(values, 14, 1f));
+            table.PrepHunt = Mathf.Max(0f, ParseFloatSafe(values, 15, 1f));
+            table.PrepTrade = Mathf.Max(0f, ParseFloatSafe(values, 16, 1f));
+            table.PrepDelve = Mathf.Max(0f, ParseFloatSafe(values, 17, 1f));
+            table.ActRest = Mathf.Max(0f, ParseFloatSafe(values, 18, 1f));
+            table.ActHunt = Mathf.Max(0f, ParseFloatSafe(values, 19, 1f));
+            table.ActTrade = Mathf.Max(0f, ParseFloatSafe(values, 20, 1f));
+            table.ActDelve = Mathf.Max(0f, ParseFloatSafe(values, 21, 1f));
+            table.AlwaysRecruit = ParseYesNoSafe(values, 22, false, table.Id);
+            table.SkipOtherParties = ParseYesNoSafe(values, 23, false, table.Id);
+            table.RequestAffinity = Mathf.Max(0, ParseIntSafe(values, 24));
+            table.RecordDeed = ParseYesNoSafe(values, 25, false, table.Id);
+            table.OutcomeTopicHours = Mathf.Max(0f, ParseFloatSafe(values, 26));
+            table.InspectText = ParseTextSafe(values, 27);
+            table.StatusText = ParseTextSafe(values, 28);
+            table.RequestText = ParseTextSafe(values, 29);
+            table.FulfilledText = ParseTextSafe(values, 30);
+            table.FulfilledByOtherText = ParseTextSafe(values, 31);
+            table.AbandonedText = ParseTextSafe(values, 32);
+
+            if (table.Category == ARPG.Npc.NpcObjectiveCategory.None || table.Trigger == ARPG.Npc.NpcObjectiveTrigger.None ||
+                table.Target == ARPG.Npc.NpcObjectiveTargetKind.None || table.Complete == ARPG.Npc.NpcObjectiveComplete.None)
+                Debug.LogError($"[ParseNpcObjectiveTable] Id={table.Id}: Category·Trigger·Target·Complete는 None일 수 없습니다.");
+            if (table.DeadlineHours <= 0f || table.PrepHours >= table.DeadlineHours)
+                Debug.LogError($"[ParseNpcObjectiveTable] Id={table.Id}: 기한({table.DeadlineHours}h)은 0보다 크고 준비({table.PrepHours}h)보다 길어야 합니다.");
+            if (table.RequestAffinity > 0 && string.IsNullOrEmpty(table.RequestText) == true)
+                Debug.LogError($"[ParseNpcObjectiveTable] Id={table.Id}: RequestAffinity가 있으면 RequestText가 필요합니다.");
+            if (string.IsNullOrEmpty(table.InspectText) == true)
+                Debug.LogError($"[ParseNpcObjectiveTable] Id={table.Id}: InspectText가 비어 있습니다.");
         }
 
         /// <summary>

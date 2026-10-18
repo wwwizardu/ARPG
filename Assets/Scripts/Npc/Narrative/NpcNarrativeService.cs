@@ -40,13 +40,16 @@ namespace ARPG.Npc.Narrative
 
             // 부탁·진행 확인·소망·발견 소문은 약속과 사실이 걸린 문장이라 작성 문구를 그대로 쓴다 (LLM·캐시 없음, NPC_NARRATIVE §6).
             // 네임드 부탁·진행 확인도 같다 (NAMED_THREAT_DESIGN §8.6). 네임드 소문 화제는 공개된 사실만 Facts에 넣고 LLM을 쓴다.
+            // 단기 목표 부탁·진행 확인도 같다 (NPC_OBJECTIVE_DESIGN §8.3). 목표 진행·결말 화제는 사실을 Facts로 주고 LLM을 쓴다 (§8.2).
             if (topic.Type == DialogueTopicType.DungeonRequest || topic.Type == DialogueTopicType.DungeonRequestProgress ||
                 topic.Type == DialogueTopicType.WishReveal || topic.Type == DialogueTopicType.WishReminder ||
                 topic.Type == DialogueTopicType.NamedThreatRequest || topic.Type == DialogueTopicType.NamedThreatRequestProgress ||
+                topic.Type == DialogueTopicType.ObjectiveRequest || topic.Type == DialogueTopicType.ObjectiveRequestProgress ||
                 topic.Rumor?.IsDiscovery == true)
                 return new DialogueResult { Text = ComposeDialogue(greeting, topic.BaseLine), Source = NarrativeSource.Fallback,
                     Tier = tier, Topic = topic.Type, NarrativeInstanceId = topic.NarrativeInstanceId,
-                    IsNarrativeRequest = topic.Type == DialogueTopicType.DungeonRequest || topic.Type == DialogueTopicType.NamedThreatRequest,
+                    IsNarrativeRequest = topic.Type == DialogueTopicType.DungeonRequest || topic.Type == DialogueTopicType.NamedThreatRequest ||
+                                         topic.Type == DialogueTopicType.ObjectiveRequest,
                     IsWishReveal = topic.Type == DialogueTopicType.WishReveal, NarrativeContentId = topic.NarrativeContentId,
                     NamedThreatId = topic.NamedThreatId };
 
@@ -174,6 +177,10 @@ namespace ARPG.Npc.Narrative
             DialogueTopicType.NamedThreatRumor => "사냥꾼들을 해치는 이름난 짐승 소문",
             DialogueTopicType.NamedThreatRequest => "이름난 짐승 사냥 부탁",
             DialogueTopicType.NamedThreatRequestProgress => "부탁한 짐승 사냥의 진행",
+            DialogueTopicType.ObjectiveStatus => "요즘 매달리고 있는 일",
+            DialogueTopicType.ObjectiveOutcome => "매달렸던 일의 결말",
+            DialogueTopicType.ObjectiveRequest => "원수를 갚는 일 부탁",
+            DialogueTopicType.ObjectiveRequestProgress => "부탁한 원수 갚기의 진행",
             _ => "잡담",
         };
 

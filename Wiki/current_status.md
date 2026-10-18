@@ -2,8 +2,9 @@
 name: current-status
 description: 최근 구현 흐름과 재개 지점을 코드·정본 문서 기준으로 종합한 프로젝트 현황.
 type: status
-last_updated: 2026-10-14
+last_updated: 2026-10-18
 sources:
+  - Docs/npc/NPC_OBJECTIVE_DESIGN.md
   - Docs/combat/SKILL_DESIGN.md
   - Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md
   - Docs/npc/NPC_AMBITION_DESIGN.md
@@ -60,6 +61,8 @@ sources:
 **2026-10-13 (커밋 대기)**: 인벤토리 **장비 비교 툴팁**을 구현했다. 인벤토리 장비 툴팁 아래에 `[Shift] 비교` 안내가 붙고, Shift를 누르고 있는 동안 현재 장착 아이템(칸이 둘이면 두 칸 모두)과 수치·옵션 차이를 카드로 나란히 보여준다. 비교 중 좌클릭은 화면 왼쪽 칸, 우클릭은 화면 오른쪽 칸에 바로 장착하고, Shift 없는 클릭은 기존 자동 선택 그대로다. PlayMode 확인 일부와 묶음 배치 검토가 남았다. 상세는 [combat.md](combat.md). [src: Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md §이용 흐름과 조작, Wiki/combat.md]
 
 **2026-10-13 (커밋 대기)**: 같은 날 **멧돼지 돌진**을 만들며 땅 위 직선 돌진(`SkillType.Dash`)과 넉백 저항 칸을 추가했다. 멧돼지는 0.6초 동안 띠로 예고하며 초당 45°까지만 방향을 돌리고, 출발 순간 방향을 고정해 0.5초에 6칸을 달린다. 지나가는 길의 적을 한 번씩 맞혀 옆으로 2칸 밀고, 벽에 닿으면 바로 멈춘다. 돌진 중에는 맞지만 밀리지 않고, 준비 중에 밀어내면 띠째 빗나간다. 함께 **몬스터도 표의 조준 방식으로 대상을 따라 돈다**(평타 90°/초, 원거리·위치 180°/초). AI 1번 점프는 몬스터용(6번)으로 바꿨다. PlayMode 측정은 통과했고 손 조작 체감 확인이 남았다. 상세는 [combat.md](combat.md)·[skill_aim.md](skill_aim.md). [src: Docs/combat/SKILL_DESIGN.md §4 M4·§6.11, Docs/combat/POE2_CURSOR_TRACKING_PLAN.md §15, Wiki/combat.md, Wiki/skill_aim.md]
+
+**2026-10-18 (커밋 대기)**: NPC **단기 목표** 1단계를 구현했다. NPC가 목표 1개(소문 확인·장비 마련·원수 갚기·설욕)를 가지고, 목표가 활동 확률·원정 대상·파티·대화·검사 창 줄을 기울인다. 옛 확인 원정은 소문 확인 목표로 옮겼고, 원수 갚기는 플레이어에게 부탁한다. 진단(30·60일, 결정론 불일치 0)은 통과했고 실제 플레이 확인이 남았다. 상세는 [npc.md](npc.md). [src: Docs/npc/NPC_OBJECTIVE_DESIGN.md 머리말·§12.1, Wiki/npc.md]
 
 **던전**: 마을마다 2~3개 슬롯, 마을 접근 시 입구 배치, E 입장, 분리된 맵 컨텍스트, ESC 퇴장, 사망 복귀, 보스 완료 트랜잭션, `dungeons` 저장 파티션이 구현됐다. 던전 안에서는 월드 시스템(NPC 시뮬·시간)이 멈춘다 — 이를 바꾸는 월드 시뮬 계속 실행안은 초안이다. [src: Docs/map/DUNGEON_RUNTIME_DESIGN.md 상태·§4, Docs/map/DUNGEON_WORLD_SIM_DESIGN.md 상태]
 

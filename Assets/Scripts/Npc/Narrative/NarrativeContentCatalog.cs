@@ -364,6 +364,17 @@ namespace ARPG.Npc.Narrative
                         where + " SignText/ResolvedText: must be empty for PersonalStory.");
                     RequireSlots(c.IntroText, KnownWoundSummarySlot, where + " IntroText");
                     break;
+                case NarrativeContentKind.Objective:
+                    // 단기 목표 부탁 (NPC_OBJECTIVE_DESIGN §9.2): 표(NarrativeContent 시트)에 행이 없다. 부탁 대사가 표시될 때
+                    // NpcObjective 표의 문구를 사실로 채워 코드에서 만든 스냅샷이다 — 그래서 슬롯이 남지 않는다. 목표 = 플레이어 측 보스 처치.
+                    Require(c.TargetType == NarrativeTargetType.None && c.TargetId == 0,
+                        where + " TargetType/TargetId: Objective has no table target.");
+                    Require(c.GoalType == NarrativeGoalType.DefeatTarget, where + " GoalType: Objective supports DefeatTarget only.");
+                    Require(string.IsNullOrWhiteSpace(c.SignText) == true, where + " SignText: must be empty for Objective.");
+                    Require(string.IsNullOrWhiteSpace(c.ResolvedText) == false, where + " ResolvedText: required for Objective.");
+                    RequireSlots(c.IntroText, null, where + " IntroText");
+                    RequireSlots(c.ResolvedText, null, where + " ResolvedText");
+                    break;
                 default:
                     throw new InvalidOperationException(where + " Kind: " + c.Kind + " is not executable yet.");
             }

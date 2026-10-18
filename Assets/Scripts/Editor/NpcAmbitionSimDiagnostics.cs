@@ -405,6 +405,9 @@ namespace ARPG.EditorTools
             public readonly List<string> DiscoveryAuditFailures = new();
             // 네임드 위협 (NAMED_THREAT_DESIGN §13, NpcAmbitionSimDiagnostics_NamedThreat)
             public NamedThreatSimStats Named = new NamedThreatSimStats();
+            // 단기 목표 (NPC_OBJECTIVE_DESIGN §12, NpcAmbitionSimDiagnostics_Objectives). 카운터는 NpcManager에 바꿔 끼운다.
+            public NpcObjectiveCounters ObjectiveCounters = new NpcObjectiveCounters();
+            public ObjectiveSimStats Objectives = new ObjectiveSimStats();
         }
 
         private static Dictionary<int, float>[] CreateTheftCooldownTables()
@@ -606,6 +609,7 @@ namespace ARPG.EditorTools
                     AdvanceNamedThreats(sim, now);
                     UpdateRumorPropagation(sim, now);
                     SampleActivityStates(sim);
+                    SampleObjectives(sim, now);
                     AR.s.Village.UpdateGoldPriceIndex(now);
 
                     // NPC 처리 뒤에 표시된 변경(소문 전파 등)을 정리한다. 여기서 빠진 표시는 다음 tick 검사가 잡는다.
@@ -688,6 +692,7 @@ namespace ARPG.EditorTools
             string summary = BuildSummary(sim, rows, cowardIds, cowardCourageMax, ambitionCounts, days,
                 watch.ElapsedMilliseconds, hashBefore, hashAfter, capture);
             summary += BuildNamedThreatSummary(sim, days);
+            summary += BuildObjectivesSummary(sim, days);
             summary += $"\n[NpcSaveSnapshot] 표시 누락={sim.UnmarkedSaveChanges} 끝 비교 누락={snapshotMismatches} " +
                 $"tick끝 정리 평균={snapshotFlushAverageMs:F3}ms 최대={snapshotFlushMaxMs:F3}ms\n";
             summary += $"\n[VillageSaveSnapshot] 표시 누락={sim.UnmarkedVillageSaveChanges} 끝 비교 누락={villageSnapshotMismatches}\n";
@@ -1114,6 +1119,8 @@ namespace ARPG.EditorTools
                 AR.s.Npc.TryFindUnmarkedPartySaveChange(key, sim.UnmarkedFieldScratch));
             populationSnapshot.DirtyObserver = key => RecordOmission("Population",
                 AR.s.Npc.TryFindUnmarkedPopulationSaveChange(sim.UnmarkedFieldScratch));
+            // 단기 목표 카운터·다시 계산 대기 목록 (복제 실행 전용, NpcAmbitionSimDiagnostics_Objectives)
+            SwapInObjectiveClones(sim, swaps);
         }
 
         private static void Swap(List<FieldSwap> swaps, object target, string fieldName, object? value)
@@ -1376,12 +1383,15 @@ namespace ARPG.EditorTools
                 sim.RelocationTravelHours += saveData.Activity.PhaseEndGameTime - startGameTime;
                 return;
             }
-            // 선택 시점의 "유망한 소문" 보유 여부 (Delve 비중 비교용). 같은 입력으로 SelectNextActivity 안에서도 다시 계산된다.
-            bool promisingHolder = reserved == false &&
-                                   AR.s.Npc.BuildActivityChoiceContext(entityId, saveData, startGameTime).HasPromisingRumor;
+            // 선택 시점의 "유망한 소문" 보유 여부 (Delve 비중 비교용, 옛 필요 배율 D76의 조건 — Delve 후보이고 유망한 소문이 있음).
+            // 배율은 이제 소문 확인 목표가 준다 (NPC_OBJECTIVE_DESIGN §5.1). 목표 평가는 SelectNextActivity 안에서 한다.
+            bool promisingHolder = reserved == false && AR.s.Npc.HasDelveOpportunity(saveData) == true &&
+                                   AR.s.Npc.TryGetPromisingRumor(saveData, startGameTime, out _) == true;
             NpcActivityKind kind = reserved == true
                 ? NpcActivityKind.Rest
                 : AR.s.Npc.SelectNextActivity(entityId, saveData, startGameTime, sim.WorldSeed);
+            if (reserved == false)
+                CountObjectiveOwnerSelection(sim, saveData, kind);
             if (reserved == false)
             {
                 if (promisingHolder == true)
@@ -1542,7 +1552,7 @@ namespace ARPG.EditorTools
             }
             if (outcome == NpcHuntOutcome.Dead)
             {
-                MarkDead(sim, saveData, entityId, outcomeGameTime);
+                MarkDead(sim, saveData, entityId, outcomeGameTime, report.DungeonId);
                 return;
             }
             if (outcome == NpcHuntOutcome.Wounded)
@@ -1584,7 +1594,7 @@ namespace ARPG.EditorTools
                 NpcSaveData member = sim.Npcs[memberId];
                 if (report.Outcomes[i] == NpcHuntOutcome.Dead)
                 {
-                    MarkDead(sim, member, memberId, outcomeGameTime);
+                    MarkDead(sim, member, memberId, outcomeGameTime, report.DungeonId);
                     continue;
                 }
                 if (report.Outcomes[i] == NpcHuntOutcome.Wounded)
@@ -1743,7 +1753,7 @@ namespace ARPG.EditorTools
             {
                 if (threatId > 0)
                     CountNamedEncounterResult(sim, threatId, outcome, false);
-                MarkDead(sim, saveData, entityId, outcomeGameTime);
+                MarkDead(sim, saveData, entityId, outcomeGameTime, null);
                 return;
             }
             if (outcome == NpcHuntOutcome.Wounded)
@@ -1897,7 +1907,7 @@ namespace ARPG.EditorTools
             for (int i = 0; i < members.Count; i++)
             {
                 if (outcomes[i] == NpcHuntOutcome.Dead)
-                    MarkDead(sim, members[i], memberIds[i], outcomeGameTime);
+                    MarkDead(sim, members[i], memberIds[i], outcomeGameTime, null);
             }
         }
 
@@ -1930,9 +1940,11 @@ namespace ARPG.EditorTools
 
         /// <summary>
         /// 사망 정리 축약판: 순회·마을 명단에서 빼고 소지 Gold는 소멸 (D46). 소문·호감도·유형 관계는 실제 MarkNpcDead와 같은
-        /// 메서드로 정리한다(복제본이 끼워져 있다, D107). 연대기·Deed·고인 기억(DeceasedRelations)은 다루지 않는다.
+        /// 메서드로 정리한다(복제본이 끼워져 있다, D107). 고인 기억·사망 Deed(던전)·단기 목표 사망 처리도 같은 공용 메서드를 부른다
+        /// (원수 갚기 판정이 그 기록을 읽는다, NPC_OBJECTIVE_DESIGN §6.1). 연대기는 다루지 않는다(사건 Id -1).
         /// </summary>
-        private static void MarkDead(SimContext sim, NpcSaveData saveData, int entityId, float when)
+        /// <param name="dungeonId">던전 원정 사망이면 그 던전 (사냥 사망은 null)</param>
+        private static void MarkDead(SimContext sim, NpcSaveData saveData, int entityId, float when, string? dungeonId)
         {
             AR.s.Npc.MarkSaveDirty(entityId, NpcSaveGroup.ActivityTransition);
             if (saveData.Condition == CharacterConditions.Dead)
@@ -1948,10 +1960,14 @@ namespace ARPG.EditorTools
             // 실제 MarkNpcDead와 같은 소문 정리 (D72) — 명단 제거 전
             AR.s.Npc.PurgeRumorsOnNpcDeath(entityId, saveData);
             AR.s.Npc.RemoveAllAffinityInvolving(entityId);
+            AR.s.Npc.RecordNpcDeathRecords(entityId, saveData, -1, when, dungeonId);
             AR.s.Npc.RemoveAllRelationsInvolving(entityId);
             if (sim.Villages.TryGetValue(saveData.VillageId, out VillageData? village))
                 village.NpcEntityIds.Remove(entityId);
             AR.s.Npc.InvalidateNpcPower(entityId);
+            if (saveData.Objective != null)
+                sim.Objectives.OwnerDeaths[GetObjectiveKindIndex(saveData.Objective)]++;
+            AR.s.Npc.NotifyObjectiveNpcDied(entityId, saveData, when, dungeonId);
         }
 
         private static void CountHuntOutcome(SimContext sim, NpcHuntOutcome outcome)
@@ -4702,13 +4718,19 @@ namespace ARPG.EditorTools
                     "교환: B가 A에게 들음 (Source=A, Hops 1)");
                 Check(b.Rumors.Count == 1 && npc.IsPromisingRumor(b, b.Rumors[0], t0 + 1f) == true,
                     "들은 원정 성공 보고(가치 50 ≥ 기준)는 유망");
+                // Idle 전환 평가가 소문 확인 목표를 세우고, 원정 대상은 그 목표 던전이다 (NPC_OBJECTIVE_DESIGN §5.1)
+                npc.EvaluateObjectiveOnIdle(idB, b, t0 + 1f);
+                Tables.NpcObjectiveTable? rumorObjective = npc.GetObjectiveDefinition(b);
+                Check(rumorObjective != null && rumorObjective.Trigger == NpcObjectiveTrigger.PromisingRumor &&
+                      b.Objective != null && b.Objective.TargetDungeonId == slot0.DungeonId,
+                    $"Idle 평가: 소문 확인 목표 (target={b.Objective?.TargetDungeonId ?? "없음"})");
                 bool prepared = npc.TryPrepareDelveTarget(idB, idB, villageId, b.Position, t0 + 1f, sim.WorldSeed,
                     out string targetId, out _, out bool fromRumor);
                 Check(prepared == true && fromRumor == true && targetId == slot0.DungeonId,
                     $"확인 원정: 소문 대상 슬롯으로 감 (target={targetId})");
                 NpcActivityChoiceContext context = npc.BuildActivityChoiceContext(idB, b, t0 + 1f);
-                Check(context.DelveAvailable == false || context.HasPromisingRumor == true,
-                    "활동 선택 문맥에 유망 소문 필요가 켜짐");
+                Check(context.DelveAvailable == false || context.ObjectiveDelveMultiplier > 1f,
+                    "활동 선택 문맥에 소문 확인 목표의 Delve 배율이 켜짐");
                 Check(npc.PickRumorToGive(a, b, t0 + 2f) == null, "같은 사건은 다시 주지 않음 (중복)");
 
                 // ③ Checked 재수신 차단
@@ -4902,6 +4924,8 @@ namespace ARPG.EditorTools
                 bool invalidAfter = npc.IsRumorValid(b.Rumors[0]) == false;
                 bool notGiven = npc.PickRumorToGive(b, a, t0 + 301f) == null;
                 bool notPromising = npc.IsPromisingRumor(b, b.Rumors[0], t0 + 301f) == false;
+                // 게임과 같은 순서: Idle 평가(유망 소문이 없어 소문 확인 목표는 빠짐) → 원정 대상
+                npc.EvaluateObjectiveOnIdle(idB, b, t0 + 301f);
                 npc.TryPrepareDelveTarget(idB, idB, villageId, b.Position, t0 + 301f, sim.WorldSeed, out _, out _,
                     out bool fromRumorAfter);
                 transaction?.Dispose();

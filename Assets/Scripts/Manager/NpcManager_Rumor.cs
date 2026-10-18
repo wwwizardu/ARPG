@@ -116,10 +116,22 @@ namespace ARPG.Npc
                 return NpcRumorPlace.Unavailable;
             if (rumor.VillageId != speakerVillageId)
                 return NpcRumorPlace.OtherVillage;
-            VillageData? village = AR.s.Village != null ? AR.s.Village.GetVillage(rumor.VillageId) : null;
-            int listIndex = AR.s.Dungeon.GetNpcDelveSlotListIndex(rumor.VillageId, rumor.SlotIndex);
+            return ResolveDungeonSlotPlace(rumor.VillageId, rumor.SlotIndex, out bearing);
+        }
+
+        /// <summary>
+        /// 마을 던전 슬롯의 장소: 마을 중심에서 입구까지의 8방위 (소문·단기 목표 표시 공용). 입구가 없거나 가까우면 Nearby,
+        /// 슬롯·마을이 없으면 Unavailable.
+        /// </summary>
+        private NpcRumorPlace ResolveDungeonSlotPlace(int villageId, int slotIndex, out int bearing)
+        {
+            bearing = -1;
+            if (AR.s.Dungeon == null)
+                return NpcRumorPlace.Unavailable;
+            VillageData? village = AR.s.Village != null ? AR.s.Village.GetVillage(villageId) : null;
+            int listIndex = AR.s.Dungeon.GetNpcDelveSlotListIndex(villageId, slotIndex);
             if (village == null || listIndex < 0 ||
-                AR.s.Dungeon.TryGetNpcDelveSlot(rumor.VillageId, listIndex, out _, out _, out bool hasEntrance,
+                AR.s.Dungeon.TryGetNpcDelveSlot(villageId, listIndex, out _, out _, out bool hasEntrance,
                     out UnityEngine.Vector2 entrance) == false)
                 return NpcRumorPlace.Unavailable;
             if (hasEntrance == false)
@@ -564,22 +576,6 @@ namespace ARPG.Npc
             _rumorCounters.Exposed++;
             if (RumorExposureAudit != null && RumorExposureAudit(rumor) == false)
                 _rumorCounters.ExposedInvalid++;
-        }
-
-        /// <summary>
-        /// 확인 원정 대상 (D76): 보유자의 유망한 소문이 가리키는 슬롯. 없으면 -1.
-        /// 고르면 노출·확인 원정으로 센다 (TryPrepareDelveTarget이 부른다).
-        /// </summary>
-        private int PickConfirmationDelveSlot(int holderId, int villageId, float now)
-        {
-            if (holderId < 0 || _npcSaveDict.TryGetValue(holderId, out NpcSaveData? holder) == false ||
-                holder.VillageId != villageId || TryGetPromisingRumor(holder, now, out NpcRumor? rumor) == false ||
-                rumor == null)
-                return -1;
-
-            RecordRumorExposure(rumor);
-            _rumorCounters.ConfirmationDelves++;
-            return rumor.SlotIndex;
         }
 
         private void ExchangeWithPeer(int entityId, NpcSaveData saveData, int peerId, int peerIndex, float restStartGameTime,

@@ -81,7 +81,9 @@ namespace ARPG.Npc
                     string location = DescribeNarrativeLocation(instance, npc.VillageId);
                     string notice = instance.Kind == NarrativeContentKind.NamedThreat
                         ? NamedThreatEndNotice(instance)
-                        : $"{location} 일은 다른 사람들이 처리했다더군. 신경 써 줘서 고맙네.";
+                        : instance.Kind == NarrativeContentKind.Objective
+                            ? ObjectiveEndNotice(npc, location)
+                            : $"{location} 일은 다른 사람들이 처리했다더군. 신경 써 줘서 고맙네.";
                     return new NarrativeDialogueResult { Kind = conversation.Kind, InstanceId = instance.InstanceId,
                         Text = $"{ResolveNpcDisplayName(npc)}: {notice}", NeedsDisplayCommit = true };
                 }
@@ -302,6 +304,8 @@ namespace ARPG.Npc
                     return null;
                 if (held.Kind == NarrativeContentKind.NamedThreat)
                     return BuildNamedThreatProgressTopic(save, held);
+                if (held.Kind == NarrativeContentKind.Objective)
+                    return BuildObjectiveRequestProgressTopic(save, held);
                 string heldLocation = DescribeNarrativeLocation(held, save.VillageId);
                 var progress = new DialogueTopic
                 {
@@ -348,8 +352,22 @@ namespace ARPG.Npc
         {
             NpcSaveData? npc = GetSaveData(npcId);
             NarrativeContentInstance? instance = GetNarrativeInstance(instanceId);
+            // 단기 목표 부탁은 대사가 표시된 지금 인스턴스를 만든다 (NPC_OBJECTIVE_DESIGN §8.3 — 소망처럼 미리 만들지 않는다).
+            // 저장이 실패하면 만든 인스턴스를 지운다.
+            bool createdObjective = false;
+            bool addedDefinition = false;
+            bool addedPolicy = false;
+            if (instance == null && npc != null && _narrativeBusy == false && IsObjectiveRequestId(npcId, instanceId) == true)
+            {
+                instance = CreateObjectiveNarrative(npcId, npc, instanceId, out addedDefinition, out addedPolicy);
+                createdObjective = instance != null;
+            }
             if (npc == null || instance == null || _narrativeBusy == true || IsRequestable(npcId, npc, instance) == false)
+            {
+                if (createdObjective == true)
+                    RemoveNarrativeInstance(instance!, addedDefinition, addedPolicy);
                 return false;
+            }
             _narrativeBusy = true;
             int lifetime = _narrative.Lifetime;
             NarrativeContentInstance? before = null;
@@ -357,7 +375,12 @@ namespace ARPG.Npc
             try
             {
                 await AR.s.Data.WaitForSaveIdleAsync();
-                if (lifetime != _narrative.Lifetime || IsRequestable(npcId, npc, instance) == false) return false;
+                if (lifetime != _narrative.Lifetime || IsRequestable(npcId, npc, instance) == false)
+                {
+                    if (createdObjective == true && lifetime == _narrative.Lifetime)
+                        RemoveNarrativeInstance(instance, addedDefinition, addedPolicy);
+                    return false;
+                }
                 before = instance.Clone();
                 MarkNarrativeInstanceDirty(instance, NarrativeSaveGroup.Introductions | NarrativeSaveGroup.Target);
                 MarkSaveDirty(npcId, NpcSaveGroup.NarrativeRequest);
@@ -383,7 +406,10 @@ namespace ARPG.Npc
                 {
                     if (before != null && committed == false)
                     {
-                        ReplaceNarrativeInstance(before);
+                        if (createdObjective == true)
+                            RemoveNarrativeInstance(instance, addedDefinition, addedPolicy);
+                        else
+                            ReplaceNarrativeInstance(before);
                         MarkSaveDirty(npcId, NpcSaveGroup.NarrativeRequest);
                         npc.NarrativeRequest = null;
                     }
@@ -424,6 +450,9 @@ namespace ARPG.Npc
                 NamedThreatRecord? record = AR.s.NamedThreat != null ? AR.s.NamedThreat.GetActive(instance.ThreatId) : null;
                 return record != null && record.TitleRevealed == true;
             }
+            // 단기 목표 (NPC_OBJECTIVE_DESIGN §8.3): 목표가 아직 그 던전을 노리는 실행 단계이고 호감 문턱·입구 조건을 지킬 때
+            if (instance.Kind == NarrativeContentKind.Objective)
+                return IsObjectiveRequestable(npcId, npc, instance.DungeonId, AR.s.Time.CurrentGameTime);
             return instance.Kind == NarrativeContentKind.DungeonRumor &&
                    AR.s.Dungeon.TryGetNarrativeEntrance(instance.DungeonId, out _, out _) == true;
         }
@@ -431,7 +460,8 @@ namespace ARPG.Npc
         // ================= 보고 (§4.1 보고와 전파·§4.5) =================
 
         private bool IsDirectTellAvailable(NarrativeContentInstance instance, int npcId)
-            => (instance.Kind == NarrativeContentKind.DungeonRumor || instance.Kind == NarrativeContentKind.NamedThreat) &&
+            => (instance.Kind == NarrativeContentKind.DungeonRumor || instance.Kind == NarrativeContentKind.NamedThreat ||
+                instance.Kind == NarrativeContentKind.Objective) &&
                instance.OwnerNpcId == npcId && instance.Progress == NarrativeRumorProgress.Resolved &&
                instance.Reported == false && instance.RequesterNpcId < 0;
 

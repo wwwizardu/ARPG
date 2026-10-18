@@ -22,6 +22,7 @@ namespace ARPG.Npc
         public int BoughtItemId;
         public int BoughtBasicItemId;     // 산 장비의 BasicItemId (D119 — 0이면 기본 아이템이 아닌 구매, 진단이 0건을 확인)
         public int BoughtPrice;
+        public int BoughtEquipSlot;       // 산 장비가 업그레이드한 칸 (EquipSlotType, Bought일 때만 의미 — 장비 마련 이룸 판정)
         public string BuySkipReason;
     }
 
@@ -67,6 +68,8 @@ namespace ARPG.Npc
 
             SellInventoryToShop(entityId, saveData, villageId, ref report);
             BuyUpgradeFromShop(entityId, saveData, village, ref report);
+            // 거래 종료 → 단기 목표: 장비 마련 이룸·계기·같은 종류 갱신 (NPC_OBJECTIVE_DESIGN §4.6·§5.2)
+            NotifyObjectiveTradeEnded(entityId, saveData, report, AR.s.Time.CurrentGameTime);
             return report;
         }
 
@@ -97,10 +100,18 @@ namespace ARPG.Npc
             activity.PhaseEndGameTime = outcomeGameTime + recoveryHours;
 
             saveData.RecordExpeditionWound(outcomeGameTime, expedition, severe, dungeonId, threatId);
+            bool dungeonWound = expedition == NpcActivityKind.DungeonDelve && string.IsNullOrEmpty(dungeonId) == false;
             if (severe == true)
-                AddSevereWoundDeed(entityId, outcomeGameTime);
+            {
+                AddSevereWoundDeed(entityId, outcomeGameTime, dungeonWound == true ? dungeonId : null);
+                // 던전 원정 중상 → 설욕 판정 (NPC_OBJECTIVE_DESIGN §6.1, 중상 Deed를 남긴 직후)
+                if (dungeonWound == true)
+                    NotifyObjectiveSevereWound(entityId, saveData, dungeonId!, outcomeGameTime);
+            }
             else
+            {
                 _narrative.InvalidateDialogues(entityId);   // 부상 토픽(누적 요약)이 바뀐다
+            }
             return recoveryHours;
         }
 
@@ -269,6 +280,7 @@ namespace ARPG.Npc
             report.BoughtItemId = bought.Id;
             report.BoughtBasicItemId = bought.Equipment != null ? bought.Equipment.BasicItemId : 0;
             report.BoughtPrice = bestPrice;
+            report.BoughtEquipSlot = (int)bestSlot;
 
             Debug.Log($"[NpcAmbition] Trade Buy npc={entityId} v={villageId} item={DescribeItem(bought)} price={bestPrice} " +
                       $"npcGold={npcGoldBefore}->{saveData.Gold} " +

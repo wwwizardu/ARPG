@@ -52,9 +52,10 @@ namespace ARPG.Npc
         }
 
         /// <summary>
-        /// 원정 대상 던전과 경로 목표를 고른다. rumorHolderId(솔로 = 본인, 파티 = 리더)가 유망한 소문을 가졌으면 그 슬롯으로 가는
-        /// 확인 원정이고 (D76, RNG 없음), 아니면 결정론(salt 56)으로 균등 선택한다. 입구가 있으면 입구 좌표,
-        /// 없으면 Hunt와 같은 방식의 마을 주변 좌표를 목표로 쓴다 (입구는 표현일 뿐 판정과 무관, D57).
+        /// 원정 대상 던전과 경로 목표를 고른다. rumorHolderId(솔로 = 본인, 파티 = 리더)가 실행 단계 던전 목표를 가졌으면 그 던전으로 가는
+        /// 목표 원정이고 (NPC_OBJECTIVE_DESIGN §7.2, RNG 없음 — 소문 확인 목표면 옛 확인 원정 D76과 같고 fromRumor = true),
+        /// 아니면 결정론(salt 56)으로 균등 선택한다. 입구가 있으면 입구 좌표, 없으면 Hunt와 같은 방식의 마을 주변 좌표를 목표로 쓴다
+        /// (입구는 표현일 뿐 판정과 무관, D57).
         /// </summary>
         public bool TryPrepareDelveTarget(int rngOwnerId, int rumorHolderId, int villageId, Vector2 origin,
             float startGameTime, int worldSeed, out string dungeonId, out Vector2 targetPosition, out bool fromRumor)
@@ -70,11 +71,11 @@ namespace ARPG.Npc
                 return false;
 
             int slotIndex = -1;
-            int rumorSlot = PickConfirmationDelveSlot(rumorHolderId, villageId, startGameTime);
-            if (rumorSlot >= 0)
+            int objectiveSlot = PickObjectiveDelveSlot(rumorHolderId, villageId, startGameTime, out bool rumorConfirmation);
+            if (objectiveSlot >= 0)
             {
-                slotIndex = AR.s.Dungeon.GetNpcDelveSlotListIndex(villageId, rumorSlot);
-                fromRumor = slotIndex >= 0;
+                slotIndex = AR.s.Dungeon.GetNpcDelveSlotListIndex(villageId, objectiveSlot);
+                fromRumor = slotIndex >= 0 && rumorConfirmation == true;
             }
             if (slotIndex < 0)
                 slotIndex = NpcActivityResolver.PickDelveSlotIndex(rngOwnerId, startGameTime, worldSeed, slotCount);
@@ -100,8 +101,29 @@ namespace ARPG.Npc
         /// <summary>
         /// 솔로 Delve 종료 판정. 상태 전이(Idle/Wounded)·치료·전리품·완료까지 적용한다.
         /// 결과가 Dead면 상태를 건드리지 않고 돌려준다 — 호출자가 MarkNpcDead로 정리한다.
+        /// 끝으로 단기 목표의 시도·완료를 알린다 (NPC_OBJECTIVE_DESIGN §4.6).
         /// </summary>
         public NpcDelveReport ResolveSoloDelve(int entityId, NpcSaveData saveData, float outcomeGameTime, int worldSeed)
+        {
+            NpcDelveReport report = ResolveSoloDelveCore(entityId, saveData, outcomeGameTime, worldSeed);
+            NotifyObjectiveDelveReturned(report, outcomeGameTime);
+            return report;
+        }
+
+        /// <summary>
+        /// 파티 Delve 종료 판정. 파티원별 결과(동료 지원 반영)·상태 전이·치료·파티 해산·전리품·완료까지 적용한다.
+        /// 사망한 파티원 정리, 파티 호감도, 알림은 호출자 몫이다. 살아 있는 파티원이 2명 미만이면 파티만 해산하고 null.
+        /// 끝으로 단기 목표의 시도·완료를 알린다 (NPC_OBJECTIVE_DESIGN §4.6).
+        /// </summary>
+        public NpcDelveReport? ResolvePartyDelve(NpcPartyState party, float outcomeGameTime, int worldSeed)
+        {
+            NpcDelveReport? report = ResolvePartyDelveCore(party, outcomeGameTime, worldSeed);
+            if (report != null)
+                NotifyObjectiveDelveReturned(report, outcomeGameTime);
+            return report;
+        }
+
+        private NpcDelveReport ResolveSoloDelveCore(int entityId, NpcSaveData saveData, float outcomeGameTime, int worldSeed)
         {
             MarkSaveDirty(entityId, NpcSaveGroup.Activity | NpcSaveGroup.Location);
             NpcActivityState activity = saveData.Activity;
@@ -189,11 +211,7 @@ namespace ARPG.Npc
             return report;
         }
 
-        /// <summary>
-        /// 파티 Delve 종료 판정. 파티원별 결과(동료 지원 반영)·상태 전이·치료·파티 해산·전리품·완료까지 적용한다.
-        /// 사망한 파티원 정리, 파티 호감도, 알림은 호출자 몫이다. 살아 있는 파티원이 2명 미만이면 파티만 해산하고 null.
-        /// </summary>
-        public NpcDelveReport? ResolvePartyDelve(NpcPartyState party, float outcomeGameTime, int worldSeed)
+        private NpcDelveReport? ResolvePartyDelveCore(NpcPartyState party, float outcomeGameTime, int worldSeed)
         {
             List<NpcSaveData> members = new List<NpcSaveData>(party.MemberIds.Count);
             NpcDelveReport report = new NpcDelveReport { IsParty = true };

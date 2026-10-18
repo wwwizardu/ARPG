@@ -9,7 +9,8 @@ namespace ARPG.Data
         Identity = 1, Location = 2, Condition = 4, Activity = 8, Wallet = 16,
         Inventory = 32, Equipment = 64, Rumors = 128, Theft = 256, Deeds = 512,
         // NarrativeRequest(부탁 칸)는 구 ScenarioKnowledge 자리(4096)를 이어받았다 (NPC_NARRATIVE_CONTENT_DESIGN §7.2).
-        Memories = 1024, Stories = 2048, NarrativeRequest = 4096, All = 8191,
+        // Objective: 단기 목표 칸·최근 결말 (NPC_OBJECTIVE_DESIGN §9.1). 목표 변화가 Deeds·Stories 저장을 끌고 가지 않게 따로 둔다.
+        Memories = 1024, Stories = 2048, NarrativeRequest = 4096, Objective = 8192, All = 16383,
         // System_NpcSim activity state transitions (and the diagnostics that replay them) mark these together.
         ActivityTransition = Activity | Location | Condition,
     }
@@ -71,6 +72,7 @@ namespace ARPG.Data
             "DeceasedRelations" or "SharedActivityMemories" or "Sentiments" => NpcSaveGroup.Memories,
             "PersonalStories" => NpcSaveGroup.Stories,
             "NarrativeRequest" => NpcSaveGroup.NarrativeRequest,
+            "Objective" or "LastObjectiveOutcome" => NpcSaveGroup.Objective,
             _ => NpcSaveGroup.Identity,
         });
 

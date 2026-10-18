@@ -220,6 +220,47 @@ namespace ARPG.Tables
         public string GetTitle(int index) => index switch { 0 => Title1, 1 => Title2, 2 => Title3, _ => string.Empty };
     }
 
+    /// <summary>
+    /// NPC 단기 목표 정의 (NPC_OBJECTIVE_DESIGN §4.1, D147). 목표 종류 하나 = 행 하나. 동작은 enum 이름으로 고르고 수치·문구는 행에 둔다.
+    /// 문구의 {target}·{item}·{gold}·{need}·{remain}·{subject}는 표시할 때 사실로 채운다 (LLM은 말투만).
+    /// </summary>
+    [Serializable]
+    public class NpcObjectiveTable : TableBase
+    {
+        [JsonProperty("Name")] public string Name = string.Empty;                                  // 표시 이름
+        [JsonProperty("Category")] public ARPG.Npc.NpcObjectiveCategory Category;                   // 분류 (강제 > 극적 > 일상)
+        [JsonProperty("Priority")] public int Priority;                                             // 같은 분류 안 순서 (클수록 우선)
+        [JsonProperty("Trigger")] public ARPG.Npc.NpcObjectiveTrigger Trigger;
+        [JsonProperty("Target")] public ARPG.Npc.NpcObjectiveTargetKind Target;
+        [JsonProperty("Complete")] public ARPG.Npc.NpcObjectiveComplete Complete;
+        [JsonProperty("SameKindRefresh")] public bool SameKindRefresh;                              // 같은 종류 새 계기면 더 나은 대상으로 갱신
+        [JsonProperty("ReactChance")] public float ReactChance;                                     // 생성 확률 기본값 (1 = 조건만 맞으면, 굴리지 않음)
+        [JsonProperty("ReactProfile")] public ARPG.Npc.NpcObjectiveReactProfile ReactProfile;       // 성격 배율 규칙
+        [JsonProperty("PrepHours")] public float PrepHours;                                         // 준비 단계 길이 (0 = 바로 실행)
+        [JsonProperty("DeadlineHours")] public float DeadlineHours;                                 // 기한 (기준 시각부터)
+        [JsonProperty("TimeFrom")] public ARPG.Npc.NpcObjectiveTimeFrom TimeFrom;                   // 준비·기한의 기준
+        [JsonProperty("MaxAttempts")] public int MaxAttempts;                                       // 시도 상한 (0 = 없음)
+        [JsonProperty("PrepRest")] public float PrepRest;                                           // 준비 단계 활동 배율
+        [JsonProperty("PrepHunt")] public float PrepHunt;
+        [JsonProperty("PrepTrade")] public float PrepTrade;
+        [JsonProperty("PrepDelve")] public float PrepDelve;
+        [JsonProperty("ActRest")] public float ActRest;                                             // 실행 단계 활동 배율
+        [JsonProperty("ActHunt")] public float ActHunt;
+        [JsonProperty("ActTrade")] public float ActTrade;
+        [JsonProperty("ActDelve")] public float ActDelve;
+        [JsonProperty("AlwaysRecruit")] public bool AlwaysRecruit;                                  // 목표 원정 때 모집 시도 확률을 건너뜀
+        [JsonProperty("SkipOtherParties")] public bool SkipOtherParties;                            // 실행 단계에 다른 리더의 모집 후보에서 빠짐 (같은 대상 리더는 예외)
+        [JsonProperty("RequestAffinity")] public int RequestAffinity;                               // 플레이어에게 부탁하는 호감 문턱 (0 = 부탁 없음)
+        [JsonProperty("RecordDeed")] public bool RecordDeed;                                        // 결말 Deed를 남김
+        [JsonProperty("OutcomeTopicHours")] public float OutcomeTopicHours;                         // 결말 화제가 나오는 기간 (0 = 없음)
+        [JsonProperty("InspectText")] public string InspectText = string.Empty;                     // 검사 창 한 줄
+        [JsonProperty("StatusText")] public string StatusText = string.Empty;                       // 진행 중 화제 (빈칸 = 화제 없음)
+        [JsonProperty("RequestText")] public string RequestText = string.Empty;                     // 부탁 대사
+        [JsonProperty("FulfilledText")] public string FulfilledText = string.Empty;                 // 이룸 화제
+        [JsonProperty("FulfilledByOtherText")] public string FulfilledByOtherText = string.Empty;   // 남이 이뤘을 때 화제
+        [JsonProperty("AbandonedText")] public string AbandonedText = string.Empty;                 // 꺾임 화제
+    }
+
     [Serializable]
     public class NpcTable : CreatureTable
     {

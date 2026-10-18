@@ -98,6 +98,13 @@ namespace ARPG.Npc
         // 칸이 찬 동안 새 소문 의뢰를 하지 않고 진행 확인 화제를 꺼낸다. 소문 목록(Rumors)과 따로 저장한다.
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore, DefaultValueHandling = DefaultValueHandling.Ignore)]
         public NpcNarrativeRequest? NarrativeRequest;
+        // 단기 목표 (NPC_OBJECTIVE_DESIGN §9.1, D152). 지금 목표 1개. 없으면 null이고 저장하지 않는다.
+        // 단계·기한은 정의 행과 사건·생성 시각에서 계산한다. 빠진 목표는 저장하지 않는다 (칸이 빌 때 다시 계산, §4.8).
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore, DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public NpcObjective? Objective;
+        // 결말 화제용 최근 결말 1건 (§9.1). OutcomeTopicHours가 지나면 지운다. 없으면 저장하지 않는다.
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore, DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public NpcObjectiveOutcomeRecord? LastObjectiveOutcome;
         // 원정 부상 요약 (NPC_AMBITION_DESIGN D91 ①). 가벼운 부상은 Deed 없이 여기만 갱신하고, 중상은 SevereWound Deed와 함께 갱신한다.
         // 치료 여부는 저장하지 않는다. 기본값(부상 없음)은 저장하지 않아 부상 없는 NPC의 저장 크기는 늘지 않는다.
         // 구 세이브의 Wounded Deed는 로드 때 MigrateLegacyWoundedDeeds가 여기로 합친다.
@@ -171,6 +178,9 @@ namespace ARPG.Npc
         {
             if (NarrativeRequest != null && string.IsNullOrEmpty(NarrativeRequest.InstanceId) == true)
                 NarrativeRequest = null;
+            // 단기 목표 null 보정 (§9.1). 정의 표 대조·시도 횟수 자르기는 표가 필요해 NpcManager.NormalizeObjectiveOnLoad가 한다.
+            Objective?.EnsureInitialized();
+            LastObjectiveOutcome?.EnsureInitialized();
             int slotMax = (int)GlobalEnum.EquipSlotType.Max;
             if (InventoryEquip == null || InventoryEquip.Length != slotMax)
             {

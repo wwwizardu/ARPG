@@ -574,7 +574,8 @@ namespace ARPG.Systems
             NotifyDelveOutcome(saveData, entityId, outcome);
             if (outcome == NpcHuntOutcome.Dead)
             {
-                AR.s.Npc.MarkNpcDead(entityId, outcomeGameTime);
+                // 던전 원정 사망은 사망 Deed에 던전을 남긴다 (NPC_OBJECTIVE_DESIGN §6.1 원수 갚기 대상)
+                AR.s.Npc.MarkNpcDead(entityId, outcomeGameTime, report.DungeonId);
                 return;
             }
             // 부상자는 회복이 끝날 때 재개한다 (Hunt와 같음)
@@ -599,7 +600,7 @@ namespace ARPG.Systems
                 int memberId = report.MemberIds[i];
                 if (report.Outcomes[i] == NpcHuntOutcome.Dead)
                 {
-                    AR.s.Npc.MarkNpcDead(memberId, outcomeGameTime);
+                    AR.s.Npc.MarkNpcDead(memberId, outcomeGameTime, report.DungeonId);
                     continue;
                 }
                 survivorCount++;

@@ -157,6 +157,15 @@ namespace ARPG.Data
 
         /// <summary>네임드 위협 부탁 인스턴스 ID. 네임드마다 하나다 (NAMED_THREAT_DESIGN §8.4).</summary>
         public static string NamedThreatId(int threatId) => "threat/" + threatId;
+
+        /// <summary>
+        /// 단기 목표 부탁 인스턴스 ID (NPC_OBJECTIVE_DESIGN §9.2): objective/{목표 주인}/{만든 게임시각 × 100}.
+        /// 목표가 다시 계산으로 돌아오면 부탁을 새로 할 수 있어 주인·던전만으로는 겹친다 — 만든 시각을 붙인다.
+        /// </summary>
+        public static string ObjectiveId(int ownerNpcId, float createdGameTime) =>
+            ObjectiveIdPrefix(ownerNpcId) + Math.Max(0, (long)Math.Floor(createdGameTime * 100d));
+
+        public static string ObjectiveIdPrefix(int ownerNpcId) => "objective/" + ownerNpcId + "/";
     }
 
     /// <summary>

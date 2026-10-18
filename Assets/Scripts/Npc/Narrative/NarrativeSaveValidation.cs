@@ -65,6 +65,8 @@ namespace ARPG.Npc.Narrative
                 return IsWishConsistent(instance, definition.Content);
             if (instance.Kind == NarrativeContentKind.NamedThreat)
                 return IsNamedThreatConsistent(instance);
+            if (instance.Kind == NarrativeContentKind.Objective)
+                return IsObjectiveConsistent(instance, worldSeed);
             if (instance.Kind != NarrativeContentKind.DungeonRumor || instance.WishState != WishState.Hidden || instance.TargetItemId != 0)
                 return false;
             if (instance.SlotIndex < 0 || instance.Generation < 0 || instance.Revision < 0 ||
@@ -136,6 +138,36 @@ namespace ARPG.Npc.Narrative
                 bool rewardRange = instance.RewardGold == 0 ||
                     (instance.RewardGold >= NarrativeReactionRules.RewardGoldMin * multiplier &&
                      instance.RewardGold <= NarrativeReactionRules.RewardGoldMax * multiplier);
+                return rewardRange == true && (instance.RewardGold == 0 || instance.ReportRelevance == NarrativeRelevance.Requester) &&
+                       (instance.RewardRefused == false || instance.RewardGold == 0);
+            }
+            return instance.RewardGold == 0 && instance.RewardRefused == false && instance.ReportDisplayed == false;
+        }
+
+        // 단기 목표 부탁 (NPC_OBJECTIVE_DESIGN §9.2): ID = objective/{주인}/{만든 시각}, 대상 = 목표 던전 세대.
+        // 부탁은 목표 주인만 한다. 부탁 없이 플레이어 측이 닫은 경우(직접 말하기)는 부탁한 NPC가 없다. 몬스터·소망·네임드·후속 소개 칸은 비어 있다.
+        private static bool IsObjectiveConsistent(NarrativeContentInstance instance, int worldSeed)
+        {
+            if (instance.OwnerNpcId < 0 ||
+                instance.InstanceId.StartsWith(NarrativeContentInstance.ObjectiveIdPrefix(instance.OwnerNpcId), StringComparison.Ordinal) == false ||
+                (instance.RequesterNpcId >= 0 && instance.RequesterNpcId != instance.OwnerNpcId) ||
+                instance.SlotIndex < 0 || instance.Generation < 0 || instance.Revision < 0 ||
+                instance.DungeonId != DungeonLayout.Id(worldSeed, instance.VillageId, instance.SlotIndex, instance.Generation) ||
+                instance.TargetMonsterId != 0 || instance.TargetItemId != 0 || instance.ThreatId != 0 ||
+                instance.WishState != WishState.Hidden || string.IsNullOrEmpty(instance.IntroducedFromInstanceId) == false ||
+                IsFollowUpConsistent(instance) == false)
+                return false;
+            if (instance.Ended == true && instance.Progress != NarrativeRumorProgress.Unresolved)
+                return false;
+            if (instance.EndNoticePending == true && (instance.Ended == false || instance.RequesterNpcId < 0))
+                return false;
+            if (instance.Reported == true)
+            {
+                if (instance.Progress != NarrativeRumorProgress.Resolved || instance.ReportNpcId < 0 ||
+                    (instance.ReportRelevance != NarrativeRelevance.Requester && instance.ReportRelevance != NarrativeRelevance.SameVillage))
+                    return false;
+                bool rewardRange = instance.RewardGold == 0 ||
+                    (instance.RewardGold >= NarrativeReactionRules.RewardGoldMin && instance.RewardGold <= NarrativeReactionRules.RewardGoldMax);
                 return rewardRange == true && (instance.RewardGold == 0 || instance.ReportRelevance == NarrativeRelevance.Requester) &&
                        (instance.RewardRefused == false || instance.RewardGold == 0);
             }

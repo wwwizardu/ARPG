@@ -4,9 +4,10 @@
 name: npc
 description: NPC 도메인 종합 — 정본 매핑, 코드 구현 현황, 마을 경제와의 경계.
 type: topic
-last_updated: 2026-10-10
+last_updated: 2026-10-18
 sources:
   - Docs/npc/VILLAGE_NPC_BOUNDARY_DESIGN.md
+  - Docs/npc/NPC_OBJECTIVE_DESIGN.md
   - Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md
   - Docs/npc/QUEST_SYSTEM_DESIGN.md
   - Docs/npc/NPC_SIMULATION_DESIGN.md
@@ -26,6 +27,7 @@ sources:
   - Assets/Scripts/Common/System/System_NpcSim.cs, Assets/Scripts/Npc/NpcActivityResolver.cs
   - Assets/Scripts/Manager/NpcManager_Narrative.cs, Assets/Scripts/Manager/NpcManager_NarrativeDialogue.cs, Assets/Scripts/Manager/NpcManager_NarrativeWish.cs
   - Assets/Scripts/Npc/Narrative/NarrativeContentCatalog.cs, Assets/Scripts/Npc/Narrative/NarrativeReactionRules.cs, Assets/Scripts/Data/NarrativeSaveData.cs
+  - Assets/Scripts/Manager/NpcManager_Objective.cs, Assets/Scripts/Manager/NpcManager_ObjectiveNarrative.cs, Assets/Scripts/Npc/NpcObjectiveRules.cs
 ---
 
 ## 1. 한눈에 보기
@@ -34,7 +36,7 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 
 **핵심 경계**: 모든 물리 NPC는 모험가이며, 마을 경제는 물리 NPC가 아닌 추상 인구가 구동하고 건물은 자가 건설된다. 서비스도 특정 NPC가 아니라 배치 건물이 제공한다. [src: Docs/npc/VILLAGE_NPC_BOUNDARY_DESIGN.md §1–5]
 
-**현재 구현**: 모든 생존 NPC는 `System_NpcSim`의 시간분할 처리 대상이며, 활동은 Rest·Hunt(솔로/파티)·Trade(마을 상점)·DungeonDelve(던전 추상 원정)다. 다음 활동은 성격에서 나온 **야망**과 필요(Gold·가방·부상 회복)로 효용 선택한다. Hunt는 Food·부상·사망·`Fell` 연대기·주요 사건 이력에 결과를 남기고, 활동 중 LOD 전환도 이어진다. 플레이어 관계 4축은 `NpcManager`가 저장하며 Talk/Gift가 Affinity·Intimacy를 실제로 바꾼다. [src: Docs/npc/NPC_SIMULATION_DESIGN.md §11.1, Docs/npc/NPC_AMBITION_DESIGN.md §4·§6, Assets/Scripts/Common/System/System_NpcSim.cs, Assets/Scripts/Manager/NpcManager.cs, Assets/Scripts/Common/Utility/InteractionHelper.cs]
+**현재 구현**: 모든 생존 NPC는 `System_NpcSim`의 시간분할 처리 대상이며, 활동은 Rest·Hunt(솔로/파티)·Trade(마을 상점)·DungeonDelve(던전 추상 원정)다. 다음 활동은 성격에서 나온 **야망**과 필요(Gold·가방·부상 회복)로 효용 선택하고, 단기 목표가 있으면 그 단계의 배율을 곱한다(2026-10-18, 아래). Hunt는 Food·부상·사망·`Fell` 연대기·주요 사건 이력에 결과를 남기고, 활동 중 LOD 전환도 이어진다. 플레이어 관계 4축은 `NpcManager`가 저장하며 Talk/Gift가 Affinity·Intimacy를 실제로 바꾼다. [src: Docs/npc/NPC_SIMULATION_DESIGN.md §11.1, Docs/npc/NPC_AMBITION_DESIGN.md §4·§6, Docs/npc/NPC_OBJECTIVE_DESIGN.md §7.1, Assets/Scripts/Common/System/System_NpcSim.cs, Assets/Scripts/Manager/NpcManager.cs, Assets/Scripts/Common/Utility/InteractionHelper.cs]
 
 **모험가 경제(야망 P1·P2·P4)**: NPC는 전리품을 상점에 팔아 Gold를 얻고(Hunt는 골드를 주지 않음), 그 Gold로 상점의 **기본 장비**를 사서 강해진다. 대금은 마을 Gold와 NPC Gold 사이에서만 움직이는 닫힌 경제다. Rest가 끝나면 예비금(치료비 × 3)을 넘은 Gold의 70%를 생활비로 소속 마을에 내고(1.8% 소멸), 세계 물가 지수가 가격에 배율을 붙인다(GOLD_BALANCE D124~D137). 전투력은 장착 장비로 계산하고, 개인 상한(시작 전투력 +20%, 강자 +35~50%)과 +15% 문턱 때문에 성장은 거의 평탄하다. 소문 교환·NPC 던전 완료(낮은 확률)·파티 자동 구성·부상 등급·NPC 간 절도까지 구현됐고, 협력·배신(P3)은 보류다. [src: Docs/npc/NPC_AMBITION_DESIGN.md §2·§5·§7·§9·§10.1, Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §2]
 
@@ -53,6 +55,8 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 **최근 부상 사연 문구(2026-10-10, 커밋 대기)**: 이미 있던 최근 부상 화제(D91·D95)의 기본 문구를 작성 표 3001(PersonalStory·RecentWound·0)에서 읽는다. `{knownWoundSummary}`에 그 NPC가 겪은 최신 부상 요약이 들어가 "지난 던전 원정에서 호되게 당했소. 다음엔 더 조심해야겠소."처럼 말한다(중상이면 "죽다 살아났소."). 화제 조건·LLM 표현·대화 보상·저장은 그대로이고 사건으로 저장하지 않으며, 표에 행이 없으면 예전 코드 문구다. 개인 사연 행은 대상 종류당 하나다. [src: Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md 머리말(4단계)·§8.3, Docs/npc/NPC_AMBITION_DESIGN.md D95, Assets/Scripts/Npc/Narrative/DialogueTopicSelector.cs]
 
 **후속 소개(2026-10-10, 커밋 대기)**: 반응 101(호기심, "아는 다른 소문 소개")을 고른 NPC는 자기가 아는 같은 마을의 미해결·미부탁 던전 소문을 이어서 소개한다("그러고 보니 소식이 하나 더 있네." + 그 소문의 원래 부탁 대사). 대사가 표시된 뒤 그 소문은 **소개한 NPC의 부탁 칸**에 들어가고, 진행 확인·보고·의뢰 보답·관계 ×3도 그 NPC가 맡는다. 원래 주인은 그 소문을 따로 부탁하지 않는다(소문 하나에 부탁한 NPC는 한 명). 소개는 행적 하나에 한 번이고 보고 대화와 소문 반응 대화 모두에서 일어난다. 소망은 소개하지 않으며, 연결 행(NarrativeLink)·조건 표는 만들지 않았다. 보고 대화의 소개는 표시가 취소되면 다시 보여 주고, 소문 반응의 소개는 표시하지 못하면 사라진다. 실제 플레이 확인 전이다. [src: Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md 머리말(5단계)·§4.6·§8.4, Assets/Scripts/Manager/NpcManager_NarrativeDialogue.cs]
+
+**단기 목표(2026-10-18, 1단계, 커밋 대기)**: 사건이나 상황이 며칠짜리 목표가 되어 활동에 이유·대상·끝을 붙인다. NPC당 목표는 1개이고, 분류(강제 > 극적 > 일상)와 정의 표의 우선순위로 더 높은 목표가 밀어낸다. 1단계 목표는 소문 확인(옛 확인 원정 D76을 옮김)·장비 마련(예산을 넘어 못 산 업그레이드)·원수 갚기(같은 마을 관계자가 던전 원정에서 죽음, 관계자마다 각자 판정)·설욕(던전 원정 중상) 4종이다. 목표는 활동 확률만 기울이고(예: 극적 목표 실행 단계 던전 원정 ×4), 원정을 떠나면 목표 던전으로 간다. 이룸·꺾임은 끝(극적 목표는 결말 Deed 16·17)이고, 밀림·대상 없어짐·이주는 빠짐이다. 칸이 비면 최근 14일 기록에서 한 번 다시 계산하며, 극적 목표의 생성 판정은 결정론(salt 200)이라 다시 계산해도 같다. 검사 창 "목표" 줄, 진행·결말 화제(극적 목표의 진행 화제는 고정), 원수 갚기 부탁(narrative 원장 `Objective` 종류, 부탁 대사 표시 뒤 생성)이 있고, 정의 표는 시트 `NpcObjective` 탭이다. 진단 기준은 통과했다(결정론 불일치 0). 원수 갚기는 60일 실행에서 10건이 모두 꺾여 플레이어 부탁이 주 해결 경로다. 실제 플레이 확인 전이다. [src: Docs/npc/NPC_OBJECTIVE_DESIGN.md 머리말·§2·§3·§4·§6·§8·§12.1, Assets/Scripts/Manager/NpcManager_Objective.cs, Assets/Scripts/Manager/NpcManager_ObjectiveNarrative.cs]
 
 ## 2. 정본 매핑 — "이걸 물으면 이 문서의 이 절"
 
@@ -75,6 +79,7 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 | NPC 실전투 런타임(진영·인식·동행·드랍 줍기·결투) | [NPC_COMBAT_DESIGN](../Docs/npc/NPC_COMBAT_DESIGN.md) | 화면 안 전투를 소유. 사회 규칙은 AMBITION이 결과 훅으로 공급 |
 | NPC 장비 출처(상점 기본 아이템)·기본 장비 칸·장비 저장 표현·기존 세이브 일괄 교체 | [NPC_SHOP_EQUIPMENT_DESIGN](../Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md) | D116~D123, 구현 결과·검증은 §11 |
 | 던전 소문(소문 주인)·부탁 칸·보고·플레이어 행적 반응(관련도·부정 반응)·의뢰 보답·대화 콘텐츠 작성 표 | [NPC_NARRATIVE_CONTENT_DESIGN](../Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md) — 머리말 2026-10-10 결정, 반응 §4, 저장 §7, 구현 결과 §8.1 | 1~5단계 구현(3단계 = 소망 ItemGift·반응 대상 열, 4단계 = 최근 부상 사연 문구, 5단계 = 후속 소개 → 소개한 NPC가 부탁). 옛 던전 시나리오 문서의 "보고 1건 → 보답" 방식과 후속 사건 설계를 대체한다 [src: Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md §8.1~§8.4·§9] |
+| NPC 단기 목표(목표 칸·우선순위·다시 계산·소문 확인·장비 마련·원수 갚기·설욕·목표 부탁) | [NPC_OBJECTIVE_DESIGN](../Docs/npc/NPC_OBJECTIVE_DESIGN.md) — 결정표 §3(D142~D152), 구현 기록 §12.1 | 활동 판정 공식은 바꾸지 않고 배율·대상·파티·대화·표시만 준다. 부탁·보고는 NARRATIVE_CONTENT 구조를 그대로 쓴다 [src: Docs/npc/NPC_OBJECTIVE_DESIGN.md §1.3·§3·§8.3] |
 | 플레이어 상태 관찰→Trust·대사·보상 | [PLAYER_RECOGNITION_DESIGN](../Docs/npc/PLAYER_RECOGNITION_DESIGN.md) | 전리품 식별 배관만 구현, 반응 본체 미구현 [src: Docs/npc/PLAYER_RECOGNITION_DESIGN.md §제약·전제·§구현 계획, Assets/Scripts/Common/Utility/MonsterTrophyIdentifier.cs] |
 
 ## 3. 정본 우선순위
@@ -108,6 +113,7 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 | 상점 거래·닫힌 경제·기본 장비 구매 | AMBITION §7.2·§9, SHOP_EQUIPMENT §4–5 | `NpcManager_Trade`, `VillageManager_NpcTrade`, `VillageTradeStockRoller.RollBasicEquipmentPlan` | ✅ 구현. 마을 골드 밸런스(생활비·물가 지수·금고 유지비) 2026-10-03 구현 [src: Assets/Scripts/Manager/NpcManager_Trade.cs, Assets/Scripts/Village/VillageManager_NpcTrade.cs, Assets/Scripts/Manager/NpcManager_LivingExpense.cs, Assets/Scripts/Village/VillageManager_GoldPrice.cs] |
 | 소문·DungeonDelve·NPC 던전 완료(P2) | AMBITION §5.2·§7.1·§7.4 | `NpcManager_Delve`, `DungeonManager_NpcCompletion`, 소문 교환 | ✅ 구현 [src: Assets/Scripts/Manager/NpcManager_Delve.cs, Assets/Scripts/Dungeon/DungeonManager_NpcCompletion.cs] |
 | 던전 소문·부탁·보고·행적 반응·후속 소개(NARRATIVE 1·2·5단계) | NARRATIVE_CONTENT §3–4·§7 | `NpcManager_Narrative`(세대 선정·소문 주인·완료 해결·정리), `NpcManager_NarrativeDialogue`(부탁·보고·행적 반응·후속 소개), `NarrativeContentCatalog`, `NarrativeReactionRules`, `narrative` 저장 파트(소개 기록 `FollowUpInstanceId`·`FollowUpState`·`IntroducedFromInstanceId`) | 🟨 구현·진단 PASS(2026-10-10, 커밋 대기), 실제 플레이 확인 전 [src: Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md §8·§8.1·§8.4, Assets/Scripts/Manager/NpcManager_Narrative.cs, Assets/Scripts/Manager/NpcManager_NarrativeDialogue.cs, Assets/Scripts/Data/NarrativeSaveData.cs] |
+| 단기 목표 1단계 | OBJECTIVE §4~§9 | `NpcManager_Objective`(후보 판정·다시 계산·교체·사건 알림), `NpcManager_ObjectiveNarrative`(화제·부탁), `NpcObjectiveRules`, `NpcSaveData.Objective`·`LastObjectiveOutcome`, 시트 `NpcObjective` | 🟨 구현·진단 PASS(2026-10-18, 커밋 대기), 실제 플레이 확인 전 [src: Docs/npc/NPC_OBJECTIVE_DESIGN.md §12.1, Assets/Scripts/Manager/NpcManager_Objective.cs, Assets/Scripts/Npc/NpcObjectiveRules.cs] |
 | 파티 자동 구성 개정·부상 등급 | AMBITION D85~D96 | 모집·수락 확률, 중상 10%·부상 요약 | ✅ 구현 [src: Docs/npc/NPC_AMBITION_DESIGN.md §2] |
 | NPC 간 절도(P4) | AMBITION §7.6, D98~D115 | `NpcManager_Theft` — 현장 적발·단서·판매 소문 늦은 발각 | ✅ 구현. 훔친 장비는 장착하지 않음(D119) [src: Assets/Scripts/Manager/NpcManager_Theft.cs] |
 | 사라진 터 강제 이주(NS4 일부) | AMBITION D138~D141 | `NpcManager_Relocation` — 터(폐허·합병) 소속 NPC가 72h 뒤 가장 가까운 상점 마을로 `Relocate`, 배분·보충에서 터 제외. `VillageId` = 소속 마을 | ✅ 구현(2026-10-03). 자발적 이주·거주 이력은 후속 [src: Assets/Scripts/Manager/NpcManager_Relocation.cs] |
@@ -138,6 +144,7 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 | 소망(퀘스트) 구현·확장 | NARRATIVE_CONTENT 머리말(3단계 결정)·§2.2·§8.2 → QUEST_SYSTEM §2.2(상태)·§8.2(대상 보장) → interactionSystem §4.7 → `NpcManager_NarrativeWish` → 진단 `ARPG/Dungeon/Run Storage and Generation Diagnostics` [src: Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md §8.2, Assets/Scripts/Editor/DungeonRuntimeDiagnostics_Scenarios.cs] |
 | 현재 NPC 자율 활동 | NPC_SIMULATION §11.1 → `System_NpcSim` → `NpcActivityResolver` |
 | NPC 경제·야망·소문·절도 규칙 변경 | AMBITION §2 결정표 → 해당 §7 절 → NPC_SIMULATION §11.1(salt 정본) → 진단 `ARPG/Npc/Diagnostics/Ambition Sim` |
+| 단기 목표 추가·수치 조정 | OBJECTIVE §3 → §4~§7 → §12.1 → 시트 `NpcObjective`와 메뉴 `ARPG/Download Table/NpcObjectiveTable` → 진단 `ARPG/Npc/Diagnostics/Ambition Sim`(요약의 "단기 목표" 절) [src: Docs/npc/NPC_OBJECTIVE_DESIGN.md §4.1·§12.1, Assets/Scripts/Editor/NpcAmbitionSimDiagnostics_Objectives.cs] |
 | NPC 장비·상점 기본 장비 | NPC_SHOP_EQUIPMENT §2·§11 → NPC_EQUIPMENT §3.3·§4 → 진단 `ARPG/Diagnostics/Basic Items` |
 | NPC 화면 안 전투·동행·결투 | NPC_COMBAT 상태·§4–7 |
 | 파티·이주·WORLD_EVENT 확장 | NPC_SIMULATION NS4 → NPC_ACTIVITY(참고 범위) → WORLD_EVENT |

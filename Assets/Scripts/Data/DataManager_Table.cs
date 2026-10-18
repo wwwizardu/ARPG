@@ -22,6 +22,10 @@ namespace ARPG.Data
         // 네임드 위협 템플릿 (NAMED_THREAT_DESIGN §11.1). 목록은 Enabled 행만 Id 오름차순 — 같은 해시면 같은 템플릿이 고르도록
         private ImmutableDictionary<int, Tables.NamedThreatTable> _namedThreatTable = null!;
         private readonly List<Tables.NamedThreatTable> _namedThreatList = new();
+        // NPC 단기 목표 정의 (NPC_OBJECTIVE_DESIGN §4.1, D147). 목록은 Id 오름차순, 계기 인덱스는 계기마다 Id가 가장 작은 행
+        private ImmutableDictionary<int, Tables.NpcObjectiveTable> _npcObjectiveTable = null!;
+        private readonly List<Tables.NpcObjectiveTable> _npcObjectiveList = new();
+        private readonly Dictionary<Npc.NpcObjectiveTrigger, Tables.NpcObjectiveTable> _npcObjectiveByTrigger = new();
         // biome → 그 biome 전용 몬스터 Id 목록 (Any 제외). LoadTableAsync에서 구축. BiomeMonsterMapping이 소비.
         private Dictionary<GlobalEnum.BiomeType, List<int>> _monsterIdsByBiome = new();
         // 공용 몬스터(Biome=Any) Id 목록 — 모든 biome 스폰 풀에 포함.
@@ -85,6 +89,7 @@ namespace ARPG.Data
                 LoadTable<Tables.MonsterArchetypeTable>("MonsterArchetypeTable.bytes", tables => _monsterArchetypeTable = tables),
                 LoadTable<Tables.MonsterAffixTable>("MonsterAffixTable.bytes", tables => _monsterAffixTable = tables),
                 LoadTable<Tables.NamedThreatTable>("NamedThreatTable.bytes", tables => _namedThreatTable = tables),
+                LoadTable<Tables.NpcObjectiveTable>("NpcObjectiveTable.bytes", tables => _npcObjectiveTable = tables),
                 LoadTable<Tables.NpcTable>("NpcTable.bytes", tables => _npcTable = tables),
                 LoadTable<Tables.NpcEquipTable>("NpcEquipTable.bytes", tables => _npcEquipTable = tables),
                 LoadTable<Tables.StatTable>("StatTable.bytes", tables => _statTable = tables),
@@ -287,6 +292,22 @@ namespace ARPG.Data
             }
             _namedThreatList.Sort((a, b) => a.Id.CompareTo(b.Id));
 
+            // NpcObjectiveTable: Id 오름차순 목록 + 계기 인덱스 (1단계는 계기 하나에 행 하나)
+            _npcObjectiveList.Clear();
+            _npcObjectiveByTrigger.Clear();
+            foreach (var table in _npcObjectiveTable.Values)
+            {
+                table.LoadLate();
+                _npcObjectiveList.Add(table);
+            }
+            _npcObjectiveList.Sort((a, b) => a.Id.CompareTo(b.Id));
+            for (int i = 0; i < _npcObjectiveList.Count; i++)
+            {
+                Tables.NpcObjectiveTable table = _npcObjectiveList[i];
+                if (table.Trigger != Npc.NpcObjectiveTrigger.None && _npcObjectiveByTrigger.ContainsKey(table.Trigger) == false)
+                    _npcObjectiveByTrigger.Add(table.Trigger, table);
+            }
+
             // ZoneTable: Cap 조회용 정렬 인덱스 구축 (Zone 번호=Id 오름차순)
             _zoneTableSortedIds.Clear();
             foreach (var key in _zoneTable.Keys)
@@ -466,6 +487,23 @@ namespace ARPG.Data
 
         /// <summary>출현 후보 네임드 템플릿 (Enabled 행, Id 오름차순, NAMED_THREAT_DESIGN §4.4).</summary>
         public IReadOnlyList<Tables.NamedThreatTable> NamedThreatTemplates => _namedThreatList;
+
+        /// <summary>단기 목표 정의 (NPC_OBJECTIVE_DESIGN §4.1). 없으면 null — 로드 보정이 표에 없는 목표를 지운다.</summary>
+        public Tables.NpcObjectiveTable? GetNpcObjective(int id)
+        {
+            if (_npcObjectiveTable != null && _npcObjectiveTable.TryGetValue(id, out var table))
+                return table;
+            return null;
+        }
+
+        /// <summary>계기에 붙은 단기 목표 정의 (그 계기의 Id가 가장 작은 행). 없으면 false — 그 계기는 목표를 만들지 않는다.</summary>
+        public bool TryGetNpcObjectiveByTrigger(Npc.NpcObjectiveTrigger trigger, out Tables.NpcObjectiveTable? table)
+        {
+            return _npcObjectiveByTrigger.TryGetValue(trigger, out table);
+        }
+
+        /// <summary>전체 단기 목표 정의 (Id 오름차순).</summary>
+        public IReadOnlyList<Tables.NpcObjectiveTable> NpcObjectiveDefinitions => _npcObjectiveList;
 
         public Tables.NpcTable? GetNpc(int id)
         {

@@ -104,6 +104,10 @@ namespace ARPG.Npc.Narrative
             NpcDeedEntry? item = save.GetLatestPersonalDeed(NpcDeedKind.NotableItemAcquired);
             NpcDeedEntry? clear = save.GetLatestPersonalDeed(NpcDeedKind.DungeonCleared);
             NpcDeedEntry? boast = clear != null && (item == null || clear.When >= item.When) ? clear : item;
+            // 같은 구매를 두 번 말하지 않는다: 장비 마련 결말 화제가 그 구매를 이미 말한다 (NPC_OBJECTIVE_DESIGN §5.2 겹침 정리)
+            if (boast != null && boast.Kind == NpcDeedKind.NotableItemAcquired && manager != null &&
+                manager.IsObjectivePurchaseOutcome(save, boast.When) == true)
+                boast = null;
             if (boast != null)
                 candidates.Add((boast.When, 3, BuildBoastTopic(npcId, boast, now)));
             candidates.Sort((a, b) => a.When != b.When ? b.When.CompareTo(a.When) : a.Order.CompareTo(b.Order));
@@ -242,7 +246,8 @@ namespace ARPG.Npc.Narrative
             if (topic.Type == DialogueTopicType.DungeonRumor || topic.Type == DialogueTopicType.ItemOwnerRumor ||
                 topic.Type == DialogueTopicType.BetrayalRumor || topic.Type == DialogueTopicType.DungeonRequest ||
                 topic.Type == DialogueTopicType.DungeonRequestProgress || topic.Type == DialogueTopicType.NamedThreatRumor ||
-                topic.Type == DialogueTopicType.NamedThreatRequest || topic.Type == DialogueTopicType.NamedThreatRequestProgress)
+                topic.Type == DialogueTopicType.NamedThreatRequest || topic.Type == DialogueTopicType.NamedThreatRequestProgress ||
+                topic.Type == DialogueTopicType.ObjectiveRequest || topic.Type == DialogueTopicType.ObjectiveRequestProgress)
                 return AmbitionRumorPriority;
 
             return topic.Category switch
@@ -282,6 +287,9 @@ namespace ARPG.Npc.Narrative
                 DialogueTopicType.TheftVictim => (save.NpcStat.Pride + (100 - save.NpcStat.Patience)) / 10,
                 // 네임드 소문: 던전 소문과 같은 성향 (NAMED_THREAT_DESIGN §8.3)
                 DialogueTopicType.NamedThreatRumor => (save.NpcStat.Curiosity + save.NpcStat.Courage) / 10,
+                // 단기 목표 진행·결말: 충성·자존심이 높을수록 자기 목표 이야기를 꺼낸다 (NPC_OBJECTIVE_DESIGN §8.2)
+                DialogueTopicType.ObjectiveStatus => (save.NpcStat.Loyalty + save.NpcStat.Pride) / 10,
+                DialogueTopicType.ObjectiveOutcome => (save.NpcStat.Loyalty + save.NpcStat.Pride) / 10,
                 _ => 0,
             };
         }
@@ -842,12 +850,17 @@ namespace ARPG.Npc.Narrative
         {
             if (save == null || AR.s.Npc == null)
                 return;
-            DialogueTopic? topic = AR.s.Npc.BuildNarrativeRequestTopic(npcId, save);
+            // 부탁 칸은 하나다. 원수 갚기 부탁(NPC_OBJECTIVE_DESIGN §8.3)이 가능하면 소문 부탁보다 먼저 꺼낸다.
+            float now = AR.s.Time.CurrentGameTime;
+            DialogueTopic? topic = AR.s.Npc.BuildObjectiveRequestTopic(npcId, save, now) ??
+                                   AR.s.Npc.BuildNarrativeRequestTopic(npcId, save);
             if (topic != null)
                 topics.Add(topic);
             DialogueTopic? wish = AR.s.Npc.BuildNarrativeWishTopic(npcId, save);
             if (wish != null)
                 topics.Add(wish);
+            // 단기 목표 진행 중 화제(극적 목표는 고정)·결말 화제 (NPC_OBJECTIVE_DESIGN §8.2)
+            AR.s.Npc.AddObjectiveTopics(topics, npcId, save, now);
         }
 
         // 징후 문장을 전해 들은 말투로 바꾼다: "...들린다." → "...들린다더군."

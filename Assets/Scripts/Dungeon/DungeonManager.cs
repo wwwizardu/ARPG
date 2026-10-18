@@ -380,6 +380,10 @@ namespace ARPG.Dungeon
                 }
                 if (lifetime != _lifetime) return false;
                 _completionPending = false;
+                // 단기 목표: 이 던전을 노리던 마을 NPC의 원수 갚기는 이룸 — 동행한 주인은 "함께" (NPC_OBJECTIVE_DESIGN §6.4).
+                // 커밋이 끝난 뒤라 되돌릴 일이 없다. NPC 쪽 변화는 다음 저장에 실린다 (D47).
+                AR.s.Npc.NotifyObjectiveDungeonClosedByPlayer(_active.VillageId, _active.DungeonId, CompanionInDungeonId(),
+                    AR.s.Time.CurrentGameTime);
                 RefreshNarrativeSelections();
                 RebuildEntranceIndex();
                 Notify("던전 완료! ESC 메뉴에서 던전 나오기를 선택하세요.");

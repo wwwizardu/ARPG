@@ -263,6 +263,13 @@ namespace ARPG.Npc
             internal NpcNarrativeRequest? RequestBefore;
             internal NpcSaveData? Companion;
             internal List<NpcRumor>? CompanionRumorsBefore;
+            // 단기 목표 부탁 (NPC_OBJECTIVE_DESIGN §6.4·§8.3): 바꾼 인스턴스의 사본, 비운 부탁 칸, 직접 말하기용으로 새로 만든 인스턴스
+            internal List<NarrativeContentInstance>? ObjectiveInstancesBefore;
+            internal List<NpcSaveData>? ObjectiveRequesters;
+            internal List<NpcNarrativeRequest?>? ObjectiveRequestsBefore;
+            internal List<NarrativeContentInstance>? ObjectiveCreated;
+            internal List<bool>? ObjectiveCreatedDefinitions;
+            internal List<bool>? ObjectiveCreatedPolicies;
             public bool Resolved { get; internal set; }
         }
 
@@ -307,11 +314,14 @@ namespace ARPG.Npc
                     now, record.CompletionGold, -1, false), now);
                 _rumorCounters.CreatedPlayerDeed++;
             }
+            // 단기 목표 부탁: 같은 던전을 노리던 원수 갚기 부탁을 해결·미해결 종료로, 부탁 없이 대신 닫았으면 직접 말하기 사건을 만든다
+            StageObjectiveDungeonCompletion(stage, record, entranceX, entranceY, companionNpcId, now);
             return stage;
         }
 
         public void RollbackDungeonCompletion(NarrativeCompletionStage stage)
         {
+            RollbackObjectiveDungeonCompletion(stage);
             if (stage.InstanceBefore != null)
                 ReplaceNarrativeInstance(stage.InstanceBefore);
             if (stage.Requester != null)
@@ -474,6 +484,17 @@ namespace ARPG.Npc
                     {
                         // 끝 처리 없이 기록이 끝난 사건은 미해결 종료로 고친다.
                         EndNamedThreatNarrative(instance.ThreatId, false, now);
+                        changed = true;
+                    }
+                }
+                else if (instance.Kind == NarrativeContentKind.Objective)
+                {
+                    // 목표 주인이 살아서 아직 그 던전을 노리는 동안 현재 사건이다 (NPC_OBJECTIVE_DESIGN §8.3).
+                    current = IsObjectiveNarrativeCurrent(instance);
+                    if (instance.IsOpen == true && current == false)
+                    {
+                        // 목표 결말 처리 없이 끝난 부탁은 미해결 종료로 고친다.
+                        EndObjectiveNarrativeUnresolved(instance, now);
                         changed = true;
                     }
                 }

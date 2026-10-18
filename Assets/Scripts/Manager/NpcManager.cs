@@ -113,6 +113,7 @@ namespace ARPG.Npc
             ResetRumorRuntime();
             ResetPartyRuntime();
             ResetTheftRuntime();
+            ResetObjectiveRuntime();
             ResetLivingExpenseRuntime();
             _nameBag.Clear();
             _nameBagCursor = 0;
@@ -1086,6 +1087,8 @@ namespace ARPG.Npc
 
                 // 장비/인벤토리 ItemData의 ItemTable 참조 복원 (PlayerData.LoadCompleted와 동일 패턴)
                 saveData.OnLoadCompleted();
+                // 단기 목표 로드 보정 — 정의 표 대조 (NPC_OBJECTIVE_DESIGN §9.1)
+                NormalizeObjectiveOnLoad(saveData);
                 if (replaceBasicEquipment == true)
                 {
                     int replaced = ReplaceEquipmentWithBasicItems(entityId, saveData, ref basicSkippedItems);
@@ -1842,7 +1845,8 @@ namespace ARPG.Npc
         /// ECS 엔티티가 없는 NPC의 영구 사망을 정리한다.
         /// NPC 저장 데이터는 전기/연대기 회고를 위해 보존하되, 활동 순회와 관계 채널에서는 제거한다.
         /// </summary>
-        public void MarkNpcDead(int entityId, float when)
+        /// <param name="dungeonId">던전 원정에서 죽었으면 그 던전. 사망 Deed에 남겨 원수 갚기의 대상이 된다 (NPC_OBJECTIVE_DESIGN §6.1·§9.1).</param>
+        public void MarkNpcDead(int entityId, float when, string? dungeonId = null)
         {
             MarkSaveDirty(entityId, NpcSaveGroup.Condition | NpcSaveGroup.Activity | NpcSaveGroup.Location);
             if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
@@ -1871,11 +1875,11 @@ namespace ARPG.Npc
             _deferredPurchaseUpgradeItemIds.Remove(entityId);
             RemoveAllAffinityInvolving(entityId);
             RemovePlayerRelation(entityId);
-            RecordDeceasedRelationMemories(entityId, ResolveNpcDisplayName(saveData), eventId, when);
+            RecordNpcDeathRecords(entityId, saveData, eventId, when, dungeonId);
             RemoveAllRelationsInvolving(entityId);
             AR.s.Village.UnregisterNpcFromVillage(saveData.VillageId, entityId);
-
-            AddDeed(entityId, NpcDeedKind.Fell, eventId, NpcKnowledgeLevel.Did, when, entityId);
+            // 단기 목표: 주인 사망 정리 + 같은 마을 관계자의 원수 갚기 판정 (기억·사망 Deed가 남고 명단에서 빠진 뒤)
+            NotifyObjectiveNpcDied(entityId, saveData, when, dungeonId);
 
             if (saveData.IsActive)
             {
@@ -1888,6 +1892,17 @@ namespace ARPG.Npc
                 // LateUpdate의 System_EntityDestroy가 UnregisterNpcByEntityId와 GameObject 파괴를 수행한다.
                 AR.s.Component.AddComponent(entityId, new DestroyTag());
             }
+        }
+
+        /// <summary>
+        /// 사망 기록: 생존자의 고인 기억(사망 관계 기억)과 본인의 사망 Deed(던전 원정이면 던전). 유형 관계를 지우기 전에 부른다.
+        /// MarkNpcDead와 진단의 축약 사망 정리가 같은 메서드를 쓴다 — 원수 갚기 판정이 이 두 기록을 읽는다 (NPC_OBJECTIVE_DESIGN §6.1).
+        /// </summary>
+        /// <param name="fellEventId">연대기 사건 Id (진단은 연대기를 건드리지 않아 -1)</param>
+        public void RecordNpcDeathRecords(int entityId, NpcSaveData saveData, int fellEventId, float when, string? dungeonId)
+        {
+            RecordDeceasedRelationMemories(entityId, ResolveNpcDisplayName(saveData), fellEventId, when);
+            AddFellDeed(entityId, saveData, fellEventId, when, dungeonId);
         }
 
         private void RecordDeceasedRelationMemories(int deceasedEntityId, string deceasedName,
@@ -1944,16 +1959,36 @@ namespace ARPG.Npc
         }
 
         /// <summary>
+        /// 사망 Deed. 참가자는 본인. 던전 원정 사망이면 그 던전을 남긴다 — 생존자 기억마다 넣지 않고 죽은 NPC 자신의 Deed에
+        /// 한 번만 남겨, 같은 마을 관계자가 모두 여기서 원수 갚기의 대상을 읽는다 (NPC_OBJECTIVE_DESIGN §6.1).
+        /// </summary>
+        private void AddFellDeed(int entityId, NpcSaveData saveData, int eventId, float when, string? dungeonId)
+        {
+            MarkSaveDirty(entityId, NpcSaveGroup.Deeds | NpcSaveGroup.Stories);
+            NpcDeedEntry entry = new NpcDeedEntry(NpcDeedKind.Fell, eventId, NpcKnowledgeLevel.Did, when)
+            {
+                DungeonId = dungeonId ?? string.Empty,
+            };
+            AddDeedParticipant(entry, entityId);
+            saveData.RecordDeed(entry);
+            _narrative.InvalidateDialogues(entityId);
+        }
+
+        /// <summary>
         /// 원정 중상 Deed (D91 ②). ApplyExpeditionWound가 중상일 때만 부른다. 가벼운 부상은 Deed가 없다.
         /// Kind·When만 남긴다 (저장 JSON = {"Kind":"SevereWound","When":…}). 활동은 NpcSaveData.LastWoundActivity가 가진다.
+        /// 던전 원정 중상이면 그 던전도 남긴다 — 설욕의 대상이다 (NPC_OBJECTIVE_DESIGN §6.1·§9.1). 사냥 중상은 비운다.
         /// </summary>
-        private void AddSevereWoundDeed(int entityId, float when)
+        private void AddSevereWoundDeed(int entityId, float when, string? dungeonId)
         {
             MarkSaveDirty(entityId, NpcSaveGroup.Deeds | NpcSaveGroup.Stories);
             if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
                 return;
 
-            saveData.RecordDeed(new NpcDeedEntry(NpcDeedKind.SevereWound, -1, NpcKnowledgeLevel.Lived, when));
+            saveData.RecordDeed(new NpcDeedEntry(NpcDeedKind.SevereWound, -1, NpcKnowledgeLevel.Lived, when)
+            {
+                DungeonId = dungeonId ?? string.Empty,
+            });
             _narrative.InvalidateDialogues(entityId);
         }
 

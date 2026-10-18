@@ -597,6 +597,14 @@ namespace ARPG.UI
             // 야망은 성격에서 결정론으로 도출하는 표시 전용 값이다 (NPC_AMBITION_DESIGN §4.2, 저장하지 않음)
             NpcAmbitionProfile ambition = NpcAmbitionEvaluator.Evaluate(nsc);
             AddPersonalityTextRow("야망", $"{GetAmbitionLabel(ambition.Primary)} (보조: {GetAmbitionLabel(ambition.Secondary)})");
+
+            // 단기 목표 한 줄 (NPC_OBJECTIVE_DESIGN §8.1). 목표가 없으면 줄을 만들지 않는다.
+            if (_saveData != null && AR.s.Npc != null)
+            {
+                string objectiveLine = AR.s.Npc.GetObjectiveInspectLine(_saveData, AR.s.Time.CurrentGameTime);
+                if (string.IsNullOrEmpty(objectiveLine) == false)
+                    AddPersonalityTextRow("목표", objectiveLine);
+            }
         }
 
         private static string GetAmbitionLabel(NpcAmbitionKind ambition) => ambition switch
