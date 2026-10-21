@@ -122,6 +122,12 @@ namespace ARPG.AI
             ComponentManager cm = AR.s.Component;
             cm.SetComponent(entityId, ai);
             cm.RemoveComponent<AICanSeeTargetTag>(entityId);
+            if (cm.TryGetComponent<AIPerceptionComponent>(entityId, out var perception) == true &&
+                perception.IsAlerted == true)
+            {
+                perception.IsAlerted = false;
+                cm.SetComponent(entityId, perception);
+            }
         }
 
         /// <summary>

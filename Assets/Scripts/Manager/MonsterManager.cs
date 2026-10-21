@@ -50,6 +50,9 @@ namespace ARPG.Monster
         [SerializeField] private float _activationDistance = 25f;
         [SerializeField] private float _deactivationDistance = 30f;
 
+        [Header("Monster Perception")]
+        [SerializeField, Min(0.1f)] private float _detectionRangeMultiplier = 2f;
+
         public enum GroupDistribution
         {
             Uniform,
@@ -78,6 +81,7 @@ namespace ARPG.Monster
 
         public int MaxSpawnGroupsPerCheck => Mathf.Max(0, _maxSpawnGroupsPerCheck);
         public int MaxSpawnEntitiesPerCheck => Mathf.Max(0, _maxSpawnEntitiesPerCheck);
+        public float DetectionRangeMultiplier => Mathf.Max(0.1f, _detectionRangeMultiplier);
 
         public void Initialize()
         {
@@ -114,6 +118,28 @@ namespace ARPG.Monster
             {
                 _monsters.Add(entity);
                 entity.transform.SetParent(_monsterParent);
+            }
+        }
+
+        /// <summary>같은 청크 세대와 스폰 슬롯에 속한 현재 구성원을 모은다.</summary>
+        public void CollectSpawnGroupMembers(int entityId, List<int> memberIds)
+        {
+            memberIds.Clear();
+            if (_monsterOrigins.TryGetValue(entityId, out MonsterSpawnOrigin origin) == false ||
+                _chunkMonsters.TryGetValue(origin.ChunkCoord, out ChunkMonsterData? chunk) == false ||
+                chunk.GenerationId != origin.GenerationId)
+                return;
+
+            List<int> candidates = chunk.SpawnedMonsterIds;
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                int candidateId = candidates[i];
+                if (_monsterOrigins.TryGetValue(candidateId, out MonsterSpawnOrigin candidate) == true &&
+                    candidate.ChunkCoord == origin.ChunkCoord &&
+                    candidate.GenerationId == origin.GenerationId && candidate.SlotIndex == origin.SlotIndex)
+                {
+                    memberIds.Add(candidateId);
+                }
             }
         }
 
@@ -402,6 +428,7 @@ namespace ARPG.Monster
                         _activationDistance, _deactivationDistance);
                     RegisterMonsterOrigin(result.entityId, chunkCoord, generationId, slotIndex);
                     SynchronizeActivationState(result.entityId);
+                    ARPG.Systems.System_AI_Perception.InheritSpawnGroupTarget(result.entityId);
                     successfulSpawnCount++;
                 }
             }

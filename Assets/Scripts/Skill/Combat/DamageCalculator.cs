@@ -377,6 +377,10 @@ namespace ARPG.Skill.Combat
                 targetStat.SetCurrentHp(targetId, newHp);
                 AR.s.Component.SetComponent(targetId, targetStat);
 
+                // 치명타격으로 죽은 구성원도 남은 같은 스폰 그룹에 공격자를 알린다.
+                if (damage > 0)
+                    System_AI_Perception.AlertMonster(targetId, attackerId);
+
                 Debug.Log($"[DamageCalculator] 데미지 적용 - Target: {targetId}, Total: {damage} (Phys:{result.PhysDamage:F0} Fire:{result.FireDamage:F0} Ice:{result.IceDamage:F0} Light:{result.LightningDamage:F0} Poison:{result.PoisonDamage:F0}), Crit: {result.IsCritical}, Block: {result.IsBlocked}, HP: {newHp}/{targetStat.FinalMaxHp}");
             }
 
@@ -405,6 +409,7 @@ namespace ARPG.Skill.Combat
                     CombatCredit.RecordLethalDamage(attackerId, attackerStat.CurrentHp, newHp, CombatCredit.Resolve(targetId));
                     attackerStat.SetCurrentHp(attackerId, newHp);
                     AR.s.Component.SetComponent(attackerId, attackerStat);
+                    System_AI_Perception.AlertMonster(attackerId, targetId);
                 }
             }
 

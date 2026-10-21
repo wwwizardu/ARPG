@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using ARPG.AI;
 using ARPG.AI.StateHandlers;
 using ARPG.Component;
@@ -18,6 +19,10 @@ namespace ARPG.Systems
     /// </summary>
     public partial struct System_AI_Perception : IFixedUpdateSystem
     {
+        private const float TargetMemoryDuration = 5f;
+        // 호출마다 비우는 스크래치. 그룹 전파는 재귀 호출하지 않는다.
+        private static readonly List<int> _groupMembersScratch = new();
+
         public int Priority => 30;  // 입력(0) 이후, 버프(40) 이전 실행
 
         /// <summary>
@@ -35,14 +40,56 @@ namespace ARPG.Systems
             Debug.Log("[System_AI_Perception] Reset called");
         }
 
+        /// <summary>유효한 적의 피격은 감지 거리와 무관하게 자신과 같은 스폰 그룹에 알린다.</summary>
+        public static void AlertMonster(int entityId, int attackerEntityId)
+        {
+            ComponentManager cm = AR.s.Component;
+            if (cm.HasComponent<MonsterTag>(entityId) == false ||
+                FactionHelper.IsHostileTo(entityId, attackerEntityId) == false ||
+                TryGetLivingTarget(cm, attackerEntityId, out Vector2 targetPosition) == false)
+                return;
+
+            TryAlertGroupMember(cm, entityId, attackerEntityId, targetPosition);
+            ShareGroupTarget(cm, entityId, attackerEntityId, targetPosition);
+        }
+
+        /// <summary>비동기 생성 중 뒤늦게 합류한 구성원도 진행 중인 그룹 교전을 이어받는다.</summary>
+        public static void InheritSpawnGroupTarget(int entityId)
+        {
+            ComponentManager cm = AR.s.Component;
+            if (AR.s.Monster == null)
+                return;
+
+            AR.s.Monster.CollectSpawnGroupMembers(entityId, _groupMembersScratch);
+            for (int i = 0; i < _groupMembersScratch.Count; i++)
+            {
+                int memberId = _groupMembersScratch[i];
+                if (memberId == entityId || IsActiveMonster(cm, memberId) == false ||
+                    cm.TryGetComponent<AIPerceptionComponent>(memberId, out var memberPerception) == false ||
+                    memberPerception.IsAlerted == false ||
+                    cm.TryGetComponent<AIComponent>(memberId, out var memberAi) == false ||
+                    TryGetLivingTarget(cm, memberAi.TargetEntityId, out Vector2 targetPosition) == false ||
+                    Time.time - memberPerception.LastDetectionTime > TargetMemoryDuration)
+                    continue;
+
+                if (TryAlertGroupMember(cm, entityId, memberAi.TargetEntityId, targetPosition) == true)
+                {
+                    // 새 구성원 때문에 원거리 추적 유예 시간이 연장되지 않게 한다.
+                    cm.TryGetComponent<AIPerceptionComponent>(entityId, out var perception);
+                    perception.LastDetectionTime = memberPerception.LastDetectionTime;
+                    cm.SetComponent(entityId, perception);
+                }
+                return;
+            }
+        }
+
         public void OnFixedUpdate(float inFixedDeltaTime)
         {
             // AIPerceptionComponent 풀 가져오기
-            SparseSet<AIPerceptionComponent> perceptionPool = AR.s.Component.GetComponentPool<AIPerceptionComponent>();
+            ComponentManager cm = AR.s.Component;
+            SparseSet<AIPerceptionComponent> perceptionPool = cm.GetComponentPool<AIPerceptionComponent>();
             if (perceptionPool == null || perceptionPool.Count == 0)
                 return;
-
-            ComponentManager cm = AR.s.Component;
 
             // 모든 AI 엔티티 순회
             for (int i = 0; i < perceptionPool.Count; i++)
@@ -64,6 +111,24 @@ namespace ARPG.Systems
                 // AI 엔티티 Transform
                 if (cm.TryGetComponent<TransformComponent>(entityId, out var transform) == false)
                     continue;
+
+                if (cm.HasComponent<MonsterTag>(entityId) == true)
+                {
+                    if (IsActiveMonster(cm, entityId) == false)
+                    {
+                        AIStateHelper.ClearTarget(entityId, ref ai);
+                        continue;
+                    }
+
+                    if (perception.IsAlerted == true)
+                    {
+                        if (TryRetainAlertedTarget(cm, entityId, transform.Position, ref ai, ref perception) == true)
+                            continue;
+
+                        AIStateHelper.ClearTarget(entityId, ref ai);
+                        perception.IsAlerted = false;
+                    }
+                }
 
                 // 결투 중인 NPC는 인식 대상을 결투 상대로 고정한다 (NPC_COMBAT_DESIGN §3.4, Q10: 상대만 노린다).
                 // 결투 영역이 없으므로 [D20] 거리·시야와 무관하게 상대를 계속 본다.
@@ -120,6 +185,10 @@ namespace ARPG.Systems
                     out Vector2 targetPosition,
                     out float targetSqrDistance);
 
+                if (targetEntityId != -1 && cm.HasComponent<MonsterTag>(entityId) == true &&
+                    TryGetLivingTarget(cm, targetEntityId, out _) == false)
+                    targetEntityId = -1;
+
                 // 타겟 감지 성공
                 if (targetEntityId != -1)
                 {
@@ -146,8 +215,11 @@ namespace ARPG.Systems
         }
 
         private static void MarkTargetSeen(ComponentManager cm, int entityId, ref AIComponent ai,
-            ref AIPerceptionComponent perception, int targetEntityId, Vector2 targetPosition)
+            ref AIPerceptionComponent perception, int targetEntityId, Vector2 targetPosition, bool shareGroup = true)
         {
+            bool isMonster = cm.HasComponent<MonsterTag>(entityId);
+            bool shouldShare = isMonster == true && shareGroup == true &&
+                (perception.IsAlerted == false || ai.TargetEntityId != targetEntityId);
             cm.AddComponent(entityId, new AICanSeeTargetTag());
 
             ai.TargetEntityId = targetEntityId;
@@ -155,7 +227,86 @@ namespace ARPG.Systems
             cm.SetComponent(entityId, ai);
 
             perception.LastDetectionTime = Time.time;
+            if (isMonster == true)
+                perception.IsAlerted = true;
             cm.SetComponent(entityId, perception);
+
+            if (shouldShare == true)
+                ShareGroupTarget(cm, entityId, targetEntityId, targetPosition);
+        }
+
+        private static bool TryRetainAlertedTarget(ComponentManager cm, int entityId, Vector2 selfPosition,
+            ref AIComponent ai, ref AIPerceptionComponent perception)
+        {
+            if (FactionHelper.IsHostileTo(entityId, ai.TargetEntityId) == false ||
+                TryGetLivingTarget(cm, ai.TargetEntityId, out Vector2 targetPosition) == false)
+                return false;
+
+            float distanceSqr = (targetPosition - selfPosition).sqrMagnitude;
+            if (distanceSqr <= perception.LoseTargetRange * perception.LoseTargetRange)
+            {
+                MarkTargetSeen(cm, entityId, ref ai, ref perception, ai.TargetEntityId, targetPosition, false);
+                return true;
+            }
+
+            // 놓침 범위 밖 피격에도 반응하되, 마지막 교전 후 유예 시간이 지나면 해제한다.
+            if (Time.time - perception.LastDetectionTime > TargetMemoryDuration)
+                return false;
+
+            ai.LastKnownTargetPos = targetPosition;
+            cm.SetComponent(entityId, ai);
+            cm.AddComponent(entityId, new AICanSeeTargetTag());
+            return true;
+        }
+
+        private static void ShareGroupTarget(ComponentManager cm, int entityId, int targetEntityId, Vector2 targetPosition)
+        {
+            if (AR.s.Monster == null)
+                return;
+
+            AR.s.Monster.CollectSpawnGroupMembers(entityId, _groupMembersScratch);
+            for (int i = 0; i < _groupMembersScratch.Count; i++)
+            {
+                int memberId = _groupMembersScratch[i];
+                if (memberId != entityId)
+                    TryAlertGroupMember(cm, memberId, targetEntityId, targetPosition);
+            }
+        }
+
+        private static bool TryAlertGroupMember(ComponentManager cm, int entityId, int targetEntityId, Vector2 targetPosition)
+        {
+            if (IsActiveMonster(cm, entityId) == false ||
+                FactionHelper.IsHostileTo(entityId, targetEntityId) == false ||
+                cm.TryGetComponent<AIComponent>(entityId, out var ai) == false ||
+                cm.TryGetComponent<AIPerceptionComponent>(entityId, out var perception) == false)
+                return false;
+
+            MarkTargetSeen(cm, entityId, ref ai, ref perception, targetEntityId, targetPosition, false);
+            return true;
+        }
+
+        private static bool IsActiveMonster(ComponentManager cm, int entityId)
+        {
+            return cm.HasComponent<MonsterTag>(entityId) == true &&
+                cm.HasComponent<DestroyTag>(entityId) == false &&
+                cm.TryGetComponent<StatComponent>(entityId, out var stat) == true && stat.CurrentHp > 0 &&
+                (cm.TryGetComponent<ActivationDistanceComponent>(entityId, out var activation) == false ||
+                 activation.IsActivated == true);
+        }
+
+        private static bool TryGetLivingTarget(ComponentManager cm, int entityId, out Vector2 position)
+        {
+            position = Vector2.zero;
+            if (AR.s.Entity.IsEntityRegistered(entityId) == false ||
+                cm.HasComponent<DestroyTag>(entityId) == true ||
+                cm.TryGetComponent<StatComponent>(entityId, out var stat) == false || stat.CurrentHp <= 0 ||
+                cm.TryGetComponent<TransformComponent>(entityId, out var transform) == false ||
+                (cm.TryGetComponent<ActivationDistanceComponent>(entityId, out var activation) == true &&
+                 activation.IsActivated == false))
+                return false;
+
+            position = transform.Position;
+            return true;
         }
 
         /// <summary>

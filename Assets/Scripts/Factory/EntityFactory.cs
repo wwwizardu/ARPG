@@ -581,6 +581,8 @@ namespace ARPG.Factory
             Tables.AiTable? aiTable = AR.s.Data.GetAiTable(aiTableId);
 
             float detectionRange = aiTable != null ? aiTable.DetectionRange : 5f;
+            if (AR.s.Component.HasComponent<MonsterTag>(entityId) == true && AR.s.Monster != null)
+                detectionRange *= AR.s.Monster.DetectionRangeMultiplier;
             AIBehaviorType behaviorType = aiTable != null ? aiTable.BehaviorType : AIBehaviorType.Melee;
 
             // AttackRange는 SkillId1의 SkillRangeMax에서 가져옴

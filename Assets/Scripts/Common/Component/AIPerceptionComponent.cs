@@ -32,5 +32,8 @@ namespace ARPG.Component
         /// 마지막으로 타겟을 감지한 시간 (Time.time)
         /// </summary>
         public float LastDetectionTime;
+
+        /// <summary>피격 또는 그룹 경계로 교전 중이면 감지 범위 밖에서도 놓침 범위까지 대상을 추적한다.</summary>
+        public bool IsAlerted;
     }
 }

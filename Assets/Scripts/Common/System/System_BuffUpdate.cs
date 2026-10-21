@@ -149,6 +149,8 @@ namespace ARPG.Systems
 
             // 변경된 StatComponent 저장
             AR.s.Component.SetComponent(buff.TargetEntityId, targetStat);
+            if (finalDamage > 0)
+                System_AI_Perception.AlertMonster(buff.TargetEntityId, buff.Credit.SourceEntityId);
         }
 
         /// <summary>
