@@ -72,7 +72,7 @@
 | 소문 | NPC 소문은 **같은 마을 안에서만** 휴식 교환으로 퍼진다(D75). 위치는 "이 마을 동쪽 약 40걸음" 같은 글로만 알려 준다 | [src: Assets/Scripts/Manager/NpcManager_Rumor.cs `ExchangeRumorsOnRestEnd`, Assets/Scripts/Dungeon/DungeonManager_Narrative.cs `DescribeLocation`] |
 | 부탁 칸 | 구조(부탁 칸·인스턴스·보고·의뢰 보답·`PlayerDeed` 소문)는 재사용할 수 있다. 부탁 가능 판정·해결 경로·관련도는 던전 전제로 짜여 있다 | [src: Assets/Scripts/Manager/NpcManager_NarrativeDialogue.cs, Assets/Scripts/Npc/Narrative/NarrativeContentCatalog.cs] |
 | 위협도·명성 | **없다.** `VillageData.ThreatLevel`은 0으로 고정돼 있고 계산하는 곳이 없다. 플레이어 명성 칸도 없다 | [src: Assets/Scripts/Village/VillageData.cs, Assets/Scripts/Data/PlayerData.cs] |
-| 시간 | 게임 1시간 = 실제 60초다(게임 1일 = 실제 24분). "하루가 바뀜" 이벤트는 없고 필요한 곳에서 `게임시각 / 24`로 계산한다. 던전 안에서는 시간이 멈춘다 | [src: Assets/Scripts/Manager/TimeManager.cs, Assets/Scripts/Village/GoldPriceRules.cs] |
+| 시간 | 게임 1시간 = 실제 60초다(게임 1일 = 실제 24분). "하루가 바뀜" 이벤트는 없고 필요한 곳에서 `게임시각 / 24`로 계산한다. 던전 안에서도 시간이 흐른다(2026-10-19, [DUNGEON_WORLD_SIM_DESIGN](../map/DUNGEON_WORLD_SIM_DESIGN.md)) | [src: Assets/Scripts/Manager/TimeManager.cs, Assets/Scripts/Village/GoldPriceRules.cs] |
 | 연대기 기록 | 실행 중 추가 API가 있지만 사건에 정착지 ID만 담긴다. 인물·이름·위치 칸이 없다 | [src: Assets/Scripts/History/HistoryManager.cs `AppendLiveEvent`, Assets/Scripts/History/Chronicle/ChronicleEvent.cs] |
 | 알림 | 화면 왼쪽 아래 소식창(`PushWorldFeed`, 5초 유지)과 화면 가운데 한 줄(`SetNotify`, 1.5초)이 있다. 소식창에는 이미 세계 모든 NPC의 부상·사망이 뜬다 | [src: Assets/Scripts/Manager/UIManager.cs, Assets/Scripts/Common/System/System_NpcSim.cs `NotifyHuntOutcome`] |
 | 지도 | 월드 지도·미니맵·지도 표시가 **없다** | [src: Docs/map/FOG_OF_WAR_DESIGN.md, Docs/README.md] |
@@ -201,7 +201,7 @@
   4. 영역 자리를 찾았다(§4.3).
 - **간격을 두는 이유**: 간격이 없으면 마을을 옮길 때마다 바로 나와서 마을 세 곳을 지나가는 동안 세 마리가 생긴다. 또 잡자마자 그 마을에 다시 나온다. 사라짐(§7.2)은 간격을 다시 세지 않는다.
 - **세계 전체 수**: 새 네임드는 많아야 약 48분에 1마리이고, 한 마리는 약 3시간 머문다. 플레이어가 계속 다른 마을로 옮겨 다녀도 동시에 4마리 정도가 최대다. [추론]
-- 네임드는 처치되거나 출현 180게임시간 뒤 사라지면 끝난다(NT12, §7.2). 던전 안에서는 월드 시스템과 함께 감독도 멈춘다.
+- 네임드는 처치되거나 출현 180게임시간 뒤 사라지면 끝난다(NT12, §7.2). 던전 안에서도 감독은 단계·사라짐·소문 주인 재배정을 진행하고, 플레이어 월드 위치가 필요한 **새 출현만 퇴장 뒤로 미룬다**. 입장 때 실체화된 네임드 엔티티는 먼저 내린다(2026-10-19, [DUNGEON_WORLD_SIM_DESIGN §3.6](../map/DUNGEON_WORLD_SIM_DESIGN.md)).
 - **실제 시간으로 보면** [추론]
   - 한 마을에 머무는 플레이어: 시작 직후 그 마을에 1마리가 나온다. 잡으면 약 48분 뒤 같은 마을에 다음이 나오고, 내버려 두면 약 3시간 뒤 사라진다.
   - 마을을 옮겨 다니는 플레이어: 48분 간격만 지나면 새로 간 마을마다 그 마을의 네임드를 만난다.
@@ -499,7 +499,7 @@
 | 상황 | 처리 |
 |---|---|
 | 플레이어 사망 | 변화 없음. 네임드는 다시 만나면 체력이 가득하다 |
-| 플레이어가 던전 안 | 월드 시간·감독·존재 시스템이 모두 멈춘다 |
+| 플레이어가 던전 안 | 월드 시간과 감독은 계속 돈다 — 단계·사라짐·소문 주인 재배정은 진행하고 새 출현만 퇴장 뒤 첫 판정으로 미룬다. 존재·흔적 시스템은 멈추고, 입장 때 네임드 엔티티를 내린다(2026-10-19, [DUNGEON_WORLD_SIM_DESIGN §3.6](../map/DUNGEON_WORLD_SIM_DESIGN.md)) |
 | 엔티티 생성 위치를 못 찾음 | 이번 배회 지점에서는 만들지 않는다(§5.4) |
 | 주 마을 주민이 모두 사라짐(이주 등) | 마주침 판정할 NPC가 없을 뿐 네임드는 남는다. 주민이 다시 생기면 다음 감독 판정에서 소문 주인을 뽑는다. 네임드는 옮겨 가지 않는다(NT12) |
 | 이웃 마을에도 네임드가 있음 | 정상이다(NT2). 두 영역은 겹치지 않으므로(§4.3) 흔적 자막·마주침·소문이 섞이지 않는다 |
@@ -661,7 +661,7 @@ NPC가 단기 목표 칸처럼 큰 구조를 새로 갖지 않는다. 피해자 
 
 | 시스템 | 단계 | 우선순위 | 주기 | 하는 일 |
 |---|---|---|---|---|
-| `System_NamedThreatDirector` | FixedUpdate, IWorldMapSystem | 135 | 1초 | 플레이어와 가장 가까운 마을과 게임 시각을 보고 출현, 각 네임드의 단계·사라짐·소문 주인 재배정 |
+| `System_NamedThreatDirector` | FixedUpdate, IWorldSimSystem (2026-10-19 — 던전 안에서도 돌고 출현만 건너뜀) | 135 | 1초 | 플레이어와 가장 가까운 마을과 게임 시각을 보고 출현, 각 네임드의 단계·사라짐·소문 주인 재배정 |
 | `System_NamedThreatPresence` | FixedUpdate, IWorldMapSystem | 136 | 0.5초 | 청크 활성에 따라 엔티티 생성·제거, 순찰 기준점 갱신 |
 | `System_NamedThreatTrail` | FixedUpdate, IWorldMapSystem | 137 | 0.5초 | 영역 안 흔적 자막 |
 

@@ -106,7 +106,8 @@ namespace ARPG.Tables
         [JsonProperty("WeaponId")] public int WeaponId;
         [JsonProperty("AiTableId")] public int AiTableId;
         [JsonProperty("DropId")] public int DropId;
-        [JsonProperty("DropRateBonus")] public int DropRateBonus;
+        // 몬스터 종 드롭 보너스 (ITEM_DROP_BALANCE_DESIGN §8.3 ③ 묶음, %). 옛 DropRateBonus(꽝 칸 줄이기) 자리
+        [JsonProperty("DropQuantityBonus")] public int DropQuantityBonus;
         [JsonProperty("DropRarityBonus")] public int DropRarityBonus;
         [JsonProperty("Level")] public int Level;
         [JsonProperty("Archetype")] public GE.MonsterArchetype Archetype = GE.MonsterArchetype.Normal;
@@ -154,12 +155,13 @@ namespace ARPG.Tables
         [JsonProperty("Note")] public string Note = string.Empty;
         [JsonProperty("ResistAdd")] public int ResistAdd;                 // 원소 저항 4종에 더하는 값 (%p). 상한은 몬스터의 최대 저항
         [JsonProperty("DropRolls")] public int DropRolls = 1;             // 사망 시 드랍 판정 횟수
-        [JsonProperty("DropRarityBonus")] public int DropRarityBonus;     // MonsterTable.DropRarityBonus에 더하는 높은 Tier 가중치 보너스 (%)
+        [JsonProperty("DropRarityBonus")] public int DropRarityBonus;     // 아이템 희귀도 (%, 몬스터 묶음). MonsterTable.DropRarityBonus에 더한다 (ITEM_DROP_BALANCE_DESIGN §8.3)
         [JsonProperty("ModTier11ChanceBp")] public int ModTier11ChanceBp; // 드랍 장비 1개당 옵션 T11 특수 판정 확률 (만분율, 10000=100%). 아이템 레벨 90 이상만
         [JsonProperty("ModTier12ChanceBp")] public int ModTier12ChanceBp; // 드랍 장비 1개당 옵션 T12 특수 판정 확률 (만분율). 아이템 레벨 90 이상만
         [JsonProperty("AffixBaseCount")] public int AffixBaseCount;       // 접사 기본 개수 (MONSTER_AFFIX_DESIGN.md §3)
         [JsonProperty("AffixExtraChance")] public int AffixExtraChance;   // 접사 추가 판정 확률 (%). 성공할 때마다 1개 더, 실패하거나 상한이면 멈춤
         [JsonProperty("DropRollsPerAffix")] public int DropRollsPerAffix; // 접사 1개당 더하는 드랍 판정 횟수 (§8)
+        [JsonProperty("RarityPerAffix")] public int RarityPerAffix;       // 접사 1개당 더하는 아이템 희귀도 (%, ITEM_DROP_BALANCE_DESIGN §8.4)
     }
 
     /// <summary>
@@ -562,18 +564,29 @@ namespace ARPG.Tables
         [JsonIgnore]
         public bool IsValid => string.IsNullOrEmpty(ValidationError) == true;
 
+        /// <summary>재료 없이 골드만 드는 작업인지 (품질 다시 굴리기, ITEM_DROP_BALANCE_DESIGN D13). 재료 칸은 0·0이다.</summary>
+        [JsonIgnore]
+        public bool IsGoldOnly => MaterialItemId == 0 && MaterialCount == 0;
+
         public override void LoadLate()
         {
-            MaterialItem = AR.s.Data?.GetItem(MaterialItemId);
-            if (MaterialItem == null)
+            MaterialItem = IsGoldOnly == true ? null : AR.s.Data?.GetItem(MaterialItemId);
+            bool goldOnlyOperation = Operation == GE.ItemEnchantmentOperation.RerollQuality;
+            if (IsGoldOnly != goldOnlyOperation)
+            {
+                ValidationError = goldOnlyOperation == true
+                    ? "RerollQuality must be gold-only (MaterialItemId 0, MaterialCount 0)"
+                    : "Only RerollQuality can be a gold-only operation";
+            }
+            else if (IsGoldOnly == false && MaterialItem == null)
             {
                 ValidationError = $"Material ItemTable {MaterialItemId} not found";
             }
-            else if (MaterialItem.ItemType != GE.ItemType.Currency)
+            else if (IsGoldOnly == false && MaterialItem!.ItemType != GE.ItemType.Currency)
             {
                 ValidationError = $"Material ItemTable {MaterialItemId} is not Currency";
             }
-            else if (MaterialCount <= 0)
+            else if (IsGoldOnly == false && MaterialCount <= 0)
             {
                 ValidationError = "MaterialCount must be greater than zero";
             }
@@ -842,6 +855,38 @@ namespace ARPG.Tables
         [JsonProperty("RoomWidthMax")] public int RoomWidthMax = 12;
         [JsonProperty("RoomHeightMin")] public int RoomHeightMin = 9;
         [JsonProperty("RoomHeightMax")] public int RoomHeightMax = 12;
+
+        // 던전 드롭 (ITEM_DROP_BALANCE_DESIGN §7.6). MonsterLevel/BossLevel은 NPC 원정 전리품 전용으로 남는다
+        [JsonProperty("MonsterLevelOffset")] public int MonsterLevelOffset;   // 일반 몬스터 레벨 = 입구 청크 지역 레벨 + 이 값
+        [JsonProperty("BossLevelOffset")] public int BossLevelOffset;         // 보스 레벨 = 입구 청크 지역 레벨 + 이 값
+        [JsonProperty("ChestDropRolls")] public int ChestDropRolls;           // 상자를 열 때 굴리는 드롭 판정 횟수
+        [JsonProperty("DropQuantityBonus")] public int DropQuantityBonus;     // 플레이어가 던전 안일 때 장소 묶음 수량 (%)
+        [JsonProperty("DropRarityBonus")] public int DropRarityBonus;         // 플레이어가 던전 안일 때 장소 묶음 희귀도 (%)
+    }
+
+    /// <summary>
+    /// 드롭 구간표 (ITEM_DROP_BALANCE_DESIGN §7.1). 몬스터 레벨(= 드롭 장비의 아이템 레벨)로 행을 고른다.
+    /// 확률은 %, 배율은 100 = ×1.0이다. 행은 1~99를 빈틈없이 덮어야 한다(다운로드 검증).
+    /// </summary>
+    [Serializable]
+    public class DropBandTable : TableBase
+    {
+        [JsonProperty("MinLevel")] public int MinLevel;
+        [JsonProperty("MaxLevel")] public int MaxLevel;
+        [JsonProperty("NormalRate")] public int NormalRate;               // 장비가 나왔을 때 희귀도 0%의 일반 확률 (%)
+        [JsonProperty("MagicRate")] public int MagicRate;                 // 마법 확률 (%)
+        [JsonProperty("RareRate")] public int RareRate;                   // 희귀 확률 (%)
+        [JsonProperty("RareModMin")] public int RareModMin;               // 희귀 장비 옵션 수 범위 (3~6)
+        [JsonProperty("RareModMax")] public int RareModMax;
+        [JsonProperty("NormalQualityMin")] public int NormalQualityMin;   // 일반 장비 드롭 품질 범위 (0~20)
+        [JsonProperty("NormalQualityMax")] public int NormalQualityMax;
+        [JsonProperty("QuantityBonus")] public int QuantityBonus;         // 장소 묶음에 더하는 수량 (%)
+        [JsonProperty("HigherCurrencyMul")] public int HigherCurrencyMul; // Tier 2 이상 화폐 가중치 배율 (100 = ×1.0)
+        [JsonProperty("BookCapacityMin")] public int BookCapacityMin;     // 스킬북 페이지 용량 보너스 범위
+        [JsonProperty("BookCapacityMax")] public int BookCapacityMax;
+        [JsonProperty("BookSlotChance")] public int BookSlotChance;       // 스킬북 슬롯 +1 확률 (%)
+        [JsonProperty("CurrentBandShare")] public int CurrentBandShare;   // 장비 현재 구간 비중 (%), 나머지는 직전 구간
+        [JsonProperty("SellPriceMul")] public int SellPriceMul;           // 플레이어 판매가 아이템 레벨 배율 (100 = ×1.0)
     }
 
     [Serializable]

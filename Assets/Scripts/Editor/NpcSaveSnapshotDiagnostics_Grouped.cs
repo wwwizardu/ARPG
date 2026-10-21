@@ -199,13 +199,15 @@ namespace ARPG.Editor
                     gear.Equipment.ApplyBasicItemTemplate(row);
                     data.MarkPlayerSaveDirty(player, PlayerSaveGroup.Inventory);
                     string basicJson = Json(Capture("CaptureOwnedPlayer", players));
-                    Require(basicJson == JsonConvert.SerializeObject(players, Formatting.None, JsonSettings.Default) && basicJson.Contains("\"BasicItemId\":123") && basicJson.Contains("\"Quality\"") == false,
+                    Require(basicJson == JsonConvert.SerializeObject(players, Formatting.None, JsonSettings.Default) && basicJson.Contains("\"BasicItemId\":123") && basicJson.Contains("Quality\"") == false,
                         "basic equipment omits Mods/Quality in cached JSON");
                     gear.Equipment.BasicItemId = 0;
                     gear.Equipment.Mods.Add(new Tables.ModInstance { Value1 = 7 });
+                    // 품질은 새 칸 BaseQuality에 저장된다 (ITEM_DROP_BALANCE_DESIGN §5, 0이면 생략)
+                    gear.Equipment.Quality = 7;
                     data.MarkPlayerSaveDirty(player, PlayerSaveGroup.Inventory);
                     string regularJson = Json(Capture("CaptureOwnedPlayer", players));
-                    Require(regularJson == JsonConvert.SerializeObject(players, Formatting.None, JsonSettings.Default) && regularJson.Contains("\"Quality\":1") && regularJson.Contains("\"BasicItemId\"") == false,
+                    Require(regularJson == JsonConvert.SerializeObject(players, Formatting.None, JsonSettings.Default) && regularJson.Contains("\"BaseQuality\":7") && regularJson.Contains("\"BasicItemId\"") == false,
                         "same-reference basic-to-regular restores omitted equipment fields in contract order");
                 }
                 finally { arDataField.SetValue(AR.s, liveData); }

@@ -72,6 +72,7 @@
 | **[MONSTER_ATTACK_TELEGRAPH_DESIGN.md](combat/MONSTER_ATTACK_TELEGRAPH_DESIGN.md)** | 몬스터 공격 범위·피해 타이밍 예고와 중앙 배치 렌더링 — Phase 0~2 구현(2026-09-19), Phase 3 일부 |
 | **[ModSystem_Changelog.md](combat/ModSystem_Changelog.md)** | 장비/스탯 mod 시스템 변경 이력 |
 | **[ITEM_LEVEL_MOD_TIER_DESIGN.md](combat/ITEM_LEVEL_MOD_TIER_DESIGN.md)** | 아이템 레벨과 장비 옵션 티어 T1~T12: 레벨 구간·가중치, T11·T12 등급별 특수 판정 — 구현(2026-10-11), 플레이 확인 전 |
+| **[ITEM_DROP_BALANCE_DESIGN.md](combat/ITEM_DROP_BALANCE_DESIGN.md)** | 난이도별 드롭 구간표, 장비 등급(일반·마법·희귀)·품질·오브 제작 순서, 아이템 수량·희귀도(PoE2 방식) 구조, 던전 레벨·보스·상자 보상, 판매 골드 — 설계 초안(2026-10-21), 미구현 |
 
 ### 🤖 AI / 몬스터
 | 문서 | 내용 |
@@ -97,7 +98,7 @@
 | **[MAP_DESIGN.md](map/MAP_DESIGN.md)** | 청크 8×8, Zone, 비트 레이아웃, 유적 단편 |
 | **[THEME_TILESET_REFACTOR.md](map/THEME_TILESET_REFACTOR.md)** | 바이옴 비주얼 차별화 리팩토링 |
 | **[DUNGEON_RUNTIME_DESIGN.md](map/DUNGEON_RUNTIME_DESIGN.md)** | 절차 던전 런타임 — 입구 배치·입장/퇴장·완료·저장 (✅ 구현 2026-09-19, 함정 등 일부 미구현) |
-| **[DUNGEON_WORLD_SIM_DESIGN.md](map/DUNGEON_WORLD_SIM_DESIGN.md)** | 던전 중 월드 시뮬 계속 실행 (설계 초안 2026-10-03, 검토 대기) |
+| **[DUNGEON_WORLD_SIM_DESIGN.md](map/DUNGEON_WORLD_SIM_DESIGN.md)** | 던전 중 월드 시뮬 계속 실행 (✅ 구현 2026-10-19 — 시계·NPC·마을 시뮬·네임드 감독이 던전 안에서도 돈다, 사용자 실플레이 확인 전) |
 | **[FOG_OF_WAR_DESIGN.md](map/FOG_OF_WAR_DESIGN.md)** | 플레이어 시야·안개(시야 밖 거리 어둡기), 벽·시설 차단(반투명 그림자), 이동 엔티티 숨김 (✅ 구현 2026-10-10, 사용자 실플레이 확인 전) |
 | **[PROCEDURAL_HISTORY_DESIGN.md](world_history/PROCEDURAL_HISTORY_DESIGN.md)** | 정착지 통폐합 / 연대기 시뮬 (런타임 LOD) |
 | **[NPC_RELATION_HISTORY_DESIGN.md](npc/NPC_RELATION_HISTORY_DESIGN.md)** | NPC 개인 관계 (가족/원한/호감도) |

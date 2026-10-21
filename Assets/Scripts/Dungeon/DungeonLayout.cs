@@ -117,11 +117,26 @@ namespace ARPG.Dungeon
             return changed;
         }
 
+        /// <summary>
+        /// 던전 몬스터 레벨 (ITEM_DROP_BALANCE_DESIGN §7.6) = 입구 청크 지역 레벨 + 보정, 1~99로 자른다.
+        /// </summary>
+        public static int ResolveEncounterLevel(int entranceZoneLevel, int offset)
+            => Math.Max(1, Math.Min(99, entranceZoneLevel + offset));
+
+        /// <param name="entranceZoneLevel">입구가 있는 청크의 지역 레벨 (MapManager.GetZoneAtWorld). 0 이하면
+        /// 던전 표의 고정 레벨(MonsterLevel·BossLevel)을 쓴다 — 지역 정보가 없는 옛 호출·진단용</param>
         public static DungeonRecord Generate(int seed, int village, DungeonSlot slot, DungeonTable table,
-            IReadOnlyList<int> eliteMonsterIds)
+            IReadOnlyList<int> eliteMonsterIds, int entranceZoneLevel = 0)
         {
             if (eliteMonsterIds == null || eliteMonsterIds.Count == 0)
                 throw new InvalidOperationException("마을 던전 보스로 사용할 Elite 몬스터가 없습니다.");
+            // 레벨은 생성 때 오브젝트마다 저장된다. 이미 만들어진 던전은 옛 레벨을 유지한다
+            int monsterLevel = entranceZoneLevel > 0
+                ? ResolveEncounterLevel(entranceZoneLevel, table.MonsterLevelOffset)
+                : table.MonsterLevel;
+            int bossLevel = entranceZoneLevel > 0
+                ? ResolveEncounterLevel(entranceZoneLevel, table.BossLevelOffset)
+                : table.BossLevel;
             int bossIndex = (int)(Hash(seed, village, slot.SlotIndex, slot.Generation, 43) % (uint)eliteMonsterIds.Count);
             int bossTableId = eliteMonsterIds[bossIndex];
             var result = new DungeonRecord { DungeonId = slot.DungeonId, VillageId = village,
@@ -172,12 +187,13 @@ namespace ARPG.Dungeon
                             TableId = isBossRoom
                                 ? bossTableId
                                 : SelectMonsterTableId(table, result.Seed, i, monsterIndex),
-                            Level = isBossRoom ? table.BossLevel : table.MonsterLevel,
+                            Level = isBossRoom ? bossLevel : monsterLevel,
                             X = monsterX, Y = monsterY });
                     }
+                    // 상자 레벨 = 일반 몬스터 레벨 (상자 드롭의 아이템 레벨, §7.6)
                     if (hasChest == true)
                         result.Objects.Add(new DungeonObject { Id = i * MONSTER_OBJECT_STRIDE + CHEST_OBJECT_OFFSET, RoomId = i,
-                            Kind = DungeonObjectKind.Chest, X = room.X + 2, Y = room.Y + 2 });
+                            Kind = DungeonObjectKind.Chest, Level = monsterLevel, X = room.X + 2, Y = room.Y + 2 });
                 }
             }
             result.BossRoomId = count - 1;

@@ -17,8 +17,9 @@ namespace ARPG.Systems
     /// 인구 cursor/라이브 데이터는 HistoryManager/WorldData가 소유하고, 건설 cursor는 이 시스템이
     /// 런타임 상태로 소유하여 OnReset에서 초기화한다.
     /// Priority 50: Village 도메인 per-village 시스템(52~68)보다 먼저 world 추상 상태를 갱신.
+    /// 던전 안에서도 돈다 (IWorldSimSystem) — 월드 맵은 AR.s.WorldMap으로만 본다 (DUNGEON_WORLD_SIM_DESIGN §2·§4).
     /// </summary>
-    public class System_SettlementSim : IFixedUpdateSystem, IWorldMapSystem
+    public class System_SettlementSim : IFixedUpdateSystem, IWorldSimSystem
     {
         public int Priority => 50;
         public float UpdateInterval => 0.5f;   // 라운드로빈이라 자주 돌 필요 없음 — CPU 절약

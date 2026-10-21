@@ -186,6 +186,11 @@ public class GlobalEnum
         PoisonDamageInc,    // 독 피해 증가 (%)
         DamageInc,          // 모든 피해 증가 (%) — 속성별 증가에 더해진다
 
+        // ===== 드롭 보너스 (ITEM_DROP_BALANCE_DESIGN.md §8) =====
+        // 증가율 묶음 — Add·Multiply 모두 %p로 합산한다. 플레이어 값은 ① 묶음, 죽은 몬스터 값은 ② 묶음으로 읽힌다
+        ItemQuantity,       // 아이템 수량 (%) — 드롭 판정 횟수를 늘린다
+        ItemRarity,         // 아이템 희귀도 (%) — 장비 등급(희귀·마법)과 상위 화폐 비중을 올린다
+
         // ===== SkillEffect 효과 종류 (구 SkillEffectType에서 통합) =====
         // 일반 stat과 같은 enum에 합쳐 SkillEffectTable.EffectType이 stat 가산도/효과 실행도 표현하도록 일원화
         LifeSteal,           // OnHit. Param1=흡혈 비율(%)
@@ -321,6 +326,18 @@ public class GlobalEnum
         AddAffix,
         RerollAffixValues,
         RerollAllAffixes,
+        EvolveToMagic,      // 진화의 오브: 일반 장비에 옵션 1개를 붙여 마법으로 (ITEM_DROP_BALANCE_DESIGN §6.1)
+        RerollQuality,      // 품질 다시 굴리기: 일반 장비 품질을 0~20에서 새로 정한다 (골드만, §5)
+    }
+
+    /// <summary>
+    /// 장비 등급 (ITEM_DROP_BALANCE_DESIGN §4.1). 저장하지 않고 붙어 있는 접두·접미 수로 판정한다.
+    /// </summary>
+    public enum EquipmentGrade
+    {
+        Normal,     // 접두·접미 0개
+        Magic,      // 접두·접미 각 1개 이하 (1~2개)
+        Rare,       // 그 밖 (3~6개)
     }
 
     public enum ItemCategory

@@ -295,7 +295,8 @@ namespace ARPG.Item
                 // 무기 Base는 WeaponStats가 이미 표시한다 (단일 툴팁·장착 처리와 같은 규칙)
                 if (isWeapon == true && mod.Slot == GE.ModSlot.Base)
                     continue;
-                AddModEntry(output, mod);
+                // 방어구 Base는 품질을 적용한 수치로 비교한다 (ITEM_DROP_BALANCE_DESIGN §5)
+                AddModEntry(output, EquipmentQualityRules.ApplyToBaseMod(mod, equip.Quality));
             }
 
             for (int i = 0; i < output.Count; i++)
@@ -400,6 +401,9 @@ namespace ARPG.Item
                     // 비-Base AttackSpeed는 증가율 의미다 (EquipHelper.ApplyPassiveMod·EquipmentOptionText와 같은 규칙)
                     if (table.TargetStat == GE.Stat.AttackSpeed)
                         return slot == GE.ModSlot.Base ? ValueKind.PerSecond : ValueKind.IncreasePercent;
+                    // 아이템 수량·희귀도는 증가율 묶음이다 (ITEM_DROP_BALANCE_DESIGN §8.5)
+                    if (EquipmentOptionText.GetDropBonusStatName(table.TargetStat) != null)
+                        return ValueKind.IncreasePercent;
                     return EquipmentOptionText.IsPercentFlatStat(table.TargetStat) == true
                         ? ValueKind.PercentPoint
                         : ValueKind.Flat;

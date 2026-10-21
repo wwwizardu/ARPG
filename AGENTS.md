@@ -88,6 +88,7 @@ Limit cleanup to temporary artifacts created by the current task. Preserve pre-e
 
 ## Validation and Diagnostic Placement
 
+- If a task will need diagnostic runs (Editor diagnostic menus, NPC/village simulation runs, play-mode verification), ask the user which diagnostics to run **before starting the implementation**, and proceed only after the user answers. List each candidate with what it checks and its expected duration, and recommend the smallest set that covers the change. Ask even when the task prompt already lists diagnostics. Long runs freeze the Unity Editor: the NPC ambition simulation takes about 10 minutes for 30 game days and about 21 minutes for 60.
 - Distinguish checks needed only to validate the current change from invariants that need ongoing verification. Do not keep task-specific validation files merely because they could be reused later.
 - Compilation is a check of the current change: run the appropriate existing Runtime/Editor build commands. Do not add a permanent verification script or test project just to wrap those commands.
 - Put expensive, repeatable diagnostics in Unity Editor menu commands so they can be run explicitly when needed. Extend the relevant existing diagnostic menu and code before adding a new entry. File I/O, large data scans, stress tests, fault injection, and save/load round trips belong here; use isolated temporary data and clean it up after execution.

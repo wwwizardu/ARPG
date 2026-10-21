@@ -120,8 +120,10 @@ namespace ARPG.Dungeon
                         Notify("마을 던전 보스로 사용할 Elite 몬스터가 없어 입장을 취소했습니다.");
                         return false;
                     }
+                    // 던전 레벨은 입구 청크의 지역 레벨을 따른다 (ITEM_DROP_BALANCE_DESIGN §7.6)
+                    int entranceZoneLevel = AR.s.WorldMap.GetZoneAtWorld(entrance);
                     record = DungeonLayout.Generate(AR.s.Data.WorldSeed, villageSlots.VillageId, slot, table,
-                        eliteMonsterIds);
+                        eliteMonsterIds, entranceZoneLevel);
                     if (EnsureNarrativeTargetPlacement(record) == false)
                     {
                         Notify("소문에 나온 몬스터를 배치할 수 없어 입장을 취소했습니다.");
@@ -296,6 +298,8 @@ namespace ARPG.Dungeon
                 _active = null;
                 AR.s.Fog.OnMapChanged();
                 _components.RestoreSuspended(_suspendedWorld);
+                // 되살린 미러는 입장 시점 값이다. 던전 중 진행된 원장으로 바로 다시 채운다 (DUNGEON_WORLD_SIM_DESIGN §3.4)
+                AR.s.Village.ResyncMaterializedMirrors();
                 // 월드 맵 기준으로 귀환 위치를 계산해야 하므로 ActiveMap 해제 뒤, 청크 재활성화(ResumeWorld) 전에 처리한다.
                 AR.s.Npc.FinishCompanionDungeonExit(companionId, returnPosition);
                 MovePlayer(returnPosition, death);
@@ -443,6 +447,12 @@ namespace ARPG.Dungeon
             StopTransientCombat();
             AR.s.Item.UnloadContextDrops();
             AR.s.WorldMap.SuspendWorld();
+            // 던전 안에서도 월드 시뮬이 돈다 (DUNGEON_WORLD_SIM_DESIGN §3). 보관함에 넣기 전에 필드에서 멀어질 때와 같은 처리를 먼저 한다.
+            // 네임드 엔티티는 청크 비활성화가 아니라 Presence tick이 지운다 — 남으면 보관되어 던전 중 사라짐이 밀린다 (§3.6)
+            AR.s.NamedThreat.DespawnAllEntities();
+            FlushDestroyedEntities();
+            // 실체화된 연대기 마을은 엔티티를 보관함으로 빼기 전에 접는다 (§3.1). 손제작 마을 ECS만 보관된다 (§3.2)
+            AR.s.History.FoldBackAllSettlements();
             _suspendedWorld = _components.SuspendExceptPlayer(AR.s.Data.CurrentPlayerEntityId);
             _active = record;
             // A queued checkpoint may have persisted the boss kill just before completion committed.
@@ -542,6 +552,12 @@ namespace ARPG.Dungeon
             MarkTransientForRemoval<ProjectileComponent>();
             MarkTransientForRemoval<AreaEffectComponent>();
             MarkTransientForRemoval<LifetimeComponent>();
+            FlushDestroyedEntities();
+        }
+
+        // DestroyTag가 붙은 엔티티를 지금 파괴한다 — 보관(SuspendExceptPlayer)·맵 교체 전에 남지 않게 한다.
+        private static void FlushDestroyedEntities()
+        {
             AR.s.System.GetSystem<System_EntityDestroy>()?.OnLateUpdate(0);
         }
 

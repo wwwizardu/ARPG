@@ -112,6 +112,10 @@ namespace ARPG.Component
         // 발사체 옵션 (Base + 장비/버프 modifier 합산값)
         public int FinalProjectileCountAdd;  // 최종 발사체 추가 개수
 
+        // 드롭 보너스 (ITEM_DROP_BALANCE_DESIGN.md §8). 기본값은 항상 0이고 보정 합계(%)만 담는 증가율 묶음이다
+        public int FinalItemQuantity;        // 아이템 수량 합계 (%)
+        public int FinalItemRarity;          // 아이템 희귀도 합계 (%) — 플레이어 곡선은 드롭 계산부가 적용한다
+
         // === 현재 상태 값 ===
         // 전투 중 변동되는 값들
         private int _currentHp;       // 현재 체력 (SetCurrentHp로만 변경)
@@ -251,6 +255,9 @@ namespace ARPG.Component
             FinalThorns = BaseThorns;
 
             FinalProjectileCountAdd = BaseProjectileCountAdd;
+
+            FinalItemQuantity = 0;
+            FinalItemRarity = 0;
         }
     }
 }

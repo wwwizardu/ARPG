@@ -9,6 +9,24 @@ using UnityEngine.AddressableAssets;
 
 namespace ARPG.Item
 {
+    /// <summary>
+    /// 스킬북 인스턴스 보너스 범위 (ITEM_DROP_BALANCE_DESIGN §7.4). 플레이어 드롭은 구간표 값을 넘기고,
+    /// 넘기지 않으면(NPC 전리품·상점) 옛 고정 규칙(용량 +1~5, 슬롯 +1 50%)과 결정론 난수 순서를 그대로 쓴다.
+    /// </summary>
+    public readonly struct SkillBookBonusRange
+    {
+        public readonly int CapacityMin;
+        public readonly int CapacityMax;
+        public readonly int SlotChancePercent;
+
+        public SkillBookBonusRange(int capacityMin, int capacityMax, int slotChancePercent)
+        {
+            CapacityMin = capacityMin;
+            CapacityMax = Mathf.Max(capacityMin, capacityMax);
+            SlotChancePercent = Mathf.Clamp(slotChancePercent, 0, 100);
+        }
+    }
+
     public partial class ItemManager : MonoBehaviour
     {
         // DataManager가 ItemManager.Initialize보다 먼저 신규 PlayerData를 만들 수 있으므로
@@ -163,7 +181,8 @@ namespace ARPG.Item
         /// 등급 책 ItemId + SkillId 조합으로 스킬북 ItemData 생성.
         /// inRng가 있으면 인스턴스 보너스 롤도 결정론 RNG를 사용한다 (V5 상점 재고 §8.5).
         /// </summary>
-        public ItemData? CreateSkillBook(int itemId, int skillId, HistoryRng? inRng = null)
+        public ItemData? CreateSkillBook(int itemId, int skillId, HistoryRng? inRng = null,
+            SkillBookBonusRange? bonusRange = null)
         {
             ItemTable? itemTable = AR.s.Data?.GetItem(itemId);
             if (itemTable == null)
@@ -187,8 +206,8 @@ namespace ARPG.Item
             // 인스턴스 roll (SKILL_RUNE_DESIGN.md §3.1)
             // - PageCapacityBonus: +1~+5 균등 랜덤 — 같은 등급 책 사이에서도 용량 차별화
             // - PageSlotsBonus  : 50% 확률 +1 — 같은 등급 책 사이에서도 가끔 슬롯 1개 추가
-            // v1 정책: 모든 등급에 동일 적용. 향후 등급별 차등이 필요하면 RollSkillBookBonuses에 itemTable.Tier 인자 추가.
-            (int capBonus, int slotsBonus) = RollSkillBookBonuses(inRng);
+            // 플레이어 드롭은 구간표 범위를 쓴다 (ITEM_DROP_BALANCE_DESIGN §7.4. 레벨 90: 용량 +3~5, 슬롯 70%).
+            (int capBonus, int slotsBonus) = RollSkillBookBonuses(inRng, bonusRange);
 
             return new ItemData
             {
@@ -207,8 +226,17 @@ namespace ARPG.Item
         }
 
         private static (int CapacityBonus, int SlotsBonus) RollSkillBookBonuses(
-            HistoryRng? inRng)
+            HistoryRng? inRng, SkillBookBonusRange? bonusRange)
         {
+            if (bonusRange.HasValue == true)
+            {
+                SkillBookBonusRange range = bonusRange.Value;
+                int bandCapacity = RollRange(inRng, range.CapacityMin, range.CapacityMax + 1);
+                int bandSlots = RollRange(inRng, 0, 100) < range.SlotChancePercent ? 1 : 0;
+                return (bandCapacity, bandSlots);
+            }
+
+            // 옛 고정 규칙 — NPC 전리품·상점 재고의 결정론 난수 순서를 바꾸지 않는다
             int capBonus = RollRange(inRng, 1, 6);          // 1~5 inclusive
             int slotsBonus = RollRange(inRng, 0, 2);        // 0 또는 1 (50% 확률 +1)
             return (capBonus, slotsBonus);
@@ -252,7 +280,8 @@ namespace ARPG.Item
         /// 등급(Tier)에 해당하는 책 ItemId를 찾고, 같은 Tier의 DropEnabled 스킬 풀에서 랜덤 SkillId를 뽑아 스킬북 생성.
         /// 드랍/상점 stock 생성 시 사용. 풀이 비어 있으면 null 반환.
         /// </summary>
-        public ItemData? CreateRandomSkillBookOfTier(int tier, HistoryRng? inRng = null)
+        public ItemData? CreateRandomSkillBookOfTier(int tier, HistoryRng? inRng = null,
+            SkillBookBonusRange? bonusRange = null)
         {
             int itemId = GetSkillBookItemIdByTier(tier);
             if (itemId == 0)
@@ -268,7 +297,7 @@ namespace ARPG.Item
                 return null;
             }
 
-            return CreateSkillBook(itemId, skillId, inRng);
+            return CreateSkillBook(itemId, skillId, inRng, bonusRange);
         }
 
         /// <summary>
@@ -477,7 +506,11 @@ namespace ARPG.Item
 
             // EquipType 설정
             equipmentData.EquipType = Utils.CategoryToEquipmentTypeMask(inTable.Category);
-            equipmentData.Quality = RollRange(inRng, 1, 101);
+            if (rollOptions.HasDropGrade == false)
+            {
+                // 옛 품질 판정 자리(1~100). 값은 쓰지 않지만(D14) NPC 전리품·상점 매물의 결정론 난수 순서를 지키려고 굴린다
+                RollRange(inRng, 1, 101);
+            }
 
             // 1. Base Mod 생성 (일반 장비의 표준 베이스 스탯)
             equipmentData.InitBaseMods(inTable.Id);
@@ -485,15 +518,21 @@ namespace ARPG.Item
             // 2. Implicit Mod 생성 (유니크/특수 아이템의 추가 옵션)
             equipmentData.InitImplicitMods(inTable.Id);
 
-            // 3. Prefix Mod 랜덤 생성
-            RollRandomMods(equipmentData, GlobalEnum.ModSlot.Prefix, RollRange(inRng, 1, 4), equipmentData.EquipType,
-                itemLevel, inRng);
+            // 3·4. Prefix/Postfix Mod 랜덤 생성
+            if (rollOptions.HasDropGrade == true)
+            {
+                RollDropGradeMods(equipmentData, rollOptions, itemLevel, inRng);
+            }
+            else
+            {
+                // 공유 경로(NPC 전리품·상점 랜덤 매물): 접두 1~3 + 접미 1~3, 일반 티어 규칙 (D12)
+                RollRandomMods(equipmentData, GlobalEnum.ModSlot.Prefix, RollRange(inRng, 1, 4), equipmentData.EquipType,
+                    itemLevel, false, inRng);
+                RollRandomMods(equipmentData, GlobalEnum.ModSlot.Postfix, RollRange(inRng, 1, 4), equipmentData.EquipType,
+                    itemLevel, false, inRng);
+            }
 
-            // 4. Postfix Mod 랜덤 생성
-            RollRandomMods(equipmentData, GlobalEnum.ModSlot.Postfix, RollRange(inRng, 1, 4), equipmentData.EquipType,
-                itemLevel, inRng);
-
-            // 5. T11·T12 특수 판정 (몬스터 드랍만 확률이 있다)
+            // 5. T11·T12 특수 판정 (몬스터 드랍만 확률이 있다). 등급과 관계없이 장비 1개당 1번, 옵션이 없으면 대상이 없다
             TryApplySpecialTier(equipmentData, itemLevel, rollOptions, inRng);
 
             // 6. 생성된 Mod들의 테이블 참조 연결
@@ -507,7 +546,7 @@ namespace ARPG.Item
 
         /// <summary>
         /// 시작 무기/시나리오 보상 등 "Mod 없는 깔끔한 베이스" 장비 생성.
-        /// Base + Implicit만 적용, Prefix/Postfix 랜덤 롤 없음. Quality도 고정값 1.
+        /// Base + Implicit만 적용, Prefix/Postfix 랜덤 롤 없음(일반 등급). 품질 0.
         /// </summary>
         public ItemData? CreateBaseEquipment(int itemId)
         {
@@ -529,7 +568,7 @@ namespace ARPG.Item
             EquipmentData equipmentData = new EquipmentData()
             {
                 Id = itemId,
-                Quality = 1,
+                Quality = EquipmentData.BasicItemQuality,
             };
             equipmentData.EquipType = Utils.CategoryToEquipmentTypeMask(itemTable.Category);
 
@@ -624,10 +663,78 @@ namespace ARPG.Item
         }
 
         /// <summary>
-        /// 지정 슬롯에 랜덤 Mod를 롤링하여 추가. 티어는 아이템 레벨의 일반 판정 후보(T1~T10)에서 가중치로 고른다.
+        /// 플레이어 드롭 등급별 옵션 (ITEM_DROP_BALANCE_DESIGN §4.3·§4.4, 품질 §5).
+        /// - 일반: 옵션 없음, 품질은 드롭 쪽이 정한 값.
+        /// - 마법: 1개면 접두·접미 후보 전체에서, 2개면 접두 1 + 접미 1. 티어는 마법 규칙(위 2단계 가중치 2배).
+        /// - 희귀: 총수를 접두·접미에 각 3개 이하로 나눈다. 한쪽 후보가 모자라면 다른 쪽으로 채운다. 일반 티어 규칙.
         /// </summary>
-        private void RollRandomMods(EquipmentData equipment, GlobalEnum.ModSlot slot, int count,
-            GlobalEnum.EquipmentTypeMask equipType, int itemLevel, HistoryRng? inRng = null)
+        private void RollDropGradeMods(EquipmentData equipment, EquipmentRollOptions rollOptions, int itemLevel,
+            HistoryRng? inRng)
+        {
+            GlobalEnum.EquipmentTypeMask equipType = equipment.EquipType;
+            switch (rollOptions.Grade)
+            {
+                case GlobalEnum.EquipmentGrade.Normal:
+                    equipment.Quality = EquipmentQualityRules.ClampQuality(rollOptions.Quality);
+                    return;
+
+                case GlobalEnum.EquipmentGrade.Magic:
+                    if (rollOptions.AffixCount <= 1)
+                    {
+                        RollRandomModAnySlot(equipment, equipType, itemLevel, true, inRng);
+                    }
+                    else
+                    {
+                        RollRandomMods(equipment, GlobalEnum.ModSlot.Prefix, 1, equipType, itemLevel, true, inRng);
+                        RollRandomMods(equipment, GlobalEnum.ModSlot.Postfix, 1, equipType, itemLevel, true, inRng);
+                    }
+                    return;
+
+                default:
+                {
+                    int limit = ItemEnchantmentRules.AFFIX_LIMIT;
+                    int total = Mathf.Clamp(rollOptions.AffixCount, 1, limit * 2);
+                    int prefixTarget = RollRange(inRng, Mathf.Max(0, total - limit), Mathf.Min(limit, total) + 1);
+                    int prefixAdded = RollRandomMods(equipment, GlobalEnum.ModSlot.Prefix, prefixTarget, equipType,
+                        itemLevel, false, inRng);
+                    int postfixAdded = RollRandomMods(equipment, GlobalEnum.ModSlot.Postfix,
+                        Mathf.Min(limit, total - prefixAdded), equipType, itemLevel, false, inRng);
+                    int remaining = total - prefixAdded - postfixAdded;
+                    if (remaining > 0 && prefixAdded < limit)
+                        RollRandomMods(equipment, GlobalEnum.ModSlot.Prefix, Mathf.Min(remaining, limit - prefixAdded),
+                            equipType, itemLevel, false, inRng);
+                    return;
+                }
+            }
+        }
+
+        /// <summary>마법 장비 옵션 1개: 접두·접미 후보 전체에서 옵션을 균등하게 고른다.</summary>
+        private void RollRandomModAnySlot(EquipmentData equipment, GlobalEnum.EquipmentTypeMask equipType, int itemLevel,
+            bool magicRule, HistoryRng? inRng)
+        {
+            List<ModTable> prefixPool = AR.s.Data.GetModPool(GlobalEnum.ModSlot.Prefix, equipType);
+            List<ModTable> postfixPool = AR.s.Data.GetModPool(GlobalEnum.ModSlot.Postfix, equipType);
+            int total = prefixPool.Count + postfixPool.Count;
+            if (total <= 0)
+                return;
+
+            GlobalEnum.ModSlot slot = RollRange(inRng, 0, total) < prefixPool.Count
+                ? GlobalEnum.ModSlot.Prefix : GlobalEnum.ModSlot.Postfix;
+            if (RollRandomMods(equipment, slot, 1, equipType, itemLevel, magicRule, inRng) == 0)
+            {
+                // 고른 쪽에 티어가 열린 옵션이 없으면 반대쪽에서 붙인다
+                GlobalEnum.ModSlot other = slot == GlobalEnum.ModSlot.Prefix
+                    ? GlobalEnum.ModSlot.Postfix : GlobalEnum.ModSlot.Prefix;
+                RollRandomMods(equipment, other, 1, equipType, itemLevel, magicRule, inRng);
+            }
+        }
+
+        /// <summary>
+        /// 지정 슬롯에 랜덤 Mod를 롤링하여 추가. 티어는 아이템 레벨의 일반 판정 후보(T1~T10)에서 가중치로 고른다.
+        /// magicRule이면 후보 중 위 2단계 가중치를 2배로 준다(마법 규칙). 실제로 붙인 개수를 돌려준다.
+        /// </summary>
+        private int RollRandomMods(EquipmentData equipment, GlobalEnum.ModSlot slot, int count,
+            GlobalEnum.EquipmentTypeMask equipType, int itemLevel, bool magicRule, HistoryRng? inRng = null)
         {
             List<ModTable> modPool = AR.s.Data.GetModPool(slot, equipType);
             for (int i = modPool.Count - 1; i >= 0; i--)
@@ -643,7 +750,7 @@ namespace ARPG.Item
                 ModTable selectedMod = modPool[selectedIndex];
                 List<ModTierTable> tiers = AR.s.Data.GetModTiers(selectedMod.Id);
                 if (ItemLevelModTierRules.BuildNormalTierCandidates(tiers, itemLevel,
-                        _tierCandidateScratch, _tierWeightScratch) == 0)
+                        _tierCandidateScratch, _tierWeightScratch, magicRule) == 0)
                 {
                     modPool.RemoveAt(selectedIndex);
                     continue;
@@ -677,6 +784,7 @@ namespace ARPG.Item
                     }
                 }
             }
+            return addedCount;
         }
 
         /// <summary>

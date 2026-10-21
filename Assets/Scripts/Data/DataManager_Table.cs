@@ -45,6 +45,10 @@ namespace ARPG.Data
         private ImmutableDictionary<int, Tables.DropTable> _dropTable = null!;
         private ImmutableDictionary<int, Tables.DropCurrencyTable> _dropCurrencyTable = null!;
         private ImmutableDictionary<int, Tables.DropEquipmentTable> _dropWeaponBaseStatTable = null!;
+        // 드롭 구간표 (ITEM_DROP_BALANCE_DESIGN §7.1). 레벨(1~99) → 행 인덱스. 0번 칸은 쓰지 않는다
+        private ImmutableDictionary<int, Tables.DropBandTable> _dropBandTable = null!;
+        private readonly Tables.DropBandTable?[] _dropBandByLevel =
+            new Tables.DropBandTable?[Item.ItemLevelModTierRules.MAX_ITEM_LEVEL + 1];
         private ImmutableDictionary<int, Tables.SkillTable> _skillTable = null!;
         private ImmutableDictionary<int, Tables.SkillEffectTable> _skillEffectTable = null!;
         private ImmutableDictionary<int, Tables.SkillPropagationTable> _skillPropagationTable = null!;
@@ -99,6 +103,7 @@ namespace ARPG.Data
                 LoadTable<Tables.DropTable>("DropTable.bytes", tables => _dropTable = tables),
                 LoadTable<Tables.DropCurrencyTable>("DropCurrencyTable.bytes", tables => _dropCurrencyTable = tables),
                 LoadTable<Tables.DropEquipmentTable>("DropEquipmentTable.bytes", tables => _dropWeaponBaseStatTable = tables),
+                LoadTable<Tables.DropBandTable>("DropBandTable.bytes", tables => _dropBandTable = tables),
                 LoadTable<Tables.SkillTable>("SkillTable.bytes", tables => _skillTable = tables),
                 LoadTable<Tables.SkillEffectTable>("SkillEffectTable.bytes", tables => _skillEffectTable = tables),
                 LoadTable<Tables.SkillPropagationTable>("SkillPropagationTable.bytes", tables => _skillPropagationTable = tables),
@@ -165,6 +170,30 @@ namespace ARPG.Data
             {
                 table.LoadLate();
             }
+
+            // DropBandTable: 레벨 인덱스 구축. 겹치면 Id가 작은 행이 이긴다 (다운로드 검증이 겹침·빈틈을 막는다)
+            System.Array.Clear(_dropBandByLevel, 0, _dropBandByLevel.Length);
+            List<Tables.DropBandTable> dropBands = new List<Tables.DropBandTable>(_dropBandTable.Values);
+            dropBands.Sort((a, b) => a.Id.CompareTo(b.Id));
+            for (int i = 0; i < dropBands.Count; i++)
+            {
+                Tables.DropBandTable band = dropBands[i];
+                band.LoadLate();
+                int min = Mathf.Max(Item.ItemLevelModTierRules.MIN_ITEM_LEVEL, band.MinLevel);
+                int max = Mathf.Min(Item.ItemLevelModTierRules.MAX_ITEM_LEVEL, band.MaxLevel);
+                for (int level = min; level <= max; level++)
+                    _dropBandByLevel[level] ??= band;
+            }
+#if UNITY_EDITOR
+            for (int level = Item.ItemLevelModTierRules.MIN_ITEM_LEVEL; level <= Item.ItemLevelModTierRules.MAX_ITEM_LEVEL; level++)
+            {
+                if (_dropBandByLevel[level] == null)
+                {
+                    Debug.LogError($"[DataManager_Table] DropBandTable이 레벨 {level}을 덮지 않습니다. DropBand 시트를 확인하세요.");
+                    break;
+                }
+            }
+#endif
 
             foreach (var table in _skillTable.Values)
             {
@@ -573,6 +602,15 @@ namespace ARPG.Data
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// 몬스터 레벨(= 드롭 장비의 아이템 레벨)에 맞는 드롭 구간 행 (ITEM_DROP_BALANCE_DESIGN §7.1).
+        /// 레벨은 1~99로 보정한다(0 = 1). 표가 비었으면 null.
+        /// </summary>
+        public Tables.DropBandTable? GetDropBand(int level)
+        {
+            return _dropBandByLevel[Item.ItemLevelModTierRules.ClampItemLevel(level)];
         }
 
         public Tables.DropCurrencyTable? GetDropCurrency(int id)

@@ -92,7 +92,7 @@ namespace ARPG.Systems
                         if (cm.TryGetComponent<TransformComponent>(entityId, out TransformComponent transform))
                         {
                             Vector3 dropPosition = new Vector3(transform.Position.x, transform.Position.y, -0.01f);
-                            DropHelper.ProcessDrops(drop, dropPosition);
+                            DropHelper.ProcessDrops(entityId, drop, dropPosition);
                         }
                     }
 

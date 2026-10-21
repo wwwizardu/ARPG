@@ -40,6 +40,12 @@ namespace ARPG
         private PlayerSkillManager _playerSkillManager = new PlayerSkillManager();
         // 엔티티 생명주기(ID 발급/등록/소멸 오케스트레이션) — 구 EntityIdHelper. plain class, 프리팹 배선 불필요
         private Manager.EntityManager _entityManager = new Manager.EntityManager();
+#if UNITY_EDITOR
+        // 진단 보호 (DUNGEON_WORLD_SIM_DESIGN §4): 던전 안에서 IWorldSimSystem이 도는 동안의 AR.s.Map 접근을 잡는다.
+        // 실행 중인 시뮬 시스템과, 이미 경고한 "시스템/호출 위치" (위치마다 한 번만 남긴다).
+        private Systems.ISystem? _worldSimMapGuard;
+        private readonly global::System.Collections.Generic.HashSet<string> _worldSimMapWarned = new();
+#endif
 
         public bool IsInitialized => _initialized;
 
@@ -48,7 +54,18 @@ namespace ARPG
         public Systems.SystemManager System => _systemManager;
         public Component.ComponentManager Component => _componentManager;
         public Data.DataManager Data => _dataManager;
-        public MapManager Map => _dungeonManager.ActiveMap ?? _mapManager;
+        /// <summary>지금 맵 컨텍스트의 맵 (던전 안이면 던전 맵). 던전 안에서도 도는 월드 시뮬은 WorldMap만 쓴다.</summary>
+        public MapManager Map
+        {
+            get
+            {
+#if UNITY_EDITOR
+                if (_worldSimMapGuard != null)
+                    WarnWorldSimMapAccess();
+#endif
+                return _dungeonManager.ActiveMap ?? _mapManager;
+            }
+        }
         public MapManager WorldMap => _mapManager;
         public Dungeon.DungeonManager Dungeon => _dungeonManager;
         public ARPG.NamedThreat.NamedThreatManager NamedThreat => _namedThreatManager;
@@ -150,7 +167,39 @@ namespace ARPG
             // 마지막: EntityId 발급기. 살아 있는 엔티티가 모두 정리된 뒤에 되돌려야 ID가 중복 발급되지 않는다.
             // (Initialize()가 EntityManager를 가장 먼저 초기화하는 것과 대칭)
             _entityManager.Reset();
+#if UNITY_EDITOR
+            _worldSimMapGuard = null;
+            _worldSimMapWarned.Clear();
+#endif
         }
+
+#if UNITY_EDITOR
+        /// <summary>
+        /// SystemManager가 시스템 실행 직전에 부른다. 던전 안에서 IWorldSimSystem을 실행할 때만 감시를 켜고,
+        /// 그 밖의 시스템이면 끈다 (DUNGEON_WORLD_SIM_DESIGN §4 진단 보호).
+        /// </summary>
+        public void BeginWorldSimMapGuard(Systems.ISystem system)
+        {
+            _worldSimMapGuard = system is Systems.IWorldSimSystem && _dungeonManager.IsInside == true ? system : null;
+        }
+
+        public void EndWorldSimMapGuard()
+        {
+            _worldSimMapGuard = null;
+        }
+
+        private void WarnWorldSimMapAccess()
+        {
+            // 프레임 0 = 이 메서드, 1 = Map getter, 2 = 호출한 곳
+            global::System.Reflection.MethodBase? caller = new global::System.Diagnostics.StackTrace(2, false).GetFrame(0)?.GetMethod();
+            string site = caller != null ? $"{caller.DeclaringType?.Name}.{caller.Name}" : "unknown";
+            string systemName = _worldSimMapGuard != null ? _worldSimMapGuard.GetType().Name : "unknown";
+            if (_worldSimMapWarned.Add(systemName + "/" + site) == false)
+                return;
+            Debug.LogWarning($"[WorldSimMapGuard] 던전 안에서 {systemName} 실행 중 AR.s.Map(던전 맵)을 읽었습니다: {site}. " +
+                             "월드 시뮬 경로는 AR.s.WorldMap을 써야 합니다 (DUNGEON_WORLD_SIM_DESIGN §4).");
+        }
+#endif
         
         public void OnSceneLoadStart(Base.SceneBase inScene)
         {

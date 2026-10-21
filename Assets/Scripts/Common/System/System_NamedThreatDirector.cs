@@ -5,10 +5,11 @@ namespace ARPG.Systems
 {
     /// <summary>
     /// 네임드 위협 감독 — 플레이어와 가장 가까운 마을과 게임 시각으로 출현, 각 네임드의 단계·사라짐·소문 주인 재배정 (§4·§7·§8.1). 처치 묶음 저장 재시도도 여기서 한다.
-    /// 상태는 NamedThreatManager(세계 저장 기록)가 가진다. 던전 안에서는 월드 시스템과 함께 멈춘다 (IWorldMapSystem).
+    /// 상태는 NamedThreatManager(세계 저장 기록)가 가진다. 던전 안에서도 단계·사라짐·소문 주인 재배정은 진행하고,
+    /// 플레이어 월드 위치가 필요한 출현 판정만 퇴장 뒤로 미룬다 (IWorldSimSystem, DUNGEON_WORLD_SIM_DESIGN §3.6).
     /// NAMED_THREAT_DESIGN §12.2.
     /// </summary>
-    public class System_NamedThreatDirector : IFixedUpdateSystem, IWorldMapSystem
+    public class System_NamedThreatDirector : IFixedUpdateSystem, IWorldSimSystem
     {
         public int Priority => 135;
         public float UpdateInterval => 1f;

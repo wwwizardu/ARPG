@@ -67,6 +67,7 @@ namespace ARPG.Editor
                 VerifyTransactionsAndSaveRoundTrip(modById, tiers, costs, itemById,
                     errors, ref assertions);
                 VerifyItemLevelTierRules(modById, tiers, archetypes, errors, ref assertions);
+                VerifyDropBalanceEnchantment(modById, tiers, costs, itemById, errors, ref assertions);
                 villageCases = VerifyVillageForgeGuarantee(buildableById,
                     errors, ref assertions);
             }
@@ -128,7 +129,7 @@ namespace ARPG.Editor
                     $"Forge {forgeTier}에서 두 비용 행을 사용할 수 없음",
                     errors, ref assertions);
 
-                string signature = BuildWeaponCandidateSignature(modById, tiers, 60, 3);
+                string signature = BuildWeaponCandidateSignature(modById, tiers, 60);
                 if (candidateSignature == null)
                     candidateSignature = signature;
                 else
@@ -332,28 +333,62 @@ namespace ARPG.Editor
                 "같은 Slot·Group이 여러 개인 구 데이터는 임의 선택 없이 거부해야 함",
                 errors, ref assertions);
 
-            List<ModTierTable> levelOne = ItemEnchantmentRules.GetEligibleTiers(
-                FindTiers(tiers, phys.Id), phys.Id, 1, 1);
-            Require(levelOne.Count == 1 && levelOne[0].Tier == 1,
-                "Player Level 1 / Item Tier 1은 Mod Tier 1만 자격이어야 함",
+            // 마법부여 티어는 아이템 레벨 규칙이다 (ITEM_DROP_BALANCE_DESIGN D9). 아이템 레벨 0(옛·기본·시작 장비)은 1로 본다.
+            List<ModTierTable> levelZero = new List<ModTierTable>();
+            List<int> levelZeroWeights = new List<int>();
+            List<ModTierTable> levelOne = new List<ModTierTable>();
+            List<int> levelOneWeights = new List<int>();
+            ItemEnchantmentRules.BuildEligibleTiers(tiers, phys.Id, 0, false, levelZero, levelZeroWeights);
+            ItemEnchantmentRules.BuildEligibleTiers(tiers, phys.Id, 1, false, levelOne, levelOneWeights);
+            Require(levelOne.Count == 3 && levelOne[0].Tier == 1 && levelOne[2].Tier == 3
+                && DescribeTiers(levelZero) == DescribeTiers(levelOne)
+                && string.Join(",", levelZeroWeights) == string.Join(",", levelOneWeights),
+                "마법부여 아이템 레벨 0·1은 T1~T3 후보(같은 가중치)여야 함: " +
+                $"0={DescribeTiers(levelZero)}, 1={DescribeTiers(levelOne)}",
                 errors, ref assertions);
 
-            List<ModTierTable> allEligible = ItemEnchantmentRules.GetEligibleTiers(
-                FindTiers(tiers, phys.Id), phys.Id, 60, 3);
-            Require(allEligible.Count == 3,
-                "Level 60 / Item Tier 3에서 기존 Mod 1100의 3개 Tier가 모두 자격이어야 함",
+            List<ModTierTable> levelNinety = new List<ModTierTable>();
+            List<int> normalWeights = new List<int>();
+            ItemEnchantmentRules.BuildEligibleTiers(tiers, phys.Id, 90, false, levelNinety, normalWeights);
+            Require(levelNinety.Count == 5 && levelNinety[0].Tier == 6 && levelNinety[4].Tier == 10,
+                $"마법부여 아이템 레벨 90은 T6~T10 후보여야 함: {DescribeTiers(levelNinety)}",
                 errors, ref assertions);
-            if (allEligible.Count == 3)
+
+            // 마법 규칙: 위 2단계(T9·T10)만 가중치 2배, 나머지는 그대로 (§6.2)
+            List<ModTierTable> magicTiers = new List<ModTierTable>();
+            List<int> magicWeights = new List<int>();
+            ItemEnchantmentRules.BuildEligibleTiers(tiers, phys.Id, 90, true, magicTiers, magicWeights);
+            bool magicValid = magicTiers.Count == levelNinety.Count && normalWeights.Count == magicWeights.Count;
+            for (int i = 0; magicValid == true && i < magicWeights.Count; i++)
             {
-                // 누적 경계는 시트 Weight에서 계산한다: [0, W1) → T1, [W1, W1+W2) → T2, 그 뒤 → T3
-                int firstBoundary = allEligible[0].Weight;
-                int secondBoundary = firstBoundary + allEligible[1].Weight;
-                Require(ItemEnchantmentRules.SelectWeightedTier(allEligible, _ => 0)?.Tier == 1
-                    && ItemEnchantmentRules.SelectWeightedTier(allEligible, _ => firstBoundary - 1)?.Tier == 1
-                    && ItemEnchantmentRules.SelectWeightedTier(allEligible, _ => firstBoundary)?.Tier == 2
-                    && ItemEnchantmentRules.SelectWeightedTier(allEligible, _ => secondBoundary)?.Tier == 3,
-                    "ModTier.Weight 누적 경계 선택이 잘못됨", errors, ref assertions);
+                bool top = magicTiers[i].Tier > levelNinety[levelNinety.Count - 1].Tier
+                    - ItemLevelModTierRules.MAGIC_TOP_TIER_COUNT;
+                int expected = top == true
+                    ? normalWeights[i] * ItemLevelModTierRules.MAGIC_TOP_TIER_WEIGHT_MUL
+                    : normalWeights[i];
+                if (Math.Abs(magicWeights[i] - expected) > 1)
+                    magicValid = false;
             }
+            Require(magicValid,
+                $"마법 규칙은 위 2단계 가중치만 2배여야 함: 일반={string.Join(",", normalWeights)}, " +
+                $"마법={string.Join(",", magicWeights)}", errors, ref assertions);
+
+            // 등급별 대상 슬롯 (§6.1)
+            ItemEnchantmentRules.ResolveAffixTargets(GlobalEnum.ItemEnchantmentOperation.EvolveToMagic, 0, 0,
+                out bool evolvePrefix, out bool evolvePostfix, out bool evolveMagic);
+            ItemEnchantmentRules.ResolveAffixTargets(GlobalEnum.ItemEnchantmentOperation.AddAffix, 1, 0,
+                out bool addPrefixOnly, out bool addPostfixOnly, out bool addMagic);
+            ItemEnchantmentRules.ResolveAffixTargets(GlobalEnum.ItemEnchantmentOperation.AddAffix, 1, 1,
+                out bool addPrefixFull, out bool addPostfixFull, out bool addFullMagic);
+            ItemEnchantmentRules.ResolveAffixTargets(GlobalEnum.ItemEnchantmentOperation.ReplaceAffix, 1, 1,
+                out _, out _, out bool replaceMagic);
+            ItemEnchantmentRules.ResolveAffixTargets(GlobalEnum.ItemEnchantmentOperation.ReplaceAffix, 2, 1,
+                out _, out _, out bool replaceRare);
+            Require(evolvePrefix == true && evolvePostfix == true && evolveMagic == true
+                && addPrefixOnly == false && addPostfixOnly == true && addMagic == true
+                && addPrefixFull == true && addPostfixFull == true && addFullMagic == false
+                && replaceMagic == true && replaceRare == false,
+                "진화·엑잘티드·변화의 대상 슬롯과 마법 규칙 판정이 잘못됨", errors, ref assertions);
         }
 
         private static void VerifyTransactionsAndSaveRoundTrip(
@@ -396,7 +431,9 @@ namespace ARPG.Editor
                 "재료 부족 실패는 옵션·재료·Gold·저장을 모두 변경하지 않아야 함",
                 errors, ref assertions);
 
+            // 엑잘티드는 마법·희귀에만 쓸 수 있으므로 접두 1개짜리 마법 장비로 검사한다 (ITEM_DROP_BALANCE §6.1)
             EquipmentData poorEquipment = CreateEquipmentWithImmutableOptions();
+            poorEquipment.Mods.Add(CreateMod(phys, 1, 1, 3));
             Inventory poorInventory = CreateInventory(
                 CreateCurrency(1002, 1, itemById));
             PlayerData poorPlayer = new PlayerData { Level = 1, Gold = 39 };
@@ -447,22 +484,24 @@ namespace ARPG.Editor
                 && replacePlayer.Gold == 75 && replaceSaveCalls == 1,
                 "Tier 1 교체는 변화의 오브 1개 + 25 Gold를 소비하고 저장 1회여야 함",
                 errors, ref assertions);
+            // 아이템 레벨 1 후보는 T1~T3이고, 마지막 난수는 가장 높은 후보(T3)를 고른다 (D9 아이템 레벨 규칙)
             Require(replaceResult.BeforeOptions.Count == 3
                 && replaceResult.AfterOptions.Count == 3
                 && replaceEquipment.Mods.Count == 3
                 && replaceResult.ReplacedMod?.ModTableId == phys.Id
                 && replaceResult.AppliedMod?.ModTableId != phys.Id
                 && replaceResult.AppliedMod?.Slot == GlobalEnum.ModSlot.Prefix
-                && replaceResult.AppliedMod?.Tier == 1
+                && replaceResult.AppliedMod?.Tier == 3
                 && replaceEquipment.Mods[2].ModTableId
                     == replaceResult.AppliedMod.ModTableId,
-                "변화의 오브는 기존 옵션 하나를 같은 슬롯의 다른 랜덤 옵션으로 교체해야 함",
+                "변화의 오브는 기존 옵션 하나를 같은 슬롯의 다른 랜덤 옵션(아이템 레벨 1: T1~T3)으로 교체해야 함",
                 errors, ref assertions);
             Require(CaptureImmutableOptions(replaceEquipment) == immutableBefore,
                 "교체가 Base·Implicit·WeaponLocalEnhancements를 변경함",
                 errors, ref assertions);
 
             EquipmentData addEquipment = CreateEquipmentWithImmutableOptions();
+            addEquipment.Mods.Add(CreateMod(phys, 1, 1, 3));
             string addImmutableBefore = CaptureImmutableOptions(addEquipment);
             Inventory addInventory = CreateInventory(
                 CreateCurrency(1002, 2, itemById));
@@ -483,10 +522,13 @@ namespace ARPG.Editor
                 && addPlayer.Gold == 60 && addSaveCalls == 1,
                 "Tier 1 추가는 엑잘티드 오브 1개 + 40 Gold를 소비하고 저장 1회여야 함",
                 errors, ref assertions);
-            Require(addResult.BeforeOptions.Count == 2 && addResult.AfterOptions.Count == 3
-                && addEquipment.Mods.Count == 3 && addResult.AppliedMod != null
-                && addEquipment.Mods[2].ModTableId == addResult.AppliedMod.ModTableId,
-                "엑잘티드 오브는 유효 후보 중 랜덤 옵션 하나를 추가해야 함",
+            // 접두 1개짜리 마법 장비는 반대쪽(접미) 마법 칸을 먼저 채운다 (§6.1)
+            Require(addResult.BeforeOptions.Count == 3 && addResult.AfterOptions.Count == 4
+                && addEquipment.Mods.Count == 4 && addResult.AppliedMod != null
+                && addResult.AppliedMod.Slot == GlobalEnum.ModSlot.Postfix
+                && addEquipment.Mods[3].ModTableId == addResult.AppliedMod.ModTableId
+                && addEquipment.GetGrade() == GlobalEnum.EquipmentGrade.Magic,
+                "엑잘티드 오브는 마법 장비의 비어 있는 반대쪽 칸에 랜덤 옵션 하나를 추가해야 함",
                 errors, ref assertions);
             Require(CaptureImmutableOptions(addEquipment) == addImmutableBefore,
                 "신규 추가가 Base·Implicit·WeaponLocalEnhancements를 변경함",
@@ -516,10 +558,10 @@ namespace ARPG.Editor
             PlayerData? loaded = JsonConvert.DeserializeObject<PlayerData>(json,
                 JsonSettings.Default);
             Require(loaded != null && loaded.Gold == 60 && loaded._inventory.Count == 2
-                && loaded._inventory[0]?.Equipment?.Mods.Count == 3
-                && loaded._inventory[0]!.Equipment!.Mods[2].ModTableId
+                && loaded._inventory[0]?.Equipment?.Mods.Count == 4
+                && loaded._inventory[0]!.Equipment!.Mods[3].ModTableId
                     == addResult.AppliedMod!.ModTableId
-                && loaded._inventory[0]!.Equipment!.Mods[2].Tier == 1
+                && loaded._inventory[0]!.Equipment!.Mods[3].Tier == addResult.AppliedMod.Tier
                 && loaded._inventory[1]?.Id == 1002
                 && loaded._inventory[1]?.Quantity == 1,
                 "마법부여 결과·재료·Gold JSON 저장 왕복이 유지되지 않음",
@@ -775,9 +817,10 @@ namespace ARPG.Editor
         }
 
         private static string BuildWeaponCandidateSignature(
-            Dictionary<int, ModTable> modById, List<ModTierTable> tiers,
-            int playerLevel, int itemTier)
+            Dictionary<int, ModTable> modById, List<ModTierTable> tiers, int itemLevel)
         {
+            List<ModTierTable> eligible = new List<ModTierTable>();
+            List<int> weights = new List<int>();
             List<int> ids = new List<int>();
             List<ModTable> mods = new List<ModTable>(modById.Values);
             mods.Sort((a, b) => a.Id.CompareTo(b.Id));
@@ -790,9 +833,8 @@ namespace ARPG.Editor
                         GlobalEnum.EquipmentTypeMask.Weapon) == false
                     || ItemEnchantmentRules.HasVerifiedRuntimeConsumer(mod) == false)
                     continue;
-                List<ModTierTable> eligible = ItemEnchantmentRules.GetEligibleTiers(
-                    FindTiers(tiers, mod.Id), mod.Id, playerLevel, itemTier);
-                if (eligible.Count > 0)
+                if (ItemEnchantmentRules.BuildEligibleTiers(tiers, mod.Id, itemLevel, false,
+                        eligible, weights) > 0)
                     ids.Add(mod.Id);
             }
             return string.Join(",", ids);

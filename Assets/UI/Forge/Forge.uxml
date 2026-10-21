@@ -32,6 +32,21 @@
 
                 <ui:VisualElement class="forge-column forge-column-right">
                     <appui:Text text="2. 마법부여 작업" class="forge-section-title"/>
+                    <ui:ScrollView name="operation-scroll" class="forge-operation-scroll">
+                    <ui:VisualElement class="forge-operation-card">
+                        <appui:Text text="품질 다시 굴리기 — 일반 장비" class="forge-card-title"/>
+                        <appui:Text text="옵션이 없는 일반 장비의 품질을 0~20 중에서 새로 정합니다. 지금보다 낮아질 수 있습니다." class="forge-card-detail"/>
+                        <appui:Text name="quality-cost-text" text="비용: -" class="forge-cost"/>
+                        <appui:Text name="quality-status-text" text="먼저 장비를 선택하세요." class="forge-status"/>
+                        <appui:Button name="quality-btn" title="품질 다시 굴리기" variant="Accent" size="M" class="forge-operation-btn"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="forge-operation-card">
+                        <appui:Text text="진화의 오브 — 일반 → 마법" class="forge-card-title"/>
+                        <appui:Text text="일반 장비에 옵션 하나를 무작위로 붙여 마법 장비로 만듭니다. 높은 티어가 잘 나옵니다." class="forge-card-detail"/>
+                        <appui:Text name="evolve-cost-text" text="비용: -" class="forge-cost"/>
+                        <appui:Text name="evolve-status-text" text="먼저 장비를 선택하세요." class="forge-status"/>
+                        <appui:Button name="evolve-btn" title="마법 장비로 진화" variant="Accent" size="M" class="forge-operation-btn"/>
+                    </ui:VisualElement>
                     <ui:VisualElement class="forge-operation-card">
                         <appui:Text text="변화의 오브 — 랜덤 옵션 변경" class="forge-card-title"/>
                         <appui:Text text="기존 Prefix/Postfix 하나를 무작위로 선택해 같은 슬롯의 다른 옵션으로 교체합니다." class="forge-card-detail"/>
@@ -41,11 +56,12 @@
                     </ui:VisualElement>
                     <ui:VisualElement class="forge-operation-card">
                         <appui:Text text="엑잘티드 오브 — 랜덤 옵션 추가" class="forge-card-title"/>
-                        <appui:Text text="빈 Prefix/Postfix 자리에 적용 가능한 옵션 하나를 무작위로 추가합니다." class="forge-card-detail"/>
+                        <appui:Text text="마법·희귀 장비의 빈 Prefix/Postfix 자리에 옵션 하나를 무작위로 추가합니다. 마법 장비는 반대쪽 칸을 먼저 채웁니다." class="forge-card-detail"/>
                         <appui:Text name="add-cost-text" text="비용: -" class="forge-cost"/>
                         <appui:Text name="add-status-text" text="먼저 장비를 선택하세요." class="forge-status"/>
                         <appui:Button name="add-btn" title="랜덤 옵션 추가" variant="Accent" size="M" class="forge-operation-btn"/>
                     </ui:VisualElement>
+                    </ui:ScrollView>
                 </ui:VisualElement>
             </ui:VisualElement>
 

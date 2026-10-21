@@ -1206,6 +1206,23 @@ namespace ARPG.Village
             return t.BoundsRadius;
         }
 
+        /// <summary>
+        /// 던전 퇴장: 보관함에서 되살린(RestoreSuspended) 실체화 마을 미러를 원장에서 다시 채운다.
+        /// 복원 값은 입장 시점 값이라 던전 중 바뀐 원장(손제작 마을 생산·NPC 거래·Hunt Food)과 어긋난다.
+        /// 다음 생산 tick을 기다리지 않고 UI가 옛 값을 보이지 않게 즉시 맞춘다 (DUNGEON_WORLD_SIM_DESIGN §3.4).
+        /// </summary>
+        public void ResyncMaterializedMirrors()
+        {
+            for (int i = 0; i < _villageList.Count; i++)
+            {
+                VillageData data = _villageList[i];
+                if (data.EntityId < 0)
+                    continue;
+                SyncStorageFromData(data);
+                SyncWallStatsToComponent(data);
+            }
+        }
+
         public void SyncStorageFromData(VillageData data)
         {
             if (data.EntityId < 0)
@@ -1309,6 +1326,10 @@ namespace ARPG.Village
                 //   ActiveBuildTasks: DematerializeVillage가 flush한 진행중 task 스냅샷(보존 필수)
                 //   Legacy CurrentBuild* / VillageComponent 미러도 마지막 실체화 시점 값 유지.
                 if (v.EntityId < 0)
+                    continue;
+                // 실체화 마을의 ECS가 보관함에 있으면(던전 안 손제작 마을) 원장이 정본이다 — 빈 task 풀·없는 태그로
+                // 진행 중 task·벽 계획 플래그를 지우지 않는다. 입장 직전 저장이 이미 동기화했다 (DUNGEON_WORLD_SIM_DESIGN §3.2).
+                if (AR.s.Component.HasComponent<VillageStorageComponent>(v.EntityId) == false)
                     continue;
 
                 MarkSaveDirty(v.VillageId, ARPG.Data.VillageSaveGroup.Construction);
@@ -1540,8 +1561,9 @@ namespace ARPG.Village
             // 1. 인벤토리 차감 (실패 시 atomic abort)
             if (AR.s.Player.Inventory.RemoveItem(slotIndex, amount, out _) == false) return -1;
 
-            // 2. Gold 지급 (PlayerData.Gold 정수) — 상인 매입가 = BasePrice × BuyFromPlayerBp / 10000
-            int gold = GetMerchantBuyPrice(villageId, item) * amount;
+            // 2. Gold 지급 (PlayerData.Gold 정수) — 상인 매입가 = BasePrice × BuyFromPlayerBp / 10000,
+            //    장비는 등급·아이템 레벨 배율을 더 곱한다 (ITEM_DROP_BALANCE_DESIGN §9)
+            int gold = GetPlayerSellPrice(villageId, slotItem) * amount;
             if (AR.s.Data?.Player != null) AR.s.Data.Player.Gold += gold;
 
             // 3. 마을 Storage 부분 환원 (자원만)
@@ -1656,6 +1678,21 @@ namespace ARPG.Village
             int price = VillageTradeStockRoller.GetMerchantBuyPrice(trade, CreateTradeItemInfo(item));
             // GOLD_BALANCE D128: 매입가는 그날 물가 지수를 따른다 (하한 0은 원래 가격 함수와 같다).
             return ApplyItemPriceIndex(price, item, 0);
+        }
+
+        /// <summary>
+        /// 플레이어 판매가: 상인 매입가 × 장비 등급 배율 × 아이템 레벨 배율 (ITEM_DROP_BALANCE_DESIGN §9, D10).
+        /// 장비가 아니면 상인 매입가와 같다. NPC 판매가는 GetNpcSellPrice(배율 없음)를 쓴다.
+        /// </summary>
+        public int GetPlayerSellPrice(int villageId, ARPG.Data.ItemData? item)
+        {
+            if (item == null)
+                return -1;
+            Tables.ItemTable? table = item.Table ?? AR.s.Data.GetItem(item.Id);
+            int price = GetMerchantBuyPrice(villageId, table);
+            if (price <= 0 || item.Equipment == null)
+                return price;
+            return PlayerSellPriceRules.Apply(price, item, AR.s.Data.GetDropBand(item.Equipment.ItemLevel));
         }
 
         /// <summary>
@@ -1789,8 +1826,9 @@ namespace ARPG.Village
             v.MerchantStock.Clear();
 
             int settlementKey = v.SettlementId >= 0 ? v.SettlementId : -1 - v.VillageId;
+            // NPC 거래(던전 안에서도 도는 월드 시뮬)가 재고를 롤할 수 있으므로 월드 맵 시드·Zone을 쓴다 (DUNGEON_WORLD_SIM §4)
             ulong seed = VillageTradeStockRoller.CreateStockSeed(
-                AR.s.Map.mapSeed, settlementKey, cycle);
+                AR.s.WorldMap.mapSeed, settlementKey, cycle);
             HistoryRng rng = new HistoryRng(seed);
 
             List<TradeItemInfo> items = BuildTradeItemInfos();
@@ -1799,7 +1837,7 @@ namespace ARPG.Village
                 trade, v.ShopTier, facilityTier, items, rng);
             // 랜덤 장비 매물의 아이템 레벨 = 마을이 있는 청크의 지역 레벨 (NPC 전리품과 같은 기준). 특수 티어 판정은 없다.
             ARPG.Item.EquipmentRollOptions stockRollOptions =
-                new ARPG.Item.EquipmentRollOptions(AR.s.Map.GetZoneAtWorld(v.Position));
+                new ARPG.Item.EquipmentRollOptions(AR.s.WorldMap.GetZoneAtWorld(v.Position));
 
             for (int i = 0; i < plan.Count; i++)
             {

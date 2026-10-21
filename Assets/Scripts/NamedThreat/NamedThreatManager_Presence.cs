@@ -212,6 +212,21 @@ namespace ARPG.NamedThreat
             view.RegisterTo(entity);
         }
 
+        /// <summary>
+        /// 던전 입장: 실체화된 네임드 엔티티를 모두 내린다 (DestroyTag, 필드에서 멀어질 때 TickPresence가 하는 처리와 같다).
+        /// 남겨 두면 SuspendExceptPlayer가 보관함에 넣고, 감독은 엔티티가 있는 동안 사라짐을 미루므로 던전 중 사라짐이 막힌다.
+        /// 퇴장 뒤 다시 만드는 것은 TickPresence가 평소대로 한다 (DUNGEON_WORLD_SIM_DESIGN §3.6).
+        /// </summary>
+        public void DespawnAllEntities()
+        {
+            _threatIdScratch.Clear();
+            foreach (KeyValuePair<int, int> pair in _entityByThreat)
+                _threatIdScratch.Add(pair.Key);
+            for (int i = 0; i < _threatIdScratch.Count; i++)
+                DespawnEntity(_threatIdScratch[i]);
+            _threatIdScratch.Clear();
+        }
+
         private void DespawnEntity(int threatId)
         {
             if (_entityByThreat.TryGetValue(threatId, out int entityId) == false)

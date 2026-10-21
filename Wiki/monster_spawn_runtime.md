@@ -92,7 +92,7 @@ biome의 `Any ∪ biome 전용` 풀에서 그룹마다 균등 샘플링한다.
 멈춘다. 던전 맵 컨텍스트의 청크는 던전 전용 생성으로 일찍 끝나 월드 스폰 슬롯을 만들지 않는다.
 청크 Expired 시 몬스터 정리(`ExpireChunkMonsters`)도 월드 컨텍스트에서만 호출한다. 2026-09-19
 던전 시스템 도입 때 바뀌었다. 던전 안의 몬스터 배치는 이 페이지 범위 밖이다.
-[src: Assets/Scripts/Common/System/System_MonsterSpawn.cs:L7, Assets/Scripts/Common/Interface/IWorldMapSystem.cs, Assets/Scripts/Manager/SystemManager.cs:L418-421, Assets/Scripts/Map/MapManager_Generator.cs:L259-264·L555-558]
+[src: Assets/Scripts/Common/System/System_MonsterSpawn.cs:L7, Assets/Scripts/Common/Interface/IWorldMapSystem.cs, Assets/Scripts/Manager/SystemManager.cs:L468-472, Assets/Scripts/Map/MapManager_Generator.cs:L259-264·L555-558]
 
 ## 3. 목표 생명주기
 

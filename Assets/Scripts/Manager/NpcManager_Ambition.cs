@@ -159,10 +159,11 @@ namespace ARPG.Npc
             if (village != null)
                 position = village.Position;
 
-            int chunkSize = _chunkSize > 0 ? _chunkSize : AR.s.Map.chunkSize;
+            // 월드 시뮬 경로라 던전 안에서도 월드 맵 Zone을 본다 (DUNGEON_WORLD_SIM §4)
+            int chunkSize = _chunkSize > 0 ? _chunkSize : AR.s.WorldMap.chunkSize;
             Vector2Int chunk = new Vector2Int(Mathf.FloorToInt(position.x / chunkSize),
                 Mathf.FloorToInt(position.y / chunkSize));
-            return AR.s.Map.GetZone(chunk);
+            return AR.s.WorldMap.GetZone(chunk);
         }
 
         /// <summary>

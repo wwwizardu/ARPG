@@ -162,6 +162,11 @@
     margin-top: 7px;
 }
 
+/* 작업 카드 4개(품질·진화·변화·엑잘티드)가 칸 높이를 넘으면 스크롤한다 */
+.forge-operation-scroll {
+    flex-grow: 1;
+}
+
 .forge-operation-card {
     margin-bottom: 12px;
     padding: 12px;

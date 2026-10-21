@@ -10,7 +10,8 @@ using UnityEngine;
 namespace ARPG.NamedThreat
 {
     /// <summary>
-    /// 감독 (NAMED_THREAT_DESIGN §4·§7·§8.1~§8.2). 게임은 System_NamedThreatDirector가 1초(실제)마다 플레이어 위치로 부르고,
+    /// 감독 (NAMED_THREAT_DESIGN §4·§7·§8.1~§8.2). 게임은 System_NamedThreatDirector가 1초(실제)마다 플레이어 위치로 부르고
+    /// (던전 안에서는 출현을 뺀 판정만, DUNGEON_WORLD_SIM_DESIGN §3.6),
     /// 진단은 같은 AdvanceDirector를 플레이어 위치를 흉내 내며 부른다 (live = false: 알림·저장 요청·엔티티 판단 없음).
     /// 출현 규칙은 마을과 시간으로만 판정한다 — 걸음 수 기준을 쓰지 않는다 (2026-10-18 사용자 결정).
     /// </summary>
@@ -21,9 +22,18 @@ namespace ARPG.NamedThreat
         {
             if (_initialized == false || AR.s.Npc == null || AR.s.Npc.NarrativeOwnerSelectionReady == false)
                 return;
-            if (TryGetPlayerPosition(out Vector2 player) == false)
-                return;
-            AdvanceDirector(now, player, true);
+            if (AR.s.Dungeon.IsInside == true)
+            {
+                // 던전 안에는 플레이어 월드 위치가 없다. 단계·사라짐·소문 주인·기록 정리는 게임 시간과 기록만 보므로 진행하고,
+                // 출현 판정만 건너뛴다 — 퇴장 뒤 첫 판정에서 평소처럼 본다 (DUNGEON_WORLD_SIM_DESIGN §3.6)
+                AdvanceRecords(now, true);
+            }
+            else
+            {
+                if (TryGetPlayerPosition(out Vector2 player) == false)
+                    return;
+                AdvanceDirector(now, player, true);
+            }
             RetryPendingSaves();
         }
 
@@ -32,6 +42,13 @@ namespace ARPG.NamedThreat
         /// referencePosition = 플레이어 위치. 그와 가장 가까운 마을에 붙은 네임드가 없고 간격이 지났으면 그 마을에 새 네임드가 나온다.
         /// </summary>
         public void AdvanceDirector(float now, Vector2 referencePosition, bool live)
+        {
+            AdvanceRecords(now, live);
+            TryAppear(now, referencePosition, live, false);
+        }
+
+        // 출현을 뺀 감독 판정: 단계 전이 → 사라짐 → 소문 주인 재배정 → 끝난 기록 정리. 플레이어 위치를 보지 않는다.
+        private void AdvanceRecords(float now, bool live)
         {
             NamedThreatWorldState state = State;
             if (state.NextAppearGameTime < 0f)
@@ -42,7 +59,6 @@ namespace ARPG.NamedThreat
             }
             AdvanceActiveThreats(now, live);
             PruneEndedRecords(now);
-            TryAppear(now, referencePosition, live, false);
         }
 
         private void AdvanceActiveThreats(float now, bool live)

@@ -832,6 +832,36 @@ namespace ARPG.EditorTools
                       three.Slots[1].DungeonId == idC1 && r7 == NpcDungeonCompletionResult.Completed,
                     $"규칙③ 3슬롯: 1번째 {r5}, 다른 슬롯(교체 1개 있음) {r6}, 교체된 슬롯 자신 재완료 {r7}");
 
+                // ④ 플레이어가 던전 안에 있어도 다른 던전의 NPC 완료는 막지 않는다 — 들어가 있는 던전만 ①로 막힌다
+                // (DUNGEON_WORLD_SIM_DESIGN §5). ActiveMap만 월드 맵으로 바꿔 IsInside를 켠다 (AR.s.Map은 그대로 월드 맵).
+                VillageDungeonSlots? insideProbe = FindCleanVillage(root, 2) ?? FindCleanVillage(root, 3);
+                if (insideProbe == null)
+                    throw new InvalidOperationException("던전 안 완료를 검사할 깨끗한 마을을 찾지 못했습니다.");
+                DungeonSlot activeSlot = insideProbe.Slots[1];
+                DungeonRecord activeRecord = new DungeonRecord { DungeonId = activeSlot.DungeonId, VillageId = insideProbe.VillageId,
+                    SlotIndex = activeSlot.SlotIndex, Generation = activeSlot.Generation };
+                string activeId = activeSlot.DungeonId;
+                string otherId = insideProbe.Slots[0].DungeonId;
+                FieldInfo activeMapField = GetField(dungeon, "<ActiveMap>k__BackingField");
+                object? activeMapBefore = activeMapField.GetValue(dungeon);
+                root.Dungeons.Add(activeRecord);
+                activeMapField.SetValue(dungeon, AR.s.WorldMap);
+                try
+                {
+                    bool inside = dm.IsInside;
+                    NpcDungeonCompletionResult r8 = dm.TryCompleteByNpc(insideProbe.VillageId, activeId, t0);
+                    NpcDungeonCompletionResult r9 = dm.TryCompleteByNpc(insideProbe.VillageId, otherId, t0);
+                    Check(inside == true && r8 == NpcDungeonCompletionResult.PlayerEntered && activeSlot.DungeonId == activeId,
+                        $"규칙④ 던전 안: 들어가 있는 던전은 거부 (IsInside={inside}, 결과 {r8})");
+                    Check(r9 == NpcDungeonCompletionResult.Completed && insideProbe.Slots[0].DungeonId != otherId,
+                        $"규칙④ 던전 안: 같은 마을의 다른 던전은 완료 (결과 {r9})");
+                }
+                finally
+                {
+                    activeMapField.SetValue(dungeon, activeMapBefore);
+                    root.Dungeons.Remove(activeRecord);
+                }
+
                 // 플레이어 완료 경로 불변: 기존 트랜잭션을 복제 상태에서 스테이징만 하고 롤백한다.
                 log.Append(VerifyPlayerCompletionPath(root, three, 2, worldSeed, t0, Check));
                 // 플레이어가 NPC 교체 세대를 완료하면 새 세대는 표시가 없다 (새 슬롯 객체 기본값)

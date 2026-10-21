@@ -32,6 +32,8 @@ namespace ARPG.Item
         UnsupportedOperation,
         CostDataInvalid,
         CommitFailed,
+        RequiresNormalGrade,    // 진화의 오브·품질 다시 굴리기는 일반 장비에만 (ITEM_DROP_BALANCE_DESIGN §5·§6.1)
+        RequiresAffixedGrade,   // 엑잘티드 오브는 마법·희귀 장비에만 — 일반은 진화의 오브부터 (§6.1)
     }
 
     public sealed class ItemEnchantmentRequest
@@ -72,6 +74,10 @@ namespace ARPG.Item
         public int ReplaceableAffixCount;
         public int RandomCandidateCount;
         public int SlotLimit = ItemEnchantmentRules.AFFIX_LIMIT;
+        public GlobalEnum.EquipmentGrade Grade;
+        public int CurrentQuality;
+        /// <summary>결과 옵션 티어에 마법 규칙(위 2단계 가중치 2배)을 쓰는지.</summary>
+        public bool UsesMagicRule;
     }
 
     public sealed class ItemEnchantmentResult
@@ -85,6 +91,8 @@ namespace ARPG.Item
         public int ConsumedMaterialItemId;
         public int ConsumedMaterialCount;
         public int ConsumedGold;
+        public int PreviousQuality;
+        public int NewQuality;
         public readonly List<EquipmentOptionSnapshot> BeforeOptions = new();
         public readonly List<EquipmentOptionSnapshot> AfterOptions = new();
     }
@@ -127,13 +135,18 @@ namespace ARPG.Item
                         || mod.TargetStat == GlobalEnum.Stat.LightningResist
                         || mod.TargetStat == GlobalEnum.Stat.PoisonResist
                         || mod.TargetStat == GlobalEnum.Stat.BloodingRate
-                        || mod.TargetStat == GlobalEnum.Stat.IgniteRate;
+                        || mod.TargetStat == GlobalEnum.Stat.IgniteRate
+                        // 드롭 보너스 (ITEM_DROP_BALANCE_DESIGN §8.3 ① 묶음) — 증가율 묶음이라 Add·Multiply 모두 %p
+                        || mod.TargetStat == GlobalEnum.Stat.ItemQuantity
+                        || mod.TargetStat == GlobalEnum.Stat.ItemRarity;
 
                 case GlobalEnum.ModEffectType.IncreasedStat:
                     return mod.TargetStat == GlobalEnum.Stat.AttackSpeedMul
                         || mod.TargetStat == GlobalEnum.Stat.CastSpeedMul
                         || mod.TargetStat == GlobalEnum.Stat.CriRateMul
-                        || mod.TargetStat == GlobalEnum.Stat.MoveSpeedMul;
+                        || mod.TargetStat == GlobalEnum.Stat.MoveSpeedMul
+                        || mod.TargetStat == GlobalEnum.Stat.ItemQuantity
+                        || mod.TargetStat == GlobalEnum.Stat.ItemRarity;
 
                 default:
                     return false;
@@ -180,111 +193,133 @@ namespace ARPG.Item
             return ItemEnchantmentFailureReason.None;
         }
 
-        public static List<ModTierTable> GetEligibleTiers(IReadOnlyList<ModTierTable> tiers,
-            int modId, int playerLevel, int itemTier)
+        /// <summary>
+        /// 작업 결과의 등급 기준으로 옵션을 새로 붙일 수 있는 슬롯과 마법 규칙 여부를 정한다 (§6.1).
+        /// - 진화: 일반 → 마법. 접두·접미 모두 후보, 마법 규칙.
+        /// - 엑잘티드: 마법은 비어 있는 반대쪽 마법 칸을 먼저 채운다(결과도 마법이라 마법 규칙).
+        ///   접두 1 + 접미 1인 마법과 희귀는 각 슬롯 상한 3까지, 일반 규칙.
+        /// - 변화: 같은 슬롯 교체라 등급이 그대로다. 마법이면 마법 규칙.
+        /// </summary>
+        public static void ResolveAffixTargets(GlobalEnum.ItemEnchantmentOperation operation,
+            int prefixCount, int postfixCount, out bool allowPrefix, out bool allowPostfix, out bool magicRule)
         {
-            List<ModTierTable> result = new List<ModTierTable>();
-            for (int i = 0; i < tiers.Count; i++)
+            GlobalEnum.EquipmentGrade grade = EquipmentData.ResolveGrade(prefixCount, postfixCount);
+            switch (operation)
             {
-                ModTierTable tier = tiers[i];
-                if (tier.ModId != modId
-                    || tier.RequiredLevel > playerLevel
-                    || tier.Tier > itemTier
-                    || tier.Weight <= 0
-                    || tier.Min1 < 0 || tier.Min1 > tier.Max1
-                    || tier.Min2 < 0 || tier.Min2 > tier.Max2
-                    || tier.Max1 > ushort.MaxValue || tier.Max2 > ushort.MaxValue)
-                    continue;
-                result.Add(tier);
+                case GlobalEnum.ItemEnchantmentOperation.EvolveToMagic:
+                    allowPrefix = true;
+                    allowPostfix = true;
+                    magicRule = true;
+                    return;
+
+                case GlobalEnum.ItemEnchantmentOperation.AddAffix:
+                    if (grade == GlobalEnum.EquipmentGrade.Magic && prefixCount + postfixCount == 1)
+                    {
+                        allowPrefix = prefixCount == 0;
+                        allowPostfix = postfixCount == 0;
+                        magicRule = true;
+                        return;
+                    }
+                    allowPrefix = prefixCount < AFFIX_LIMIT;
+                    allowPostfix = postfixCount < AFFIX_LIMIT;
+                    magicRule = false;
+                    return;
+
+                default:
+                    allowPrefix = true;
+                    allowPostfix = true;
+                    magicRule = grade == GlobalEnum.EquipmentGrade.Magic;
+                    return;
             }
-            result.Sort((a, b) =>
-            {
-                int tierCompare = a.Tier.CompareTo(b.Tier);
-                return tierCompare != 0 ? tierCompare : a.Id.CompareTo(b.Id);
-            });
-            return result;
         }
 
-        public static ModTierTable? SelectWeightedTier(
-            IReadOnlyList<ModTierTable> eligibleTiers, Func<int, int> randomIndex)
+        /// <summary>
+        /// 한 Mod의 티어 후보와 가중치. 아이템 레벨 규칙(ItemLevelModTierRules, D9)을 쓰고, 아이템 레벨 0은 1로 본다.
+        /// 두 목록은 비운 뒤 채운다. 후보 수를 돌려준다.
+        /// </summary>
+        public static int BuildEligibleTiers(IReadOnlyList<ModTierTable> tiers, int modId, int itemLevel,
+            bool magicRule, List<ModTierTable> outTiers, List<int> outWeights)
         {
-            int totalWeight = 0;
-            for (int i = 0; i < eligibleTiers.Count; i++)
+            List<ModTierTable> modTiers = new List<ModTierTable>();
+            for (int i = 0; i < tiers.Count; i++)
             {
-                int weight = eligibleTiers[i].Weight;
-                if (weight <= 0 || totalWeight > int.MaxValue - weight)
-                    return null;
-                totalWeight += weight;
+                if (tiers[i].ModId == modId)
+                    modTiers.Add(tiers[i]);
             }
-            if (totalWeight <= 0)
-                return null;
-
-            int roll = randomIndex(totalWeight);
-            if (roll < 0 || roll >= totalWeight)
-                return null;
-            int accumulated = 0;
-            for (int i = 0; i < eligibleTiers.Count; i++)
-            {
-                accumulated += eligibleTiers[i].Weight;
-                if (roll < accumulated)
-                    return eligibleTiers[i];
-            }
-            return null;
+            return ItemLevelModTierRules.BuildNormalTierCandidates(modTiers, itemLevel, outTiers, outWeights, magicRule);
         }
     }
 
     /// <summary>
-    /// 서비스의 전체 검증 후 옵션·재료·Gold를 한 번에 커밋하는 메모리 트랜잭션.
+    /// 서비스의 전체 검증 후 옵션·품질·재료·Gold를 한 번에 커밋하는 메모리 트랜잭션.
     /// </summary>
     public static class ItemEnchantmentTransaction
     {
         public static bool TryCommit(EquipmentData equipment,
             GlobalEnum.ItemEnchantmentOperation operation, int replacementIndex,
-            ModInstance appliedMod, Inventory inventory, PlayerData playerData,
+            ModInstance? appliedMod, int newQuality, Inventory inventory, PlayerData playerData,
             ItemEnchantmentCostTable cost,
             out ItemEnchantmentFailureReason failureReason)
         {
             failureReason = ItemEnchantmentFailureReason.None;
+            bool isQuality = operation == GlobalEnum.ItemEnchantmentOperation.RerollQuality;
             if (operation != GlobalEnum.ItemEnchantmentOperation.ReplaceAffix
-                && operation != GlobalEnum.ItemEnchantmentOperation.AddAffix)
+                && operation != GlobalEnum.ItemEnchantmentOperation.AddAffix
+                && operation != GlobalEnum.ItemEnchantmentOperation.EvolveToMagic
+                && isQuality == false)
             {
                 failureReason = ItemEnchantmentFailureReason.UnsupportedOperation;
                 return false;
             }
-            if (cost.Operation != operation || cost.MaterialItemId <= 0
-                || cost.MaterialCount <= 0 || cost.GoldCost < 0)
+            if (cost.Operation != operation || cost.GoldCost < 0
+                || (cost.IsGoldOnly == false && (cost.MaterialItemId <= 0 || cost.MaterialCount <= 0))
+                || cost.IsGoldOnly != isQuality)
             {
                 failureReason = ItemEnchantmentFailureReason.CostDataInvalid;
                 return false;
             }
-            if (appliedMod.Slot != GlobalEnum.ModSlot.Prefix
-                && appliedMod.Slot != GlobalEnum.ModSlot.Postfix)
+
+            if (isQuality == true)
             {
-                failureReason = ItemEnchantmentFailureReason.ImmutableSlot;
-                return false;
-            }
-            if (operation == GlobalEnum.ItemEnchantmentOperation.ReplaceAffix
-                && (replacementIndex < 0 || replacementIndex >= equipment.Mods.Count
-                    || equipment.Mods[replacementIndex].Slot != appliedMod.Slot))
-            {
-                failureReason = ItemEnchantmentFailureReason.TargetChanged;
-                return false;
-            }
-            if (operation == GlobalEnum.ItemEnchantmentOperation.AddAffix)
-            {
-                int slotCount = 0;
-                for (int i = 0; i < equipment.Mods.Count; i++)
+                if (equipment.GetGrade() != GlobalEnum.EquipmentGrade.Normal)
                 {
-                    if (equipment.Mods[i].Slot == appliedMod.Slot)
-                        slotCount++;
-                }
-                if (slotCount >= ItemEnchantmentRules.AFFIX_LIMIT)
-                {
-                    failureReason = ItemEnchantmentFailureReason.AffixLimitReached;
+                    failureReason = ItemEnchantmentFailureReason.RequiresNormalGrade;
                     return false;
                 }
             }
-            if (inventory.CanConsumeItem(cost.MaterialItemId, cost.MaterialCount) == false)
+            else
+            {
+                if (appliedMod == null
+                    || (appliedMod.Slot != GlobalEnum.ModSlot.Prefix && appliedMod.Slot != GlobalEnum.ModSlot.Postfix))
+                {
+                    failureReason = ItemEnchantmentFailureReason.ImmutableSlot;
+                    return false;
+                }
+                if (operation == GlobalEnum.ItemEnchantmentOperation.ReplaceAffix
+                    && (replacementIndex < 0 || replacementIndex >= equipment.Mods.Count
+                        || equipment.Mods[replacementIndex].Slot != appliedMod.Slot))
+                {
+                    failureReason = ItemEnchantmentFailureReason.TargetChanged;
+                    return false;
+                }
+                if (operation != GlobalEnum.ItemEnchantmentOperation.ReplaceAffix)
+                {
+                    int slotCount = 0;
+                    for (int i = 0; i < equipment.Mods.Count; i++)
+                    {
+                        if (equipment.Mods[i].Slot == appliedMod.Slot)
+                            slotCount++;
+                    }
+                    if (slotCount >= ItemEnchantmentRules.AFFIX_LIMIT)
+                    {
+                        failureReason = ItemEnchantmentFailureReason.AffixLimitReached;
+                        return false;
+                    }
+                }
+            }
+
+            if (cost.IsGoldOnly == false
+                && inventory.CanConsumeItem(cost.MaterialItemId, cost.MaterialCount) == false)
             {
                 failureReason = ItemEnchantmentFailureReason.MaterialMissing;
                 return false;
@@ -294,7 +329,8 @@ namespace ARPG.Item
                 failureReason = ItemEnchantmentFailureReason.GoldInsufficient;
                 return false;
             }
-            if (inventory.TryConsumeItem(cost.MaterialItemId, cost.MaterialCount) == false)
+            if (cost.IsGoldOnly == false
+                && inventory.TryConsumeItem(cost.MaterialItemId, cost.MaterialCount) == false)
             {
                 failureReason = ItemEnchantmentFailureReason.CommitFailed;
                 return false;
@@ -302,10 +338,12 @@ namespace ARPG.Item
 
             // 기본 아이템은 옵션이 바뀌는 순간 일반 아이템이 된다 — 이후 전체 옵션이 저장된다 (D122 안전망).
             equipment.BasicItemId = 0;
-            if (operation == GlobalEnum.ItemEnchantmentOperation.ReplaceAffix)
-                equipment.Mods[replacementIndex] = appliedMod;
+            if (isQuality == true)
+                equipment.Quality = EquipmentQualityRules.ClampQuality(newQuality);
+            else if (operation == GlobalEnum.ItemEnchantmentOperation.ReplaceAffix)
+                equipment.Mods[replacementIndex] = appliedMod!;
             else
-                equipment.Mods.Add(appliedMod);
+                equipment.Mods.Add(appliedMod!);
             AR.s?.Data?.MarkPlayerSaveDirty(playerData, PlayerSaveGroup.Progress | PlayerSaveGroup.Inventory | PlayerSaveGroup.Equipment);
             playerData.Gold -= cost.GoldCost;
             equipment.InvalidateWeaponStats();
@@ -315,7 +353,8 @@ namespace ARPG.Item
 
     /// <summary>
     /// Forge UI가 대상과 작업 종류만 넘기면 실제 제련소·장비·랜덤 후보·비용을
-    /// 다시 검증하고 실행 시에만 옵션 종류·티어·수치를 롤한다.
+    /// 다시 검증하고 실행 시에만 옵션 종류·티어·수치·품질을 롤한다.
+    /// 옵션 티어는 장비의 아이템 레벨로 정한다(ITEM_DROP_BALANCE_DESIGN D9). 마법 상태 결과는 마법 규칙을 쓴다.
     /// </summary>
     public sealed class ItemEnchantmentService
     {
@@ -323,6 +362,7 @@ namespace ARPG.Item
         {
             public ModTable Mod = null!;
             public readonly List<ModTierTable> EligibleTiers = new();
+            public readonly List<int> TierWeights = new();
         }
 
         private sealed class ReplacementTarget
@@ -399,16 +439,16 @@ namespace ARPG.Item
         }
 
         /// <summary>
-        /// 실제 랜덤 선택·커밋·저장 콜백 경로를 AR singleton 없이 검증한다.
+        /// 실제 랜덤 선택·커밋·저장 콜백 경로를 AR singleton 없이 검증한다. itemLevel은 장비의 아이템 레벨 자리다.
         /// </summary>
         public ItemEnchantmentResult ExecuteForDiagnostics(EquipmentData equipment,
             Inventory inventory, PlayerData playerData,
-            GlobalEnum.ItemEnchantmentOperation operation, int itemTier,
+            GlobalEnum.ItemEnchantmentOperation operation, int itemLevel,
             IReadOnlyList<ModTable> modPool, IReadOnlyList<ModTierTable> tiers,
             ItemEnchantmentCostTable cost, Func<int, ModTable?> tableResolver)
         {
             return ExecuteValidated(equipment, inventory, playerData, operation,
-                itemTier, modPool, tiers, cost, tableResolver);
+                itemLevel, modPool, tiers, cost, tableResolver);
         }
 #endif
 
@@ -484,7 +524,8 @@ namespace ARPG.Item
 
             ItemEnchantmentCostTable? cost = runtime.Data.GetItemEnchantmentCost(
                 request.Operation);
-            if (cost == null || cost.IsValid == false || cost.MaterialItem == null
+            if (cost == null || cost.IsValid == false
+                || (cost.IsGoldOnly == false && cost.MaterialItem == null)
                 || cost.Operation != request.Operation)
             {
                 preview.FailureReason = ItemEnchantmentFailureReason.CostDataInvalid;
@@ -495,7 +536,8 @@ namespace ARPG.Item
             preview.RequiredMaterialCount = cost.MaterialCount;
             preview.BaseGoldCost = cost.GoldCost;
             preview.FinalGoldCost = cost.GoldCost;
-            preview.OwnedMaterialCount = inventory.GetTotalQuantity(cost.MaterialItemId);
+            preview.OwnedMaterialCount = cost.IsGoldOnly == true
+                ? 0 : inventory.GetTotalQuantity(cost.MaterialItemId);
             preview.OwnedGold = playerData.Gold;
             if (forgeTier < cost.RequiredForgeTier)
             {
@@ -509,53 +551,66 @@ namespace ARPG.Item
                     out int prefixCount, out int postfixCount);
             preview.PrefixCount = prefixCount;
             preview.PostfixCount = postfixCount;
+            preview.Grade = EquipmentData.ResolveGrade(prefixCount, postfixCount);
+            preview.CurrentQuality = equipment.Quality;
             if (stateFailure != ItemEnchantmentFailureReason.None)
             {
                 preview.FailureReason = stateFailure;
                 return preview;
             }
 
-            List<ModTable> modPool = GetRuntimeModPool(equipment);
-            List<ModTierTable> tiers = GetRuntimeTiers(modPool);
-            if (request.Operation == GlobalEnum.ItemEnchantmentOperation.ReplaceAffix)
+            ItemEnchantmentFailureReason gradeFailure = ValidateGrade(request.Operation, preview.Grade);
+            if (gradeFailure != ItemEnchantmentFailureReason.None)
             {
-                List<ReplacementTarget> targets = BuildReplacementTargets(equipment,
-                    modPool, tiers, playerData.Level, targetItem.Table!.Tier,
-                    runtime.Data.GetMod);
-                preview.ReplaceableAffixCount = targets.Count;
-                preview.RandomCandidateCount = CountReplacementCandidates(targets);
-                if (prefixCount + postfixCount == 0)
-                {
-                    preview.FailureReason = ItemEnchantmentFailureReason.NoAffixAvailable;
-                    return preview;
-                }
-                if (targets.Count == 0)
-                {
-                    preview.FailureReason = ItemEnchantmentFailureReason.NoRandomCandidate;
-                    return preview;
-                }
+                preview.FailureReason = gradeFailure;
+                return preview;
             }
-            else
+
+            if (request.Operation != GlobalEnum.ItemEnchantmentOperation.RerollQuality)
             {
-                if (prefixCount >= ItemEnchantmentRules.AFFIX_LIMIT
-                    && postfixCount >= ItemEnchantmentRules.AFFIX_LIMIT)
+                ItemEnchantmentRules.ResolveAffixTargets(request.Operation, prefixCount, postfixCount,
+                    out bool allowPrefix, out bool allowPostfix, out bool magicRule);
+                preview.UsesMagicRule = magicRule;
+                List<ModTable> modPool = GetRuntimeModPool(equipment);
+                List<ModTierTable> tiers = GetRuntimeTiers(modPool);
+                if (request.Operation == GlobalEnum.ItemEnchantmentOperation.ReplaceAffix)
                 {
-                    preview.FailureReason = ItemEnchantmentFailureReason.AffixLimitReached;
-                    return preview;
+                    List<ReplacementTarget> targets = BuildReplacementTargets(equipment,
+                        modPool, tiers, equipment.ItemLevel, magicRule, runtime.Data.GetMod);
+                    preview.ReplaceableAffixCount = targets.Count;
+                    preview.RandomCandidateCount = CountReplacementCandidates(targets);
+                    if (prefixCount + postfixCount == 0)
+                    {
+                        preview.FailureReason = ItemEnchantmentFailureReason.NoAffixAvailable;
+                        return preview;
+                    }
+                    if (targets.Count == 0)
+                    {
+                        preview.FailureReason = ItemEnchantmentFailureReason.NoRandomCandidate;
+                        return preview;
+                    }
                 }
-                List<RandomModCandidate> candidates = BuildAdditionCandidates(equipment,
-                    modPool, tiers, playerData.Level, targetItem.Table!.Tier,
-                    runtime.Data.GetMod, prefixCount, postfixCount);
-                preview.RandomCandidateCount = candidates.Count;
-                if (candidates.Count == 0)
+                else
                 {
-                    preview.FailureReason = ItemEnchantmentFailureReason.NoRandomCandidate;
-                    return preview;
+                    if (allowPrefix == false && allowPostfix == false)
+                    {
+                        preview.FailureReason = ItemEnchantmentFailureReason.AffixLimitReached;
+                        return preview;
+                    }
+                    List<RandomModCandidate> candidates = BuildAdditionCandidates(equipment,
+                        modPool, tiers, equipment.ItemLevel, magicRule, runtime.Data.GetMod,
+                        allowPrefix, allowPostfix);
+                    preview.RandomCandidateCount = candidates.Count;
+                    if (candidates.Count == 0)
+                    {
+                        preview.FailureReason = ItemEnchantmentFailureReason.NoRandomCandidate;
+                        return preview;
+                    }
                 }
             }
 
             preview.IsEligible = true;
-            if (preview.OwnedMaterialCount < cost.MaterialCount)
+            if (cost.IsGoldOnly == false && preview.OwnedMaterialCount < cost.MaterialCount)
             {
                 preview.FailureReason = ItemEnchantmentFailureReason.MaterialMissing;
                 return preview;
@@ -590,20 +645,21 @@ namespace ARPG.Item
             List<ModTable> modPool = GetRuntimeModPool(targetItem.Equipment);
             List<ModTierTable> tiers = GetRuntimeTiers(modPool);
             return ExecuteValidated(targetItem.Equipment, inventory, playerData,
-                request.Operation, targetItem.Table.Tier, modPool, tiers, cost,
+                request.Operation, targetItem.Equipment.ItemLevel, modPool, tiers, cost,
                 AR.s.Data.GetMod);
         }
 
         private ItemEnchantmentResult ExecuteValidated(EquipmentData equipment,
             Inventory inventory, PlayerData playerData,
-            GlobalEnum.ItemEnchantmentOperation operation, int itemTier,
+            GlobalEnum.ItemEnchantmentOperation operation, int itemLevel,
             IReadOnlyList<ModTable> modPool, IReadOnlyList<ModTierTable> tiers,
             ItemEnchantmentCostTable cost, Func<int, ModTable?> tableResolver)
         {
             if (IsSupportedOperation(operation) == false)
                 return Failure(ItemEnchantmentFailureReason.UnsupportedOperation);
-            if (cost.Operation != operation || cost.MaterialItemId <= 0
-                || cost.MaterialCount <= 0 || cost.GoldCost < 0)
+            bool isQuality = operation == GlobalEnum.ItemEnchantmentOperation.RerollQuality;
+            if (cost.Operation != operation || cost.GoldCost < 0 || cost.IsGoldOnly != isQuality
+                || (cost.IsGoldOnly == false && (cost.MaterialItemId <= 0 || cost.MaterialCount <= 0)))
                 return Failure(ItemEnchantmentFailureReason.CostDataInvalid);
 
             ItemEnchantmentFailureReason stateFailure =
@@ -611,55 +667,70 @@ namespace ARPG.Item
                     out int prefixCount, out int postfixCount);
             if (stateFailure != ItemEnchantmentFailureReason.None)
                 return Failure(stateFailure);
-
-            int replacementIndex = -1;
-            RandomModCandidate? selectedCandidate;
-            if (operation == GlobalEnum.ItemEnchantmentOperation.ReplaceAffix)
-            {
-                List<ReplacementTarget> targets = BuildReplacementTargets(equipment,
-                    modPool, tiers, playerData.Level, itemTier, tableResolver);
-                if (prefixCount + postfixCount == 0)
-                    return Failure(ItemEnchantmentFailureReason.NoAffixAvailable);
-                ReplacementTarget? target = SelectRandom(targets);
-                if (target == null)
-                    return Failure(ItemEnchantmentFailureReason.NoRandomCandidate);
-                replacementIndex = target.ModIndex;
-                selectedCandidate = SelectRandom(target.Candidates);
-            }
-            else
-            {
-                if (prefixCount >= ItemEnchantmentRules.AFFIX_LIMIT
-                    && postfixCount >= ItemEnchantmentRules.AFFIX_LIMIT)
-                    return Failure(ItemEnchantmentFailureReason.AffixLimitReached);
-                List<RandomModCandidate> candidates = BuildAdditionCandidates(equipment,
-                    modPool, tiers, playerData.Level, itemTier, tableResolver,
-                    prefixCount, postfixCount);
-                selectedCandidate = SelectRandom(candidates);
-            }
-            if (selectedCandidate == null)
-                return Failure(ItemEnchantmentFailureReason.NoRandomCandidate);
-
-            ModTierTable? selectedTier = ItemEnchantmentRules.SelectWeightedTier(
-                selectedCandidate.EligibleTiers, _randomIndex);
-            if (selectedTier == null)
-                return Failure(ItemEnchantmentFailureReason.TierUnavailable);
-
-            ModInstance appliedMod = new ModInstance
-            {
-                ModTableId = selectedCandidate.Mod.Id,
-                Slot = selectedCandidate.Mod.Slot,
-                Tier = selectedTier.Tier,
-                Value1 = (ushort)RollInclusive(selectedTier.Min1, selectedTier.Max1),
-                Value2 = (ushort)RollInclusive(selectedTier.Min2, selectedTier.Max2),
-                Table = selectedCandidate.Mod,
-            };
+            ItemEnchantmentFailureReason gradeFailure = ValidateGrade(operation,
+                EquipmentData.ResolveGrade(prefixCount, postfixCount));
+            if (gradeFailure != ItemEnchantmentFailureReason.None)
+                return Failure(gradeFailure);
 
             List<EquipmentOptionSnapshot> before = CreateOptionSnapshots(
                 equipment, tableResolver);
+            int previousQuality = equipment.Quality;
+            int replacementIndex = -1;
+            ModInstance? appliedMod = null;
+            int newQuality = previousQuality;
+            if (isQuality == true)
+            {
+                // 품질 다시 굴리기: 0~20에서 균등하게 새로 정한다. 지금보다 낮아질 수 있다 (§5)
+                newQuality = EquipmentQualityRules.MIN_QUALITY
+                    + _randomIndex(EquipmentQualityRules.MAX_QUALITY - EquipmentQualityRules.MIN_QUALITY + 1);
+            }
+            else
+            {
+                ItemEnchantmentRules.ResolveAffixTargets(operation, prefixCount, postfixCount,
+                    out bool allowPrefix, out bool allowPostfix, out bool magicRule);
+                RandomModCandidate? selectedCandidate;
+                if (operation == GlobalEnum.ItemEnchantmentOperation.ReplaceAffix)
+                {
+                    List<ReplacementTarget> targets = BuildReplacementTargets(equipment,
+                        modPool, tiers, itemLevel, magicRule, tableResolver);
+                    if (prefixCount + postfixCount == 0)
+                        return Failure(ItemEnchantmentFailureReason.NoAffixAvailable);
+                    ReplacementTarget? target = SelectRandom(targets);
+                    if (target == null)
+                        return Failure(ItemEnchantmentFailureReason.NoRandomCandidate);
+                    replacementIndex = target.ModIndex;
+                    selectedCandidate = SelectRandom(target.Candidates);
+                }
+                else
+                {
+                    if (allowPrefix == false && allowPostfix == false)
+                        return Failure(ItemEnchantmentFailureReason.AffixLimitReached);
+                    List<RandomModCandidate> candidates = BuildAdditionCandidates(equipment,
+                        modPool, tiers, itemLevel, magicRule, tableResolver, allowPrefix, allowPostfix);
+                    selectedCandidate = SelectRandom(candidates);
+                }
+                if (selectedCandidate == null)
+                    return Failure(ItemEnchantmentFailureReason.NoRandomCandidate);
+
+                ModTierTable? selectedTier = SelectWeightedTier(selectedCandidate);
+                if (selectedTier == null)
+                    return Failure(ItemEnchantmentFailureReason.TierUnavailable);
+
+                appliedMod = new ModInstance
+                {
+                    ModTableId = selectedCandidate.Mod.Id,
+                    Slot = selectedCandidate.Mod.Slot,
+                    Tier = selectedTier.Tier,
+                    Value1 = (ushort)RollInclusive(selectedTier.Min1, selectedTier.Max1),
+                    Value2 = (ushort)RollInclusive(selectedTier.Min2, selectedTier.Max2),
+                    Table = selectedCandidate.Mod,
+                };
+            }
+
             EquipmentOptionSnapshot? replaced = replacementIndex >= 0
                 ? CreateSnapshot(equipment.Mods[replacementIndex]) : null;
             if (ItemEnchantmentTransaction.TryCommit(equipment, operation,
-                    replacementIndex, appliedMod, inventory, playerData, cost,
+                    replacementIndex, appliedMod, newQuality, inventory, playerData, cost,
                     out ItemEnchantmentFailureReason commitFailure) == false)
                 return Failure(commitFailure);
 
@@ -671,10 +742,12 @@ namespace ARPG.Item
                 FailureReason = ItemEnchantmentFailureReason.None,
                 ResolvedOperation = operation,
                 ReplacedMod = replaced,
-                AppliedMod = CreateSnapshot(appliedMod),
+                AppliedMod = appliedMod != null ? CreateSnapshot(appliedMod) : null,
                 ConsumedMaterialItemId = cost.MaterialItemId,
                 ConsumedMaterialCount = cost.MaterialCount,
                 ConsumedGold = cost.GoldCost,
+                PreviousQuality = previousQuality,
+                NewQuality = equipment.Quality,
             };
             result.BeforeOptions.AddRange(before);
             result.AfterOptions.AddRange(after);
@@ -693,7 +766,7 @@ namespace ARPG.Item
 
         private List<ReplacementTarget> BuildReplacementTargets(
             EquipmentData equipment, IReadOnlyList<ModTable> modPool,
-            IReadOnlyList<ModTierTable> tiers, int playerLevel, int itemTier,
+            IReadOnlyList<ModTierTable> tiers, int itemLevel, bool magicRule,
             Func<int, ModTable?> tableResolver)
         {
             List<ReplacementTarget> targets = new List<ReplacementTarget>();
@@ -716,16 +789,13 @@ namespace ARPG.Item
                             tableResolver) == true)
                         continue;
 
-                    List<ModTierTable> eligibleTiers =
-                        ItemEnchantmentRules.GetEligibleTiers(tiers, candidate.Id,
-                            playerLevel, itemTier);
-                    if (eligibleTiers.Count == 0)
-                        continue;
                     RandomModCandidate randomCandidate = new RandomModCandidate
                     {
                         Mod = candidate,
                     };
-                    randomCandidate.EligibleTiers.AddRange(eligibleTiers);
+                    if (ItemEnchantmentRules.BuildEligibleTiers(tiers, candidate.Id, itemLevel, magicRule,
+                            randomCandidate.EligibleTiers, randomCandidate.TierWeights) == 0)
+                        continue;
                     target.Candidates.Add(randomCandidate);
                 }
                 if (target.Candidates.Count > 0)
@@ -736,8 +806,8 @@ namespace ARPG.Item
 
         private List<RandomModCandidate> BuildAdditionCandidates(
             EquipmentData equipment, IReadOnlyList<ModTable> modPool,
-            IReadOnlyList<ModTierTable> tiers, int playerLevel, int itemTier,
-            Func<int, ModTable?> tableResolver, int prefixCount, int postfixCount)
+            IReadOnlyList<ModTierTable> tiers, int itemLevel, bool magicRule,
+            Func<int, ModTable?> tableResolver, bool allowPrefix, bool allowPostfix)
         {
             List<RandomModCandidate> result = new List<RandomModCandidate>();
             HashSet<int> addedModIds = new HashSet<int>();
@@ -747,27 +817,53 @@ namespace ARPG.Item
                 if (addedModIds.Add(candidate.Id) == false
                     || IsValidRandomMod(candidate, equipment) == false)
                     continue;
-                if (candidate.Slot == GlobalEnum.ModSlot.Prefix
-                    && prefixCount >= ItemEnchantmentRules.AFFIX_LIMIT)
+                if (candidate.Slot == GlobalEnum.ModSlot.Prefix && allowPrefix == false)
                     continue;
-                if (candidate.Slot == GlobalEnum.ModSlot.Postfix
-                    && postfixCount >= ItemEnchantmentRules.AFFIX_LIMIT)
+                if (candidate.Slot == GlobalEnum.ModSlot.Postfix && allowPostfix == false)
                     continue;
                 if (HasGroupCollision(equipment, candidate, -1, tableResolver) == true)
                     continue;
 
-                List<ModTierTable> eligibleTiers = ItemEnchantmentRules.GetEligibleTiers(
-                    tiers, candidate.Id, playerLevel, itemTier);
-                if (eligibleTiers.Count == 0)
-                    continue;
                 RandomModCandidate randomCandidate = new RandomModCandidate
                 {
                     Mod = candidate,
                 };
-                randomCandidate.EligibleTiers.AddRange(eligibleTiers);
+                if (ItemEnchantmentRules.BuildEligibleTiers(tiers, candidate.Id, itemLevel, magicRule,
+                        randomCandidate.EligibleTiers, randomCandidate.TierWeights) == 0)
+                    continue;
                 result.Add(randomCandidate);
             }
             return result;
+        }
+
+        private ModTierTable? SelectWeightedTier(RandomModCandidate candidate)
+        {
+            int totalWeight = ItemLevelModTierRules.GetTotalWeight(candidate.TierWeights);
+            if (totalWeight <= 0)
+                return null;
+            int roll = _randomIndex(totalWeight);
+            if (roll < 0 || roll >= totalWeight)
+                return null;
+            return candidate.EligibleTiers[ItemLevelModTierRules.SelectWeightedIndex(candidate.TierWeights, roll)];
+        }
+
+        private static ItemEnchantmentFailureReason ValidateGrade(
+            GlobalEnum.ItemEnchantmentOperation operation, GlobalEnum.EquipmentGrade grade)
+        {
+            switch (operation)
+            {
+                case GlobalEnum.ItemEnchantmentOperation.EvolveToMagic:
+                case GlobalEnum.ItemEnchantmentOperation.RerollQuality:
+                    return grade == GlobalEnum.EquipmentGrade.Normal
+                        ? ItemEnchantmentFailureReason.None
+                        : ItemEnchantmentFailureReason.RequiresNormalGrade;
+                case GlobalEnum.ItemEnchantmentOperation.AddAffix:
+                    return grade == GlobalEnum.EquipmentGrade.Normal
+                        ? ItemEnchantmentFailureReason.RequiresAffixedGrade
+                        : ItemEnchantmentFailureReason.None;
+                default:
+                    return ItemEnchantmentFailureReason.None;
+            }
         }
 
         private static bool IsValidRandomMod(ModTable mod, EquipmentData equipment)
@@ -852,7 +948,9 @@ namespace ARPG.Item
             GlobalEnum.ItemEnchantmentOperation operation)
         {
             return operation == GlobalEnum.ItemEnchantmentOperation.ReplaceAffix
-                || operation == GlobalEnum.ItemEnchantmentOperation.AddAffix;
+                || operation == GlobalEnum.ItemEnchantmentOperation.AddAffix
+                || operation == GlobalEnum.ItemEnchantmentOperation.EvolveToMagic
+                || operation == GlobalEnum.ItemEnchantmentOperation.RerollQuality;
         }
 
         private static ItemEnchantmentFailureReason ValidateTarget(ItemData? targetItem,

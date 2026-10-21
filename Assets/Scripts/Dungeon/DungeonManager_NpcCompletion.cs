@@ -13,11 +13,10 @@ namespace ARPG.Dungeon
         NoSlot,
         // 원정 중에 그 슬롯의 세대가 이미 넘어갔다 (플레이어 완료 또는 다른 NPC 완료)
         DungeonChanged,
-        // 보호 규칙: 플레이어가 던전 안에 있음 (NPC 시뮬레이션이 멈추므로 보통 도달하지 않는다)
-        PlayerInside,
         // 입장·배치 저장 트랜잭션 진행 중 — 슬롯 객체를 붙잡고 있는 비동기 작업과 겹치지 않게 한다
         Busy,
-        // 보호 규칙 ①: 플레이어가 입장한 던전 (DungeonRecord 존재)
+        // 보호 규칙 ①: 플레이어가 입장한 던전 (DungeonRecord 존재). 지금 들어가 있는 던전도 입장 때 기록이 생겨 여기서 막힌다.
+        // 플레이어가 던전 안에 있다는 이유만으로는 막지 않는다 (DUNGEON_WORLD_SIM_DESIGN §5)
         PlayerEntered,
         // 보호 규칙 ②: 마을당 NPC 완료 쿨다운
         VillageCooldown,
@@ -144,7 +143,8 @@ namespace ARPG.Dungeon
         /// <summary>
         /// 보호 규칙만 평가한다 (슬롯을 바꾸지 않음). 진단·검증용으로도 쓴다.
         /// ① 플레이어가 입장한 던전(DungeonRecord 존재) ② 마을당 72h 쿨다운 ③ 이번 완료 뒤 NPC 교체 슬롯이 절반 초과
-        /// + 플레이어가 던전 안 / 저장 트랜잭션 진행 중이면 거부.
+        /// + 저장 트랜잭션 진행 중이면 거부. 플레이어가 다른 던전 안에 있어도 거부하지 않는다 — 슬롯 교체는 입구 역인덱스를
+        /// 다음 TickPlacement(퇴장 뒤)로 미루고, 월드 입구 표현은 이미 청크 비활성화로 내려가 있다 (DUNGEON_WORLD_SIM_DESIGN §5).
         /// </summary>
         public NpcDungeonCompletionResult EvaluateNpcCompletion(int villageId, string dungeonId, float gameTime)
         {
@@ -154,8 +154,6 @@ namespace ARPG.Dungeon
                 return NpcDungeonCompletionResult.NoSlot;
             if (TryFindVillageSlot(villageId, dungeonId, out _, out DungeonSlot slot) == false)
                 return NpcDungeonCompletionResult.DungeonChanged;
-            if (IsInside == true)
-                return NpcDungeonCompletionResult.PlayerInside;
             if (_busy == true || _recoveryRequired == true)
                 return NpcDungeonCompletionResult.Busy;
             if (FindRecord(slot.DungeonId) != null)

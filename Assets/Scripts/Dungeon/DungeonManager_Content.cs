@@ -85,6 +85,10 @@ namespace ARPG.Dungeon
                 RemoveDungeonEntity(chestId, objectId);
                 _chests.Remove(objectId);
             }
+            // 골드에 더해 공통 드롭 판정 — 아이템은 상자 자리에 떨어진다 (ITEM_DROP_BALANCE_DESIGN §7.6)
+            DungeonObject chest = FindObject(objectId);
+            if (chest != null)
+                RollChestDrops(chest);
             Notify($"상자를 열었습니다. 골드 +{_active.ChestGold}");
             return true;
         }
@@ -158,8 +162,8 @@ namespace ARPG.Dungeon
                 }
                 _components.AddComponent(id, new DungeonObjectComponent { DungeonId = record.DungeonId,
                     ObjectId = obj.Id, IsBoss = obj.Kind == DungeonObjectKind.Boss });
-                // Boss completion reward is part of the transaction, never a second random death reward.
-                if (obj.Kind == DungeonObjectKind.Boss) _components.RemoveComponent<DropComponent>(id);
+                // 보스도 사망 드롭을 한다 — 보상 크기는 보스 등급(Elite) 행의 판정 횟수·희귀도 (ITEM_DROP_BALANCE_DESIGN §7.6).
+                // 완료 골드는 완료 처리(DungeonCompletionTransaction)가 그대로 따로 준다.
                 if (saved != null && _components.TryGetComponent<StatComponent>(id, out var stat) == true)
                 {
                     stat.SetCurrentHp(id, Mathf.Clamp(saved.Hp, 1, Mathf.Max(1, stat.FinalMaxHp)));

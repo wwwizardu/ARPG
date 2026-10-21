@@ -17,9 +17,10 @@ namespace ARPG.EditorTools
     /// - 등급별 접사 개수 분포를 대량 판정해 문서 §3 표와 대조한다.
     /// - 등급별·필드 평균 드랍 판정과 필드 총량을 유지하는 NothingRate를 계산한다(§8.3 식).
     /// - 종별로 실제 붙는 접사 수를 재서 피해 종류 조건·Group 제외로 후보가 모자란 종을 찾는다.
+    /// - 드롭 분포 표본 검사(ITEM_DROP_BALANCE_DESIGN.md §7·§8): MonsterAffixDiagnostics_DropDistribution.cs.
     /// 테이블은 AR.s.Data에서 읽으므로 플레이 모드(GameScene 로드 후)에서만 동작한다. 난수 상태는 실행 뒤 되돌린다.
     /// </summary>
-    public static class MonsterAffixDiagnostics
+    public static partial class MonsterAffixDiagnostics
     {
         private const int CountSampleSize = 100000;
         private const int SpeciesSampleSize = 2000;
@@ -58,6 +59,7 @@ namespace ARPG.EditorTools
                 AppendCountDistribution(report, meanCounts);
                 AppendDropRolls(report, meanCounts);
                 AppendSpeciesShortage(report);
+                AppendDropDistribution(report);
 
                 Debug.Log(report.ToString());
             }
@@ -127,18 +129,24 @@ namespace ARPG.EditorTools
                 report.AppendLine($"  {Archetypes[a]}: 기본 {table.DropRolls} + 접사당 {table.DropRollsPerAffix} × {meanCounts[a]:F3} = 평균 {rolls:F3}회");
             }
 
-            report.AppendLine($"  필드 마리당 평균 판정 {fieldRolls:F3}회 (문서 1.68, 접사 도입 전 1.66)");
+            report.AppendLine($"  필드 마리당 평균 기본 판정 {fieldRolls:F3}회 (문서 1.68, 접사 도입 전 1.66)");
 
             DropTable? drop = AR.s.Data.GetDrop(FieldDropTableId);
             if (drop == null || fieldRolls <= 0)
                 return;
 
+            // 수량 방식 (ITEM_DROP_BALANCE_DESIGN §8.2): 판정 횟수 = 기본 판정 × (1 + Q/100). 꽝 칸은 줄이지 않는다.
+            // 총량 유지 기준(R7)은 레벨 1~9 구간이다 — 그 구간의 장소 수량 보너스를 곱한 판정 수로 권장값을 계산한다.
+            DropBandTable? baseBand = AR.s.Data.GetDropBand(1);
+            int baseQuantity = baseBand != null ? baseBand.QuantityBonus : 0;
+            double baseFieldRolls = fieldRolls * Math.Max(0d, 1d + baseQuantity / 100d);
             int otherRates = drop.CurrencyRate + drop.EquipmentRate + drop.SkillBookRate + drop.SkillPageRate;
-            double perRoll = FieldItemsPerMonsterTarget / fieldRolls;
+            double perRoll = FieldItemsPerMonsterTarget / baseFieldRolls;
             double recommendedNothing = otherRates * (1.0 - perRoll) / perRoll;
             double currentPerRoll = otherRates / (double)Math.Max(1, otherRates + drop.NothingRate);
-            report.AppendLine($"  ItemDrop {FieldDropTableId}: NothingRate 현재 {drop.NothingRate}, 총량 유지 권장 {recommendedNothing:F1} " +
-                $"(나머지 칸 합 {otherRates}) → 현재 값의 마리당 평균 {fieldRolls * currentPerRoll:F3}개 (목표 {FieldItemsPerMonsterTarget})");
+            report.AppendLine($"  ItemDrop {FieldDropTableId}: NothingRate 현재 {drop.NothingRate}, 레벨 1~9 총량 유지 권장 {recommendedNothing:F1} " +
+                $"(나머지 칸 합 {otherRates}, 구간 수량 {baseQuantity}% → 판정 {baseFieldRolls:F3}회) → 현재 값의 마리당 평균 " +
+                $"{baseFieldRolls * currentPerRoll:F3}개 (목표 {FieldItemsPerMonsterTarget})");
         }
 
         private static void AppendSpeciesShortage(StringBuilder report)

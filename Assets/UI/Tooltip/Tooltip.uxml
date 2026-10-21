@@ -46,6 +46,7 @@
                 <ui:Label name="eq-name" class="tooltip-name"/>
                 <ui:Label name="eq-tier" class="tooltip-tier"/>
                 <ui:Label name="eq-item-level" class="tooltip-tier"/>
+                <ui:Label name="eq-quality" class="tooltip-tier"/>
                 <ui:VisualElement class="tooltip-divider"/>
                 <!-- Base: 무기는 WeaponStats, 방어구는 Base Mod -->
                 <ui:VisualElement name="eq-base-section" class="tooltip-section">

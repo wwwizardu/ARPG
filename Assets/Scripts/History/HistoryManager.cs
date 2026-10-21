@@ -514,10 +514,12 @@ namespace ARPG.History
             WorldSimState sim = AR.s.Data.WorldSim;
             if (sim == null || sim.Settlements == null || sim.Settlements.Length == 0)
                 return;
-            if (AR.s.Map == null || AR.s.Village == null)
+            // 근처 판정은 월드 청크로 한다. 던전 안에서는 월드 렌더 청크가 비어 있어 실체화가 일어나지 않는다 (DUNGEON_WORLD_SIM §4)
+            MapManager worldMap = AR.s.WorldMap;
+            if (worldMap == null || AR.s.Village == null)
                 return;
 
-            int chunkSize = AR.s.Map.chunkSize;
+            int chunkSize = worldMap.chunkSize;
             if (chunkSize <= 0)
                 return;
 
@@ -533,12 +535,35 @@ namespace ARPG.History
                 Vector2Int chunk = new Vector2Int(
                     Mathf.FloorToInt(v.PositionX / chunkSize),
                     Mathf.FloorToInt(v.PositionY / chunkSize));
-                bool near = AR.s.Map.IsChunkActive(chunk);
+                bool near = worldMap.IsChunkActive(chunk);
                 bool materialized = sim.Settlements[idx].IsMaterialized;
 
                 if (near && materialized == false)
                     MaterializeSettlement(v.SettlementId, v.VillageId);
                 else if (near == false && materialized)
+                    FoldBackSettlement(v.SettlementId);
+            }
+        }
+
+        /// <summary>
+        /// 던전 입장: 실체화된 연대기 마을을 모두 추상으로 접는다 (필드에서 멀어질 때와 같은 FoldBackSettlement).
+        /// 엔티티를 보관함으로 빼기(SuspendExceptPlayer) 전에 불러야 한다 — 던전 중 정착지 시뮬이 마을을 접으며
+        /// 보관 중인 컴포넌트를 못 읽고 엔티티를 파괴하면, 퇴장 복원이 유령 마을 엔티티를 되살린다 (DUNGEON_WORLD_SIM_DESIGN §3.1).
+        /// 손제작 마을(SettlementId &lt; 0)은 추상 층에 참여하지 않으므로 그대로 둔다.
+        /// </summary>
+        public void FoldBackAllSettlements()
+        {
+            WorldSimState sim = AR.s.Data.WorldSim;
+            if (sim == null || sim.Settlements == null || sim.Settlements.Length == 0 || AR.s.Village == null)
+                return;
+
+            IReadOnlyList<VillageData> villages = AR.s.Village.GetAllVillages();
+            for (int i = 0; i < villages.Count; i++)
+            {
+                VillageData v = villages[i];
+                if (v.SettlementId < 0 || TryGetLiveIndex(v.SettlementId, out int idx) == false)
+                    continue;
+                if (sim.Settlements[idx].IsMaterialized)
                     FoldBackSettlement(v.SettlementId);
             }
         }

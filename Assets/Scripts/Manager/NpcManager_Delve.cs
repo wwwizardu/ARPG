@@ -89,10 +89,10 @@ namespace ARPG.Npc
                 return true;
             }
 
-            float minX = AR.s.Map.minChunkX * AR.s.Map.chunkSize;
-            float maxX = (AR.s.Map.maxChunkX + 1) * AR.s.Map.chunkSize - 1f;
-            float minY = AR.s.Map.minChunkY * AR.s.Map.chunkSize;
-            float maxY = (AR.s.Map.maxChunkY + 1) * AR.s.Map.chunkSize - 1f;
+            float minX = AR.s.WorldMap.minChunkX * AR.s.WorldMap.chunkSize;
+            float maxX = (AR.s.WorldMap.maxChunkX + 1) * AR.s.WorldMap.chunkSize - 1f;
+            float minY = AR.s.WorldMap.minChunkY * AR.s.WorldMap.chunkSize;
+            float maxY = (AR.s.WorldMap.maxChunkY + 1) * AR.s.WorldMap.chunkSize - 1f;
             targetPosition = NpcActivityResolver.GetHuntTargetPosition(origin, rngOwnerId, startGameTime, worldSeed,
                 minX, maxX, minY, maxY);
             return true;

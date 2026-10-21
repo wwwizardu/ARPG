@@ -22,22 +22,26 @@
 | R2 | 등급은 **무리 단위**로 정한다. 마법 무리는 전원 마법, 희귀 무리는 첫 구성원 1마리만 희귀이고 나머지는 일반 호위다. |
 | R3 | 확률은 Zone 시트 `MagicPackRate`·`RarePackRate`(%)에 둔다. 값은 전 구역 15 / 8(처음 8 / 4에서 "잘 안 보인다"는 판단으로 상향). 평균 무리 크기가 2라서 몬스터 비율로는 마법 15%, 희귀 약 4%다. 희귀 무리는 평균 12.5무리마다, 절반 확률로는 8무리 안에 만난다. |
 | R4 | 1차 범위는 필드 스폰만이다. 던전은 후속 작업이다(§8). |
-| R5 | 보상은 **판정 횟수**(`DropRolls`)와 **높은 Tier 보너스**(`DropRarityBonus`)로 준다. `DropRateBonus`는 꽝 칸만 줄여 효과가 작으므로 등급에 넣지 않는다. 판정 횟수는 2026-10-11부터 `DropRolls` + `DropRollsPerAffix` × 접사 수다(MONSTER_AFFIX_DESIGN A4). |
+| R5 | 보상은 **판정 횟수**(`DropRolls`)와 **아이템 희귀도**(`DropRarityBonus`)로 준다. 판정 횟수는 2026-10-11부터 `DropRolls` + `DropRollsPerAffix` × 접사 수다(MONSTER_AFFIX_DESIGN A4). 2026-10-21부터 `DropRarityBonus`는 높은 Tier 가중치가 아니라 아이템 희귀도(몬스터 묶음)이고, 몬스터 시트 `DropRateBonus`(꽝 칸 줄이기)는 `DropQuantityBonus`(판정 횟수 곱하기, 21종 모두 0)로 바뀌었다(ITEM_DROP_BALANCE §8.9). |
 | R6 | 시간당 보상 목표는 일반 1.0 : 마법 약 1.4 : 희귀 약 1.6이다(원소 공격 기준, §3.3). 2026-10-11 마법 HP를 2 → 1.3으로 낮춰 마법이 약 2.1로 희귀보다 높아졌다가, 같은 날 접사 도입으로 마법 평균 판정이 3 → 2.54회가 되어 약 1.76으로 내려왔다(접사 난이도 미포함). |
 | R7 | 필드 드랍 총량을 유지하기 위해 ItemDrop 1번 행의 `NothingRate`를 10 → 43으로 올렸다(확률 8/4 때는 27). 접사 도입으로 마리당 평균 판정이 1.66 → 1.68회가 되어 44로 다시 맞췄다(2026-10-11). |
 | R8 | 마법·희귀는 만피여도 HP바를 보여 주고, HP바를 등급 색(파랑·노랑)으로 칠한다. |
 
 ## 3. 등급 시트 (MonsterArchetype)
 
-값은 시트가 정본이다. 아래는 2026-10-11 기준 값이다.
+값은 시트가 정본이다. 아래는 2026-10-21 기준 값이다.
 
-| 등급 | HpMul | DmgMul | ResistAdd | DropRolls | DropRarityBonus | ModTier11ChanceBp | ModTier12ChanceBp | AffixBaseCount | AffixExtraChance | DropRollsPerAffix |
-|---|---|---|---|---|---|---|---|---|---|---|
-| Normal | 1 | 1.3 | 0 | 1 | 0 | 50 | 10 | 0 | 10 | 1 |
-| Magic | 1.3 | 1.56 | 10 | 1 (예전 3) | 50 | 100 | 20 | 1 | 35 | 1 |
-| Rare | 5 | 1.95 | 20 | 6 (예전 10) | 150 | 200 | 50 | 1 | 50 | 2 |
-| Boss | 20 | 2.6 | 0 | 1 | 0 | 500 | 100 | 0 | 0 | 0 |
-| EndgameBoss | 60 | 2.6 | 0 | 1 | 0 | 1000 | 300 | 0 | 0 | 0 |
+| 등급 | HpMul | DmgMul | ResistAdd | DropRolls | DropRarityBonus | ModTier11ChanceBp | ModTier12ChanceBp | AffixBaseCount | AffixExtraChance | DropRollsPerAffix | RarityPerAffix |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Normal | 1 | 1.3 | 0 | 1 | 0 | 50 | 10 | 0 | 10 | 1 | 5 |
+| Magic | 1.3 | 1.56 | 10 | 1 (예전 3) | 20 (예전 50) | 100 | 20 | 1 | 35 | 1 | 5 |
+| Rare | 5 | 1.95 | 20 | 6 (예전 10) | 60 (예전 150) | 200 | 50 | 1 | 50 | 2 | 5 |
+| Boss | 20 | 2.6 | 0 | 1 | 0 | 500 | 100 | 0 | 0 | 0 | 5 |
+| EndgameBoss | 60 | 2.6 | 0 | 1 | 0 | 1000 | 300 | 0 | 0 | 0 | 5 |
+| Elite (마을 던전 보스) | 10 | 2.275 | 0 | 10 (예전 1) | 100 (예전 0) | 350 | 75 | 0 | 0 | 0 | 5 |
+| Named | 12 | 2.2 | 25 | 10 | 100 (예전 250) | 400 | 100 | 0 | 0 | 1 | 5 |
+
+- 2026-10-21(ITEM_DROP_BALANCE D20·D21): `DropRarityBonus`를 마법 20·희귀 60·네임드 100으로 낮추고, Elite 행을 판정 10회·희귀도 100으로 올렸다(던전 보스 사망 드롭). N열 `RarityPerAffix`(접사당 희귀도 5)를 추가했다.
 
 - K~M열(`AffixBaseCount`·`AffixExtraChance`·`DropRollsPerAffix`, 2026-10-11 추가)은 접사 개수와 접사당 드랍 판정이다. 규칙은 [MONSTER_AFFIX_DESIGN.md](MONSTER_AFFIX_DESIGN.md) §3·§8.
 
@@ -57,10 +61,8 @@
 
 - 사망 시 `DropRolls` + `DropRollsPerAffix` × 접사 수만큼 판정한다. 판정마다 기존 드랍 규칙(꽝·화폐·장비·스킬북·페이지)을 그대로 쓴다.
 - 판정이 2회 이상이면 아이템이 한 점에 겹치지 않게 판정마다 반경 0.8칸 안으로 위치를 흩는다. 흩은 칸이 막혀 있으면 원래 위치에 떨군다.
-- `DropRarityBonus`는 몬스터 시트의 보너스에 더한다. 장비 후보 중 최저 Tier보다 높은 Tier의 가중치를 올린다. 효과가 없는 경우:
-  - 화폐: 전부 Tier 1이라 효과 없음.
-  - 장비: Tier 2는 DropLevel 10, Tier 3는 20부터 후보에 들어오므로 레벨 10 미만 구역에서는 효과 없음.
-  - 스킬북·스킬 페이지: Tier가 드랍 시트에 고정돼 효과 없음.
+- `DropRarityBonus`는 몬스터 시트의 보너스와 접사 수 × `RarityPerAffix`에 더해 아이템 희귀도(몬스터 묶음)가 된다. 장비가 희귀·마법으로 나올 확률과 Tier 2 이상 화폐(엑잘티드)의 비중을 올린다. 장비 Tier(구간)·옵션 티어·품질에는 영향이 없다. 계산식은 [ITEM_DROP_BALANCE_DESIGN.md](../combat/ITEM_DROP_BALANCE_DESIGN.md) §8.2 (2026-10-21, 예전에는 높은 Tier 장비 가중치였다).
+- 판정 횟수에는 아이템 수량을 곱한다(× (1 + Q/100), 몬스터 1마리 상한 40회). 꽝 칸은 줄이지 않는다.
 - 드랍 장비의 아이템 레벨은 몬스터 레벨이고, 옵션 티어는 아이템 레벨로 정해진다. 등급은 옵션 티어 중 T11·T12 특수 판정 확률만 올린다(§3 표, [ITEM_LEVEL_MOD_TIER_DESIGN.md](../combat/ITEM_LEVEL_MOD_TIER_DESIGN.md)).
 
 평균 드랍 개수 (`NothingRate` 44 → 판정 1번에 약 47.6%, 접사 포함 평균):
@@ -130,7 +132,7 @@
 ## 8. 후속 작업
 
 - **던전 등급**: `DungeonObject`에 `Archetype`(이후 접사 Id) 필드 추가 — 던전 저장 형식이 바뀐다. `DungeonLayout`에서 결정론적으로 판정한다. 던전 보스를 Boss 등급으로 올릴지도 함께 정한다.
-- **던전 일반 몬스터 드랍 감소**: 던전 몬스터도 ItemDrop 1번을 써서, R7로 던전 일반 몬스터 드랍이 40% 줄었다(0.8 → 0.48개). 던전에는 등급 보상이 아직 없으므로 던전 전용 드랍 행 분리 또는 던전 등급 도입으로 맞춘다.
+- **던전 일반 몬스터 드랍 감소**: 던전 몬스터도 ItemDrop 1번을 써서, R7로 던전 일반 몬스터 드랍이 40% 줄었다(0.8 → 0.48개). → 2026-10-21 던전 장소 보너스(수량 +70%)로 해결했다(ITEM_DROP_BALANCE §7.6, 던전 표 `DropQuantityBonus`).
 - **구역별 확률 차등**: 초반 구역(3~4)의 희귀 확률을 낮추는 등.
 - **골드 밸런스**: 필드 총량은 유지했지만 희귀 몬스터 한 마리가 6개를 떨군다. GOLD_BALANCE_DESIGN의 플레이어 판매 가정과 대조가 필요하다.
 - **BALANCE_DESIGN §3.3**: 표의 Normal `DmgMul` 1.0과 시트 1.3이 다르다.

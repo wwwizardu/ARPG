@@ -1,6 +1,7 @@
 #nullable enable
 using System.Collections.Generic;
 using ARPG.Data;
+using ARPG.Item;
 using ARPG.Tables;
 using UnityEngine;
 using GE = GlobalEnum;
@@ -87,18 +88,20 @@ namespace ARPG.Npc
                 List<ModInstance> mods = item.Equipment.Mods;
                 for (int m = 0; m < mods.Count; m++)
                 {
-                    ModInstance mod = mods[m];
-                    if (mod.Table == null)
+                    ModInstance sourceMod = mods[m];
+                    if (sourceMod.Table == null)
                     {
-                        mod.OnLoadCompleted();
-                        if (mod.Table == null)
+                        sourceMod.OnLoadCompleted();
+                        if (sourceMod.Table == null)
                             continue;
                     }
 
                     // EquipHelper.ApplyEquipmentModifiers와 같다 — 무기 Base는 무기 기본 능력 캐시에서만 소비한다.
-                    if (isWeapon == true && mod.Slot == GE.ModSlot.Base)
+                    if (isWeapon == true && sourceMod.Slot == GE.ModSlot.Base)
                         continue;
-                    if (mod.Table.ApplyType != GE.ModApplyType.Passive)
+                    // 방어구 Base에는 품질을 적용한다 (ITEM_DROP_BALANCE_DESIGN §5). NPC 장비는 품질 0이라 값이 그대로다
+                    ModInstance mod = EquipmentQualityRules.ApplyToBaseMod(sourceMod, item.Equipment.Quality);
+                    if (mod.Table == null || mod.Table.ApplyType != GE.ModApplyType.Passive)
                         continue;
 
                     switch (mod.Table.EffectType)

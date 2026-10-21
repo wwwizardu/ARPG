@@ -63,6 +63,11 @@ namespace ARPG.EditorTools
                     table.RoomWidthMin >= 7 && table.RoomWidthMax >= table.RoomWidthMin && table.RoomWidthMax <= 24 &&
                     table.RoomHeightMin >= 7 && table.RoomHeightMax >= table.RoomHeightMin && table.RoomHeightMax <= 24,
                     "DungeonTable row has valid generation, encounter and reward values");
+                Require(table.MonsterLevelOffset >= -98 && table.MonsterLevelOffset <= 98 &&
+                    table.BossLevelOffset >= -98 && table.BossLevelOffset <= 98 &&
+                    table.ChestDropRolls >= 0 && table.ChestDropRolls <= ARPG.Utility.DropBonusResolver.MAX_ROLLS_PER_SOURCE &&
+                    table.DropQuantityBonus >= -100 && table.DropRarityBonus >= -100,
+                    "DungeonTable row has valid drop values (ITEM_DROP_BALANCE §7.6)");
             }
             report.AppendLine($"PASS: DungeonTable contains {rows.Count} structurally valid row(s).");
         }
@@ -209,6 +214,7 @@ namespace ARPG.EditorTools
             for (int i = 1; i < tunedLayout.BossRoomId; i++)
                 Require(roomMonsterCounts[i] == 3, "table-driven normal room monster count");
             Require(roomMonsterCounts[tunedLayout.BossRoomId] == 1, "boss room remains one boss");
+            ValidateEncounterLevels();
             DungeonTable defaultTable = CreateDungeonTable();
             var legacyRoot = new DungeonSaveRoot();
             VillageDungeonSlots legacySlots = DungeonLayout.CreateSlots(12345, 777);
@@ -224,7 +230,36 @@ namespace ARPG.EditorTools
                 "legacy table migration values");
             Require(DungeonLayout.NormalizeTableReferences(legacyRoot, defaultTable) == false,
                 "legacy table migration idempotence");
-            report.AppendLine($"PASS: 300 villages (2 slots: {two}, 3 slots: {three}), deterministic IDs/rooms; 32 village layout samples, table-driven room size/monster count, table snapshot/legacy migration, raster connectivity/reload, progress and unsupported versions.");
+            report.AppendLine($"PASS: 300 villages (2 slots: {two}, 3 slots: {three}), deterministic IDs/rooms; 32 village layout samples, table-driven room size/monster count, entrance-zone encounter levels, table snapshot/legacy migration, raster connectivity/reload, progress and unsupported versions.");
+        }
+
+        /// <summary>
+        /// 던전 레벨 = 입구 청크 지역 레벨 + 보정, 1~99로 자른다 (ITEM_DROP_BALANCE_DESIGN §7.6).
+        /// 상자 레벨은 일반 몬스터 레벨이고, 지역 정보가 없으면(0) 표의 고정 레벨을 쓴다.
+        /// </summary>
+        private static void ValidateEncounterLevels()
+        {
+            DungeonTable table = CreateDungeonTable();
+            VillageDungeonSlots slots = DungeonLayout.CreateSlots(12345, 778);
+            int[,] cases = { { 30, 32, 34 }, { 1, 3, 5 }, { 98, 99, 99 }, { 0, 1, 5 } };
+            for (int c = 0; c < cases.GetLength(0); c++)
+            {
+                DungeonRecord layout = DungeonLayout.Generate(12345, 778, slots.Slots[0], table, _diagnosticEliteIds, cases[c, 0]);
+                int expectedMonster = cases[c, 1];
+                int expectedBoss = cases[c, 2];
+                bool chestSeen = false;
+                for (int i = 0; i < layout.Objects.Count; i++)
+                {
+                    DungeonObject obj = layout.Objects[i];
+                    int expected = obj.Kind == DungeonObjectKind.Boss ? expectedBoss : expectedMonster;
+                    Require(obj.Level == expected,
+                        $"zone {cases[c, 0]} {obj.Kind} level {obj.Level} (expected {expected})");
+                    chestSeen |= obj.Kind == DungeonObjectKind.Chest;
+                }
+                Require(chestSeen, "encounter level sample has a chest");
+            }
+            Require(DungeonLayout.ResolveEncounterLevel(-5, 2) == 1 && DungeonLayout.ResolveEncounterLevel(97, 4) == 99,
+                "encounter level clamps to 1..99");
         }
 
         private static void ValidateRasterConnectivity(DungeonRecord record)
@@ -913,6 +948,12 @@ namespace ARPG.EditorTools
                 RoomWidthMax = 12,
                 RoomHeightMin = 9,
                 RoomHeightMax = 12,
+                // 던전 드롭 (ITEM_DROP_BALANCE_DESIGN §7.6) 초안 값
+                MonsterLevelOffset = 2,
+                BossLevelOffset = 4,
+                ChestDropRolls = 3,
+                DropQuantityBonus = 70,
+                DropRarityBonus = 0,
             };
         }
 

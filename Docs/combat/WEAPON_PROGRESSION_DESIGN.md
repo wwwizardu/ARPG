@@ -1010,6 +1010,8 @@ Lacerate의 SkillEffect 1002는 적중 시 Buff 1 출혈을 확정 적용한다.
 
 이 선택은 현행 평면 DropRate Pool만으로는 구현되지 않는다. 미래 구현에서 공유 Pool·Explicit 장비 보상·일반 상점 후보의 적용 범위를 명시해야 한다. 현재 DropRateBonus의 무드랍 감소와 DropRarityBonus의 상위 Item Tier 가중치 보너스는 유지하되, 단계 선택에서 한 번만 반영해 중복 보너스를 주지 않는다. 제안한 1·10·20의 구간 분포는 희귀도 보너스가 없는 기본값이고 보너스 적용 결과와 구분한다. [src: Assets/Scripts/Common/Utility/DropHelper.cs ProcessDrop·SelectEquipmentItem, Assets/Scripts/Common/Utility/DropPoolBuilder.cs SelectWeightedRandom·GetBonusWeight]
 
+**2026-10-21 갱신 (ITEM_DROP_BALANCE_DESIGN D7·D8, 구현)**: 플레이어 드롭은 부위 몫(무기 40·방어구 각 7·방패 10·목걸이 5·반지 10) → 현재 구간 80%·직전 구간 20% → `DropRate` 순서의 전용 경로(`PlayerEquipmentDropSelector`)로 고른다. 계열(검·도끼 등)끼리 균등 분배는 무기 계열 데이터가 생길 때까지 미룬다. 위 문단과 달리 `DropRarityBonus`는 장비 Tier 가중치에 쓰지 않고 아이템 희귀도(장비 등급·상위 화폐)로 쓰며, `DropRateBonus`(꽝 칸 줄이기)는 `DropQuantityBonus`(판정 횟수 곱하기)로 바뀌었다. 공유 풀(`DropPoolBuilder.GetEquipmentPool`)은 NPC 전리품·상점 매물용으로 그대로 남는다. [src: Assets/Scripts/Common/Utility/PlayerEquipmentDropSelector.cs, Assets/Scripts/Common/Utility/DropHelper.cs]
+
 일반 DropTable 1의 현행 가중치는 무드랍 10·화폐 10·장비 15·책 5·페이지 10으로 총 50이다. 보너스 없이 장비는 30%, 책은 10%이며 이번에는 이 바깥 카테고리 예산을 바꾸지 않는다. 새 안의 완성된 6계열·두 구간 조건에서 특정 무기 계열의 최신 구간 장비는 처치당 `0.30 × 0.40 × 1/6 × 0.80 = 1.6%`다. 독립 처치 모델에서 평균 62.5마리인 참고값이며 획득 보장은 아니다. 좋은 옵션·변형까지 지정하면 더 오래 걸리므로 기본 교체는 목록 구매로 보완한다. [src: Assets/_BinaryData/TableData/DropTable.bytes Id 1, Assets/Scripts/Common/Tables.cs DropTable.NothingRate, Assets/Scripts/Common/Utility/DropHelper.cs ProcessDrop]
 
 던전·보스는 일반 사냥보다 좋은 옵션과 선택지 발견에 비중을 두는 방향만 제안한다. 보스별 확정 장비·구체적인 확률·추가 보상 개수는 콘텐츠 보상표에서 따로 정하고, 이번 공급안이 모든 보스에게 장비 한 개를 추가하는 규칙은 아니다. 현행 던전 완료·입구 세대 교체·보상 저장 계약을 새 드랍 분배로 덮어쓰지 않는다. [src: Docs/map/DUNGEON_RUNTIME_DESIGN.md §3.2·§5.2·§8]

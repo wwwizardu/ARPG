@@ -179,7 +179,7 @@ _초안 작성: 2026-09-24 — [NPC_AMBITION_DESIGN.md](NPC_AMBITION_DESIGN.md) 
 
 **화면 밖 시뮬레이션과의 관계**
 - 동행 중(던전 안)인 NPC는 `System_NpcSim`의 활동 선택·판정 대상에서 **제외**해야 한다. 그렇지 않으면 던전에 있는 NPC가 동시에 사냥을 떠나는 상태가 된다. 이것이 A 갈래 코드에 대한 **유일한 추가 접점**이다(§9).
-  - 참고: `System_NpcSim`과 `System_Time`은 `IWorldMapSystem`이라 던전 안에서는 **원래 돌지 않는다**(게임 시간도 멈춘다). 제외 조건은 이 구조가 바뀌어도 동행 NPC가 판정되지 않게 하는 방어선이다.
+  - 참고: 2026-10-19부터 `System_NpcSim`과 `System_Time`은 던전 안에서도 돈다(`IWorldSimSystem`, [DUNGEON_WORLD_SIM_DESIGN §3.5](../map/DUNGEON_WORLD_SIM_DESIGN.md)). 처음에는 구조가 바뀔 때를 대비한 방어선이던 이 제외 조건이, 이제 던전 안 동행 NPC가 판정되지 않게 막는 실제 규칙이다.
 - 예약만 한 상태에서는 제외하지 않는다. 다만 예약 중에 원정(Hunt)을 떠나지 않도록, 예약 NPC는 활동 선택에서 Rest만 고른다. [확정: B2]
 - 예약 NPC는 **다른 NPC의 사냥 파티 모집에서도 제외**한다. Rest 고정만으로는 다른 리더가 만드는 파티(`NpcManager.TryCreateHuntParty`)에 뽑혀 원정을 떠나는 경로가 남기 때문이다. [확정: B2]
 

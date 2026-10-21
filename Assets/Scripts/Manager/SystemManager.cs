@@ -148,7 +148,8 @@ namespace ARPG.Systems
             System_MonsterSpawn monsterSpawnSystem = new();
             RegisterSystems(monsterSpawnSystem);
 
-            // Priority 135: Named Threat Director (FixedUpdate, World, 1초) - 네임드 위협 출현·단계·사라짐·소문 주인 재배정 (NAMED_THREAT_DESIGN §12.2)
+            // Priority 135: Named Threat Director (FixedUpdate, WorldSim, 1초) - 네임드 위협 출현·단계·사라짐·소문 주인 재배정 (NAMED_THREAT_DESIGN §12.2)
+            // 던전 안에서도 돌고 출현 판정만 건너뛴다 (DUNGEON_WORLD_SIM_DESIGN §3.6)
             RegisterSystems(new System_NamedThreatDirector());
 
             // Priority 136: Named Threat Presence (FixedUpdate, World, 0.5초) - 청크 활성에 따른 네임드 엔티티 생성·제거, 순찰 기준점 갱신
@@ -404,6 +405,9 @@ namespace ARPG.Systems
             {
                 IUpdateSystem system = _updateSystems[i];
                 if (CanRun(system) == false) continue;
+#if UNITY_EDITOR
+                AR.s.BeginWorldSimMapGuard(system);
+#endif
                 float updateInterval = system.UpdateInterval;
 
                 if (updateInterval <= 0f)
@@ -420,6 +424,9 @@ namespace ARPG.Systems
                         _updateSystemTimers[i] = 0f;
                     }
                 }
+#if UNITY_EDITOR
+                AR.s.EndWorldSimMapGuard();
+#endif
             }
         }
 
@@ -432,6 +439,9 @@ namespace ARPG.Systems
             {
                 IFixedUpdateSystem system = _fixedUpdateSystems[i];
                 if (CanRun(system) == false) continue;
+#if UNITY_EDITOR
+                AR.s.BeginWorldSimMapGuard(system);
+#endif
                 float updateInterval = system.UpdateInterval;
 
                 if (updateInterval <= 0f)
@@ -448,6 +458,9 @@ namespace ARPG.Systems
                         _fixedUpdateSystemTimers[i] = 0f;
                     }
                 }
+#if UNITY_EDITOR
+                AR.s.EndWorldSimMapGuard();
+#endif
             }
         }
 
@@ -455,6 +468,7 @@ namespace ARPG.Systems
         private static bool CanRun(ISystem system)
         {
             if (AR.s == null || AR.s.IsInitialized == false) return false;
+            // 월드 좌표·엔티티가 필요한 시스템만 던전 안에서 멈춘다. IWorldSimSystem(시간·NPC·마을 시뮬)은 계속 돈다 (DUNGEON_WORLD_SIM_DESIGN §2)
             if (system is IWorldMapSystem && AR.s.Dungeon.IsInside) return false;
             if (AR.s.Dungeon.GameplayPaused)
                 return system is System_Input || system is System_DungeonCheckpoint;
@@ -469,6 +483,9 @@ namespace ARPG.Systems
             {
                 ILateUpdateSystem system = _lateUpdateSystems[i];
                 if (CanRun(system) == false) continue;
+#if UNITY_EDITOR
+                AR.s.BeginWorldSimMapGuard(system);
+#endif
                 float updateInterval = system.UpdateInterval;
 
                 if (updateInterval <= 0f)
@@ -485,6 +502,9 @@ namespace ARPG.Systems
                         _lateUpdateSystemTimers[i] = 0f;
                     }
                 }
+#if UNITY_EDITOR
+                AR.s.EndWorldSimMapGuard();
+#endif
             }
         }
     }

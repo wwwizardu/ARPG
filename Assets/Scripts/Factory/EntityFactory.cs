@@ -125,13 +125,16 @@ namespace ARPG.Factory
 
             if (table.DropId > 0)
             {
-                // 등급 보상: 판정 횟수와 높은 Tier 보너스 (MONSTER_RARITY_DESIGN.md §3.2)
+                // 등급 보상: 판정 횟수와 아이템 희귀도 (MONSTER_RARITY_DESIGN.md §3.2, ITEM_DROP_BALANCE_DESIGN §8.3 ③)
                 // 판정 횟수 = 등급 기본 판정 + 접사당 판정 × 접사 수 (MONSTER_AFFIX_DESIGN.md §8)
+                // 희귀도 = 종 + 등급 + 접사 수 × 접사당 희귀도 (§8.4). 수량 보너스는 종 값만 (접사는 판정 횟수로 이미 늘린다)
                 AR.s.Component.AddComponent(entityId, new DropComponent
                 {
                     DropId = table.DropId,
-                    DropRateBonus = table.DropRateBonus,
-                    DropRarityBonus = table.DropRarityBonus + (archetypeTable != null ? archetypeTable.DropRarityBonus : 0),
+                    DropQuantityBonus = table.DropQuantityBonus,
+                    DropRarityBonus = table.DropRarityBonus + (archetypeTable != null
+                        ? archetypeTable.DropRarityBonus + archetypeTable.RarityPerAffix * affixCount
+                        : 0),
                     MonsterLevel = effectiveLevel,
                     DropRolls = archetypeTable != null
                         ? Mathf.Max(1, archetypeTable.DropRolls + archetypeTable.DropRollsPerAffix * affixCount)

@@ -196,7 +196,7 @@ namespace ARPG.Npc
 
             bool found = false;
             ObjectiveCandidate best = default;
-            int worldSeed = AR.s.Map.mapSeed;
+            int worldSeed = AR.s.WorldMap.mapSeed;
             for (int i = 0; i < candidates.Count; i++)
             {
                 ObjectiveCandidate candidate = candidates[i];
@@ -302,7 +302,7 @@ namespace ARPG.Npc
             bool passed = true;
             if (candidate.ReactChance < 1f)
             {
-                passed = NpcObjectiveRules.RollReaction(entityId, candidate.EventGameTime, AR.s.Map.mapSeed, candidate.ReactChance);
+                passed = NpcObjectiveRules.RollReaction(entityId, candidate.EventGameTime, AR.s.WorldMap.mapSeed, candidate.ReactChance);
                 if (recalculated == false)
                 {
                     _objectiveCounters.ReactRolls[kind]++;
@@ -985,7 +985,7 @@ namespace ARPG.Npc
                 if (candidate.EventGameTime != eventCandidate.EventGameTime || candidate.DungeonId != eventCandidate.DungeonId)
                     continue;
                 sameFacts = true;
-                recordPassed = NpcObjectiveRules.RollReaction(entityId, candidate.EventGameTime, AR.s.Map.mapSeed,
+                recordPassed = NpcObjectiveRules.RollReaction(entityId, candidate.EventGameTime, AR.s.WorldMap.mapSeed,
                     candidate.ReactChance);
                 break;
             }

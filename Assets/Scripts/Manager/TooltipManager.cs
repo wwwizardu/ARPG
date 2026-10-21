@@ -27,6 +27,12 @@ namespace ARPG.Manager
             "tooltip-tier-1", "tooltip-tier-2", "tooltip-tier-3"
         };
 
+        // 장비 등급별 이름 색 (ITEM_DROP_BALANCE_DESIGN §4.1): 일반 흰색, 마법 파랑, 희귀 노랑. GlobalEnum.EquipmentGrade 순서
+        private static readonly string[] GRADE_CLASSES =
+        {
+            "tooltip-grade-normal", "tooltip-grade-magic", "tooltip-grade-rare"
+        };
+
         private const float ANCHOR_OFFSET_X = 8f;
 
         // 인벤토리 장비 비교 (INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md §화면 구성)
@@ -94,6 +100,7 @@ namespace ARPG.Manager
         private Label? _eqName;
         private Label? _eqTier;
         private Label? _eqItemLevel;
+        private Label? _eqQuality;
         private Label? _eqDmgPhysics;
         private Label? _eqDmgFire;
         private Label? _eqDmgIce;
@@ -565,10 +572,12 @@ namespace ARPG.Manager
             int tier = equipItem.Table?.Tier ?? 0;
             EquipmentData? equip = equipItem.Equipment;
 
-            ApplyTierName(_eqName, itemName, tier);
-            ApplyTierLabel(_eqTier, tier);
+            ApplyEquipmentName(_eqName, itemName, equip);
+            SetStatLine(_eqTier, FormatTierGradeText(tier, equip));
             // 아이템 레벨이 없는 장비(기본 아이템·시작 장비·구 장비)는 줄을 숨긴다
             SetStatLine(_eqItemLevel, equip != null && equip.ItemLevel > 0 ? $"아이템 레벨 {equip.ItemLevel}" : null);
+            // 품질은 0이면 숨긴다 (ITEM_DROP_BALANCE_DESIGN §5)
+            SetStatLine(_eqQuality, EquipmentOptionText.FormatQualityLine(equip));
 
             bool isWeapon = equip != null && equip.EquipType == GlobalEnum.EquipmentTypeMask.Weapon;
             if (_eqBaseTitle != null)
@@ -628,7 +637,8 @@ namespace ARPG.Manager
                     ModInstance mod = equip.Mods[i];
                     if (mod.Table == null) continue;
                     if (mod.Slot != GlobalEnum.ModSlot.Base) continue;
-                    AppendModLine(_eqBaseMods, mod, isImplicit: false);
+                    // Base 수치는 품질을 적용해 보여 준다 (ITEM_DROP_BALANCE_DESIGN §5)
+                    AppendModLine(_eqBaseMods, EquipmentQualityRules.ApplyToBaseMod(mod, equip.Quality), isImplicit: false);
                     hasBaseContent = true;
                 }
             }
@@ -785,6 +795,7 @@ namespace ARPG.Manager
             VisualElement nameRow = CreateCompareRow(headerParent);
             bool hasTier = false;
             bool hasItemLevel = false;
+            bool hasQuality = false;
             for (int c = firstColumn; c < endColumn; c++)
             {
                 VisualElement cell = CreateCompareCell(nameRow, c - firstColumn);
@@ -796,10 +807,11 @@ namespace ARPG.Manager
                 }
 
                 Label name = CreateIgnoredLabel(string.Empty, "tooltip-name");
-                ApplyTierName(name, item.Table?.Name ?? "장비", item.Table?.Tier ?? 0);
+                ApplyEquipmentName(name, item.Table?.Name ?? "장비", item.Equipment);
                 cell.Add(name);
-                hasTier |= (item.Table?.Tier ?? 0) > 0;
+                hasTier |= FormatTierGradeText(item.Table?.Tier ?? 0, item.Equipment) != null;
                 hasItemLevel |= (item.Equipment?.ItemLevel ?? 0) > 0;
+                hasQuality |= EquipmentOptionText.FormatQualityLine(item.Equipment) != null;
             }
 
             // 이름·등급·아이템 레벨에는 우열 색을 붙이지 않는다
@@ -809,8 +821,9 @@ namespace ARPG.Manager
                 for (int c = firstColumn; c < endColumn; c++)
                 {
                     VisualElement cell = CreateCompareCell(tierRow, c - firstColumn);
-                    int tier = _compareColumns[c].Item?.Table?.Tier ?? 0;
-                    if (tier > 0) cell.Add(CreateIgnoredLabel($"Tier {tier}", "tooltip-tier"));
+                    ItemData? tierItem = _compareColumns[c].Item;
+                    string? tierText = FormatTierGradeText(tierItem?.Table?.Tier ?? 0, tierItem?.Equipment);
+                    if (tierText != null) cell.Add(CreateIgnoredLabel(tierText, "tooltip-tier"));
                 }
             }
 
@@ -822,6 +835,17 @@ namespace ARPG.Manager
                     VisualElement cell = CreateCompareCell(levelRow, c - firstColumn);
                     int itemLevel = _compareColumns[c].Item?.Equipment?.ItemLevel ?? 0;
                     if (itemLevel > 0) cell.Add(CreateIgnoredLabel($"아이템 레벨 {itemLevel}", "tooltip-tier"));
+                }
+            }
+
+            if (hasQuality == true)
+            {
+                VisualElement qualityRow = CreateCompareRow(headerParent);
+                for (int c = firstColumn; c < endColumn; c++)
+                {
+                    VisualElement cell = CreateCompareCell(qualityRow, c - firstColumn);
+                    string? qualityText = EquipmentOptionText.FormatQualityLine(_compareColumns[c].Item?.Equipment);
+                    if (qualityText != null) cell.Add(CreateIgnoredLabel(qualityText, "tooltip-tier"));
                 }
             }
 
@@ -1157,6 +1181,28 @@ namespace ARPG.Manager
                 label.AddToClassList(TIER_CLASSES[tier - 1]);
         }
 
+        /// <summary>장비 이름: 등급 색 (일반 흰색·마법 파랑·희귀 노랑). 장비 데이터가 없으면 색을 붙이지 않는다.</summary>
+        private static void ApplyEquipmentName(Label? label, string text, EquipmentData? equip)
+        {
+            if (label == null) return;
+            label.text = text;
+            for (int i = 0; i < TIER_CLASSES.Length; i++)
+                label.RemoveFromClassList(TIER_CLASSES[i]);
+            for (int i = 0; i < GRADE_CLASSES.Length; i++)
+                label.RemoveFromClassList(GRADE_CLASSES[i]);
+            if (equip != null)
+                label.AddToClassList(GRADE_CLASSES[(int)equip.GetGrade()]);
+        }
+
+        /// <summary>"Tier 2 · 마법"처럼 아이템 Tier와 장비 등급을 한 줄로. 둘 다 없으면 null.</summary>
+        private static string? FormatTierGradeText(int tier, EquipmentData? equip)
+        {
+            string? gradeName = equip != null ? EquipmentOptionText.GetGradeName(equip.GetGrade()) : null;
+            if (tier > 0 && gradeName != null) return $"Tier {tier} · {gradeName}";
+            if (tier > 0) return $"Tier {tier}";
+            return gradeName;
+        }
+
         private static void ApplyTierLabel(Label? label, int tier)
         {
             if (label == null) return;
@@ -1416,6 +1462,7 @@ namespace ARPG.Manager
             _eqName = root.Q<Label>("eq-name");
             _eqTier = root.Q<Label>("eq-tier");
             _eqItemLevel = root.Q<Label>("eq-item-level");
+            _eqQuality = root.Q<Label>("eq-quality");
             _eqDmgPhysics = root.Q<Label>("eq-dmg-physics");
             _eqDmgFire = root.Q<Label>("eq-dmg-fire");
             _eqDmgIce = root.Q<Label>("eq-dmg-ice");

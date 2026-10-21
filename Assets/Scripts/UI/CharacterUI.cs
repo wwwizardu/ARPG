@@ -16,10 +16,14 @@ namespace ARPG.UI
         [SerializeField] private SlotUI_Equip[] _slots = null!;
 
         private Data.ItemData?[]? _equippedItems = null;
+        // 아이템 수량·희귀도 두 줄 (ITEM_DROP_BALANCE_DESIGN §8.8). 프리팹 배열의 마지막 줄을 복제해 같은 배치에 붙인다
+        private TextMeshProUGUI? _itemQuantityText;
+        private TextMeshProUGUI? _itemRarityText;
 
         public void Initialize(Action<SlotUI, UnityEngine.EventSystems.PointerEventData> OnClickSlot)
         {
             base.Initialize("UI/CharacterUI", false);
+            CreateDropBonusLines();
 
             if (_slots == null || _slots.Length == 0)
             {
@@ -232,6 +236,35 @@ namespace ARPG.UI
             _textStat[20].text = $"번개 저항 {_statComponent.FinalLightningResist}";
             _textStat[21].text = $"독 저항 {_statComponent.FinalPoisonResist}";
             _textStat[22].text = $"행운 {_statComponent.FinalLuck}";
+
+            // ① 플레이어 묶음 합계. 희귀도는 곡선을 거친 실제 적용값이 다르면 함께 보여 준다 (§8.2·§8.8)
+            if (_itemQuantityText != null)
+                _itemQuantityText.text = $"아이템 수량 {FormatSignedPercent(_statComponent.FinalItemQuantity)}";
+            if (_itemRarityText != null)
+            {
+                int rarity = _statComponent.FinalItemRarity;
+                int applied = Mathf.RoundToInt(DropBonusResolver.ApplyPlayerRarityCurve(rarity));
+                _itemRarityText.text = applied != rarity
+                    ? $"아이템 희귀도 {FormatSignedPercent(rarity)} (적용 {applied}%)"
+                    : $"아이템 희귀도 {FormatSignedPercent(rarity)}";
+            }
+        }
+
+        private void CreateDropBonusLines()
+        {
+            if (_textStat == null || _textStat.Length == 0 || _itemQuantityText != null)
+                return;
+
+            TextMeshProUGUI template = _textStat[_textStat.Length - 1];
+            _itemQuantityText = Instantiate(template, template.transform.parent);
+            _itemQuantityText.name = "Text_ItemQuantity";
+            _itemRarityText = Instantiate(template, template.transform.parent);
+            _itemRarityText.name = "Text_ItemRarity";
+        }
+
+        private static string FormatSignedPercent(int value)
+        {
+            return value >= 0 ? $"+{value}%" : $"{value}%";
         }
     }
 }

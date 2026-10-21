@@ -429,7 +429,8 @@ namespace ARPG.Npc
                 RetryPendingRumorOwners(villageId);
             }
 
-            if (AR.s.Map.IsChunkActive(chunkCoord))
+            // 던전 안 보충에서도 월드 청크를 본다 — 던전 맵 청크가 같은 좌표로 활성이어도 던전에 엔티티를 만들지 않는다 (DUNGEON_WORLD_SIM §4.1)
+            if (AR.s.WorldMap.IsChunkActive(chunkCoord))
                 SpawnNpc(entityId, saveData).Forget();
 
             return entityId;
@@ -710,6 +711,8 @@ namespace ARPG.Npc
                 ? npcTable.MoveRadius
                 : DEFAULT_NPC_MOVE_RADIUS;
 
+            // 마을 좌표는 월드 좌표다. 던전 안 보충(System_NpcSim)에서도 월드 청크 데이터로 충돌을 본다 (DUNGEON_WORLD_SIM §4.1).
+            MapManager worldMap = AR.s.WorldMap;
             const int MAX_SPAWN_POSITION_ATTEMPTS = 8;
             for (int attempt = 0; attempt < MAX_SPAWN_POSITION_ATTEMPTS; attempt++)
             {
@@ -721,11 +724,11 @@ namespace ARPG.Npc
                     candidate += new Vector2(Mathf.Cos(angle) * r, Mathf.Sin(angle) * r);
                 }
 
-                if (CollisionUtil.IsBlockedAt(candidate, moveRadius) == false)
+                if (CollisionUtil.IsBlockedAt(worldMap, candidate, moveRadius) == false)
                     return candidate;
             }
 
-            if (CollisionUtil.TryFindNearestFree(village.Position, moveRadius,
+            if (CollisionUtil.TryFindNearestFree(worldMap, village.Position, moveRadius,
                     out Vector2 fallback) == true)
                 return fallback;
 
@@ -772,7 +775,7 @@ namespace ARPG.Npc
 
                 // await 도중 청크가 비활성화되었으면 GameObject 폐기 (orphan 방지)
                 Vector2Int chunkCoord = PositionToChunk(saveData.Position);
-                if (AR.s.Map == null || AR.s.Map.IsChunkActive(chunkCoord) == false)
+                if (AR.s.WorldMap == null || AR.s.WorldMap.IsChunkActive(chunkCoord) == false)
                 {
                     AR.s.Entity.DestroyEntity(createdId, allowRecycle: false, keepRegistered: true);
                     if (entity != null)

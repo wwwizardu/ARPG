@@ -104,6 +104,13 @@ namespace ARPG.Item
                     return $"{mod.Table.Name} +{mod.Value1}%";
             }
 
+            // 드롭 보너스 스탯은 FlatStat·IncreasedStat 모두 증가율 묶음이다 (ITEM_DROP_BALANCE_DESIGN §8.5)
+            string? dropBonusName = GetDropBonusStatName(mod.Table.TargetStat);
+            if (dropBonusName != null
+                && (mod.Table.EffectType == GlobalEnum.ModEffectType.FlatStat
+                    || mod.Table.EffectType == GlobalEnum.ModEffectType.IncreasedStat))
+                return $"{dropBonusName} {mod.Value1}% 증가";
+
             if (mod.Table.EffectType == GlobalEnum.ModEffectType.IncreasedStat)
             {
                 if (mod.Table.TargetStat == GlobalEnum.Stat.CriRate
@@ -140,7 +147,8 @@ namespace ARPG.Item
             if (tier.Max2 == 0 && tier.Min2 == 0)
             {
                 if (mod.EffectType == GlobalEnum.ModEffectType.IncreasedStat
-                    || IsPercentFlatStat(mod.TargetStat) == true)
+                    || IsPercentFlatStat(mod.TargetStat) == true
+                    || GetDropBonusStatName(mod.TargetStat) != null)
                     value += "%";
                 else if (mod.TargetStat == GlobalEnum.Stat.HpGeneration
                     || mod.TargetStat == GlobalEnum.Stat.MpGeneration)
@@ -148,6 +156,34 @@ namespace ARPG.Item
             }
 
             return $"T{tier.Tier} {mod.Name}: {value}";
+        }
+
+        /// <summary>장비 등급 이름 (ITEM_DROP_BALANCE_DESIGN §4.1).</summary>
+        public static string GetGradeName(GlobalEnum.EquipmentGrade grade)
+        {
+            switch (grade)
+            {
+                case GlobalEnum.EquipmentGrade.Magic: return "마법";
+                case GlobalEnum.EquipmentGrade.Rare: return "희귀";
+                default: return "일반";
+            }
+        }
+
+        /// <summary>품질 줄 "품질 +15%". 품질 0이거나 장비가 없으면 null (§5).</summary>
+        public static string? FormatQualityLine(EquipmentData? equipment)
+        {
+            return equipment != null && equipment.Quality > 0 ? $"품질 +{equipment.Quality}%" : null;
+        }
+
+        /// <summary>아이템 수량·희귀도 스탯 이름. 다른 스탯이면 null.</summary>
+        public static string? GetDropBonusStatName(GlobalEnum.Stat stat)
+        {
+            switch (stat)
+            {
+                case GlobalEnum.Stat.ItemQuantity: return "아이템 수량";
+                case GlobalEnum.Stat.ItemRarity: return "아이템 희귀도";
+                default: return null;
+            }
         }
 
         public static string GetSlotName(GlobalEnum.ModSlot slot)

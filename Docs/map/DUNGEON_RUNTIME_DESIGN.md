@@ -1,6 +1,6 @@
 # 절차 던전 런타임 설계
 
-> 상태: **구현됨** — 2026-09-19 던전 시스템("던전 시스템 추가"), 09-20 테이블 정리(GeneratorVersion 2), 09-27 동행 NPC(§5.3), 09-29 NPC 완료(§3.3). 마을별 2~3 슬롯, 접근 시 시간분할 입구 배치, E 입장, 분리된 `MapContext` 던전 맵, ESC 퇴장, 사망 복귀, 보스 완료 트랜잭션, `dungeons` 저장 파티션, 에디터 진단(`Editor/DungeonRuntimeDiagnostics.cs`)이 있다. **미구현**: 함정, 생성 실패 재시도, 입구 배치 실패율·"2~3개 보장" 진단, GeneratorVersion 마이그레이션(지원하지 않는 버전은 차단만), 사망 패널. Play Mode Profiler 실측 기록은 없다. (2026-10-03 문서 정리) 2026-10-09: 던전 상자와 입구를 엔티티로 전환(§4.1, 구현·사용자 플레이 확인). 2026-10-10: 입구 자막 문구를 `NarrativeContent.SignText`로 바꾸고, 입구가 있는 동안 거리만으로 켜도록 했다(§4.1, 진단 PASS·플레이 확인 전).
+> 상태: **구현됨** — 2026-09-19 던전 시스템("던전 시스템 추가"), 09-20 테이블 정리(GeneratorVersion 2), 09-27 동행 NPC(§5.3), 09-29 NPC 완료(§3.3). 마을별 2~3 슬롯, 접근 시 시간분할 입구 배치, E 입장, 분리된 `MapContext` 던전 맵, ESC 퇴장, 사망 복귀, 보스 완료 트랜잭션, `dungeons` 저장 파티션, 에디터 진단(`Editor/DungeonRuntimeDiagnostics.cs`)이 있다. **미구현**: 함정, 생성 실패 재시도, 입구 배치 실패율·"2~3개 보장" 진단, GeneratorVersion 마이그레이션(지원하지 않는 버전은 차단만), 사망 패널. Play Mode Profiler 실측 기록은 없다. (2026-10-03 문서 정리) 2026-10-09: 던전 상자와 입구를 엔티티로 전환(§4.1, 구현·사용자 플레이 확인). 2026-10-10: 입구 자막 문구를 `NarrativeContent.SignText`로 바꾸고, 입구가 있는 동안 거리만으로 켜도록 했다(§4.1, 진단 PASS·플레이 확인 전). 2026-10-19: 던전 안에서도 게임 시간·NPC·마을 시뮬이 계속 돈다([`DUNGEON_WORLD_SIM_DESIGN.md`](DUNGEON_WORLD_SIM_DESIGN.md) 구현 — §4·§5.3 문장 갱신). NPC 완료의 "플레이어가 던전 안" 거부를 뺐다(§3.3). 2026-10-21: 던전 드롭을 [`ITEM_DROP_BALANCE_DESIGN.md`](../combat/ITEM_DROP_BALANCE_DESIGN.md) §7.6으로 구현했다(§5.4, 던전 진단 PASS·플레이 확인 전).
 >
 > 표기: **확정** = 사용자 요청·답변, **구현** = 구현된 방식(처음 [제안]이던 항목 중 구현된 것), **제안** = 아직 구현되지 않은 기본안.
 >
@@ -64,7 +64,7 @@ ESC는 현재 UIManager에서 열린 UI가 없을 때 `UIMainMenu`를 연다. �
 - **진입점 분리**: 플레이어 완료(`DungeonCompletionTransaction` — 플레이어 Gold·`DungeonRecord.Completed`·`CompletedCount`)는 바꾸지 않는다. NPC 완료는 슬롯 단위 진입점 `DungeonManager.TryCompleteByNpc`로 한다. 플레이어 Gold, `DungeonRecord`, 전역 `CompletedCount`는 건드리지 않는다.
 - **슬롯 변경**: 슬롯을 제자리에서 바꾼다 — `Generation`+1, 새 `DungeonId`, 입구가 있었으면 없애고 그 좌표를 이전 입구(`HasPreviousEntrance`/`PreviousX,Y`)로 기록, `PlacementReadyGameTime` = 지금 + 교체 쿨다운, `NextCandidate` = 0. 입구가 배치되지 않은 슬롯도 완료할 수 있다(입구는 플레이어가 마을 근처에 와야 배치된다). 입구 역색인은 dirty 표시 후 다음 `TickPlacement` 첫머리에서 다시 만든다.
 - **새 저장 필드**(기본값 + 로드 보정, 스키마 버전 유지): `VillageDungeonSlots.LastNpcCompletionGameTime`(−1 = 없음, 마을당 72h 쿨다운), `DungeonSlot.NpcReplacedGeneration`(−1 = 없음, 현재 `Generation`과 같으면 NPC 교체 세대). 플레이어 완료는 새 슬롯 객체를 만들어 표시가 기본값으로 돌아간다.
-- **보호 규칙**(하나라도 해당하면 거부): 플레이어가 입장한 던전(`DungeonRecord` 존재) / 플레이어가 던전 안(`IsInside`) / 입장·배치 저장 진행 중 / 요청 DungeonId가 현재 슬롯에 없음(이미 세대 전진) / 마을 72h 쿨다운 / 이번 완료 뒤 NPC 교체 슬롯이 그 마을 슬롯 수의 절반 초과. **`DungeonRecord` 보호는 세이브 무결성 조건이기도 하다** — 로드 시 저장 검증(`DungeonSaveValidation`)은 기록이 있는 던전의 슬롯 `DungeonId`가 기록과 같은지 확인하므로, 기록 있는 던전의 세대를 넘기면 로드가 깨진다.
+- **보호 규칙**(하나라도 해당하면 거부): 플레이어가 입장한 던전(`DungeonRecord` 존재 — 지금 들어가 있는 던전도 입장 때 기록이 생겨 여기서 막힌다) / 입장·배치 저장 진행 중 / 요청 DungeonId가 현재 슬롯에 없음(이미 세대 전진) / 마을 72h 쿨다운 / 이번 완료 뒤 NPC 교체 슬롯이 그 마을 슬롯 수의 절반 초과. **`DungeonRecord` 보호는 세이브 무결성 조건이기도 하다** — 로드 시 저장 검증(`DungeonSaveValidation`)은 기록이 있는 던전의 슬롯 `DungeonId`가 기록과 같은지 확인하므로, 기록 있는 던전의 세대를 넘기면 로드가 깨진다.
 - **저장**: 즉시 저장하지 않는다. 미저장 NPC 완료가 있으면 다음 저장이 Dungeons 또는 NpcState 중 하나를 실을 때 둘을 함께 실어, 슬롯 변경과 NPC 보상이 같은 manifest revision에 커밋된다. 커밋 성공 시 미저장 표시를 지운다.
 
 ## 4. 던전 내부 맵
@@ -75,7 +75,7 @@ ESC는 현재 UIManager에서 열린 UI가 없을 때 `UIMainMenu`를 연다. �
 
 타일 전체 배열은 저장하지 않는다. 방/복도 메타데이터에서 플레이어 주변 8×8 청크만 래스터화·렌더하며, 플레이어가 이동하면 기존 청크 풀을 재사용한다. 구조 메타데이터를 저장하므로 생성 알고리즘이 업데이트되어도 진행 중 던전의 레이아웃이 달라지지 않는다. 상자·몬스터는 안정 ID로 만들고, 처치·획득·열림 등의 **차이 데이터만** 저장한다. [구현: `Dungeon/DungeonManager_Content.cs`] 함정은 없다(`DungeonObjectKind` = Monster/Boss/Chest). [미구현]
 
-월드 NPC·마을 시뮬레이션·건물 근접 UI·월드 몬스터 스폰은 던전 플레이어 좌표를 월드 좌표로 해석하면 안 된다. 던전 활성 동안 월드 시스템(`IWorldMapSystem` — `System_NpcSim`, `System_Time` 등)은 일시 중지한다(구현: `SystemManager.cs`). 던전 중에도 월드 시뮬을 돌리는 개정안은 [`DUNGEON_WORLD_SIM_DESIGN.md`](DUNGEON_WORLD_SIM_DESIGN.md)(2026-10-03 초안, 검토 대기). 던전 전투 시스템은 던전 엔티티만 조회한다. 월드로 돌아가면 기존 월드 컨텍스트와 매니저 상태를 복원한다. [`System_NpcSim.cs`](../../Assets/Scripts/Common/System/System_NpcSim.cs), [`System_SettlementSim.cs`](../../Assets/Scripts/Common/System/System_SettlementSim.cs), [`System_MonsterSpawn.cs`](../../Assets/Scripts/Common/System/System_MonsterSpawn.cs)
+월드 NPC·마을 시뮬레이션·건물 근접 UI·월드 몬스터 스폰은 던전 플레이어 좌표를 월드 좌표로 해석하면 안 된다. 던전 활성 동안 월드 좌표·월드 엔티티가 필요한 시스템(`IWorldMapSystem` 10개 — 청크 로더·몬스터 스폰·입구 배치·입구 자막·근처 시설 집계·마을 Tier 승격·건설 큐·벽 계획·네임드 존재·네임드 흔적)은 일시 중지한다. 게임 시간으로 도는 추상 시뮬레이션(`IWorldSimSystem` — `System_Time`·`System_SettlementSim`·`System_VillagePassiveProduction`·`System_NpcSim`·`System_NamedThreatDirector`)은 월드 맵을 `AR.s.WorldMap`으로만 조회하며 계속 돈다(구현: `SystemManager.cs`, 2026-10-19). 규칙·입장/퇴장 순서는 [`DUNGEON_WORLD_SIM_DESIGN.md`](DUNGEON_WORLD_SIM_DESIGN.md)가 정본이다. 던전 전투 시스템은 던전 엔티티만 조회한다. 월드로 돌아가면 기존 월드 컨텍스트와 매니저 상태를 복원한다. [`System_NpcSim.cs`](../../Assets/Scripts/Common/System/System_NpcSim.cs), [`System_SettlementSim.cs`](../../Assets/Scripts/Common/System/System_SettlementSim.cs), [`System_MonsterSpawn.cs`](../../Assets/Scripts/Common/System/System_MonsterSpawn.cs)
 
 ### 4.1 던전 상자·입구 엔티티 (2026-10-09)
 
@@ -183,9 +183,19 @@ ESC는 현재 UIManager에서 열린 UI가 없을 때 `UIMainMenu`를 연다. �
 
 **던전 안 사망**: 동행 NPC가 전투로 죽으면 기존 사망 파이프라인(`System_HpCheck` → `System_EntityDestroy` → `MarkNpcDead`)이 영구 사망을 기록하고, 이어서 동행을 즉시 끝낸다(`EndCompanionOnDeath`). 이후 체크포인트·재접속은 죽은 NPC를 소환하지 않는다. `HandleDeath`는 NPC를 가로채지 않는다(플레이어·던전 오브젝트 전용). [확정]
 
-**시스템 가동**: 던전 안에서는 `IWorldMapSystem`(`System_NpcSim`, `System_Time` 등)이 멈추므로 동행 NPC의 활동 판정도 멈춘다. 동행 NPC는 `System_AI_Behavior`의 "비활성 청크 AI 정지"에서 예외로 두어, 뒤처져도 순간이동할 수 있게 한다. [확정]
+**시스템 가동**: 던전 안에서도 `System_NpcSim`·`System_Time`은 돈다(`IWorldSimSystem`, [DUNGEON_WORLD_SIM_DESIGN §2·§3.5](DUNGEON_WORLD_SIM_DESIGN.md), 2026-10-19). 던전 안 동행 NPC는 `System_NpcSim`의 활동 선택·결과 판정에서 제외되고(`IsCompanionInDungeon`), 파티 모집·절도·소문 교환·네임드 소문 주인 후보에서도 빠진다. 동행 NPC는 `System_AI_Behavior`의 "비활성 청크 AI 정지"에서 예외로 두어, 뒤처져도 순간이동할 수 있게 한다. [확정]
 
 **하지 않는 것**: 동행 NPC의 HP는 저장하지 않는다(재접속 시 최대 HP로 소환). NPC는 던전 드랍·상자·완료 보상을 받지 않는다(D16). 필드 동행과 함께 입장하는 최종 형태(§4.4)는 C1에서 이 계약 위에 얹는다.
+
+### 5.4 던전 드롭 (2026-10-21)
+
+보상 밸런스의 정본은 [ITEM_DROP_BALANCE_DESIGN.md](../combat/ITEM_DROP_BALANCE_DESIGN.md) §7.6이다. 여기서는 런타임 연결만 적는다. 완료 트랜잭션(완료 골드·입구 교체·저장)은 바꾸지 않았다. [구현]
+
+- **레벨**: 입장 때 `DungeonLayout.Generate`에 입구 청크의 지역 레벨(`MapManager.GetZoneAtWorld`)을 넘긴다. 일반·상자 = 지역 + `MonsterLevelOffset`, 보스 = 지역 + `BossLevelOffset`(1~99). 레벨은 `DungeonObject.Level`에 저장되므로 이미 만든 던전은 옛 레벨을 유지한다. 지역 레벨을 넘기지 않으면(0) 표의 `MonsterLevel`·`BossLevel`을 쓴다. NPC 원정 전리품은 계속 표의 고정 레벨이다. `GeneratorVersion`은 그대로 4다.
+- **보스**: `SpawnMonsterAsync`의 `DropComponent` 제거를 지웠다. 보스는 Elite 등급 행(판정 10회·희귀도 100)으로 사망 드롭을 하고, 완료 골드는 따로 받는다.
+- **상자**: `OpenChest`가 골드에 더해 `DropHelper.ProcessChestDrops`를 부른다(던전 표 `ChestDropRolls`, 아이템 레벨 = 상자 레벨 또는 옛 던전은 일반 몬스터 레벨, 플레이어·장소 묶음만, T11·T12 없음).
+- **장소 보너스**: `DungeonManager.TryGetPlayerLocationDropBonus`가 플레이어가 던전 안이면 그 던전 표의 `DropQuantityBonus`·`DropRarityBonus`를 돌려준다. 드롭 계산부(`DropBonusResolver`)가 장소 묶음으로 더한다. 값은 표를 실시간으로 읽는다(레코드에 저장하지 않는다).
+- NPC는 던전 드롭·상자·보스 드롭을 받지 않는다(D16 그대로). [src: Assets/Scripts/Dungeon/DungeonManager_Drop.cs, Assets/Scripts/Dungeon/DungeonLayout.cs `Generate`·`ResolveEncounterLevel`, Assets/Scripts/Dungeon/DungeonManager_Content.cs]
 
 ## 6. 성능 계약
 

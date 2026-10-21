@@ -49,7 +49,8 @@ namespace ARPG.Editor
             Register<NpcTable>(list, "1460299278&range=A:P");
             // NpcEquipTable — NPC 시작 장비 세트. Desc + 슬롯별 ItemId/Chance 쌍.
             Register<NpcEquipTable>(list, "1566085089&range=A:Z");
-            Register<MonsterArchetypeTable>(list, "1141585255&range=A:M");
+            // N열 RarityPerAffix (ITEM_DROP_BALANCE_DESIGN §8.4)
+            Register<MonsterArchetypeTable>(list, "1141585255&range=A:N");
             // 몬스터 접사 (MONSTER_AFFIX_DESIGN.md §5). A~S 데이터, T열 Note는 시트 가독성용(다운로드 제외)
             Register<MonsterAffixTable>(list, "1703620452&range=A:S");
             // 네임드 위협 템플릿 (NAMED_THREAT_DESIGN §11.1). A~S 데이터, T열 Note는 시트 가독성용(다운로드 제외)
@@ -64,6 +65,8 @@ namespace ARPG.Editor
             Register<DropTable>(list, "1241586373&range=A:K");
             Register<DropCurrencyTable>(list, "2071520432&range=A:V");
             Register<DropEquipmentTable>(list, "1267382287&range=A:V");
+            // 드롭 구간표 (ITEM_DROP_BALANCE_DESIGN §7.1). A~Q 데이터, R열 Note는 시트 가독성용(다운로드 제외)
+            Register<DropBandTable>(list, "1276985023&range=A:Q");
             Register<SkillTable>(list, "92727160&range=A:AS");
             // Phase 1: SkillEffect 합성 시스템용 테이블 (+ 스킬 페이지 Tier/비용 메타데이터 + Kind 분류 컬럼)
             Register<SkillEffectTable>(list, "1681865950&range=A:N");
@@ -82,7 +85,8 @@ namespace ARPG.Editor
             // EquipmentBaseStat: A~N가 실제 데이터, O~S는 시트 가독성용 보조 컬럼(다운로드 제외).
             // 슬롯당 3컬럼(ModId, Value1, Value2) × 4 슬롯 = 12컬럼 + Id + ItemId = 14컬럼.
             Register<EquipmentBaseStatTable>(list, "972309111&range=A:N");
-            Register<DungeonTable>(list, "1672490546&range=A:P");
+            // Q~U열 던전 드롭 (ITEM_DROP_BALANCE_DESIGN §7.6): 레벨 보정 2칸, 상자 판정, 장소 수량·희귀도
+            Register<DungeonTable>(list, "1672490546&range=A:U");
             Register<VillageTable>(list, "441028134&range=A:F");
             Register<VillageStageTable>(list, "467145019&range=A:Q");
             // 청크 Zone(시드 청크 (0,0) 기준 Chebyshev 거리+1)별 몬스터 스폰 파라미터
@@ -125,6 +129,12 @@ namespace ARPG.Editor
             if (ValidateModSetup() == false)
             {
                 Debug.LogError("[DownloadTables] Mod/ModTier 검증 실패로 전체 테이블 저장을 중단합니다.");
+                return;
+            }
+
+            if (ValidateDropBandSetup() == false)
+            {
+                Debug.LogError("[DownloadTables] DropBand 검증 실패로 전체 테이블 저장을 중단합니다.");
                 return;
             }
 
@@ -244,6 +254,28 @@ namespace ARPG.Editor
 
         [MenuItem("ARPG/Download Table/CreatureTable", false, 100)]
         private static async void DownloadCreatureTable() => await DownloadSingleTable<CreatureTable>();
+
+        [MenuItem("ARPG/Download Table/DropBandTable", false, 100)]
+        private static async void DownloadDropBandTable()
+        {
+            TableEntry entry = GetTableEntry<DropBandTable>();
+            if (entry == null)
+            {
+                Debug.LogError("[DownloadTables] DropBandTable 등록 정보를 찾을 수 없습니다.");
+                return;
+            }
+
+            _tableDic = new();
+            if (await entry.DownloadAction() == false || ValidateDropBandSetup() == false)
+            {
+                Debug.LogError("[DownloadTables] DropBand 다운로드 또는 검증 실패로 저장하지 않습니다.");
+                return;
+            }
+
+            SaveTable(typeof(DropBandTable).Name, _tableDic[typeof(DropBandTable)], entry.SaveType);
+            AssetDatabase.Refresh();
+            Debug.Log("download DropBandTable Completed...");
+        }
 
         [MenuItem("ARPG/Download Table/DropCurrencyTable", false, 100)]
         private static async void DownloadDropCurrencyTable() => await DownloadSingleTable<DropCurrencyTable>();
@@ -766,6 +798,10 @@ namespace ARPG.Editor
                 {
                     ParseDropEquipmentTable(dropEquipmentTable, values);
                 }
+                else if (table is DropBandTable dropBandTable)
+                {
+                    ParseDropBandTable(dropBandTable, values);
+                }
                 else if (table is SkillTable skillTable)
                 {
                     ParseSkillTable(skillTable, values);
@@ -927,6 +963,20 @@ namespace ARPG.Editor
             table.RoomWidthMax = int.Parse(values[13]);
             table.RoomHeightMin = int.Parse(values[14]);
             table.RoomHeightMax = int.Parse(values[15]);
+            // 던전 드롭 (ITEM_DROP_BALANCE_DESIGN §7.6). 빈 셀이면 0
+            table.MonsterLevelOffset = ParseIntSafe(values, 16);
+            table.BossLevelOffset = ParseIntSafe(values, 17);
+            table.ChestDropRolls = ParseIntSafe(values, 18);
+            table.DropQuantityBonus = ParseIntSafe(values, 19);
+            table.DropRarityBonus = ParseIntSafe(values, 20);
+
+            if (table.MonsterLevelOffset < -98 || table.MonsterLevelOffset > 98 ||
+                table.BossLevelOffset < -98 || table.BossLevelOffset > 98 ||
+                table.ChestDropRolls < 0 || table.ChestDropRolls > DropBonusResolver.MAX_ROLLS_PER_SOURCE ||
+                table.DropQuantityBonus < -100 || table.DropRarityBonus < -100)
+            {
+                throw new FormatException($"DungeonTable Id {table.Id} contains an out-of-range drop value.");
+            }
 
             if (table.RoomCount < 6 || table.RoomCount > 12 ||
                 HasValidIds(table.MonsterTableIds) == false || table.MonsterLevel <= 0 ||
@@ -1130,7 +1180,8 @@ namespace ARPG.Editor
             table.WeaponId = int.Parse(values[9]);
             table.AiTableId = int.Parse(values[10]);
             table.DropId = int.Parse(values[11]);
-            table.DropRateBonus = int.Parse(values[12]);
+            // M열 DropQuantityBonus (옛 DropRateBonus 자리, ITEM_DROP_BALANCE_DESIGN §8.9)
+            table.DropQuantityBonus = int.Parse(values[12]);
             table.DropRarityBonus = int.Parse(values[13]);
             table.Level = int.Parse(values[14]);
             // Archetype은 시트에 컬럼 있으면 읽음. 없으면 C# 기본값 Normal 유지.
@@ -1201,6 +1252,9 @@ namespace ARPG.Editor
             table.AffixBaseCount = Mathf.Clamp(ParseIntSafe(values, 10), 0, MonsterAffixComponent.MAX_AFFIXES);
             table.AffixExtraChance = Mathf.Clamp(ParseIntSafe(values, 11), 0, 100);
             table.DropRollsPerAffix = Mathf.Max(0, ParseIntSafe(values, 12));
+
+            // 접사 1개당 아이템 희귀도 (ITEM_DROP_BALANCE_DESIGN §8.4). 빈 셀이면 0
+            table.RarityPerAffix = Mathf.Max(0, ParseIntSafe(values, 13));
         }
 
         /// <summary>
@@ -1525,6 +1579,81 @@ namespace ARPG.Editor
             table.SkillBookRate = values.Length > 9 && int.TryParse(values[9], out var sbr) ? sbr : 0;
             // 스킬 페이지 드랍 가중치 (SKILL_RUNE_DESIGN.md §8.1) — 신규 컬럼, 빈 셀 허용 (= 0)
             table.SkillPageRate = ParseIntSafe(values, 10);
+        }
+
+        /// <summary>
+        /// DropBandTable 파싱 (ITEM_DROP_BALANCE_DESIGN §7.1).
+        /// 컬럼: Id, MinLevel, MaxLevel, NormalRate, MagicRate, RareRate, RareModMin, RareModMax,
+        ///       NormalQualityMin, NormalQualityMax, QuantityBonus, HigherCurrencyMul,
+        ///       BookCapacityMin, BookCapacityMax, BookSlotChance, CurrentBandShare, SellPriceMul (R열 Note 제외)
+        /// </summary>
+        private static void ParseDropBandTable(DropBandTable table, string[] values)
+        {
+            if (values.Length < 17)
+                throw new FormatException($"DropBandTable Id {table.Id}: expected at least 17 columns, got {values.Length}.");
+
+            table.MinLevel = int.Parse(values[1]);
+            table.MaxLevel = int.Parse(values[2]);
+            table.NormalRate = int.Parse(values[3]);
+            table.MagicRate = int.Parse(values[4]);
+            table.RareRate = int.Parse(values[5]);
+            table.RareModMin = int.Parse(values[6]);
+            table.RareModMax = int.Parse(values[7]);
+            table.NormalQualityMin = int.Parse(values[8]);
+            table.NormalQualityMax = int.Parse(values[9]);
+            table.QuantityBonus = int.Parse(values[10]);
+            table.HigherCurrencyMul = int.Parse(values[11]);
+            table.BookCapacityMin = int.Parse(values[12]);
+            table.BookCapacityMax = int.Parse(values[13]);
+            table.BookSlotChance = int.Parse(values[14]);
+            table.CurrentBandShare = int.Parse(values[15]);
+            table.SellPriceMul = int.Parse(values[16]);
+
+            if (table.MinLevel < ItemLevelModTierRules.MIN_ITEM_LEVEL || table.MaxLevel > ItemLevelModTierRules.MAX_ITEM_LEVEL ||
+                table.MinLevel > table.MaxLevel ||
+                table.NormalRate < 0 || table.MagicRate < 0 || table.RareRate < 0 ||
+                table.NormalRate + table.MagicRate + table.RareRate != 100 || table.RareRate >= 100 ||
+                table.RareModMin < 3 || table.RareModMax > 6 || table.RareModMin > table.RareModMax ||
+                table.NormalQualityMin < 0 || table.NormalQualityMax > EquipmentQualityRules.MAX_QUALITY ||
+                table.NormalQualityMin > table.NormalQualityMax ||
+                table.QuantityBonus < -100 || table.HigherCurrencyMul < 0 ||
+                table.BookCapacityMin < 0 || table.BookCapacityMin > table.BookCapacityMax ||
+                table.BookSlotChance < 0 || table.BookSlotChance > 100 ||
+                table.CurrentBandShare < 0 || table.CurrentBandShare > 100 || table.SellPriceMul < 0)
+            {
+                throw new FormatException($"DropBandTable Id {table.Id} contains an out-of-range value.");
+            }
+        }
+
+        /// <summary>
+        /// 드롭 구간표가 레벨 1~99를 겹침·빈틈 없이 덮는지 확인한다. 레벨 오름차순 행이어야 한다.
+        /// 표를 받지 않은 다운로드(다른 단일 표)에서는 검사하지 않는다.
+        /// </summary>
+        private static bool ValidateDropBandSetup()
+        {
+            List<DropBandTable> bands = GetTableList<DropBandTable>();
+            if (bands == null)
+                return true;
+
+            bands.Sort((a, b) => a.MinLevel.CompareTo(b.MinLevel));
+            int expectedMin = ItemLevelModTierRules.MIN_ITEM_LEVEL;
+            for (int i = 0; i < bands.Count; i++)
+            {
+                if (bands[i].MinLevel != expectedMin)
+                {
+                    Debug.LogError($"[ValidateDropBand] Id={bands[i].Id}: MinLevel {bands[i].MinLevel} — {expectedMin}이어야 합니다(겹침 또는 빈틈).");
+                    return false;
+                }
+                expectedMin = bands[i].MaxLevel + 1;
+            }
+            if (expectedMin != ItemLevelModTierRules.MAX_ITEM_LEVEL + 1)
+            {
+                Debug.LogError($"[ValidateDropBand] 마지막 구간이 레벨 {ItemLevelModTierRules.MAX_ITEM_LEVEL}까지 덮지 않습니다.");
+                return false;
+            }
+
+            Debug.Log($"[ValidateDropBand] PASS — Bands={bands.Count}");
+            return true;
         }
 
         private static void ParseDropCurrencyTable(DropCurrencyTable table, string[] values)

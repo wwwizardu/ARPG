@@ -173,14 +173,14 @@ namespace ARPG.Editor
                 Id = 1,
                 ItemInstanceId = 7101,
                 Quantity = 1,
-                Equipment = new EquipmentData { Id = 1, Quality = 50, ItemLevel = 77 },
+                Equipment = new EquipmentData { Id = 1, Quality = 5, ItemLevel = 77 },
             };
             ItemData legacy = new ItemData
             {
                 Id = 1,
                 ItemInstanceId = 7102,
                 Quantity = 1,
-                Equipment = new EquipmentData { Id = 1, Quality = 50 },
+                Equipment = new EquipmentData { Id = 1, Quality = 5 },
             };
             string leveledJson = JsonConvert.SerializeObject(leveled, Formatting.None, JsonSettings.Default);
             string legacyJson = JsonConvert.SerializeObject(legacy, Formatting.None, JsonSettings.Default);

@@ -143,12 +143,12 @@ namespace ARPG.Data
             Max += max;
         }
 
+        /// <summary>증가율을 한 번 적용한다. 반올림은 품질 규칙과 같이 정확히 .5면 올린다 (ITEM_DROP_BALANCE_DESIGN §5).</summary>
         public void ApplyIncrease(int percent)
         {
             if (percent <= 0) return;
-            float mul = 1f + percent / 100f;
-            Min = Mathf.RoundToInt(Min * mul);
-            Max = Mathf.RoundToInt(Max * mul);
+            Min = ARPG.Item.EquipmentQualityRules.ApplyIncreasePercent(Min, percent);
+            Max = ARPG.Item.EquipmentQualityRules.ApplyIncreasePercent(Max, percent);
         }
     }
 
@@ -181,11 +181,17 @@ namespace ARPG.Data
     [Serializable]
     public class EquipmentData
     {
-        /// <summary>상점 기본 아이템의 고정 품질. 품질은 생성 때 롤만 되고 게임 로직에서 쓰이지 않는다.</summary>
-        public const int BasicItemQuality = 1;
+        /// <summary>상점 기본 아이템의 고정 품질 (0 = 품질 없음). 기본 아이템은 마법 등급이라 품질을 바꿀 수 없다.</summary>
+        public const int BasicItemQuality = 0;
 
         public int Id;
 
+        /// <summary>
+        /// 품질 0~20 (ITEM_DROP_BALANCE_DESIGN §5, EquipmentQualityRules). Base 칸 수치 × (1 + 품질/100).
+        /// 새 칸 "BaseQuality"에 저장하고 0이면 생략한다. 옛 "Quality"(1~100, 효과 없던 값)는 읽지 않으므로
+        /// 이전 장비는 품질 0이다(D14). 세이브 버전은 그대로다 — 아이템 레벨과 같은 방식.
+        /// </summary>
+        [JsonProperty("BaseQuality", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public int Quality;
 
         /// <summary>
@@ -247,13 +253,47 @@ namespace ARPG.Data
             _weaponStatsDirty = true;
         }
 
+        // ========== 장비 등급 (ITEM_DROP_BALANCE_DESIGN.md §4.1) ==========
+
+        /// <summary>
+        /// 붙어 있는 접두·접미로 등급을 판정한다. 없으면 일반, 접두·접미가 각각 1개 이하면 마법, 그 밖은 희귀.
+        /// Base·Implicit·무기 고유 강화는 세지 않는다. 등급은 저장하지 않는다.
+        /// </summary>
+        public GE.EquipmentGrade GetGrade()
+        {
+            CountAffixes(out int prefixCount, out int postfixCount);
+            return ResolveGrade(prefixCount, postfixCount);
+        }
+
+        public static GE.EquipmentGrade ResolveGrade(int prefixCount, int postfixCount)
+        {
+            if (prefixCount + postfixCount == 0)
+                return GE.EquipmentGrade.Normal;
+            if (prefixCount <= 1 && postfixCount <= 1)
+                return GE.EquipmentGrade.Magic;
+            return GE.EquipmentGrade.Rare;
+        }
+
+        public void CountAffixes(out int prefixCount, out int postfixCount)
+        {
+            prefixCount = 0;
+            postfixCount = 0;
+            for (int i = 0; i < Mods.Count; i++)
+            {
+                if (Mods[i].Slot == GE.ModSlot.Prefix)
+                    prefixCount++;
+                else if (Mods[i].Slot == GE.ModSlot.Postfix)
+                    postfixCount++;
+            }
+        }
+
         // ========== 상점 기본 아이템 (NPC_SHOP_EQUIPMENT_DESIGN.md §3.2·§6.1) ==========
 
         // Newtonsoft 조건부 저장 — SaveDtoSnapshot도 같은 규칙을 따른다.
         // 온전한 기본 아이템은 행 번호만, 그 밖의 장비(옵션이 행과 달라진 기본 아이템 포함)는 전체 옵션을 저장한다.
+        // 품질은 0이면 DefaultValueHandling으로 생략된다. 온전한 기본 아이템의 품질은 항상 0이다.
         public bool ShouldSerializeBasicItemId() => IsIntactBasicItem();
         public bool ShouldSerializeMods() => IsIntactBasicItem() == false;
-        public bool ShouldSerializeQuality() => IsIntactBasicItem() == false;
         // Id는 소유 ItemData.Id와 같다 (ItemData.OnLoadCompleted가 채운다). 빈 고유 강화 목록도 저장하지 않는다.
         public bool ShouldSerializeId() => false;
         public bool ShouldSerializeWeaponLocalEnhancements() => WeaponLocalEnhancements != null && WeaponLocalEnhancements.Count > 0;
@@ -565,11 +605,13 @@ namespace ARPG.Data
                 }
             }
 
-            cache.Physics.ApplyIncrease(physIncPct);
-            cache.Fire.ApplyIncrease(fireIncPct);
-            cache.Ice.ApplyIncrease(iceIncPct);
-            cache.Lightning.ApplyIncrease(lightIncPct);
-            cache.Poison.ApplyIncrease(poisonIncPct);
+            // 품질은 Base 피해에만 적용하고, 무기 고유 강화의 증가율과 더한 뒤 한 번 곱한다 (ITEM_DROP_BALANCE_DESIGN §5).
+            // 공격속도·치명타는 계열 고정값이라 품질을 적용하지 않는다.
+            cache.Physics.ApplyIncrease(ARPG.Item.EquipmentQualityRules.CombineWithIncrease(physIncPct, Quality));
+            cache.Fire.ApplyIncrease(ARPG.Item.EquipmentQualityRules.CombineWithIncrease(fireIncPct, Quality));
+            cache.Ice.ApplyIncrease(ARPG.Item.EquipmentQualityRules.CombineWithIncrease(iceIncPct, Quality));
+            cache.Lightning.ApplyIncrease(ARPG.Item.EquipmentQualityRules.CombineWithIncrease(lightIncPct, Quality));
+            cache.Poison.ApplyIncrease(ARPG.Item.EquipmentQualityRules.CombineWithIncrease(poisonIncPct, Quality));
 
             if (critIncPct > 0)
             {

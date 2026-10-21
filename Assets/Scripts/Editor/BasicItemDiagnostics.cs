@@ -79,7 +79,7 @@ namespace ARPG.EditorTools
                     string json = JsonConvert.SerializeObject(item, Formatting.None, JsonSettings.Default);
                     basicBytes += Encoding.UTF8.GetByteCount(json);
                     if (item.Equipment.IsIntactBasicItem() == false || json.Contains("\"Mods\"") == true ||
-                        json.Contains("\"Quality\"") == true || json.Contains("\"WeaponStats\"") == true ||
+                        json.Contains("Quality\"") == true || json.Contains("\"WeaponStats\"") == true ||
                         json.Contains("\"EquipType\"") == true || json.Contains("\"BasicItemId\":" + row.Id) == false)
                     {
                         omitFailures++;
@@ -105,7 +105,7 @@ namespace ARPG.EditorTools
                 }
             }
             Check(rowCount > 0, $"유효 기본 아이템 행 존재 (rows={rowCount}, items={itemIds.Count})");
-            Check(omitFailures == 0, $"기본 아이템 JSON에서 Mods·Quality·WeaponStats·EquipType 생략, BasicItemId 저장 (실패 {omitFailures})");
+            Check(omitFailures == 0, $"기본 아이템 JSON에서 Mods·품질·WeaponStats·EquipType 생략, BasicItemId 저장 (실패 {omitFailures})");
             Check(snapshotFailures == 0, $"저장 복사기(SaveDtoSnapshot)도 같은 필드 생략 (실패 {snapshotFailures})");
             Check(roundTripFailures == 0, $"저장·로드 왕복 뒤 옵션·무기 능력·전투력·JSON 동일 (실패 {roundTripFailures})");
 
@@ -122,7 +122,8 @@ namespace ARPG.EditorTools
                 string json = JsonConvert.SerializeObject(regular, Formatting.None, JsonSettings.Default);
                 regularBytes += Encoding.UTF8.GetByteCount(json);
                 ItemData? loaded = RoundTrip(json);
-                if (json.Contains("\"Mods\"") == false || json.Contains("\"Quality\"") == false ||
+                // 공유 경로 장비는 품질 0이라 품질 칸(BaseQuality)이 생략되고, 옛 Quality 칸은 더 이상 저장하지 않는다 (ITEM_DROP_BALANCE D14)
+                if (json.Contains("\"Mods\"") == false || json.Contains("Quality\"") == true ||
                     json.Contains("\"BasicItemId\"") == true || json.Contains("\"WeaponStats\"") == true ||
                     json.Contains("\"EquipType\"") == true || loaded == null || SameEquipment(regular, loaded) == false ||
                     loaded.Equipment!.Quality != regular.Equipment.Quality)
@@ -805,7 +806,7 @@ namespace ARPG.EditorTools
             };
 
             bool committed = ItemEnchantmentTransaction.TryCommit(equipment, GE.ItemEnchantmentOperation.AddAffix, -1,
-                applied, inventory, player, cost, out ItemEnchantmentFailureReason reason);
+                applied, equipment.Quality, inventory, player, cost, out ItemEnchantmentFailureReason reason);
             string json = JsonConvert.SerializeObject(item, Formatting.None, JsonSettings.Default);
             ItemData? loaded = RoundTrip(json);
             bool ok = committed == true && equipment.BasicItemId == 0 && json.Contains("\"Mods\"") == true &&
@@ -824,7 +825,7 @@ namespace ARPG.EditorTools
             if (itemFields.TryGetValue("Equipment", out object? equipmentObject) == false ||
                 equipmentObject is Dictionary<string, object?> equipmentFields == false)
                 return false;
-            return equipmentFields.ContainsKey("Mods") == false && equipmentFields.ContainsKey("Quality") == false &&
+            return equipmentFields.ContainsKey("Mods") == false && equipmentFields.ContainsKey("BaseQuality") == false &&
                    equipmentFields.ContainsKey("WeaponStats") == false && equipmentFields.ContainsKey("EquipType") == false &&
                    equipmentFields.TryGetValue("BasicItemId", out object? id) == true && id is int value && value == basicItemId;
         }

@@ -129,6 +129,16 @@ namespace ARPG.Utility
         public static bool TryFindNearestFree(Vector2 pos, float radius, out Vector2 result,
             bool requireActiveChunk = false)
         {
+            return TryFindNearestFree(AR.s.Map, pos, radius, out result, requireActiveChunk);
+        }
+
+        /// <summary>
+        /// 지정한 맵 기준 TryFindNearestFree. 던전 안에서도 도는 월드 시뮬(NPC 보충)이 월드 맵을 넘긴다 —
+        /// AR.s.Map은 던전 전투가 쓰므로 바꾸지 않는다 (DUNGEON_WORLD_SIM_DESIGN §4.1).
+        /// </summary>
+        public static bool TryFindNearestFree(MapManager map, Vector2 pos, float radius, out Vector2 result,
+            bool requireActiveChunk = false)
+        {
             int centerX = Mathf.FloorToInt(pos.x);
             int centerY = Mathf.FloorToInt(pos.y);
 
@@ -146,9 +156,9 @@ namespace ARPG.Utility
                         int ty = centerY + dy;
                         Vector2 candidate = new Vector2(tx + 0.5f, ty + 0.5f);
                         if (requireActiveChunk == true &&
-                            AR.s.Map.IsChunkActiveAtWorld(candidate) == false)
+                            map.IsChunkActiveAtWorld(candidate) == false)
                             continue;
-                        if (IsBlockedAt(candidate, radius) == false)
+                        if (IsBlockedAt(map, candidate, radius) == false)
                         {
                             result = candidate;
                             return true;
@@ -167,7 +177,12 @@ namespace ARPG.Utility
         /// </summary>
         public static bool IsBlockedAt(Vector2 pos, float radius)
         {
-            MapManager map = AR.s.Map;
+            return IsBlockedAt(AR.s.Map, pos, radius);
+        }
+
+        /// <summary>지정한 맵 기준 IsBlockedAt (월드 시뮬 경로용, TryFindNearestFree(MapManager, ...)와 같은 이유).</summary>
+        public static bool IsBlockedAt(MapManager map, Vector2 pos, float radius)
+        {
             int minX = Mathf.FloorToInt(pos.x - radius);
             int maxX = Mathf.FloorToInt(pos.x + radius);
             int minY = Mathf.FloorToInt(pos.y - radius);

@@ -235,6 +235,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 78ff55ace6c3d094a941be5075ab34b1
+    m_Address: Animation/RaggedSpearman
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7c427aeacf06dde43ac3b30bb18968cc
     m_Address: Sprites/Items/Woodpile
     m_ReadOnly: 0

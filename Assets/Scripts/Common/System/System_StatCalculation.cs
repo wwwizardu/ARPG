@@ -367,6 +367,12 @@ namespace ARPG.Systems
                 case GE.Stat.ProjectileCountAdd:
                     stat.FinalProjectileCountAdd = ApplyValue(stat.FinalProjectileCountAdd, modifier);
                     break;
+                case GE.Stat.ItemQuantity:
+                    stat.FinalItemQuantity = ApplyIncreaseBucket(stat.FinalItemQuantity, modifier);
+                    break;
+                case GE.Stat.ItemRarity:
+                    stat.FinalItemRarity = ApplyIncreaseBucket(stat.FinalItemRarity, modifier);
+                    break;
             }
         }
 
@@ -417,6 +423,7 @@ namespace ARPG.Systems
         /// <summary>
         /// CriRateMul/AttackSpeedMul/CastSpeedMul은 최종 수치에 곱하는 대상이 아니라
         /// 프로필에서 한 번 소비할 증가율 버킷이다. Add와 Multiply 모두 퍼센트 포인트로 합산한다.
+        /// ItemQuantity/ItemRarity도 같은 버킷이며 드롭 계산부(DropBonusResolver)가 소비한다.
         /// </summary>
         private readonly int ApplyIncreaseBucket(int currentValue, StatModifier modifier)
         {

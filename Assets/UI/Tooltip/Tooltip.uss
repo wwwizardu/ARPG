@@ -258,3 +258,14 @@
 .tooltip-tier-3 {
     color: rgb(200, 130, 255);
 }
+
+/* 장비 등급별 이름 색 (ITEM_DROP_BALANCE_DESIGN §4.1): 일반 흰색, 마법 파랑, 희귀 노랑 */
+.tooltip-grade-normal {
+    color: rgb(235, 235, 235);
+}
+.tooltip-grade-magic {
+    color: rgb(110, 150, 255);
+}
+.tooltip-grade-rare {
+    color: rgb(255, 220, 90);
+}

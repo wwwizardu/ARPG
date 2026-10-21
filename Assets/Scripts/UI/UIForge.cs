@@ -12,7 +12,7 @@ using Text = Unity.AppUI.UI.Text;
 namespace ARPG.UI
 {
     /// <summary>
-    /// 미장착 장비와 랜덤 교체/추가 작업만 선택하는 Forge 마법부여 UI.
+    /// 미장착 장비와 마법부여 작업(품질 다시 굴리기·진화·랜덤 교체·추가)만 선택하는 Forge UI.
     /// 후보 구성·옵션 롤·비용·데이터 변경은 ItemEnchantmentService만 수행한다.
     /// </summary>
     public class UIForge : UIBaseForm
@@ -21,6 +21,8 @@ namespace ARPG.UI
         private Button? _disassembleBtn;
         private Button? _replaceBtn;
         private Button? _addBtn;
+        private Button? _evolveBtn;
+        private Button? _qualityBtn;
         private IconButton? _closeBtn;
         private Text? _tierText;
         private Text? _selectedText;
@@ -28,6 +30,10 @@ namespace ARPG.UI
         private Text? _replaceStatusText;
         private Text? _addCostText;
         private Text? _addStatusText;
+        private Text? _evolveCostText;
+        private Text? _evolveStatusText;
+        private Text? _qualityCostText;
+        private Text? _qualityStatusText;
         private Text? _resultTitle;
         private VisualElement? _selectedOptions;
         private VisualElement? _resultSection;
@@ -117,6 +123,8 @@ namespace ARPG.UI
             _disassembleBtn = root.Q<Button>("disassemble-btn");
             _replaceBtn = root.Q<Button>("replace-btn");
             _addBtn = root.Q<Button>("add-btn");
+            _evolveBtn = root.Q<Button>("evolve-btn");
+            _qualityBtn = root.Q<Button>("quality-btn");
             _closeBtn = root.Q<IconButton>("close-btn");
             _tierText = root.Q<Text>("tier-text");
             _selectedText = root.Q<Text>("selected-text");
@@ -124,6 +132,10 @@ namespace ARPG.UI
             _replaceStatusText = root.Q<Text>("replace-status-text");
             _addCostText = root.Q<Text>("add-cost-text");
             _addStatusText = root.Q<Text>("add-status-text");
+            _evolveCostText = root.Q<Text>("evolve-cost-text");
+            _evolveStatusText = root.Q<Text>("evolve-status-text");
+            _qualityCostText = root.Q<Text>("quality-cost-text");
+            _qualityStatusText = root.Q<Text>("quality-status-text");
             _resultTitle = root.Q<Text>("result-title");
             _selectedOptions = root.Q<VisualElement>("selected-options");
             _resultSection = root.Q<VisualElement>("result-section");
@@ -136,6 +148,10 @@ namespace ARPG.UI
                 _replaceBtn.clicked += OnClickReplace;
             if (_addBtn != null)
                 _addBtn.clicked += OnClickAdd;
+            if (_evolveBtn != null)
+                _evolveBtn.clicked += OnClickEvolve;
+            if (_qualityBtn != null)
+                _qualityBtn.clicked += OnClickQuality;
             if (_closeBtn != null)
                 _closeBtn.clicked += OnClickClose;
         }
@@ -160,6 +176,16 @@ namespace ARPG.UI
             ExecuteOperation(GlobalEnum.ItemEnchantmentOperation.AddAffix);
         }
 
+        private void OnClickEvolve()
+        {
+            ExecuteOperation(GlobalEnum.ItemEnchantmentOperation.EvolveToMagic);
+        }
+
+        private void OnClickQuality()
+        {
+            ExecuteOperation(GlobalEnum.ItemEnchantmentOperation.RerollQuality);
+        }
+
         private void ExecuteOperation(GlobalEnum.ItemEnchantmentOperation operation)
         {
             if (GetSelectedItem() == null)
@@ -178,8 +204,7 @@ namespace ARPG.UI
             {
                 _lastResult = null;
                 RefreshAll();
-                Text? status = operation == GlobalEnum.ItemEnchantmentOperation.ReplaceAffix
-                    ? _replaceStatusText : _addStatusText;
+                Text? status = GetStatusText(operation);
                 if (status != null)
                     status.text = GetFailureMessage(result.FailureReason);
                 return;
@@ -219,7 +244,7 @@ namespace ARPG.UI
             {
                 GlobalEnum.ForgeTier.Premium => "제련소 Tier 3 — MVP 비용·후보는 Tier 1과 동일",
                 GlobalEnum.ForgeTier.Standard => "제련소 Tier 2 — MVP 비용·후보는 Tier 1과 동일",
-                GlobalEnum.ForgeTier.Basic => "제련소 Tier 1 — 랜덤 옵션 변경·추가 사용 가능",
+                GlobalEnum.ForgeTier.Basic => "제련소 Tier 1 — 품질·진화·옵션 변경·추가 사용 가능",
                 _ => "마법부여 불가 — 유효한 제련소가 없습니다",
             };
         }
@@ -288,7 +313,7 @@ namespace ARPG.UI
             ItemData? selected = GetSelectedItem();
             if (_selectedText != null)
                 _selectedText.text = selected != null
-                    ? $"선택: {selected.Table?.Name} (Item #{selected.ItemInstanceId})"
+                    ? FormatSelectedText(selected)
                     : "장비를 선택하세요";
             if (selected == null)
             {
@@ -305,6 +330,10 @@ namespace ARPG.UI
                 _replaceBtn, _replaceCostText, _replaceStatusText);
             RefreshOperation(GlobalEnum.ItemEnchantmentOperation.AddAffix,
                 _addBtn, _addCostText, _addStatusText);
+            RefreshOperation(GlobalEnum.ItemEnchantmentOperation.EvolveToMagic,
+                _evolveBtn, _evolveCostText, _evolveStatusText);
+            RefreshOperation(GlobalEnum.ItemEnchantmentOperation.RerollQuality,
+                _qualityBtn, _qualityCostText, _qualityStatusText);
         }
 
         private void RefreshOperation(GlobalEnum.ItemEnchantmentOperation operation,
@@ -333,14 +362,22 @@ namespace ARPG.UI
                     $"{preview.RequiredMaterialCount}개 (보유 {preview.OwnedMaterialCount}) + " +
                     $"{preview.FinalGoldCost} Gold (보유 {preview.OwnedGold})";
             }
+            else if (costText != null && operation == GlobalEnum.ItemEnchantmentOperation.RerollQuality
+                && preview.FailureReason != ItemEnchantmentFailureReason.CostDataInvalid)
+            {
+                costText.text = $"비용: {preview.FinalGoldCost} Gold (보유 {preview.OwnedGold})";
+            }
             if (statusText != null)
             {
+                string magicNote = preview.UsesMagicRule == true ? " · 마법 규칙(높은 티어 2배)" : string.Empty;
                 if (preview.CanApply == false)
                     statusText.text = GetFailureMessage(preview.FailureReason);
                 else if (operation == GlobalEnum.ItemEnchantmentOperation.ReplaceAffix)
-                    statusText.text = $"교체 가능 옵션 {preview.ReplaceableAffixCount}개 · 랜덤 대체 후보 {preview.RandomCandidateCount}개";
+                    statusText.text = $"교체 가능 옵션 {preview.ReplaceableAffixCount}개 · 랜덤 대체 후보 {preview.RandomCandidateCount}개{magicNote}";
+                else if (operation == GlobalEnum.ItemEnchantmentOperation.RerollQuality)
+                    statusText.text = $"현재 품질 {preview.CurrentQuality} → 0~{EquipmentQualityRules.MAX_QUALITY} 중 새 값";
                 else
-                    statusText.text = $"랜덤 후보 {preview.RandomCandidateCount}개 · Prefix {preview.PrefixCount}/{preview.SlotLimit} · Postfix {preview.PostfixCount}/{preview.SlotLimit}";
+                    statusText.text = $"랜덤 후보 {preview.RandomCandidateCount}개 · Prefix {preview.PrefixCount}/{preview.SlotLimit} · Postfix {preview.PostfixCount}/{preview.SlotLimit}{magicNote}";
             }
             button?.SetEnabled(preview.CanApply);
         }
@@ -367,6 +404,18 @@ namespace ARPG.UI
                         $"{_lastResult.ReplacedMod?.DisplayText} → {_lastResult.AppliedMod?.DisplayText} / " +
                         $"재료 {_lastResult.ConsumedMaterialCount}개 + {_lastResult.ConsumedGold} Gold";
                 }
+                else if (_lastResult.ResolvedOperation
+                    == GlobalEnum.ItemEnchantmentOperation.RerollQuality)
+                {
+                    _resultTitle.text = $"품질 다시 굴리기 — {_lastResult.PreviousQuality} → {_lastResult.NewQuality} / " +
+                        $"{_lastResult.ConsumedGold} Gold";
+                }
+                else if (_lastResult.ResolvedOperation
+                    == GlobalEnum.ItemEnchantmentOperation.EvolveToMagic)
+                {
+                    _resultTitle.text = $"마법 장비로 진화 — {_lastResult.AppliedMod?.DisplayText} / 재료 " +
+                        $"{_lastResult.ConsumedMaterialCount}개 + {_lastResult.ConsumedGold} Gold";
+                }
                 else
                 {
                     _resultTitle.text = $"랜덤 옵션 추가 성공 — " +
@@ -378,6 +427,35 @@ namespace ARPG.UI
             _afterOptions.Clear();
             AddOptionLines(_beforeOptions, _lastResult.BeforeOptions);
             AddOptionLines(_afterOptions, _lastResult.AfterOptions);
+        }
+
+        private Text? GetStatusText(GlobalEnum.ItemEnchantmentOperation operation)
+        {
+            return operation switch
+            {
+                GlobalEnum.ItemEnchantmentOperation.ReplaceAffix => _replaceStatusText,
+                GlobalEnum.ItemEnchantmentOperation.EvolveToMagic => _evolveStatusText,
+                GlobalEnum.ItemEnchantmentOperation.RerollQuality => _qualityStatusText,
+                _ => _addStatusText,
+            };
+        }
+
+        /// <summary>"선택: 가죽 장화 · 일반 · 품질 12 · 아이템 레벨 40 (Item #123)"</summary>
+        private static string FormatSelectedText(ItemData selected)
+        {
+            System.Text.StringBuilder sb = new System.Text.StringBuilder();
+            sb.Append("선택: ").Append(selected.Table?.Name);
+            EquipmentData? equipment = selected.Equipment;
+            if (equipment != null)
+            {
+                sb.Append(" · ").Append(EquipmentOptionText.GetGradeName(equipment.GetGrade()));
+                if (equipment.Quality > 0)
+                    sb.Append(" · 품질 ").Append(equipment.Quality);
+                if (equipment.ItemLevel > 0)
+                    sb.Append(" · 아이템 레벨 ").Append(equipment.ItemLevel);
+            }
+            sb.Append(" (Item #").Append(selected.ItemInstanceId).Append(')');
+            return sb.ToString();
         }
 
         private ItemData? GetSelectedItem()
@@ -464,7 +542,9 @@ namespace ARPG.UI
                 ItemEnchantmentFailureReason.IncompatibleMod => "장비 옵션 데이터가 올바르지 않습니다.",
                 ItemEnchantmentFailureReason.EffectNotImplemented => "실제 전투 소비 경로가 확인되지 않은 효과입니다.",
                 ItemEnchantmentFailureReason.DuplicateGroup => "Group이 없거나 중복 규칙이 잘못된 Mod 데이터입니다.",
-                ItemEnchantmentFailureReason.TierUnavailable => "플레이어 레벨과 아이템 Tier에 맞는 결과 Tier가 없습니다.",
+                ItemEnchantmentFailureReason.TierUnavailable => "아이템 레벨에 맞는 결과 Tier가 없습니다.",
+                ItemEnchantmentFailureReason.RequiresNormalGrade => "옵션이 없는 일반 장비에만 쓸 수 있습니다.",
+                ItemEnchantmentFailureReason.RequiresAffixedGrade => "일반 장비는 진화의 오브로 먼저 마법 장비로 만드세요.",
                 ItemEnchantmentFailureReason.UnsupportedOperation => "아직 지원하지 않는 마법부여 작업입니다.",
                 ItemEnchantmentFailureReason.CostDataInvalid => "마법부여 비용 테이블을 사용할 수 없습니다.",
                 _ => "마법부여 처리에 실패했습니다. 데이터는 변경되지 않았습니다.",

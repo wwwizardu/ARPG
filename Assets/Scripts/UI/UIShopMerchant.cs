@@ -393,9 +393,10 @@ namespace ARPG.UI
                 if (item != null && item.Table != null)
                 {
                     // V5 (§8.3): 상인 매입가 = BasePrice × BuyFromPlayerBp / 10000 (TradeProfile 정본).
+                    // 장비는 등급·아이템 레벨 배율을 더 곱한다 (ITEM_DROP_BALANCE_DESIGN §9). 실제 지급액과 같은 함수다.
                     // 마을 컨텍스트가 없으면(테스트 모드) 기존 SellRatioBp 표기 유지.
                     int sellPrice = _villageId >= 0
-                        ? AR.s.Village.GetMerchantBuyPrice(_villageId, item.Table)
+                        ? AR.s.Village.GetPlayerSellPrice(_villageId, item)
                         : item.Table.BasePrice * item.Table.SellRatioBp / 100;
                     if (sellPrice < 0)
                         sellPrice = 0;

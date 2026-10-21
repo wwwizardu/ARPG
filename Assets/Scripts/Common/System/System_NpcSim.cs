@@ -12,8 +12,9 @@ namespace ARPG.Systems
     /// <summary>
     /// 개별 NPC의 오프스크린 활동을 시간분할로 전진한다.
     /// 상태는 NpcSaveData가 소유하며, 이 시스템은 틱마다 한정된 수만 처리한다.
+    /// 던전 안에서도 돈다 (IWorldSimSystem) — 월드 맵은 AR.s.WorldMap으로만 본다 (DUNGEON_WORLD_SIM_DESIGN §2·§4).
     /// </summary>
-    public class System_NpcSim : IFixedUpdateSystem, IWorldMapSystem
+    public class System_NpcSim : IFixedUpdateSystem, IWorldSimSystem
     {
         // 총 NPC 수와 무관하게 틱당 비용을 제한한다.
         private const int TickBudget = 12;
@@ -33,7 +34,7 @@ namespace ARPG.Systems
                 return;
 
             float now = AR.s.Time.CurrentGameTime;
-            int worldSeed = AR.s.Map.mapSeed;
+            int worldSeed = AR.s.WorldMap.mapSeed;
 
             // NpcManager가 정렬된 ID 순서와 커서를 소유한다. 시스템은 순회 상태를 저장하지 않는다.
             for (int i = 0; i < TickBudget; i++)
@@ -219,10 +220,10 @@ namespace ARPG.Systems
             activity.HasMovementPath = isExpedition;
             if (activity.HasMovementPath)
             {
-                float minX = AR.s.Map.minChunkX * AR.s.Map.chunkSize;
-                float maxX = (AR.s.Map.maxChunkX + 1) * AR.s.Map.chunkSize - 1f;
-                float minY = AR.s.Map.minChunkY * AR.s.Map.chunkSize;
-                float maxY = (AR.s.Map.maxChunkY + 1) * AR.s.Map.chunkSize - 1f;
+                float minX = AR.s.WorldMap.minChunkX * AR.s.WorldMap.chunkSize;
+                float maxX = (AR.s.WorldMap.maxChunkX + 1) * AR.s.WorldMap.chunkSize - 1f;
+                float minY = AR.s.WorldMap.minChunkY * AR.s.WorldMap.chunkSize;
+                float maxY = (AR.s.WorldMap.maxChunkY + 1) * AR.s.WorldMap.chunkSize - 1f;
                 activity.OriginPosition = saveData.Position;
                 activity.TargetPosition = kind == NpcActivityKind.DungeonDelve
                     ? delveTarget
@@ -246,10 +247,10 @@ namespace ARPG.Systems
                 return;
             }
 
-            float minX = AR.s.Map.minChunkX * AR.s.Map.chunkSize;
-            float maxX = (AR.s.Map.maxChunkX + 1) * AR.s.Map.chunkSize - 1f;
-            float minY = AR.s.Map.minChunkY * AR.s.Map.chunkSize;
-            float maxY = (AR.s.Map.maxChunkY + 1) * AR.s.Map.chunkSize - 1f;
+            float minX = AR.s.WorldMap.minChunkX * AR.s.WorldMap.chunkSize;
+            float maxX = (AR.s.WorldMap.maxChunkX + 1) * AR.s.WorldMap.chunkSize - 1f;
+            float minY = AR.s.WorldMap.minChunkY * AR.s.WorldMap.chunkSize;
+            float maxY = (AR.s.WorldMap.maxChunkY + 1) * AR.s.WorldMap.chunkSize - 1f;
             Vector2 target = NpcActivityResolver.GetHuntTargetPosition(leader.Position, party.PartyId,
                 startGameTime, worldSeed, minX, maxX, minY, maxY);
             StartPartyExpedition(party, leader, NpcActivityKind.Hunt, "hunt", target, startGameTime);
