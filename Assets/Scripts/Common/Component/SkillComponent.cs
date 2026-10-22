@@ -94,6 +94,9 @@ namespace ARPG.Component
         /// <summary>현재 실행에서 AreaEffect 논리 엔티티가 이미 생성됐는지 여부</summary>
         public bool IsAreaEffectCreated;
 
+        /// <summary>위임 시전 후 이 슬롯의 입력을 한 번 놓아야 다시 소환할 수 있는지.</summary>
+        public bool RequiresInputRelease;
+
         /// <summary>
         /// 스킬 데이터를 초기화
         /// </summary>
@@ -104,6 +107,7 @@ namespace ARPG.Component
             CurrentChargeTime = 0f;
             IsToggleActive = false;
             IsAreaEffectCreated = false;
+            RequiresInputRelease = false;
             ResetAimRuntimeData();
         }
 

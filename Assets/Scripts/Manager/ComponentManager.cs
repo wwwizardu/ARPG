@@ -71,6 +71,8 @@ namespace ARPG.Component
             { typeof(InputComponent), 100 },
             { typeof(SkillAimIndicatorComponent), 8 },
             { typeof(SkillMovementPenaltyComponent), 20 },
+            { typeof(SkillChannelEffectComponent), 32 },
+            { typeof(TotemTag), 32 },
             { typeof(MoveSlowComponent), 64 },        // 둔화 중인 엔티티 (장판 위 몬스터·플레이어)
             { typeof(MoveSlowBuffComponent), 64 },    // 둔화(Slow) 버프 엔티티
             { typeof(AttackTelegraphComponent), 128 },

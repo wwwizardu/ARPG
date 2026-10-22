@@ -45,6 +45,7 @@ namespace ARPG.Systems
             public readonly SparseSet<DashComponent> Dash;
             public readonly SparseSet<SkillDashHitComponent> DashHit;
             public readonly SparseSet<AIComponent> AI;
+            public readonly SparseSet<TotemTag> Totem;
 
             public SkillRuntimePools(ComponentManager cm)
             {
@@ -68,6 +69,7 @@ namespace ARPG.Systems
                 Dash = cm.GetComponentPool<DashComponent>();
                 DashHit = cm.GetComponentPool<SkillDashHitComponent>();
                 AI = cm.GetComponentPool<AIComponent>();
+                Totem = cm.GetComponentPool<TotemTag>();
             }
         }
 
@@ -88,6 +90,7 @@ namespace ARPG.Systems
                 int skillEntityId = skillPool.GetEntityId(i);
                 SkillComponent skill = skillPool.GetByIndex(i);
                 skill.ResetAimRuntimeData();
+                skill.RequiresInputRelease = false;
                 cm.SetComponent(skillEntityId, skill);
 
                 if (skillStatePool.TryGet(skillEntityId, out SkillStateComponent skillState) == true)
@@ -130,6 +133,14 @@ namespace ARPG.Systems
                 // 초기화되지 않은 스킬은 건너뜀
                 if (skill.IsInitialized == false)
                     continue;
+
+                if (skill.RequiresInputRelease == true
+                    && pools.Input.TryGet(skill.OwnerEntityId, out InputComponent heldInput) == true
+                    && (heldInput.SkillSlotHeldMask & (1 << skill.SlotIndex)) == 0)
+                {
+                    skill.RequiresInputRelease = false;
+                    cm.SetComponent(skillEntityId, skill);
+                }
 
                 // 상태 컴포넌트가 없으면 건너뜀
                 if (pools.SkillState.TryGet(skillEntityId, out var skillState) == false)
@@ -184,6 +195,12 @@ namespace ARPG.Systems
         /// <param name="skill">스킬 컴포넌트</param>
         private void ProcessSkillCommands(int skillEntityId, ref SkillComponent inSkill, ref SkillCommandComponent inCommand, in SkillRuntimePools pools)
         {
+            if (inSkill.RequiresInputRelease == true)
+            {
+                AR.s.Component.RemoveComponent<SkillCommandComponent>(inSkill.OwnerEntityId);
+                return;
+            }
+
             if(pools.State.TryGet(inSkill.OwnerEntityId, out var charState) == false)
             {
                 Debug.LogError($"[System_Skill] Character StateComponent not found (OwnerEntityId: {inSkill.OwnerEntityId})");
@@ -240,6 +257,8 @@ namespace ARPG.Systems
             SkillEffectExecutor.Trigger(GE.SkillTrigger.OnSkillCommand, ref cmdCtx, inSkill.EffectiveSkillEffectIds);
             if (cmdCtx.CancelOriginalCast)
             {
+                inSkill.RequiresInputRelease = pools.Input.Contains(inSkill.OwnerEntityId);
+                AR.s.Component.SetComponent(skillEntityId, inSkill);
                 AR.s.Component.RemoveComponent<SkillCommandComponent>(inSkill.OwnerEntityId);
                 return;
             }
@@ -456,11 +475,12 @@ namespace ARPG.Systems
             AR.s.Component.SetComponent(skillEntityId, skill);
 
             // Process 상태 시간이 끝나면 End 상태로 전환
-            // 단, 플레이어 채널링은 입력 유지가 종료를 결정하므로 ProcessDuration 자동 종료를 스킵
-            // (AI 채널링은 InputComponent가 없으므로 ProcessDuration으로 종료됨 → 채널 지속시간 데이터로 활용)
+            // 플레이어는 입력 유지, 토템은 공격 대상 유무가 채널 종료를 결정한다.
+            // 일반 AI 채널링은 ProcessDuration으로 종료한다.
             // ProcessChannelingSkill에서 이미 End로 전이된 경우는 state.State가 더 이상 Process가 아니므로 중복 전이 방지
             bool hasInput = pools.Input.Contains(skill.OwnerEntityId);
-            bool isPlayerChanneling = (skill.ExecutionType == SkillExecutionType.Channeling) && hasInput;
+            bool isSustainedChanneling = skill.ExecutionType == SkillExecutionType.Channeling
+                && (hasInput == true || pools.Totem.Contains(skill.OwnerEntityId) == true);
             SkillImpactSchedule processSchedule = ResolveImpactSchedule(skill, timing);
             // 오너의 아무 점프가 아니라 이 스킬이 띄운 점프만 기다린다.
             // 넉백·대시 같은 다른 점프 소스가 추가되면 오너 단위 검사는 엉뚱한 점프를 기다린다.
@@ -470,7 +490,7 @@ namespace ARPG.Systems
                 && (isOwnJumpAirborne == true
                     || pools.LandingCommit.Contains(skillEntityId) == true);
             if (state.State == SkillState.Process
-                && isPlayerChanneling == false
+                && isSustainedChanneling == false
                 && waitsForLanding == false
                 && state.ElapsedTime >= timing.ProcessDuration)
             {
@@ -751,6 +771,7 @@ namespace ARPG.Systems
         private void OnEnterEndState(int skillEntityId, ref SkillComponent inSkill, in SkillRuntimePools pools)
         {
             ComponentManager cm = AR.s.Component;
+            AR.s.System.GetSystem<System_SkillChannelEffect>()?.StopEffect(skillEntityId);
             // 채널 종료 등 남은 커밋이 실행되지 않는 경우에도 후딜에는 예고를 남기지 않는다.
             cm.RemoveComponent<AttackTelegraphComponent>(skillEntityId);
             cm.RemoveComponent<SkillLandingCommitComponent>(skillEntityId);
@@ -781,6 +802,7 @@ namespace ARPG.Systems
             bool wasCancelled,
             in SkillRuntimePools pools)
         {
+            AR.s.System.GetSystem<System_SkillChannelEffect>()?.StopEffect(skillEntityId);
             // 스킬 런타임 데이터 초기화
             inSkill.ResetRuntimeData();
             AR.s.Component.SetComponent(skillEntityId, inSkill);
@@ -880,14 +902,23 @@ namespace ARPG.Systems
             bool hasPlayerInput = pools.Input.Contains(skill.OwnerEntityId);
             GlobalEnum.SkillMovementMode movementMode = SkillUsePolicyResolver.ResolveMovementMode(skill, hasPlayerInput);
             float baseMultiplier = SkillUsePolicyResolver.ResolveMovementMultiplier(skill.Table, movementMode);
+            bool locksChannelMovement = skill.ExecutionType == SkillExecutionType.Channeling && baseMultiplier == 0f;
             AR.s.Component.SetComponent(skill.OwnerEntityId, new SkillMovementPenaltyComponent
             {
                 SkillEntityId = skillEntityId,
                 MovementMode = movementMode,
                 BaseMultiplier = baseMultiplier,
-                CurrentMultiplier = 1f,
+                CurrentMultiplier = locksChannelMovement == true ? 0f : 1f,
                 EndRecoveryProgress = 0f,
             });
+
+            // Move(100)는 Skill(200)보다 먼저 실행된다. 제자리 채널 시작 순간의 남은 이동도 지운다.
+            if (locksChannelMovement == true
+                && AR.s.Component.TryGetComponent<VelocityComponent>(skill.OwnerEntityId, out VelocityComponent velocity) == true)
+            {
+                velocity.Speed = 0f;
+                AR.s.Component.SetComponent(skill.OwnerEntityId, velocity);
+            }
 
             if (pools.SkillAimIndicator.TryGet(skill.OwnerEntityId, out SkillAimIndicatorComponent indicator) == true)
             {
@@ -1215,7 +1246,7 @@ namespace ARPG.Systems
         /// <summary>
         /// Channeling 타입 스킬 처리
         /// - 플레이어(InputComponent 보유): 슬롯 키를 유지하는 동안 tick. 입력을 떼면 End 상태로 전이하여 후딜레이/쿨타임 정상 처리
-        /// - AI(InputComponent 없음): 항상 held 취급. 종료는 ProcessProcessState의 ProcessDuration 자동 종료 경로에서 처리
+        /// - 토템: 공격 대상이 있는 동안 유지. 일반 AI는 ProcessDuration으로 종료
         /// </summary>
         private void ProcessChannelingSkill(int skillEntityId, ref SkillStateComponent state, ref SkillComponent skill, in SkillRuntimePools pools)
         {
@@ -1227,8 +1258,9 @@ namespace ARPG.Systems
             }
             else
             {
-                // AI 채널링: ProcessDuration이 종료를 결정
-                isHeld = true;
+                // 토템은 유효한 공격 대상이 있는 동안 유지한다. 일반 AI는 ProcessDuration으로 종료한다.
+                isHeld = pools.Totem.Contains(skill.OwnerEntityId) == false
+                    || (pools.AI.TryGet(skill.OwnerEntityId, out AIComponent ai) == true && ai.TargetEntityId >= 0);
             }
 
             if (isHeld == false)
@@ -1448,7 +1480,8 @@ namespace ARPG.Systems
 
             // 기존 테이블의 "Hit" 같은 값은 Addressable 이펙트 키가 아니다.
             // Effects/ 주소가 명시된 경우에만 첫 커밋 연출을 한 번 재생한다.
-            if (skill.CurrentHitIndex == 0
+            if (skill.ExecutionType != SkillExecutionType.Channeling
+                && skill.CurrentHitIndex == 0
                 && string.IsNullOrEmpty(skillTable.ActivateName) == false
                 && skillTable.ActivateName.StartsWith("Effects/", System.StringComparison.Ordinal) == true)
             {

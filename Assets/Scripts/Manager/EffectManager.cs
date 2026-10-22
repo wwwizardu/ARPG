@@ -204,6 +204,21 @@ namespace ARPG.Manager
         }
 
         /// <summary>
+        /// 살아 있는 핸들의 위치와 회전을 갱신한다. 조준 추적 연출에서 사용한다.
+        /// </summary>
+        public bool SetPose(EffectHandle handle, Vector3 position, Quaternion rotation)
+        {
+            if (handle.IsValid == false
+                || _active.TryGetValue(handle.InstanceId, out EffectInstance instance) == false
+                || instance == null
+                || instance.InstanceId != handle.InstanceId)
+                return false;
+
+            instance.transform.SetPositionAndRotation(position, rotation);
+            return true;
+        }
+
+        /// <summary>
         /// 핸들로 이펙트 종료. 풀로 반환. 이미 반환됐거나 무효 핸들이면 false.
         /// </summary>
         public bool Stop(EffectHandle handle)

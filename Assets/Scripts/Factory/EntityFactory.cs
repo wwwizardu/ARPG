@@ -25,6 +25,7 @@ namespace ARPG.Factory
     /// </summary>
     public static class EntityFactory
     {
+        public const string TotemPrefabKey = "Prefabs/Totem";
         private const string ENTITY_PREFAB_KEY = "Prefabs/Entity";
         private const string SKILL_AIM_INDICATOR_PREFAB_KEY = "Prefabs/Player/SkillAimIndicator";
 
@@ -779,7 +780,7 @@ namespace ARPG.Factory
 
         /// <summary>
         /// 토템 엔티티 생성. caster의 StatComponent를 스냅샷 복사하고 caster 진영을 그대로 따름.
-        /// 슬롯 0에 지정 스킬을 생성하며, System_Totem이 자율로 사거리 내 적에게 발사한다.
+        /// 슬롯 0에 지정 스킬을 생성하며, Stationary AI가 사거리 내 적을 추적해 시전한다.
         /// LifetimeComponent로 만료되면 System_Lifetime이 DestroyTag를 부착.
         /// </summary>
         /// <param name="casterEntityId">시전자(플레이어 등) - 스탯 스냅샷 출처</param>
@@ -846,9 +847,9 @@ namespace ARPG.Factory
             CreateSkill(totemId, 0, skillId);
 
             // AI 컴포넌트: Stationary 프로필 - StationaryAttackStateHandler가 사거리 내 적 자율 시전
-            // AIComponent / AIPerceptionComponent / PathfindingComponent는 추가 안 함:
-            //  - StationaryAttackStateHandler가 FactionHelper로 직접 타겟 탐색 (AI Perception 우회)
-            //  - 정지 상태이므로 Pathfinding 불필요
+            // 감지는 Stationary 핸들러가 담당하고, AIComponent의 대상을 공통 조준 시스템이 소비한다.
+            // 정지 상태이므로 AIPerceptionComponent / PathfindingComponent는 필요 없다.
+            cm.AddComponent(totemId, new AIComponent { TargetEntityId = -1 });
             float skillRange = 0f;
             Tables.SkillTable? skillTable = AR.s.Data.GetSkill(skillId);
             if (skillTable != null)
@@ -868,9 +869,41 @@ namespace ARPG.Factory
             });
 
             AIStateHelper.EnterInitialState(totemId);
+            AttachTotemVisual(totemId, position).Forget();
 
             Debug.Log($"[EntityFactory] CreateTotem - TotemId: {totemId}, Caster: {casterEntityId}, SkillId: {skillId}, Position: {position}, Duration: {duration}");
             return totemId;
+        }
+
+        private static async UniTask AttachTotemVisual(int totemId, Vector2 position)
+        {
+            ComponentManager cm = AR.s.Component;
+            using var contextLoad = AR.s.Map.Context.BeginLoad();
+            GameObject? obj = await AddressablePool.Get(TotemPrefabKey,
+                new Vector3(position.x, position.y, 0f), Quaternion.identity);
+            if (obj == null)
+                return;
+
+            if (contextLoad.IsCurrent == false || cm == null
+                || cm.HasComponent<TotemTag>(totemId) == false || cm.HasComponent<DestroyTag>(totemId) == true)
+            {
+                AddressablePool.Return(TotemPrefabKey, obj);
+                return;
+            }
+
+            EntityBase? entity = obj.GetComponent<EntityBase>();
+            if (entity == null)
+            {
+                Debug.LogError("[EntityFactory] Totem prefab needs EntityBase.");
+                AddressablePool.Return(TotemPrefabKey, obj);
+                return;
+            }
+
+            entity.SetEntityId(totemId);
+            entity.SetupEntityId();
+            AddFogVisibility(totemId, entity);
+            entity.AutoRegisterChildHandlers();
+            RegisterToSystems(totemId, obj, 0);
         }
 
         /// <summary>

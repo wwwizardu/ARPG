@@ -86,7 +86,8 @@ namespace ARPG.Utility
             float fieldOfView,
             bool requireStatComponent,
             out Vector2 targetPosition,
-            out float nearestEnemySqrDistance)
+            out float nearestEnemySqrDistance,
+            bool requireLivingTarget = false)
         {
             ComponentManager cm = AR.s.Component;
             targetPosition = Vector2.zero;
@@ -117,6 +118,12 @@ namespace ARPG.Utility
                     continue;
 
                 if (requireStatComponent && statPool.Contains(candidateId) == false)
+                    continue;
+
+                if (requireLivingTarget == true
+                    && (cm.HasComponent<DestroyTag>(candidateId) == true
+                        || statPool.TryGet(candidateId, out StatComponent candidateStat) == false
+                        || candidateStat.CurrentHp <= 0))
                     continue;
 
                 TransformComponent candidateTransform = transformPool.GetByIndex(i);

@@ -219,6 +219,12 @@ namespace ARPG.Utility
             }
 
             // 스킬이 실행 중이거나 쿨타임 중이면 커맨드 생성하지 않음
+            if (skill.RequiresInputRelease == true)
+            {
+                command = default;
+                return false;
+            }
+
             if (AR.s.Component.TryGetComponent<SkillStateComponent>(skillEntityId, out var skillState))
             {
                 if (skillState.IsRunning)

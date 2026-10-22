@@ -220,6 +220,9 @@ namespace ARPG.Systems
             System_ForcedMove forcedMoveSystem = new();
             RegisterSystems(forcedMoveSystem);
 
+            // Priority 520: Channel Effect (Update) - 채널 루프 연출의 조준/위치 추적과 수명 정리
+            RegisterSystems(new System_SkillChannelEffect());
+
             // Priority 900: Attack Telegraph (Update) - 활성 공격 ECS를 단일 Combined Mesh로 메인 카메라에 제출
             System_AttackTelegraph attackTelegraphSystem = new();
             RegisterSystems(attackTelegraphSystem);

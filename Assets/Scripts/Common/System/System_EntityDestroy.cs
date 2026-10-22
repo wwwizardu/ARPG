@@ -31,6 +31,10 @@ namespace ARPG.Systems
 
         public void OnReset()
         {
+            ComponentManager cm = AR.s.Component;
+            SparseSet<TotemTag> totems = cm.GetComponentPool<TotemTag>();
+            for (int i = totems.Count - 1; i >= 0; i--)
+                DestroyTotem(totems.GetEntityId(i));
             Debug.Log("[System_EntityDestroy] Reset");
         }
 
@@ -45,6 +49,12 @@ namespace ARPG.Systems
             for (int i = pool.Count - 1; i >= 0; i--)
             {
                 int entityId = pool.GetEntityId(i);
+
+                if (cm.HasComponent<TotemTag>(entityId) == true)
+                {
+                    DestroyTotem(entityId);
+                    continue;
+                }
 
                 // 외부 제거(만료, 씬 정리 등)가 정상 전파 완료 경로보다 먼저 도달하면
                 // 남은 작업 수를 한 번만 해제한다. 완료 경로는 marker를 남겨 이 블록을 건너뛴다.
@@ -163,6 +173,21 @@ namespace ARPG.Systems
                     AR.s.Entity.DestroyEntity(entityId);
                 }
             }
+        }
+
+        private static void DestroyTotem(int entityId)
+        {
+            var render = AR.s.System.GetSystem<System_Render>();
+            AR.s.Message.TryGetEntity(entityId, out var entity);
+            if (entity == null)
+                entity = render?.GetEntity(entityId);
+            if (entity != null)
+                entity.OnEntityDestroy();
+            AR.s.Message.UnregisterEntity(entityId);
+            render?.UnregisterEntity(entityId);
+            AR.s.Entity.DestroyEntity(entityId);
+            if (entity != null)
+                AddressablePool.Return(Factory.EntityFactory.TotemPrefabKey, entity.gameObject);
         }
     }
 }

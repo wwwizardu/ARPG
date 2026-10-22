@@ -7,7 +7,7 @@ namespace ARPG.AI.StateHandlers
 {
     /// <summary>
     /// 정지형(Stationary) Attack 상태: 토템·터렛처럼 한자리에 머물며 사거리 내 적 자동 시전.
-    /// 추적/이동 없음. 슬롯 0 스킬을 사용한다.
+    /// 이동 없이 대상을 계속 조준한다. 슬롯 0 스킬을 사용한다.
     /// 적이 없으면 같은 상태에 머물며 다음 틱에 재탐색.
     /// </summary>
     public class StationaryAttackStateHandler : IAIStateHandler
@@ -21,8 +21,7 @@ namespace ARPG.AI.StateHandlers
         {
             ComponentManager cm = AR.s.Component;
 
-            // 이미 시전 명령이 부착되어 있으면 다음 프레임 대기
-            if (cm.HasComponent<SkillCommandComponent>(entityId))
+            if (cm.HasComponent<DestroyTag>(entityId) == true)
                 return;
 
             if (cm.TryGetComponent<TransformComponent>(entityId, out var transform) == false) return;
@@ -33,31 +32,34 @@ namespace ARPG.AI.StateHandlers
             if (cm.TryGetComponent<SkillComponent>(skillEntityId, out var skill) == false) return;
             if (skill.Table == null) return;
 
-            // 쿨다운 / 실행 중이면 대기
-            if (cm.TryGetComponent<SkillStateComponent>(skillEntityId, out var skillState))
+            if (cm.TryGetComponent<AIComponent>(entityId, out var ai) == false)
+                ai = new AIComponent { TargetEntityId = -1 };
+
+            // 시전 중에도 대상의 이동·사망·사거리 이탈을 반영한다. 유효한 현재 대상은 계속 유지한다.
+            int targetId = ai.TargetEntityId;
+            Vector2 targetPosition;
+            if (TryGetTarget(entityId, targetId, transform.Position, skill.Table.SkillRangeMax, out targetPosition) == false)
             {
-                if (skillState.IsRunning || skillState.IsCooldownReady == false)
-                    return;
+                float effectiveRange = SkillHelper.GetEntityHitRadius(entityId) + skill.Table.SkillRangeMax;
+                targetId = FactionHelper.FindNearestEnemy(entityId, transform.Position, transform.Rotation,
+                    faction.FactionId, effectiveRange * effectiveRange, 360f, true, out targetPosition, out _,
+                    requireLivingTarget: true);
+                if (TryGetTarget(entityId, targetId, transform.Position, skill.Table.SkillRangeMax, out targetPosition) == false)
+                    targetId = -1;
             }
 
-            // 사거리 내 적 탐색 (FOV 360 = 전방위)
-            // 유효 사거리 = owner.HitRadius + SkillRangeMax ("몸 밖으로 뻗는 추가 사거리" 모델 일관성)
-            // target.HitRadius는 후보별로 다르므로 여기선 미반영. 실제 hit 판정은 System_Skill이 정확히 처리.
-            float ownerHitRadius = SkillHelper.GetEntityHitRadius(entityId);
-            float effectiveRange = ownerHitRadius + skill.Table.SkillRangeMax;
-            float rangeSqr = effectiveRange * effectiveRange;
-            int targetId = FactionHelper.FindNearestEnemy(
-                entityId,
-                transform.Position,
-                transform.Rotation,
-                faction.FactionId,
-                rangeSqr,
-                fieldOfView: 360f,
-                requireStatComponent: true,
-                out Vector2 targetPosition,
-                out _);
+            ai.TargetEntityId = targetId;
+            if (targetId >= 0)
+                ai.LastKnownTargetPos = targetPosition;
+            cm.SetComponent(entityId, ai);
 
             if (targetId == -1)
+                return;
+
+            if (cm.HasComponent<SkillCommandComponent>(entityId) == true)
+                return;
+            if (cm.TryGetComponent<SkillStateComponent>(skillEntityId, out var skillState) == true
+                && (skillState.IsRunning == true || skillState.IsCooldownReady == false))
                 return;
 
             // SkillCommandComponent 부착 → System_Skill이 다음 프레임에 처리
@@ -69,6 +71,24 @@ namespace ARPG.AI.StateHandlers
 
         public void OnExit(int entityId)
         {
+        }
+
+        private static bool TryGetTarget(int ownerId, int targetId, Vector2 origin, float range, out Vector2 position)
+        {
+            ComponentManager cm = AR.s.Component;
+            position = default;
+            if (targetId < 0 || cm.HasComponent<DestroyTag>(targetId) == true
+                || cm.TryGetComponent<StatComponent>(targetId, out var stat) == false || stat.CurrentHp <= 0
+                || cm.TryGetComponent<TransformComponent>(targetId, out var transform) == false
+                || FactionHelper.IsHostileTo(ownerId, targetId) == false)
+                return false;
+
+            float effectiveRange = SkillHelper.GetEntityHitRadius(ownerId) + range + SkillHelper.GetEntityHitRadius(targetId);
+            if ((transform.Position - origin).sqrMagnitude > effectiveRange * effectiveRange)
+                return false;
+
+            position = transform.Position;
+            return true;
         }
     }
 }

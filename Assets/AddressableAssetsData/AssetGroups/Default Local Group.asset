@@ -445,6 +445,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d245a8539a185b346851291f6ddd41f1
+    m_Address: Effects/Flamethrower
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d7027778bad3c34438ae75c19b12d427
     m_Address: Animation/ElfRogue
     m_ReadOnly: 0
@@ -462,6 +467,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: def967a83b43db54785a8aff08a0b520
     m_Address: Humanoid/Idle
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: df1c5fad7af41bc44ae7799566ee5673
+    m_Address: Prefabs/Totem
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

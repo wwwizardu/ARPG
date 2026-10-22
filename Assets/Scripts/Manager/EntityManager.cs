@@ -185,6 +185,7 @@ namespace ARPG.Manager
                 for (int i = 0; i < skillEntitiesToRemove.Count; i++)
                 {
                     int skillEntityId = skillEntitiesToRemove[i];
+                    AR.s.System.GetSystem<ARPG.Systems.System_SkillChannelEffect>()?.StopEffect(skillEntityId);
                     AR.s.Component.RemoveAllComponents(skillEntityId);
                     _registeredEntityIds.Remove(skillEntityId);
                 }
@@ -197,6 +198,7 @@ namespace ARPG.Manager
             DestroyAllRelationshipsForEntity(entityId);
 
             // 메인 엔티티의 모든 ECS 컴포넌트 제거
+            AR.s.System.GetSystem<ARPG.Systems.System_SkillChannelEffect>()?.StopEffect(entityId);
             AR.s.Component.RemoveAllComponents(entityId);
 
             // 스탯 수정치(런타임·비ECS)도 함께 정리 — 누수/ID 재활용 오염 방지
@@ -455,6 +457,7 @@ namespace ARPG.Manager
             }
 
             // ECS 컴포넌트 일괄 제거
+            AR.s.System.GetSystem<ARPG.Systems.System_SkillChannelEffect>()?.StopEffect(skillEntityId);
             AR.s.Component.RemoveAllComponents(skillEntityId);
 
             // 등록 해제
