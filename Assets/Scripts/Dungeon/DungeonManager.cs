@@ -368,8 +368,10 @@ namespace ARPG.Dungeon
                     bool committed = false;
                     try
                     {
+                        // Completion runs during gameplay; flush marked changes without rebuilding every simulation snapshot.
                         if (await CommitAsync(scope | SaveScope.Player | SaveScope.World |
-                                              SaveScope.NpcState | SaveScope.Dungeons | SaveScope.Narrative) == false)
+                                              SaveScope.NpcState | SaveScope.Dungeons | SaveScope.Narrative,
+                                              rebuildSaveSnapshots: false) == false)
                         {
                             Notify("보스 완료 저장 실패. 보상과 입구 교체를 함께 재시도합니다.");
                             return false;
@@ -428,11 +430,11 @@ namespace ARPG.Dungeon
                 ? state.ReservedNpcId : -1;
         }
 
-        private async Task<bool> CommitAsync(SaveScope scope)
+        private async Task<bool> CommitAsync(SaveScope scope, bool rebuildSaveSnapshots = true)
         {
             int lifetime = _lifetime;
             _committing = true;
-            try { return await AR.s.Data.SaveDungeonTransactionAsync(scope); }
+            try { return await AR.s.Data.SaveDungeonTransactionAsync(scope, rebuildSaveSnapshots); }
             finally { if (lifetime == _lifetime) _committing = false; }
         }
 

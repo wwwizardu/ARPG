@@ -424,7 +424,8 @@ namespace ARPG.Data
         }
 
         // Only DungeonManager's exclusive transition calls this after draining existing saves.
-        public Task<bool> SaveDungeonTransactionAsync(SaveScope scope) => SavePartitionedAsync(scope, rebuildSaveSnapshots: true);
+        public Task<bool> SaveDungeonTransactionAsync(SaveScope scope, bool rebuildSaveSnapshots = true) =>
+            SavePartitionedAsync(scope, rebuildSaveSnapshots);
 
         public bool DropItem(Vector2 inPosition, ItemData inItem)
         {

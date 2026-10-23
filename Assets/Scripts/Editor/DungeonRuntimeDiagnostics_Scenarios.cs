@@ -460,8 +460,14 @@ namespace ARPG.EditorTools
             Require(record.BossKilledByPlayerParty, "companion solo boss kill credits the player party");
             fixture.Deactivate();
             int companionDeedsBefore = npc.GetSaveData(13).Rumors.Count;
-            baseline = ReadManifest(fixture.SlotPath).Revision;
             const SaveScope completionScope = SaveScope.Player | SaveScope.World | SaveScope.NpcState | SaveScope.Dungeons | SaveScope.Narrative;
+            Require(await data.SaveDungeonTransactionAsync(completionScope), "pre-completion checkpoint seeds snapshot caches");
+            SaveManifest beforeCompletion = ReadManifest(fixture.SlotPath);
+            baseline = beforeCompletion.Revision;
+            int completionGoldBefore = data.Player.Gold;
+            long completedBefore = data.Dungeons.CompletedCount;
+            int unchangedShard = DataManager.GetNpcShardIndex(30);
+            long unchangedShardGeneration = npc.GetSaveShardGeneration(unchangedShard);
             foreach (string failure in _narrativeFailurePoints)
             {
                 Require(DungeonCompletionTransaction.TryStage(data.Dungeons, data.Player, record, seed, now, record.ReplacementCooldownHours,
@@ -471,20 +477,35 @@ namespace ARPG.EditorTools
                     var stage = npc.StageDungeonCompletion(record, rumorSlot.EntranceX, rumorSlot.EntranceY, 13, now);
                     Require(stage.Resolved && npc.GetNarrativeInstance(rumorId).Progress == NarrativeRumorProgress.Resolved, "staged resolution");
                     data.DiagnosticFailurePoint = failure;
-                    Require(await data.SaveDungeonTransactionAsync(completionScope) == false, "injected completion failure " + failure);
+                    Require(await (Task<bool>)Invoke(dungeon, "CommitAsync", completionScope, false) == false,
+                        "injected incremental completion failure " + failure);
                     data.DiagnosticFailurePoint = null;
                     npc.RollbackDungeonCompletion(stage);
                 }
                 Require(npc.GetNarrativeInstance(rumorId).IsOpen && npc.GetSaveData(13).Rumors.Count == companionDeedsBefore &&
-                    npc.GetSaveData(owner).NarrativeRequest != null && ReadManifest(fixture.SlotPath).Revision == baseline,
+                    npc.GetSaveData(owner).NarrativeRequest != null && ReadManifest(fixture.SlotPath).Revision == baseline &&
+                    record.Completed == false && data.Player.Gold == completionGoldBefore && data.Dungeons.CompletedCount == completedBefore,
                     "completion failure rolls back resolution, companion deed and slot: " + failure);
+                // Persist the rollback incrementally too: a later retry must not hide stale staged snapshots.
+                Require(await data.SaveDungeonTransactionAsync(completionScope, rebuildSaveSnapshots: false),
+                    "incremental checkpoint after completion rollback " + failure);
+                snapshot = ReadSnapshot(data, fixture.SlotPath, "manifest.json");
+                var rolledBackDungeons = (DungeonSaveRoot)Field(snapshot, "Dungeons");
+                Require(((NarrativeSaveRoot)Field(snapshot, "Narrative")).Instances.Find(i => i.InstanceId == rumorId).IsOpen &&
+                    ((Dictionary<int, NpcSaveData>)Field(snapshot, "Npcs"))[13].Rumors.Count == companionDeedsBefore &&
+                    ((PlayerSaveRoot)Field(snapshot, "Player")).Players[0].Gold == completionGoldBefore &&
+                    rolledBackDungeons.CompletedCount == completedBefore &&
+                    rolledBackDungeons.Dungeons.Find(d => d.DungeonId == record.DungeonId).Completed == false &&
+                    rolledBackDungeons.Villages.Find(v => v.VillageId == record.VillageId).Slots[record.SlotIndex].Generation == record.Generation,
+                    "incremental save persists restored completion state " + failure);
+                baseline = ReadManifest(fixture.SlotPath).Revision;
             }
             Require(DungeonCompletionTransaction.TryStage(data.Dungeons, data.Player, record, seed, now, record.ReplacementCooldownHours,
                 out var completion), "stage completion retry");
             using (completion)
             {
                 npc.StageDungeonCompletion(record, rumorSlot.EntranceX, rumorSlot.EntranceY, 13, now);
-                Require(await data.SaveDungeonTransactionAsync(completionScope), "completion checkpoint with narrative");
+                Require(await (Task<bool>)Invoke(dungeon, "CommitAsync", completionScope, false), "incremental completion checkpoint with narrative");
                 completion.Commit();
             }
             fixture.Reindex();
@@ -496,8 +517,20 @@ namespace ARPG.EditorTools
                 "boss close resolves the rumor, gives the companion a firsthand deed and removes the sign");
             snapshot = ReadSnapshot(data, fixture.SlotPath, "manifest.json");
             Require(((NarrativeSaveRoot)Field(snapshot, "Narrative")).Instances.Find(i => i.InstanceId == rumorId).Progress == NarrativeRumorProgress.Resolved &&
-                ((DungeonSaveRoot)Field(snapshot, "Dungeons")).Dungeons.Find(d => d.DungeonId == record.DungeonId).Completed,
+                ((DungeonSaveRoot)Field(snapshot, "Dungeons")).Dungeons.Find(d => d.DungeonId == record.DungeonId).Completed &&
+                ((DungeonSaveRoot)Field(snapshot, "Dungeons")).CompletedCount == completedBefore + 1 &&
+                ((DungeonSaveRoot)Field(snapshot, "Dungeons")).Villages.Find(v => v.VillageId == record.VillageId).Slots[record.SlotIndex].Generation == record.Generation + 1 &&
+                ((PlayerSaveRoot)Field(snapshot, "Player")).Players[0].Gold == completionGoldBefore + record.CompletionGold &&
+                ((Dictionary<int, NpcSaveData>)Field(snapshot, "Npcs"))[13].Rumors.Exists(r => r.Kind == NpcRumorKind.PlayerDeed && r.InstanceId == rumorId),
                 "resolution and completion share one manifest revision before map deletion");
+            SaveManifest afterCompletion = ReadManifest(fixture.SlotPath);
+            string[] unchangedParts = { "npc_state_" + unchangedShard.ToString("D2"), "villages", "npc_social", "npc_parties", "npc_meta", "world_sim" };
+            for (int i = 0; i < unchangedParts.Length; i++)
+                Require(afterCompletion.Parts[unchangedParts[i]].FileName == beforeCompletion.Parts[unchangedParts[i]].FileName,
+                    "incremental completion reuses unchanged file " + unchangedParts[i]);
+            Require(npc.GetSaveShardGeneration(unchangedShard) == unchangedShardGeneration,
+                "completion does not rebuild an unrelated NPC shard");
+            report.AppendLine("PASS: incremental boss completion reuses unchanged simulation files; four failure rollbacks persist before retry; gold, slot, count and companion deed share one revision.");
             fixture.World.NpcCompanion.IsInDungeon = false;
             fixture.Components.RemoveComponent<NpcCompanionComponent>(13);
 
