@@ -116,7 +116,7 @@ UI/UX:       ██████████████░░░░░░░░�
 - [X] ItemManager
 - [X] WorldItemComponent (드랍 아이템)
 - [X] DropComponent
-- [X] 인벤토리 UI (UIInventory)
+- [X] 인벤토리 UI (UICharacter, UI Toolkit)
 - [X] 장비 UI (UICharacter)
 - **파일**: `ItemManager.cs`, `ItemData.cs`
 - **상태**: 완성
@@ -235,7 +235,7 @@ UI/UX:       ██████████████░░░░░░░░�
 
 #### 19. UI 시스템 🚧
 - [X] UIManager
-- [X] UIInventory
+- [X] UICharacter (캐릭터·인벤토리 창, UI Toolkit)
 - [X] UICharacter
 - [X] UIMainMenu
 - [X] UICheat

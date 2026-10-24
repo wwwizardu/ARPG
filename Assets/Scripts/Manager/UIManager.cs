@@ -25,9 +25,7 @@ namespace ARPG
 
     public static class AddressablePath
     {
-        public const string SlotUI = "UI/SlotUI";
         public const string Character = "UI/Character";
-        public const string Inventory = "UI/Inventory";
 
         // Phase D: 마을 서비스 UI (prefab 키 — Step U1 사용자 작업)
         public const string ShopMerchant = "UI/ShopMerchant";
@@ -41,6 +39,10 @@ namespace ARPG
 
         // NPC 장비/인벤토리 검사 UI (NPC_EQUIPMENT_DESIGN.md UI 패스)
         public const string NpcInspect = "UI/NpcInspect";
+
+        // 플레이어 레벨·참 판 (PLAYER_LEVEL_CHARM_DESIGN.md §8)
+        public const string ConfirmDialog = "UI/ConfirmDialog";
+        public const string CharmBoard = "UI/CharmBoard";
     }
 
     public class UIManager : MonoBehaviour, IPointerDownHandler, IPointerUpHandler

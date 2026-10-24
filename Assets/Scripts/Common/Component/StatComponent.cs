@@ -49,7 +49,7 @@ namespace ARPG.Component
 
 
         // 전투 시스템 확장 스탯 (2026-04-01 추가)
-        public int BaseEvasion;              // 기본 회피율 (%)
+        public int BaseEvasion;              // 기본 회피 수치 (몬스터는 레벨 곡선, PLAYER_LEVEL_CHARM_DESIGN §5.3)
         public int BaseBlockChance;          // 기본 막기 확률 (%)
         public int BaseBlockReduction;       // 기본 막기 데미지 감소 (%)
         public int BaseSkillDamage;          // 기본 스킬 데미지 배율 (%)
@@ -59,6 +59,10 @@ namespace ARPG.Component
 
         // 발사체 옵션 (장비 mod / 버프가 +N 합산. 캐릭터 base는 항상 0)
         public int BaseProjectileCountAdd;   // 기본 발사체 추가 개수
+
+        // 적중 판정 (PLAYER_LEVEL_CHARM_DESIGN §5.3). 표에 칸이 없고 생성할 때 레벨로 채운다:
+        // 플레이어 = 레벨 기본값 A(L), 몬스터 = 레벨 곡선 × 종 배율, NPC = 고향 마을 지역 레벨의 A(L)
+        public int BaseAccuracy;             // 기본 정확도
 
         // === 최종 스탯 (Final Stats) ===
         // Base + 장비 + 버프 등 모든 보정이 적용된 최종값 (읽기 전용으로 사용)
@@ -101,7 +105,7 @@ namespace ARPG.Component
         public int FinalIgniteRate;
 
         // 전투 시스템 확장 스탯 (2026-04-01 추가)
-        public int FinalEvasion;             // 최종 회피율 (%)
+        public int FinalEvasion;             // 최종 회피 수치 (민첩 보너스·회피 증가 포함)
         public int FinalBlockChance;         // 최종 막기 확률 (%)
         public int FinalBlockReduction;      // 최종 막기 데미지 감소 (%)
         public int FinalSkillDamage;         // 최종 스킬 데미지 배율 (%)
@@ -111,6 +115,8 @@ namespace ARPG.Component
 
         // 발사체 옵션 (Base + 장비/버프 modifier 합산값)
         public int FinalProjectileCountAdd;  // 최종 발사체 추가 개수
+
+        public int FinalAccuracy;            // 최종 정확도
 
         // 드롭 보너스 (ITEM_DROP_BALANCE_DESIGN.md §8). 기본값은 항상 0이고 보정 합계(%)만 담는 증가율 묶음이다
         public int FinalItemQuantity;        // 아이템 수량 합계 (%)
@@ -255,6 +261,7 @@ namespace ARPG.Component
             FinalThorns = BaseThorns;
 
             FinalProjectileCountAdd = BaseProjectileCountAdd;
+            FinalAccuracy = BaseAccuracy;
 
             FinalItemQuantity = 0;
             FinalItemRarity = 0;

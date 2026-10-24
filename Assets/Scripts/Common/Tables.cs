@@ -122,6 +122,10 @@ namespace ARPG.Tables
         [JsonProperty("AdditionalBiomes", NullValueHandling = NullValueHandling.Ignore)]
         public GE.BiomeType[]? AdditionalBiomes;
 
+        // 적중 판정 종 배율 (PLAYER_LEVEL_CHARM_DESIGN §4.4·§5.3). 정확도·회피 = 레벨 곡선 × 이 배율. 빈 칸은 1.0
+        [JsonProperty("AccuracyMul")] public float AccuracyMul = 1f;
+        [JsonProperty("EvasionMul")] public float EvasionMul = 1f;
+
         [JsonIgnore] public AiTable? AiTable;
 
 
@@ -162,6 +166,18 @@ namespace ARPG.Tables
         [JsonProperty("AffixExtraChance")] public int AffixExtraChance;   // 접사 추가 판정 확률 (%). 성공할 때마다 1개 더, 실패하거나 상한이면 멈춤
         [JsonProperty("DropRollsPerAffix")] public int DropRollsPerAffix; // 접사 1개당 더하는 드랍 판정 횟수 (§8)
         [JsonProperty("RarityPerAffix")] public int RarityPerAffix;       // 접사 1개당 더하는 아이템 희귀도 (%, ITEM_DROP_BALANCE_DESIGN §8.4)
+        [JsonProperty("ExpMul")] public float ExpMul = 1f;                // 처치 경험치 등급 배율. 잡는 시간에 비례하도록 HpMul과 같은 값 (PLAYER_LEVEL_CHARM_DESIGN §3.2)
+    }
+
+    /// <summary>
+    /// 플레이어 레벨별 필요 경험치와 몬스터 레벨별 기본 경험치 (PLAYER_LEVEL_CHARM_DESIGN.md §3.4).
+    /// Id = 레벨(1~100). 시트에는 계산된 값만 두고 식은 설계 문서가 정본이다.
+    /// </summary>
+    [Serializable]
+    public class ExpTable : TableBase
+    {
+        [JsonProperty("RequiredExp")] public int RequiredExp;   // 이 레벨 → 다음 레벨 필요 경험치 R(L). 최고 레벨은 0
+        [JsonProperty("MonsterExp")] public int MonsterExp;     // 이 레벨 몬스터의 기본 경험치 E(L)
     }
 
     /// <summary>
@@ -627,6 +643,10 @@ namespace ARPG.Tables
 
         // 스킬 페이지 드랍 (SKILL_RUNE_DESIGN.md §8.1) — Pool 모드 전용. PageCost 범위로 Tier 매칭 후 랜덤 픽
         [JsonProperty("SkillPageRate")] public int SkillPageRate;           // Drop 스킬 페이지 가중치. 0=드랍 없음
+
+        // 참·참 판 드랍 (PLAYER_LEVEL_CHARM_DESIGN §6.6). 아이템 레벨 = 몬스터 레벨
+        [JsonProperty("CharmRate")] public int CharmRate;                   // Drop 참 가중치. 0=드랍 없음
+        [JsonProperty("CharmBoardRate")] public int CharmBoardRate;         // Drop 참 판 가중치. 0=드랍 없음
     }
 
     [Serializable]

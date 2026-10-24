@@ -114,6 +114,12 @@ namespace ARPG.Systems
                 AR.s.UI.Show<UI.UISkillBook>(AddressablePath.SkillBook, UIManager.Layer.Main);
             }
 
+            // P키 — 참 판 창 열기 (PLAYER_LEVEL_CHARM_DESIGN §8.4, LV20)
+            if (Keyboard.current != null && Keyboard.current.pKey.wasPressedThisFrame)
+            {
+                AR.s.UI.Show<UI.UICharmBoard>(AddressablePath.CharmBoard, UIManager.Layer.Main);
+            }
+
             // if (_input.Value.UseItem.WasPressedThisFrame() == true) // 아이템 사용 시 그냥 리턴
             // {
             //     CharacterComponent.Toolbelt.UseHoldingItem();

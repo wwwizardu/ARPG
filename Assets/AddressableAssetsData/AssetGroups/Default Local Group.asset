@@ -135,6 +135,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3835b5a6b1bdbee4586cdf0804a15970
+    m_Address: UI/CharmBoard
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3866fb743eb1646478333e2966c3e710
     m_Address: Sprites/Tiles/UnderConstruction
     m_ReadOnly: 0
@@ -175,11 +180,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 487fed0a5647d4e4397521a391fc4cef
-    m_Address: UI/CharacterUI
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 49d74ff3525b2044289761c822e28f8f
     m_Address: UI/Forge
     m_ReadOnly: 0
@@ -205,6 +205,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5b5a84cc60f56f2449f8511b976982d6
+    m_Address: UI/ConfirmDialog
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5b9666e427377e342aab13bef442812d
     m_Address: Effects/FrostExplosion
     m_ReadOnly: 0
@@ -217,11 +222,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 655633fc0242a184188ff0b68704521a
     m_Address: Tile/WoodWall
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 67e8b3db722c2c44b8daf70e09c44e42
-    m_Address: UI/Inventory
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -422,11 +422,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c1310f69a2074e247a11b0f6060521f1
     m_Address: Sprites/Items/DryingRack
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: c7be8e5aec1ed9343b40ecd697f4f5d0
-    m_Address: UI/SlotUI_Equip
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

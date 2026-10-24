@@ -355,8 +355,7 @@ namespace ARPG.Npc
                 for (int i = 0; i < slotMax; i++)
                     _upgradeScratchEquip[i] = saveData.InventoryEquip[i];
                 _upgradeScratchEquip[s] = loot;
-                float candidatePower = NpcPowerEvaluator.EvaluateBreakdown(_upgradeScratchEquip,
-                    saveData.SkillLevel).Total;
+                float candidatePower = NpcPowerEvaluator.EvaluateBreakdown(saveData, _upgradeScratchEquip).Total;
 
                 if (candidatePower > bestPower && candidatePower >= requiredPower && candidatePower <= cap)
                 {

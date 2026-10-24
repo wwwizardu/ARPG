@@ -25,6 +25,8 @@ Shift 유지 비교, Tab 전환 제거, 화면 위치 기준 좌·우클릭 장�
 
 [src: Assets/InputSystem_Actions.inputactions, Assets/Scripts/Common/System/System_Input.cs, Assets/Scripts/Common/Component/InputComponent.cs, Assets/Scripts/Manager/UIManager.cs `UpdateInput`, Assets/Scripts/UI/UICharacter.cs, Assets/Scripts/UI/SlotUI.cs, Assets/Scripts/UI/SlotUI_Equip.cs, Assets/Prefabs/UI/Prob/CharacterUI.prefab, Assets/Scripts/Common/Utility/EquipHelper.cs, Assets/Scripts/Manager/TooltipManager.cs, Assets/UI/Tooltip/Tooltip.uxml]
 
+2026-10-24에 캐릭터 창을 UI Toolkit 한 장으로 옮겼다. 위 표의 `SlotUI`·`SlotUI_Equip`·`CharacterUI.prefab` 경로는 삭제됐고, 칸 호버·클릭은 `UICharacter`가 칸 element 콜백으로 직접 받는다. 장비 칸의 화면 배치(오른쪽 칸이 화면 왼쪽)는 그대로다. [src: Assets/Scripts/UI/UICharacter.cs, Assets/UI/Character/Character.uxml, Assets/UI/Character/Character.uss]
+
 ## 이용 흐름과 조작
 
 1. `I` 키로 인벤토리를 연다.
@@ -57,7 +59,7 @@ Shift는 UI 입력 액션으로 연결하고 왼쪽·오른쪽 Shift를 모두 �
 | 반지 | 오른쪽·왼쪽 반지 두 장 | 좌클릭 오른쪽 반지, 우클릭 왼쪽 반지 | 오른쪽이 비었으면 오른쪽, 왼쪽이 비었으면 왼쪽, 둘 다 차면 오른쪽 |
 | 귀걸이 | 오른쪽·왼쪽 귀걸이 두 장 | 좌클릭 오른쪽 귀걸이, 우클릭 왼쪽 귀걸이 | 오른쪽이 비었으면 오른쪽, 왼쪽이 비었으면 왼쪽, 둘 다 차면 오른쪽 |
 
-좌·우클릭은 슬롯 이름이 아니라 **장비 화면의 위치**에 대응한다. 장비 화면에서 오른손·오른쪽 반지·오른쪽 귀걸이는 화면 왼쪽에 있으므로 좌클릭 대상이다. 이렇게 하면 누르는 버튼과 바뀌는 칸이 같은 쪽에 있고, 무기는 가장 자주 쓰는 좌클릭이 주무기 교체가 된다. 두 칸이 모두 찼을 때 Shift 없는 클릭이 고르는 칸과 비교 중 좌클릭의 결과도 같다. [src: Assets/Prefabs/UI/Prob/CharacterUI.prefab, Assets/Scripts/Common/Utility/EquipHelper.cs `GetBestSlot`]
+좌·우클릭은 슬롯 이름이 아니라 **장비 화면의 위치**에 대응한다. 장비 화면에서 오른손·오른쪽 반지·오른쪽 귀걸이는 화면 왼쪽에 있으므로 좌클릭 대상이다. 이렇게 하면 누르는 버튼과 바뀌는 칸이 같은 쪽에 있고, 무기는 가장 자주 쓰는 좌클릭이 주무기 교체가 된다. 두 칸이 모두 찼을 때 Shift 없는 클릭이 고르는 칸과 비교 중 좌클릭의 결과도 같다. [src: Assets/UI/Character/Character.uss 장비 칸 배치(2026-10-24 이전 Assets/Prefabs/UI/Prob/CharacterUI.prefab), Assets/Scripts/Common/Utility/EquipHelper.cs `GetBestSlot`]
 
 장착 카드 제목은 `좌클릭 — 오른쪽 반지`처럼 버튼과 부위를 함께 적는다. 칸이 하나인 장비는 `현재 장착 — 갑옷`처럼 부위만 적는다.
 
@@ -144,7 +146,7 @@ Shift는 UI 입력 액션으로 연결하고 왼쪽·오른쪽 Shift를 모두 �
 3. **양손 및 쌍수 설계 반영:** 기존 장착 규칙의 구현과 함께 왼손 해제 등 전체 변경을 미리 보여준다.
 4. **상점 구매 전 비교와 다른 인벤토리 아이템 비교:** 첫 구현의 표시·비교 규칙을 재사용한다.
 5. **드래그 앤 드롭:** 비교 중 누른 버튼은 드래그를 시작하지 않는다는 규칙을 유지한다. 드래그로 판정된 입력은 원래 칸에 다시 놓더라도 클릭 장착을 실행하지 않는다. Shift 없는 클릭의 동작은 드래그 방식을 정할 때 결정한다. 누른 채 끌기 방식이면 현행 클릭 장착을 유지하고, 클릭으로 집는 방식이면 클릭은 집기가 되며 클릭 장착은 Shift+클릭으로만 한다.
-6. **컨트롤러 조작:** 포커스한 칸을 기준으로 버튼 안내를 표시한다. 비교 버튼을 누르고 있는 동안 LB/RB는 화면 왼쪽·오른쪽 칸에 바로 장착하고, 그 밖에는 A로 집고 놓는다. 안내 아이콘은 마지막으로 사용한 입력 장치에 맞춰 바꾼다. 현행 슬롯은 마우스 이벤트만 받으므로 별도 작업이 필요하다. [src: Assets/Scripts/UI/SlotUI.cs]
+6. **컨트롤러 조작:** 포커스한 칸을 기준으로 버튼 안내를 표시한다. 비교 버튼을 누르고 있는 동안 LB/RB는 화면 왼쪽·오른쪽 칸에 바로 장착하고, 그 밖에는 A로 집고 놓는다. 안내 아이콘은 마지막으로 사용한 입력 장치에 맞춰 바꾼다. 현행 슬롯은 마우스 이벤트만 받으므로 별도 작업이 필요하다. [src: Assets/Scripts/UI/UICharacter.cs]
 
 캐릭터 스탯과 공격 프로필은 글로벌 옵션·스킬 태그·무기 기본값을 함께 소비한다. 후속 미리보기는 아이템 옵션 합계만으로 최종 수치를 추정하지 않고, 라이브 플레이어를 임시로 장착·해제하는 방식도 사용하지 않는다. [src: Docs/combat/combatSystem.md §스킬 공격 프로필 구성·§공격 속도 / 시전 속도, Assets/Scripts/Common/System/System_SkillAttackProfileCalculation.cs, Assets/Scripts/Common/System/System_StatCalculation.cs]
 
@@ -153,7 +155,7 @@ Shift는 UI 입력 액션으로 연결하고 왼쪽·오른쪽 Shift를 모두 �
 | 연결 지점 | 역할 |
 | --- | --- |
 | `UICharacter` | 호버 중인 인벤토리 아이템과 비교 상태를 관리한다. 비교 중 클릭은 누른 버튼을 화면 위치의 슬롯으로 바꿔 장착하고, Shift 없는 클릭은 자동 선택 규칙을 사용한다 |
-| `SlotUI`와 `UIInventory` | 호버 진입·이탈, 누른 버튼을 포함한 클릭, 휠, 데이터 갱신을 비교 흐름에 전달한다 |
+| `Character.uxml`과 `Character.uss` | 장비 12칸·인벤토리 칸 배치와 비교 대상 칸 강조 스타일을 정의한다. 칸의 호버 진입·이탈, 누른 버튼, 같은 칸에서 뗀 클릭은 `UICharacter`가 칸 element 콜백으로 받고, 칸 표시는 기억한 아이템 참조·수량이 데이터와 다를 때만 다시 그린다 |
 | `EquipHelper` | 장착 가능 슬롯 판정, 자동 선택, 칸이 두 개인 장비의 화면 왼쪽·오른쪽 슬롯 조회를 공유한다 |
 | `TooltipManager` | 하단 Shift 안내가 있는 단일 상세와 두 장·세 장 비교 상세를 표시하고 배치·스크롤·닫기 수명을 관리한다 |
 | `Tooltip.uxml`과 `Tooltip.uss` | 카드, 정렬된 행, `교체 시` 차이 스타일, 빈 슬롯, Shift 키캡, 조작 안내를 정의한다 |

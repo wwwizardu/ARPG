@@ -23,6 +23,8 @@ namespace ARPG.Component
         Terrain,    // 지형 효과
         Party,      // 파티 버프
         MonsterAffix, // 몬스터 접사 (SourceId = MonsterAffixTable.Id, MONSTER_AFFIX_DESIGN.md §6.1)
+        PlayerAttribute, // 레벨업으로 넣은 힘·민첩·지능 포인트 (SourceId 0, PLAYER_LEVEL_CHARM_DESIGN §4.2)
+        CharmBoard,      // 판 자리에 끼운 참 판의 참 옵션 (SourceId = 판 ItemInstanceId, §6)
     }
 
     /// <summary>

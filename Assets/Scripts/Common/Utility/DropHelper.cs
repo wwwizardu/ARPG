@@ -73,7 +73,8 @@ namespace ARPG.Utility
             }
 
             int nothingRate = Mathf.Max(0, dropTable.NothingRate);
-            int totalRate = nothingRate + dropTable.CurrencyRate + dropTable.EquipmentRate + dropTable.SkillBookRate + dropTable.SkillPageRate;
+            int totalRate = nothingRate + dropTable.CurrencyRate + dropTable.EquipmentRate + dropTable.SkillBookRate + dropTable.SkillPageRate
+                + dropTable.CharmRate + dropTable.CharmBoardRate;
             if (totalRate <= 0)
             {
                 Debug.Log($"[DropHelper] DropId({dropId}) totalRate=0 → 드랍 스킵. (의도적 무드랍 행이거나 데이터 누락)");
@@ -111,7 +112,31 @@ namespace ARPG.Utility
             }
 
             // 스킬 페이지 — DropTable.Tier에 매칭되는 등급 페이지 ItemId + PageCost 범위 매칭 SkillEffect 풀에서 랜덤 픽
-            CreateSkillPageDropAsync(dropTable.Tier, position);
+            int pageThreshold = nothingRate + dropTable.CurrencyRate + dropTable.EquipmentRate + dropTable.SkillBookRate + dropTable.SkillPageRate;
+            if (randomValue < pageThreshold)
+            {
+                CreateSkillPageDropAsync(dropTable.Tier, position);
+                return;
+            }
+
+            // 참 — 아이템 레벨 = 몬스터 레벨 (PLAYER_LEVEL_CHARM_DESIGN §6.6). 그 밖은 참 판
+            if (randomValue < pageThreshold + dropTable.CharmRate)
+            {
+                ItemData? charm = AR.s.Item.CreateRandomCharm(monsterLevel);
+                if (charm != null) CreateDropItemFromDataAsync(charm, position);
+                return;
+            }
+
+            ItemData? board = AR.s.Item.CreateRandomCharmBoard();
+            if (board != null) CreateDropItemFromDataAsync(board, position);
+        }
+
+        private static async void CreateDropItemFromDataAsync(ItemData item, Vector3 position)
+        {
+            if (await AR.s.Item.CreateItemFromData(item, position) == false)
+            {
+                Debug.LogError($"[DropHelper] Failed to spawn drop. ItemId({item.Id})");
+            }
         }
 
         /// <summary>

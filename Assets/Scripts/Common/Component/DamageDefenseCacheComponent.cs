@@ -2,7 +2,7 @@ namespace ARPG.Component
 {
     /// <summary>
     /// 데미지 계산용 타겟측 방어 캐시.
-    /// 원소 저항/회피/블록은 미리 계산해 곱셈 상수로 보관.
+    /// 원소 저항/블록은 미리 계산해 곱셈 상수로 보관. 회피는 수치 그대로 보관하고 매 히트 공격 쪽 정확도와 비교한다.
     /// 아머는 PoE 원본 공식이 들어오는 데미지에 의존하므로 raw 값만 보관 — 매 히트 시 Armor / (Armor + 10×Damage) 계산.
     /// System_StatCalculation 이 StatComponent 재계산 직후 항상 갱신. 없을 경우 DamageCalculator가 lazy build.
     /// </summary>
@@ -14,7 +14,7 @@ namespace ARPG.Component
         public float LightningReductionMul;
         public float PoisonReductionMul;
 
-        public int   EvasionRate;            // FinalEvasion (확률 %, 0~100)
+        public int   Evasion;                // FinalEvasion (회피 수치). 공격 쪽 정확도와 비교한다 (PLAYER_LEVEL_CHARM_DESIGN §5.2)
         public int   BlockChance;            // FinalBlockChance (확률 %, 0~100)
         public float BlockReductionMul;      // FinalBlockReduction/100 (0이면 0.5 fallback)
     }

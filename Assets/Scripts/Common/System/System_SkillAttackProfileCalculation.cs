@@ -171,6 +171,9 @@ namespace ARPG.Systems
                 profile.AttackSpeedPerSecond = Mathf.Max(0.1f, weaponAS * skillSpeedMul * globalSpeedMul);
             }
 
+            profile.Accuracy       = ownerStat.FinalAccuracy;
+            profile.Unevadable     = (table.Tags & GE.SkillTag.Unevadable) != 0;
+
             profile.IsAttackSkill  = isAttackSkill;
             profile.DamageType     = table.DamageType;
 

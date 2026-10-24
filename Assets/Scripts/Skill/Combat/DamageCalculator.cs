@@ -283,7 +283,8 @@ namespace ARPG.Skill.Combat
             float totalDamage = physDamage + fireDamage + iceDamage + lightningDamage + poisonDamage;
 
             // ========== 7단계: 회피/막기 판정 (합산 후 적용) ==========
-            if (Random.Range(0f, 100f) < defenseCache.EvasionRate)
+            // 적중률 = 정확도 ÷ (정확도 + 회피), 하한 25%. 회피 불가 태그 스킬은 판정하지 않는다 (PLAYER_LEVEL_CHARM_DESIGN §5)
+            if (IsEvadedByAccuracy(profile, defenseCache.Evasion) == true)
             {
                 result.IsEvaded = true;
                 result.FinalDamage = 0;
@@ -311,6 +312,15 @@ namespace ARPG.Skill.Combat
             result.ThornsDamage = targetStat.FinalThorns;
 
             return result;
+        }
+
+        /// <summary>회피 판정. 회피 불가 태그이거나 회피가 0이면 난수를 쓰지 않고 맞는다.</summary>
+        private static bool IsEvadedByAccuracy(in SkillAttackProfileComponent profile, int targetEvasion)
+        {
+            if (profile.Unevadable == true || targetEvasion <= 0)
+                return false;
+
+            return Random.value >= HitChanceRules.GetHitChance(profile.Accuracy, targetEvasion);
         }
 
         /// <summary>

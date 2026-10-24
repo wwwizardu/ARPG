@@ -548,7 +548,10 @@ namespace ARPG.Npc
             int equipmentRate = Mathf.Max(0, dropTable.EquipmentRate);
             int skillBookRate = Mathf.Max(0, dropTable.SkillBookRate);
             int skillPageRate = Mathf.Max(0, dropTable.SkillPageRate);
-            int totalRate = currencyRate + equipmentRate + skillBookRate + skillPageRate;
+            // 판·참도 같은 드롭 표 몫으로 섞인다 (PLAYER_LEVEL_CHARM_DESIGN §6.6). NPC는 판을 끼우지 않고 상점에 판다
+            int charmRate = Mathf.Max(0, dropTable.CharmRate);
+            int charmBoardRate = Mathf.Max(0, dropTable.CharmBoardRate);
+            int totalRate = currencyRate + equipmentRate + skillBookRate + skillPageRate + charmRate + charmBoardRate;
             if (totalRate <= 0)
                 return null;
 
@@ -577,7 +580,16 @@ namespace ARPG.Npc
             if (pick < skillBookRate)
                 return AR.s.Item.CreateRandomSkillBookOfTier(dropTable.Tier, rng);
 
-            return AR.s.Item.CreateRandomSkillPageOfTier(dropTable.Tier, rng);
+            pick -= skillBookRate;
+            if (pick < skillPageRate)
+                return AR.s.Item.CreateRandomSkillPageOfTier(dropTable.Tier, rng);
+
+            // 참의 아이템 레벨 = 기준 레벨 (장비 전리품과 같은 기준)
+            pick -= skillPageRate;
+            if (pick < charmRate)
+                return AR.s.Item.CreateRandomCharm(zoneLevel, rng);
+
+            return AR.s.Item.CreateRandomCharmBoard(rng);
         }
 
         /// <summary>DropHelper의 Explicit 모드 선택을 결정론 RNG로 옮긴 것. 기존 DropHelper 동작은 바꾸지 않는다.</summary>

@@ -1,0 +1,16 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements"
+         xmlns:appui="Unity.AppUI.UI"
+         editor-extension-mode="False">
+    <Style src="project://database/Assets/UI/Confirm/ConfirmDialog.uss"/>
+    <!-- 공용 확인 창 (PLAYER_LEVEL_CHARM_DESIGN §8.9): 포인트 되돌리기, 참이 박힌 판 판매 -->
+    <ui:VisualElement name="root" class="confirm-root" picking-mode="Position">
+        <ui:VisualElement name="overlay" class="confirm-overlay" picking-mode="Position"/>
+        <ui:VisualElement name="panel" class="confirm-panel">
+            <appui:Text name="message-text" text="" class="confirm-message"/>
+            <ui:VisualElement class="confirm-buttons">
+                <appui:Button name="cancel-btn" title="취소" size="M" class="confirm-button"/>
+                <appui:Button name="ok-btn" title="확인" variant="Accent" size="M" class="confirm-button"/>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

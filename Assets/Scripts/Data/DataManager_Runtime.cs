@@ -69,6 +69,29 @@ namespace ARPG.Data
             return removedCount;
         }
 
+        /// <summary>출처 종류가 같은 StatModifier를 SourceId와 관계없이 모두 제거 (참 판 전체 다시 적용용)</summary>
+        /// <returns>제거된 modifier 수</returns>
+        public int RemoveModifiersBySourceType(int targetEntityId, StatModifierSource source)
+        {
+            if (_modifiersByOwner.TryGetValue(targetEntityId, out List<StatModifier>? modifiers) == false)
+                return 0;
+
+            int removedCount = 0;
+            for (int i = modifiers.Count - 1; i >= 0; i--)
+            {
+                if (modifiers[i].Source == source)
+                {
+                    modifiers.RemoveAt(i);
+                    removedCount++;
+                }
+            }
+
+            if (modifiers.Count == 0)
+                _modifiersByOwner.Remove(targetEntityId);
+
+            return removedCount;
+        }
+
         /// <summary>특정 엔티티의 모든 StatModifier 목록 반환 (System_StatCalculation에서 사용). 없으면 null</summary>
         public List<StatModifier>? GetModifiers(int ownerEntityId)
         {

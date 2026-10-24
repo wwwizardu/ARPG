@@ -85,6 +85,7 @@ namespace ARPG.Component
             { typeof(AICanSeeTargetTag), 500 },
             { typeof(PathfindingComponent), 500 },
             { typeof(MonsterArchetypeComponent), 256 }, // 모든 몬스터에 1개 (필드 최대 ~150 + 던전)
+            { typeof(ExpRewardComponent), 256 },        // 모든 몬스터에 1개 (PLAYER_LEVEL_CHARM_DESIGN §3.2)
             { typeof(NamedThreatComponent), 4 },        // 네임드 위협 엔티티 (마을당 1마리, 플레이어 근처만 실체화 — NAMED_THREAT §12.1)
             { typeof(MonsterAffixComponent), 256 },     // 접사가 있는 몬스터 (필드 몬스터의 약 27%, 등급 컴포넌트와 같은 상한)
             { typeof(SpawnHpRefillTag), 64 },           // 접사 몬스터 스폰 직후 첫 재계산까지만 존재

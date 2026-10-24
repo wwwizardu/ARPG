@@ -30,6 +30,13 @@ namespace ARPG.Data
         [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
         public SkillPageData? SkillPage;
 
+        // 참 판·참 (PLAYER_LEVEL_CHARM_DESIGN §7) — Table.ItemType==CharmBoard / Charm 일 때만 셋
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public CharmBoardData? CharmBoard;
+
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public CharmData? Charm;
+
         // 저장에서 빠진 경우(1)만 로드 때 1로 채운다. 코드에서 만든 아이템의 필드 기본값(0)은 바꾸지 않는다.
         [System.ComponentModel.DefaultValue(1)]
         [JsonProperty(DefaultValueHandling = DefaultValueHandling.IgnoreAndPopulate)]
@@ -70,6 +77,9 @@ namespace ARPG.Data
             {
                 SkillPage.OnLoadCompleted();
             }
+
+            CharmBoard?.OnLoadCompleted();
+            Charm?.OnLoadCompleted();
         }
     }
 

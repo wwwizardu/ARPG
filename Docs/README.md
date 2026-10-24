@@ -73,6 +73,7 @@
 | **[ModSystem_Changelog.md](combat/ModSystem_Changelog.md)** | 장비/스탯 mod 시스템 변경 이력 |
 | **[ITEM_LEVEL_MOD_TIER_DESIGN.md](combat/ITEM_LEVEL_MOD_TIER_DESIGN.md)** | 아이템 레벨과 장비 옵션 티어 T1~T12: 레벨 구간·가중치, T11·T12 등급별 특수 판정 — 구현(2026-10-11), 플레이 확인 전 |
 | **[ITEM_DROP_BALANCE_DESIGN.md](combat/ITEM_DROP_BALANCE_DESIGN.md)** | 난이도별 드롭 구간표, 장비 등급(일반·마법·희귀)·품질·오브 제작 순서, 아이템 수량·희귀도(PoE2 방식) 구조, 던전 레벨·보스·상자 보상, 판매 골드 — 설계 초안(2026-10-21), 미구현 |
+| **[PLAYER_LEVEL_CHARM_DESIGN.md](combat/PLAYER_LEVEL_CHARM_DESIGN.md)** | 플레이어 레벨 1~100·몬스터 처치 경험치, 레벨업 5포인트 힘·민첩·지능(HP·회피·마나), 형태 기준 정확도 대 회피 판정(범위 회피 불가), 몬스터는 능력치 없이 레벨 표, 3×3 참 판 9개(정사각형 배치)와 참 — 설계 초안(2026-10-24), 미구현 |
 
 ### 🤖 AI / 몬스터
 | 문서 | 내용 |
@@ -351,7 +352,7 @@ Assets/Scripts/
 ├── Village/          # 마을 자가성장 관련
 ├── Data/             # DataManager_Table, 세이브 데이터
 ├── Factory/          # EntityFactory, BuildingFactory
-├── UI/               # UIInventory, UIShop, UIForge, UIInn, UIShrine, 등
+├── UI/               # UICharacter, UIShop, UIForge, UIInn, UIShrine, 등
 └── Editor/           # DownloadTables, 에디터 메뉴
 ```
 

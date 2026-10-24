@@ -1,0 +1,131 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements"
+         xmlns:appui="Unity.AppUI.UI"
+         editor-extension-mode="False">
+    <Style src="project://database/Assets/UI/Character/Character.uss"/>
+    <!-- 캐릭터·인벤토리 창 (I키). 인벤토리 칸과 장비 칸 그림은 UICharacter가 코드로 채운다 -->
+    <ui:VisualElement name="root" class="char-root" picking-mode="Position">
+        <ui:VisualElement name="overlay" class="char-overlay" picking-mode="Position"/>
+        <ui:VisualElement name="panel" class="char-panel">
+            <ui:VisualElement class="char-header">
+                <appui:Heading text="캐릭터" size="L" class="char-title"/>
+                <appui:IconButton name="close-btn" icon="x" class="char-close-icon"/>
+            </ui:VisualElement>
+
+            <appui:Divider/>
+
+            <ui:VisualElement class="char-top">
+                <!-- 능력치 두 칸 (PLAYER_LEVEL_CHARM_DESIGN §8.2·§8.3, ITEM_DROP_BALANCE_DESIGN §8.8) -->
+                <ui:VisualElement class="char-stats-box">
+                    <appui:Text text="능력치" class="char-section-title"/>
+                    <ui:VisualElement class="char-stats-columns">
+                        <ui:VisualElement class="char-stats-col char-stats-col-left">
+                            <ui:VisualElement class="char-stat-row">
+                                <appui:Text name="level-text" text="" class="char-stat-text"/>
+                                <appui:Button name="charm-board-btn" title="참 판 (P)" size="S" class="char-stat-btn"/>
+                            </ui:VisualElement>
+                            <ui:VisualElement class="char-stat-row">
+                                <appui:Text name="points-text" text="" class="char-stat-text"/>
+                                <appui:Button name="apply-btn" title="적용" size="S" variant="Accent" class="char-stat-btn"/>
+                                <appui:Button name="cancel-btn" title="취소" size="S" class="char-stat-btn"/>
+                                <appui:Button name="refund-all-btn" title="전체 되돌리기" size="S" class="char-stat-btn"/>
+                            </ui:VisualElement>
+                            <ui:VisualElement class="char-stat-row">
+                                <appui:Text name="str-text" text="" class="char-stat-text"/>
+                                <appui:Button name="str-minus-btn" title="−" size="S" class="char-stat-btn char-stat-btn-square"/>
+                                <appui:Button name="str-plus-btn" title="+" size="S" class="char-stat-btn char-stat-btn-square"/>
+                            </ui:VisualElement>
+                            <ui:VisualElement class="char-stat-row">
+                                <appui:Text name="dex-text" text="" class="char-stat-text"/>
+                                <appui:Button name="dex-minus-btn" title="−" size="S" class="char-stat-btn char-stat-btn-square"/>
+                                <appui:Button name="dex-plus-btn" title="+" size="S" class="char-stat-btn char-stat-btn-square"/>
+                            </ui:VisualElement>
+                            <ui:VisualElement class="char-stat-row">
+                                <appui:Text name="int-text" text="" class="char-stat-text"/>
+                                <appui:Button name="int-minus-btn" title="−" size="S" class="char-stat-btn char-stat-btn-square"/>
+                                <appui:Button name="int-plus-btn" title="+" size="S" class="char-stat-btn char-stat-btn-square"/>
+                            </ui:VisualElement>
+                            <appui:Text name="hp-text" text="" class="char-stat-line"/>
+                            <appui:Text name="mp-text" text="" class="char-stat-line"/>
+                            <appui:Text name="accuracy-text" text="" class="char-stat-line"/>
+                            <appui:Text name="evasion-text" text="" class="char-stat-line"/>
+                            <appui:Text name="hp-regen-text" text="" class="char-stat-line"/>
+                            <appui:Text name="mp-regen-text" text="" class="char-stat-line"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="char-stats-col char-stats-col-right">
+                            <appui:Text name="damage-physical-text" text="" class="char-stat-line"/>
+                            <appui:Text name="damage-fire-text" text="" class="char-stat-line"/>
+                            <appui:Text name="damage-ice-text" text="" class="char-stat-line"/>
+                            <appui:Text name="damage-lightning-text" text="" class="char-stat-line"/>
+                            <appui:Text name="damage-poison-text" text="" class="char-stat-line"/>
+                            <appui:Text name="crit-rate-text" text="" class="char-stat-line"/>
+                            <appui:Text name="crit-damage-text" text="" class="char-stat-line"/>
+                            <appui:Text name="move-speed-text" text="" class="char-stat-line"/>
+                            <appui:Text name="attack-speed-text" text="" class="char-stat-line"/>
+                            <appui:Text name="cast-speed-text" text="" class="char-stat-line"/>
+                            <appui:Text name="defense-text" text="" class="char-stat-line"/>
+                            <appui:Text name="fire-resist-text" text="" class="char-stat-line"/>
+                            <appui:Text name="ice-resist-text" text="" class="char-stat-line"/>
+                            <appui:Text name="lightning-resist-text" text="" class="char-stat-line"/>
+                            <appui:Text name="poison-resist-text" text="" class="char-stat-line"/>
+                            <appui:Text name="luck-text" text="" class="char-stat-line"/>
+                            <appui:Text name="item-quantity-text" text="" class="char-stat-line"/>
+                            <appui:Text name="item-rarity-text" text="" class="char-stat-line"/>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <!-- 장비 12칸. 캐릭터가 화면을 마주 보는 배치라 오른쪽 칸(오른손·오른쪽 반지·오른쪽 귀걸이)이 화면 왼쪽에 있다
+                     (EquipHelper.GetScreenSideSlots, 비교 중 좌클릭 = 화면 왼쪽 칸). name은 equip-{EquipSlotType} -->
+                <ui:VisualElement class="char-equip-box">
+                    <appui:Text text="장비" class="char-section-title"/>
+                    <ui:VisualElement name="equip-area" class="char-equip-area">
+                        <ui:VisualElement name="equip-Helmet" class="char-equip-slot char-equip-helmet">
+                            <appui:Text text="투구" class="char-equip-label" picking-mode="Ignore"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement name="equip-EarringRight" class="char-equip-slot char-equip-earring-right">
+                            <appui:Text text="귀걸이" class="char-equip-label" picking-mode="Ignore"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement name="equip-Necklace" class="char-equip-slot char-equip-necklace">
+                            <appui:Text text="목걸이" class="char-equip-label" picking-mode="Ignore"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement name="equip-EarringLeft" class="char-equip-slot char-equip-earring-left">
+                            <appui:Text text="귀걸이" class="char-equip-label" picking-mode="Ignore"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement name="equip-WeaponRight" class="char-equip-slot char-equip-weapon-right">
+                            <appui:Text text="오른손" class="char-equip-label" picking-mode="Ignore"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement name="equip-Armor" class="char-equip-slot char-equip-armor">
+                            <appui:Text text="갑옷" class="char-equip-label" picking-mode="Ignore"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement name="equip-WeaponLeft" class="char-equip-slot char-equip-weapon-left">
+                            <appui:Text text="왼손" class="char-equip-label" picking-mode="Ignore"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement name="equip-RingRight" class="char-equip-slot char-equip-ring-right">
+                            <appui:Text text="반지" class="char-equip-label" picking-mode="Ignore"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement name="equip-Belt" class="char-equip-slot char-equip-belt">
+                            <appui:Text text="허리띠" class="char-equip-label" picking-mode="Ignore"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement name="equip-RingLeft" class="char-equip-slot char-equip-ring-left">
+                            <appui:Text text="반지" class="char-equip-label" picking-mode="Ignore"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement name="equip-Gloves" class="char-equip-slot char-equip-gloves">
+                            <appui:Text text="장갑" class="char-equip-label" picking-mode="Ignore"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement name="equip-Boots" class="char-equip-slot char-equip-boots">
+                            <appui:Text text="장화" class="char-equip-label" picking-mode="Ignore"/>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <appui:Divider/>
+
+            <!-- 인벤토리: 1920 기준 한 줄 20칸 × 3줄. 스크롤 영역이 없어 칸 위 휠은 비교 툴팁 본문만 스크롤한다 -->
+            <ui:VisualElement class="char-inv-box">
+                <appui:Text text="인벤토리" class="char-section-title"/>
+                <ui:VisualElement name="inventory-grid" class="char-inv-grid"/>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

@@ -138,7 +138,9 @@ namespace ARPG.Item
                         || mod.TargetStat == GlobalEnum.Stat.IgniteRate
                         // 드롭 보너스 (ITEM_DROP_BALANCE_DESIGN §8.3 ① 묶음) — 증가율 묶음이라 Add·Multiply 모두 %p
                         || mod.TargetStat == GlobalEnum.Stat.ItemQuantity
-                        || mod.TargetStat == GlobalEnum.Stat.ItemRarity;
+                        || mod.TargetStat == GlobalEnum.Stat.ItemRarity
+                        // 정확도 (PLAYER_LEVEL_CHARM_DESIGN §5.4) — 스킬 공격 프로필이 Accuracy로 소비한다
+                        || mod.TargetStat == GlobalEnum.Stat.Accuracy;
 
                 case GlobalEnum.ModEffectType.IncreasedStat:
                     return mod.TargetStat == GlobalEnum.Stat.AttackSpeedMul

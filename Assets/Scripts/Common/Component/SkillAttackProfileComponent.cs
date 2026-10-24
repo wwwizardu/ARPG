@@ -29,6 +29,10 @@ namespace ARPG.Component
         // === 부수 효과 비율 ===
         public float LifeStealRatio;         // Stat.FinalLifeSteal/100
 
+        // === 적중 판정 (PLAYER_LEVEL_CHARM_DESIGN §5) ===
+        public int  Accuracy;                // Stat.FinalAccuracy (설치형은 설치 당시 값)
+        public bool Unevadable;              // (SkillTable.Tags & Unevadable) != 0, 스킬 없는 장판도 true — 회피 판정을 하지 않는다
+
         // === UI/타이밍용 ===
         public float AttackSpeedPerSecond;   // Attack 전용. WeaponAS × Skill.BaseAttackSpeedMul × (1 + GlobalIncreased%), Spell은 0
 

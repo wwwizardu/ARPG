@@ -1245,7 +1245,7 @@ ItemTable에는 현재 계열·양손·거리 필드가 없다. 제안 상세 �
 | 철 투창 | 2 / 10 | Item·투창 한손/거리·Base 1/2/3·시작 변형·SpriteName | 원거리 스킬 연결 후 |
 | 미스릴 투창 | 3 / 20 | 위 투창 연결의 상위 구간 값 | 원거리 스킬 연결 후 |
 
-신규 공격 장비의 기본 변형은 공속 1002 +4%와 치명타 증가 1003 +2%의 두 Postfix를 각각 한 행으로 제안한다. 새 마법서와 복구할 44는 시전 1208 +4%·저항 한 종류 +7%의 두 시작 변형을 제안해 Prefix를 남긴다. 저항 종류·새 행 ID·Weight는 다음 후보/가중치 설계와 구현에서 정한다. 가격·DropRate·아이콘 이름은 아직 배정하지 않으며 기존 아이템 가격도 이번 연결표에서 재산정하지 않는다. 새 SpriteName이 실제 GetSprite 결과를 가지는지 확인한 후 아이콘 연결 완료로 표시한다. [src: Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md D116·D123, Assets/Scripts/UI/SlotUI.cs, Assets/Scripts/Item/ItemObject.cs]
+신규 공격 장비의 기본 변형은 공속 1002 +4%와 치명타 증가 1003 +2%의 두 Postfix를 각각 한 행으로 제안한다. 새 마법서와 복구할 44는 시전 1208 +4%·저항 한 종류 +7%의 두 시작 변형을 제안해 Prefix를 남긴다. 저항 종류·새 행 ID·Weight는 다음 후보/가중치 설계와 구현에서 정한다. 가격·DropRate·아이콘 이름은 아직 배정하지 않으며 기존 아이템 가격도 이번 연결표에서 재산정하지 않는다. 새 SpriteName이 실제 GetSprite 결과를 가지는지 확인한 후 아이콘 연결 완료로 표시한다. [src: Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md D116·D123, Assets/Scripts/UI/UICharacter.cs `DrawSlot`, Assets/Scripts/Item/ItemObject.cs]
 
 ### MOD 정의와 고정 특성 연결
 

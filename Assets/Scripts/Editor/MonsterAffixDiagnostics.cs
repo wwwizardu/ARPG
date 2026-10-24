@@ -60,6 +60,7 @@ namespace ARPG.EditorTools
                 AppendDropRolls(report, meanCounts);
                 AppendSpeciesShortage(report);
                 AppendDropDistribution(report);
+                AppendCharmDropDistribution(report, meanCounts);
 
                 Debug.Log(report.ToString());
             }
@@ -140,7 +141,9 @@ namespace ARPG.EditorTools
             DropBandTable? baseBand = AR.s.Data.GetDropBand(1);
             int baseQuantity = baseBand != null ? baseBand.QuantityBonus : 0;
             double baseFieldRolls = fieldRolls * Math.Max(0d, 1d + baseQuantity / 100d);
-            int otherRates = drop.CurrencyRate + drop.EquipmentRate + drop.SkillBookRate + drop.SkillPageRate;
+            // 참·참 판 칸도 나머지 칸이다 (PLAYER_LEVEL_CHARM_DESIGN §6.6)
+            int otherRates = drop.CurrencyRate + drop.EquipmentRate + drop.SkillBookRate + drop.SkillPageRate
+                + drop.CharmRate + drop.CharmBoardRate;
             double perRoll = FieldItemsPerMonsterTarget / baseFieldRolls;
             double recommendedNothing = otherRates * (1.0 - perRoll) / perRoll;
             double currentPerRoll = otherRates / (double)Math.Max(1, otherRates + drop.NothingRate);

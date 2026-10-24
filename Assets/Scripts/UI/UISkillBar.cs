@@ -6,6 +6,7 @@ using ARPG.Component;
 using ARPG.Data;
 using ARPG.Manager;
 using ARPG.Message;
+using ARPG.Utility;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -38,9 +39,18 @@ namespace ARPG.UI
         private VisualElement? _panel;
         private Button? _settingsButton;
         private SlotView? _hoveredSlot;
+        // 경험치 바 (PLAYER_LEVEL_CHARM_DESIGN §8.1)
+        private VisualElement? _expBar;
+        private VisualElement? _expFill;
+        private Label? _expLevel;
+        private Label? _expPoints;
+        private bool _expHovered;
         private MessageManager? _messageManager;
         private TooltipManager? _tooltipManager;
         private Action<SkillBookChangedMessage> _skillBookChangedHandler = null!;
+        private Action<PlayerProgressChangedMessage> _progressChangedHandler = null!;
+        private EventCallback<PointerEnterEvent> _expPointerEnterHandler = null!;
+        private EventCallback<PointerLeaveEvent> _expPointerLeaveHandler = null!;
         private Action _settingsClickedHandler = null!;
         private EventCallback<PointerEnterEvent> _pointerEnterHandler = null!;
         private EventCallback<PointerLeaveEvent> _pointerLeaveHandler = null!;
@@ -66,6 +76,9 @@ namespace ARPG.UI
             _ar = AR.s;
             _document = GetComponent<UIDocument>();
             _skillBookChangedHandler = OnSkillBookChanged;
+            _progressChangedHandler = OnProgressChanged;
+            _expPointerEnterHandler = OnExpPointerEnter;
+            _expPointerLeaveHandler = OnExpPointerLeave;
             _settingsClickedHandler = OnSettingsClicked;
             _pointerEnterHandler = OnSlotPointerEnter;
             _pointerLeaveHandler = OnSlotPointerLeave;
@@ -81,9 +94,11 @@ namespace ARPG.UI
             _messageManager = _ar.Message;
             _tooltipManager = _ar.Tooltip;
             _messageManager.Subscribe(_skillBookChangedHandler);
+            _messageManager.Subscribe(_progressChangedHandler);
             EnsureBound();
             RefreshAll();
             RefreshRuntimeState();
+            RefreshExp();
         }
 
         public override void OnClose()
@@ -120,6 +135,7 @@ namespace ARPG.UI
             {
                 _playerEntityId = playerEntityId;
                 RefreshAll();
+                RefreshExp();
             }
             RefreshRuntimeState();
 
@@ -127,6 +143,11 @@ namespace ARPG.UI
             {
                 if (_ar.UI.CurrentUI != null) HideTooltip();
                 else _tooltipManager?.UpdatePosition(GetScreenRect(_hoveredSlot._element));
+            }
+            else if (_expHovered == true && _expBar != null)
+            {
+                if (_ar.UI.CurrentUI != null) HideTooltip();
+                else _tooltipManager?.UpdatePosition(GetScreenRect(_expBar));
             }
         }
 
@@ -142,8 +163,19 @@ namespace ARPG.UI
 
             ReleaseBindings();
             _lastRoot = root;
-            _panel = root.Q<VisualElement>("skillbar-panel");
+            // 배율·포인터 판정은 경험치 바까지 포함한 묶음 기준이다
+            _panel = root.Q<VisualElement>("skillbar-hud") ?? root.Q<VisualElement>("skillbar-panel");
             ApplyScale();
+            _expBar = root.Q<VisualElement>("exp-bar");
+            _expFill = root.Q<VisualElement>("exp-fill");
+            _expLevel = root.Q<Label>("exp-level");
+            _expPoints = root.Q<Label>("exp-points");
+            if (_expBar != null)
+            {
+                _expBar.tooltip = string.Empty;
+                _expBar.RegisterCallback(_expPointerEnterHandler);
+                _expBar.RegisterCallback(_expPointerLeaveHandler);
+            }
             _settingsButton = root.Q<Button>("settings-btn");
             if (_settingsButton != null) _settingsButton.clicked += _settingsClickedHandler;
 
@@ -174,6 +206,15 @@ namespace ARPG.UI
         {
             HideTooltip();
             if (_settingsButton != null) _settingsButton.clicked -= _settingsClickedHandler;
+            if (_expBar != null)
+            {
+                _expBar.UnregisterCallback(_expPointerEnterHandler);
+                _expBar.UnregisterCallback(_expPointerLeaveHandler);
+            }
+            _expBar = null;
+            _expFill = null;
+            _expLevel = null;
+            _expPoints = null;
             for (int i = 0; i < _slots.Length; i++)
             {
                 SlotView? slot = _slots[i];
@@ -201,7 +242,11 @@ namespace ARPG.UI
 
         private void StopObserving()
         {
-            if (_messageManager != null) _messageManager.Unsubscribe(_skillBookChangedHandler);
+            if (_messageManager != null)
+            {
+                _messageManager.Unsubscribe(_skillBookChangedHandler);
+                _messageManager.Unsubscribe(_progressChangedHandler);
+            }
             _messageManager = null;
             _isOpen = false;
             _playerEntityId = -1;
@@ -213,6 +258,63 @@ namespace ARPG.UI
             if (message.SlotIndex < 0 || message.SlotIndex >= _slots.Length) return;
             RefreshSlot(message.SlotIndex);
             RefreshRuntimeState();
+        }
+
+        private void OnProgressChanged(PlayerProgressChangedMessage message)
+        {
+            RefreshExp();
+            if (_expHovered == true && _expBar != null) ShowExpTooltip();
+            if (message.LeveledUp == false || _ar == null) return;
+
+            // 레벨업 순간 (§8.1): 머리 위 글자, 판 자리가 열리는 레벨이면 알림
+            Base.EntityBase? player = _ar.MyPlayer;
+            if (player != null && _ar.Component.TryGetComponent<TransformComponent>(player.EntityId, out var transform) == true)
+                _ar.FloatingText.ShowLevelUpText(transform.Position, message.Level);
+            if (message.CharmBoardSlotOpened == true)
+                _ar.UI.SetNotify("참 판 자리가 열렸습니다 (P)");
+        }
+
+        /// <summary>경험치 바 채움·레벨·남은 포인트 (§8.1). 남은 포인트가 0이면 숨긴다.</summary>
+        private void RefreshExp()
+        {
+            PlayerData? data = _ar?.Data.Player;
+            if (data == null) return;
+
+            int required = PlayerLevelRules.GetRequiredExp(data.Level);
+            float fraction = required > 0 ? Mathf.Clamp01(data.Exp / (float)required) : 1f;
+            if (_expFill != null) _expFill.style.width = Length.Percent(fraction * 100f);
+            if (_expLevel != null) _expLevel.text = $"Lv {data.Level}";
+            if (_expPoints != null)
+            {
+                bool hasPoints = data.UnspentAttributePoints > 0;
+                _expPoints.text = hasPoints ? $"능력치 포인트 {data.UnspentAttributePoints} (I)" : string.Empty;
+                _expPoints.EnableInClassList("skillbar-exp-points-visible", hasPoints);
+            }
+        }
+
+        private void OnExpPointerEnter(PointerEnterEvent evt)
+        {
+            _expHovered = true;
+            ShowExpTooltip();
+        }
+
+        private void OnExpPointerLeave(PointerLeaveEvent evt)
+        {
+            if (_expHovered == true) _tooltipManager?.Hide();
+            _expHovered = false;
+        }
+
+        /// <summary>"레벨 N — 현재 / 필요 경험치 (x%)" (§8.1)</summary>
+        private void ShowExpTooltip()
+        {
+            PlayerData? data = _ar?.Data.Player;
+            if (_ar == null || data == null || _expBar == null || _ar.UI.CurrentUI != null) return;
+
+            int required = PlayerLevelRules.GetRequiredExp(data.Level);
+            string body = required > 0
+                ? $"{data.Exp:N0} / {required:N0} 경험치 ({data.Exp * 100f / required:0.0}%)"
+                : "최고 레벨";
+            _tooltipManager?.ShowText($"레벨 {data.Level}", body, GetScreenRect(_expBar));
         }
 
         private void RefreshAll()
@@ -320,8 +422,9 @@ namespace ARPG.UI
 
         private void HideTooltip()
         {
-            if (_hoveredSlot != null) _tooltipManager?.Hide();
+            if (_hoveredSlot != null || _expHovered == true) _tooltipManager?.Hide();
             _hoveredSlot = null;
+            _expHovered = false;
         }
 
         private static Rect GetScreenRect(VisualElement element)

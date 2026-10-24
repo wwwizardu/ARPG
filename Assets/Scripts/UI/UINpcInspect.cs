@@ -775,7 +775,9 @@ namespace ARPG.UI
             AddStatRow("냉기 저항", $"{sc.FinalIceResist}% / {sc.FinalMaxIceResist}%");
             AddStatRow("번개 저항", $"{sc.FinalLightningResist}% / {sc.FinalMaxLightningResist}%");
             AddStatRow("독 저항", $"{sc.FinalPoisonResist}% / {sc.FinalMaxPoisonResist}%");
-            AddStatRow("회피", $"{sc.FinalEvasion}%");
+            // 회피는 확률이 아니라 수치다 — 공격 쪽 정확도와 비교한다 (PLAYER_LEVEL_CHARM_DESIGN §8.3)
+            AddStatRow("정확도", sc.FinalAccuracy.ToString());
+            AddStatRow("회피", sc.FinalEvasion.ToString());
             AddStatRow("막기", $"{sc.FinalBlockChance}%");
             AddStatRow("막기 감소", $"{sc.FinalBlockReduction}%");
             AddStatRow("스킬 데미지", $"{sc.FinalSkillDamage}%");

@@ -1,0 +1,213 @@
+/* 캐릭터·인벤토리 창 — Shop/Forge와 톤 일관. 기준 해상도 1920×1080 (PS_Main) */
+
+.char-root {
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+}
+
+.char-overlay {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+}
+
+.char-panel {
+    width: 1400px;
+    max-height: 96%;
+    padding: 20px;
+    border-radius: 12px;
+    background-color: rgba(28, 28, 32, 0.96);
+    border-width: 1px;
+    border-color: rgba(180, 140, 80, 0.4);
+}
+
+.char-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.char-title {
+    color: rgb(220, 180, 100);
+}
+
+.char-close-icon {
+    --appui-iconbutton-size: 32px;
+}
+
+.char-section-title {
+    color: rgb(200, 200, 200);
+    margin-bottom: 8px;
+    font-size: 12px;
+}
+
+.char-top {
+    flex-direction: row;
+    align-items: flex-start;
+    padding-top: 12px;
+    padding-bottom: 12px;
+}
+
+/* 능력치 — 왼쪽 11줄(레벨·분배·생명), 오른쪽 18줄(피해·속도·저항·드롭) */
+.char-stats-box {
+    flex-grow: 1;
+    flex-shrink: 1;
+    margin-right: 20px;
+}
+
+.char-stats-columns {
+    flex-direction: row;
+}
+
+.char-stats-col {
+    width: 50%;
+    padding-right: 16px;
+}
+
+.char-stat-row {
+    flex-direction: row;
+    align-items: center;
+    height: 26px;
+}
+
+.char-stat-text {
+    flex-grow: 1;
+    flex-shrink: 1;
+    font-size: 15px;
+    color: rgb(220, 220, 220);
+    white-space: nowrap;
+}
+
+.char-stat-line {
+    height: 26px;
+    font-size: 15px;
+    color: rgb(220, 220, 220);
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+}
+
+.char-stat-btn {
+    margin-left: 4px;
+}
+
+.char-stat-btn-square {
+    width: 28px;
+    min-width: 28px;
+}
+
+/* 장비 칸 — 위치·크기는 옛 CharacterUI 프리팹 배치를 440×520 영역 좌상단 기준으로 옮긴 값 */
+.char-equip-box {
+    width: 460px;
+}
+
+.char-equip-area {
+    width: 440px;
+    height: 520px;
+    border-radius: 8px;
+    background-color: rgba(18, 18, 22, 0.45);
+    border-width: 1px;
+    border-color: rgba(105, 105, 120, 0.45);
+}
+
+.char-equip-slot {
+    position: absolute;
+    border-radius: 6px;
+    background-color: rgba(50, 50, 60, 0.6);
+    border-width: 2px;
+    border-color: rgba(100, 100, 120, 0.4);
+    align-items: center;
+    justify-content: center;
+}
+
+.char-equip-slot:hover {
+    border-color: rgba(255, 215, 100, 0.6);
+}
+
+.char-slot-filled {
+    border-color: rgba(180, 140, 80, 0.6);
+    background-color: rgba(60, 50, 40, 0.7);
+}
+
+/* 인벤토리 장비 비교 대상 칸 강조 (INVENTORY_EQUIPMENT_COMPARISON_DESIGN) */
+.char-equip-slot-compare {
+    border-width: 3px;
+    border-color: rgb(255, 214, 102);
+}
+
+.char-equip-icon {
+    position: absolute;
+    left: 6px;
+    top: 6px;
+    right: 6px;
+    bottom: 6px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.char-equip-label {
+    font-size: 11px;
+    color: rgb(130, 130, 140);
+    -unity-text-align: middle-center;
+}
+
+.char-equip-helmet        { left: 170px; top: 10px;  width: 100px; height: 100px; }
+.char-equip-earring-right { left: 105px; top: 125px; width: 50px;  height: 50px; }
+.char-equip-necklace      { left: 195px; top: 125px; width: 50px;  height: 50px; }
+.char-equip-earring-left  { left: 285px; top: 125px; width: 50px;  height: 50px; }
+.char-equip-weapon-right  { left: 20px;  top: 185px; width: 100px; height: 150px; }
+.char-equip-armor         { left: 170px; top: 185px; width: 100px; height: 150px; }
+.char-equip-weapon-left   { left: 320px; top: 185px; width: 100px; height: 150px; }
+.char-equip-ring-right    { left: 95px;  top: 345px; width: 50px;  height: 50px; }
+.char-equip-belt          { left: 180px; top: 345px; width: 80px;  height: 50px; }
+.char-equip-ring-left     { left: 295px; top: 345px; width: 50px;  height: 50px; }
+.char-equip-gloves        { left: 50px;  top: 410px; width: 100px; height: 100px; }
+.char-equip-boots         { left: 290px; top: 410px; width: 100px; height: 100px; }
+
+/* 인벤토리 — 칸 56 + 여백 8 = 64, 한 줄 20칸 */
+.char-inv-box {
+    padding-top: 12px;
+    align-items: center;
+}
+
+.char-inv-box > .char-section-title {
+    align-self: flex-start;
+}
+
+.char-inv-grid {
+    width: 1280px;
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.char-inv-slot {
+    width: 56px;
+    height: 56px;
+    margin: 4px;
+    border-radius: 6px;
+    background-color: rgba(50, 50, 60, 0.6);
+    border-width: 2px;
+    border-color: rgba(100, 100, 120, 0.4);
+    align-items: center;
+    justify-content: center;
+}
+
+.char-inv-slot:hover {
+    border-color: rgba(255, 215, 100, 0.6);
+}
+
+.char-inv-icon {
+    width: 44px;
+    height: 44px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.char-inv-qty {
+    position: absolute;
+    bottom: 2px;
+    right: 4px;
+    color: rgb(255, 255, 255);
+    font-size: 11px;
+}

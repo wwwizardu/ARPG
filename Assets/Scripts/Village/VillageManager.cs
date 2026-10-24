@@ -1690,9 +1690,30 @@ namespace ARPG.Village
                 return -1;
             Tables.ItemTable? table = item.Table ?? AR.s.Data.GetItem(item.Id);
             int price = GetMerchantBuyPrice(villageId, table);
-            if (price <= 0 || item.Equipment == null)
+            // 참 판은 막힌 칸 배율, 박힌 참은 판과 함께 팔린다 (PLAYER_LEVEL_CHARM_DESIGN §6.2·§6.5)
+            if (item.CharmBoard != null)
+                return price < 0 ? price : GetCharmBoardSellPrice(villageId, item, price);
+            if (price <= 0)
+                return price;
+            // 참은 아이템 레벨 구간 판매 배율 (§6.3)
+            if (item.Charm != null)
+                return ARPG.Item.CharmPriceRules.ApplyCharmLevelMul(price, AR.s.Data.GetDropBand(item.Charm.ItemLevel));
+            if (item.Equipment == null)
                 return price;
             return PlayerSellPriceRules.Apply(price, item, AR.s.Data.GetDropBand(item.Equipment.ItemLevel));
+        }
+
+        /// <summary>판 판매가 = 판 매입가 × 막힌 칸 배율 + 박힌 참 각각의 판매가 (§6.5).</summary>
+        private int GetCharmBoardSellPrice(int villageId, ARPG.Data.ItemData board, int boardMerchantPrice)
+        {
+            long total = ARPG.Item.CharmPriceRules.ApplyBoardBlockedMul(boardMerchantPrice, board.CharmBoard!);
+            for (int i = 0; i < board.CharmBoard!.Charms.Count; i++)
+            {
+                int charmPrice = GetPlayerSellPrice(villageId, board.CharmBoard.Charms[i].Charm);
+                if (charmPrice > 0)
+                    total += charmPrice;
+            }
+            return total > int.MaxValue ? int.MaxValue : (int)total;
         }
 
         /// <summary>
@@ -1895,9 +1916,53 @@ namespace ARPG.Village
                 basicCount++;
             }
 
-            Debug.Log($"[Shop] v{v.VillageId} 매물 재롤: {v.MerchantStock.Count}건 (기본 장비 {basicCount}) " +
+            // PLAYER_LEVEL_CHARM_DESIGN §6.6: 참 칸은 기본 장비 칸 뒤에 같은 rng를 이어 롤한다 — 앞 칸의 결과는 그대로다.
+            // 판 막힌 칸·참 모양 비중은 드롭과 같고, 참 아이템 레벨 = 지역 레벨
+            int charmCount = RollCharmStock(v, trade, cycle, stockRollOptions.ItemLevel, rng);
+
+            Debug.Log($"[Shop] v{v.VillageId} 매물 재롤: {v.MerchantStock.Count}건 (기본 장비 {basicCount}, 참 칸 {charmCount}) " +
                 $"(trade={trade.TradeProfileId}, cycle={cycle}, shopTier={v.ShopTier}, " +
                 $"facilityTier={facilityTier})");
+        }
+
+        private int RollCharmStock(VillageData v, VillageTradeProfile trade, int cycle, int zoneLevel, HistoryRng rng)
+        {
+            int added = 0;
+            int boardSlots = trade.GetCharmBoardSlotCount(v.ShopTier);
+            for (int i = 0; i < boardSlots; i++)
+            {
+                if (AddCharmStockEntry(v, trade, cycle, AR.s.Item.CreateRandomCharmBoard(rng)) == true)
+                    added++;
+            }
+
+            int charmSlots = trade.GetCharmSlotCount(v.ShopTier);
+            for (int i = 0; i < charmSlots; i++)
+            {
+                if (AddCharmStockEntry(v, trade, cycle, AR.s.Item.CreateRandomCharm(zoneLevel, rng)) == true)
+                    added++;
+            }
+            return added;
+        }
+
+        private bool AddCharmStockEntry(VillageData v, VillageTradeProfile trade, int cycle, ARPG.Data.ItemData? item)
+        {
+            if (item?.Table == null)
+                return false;
+
+            Tables.ItemTable table = item.Table;
+            TradeItemInfo info = new TradeItemInfo(table.Id, table.Tier, ARPG.Item.CharmPriceRules.GetInstanceBasePrice(item),
+                table.Stackable, ItemTradeTagCatalog.GetTags(table.Id));
+            v.MerchantStock.Add(new MerchantStockEntry
+            {
+                Item = item,
+                RemainingCount = 1,
+                UnitPrice = ApplyItemPriceIndex(VillageTradeStockRoller.GetPlayerBuyPrice(trade, info), table, 1),
+                RestockCycle = cycle,
+                TradeProfileId = trade.TradeProfileId,
+                SlotKind = TradeStockSlotKind.Charm,
+                PriceReason = VillageTradeStockRoller.GetPriceReason(trade, info, TradeStockSlotKind.Charm),
+            });
+            return true;
         }
 
         /// <summary>기본 장비 칸 후보 — 거래 품목 중 기본 아이템 변형이 있는 장비 (입력 순서 = ItemId 오름차순 유지).</summary>
@@ -1968,6 +2033,9 @@ namespace ARPG.Village
             for (int i = 0; i < all.Count; i++)
             {
                 if (all[i].BasePrice <= 0)
+                    continue;
+                // 참 판·참은 일반 매물과 별도 칸으로만 판다 (PLAYER_LEVEL_CHARM_DESIGN §6.6)
+                if (all[i].ItemType == GlobalEnum.ItemType.CharmBoard || all[i].ItemType == GlobalEnum.ItemType.Charm)
                     continue;
                 items.Add(CreateTradeItemInfo(all[i]));
             }

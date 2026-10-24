@@ -112,7 +112,7 @@ namespace ARPG.UI
         /// Screen Space - Overlay 캔버스에서는 world == screen이라 변환 불필요,
         /// Screen Space - Camera는 UI 카메라로 WorldToScreenPoint 변환.
         /// </summary>
-        protected static Rect GetSlotScreenRect(RectTransform rt)
+        public static Rect GetSlotScreenRect(RectTransform rt)
         {
             if (rt == null) return Rect.zero;
 

@@ -45,12 +45,13 @@ namespace ARPG.Editor
             Register<CreatureTable>(list, "0&range=A:I");
             // M열 PatrolRadius (NAMED_THREAT_DESIGN §5.5) — 빈칸 = 0 = 순찰 안 함
             Register<AiTable>(list, "947794841&range=A:M");
-            Register<MonsterTable>(list, "483012127&range=A:Q");
+            // R·S열 AccuracyMul·EvasionMul (PLAYER_LEVEL_CHARM_DESIGN §4.4) — 빈칸 = 1.0
+            Register<MonsterTable>(list, "483012127&range=A:S");
             Register<NpcTable>(list, "1460299278&range=A:P");
             // NpcEquipTable — NPC 시작 장비 세트. Desc + 슬롯별 ItemId/Chance 쌍.
             Register<NpcEquipTable>(list, "1566085089&range=A:Z");
-            // N열 RarityPerAffix (ITEM_DROP_BALANCE_DESIGN §8.4)
-            Register<MonsterArchetypeTable>(list, "1141585255&range=A:N");
+            // N열 RarityPerAffix (ITEM_DROP_BALANCE_DESIGN §8.4), O열 ExpMul (PLAYER_LEVEL_CHARM_DESIGN §3.2)
+            Register<MonsterArchetypeTable>(list, "1141585255&range=A:O");
             // 몬스터 접사 (MONSTER_AFFIX_DESIGN.md §5). A~S 데이터, T열 Note는 시트 가독성용(다운로드 제외)
             Register<MonsterAffixTable>(list, "1703620452&range=A:S");
             // 네임드 위협 템플릿 (NAMED_THREAT_DESIGN §11.1). A~S 데이터, T열 Note는 시트 가독성용(다운로드 제외)
@@ -62,11 +63,14 @@ namespace ARPG.Editor
             Register<BuildableItemTable>(list, "534887250&range=A:AA");
             // Phase D: JobBonusTable (직업별 시간당 가산 자원)
             Register<JobBonusTable>(list, "470575350&range=A:F");
-            Register<DropTable>(list, "1241586373&range=A:K");
+            // L·M열 CharmRate·CharmBoardRate (PLAYER_LEVEL_CHARM_DESIGN §6.6)
+            Register<DropTable>(list, "1241586373&range=A:M");
             Register<DropCurrencyTable>(list, "2071520432&range=A:V");
             Register<DropEquipmentTable>(list, "1267382287&range=A:V");
             // 드롭 구간표 (ITEM_DROP_BALANCE_DESIGN §7.1). A~Q 데이터, R열 Note는 시트 가독성용(다운로드 제외)
             Register<DropBandTable>(list, "1276985023&range=A:Q");
+            // 플레이어 레벨 경험치 표 (PLAYER_LEVEL_CHARM_DESIGN §3.4). A=Id(레벨), B=RequiredExp, C=MonsterExp
+            Register<ExpTable>(list, "1501748408&range=A:C");
             Register<SkillTable>(list, "92727160&range=A:AS");
             // Phase 1: SkillEffect 합성 시스템용 테이블 (+ 스킬 페이지 Tier/비용 메타데이터 + Kind 분류 컬럼)
             Register<SkillEffectTable>(list, "1681865950&range=A:N");
@@ -135,6 +139,12 @@ namespace ARPG.Editor
             if (ValidateDropBandSetup() == false)
             {
                 Debug.LogError("[DownloadTables] DropBand 검증 실패로 전체 테이블 저장을 중단합니다.");
+                return;
+            }
+
+            if (ValidateExpSetup() == false)
+            {
+                Debug.LogError("[DownloadTables] Exp 검증 실패로 전체 테이블 저장을 중단합니다.");
                 return;
             }
 
@@ -285,6 +295,28 @@ namespace ARPG.Editor
 
         [MenuItem("ARPG/Download Table/DropTable", false, 100)]
         private static async void DownloadDropTable() => await DownloadSingleTable<DropTable>();
+
+        [MenuItem("ARPG/Download Table/ExpTable", false, 100)]
+        private static async void DownloadExpTable()
+        {
+            TableEntry entry = GetTableEntry<ExpTable>();
+            if (entry == null)
+            {
+                Debug.LogError("[DownloadTables] ExpTable 등록 정보를 찾을 수 없습니다.");
+                return;
+            }
+
+            _tableDic = new();
+            if (await entry.DownloadAction() == false || ValidateExpSetup() == false)
+            {
+                Debug.LogError("[DownloadTables] Exp 다운로드 또는 검증 실패로 저장하지 않습니다.");
+                return;
+            }
+
+            SaveTable(typeof(ExpTable).Name, _tableDic[typeof(ExpTable)], entry.SaveType);
+            AssetDatabase.Refresh();
+            Debug.Log("download ExpTable Completed...");
+        }
 
         [MenuItem("ARPG/Download Table/DungeonTable", false, 100)]
         private static async void DownloadDungeonTable() => await DownloadSingleTable<DungeonTable>();
@@ -576,7 +608,8 @@ namespace ARPG.Editor
 
                 bool isAffix = mod.Slot == GlobalEnum.ModSlot.Prefix
                     || mod.Slot == GlobalEnum.ModSlot.Postfix;
-                if (isAffix == true && string.IsNullOrWhiteSpace(mod.Group) == true)
+                bool needsTiers = isAffix || mod.Slot == GlobalEnum.ModSlot.Charm;
+                if (needsTiers == true && string.IsNullOrWhiteSpace(mod.Group) == true)
                 {
                     Debug.LogError($"[ValidateMod] Mod Id={mod.Id}의 Group이 비어 있습니다.");
                     errors++;
@@ -672,11 +705,12 @@ namespace ARPG.Editor
             for (int i = 0; i < mods.Count; i++)
             {
                 ModTable mod = mods[i];
-                bool isAffix = mod.Slot == GlobalEnum.ModSlot.Prefix
-                    || mod.Slot == GlobalEnum.ModSlot.Postfix;
-                if (isAffix == true && modsWithTier.Contains(mod.Id) == false)
+                bool needsTiers = mod.Slot == GlobalEnum.ModSlot.Prefix
+                    || mod.Slot == GlobalEnum.ModSlot.Postfix
+                    || mod.Slot == GlobalEnum.ModSlot.Charm;
+                if (needsTiers == true && modsWithTier.Contains(mod.Id) == false)
                 {
-                    Debug.LogError($"[ValidateMod] Prefix/Postfix Mod Id={mod.Id}에 Tier 행이 없습니다.");
+                    Debug.LogError($"[ValidateMod] Prefix/Postfix/Charm Mod Id={mod.Id}에 Tier 행이 없습니다.");
                     errors++;
                 }
             }
@@ -801,6 +835,10 @@ namespace ARPG.Editor
                 else if (table is DropBandTable dropBandTable)
                 {
                     ParseDropBandTable(dropBandTable, values);
+                }
+                else if (table is ExpTable expTable)
+                {
+                    ParseExpTable(expTable, values);
                 }
                 else if (table is SkillTable skillTable)
                 {
@@ -1188,6 +1226,24 @@ namespace ARPG.Editor
             table.Archetype = ParseEnumSafe(values, 15, GlobalEnum.MonsterArchetype.Normal);
             // Q열은 단일 바이옴 또는 쉼표로 구분한 서식지 목록. 빈 셀/누락은 Any=공용.
             ParseMonsterBiomes(table, values);
+            // R·S열 적중 판정 종 배율 (PLAYER_LEVEL_CHARM_DESIGN §4.4). 빈 셀이면 1.0
+            table.AccuracyMul = ParseMulOrDefault(values, 17, table.Id, "AccuracyMul");
+            table.EvasionMul = ParseMulOrDefault(values, 18, table.Id, "EvasionMul");
+        }
+
+        /// <summary>빈 칸은 1.0, 음수는 0으로 막고 오류를 남긴다.</summary>
+        private static float ParseMulOrDefault(string[] values, int index, int tableId, string column)
+        {
+            if (index >= values.Length || string.IsNullOrWhiteSpace(values[index]))
+                return 1f;
+
+            float value = ParseFloatSafe(values, index);
+            if (value < 0f)
+            {
+                Debug.LogError($"[ParseMonsterTable] {column} must be >= 0 (Id={tableId}, value={value})");
+                return 0f;
+            }
+            return value;
         }
 
         private static void ParseMonsterBiomes(MonsterTable table, string[] values)
@@ -1255,6 +1311,72 @@ namespace ARPG.Editor
 
             // 접사 1개당 아이템 희귀도 (ITEM_DROP_BALANCE_DESIGN §8.4). 빈 셀이면 0
             table.RarityPerAffix = Mathf.Max(0, ParseIntSafe(values, 13));
+
+            // 처치 경험치 등급 배율 (PLAYER_LEVEL_CHARM_DESIGN §3.2). 빈 셀이면 1.0
+            table.ExpMul = values.Length > 14 && string.IsNullOrWhiteSpace(values[14]) == false
+                ? Mathf.Max(0f, ParseFloatSafe(values, 14))
+                : 1f;
+        }
+
+        /// <summary>ExpTable 파싱 (PLAYER_LEVEL_CHARM_DESIGN §3.4). 컬럼: Id(레벨), RequiredExp, MonsterExp</summary>
+        private static void ParseExpTable(ExpTable table, string[] values)
+        {
+            if (values.Length < 3)
+            {
+                Debug.LogError($"[ParseExpTable] Invalid data length. Expected at least 3, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            table.RequiredExp = int.Parse(values[1]);
+            table.MonsterExp = int.Parse(values[2]);
+        }
+
+        /// <summary>
+        /// ExpTable 검증: 레벨 1~최고 레벨이 빈틈없이 있고, 최고 레벨 전까지 RequiredExp가 양수이며 MonsterExp가 양수다.
+        /// </summary>
+        private static bool ValidateExpSetup()
+        {
+            List<ExpTable> rows = GetTableList<ExpTable>();
+            if (rows == null || rows.Count == 0)
+            {
+                Debug.LogError("[ValidateExp] ExpTable 행이 없습니다.");
+                return false;
+            }
+
+            int errors = 0;
+            HashSet<int> levels = new HashSet<int>();
+            for (int i = 0; i < rows.Count; i++)
+            {
+                ExpTable row = rows[i];
+                if (levels.Add(row.Id) == false)
+                {
+                    Debug.LogError($"[ValidateExp] 레벨 {row.Id} 중복");
+                    errors++;
+                }
+                if (row.MonsterExp <= 0)
+                {
+                    Debug.LogError($"[ValidateExp] 레벨 {row.Id} MonsterExp가 0 이하입니다.");
+                    errors++;
+                }
+                if (row.Id < PlayerLevelRules.MAX_LEVEL && row.RequiredExp <= 0)
+                {
+                    Debug.LogError($"[ValidateExp] 레벨 {row.Id} RequiredExp가 0 이하입니다.");
+                    errors++;
+                }
+            }
+
+            for (int level = 1; level <= PlayerLevelRules.MAX_LEVEL; level++)
+            {
+                if (levels.Contains(level) == false)
+                {
+                    Debug.LogError($"[ValidateExp] 레벨 {level} 행이 없습니다.");
+                    errors++;
+                }
+            }
+
+            if (errors == 0)
+                Debug.Log($"[ValidateExp] PASS — Levels={rows.Count}");
+            return errors == 0;
         }
 
         /// <summary>
@@ -1579,6 +1701,9 @@ namespace ARPG.Editor
             table.SkillBookRate = values.Length > 9 && int.TryParse(values[9], out var sbr) ? sbr : 0;
             // 스킬 페이지 드랍 가중치 (SKILL_RUNE_DESIGN.md §8.1) — 신규 컬럼, 빈 셀 허용 (= 0)
             table.SkillPageRate = ParseIntSafe(values, 10);
+            // 참·참 판 가중치 (PLAYER_LEVEL_CHARM_DESIGN §6.6). 빈 칸이면 0 = 드랍 없음
+            table.CharmRate = Mathf.Max(0, ParseIntSafe(values, 11));
+            table.CharmBoardRate = Mathf.Max(0, ParseIntSafe(values, 12));
         }
 
         /// <summary>
@@ -2360,10 +2485,12 @@ namespace ARPG.Editor
         private static GlobalEnum.EquipmentTypeMask ParseEquipMaskStrict(string[] values, int index, int tableId, GlobalEnum.ModSlot slot)
         {
             bool isImplicit = (slot == GlobalEnum.ModSlot.Implicit);
+            // 참 전용 옵션은 장비에 붙지 않으므로 빈 칸을 허용한다 (PLAYER_LEVEL_CHARM_DESIGN §7)
+            bool allowsEmpty = isImplicit || slot == GlobalEnum.ModSlot.Charm;
 
             if (values.Length <= index || string.IsNullOrEmpty(values[index]))
             {
-                if (isImplicit == false)
+                if (allowsEmpty == false)
                     Debug.LogError($"[ParseModTable] AllowedEquipTypes must be set for non-Implicit mod (Mod Id={tableId})");
                 return GlobalEnum.EquipmentTypeMask.None;
             }

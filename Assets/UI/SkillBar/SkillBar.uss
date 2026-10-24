@@ -12,8 +12,64 @@
     color: rgb(224, 220, 212);
 }
 
-.skillbar-panel {
+.skillbar-hud {
     transform-origin: 50% 100%;
+    flex-direction: column;
+    align-items: stretch;
+}
+
+/* 경험치 바 (PLAYER_LEVEL_CHARM_DESIGN §8.1) */
+.skillbar-exp-row {
+    flex-direction: row;
+    align-items: center;
+    height: 18px;
+    margin-bottom: 4px;
+}
+
+.skillbar-exp-level {
+    margin: 0 6px 0 0;
+    padding: 0;
+    font-size: 13px;
+    color: rgb(255, 215, 130);
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+}
+
+.skillbar-exp-bar {
+    flex-grow: 1;
+    height: 8px;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: rgba(180, 140, 80, 0.55);
+    background-color: rgba(28, 28, 32, 0.94);
+    overflow: hidden;
+}
+
+.skillbar-exp-bar:hover {
+    border-color: rgba(255, 215, 130, 0.9);
+}
+
+.skillbar-exp-fill {
+    width: 0;
+    height: 100%;
+    background-color: rgb(120, 190, 255);
+}
+
+.skillbar-exp-points {
+    display: none;
+    margin: 0 0 0 8px;
+    padding: 0;
+    font-size: 13px;
+    color: rgb(120, 220, 120);
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+}
+
+.skillbar-exp-points-visible {
+    display: flex;
+}
+
+.skillbar-panel {
     flex-direction: row;
     align-items: center;
     padding: 10px 12px;

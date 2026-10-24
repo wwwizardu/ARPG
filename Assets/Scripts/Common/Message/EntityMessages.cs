@@ -173,6 +173,28 @@ namespace ARPG.Message
     }
 
     /// <summary>
+    /// 플레이어 레벨·경험치·능력치 포인트 변경 Broadcast 메시지 (PLAYER_LEVEL_CHARM_DESIGN.md §8.1)
+    /// PlayerManager가 경험치 획득·분배·되돌리기 때 발행. 경험치 바·캐릭터 창·레벨업 알림이 구독한다.
+    /// </summary>
+    public struct PlayerProgressChangedMessage
+    {
+        public int Level;
+        /// <summary>이번 변경에서 레벨이 올랐다 (레벨업 글자·효과음)</summary>
+        public bool LeveledUp;
+        /// <summary>이번 레벨업으로 참 판 자리가 새로 열렸다 (§8.1 알림)</summary>
+        public bool CharmBoardSlotOpened;
+    }
+
+    /// <summary>
+    /// 참 판 자리·박힌 참 변경 Broadcast 메시지 (PLAYER_LEVEL_CHARM_DESIGN.md §8.4~§8.6). 참 판 창이 구독해 다시 그린다.
+    /// </summary>
+    public struct CharmBoardChangedMessage
+    {
+        /// <summary>바뀐 판 자리 (0~8). 여러 자리가 바뀌면 -1</summary>
+        public int SlotIndex;
+    }
+
+    /// <summary>
     /// 스킬북 슬롯 변경 Broadcast 메시지 (SKILLBOOK_DESIGN.md §4.1)
     /// PlayerSkillManager.Equip/UnequipSkillBook 성공 시 발행.
     /// UI가 구독해 슬롯·인벤토리 표시를 갱신.

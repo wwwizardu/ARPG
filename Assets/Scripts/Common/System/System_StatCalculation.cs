@@ -64,30 +64,18 @@ namespace ARPG.Systems
                 // 1단계: Base를 Final로 복사 (초기화)
                 stat.CopyBaseToFinal();
 
-                // 2단계: DataManager(런타임)에서 모든 보정 가져오기
+                // 2단계: DataManager(런타임)에서 모든 보정 가져오기. 없으면 능력치 보너스만 붙인다
                 List<StatModifier>? modifiers = AR.s.Data.GetModifiers(entityId);
-                if (modifiers == null || modifiers.Count == 0)
-                {
-                    // modifier가 없으면 Base = Final 그대로 저장
-                    ClampCurrentResources(entityId, ref stat);
-                    RefillHpIfSpawned(entityId, ref stat);
-                    AR.s.Component.SetComponent(entityId, stat);
-                    SyncDerivedStatComponents(entityId, stat);
-                    AR.s.Component.RemoveComponent<StatDirtyTag>(entityId);
-                    if (entityId == AR.s.Data.CurrentPlayerEntityId)
-                    {
-                        AR.s.Message.Broadcast(new StatRecalculatedMessage { EntityId = entityId });
-                    }
-                    continue;
-                }
+                int modifierCount = modifiers != null ? modifiers.Count : 0;
 
                 // 3단계: 우선순위 순으로 정렬 (낮은 숫자가 먼저)
-                modifiers.Sort((a, b) => a.Priority.CompareTo(b.Priority));
+                if (modifierCount > 1)
+                    modifiers!.Sort((a, b) => a.Priority.CompareTo(b.Priority));
 
                 // 4단계: Add 타입 먼저 적용. 태그가 지정된 modifier는 스킬 프로필에서 별도로 집계한다.
-                for (int j = 0; j < modifiers.Count; j++)
+                for (int j = 0; j < modifierCount; j++)
                 {
-                    StatModifier modifier = modifiers[j];
+                    StatModifier modifier = modifiers![j];
                     if (modifier.Tags == GE.SkillTag.None
                         && modifier.ModifierType == StatModifierType.Add)
                     {
@@ -95,14 +83,23 @@ namespace ARPG.Systems
                     }
                 }
 
-                // 5단계: 같은 Stat의 Increased(%)를 합산한 뒤 한 번만 적용한다.
+                // 5단계: 같은 Stat의 Increased(%)를 합산한다. 회피 증가(EvasionInc)는 Add·Multiply 모두 회피 묶음에 넣는다.
                 int[] increasedByStat = _increasedByStatScratch;
                 Array.Clear(increasedByStat, 0, STAT_BUCKET_COUNT);
-                for (int j = 0; j < modifiers.Count; j++)
+                for (int j = 0; j < modifierCount; j++)
                 {
-                    StatModifier modifier = modifiers[j];
-                    if (modifier.Tags != GE.SkillTag.None
-                        || modifier.ModifierType != StatModifierType.Multiply)
+                    StatModifier modifier = modifiers![j];
+                    if (modifier.Tags != GE.SkillTag.None)
+                        continue;
+
+                    if (modifier.StatType == GE.Stat.EvasionInc)
+                    {
+                        if (modifier.ModifierType != StatModifierType.Override)
+                            increasedByStat[(int)GE.Stat.Evasion] += modifier.Value;
+                        continue;
+                    }
+
+                    if (modifier.ModifierType != StatModifierType.Multiply)
                         continue;
 
                     int statIndex = (int)modifier.StatType;
@@ -112,24 +109,28 @@ namespace ARPG.Systems
                     increasedByStat[statIndex] += modifier.Value;
                 }
 
+                // 5-1단계: 힘·민첩·지능 증가를 먼저 곱해 최종 능력치를 만든 뒤 고정값 보너스를 더한다 (PLAYER_LEVEL_CHARM_DESIGN §4.1).
+                // 보너스가 HP·회피·마나 증가율보다 먼저 들어가므로 "최대 HP 증가 %"가 힘에서 온 HP에도 붙는다.
+                ApplyIncrease(ref stat, increasedByStat, GE.Stat.Str);
+                ApplyIncrease(ref stat, increasedByStat, GE.Stat.Dex);
+                ApplyIncrease(ref stat, increasedByStat, GE.Stat.Int);
+                stat.FinalMaxHp += AttributeBonusRules.GetBonusHp(stat.FinalStr);
+                stat.FinalEvasion += AttributeBonusRules.GetBonusEvasion(stat.FinalDex);
+                stat.FinalMaxMp += AttributeBonusRules.GetBonusMp(stat.FinalInt);
+
+                // 5-2단계: 나머지 증가율을 한 번씩 적용한다.
                 for (int statIndex = 0; statIndex < increasedByStat.Length; statIndex++)
                 {
-                    int increased = increasedByStat[statIndex];
-                    if (increased == 0)
+                    if (statIndex == (int)GE.Stat.Str || statIndex == (int)GE.Stat.Dex || statIndex == (int)GE.Stat.Int)
                         continue;
 
-                    ApplyModifier(ref stat, new StatModifier(
-                        (GE.Stat)statIndex,
-                        StatModifierType.Multiply,
-                        StatModifierSource.Equipment,
-                        0,
-                        increased));
+                    ApplyIncrease(ref stat, increasedByStat, (GE.Stat)statIndex);
                 }
 
                 // 6단계: Override 타입 마지막 적용
-                for (int j = 0; j < modifiers.Count; j++)
+                for (int j = 0; j < modifierCount; j++)
                 {
-                    StatModifier modifier = modifiers[j];
+                    StatModifier modifier = modifiers![j];
                     if (modifier.Tags == GE.SkillTag.None
                         && modifier.ModifierType == StatModifierType.Override)
                     {
@@ -154,6 +155,20 @@ namespace ARPG.Systems
                     AR.s.Message.Broadcast(new StatRecalculatedMessage { EntityId = entityId });
                 }
             }
+        }
+
+        private void ApplyIncrease(ref StatComponent stat, int[] increasedByStat, GE.Stat statType)
+        {
+            int increased = increasedByStat[(int)statType];
+            if (increased == 0)
+                return;
+
+            ApplyModifier(ref stat, new StatModifier(
+                statType,
+                StatModifierType.Multiply,
+                StatModifierSource.Equipment,
+                0,
+                increased));
         }
 
         private void ClampCurrentResources(int entityId, ref StatComponent stat)
@@ -209,7 +224,7 @@ namespace ARPG.Systems
             cache.IceReductionMul       = 1f - DamageCalculator.GetResistanceReduction(stat.FinalIceResist,       stat.FinalMaxIceResist);
             cache.LightningReductionMul = 1f - DamageCalculator.GetResistanceReduction(stat.FinalLightningResist, stat.FinalMaxLightningResist);
             cache.PoisonReductionMul    = 1f - DamageCalculator.GetResistanceReduction(stat.FinalPoisonResist,    stat.FinalMaxPoisonResist);
-            cache.EvasionRate           = stat.FinalEvasion;
+            cache.Evasion               = stat.FinalEvasion;
             cache.BlockChance           = stat.FinalBlockChance;
             cache.BlockReductionMul     = stat.FinalBlockReduction > 0
                 ? stat.FinalBlockReduction / 100f
@@ -372,6 +387,9 @@ namespace ARPG.Systems
                     break;
                 case GE.Stat.ItemRarity:
                     stat.FinalItemRarity = ApplyIncreaseBucket(stat.FinalItemRarity, modifier);
+                    break;
+                case GE.Stat.Accuracy:
+                    stat.FinalAccuracy = ApplyValue(stat.FinalAccuracy, modifier);
                     break;
             }
         }

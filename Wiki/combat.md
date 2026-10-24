@@ -84,8 +84,28 @@ sources:
   - Assets/UI/Tooltip/Tooltip.uss
   - Assets/UI/PanelSettings/PS_Tooltip.asset
   - Assets/InputSystem_Actions.inputactions
+  - Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md
+  - Assets/Scripts/Skill/Combat/HitChanceRules.cs
+  - Assets/Scripts/Common/Utility/PlayerLevelRules.cs
+  - Assets/Scripts/Common/Utility/AttributeBonusRules.cs
+  - Assets/Scripts/Manager/PlayerManager_Progression.cs
+  - Assets/Scripts/Manager/PlayerManager_CharmBoard.cs
+  - Assets/Scripts/Manager/ItemManager_Charm.cs
+  - Assets/Scripts/Item/CharmRules.cs
+  - Assets/Scripts/Item/CharmPriceRules.cs
+  - Assets/Scripts/Item/CharmTooltipText.cs
+  - Assets/Scripts/Data/CharmData.cs
+  - Assets/Scripts/Npc/NpcPowerEvaluator.cs
+  - Assets/Scripts/UI/UICharmBoard.cs
+  - Assets/Scripts/UI/UIConfirmDialog.cs
+  - Assets/Scripts/Editor/PlayerLevelCharmDiagnostics.cs
+  - Assets/Scripts/Editor/MonsterAffixDiagnostics_CharmDrop.cs
+  - Assets/_BinaryData/TableData/ExpTable.bytes
+  - Assets/_BinaryData/TableData/StatTable.bytes
+  - Assets/_BinaryData/TableData/ItemTable.bytes
+  - Assets/_BinaryData/TableData/DropTable.bytes
 last_synced: 2026-09-01
-last_updated: 2026-10-21
+last_updated: 2026-10-24
 status: implemented-contract-active-validation-pending
 ---
 
@@ -93,7 +113,7 @@ status: implemented-contract-active-validation-pending
 
 ## 한 줄 요약
 
-무기의 고정 기본 능력과 인스턴스별 고유 강화만 무기 캐시에 들어가며, 장비의 Implicit/Prefix/Postfix는 부위와 무관한 글로벌 Modifier로 합산된다. 미장착 인벤토리 장비의 Prefix/Postfix는 Tier 1 이상 제련소에서 랜덤 교체·추가할 수 있고, 스킬 공격 프로필은 변경된 옵션까지 태그에 맞춰 한 번 계산해 예상값과 실제 전투가 같은 값을 소비한다. [src: Docs/combat/combatSystem.md §장비 옵션 책임 경계·§스킬 공격 프로필 구성, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §0–§8, Assets/Scripts/Item/ItemEnchantmentService.cs, Assets/Scripts/Common/System/System_SkillAttackProfileCalculation.cs] 새로 만드는 장비의 Prefix/Postfix 티어(T1~T12)는 장비에 저장된 아이템 레벨로 정해진다(2026-10-11). [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §1, Assets/Scripts/Item/ItemLevelModTierRules.cs] 명중 시 넉백·당기기(2026-10-12 구현)와 땅 위 직선 돌진·넉백 저항(2026-10-13 구현, 첫 콘텐츠는 멧돼지 돌진)도 이 페이지 뒤쪽에 정리한다. [src: Docs/combat/SKILL_DESIGN.md §6.10·§6.11] 인벤토리 장비는 Shift를 누르고 있는 동안 현재 장착 아이템과 수치·옵션 차이를 비교하고, 비교 중 좌·우클릭으로 화면 왼쪽·오른쪽 칸에 바로 장착한다(2026-10-13 구현). [src: Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md, Assets/Scripts/UI/UICharacter.cs] 2026-10-21부터 장비에 일반·마법·희귀 등급과 품질(0~20)이 있고, 플레이어 드롭은 몬스터 레벨 구간표·아이템 수량·희귀도로 양과 질이 정해진다. 마법부여 티어도 아이템 레벨을 따른다(구현, 플레이 확인 전). [src: Docs/combat/ITEM_DROP_BALANCE_DESIGN.md 상태·§4–§8·§16]
+무기의 고정 기본 능력과 인스턴스별 고유 강화만 무기 캐시에 들어가며, 장비의 Implicit/Prefix/Postfix는 부위와 무관한 글로벌 Modifier로 합산된다. 미장착 인벤토리 장비의 Prefix/Postfix는 Tier 1 이상 제련소에서 랜덤 교체·추가할 수 있고, 스킬 공격 프로필은 변경된 옵션까지 태그에 맞춰 한 번 계산해 예상값과 실제 전투가 같은 값을 소비한다. [src: Docs/combat/combatSystem.md §장비 옵션 책임 경계·§스킬 공격 프로필 구성, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §0–§8, Assets/Scripts/Item/ItemEnchantmentService.cs, Assets/Scripts/Common/System/System_SkillAttackProfileCalculation.cs] 새로 만드는 장비의 Prefix/Postfix 티어(T1~T12)는 장비에 저장된 아이템 레벨로 정해진다(2026-10-11). [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §1, Assets/Scripts/Item/ItemLevelModTierRules.cs] 명중 시 넉백·당기기(2026-10-12 구현)와 땅 위 직선 돌진·넉백 저항(2026-10-13 구현, 첫 콘텐츠는 멧돼지 돌진)도 이 페이지 뒤쪽에 정리한다. [src: Docs/combat/SKILL_DESIGN.md §6.10·§6.11] 인벤토리 장비는 Shift를 누르고 있는 동안 현재 장착 아이템과 수치·옵션 차이를 비교하고, 비교 중 좌·우클릭으로 화면 왼쪽·오른쪽 칸에 바로 장착한다(2026-10-13 구현). [src: Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md, Assets/Scripts/UI/UICharacter.cs] 2026-10-21부터 장비에 일반·마법·희귀 등급과 품질(0~20)이 있고, 플레이어 드롭은 몬스터 레벨 구간표·아이템 수량·희귀도로 양과 질이 정해진다. 마법부여 티어도 아이템 레벨을 따른다(구현, 플레이 확인 전). [src: Docs/combat/ITEM_DROP_BALANCE_DESIGN.md 상태·§4–§8·§16] 2026-10-24부터 플레이어 레벨·능력치 포인트, 정확도 대 회피 적중 판정, 3×3 참 판과 참이 있다(구현, 플레이 확인 전, 아래 절). [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md 머리말, Assets/Scripts/Skill/Combat/HitChanceRules.cs, Assets/Scripts/Manager/PlayerManager_CharmBoard.cs]
 
 ## 문서 정본
 
@@ -328,6 +348,41 @@ FinalAttackSpeedPerSecond
 - **멧돼지 돌진(Skill 52)**: 멧돼지 전용 AI 6번(평타 70 : 돌진 30)이 쓴다. 사용 거리 2~4칸, 0.6초 준비(조준 45°/초, 제자리 `Locked`) → 0.5초에 6칸 → 0.8초 후딜, 쿨타임 6초, 피해 평타의 1.5배, 넉백 저항 켬, 맞으면 옆으로 2칸(1032). 처음 제안한 "0.4초 5칸·사용 2~5칸"은 최대 거리에서 출발하면 대상 앞에서 멈춰 관통이 안 돼 바꿨다. [src: Docs/combat/SKILL_DESIGN.md §4 M4, Assets/_BinaryData/TableData/SkillTable.bytes, Assets/_BinaryData/TableData/AiTable.bytes] [추론: 수치 변경 사유는 2026-10-13 작업 보고 기준]
 - **검증**: 2026-10-13 컴파일·단일 표 다운로드·공격 예고 빌드 검증과 PlayMode 측정을 통과했다. 준비 중 45°/초 회전, 준비 중 밀려 빗나감(경로가 약 2.5칸 비켜 감), 0.5초 6.00칸 일정 속도, 대상당 1회·옆 2칸 넉백·관통, 돌진 중 밀기 무시, 벽 앞 즉시 멈춤(4.19칸·0.36초), 돌진 중 피해를 확인했다. 손 조작 체감은 확인하지 않았다. [src: Docs/combat/SKILL_DESIGN.md §6.11 검증 결과]
 
+## 플레이어 레벨·능력치·적중 판정·참 판
+
+2026-10-24 구현했고 사용자 커밋·플레이 확인 전이다. 정본은 `PLAYER_LEVEL_CHARM_DESIGN.md`(결정 LV1~LV24, 수치 초안)이고, 문서 머리말 상태 줄은 아직 "미구현"이다. [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md 머리말·§2·§10]
+
+**레벨·경험치**
+
+- 레벨 1~100. 플레이어 근처 20칸 안에서 죽은 몬스터는 누가 잡았든 경험치를 준다. 경험치 = 기본 경험치(몬스터 레벨) × 등급 `ExpMul`(= `HpMul`) × 레벨 차이 보정이다. 레벨별 필요 경험치와 몬스터 기본 경험치는 새 `ExpTable`(시트 Exp 탭 100행)이고, 식은 문서 §3.4가 정본이다. [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md §3.2·§3.4, Assets/Scripts/Common/Utility/PlayerLevelRules.cs, Assets/Scripts/Manager/PlayerManager_Progression.cs `GrantMonsterKillExp`·`GainExp`, Assets/Scripts/Common/System/System_HpCheck.cs, Assets/_BinaryData/TableData/ExpTable.bytes, Assets/_BinaryData/TableData/MonsterArchetypeTable.bytes]
+- 레벨업마다 능력치 포인트 5와 기본 정확도 A(L) = 100 + 10 × (L − 1)을 얻는다. 넣은 포인트는 `StatTable` 기본 능력치 위에 `StatModifier`(출처 `PlayerAttribute`)로 붙는다. 캐릭터 창에서 예정으로 두었다가 [적용]으로 확정하고, 되돌리기는 19레벨까지 무료, 20레벨부터 1포인트 = ceil(15G × 플레이어 레벨 구간 판매 배율)이다. [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md §3.1·§4.2, Assets/Scripts/Manager/PlayerManager_Progression.cs `ApplyProgressionToEntity`·`CommitAttributeAllocation`·`TryRefundAttributePoints`, Assets/Scripts/Common/Utility/PlayerLevelRules.cs `GetRespecCostPerPoint`]
+- 저장은 `PlayerData`의 `Level`·`Exp`(현재 레벨 안 진행량)·`AllocatedStr/Dex/Int`·`UnspentAttributePoints`다. 칸이 없는 옛 세이브는 저장된 레벨 그대로 열고, 남은 포인트를 (레벨 − 1) × 5에 맞춘다. [src: Assets/Scripts/Data/PlayerData.cs `NormalizeProgression`, Assets/Scripts/Data/SaveSnapshotGroups.cs]
+
+**능력치 보너스**: 힘 1 = 최대 HP +2, 민첩 1 = 회피 +2, 지능 1 = 최대 마나 +1이며 플레이어·NPC·몬스터가 같은 계산을 거친다. 스탯 재계산 순서가 고정값 → 힘·민첩·지능 증가율 → 보너스 가산 → 나머지 증가율 → 덮어쓰기라서 "최대 HP 증가 %"가 힘에서 온 HP에도 붙는다. 기존 HP·마나를 지키려고 `StatTable` 기본값을 플레이어 180/98, NPC 130/98로 낮추고 몬스터 능력치를 0으로 바꿨다. [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md §4.1·§4.3·§4.4, Assets/Scripts/Common/System/System_StatCalculation.cs `OnUpdate`, Assets/Scripts/Common/Utility/AttributeBonusRules.cs, Assets/_BinaryData/TableData/StatTable.bytes]
+
+**적중 판정**
+
+- 적중률 = 정확도 ÷ (정확도 + 회피), 하한 25%이고 공격·주문·범위를 가리지 않는다. 스킬 태그 `Unevadable`(첫 6개: 203·206·208·52·211·212)과 스킬 없이 생긴 장판은 판정 없이 맞는다. 정확도와 회피 불가 여부는 스킬 공격 프로필(`Accuracy`·`Unevadable`)에 실려, 설치형 장판도 설치 당시 값을 쓴다. [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md §5.1·§5.2, Assets/Scripts/Skill/Combat/HitChanceRules.cs, Assets/Scripts/Skill/Combat/DamageCalculator.cs `IsEvadedByAccuracy`, Assets/Scripts/Common/Component/SkillAttackProfileComponent.cs, Assets/Scripts/Common/System/System_SkillAttackProfileCalculation.cs, Assets/Scripts/Factory/EntityFactory.cs `SnapshotAreaAttack`, Assets/_BinaryData/TableData/SkillTable.bytes]
+- 반복 장판 틱(독구름·불고리·거미줄)은 이전처럼 회피 판정을 하지 않는다. 피해를 주는 두 장판은 회피 불가 태그 스킬이 만든다. [src: Assets/Scripts/Common/System/System_AreaEffect.cs `ApplyTickToTarget`, Assets/_BinaryData/TableData/AreaEffectTable.bytes]
+- 몬스터는 능력치 없이 정확도 A(L) × `AccuracyMul`, 회피 A(L) ÷ 9 × `EvasionMul`(몬스터 시트 R·S열, FrostMantis·SkeletonArcher 회피 1.5)이다. 접사 날렵한(111)은 회피 증가 +200%(`Stat.EvasionInc`, 회피 증가율 묶음에 합산)다. [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md §5.3·§5.5, Assets/Scripts/Factory/EntityFactory.cs `ApplyMonsterHitCurve`, Assets/_BinaryData/TableData/MonsterTable.bytes, Assets/_BinaryData/TableData/MonsterAffixTable.bytes]
+- 장비 정확도 옵션은 Mod 1209(접미, 무기·장갑·투구, 티어 값은 Mod 1000과 같음)이고 마법부여 후보에도 들어간다. [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md §5.4, Assets/_BinaryData/TableData/ModTable.bytes, Assets/_BinaryData/TableData/ModTierTable.bytes, Assets/Scripts/Item/ItemEnchantmentService.cs `HasVerifiedRuntimeConsumer`]
+
+**구현 중 사용자 결정 (2026-10-24, 설계 문서에는 아직 없음)**
+
+- 기존 세이브의 플레이어는 1레벨에서 시작한다(저장된 값 그대로). [src: Assets/Scripts/Data/PlayerData.cs `NormalizeProgression`]
+- NPC 정확도는 고향 마을 청크 지역 레벨의 A(L)이다. 문서 §5.4의 "제안"을 채택했다. [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md §5.4, Assets/Scripts/Factory/EntityFactory.cs `ApplyNpcAccuracy`, Assets/Scripts/Manager/NpcManager_Ambition.cs `GetNpcLootZoneLevel`]
+- NPC 전투력의 회피 항은 (표 기본 민첩 + 장비 민첩) × 2 + 장비 회피를 같은 지역 균형형 몬스터 정확도 기준 피할 확률(%)로 바꿔 넣는다. 문서 §5.6은 "지금 값(0)과 거의 같게 유지"였지만, 평가식은 원래 장비만 읽었고 사용자가 기본 민첩 포함을 골랐다. [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md §5.6, Assets/Scripts/Npc/NpcPowerEvaluator.cs `EvaluateBreakdown`·`GetEvadePercent`·`ResolveContext`] 같은 세이브에서 NPC 평균 전투력이 9.986 → 10.284(NPC당 +0.20~1.00)가 됐다. [추론: 2026-10-24 플레이 모드 측정 기준]
+
+**참 판·참**
+
+- 판(아이템 8000)은 3×3칸, 막힌 칸 0~3칸(비중 10·35·35·20%), 기본 가격 40G × (4 / 1.5 / 1 / 0.6)이다. 참(8001~8006)은 1×1·1×2·1×3·L자·2×2·3×3이고 모양 비중 30·25·12·12·15·6%, 옵션 수와 장비 기준값 대비 비율은 문서 §6.3 표, 티어는 아이템 레벨로 T1~T10만 쓴다. 참 전용 힘·민첩·지능·회피는 새 `ModSlot.Charm`(Mod 1300~1303, 장비 롤 후보 아님)이고, 최대 HP·마나·재생·저항·정확도는 장비 Mod를 같이 쓴다. 아이콘은 2026-10-24에 새로 그린 `CharmBoard`·`Charm1x1`·`Charm1x2`·`Charm1x3`·`CharmL`·`Charm2x2`·`Charm3x3`이다. [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md §6.2·§6.3, Assets/Scripts/Item/CharmRules.cs, Assets/Scripts/Manager/ItemManager_Charm.cs, Assets/Scripts/Item/CharmPriceRules.cs, Assets/_BinaryData/TableData/ItemTable.bytes, Assets/_BinaryData/TableData/ModTable.bytes, Assets/Art/Sprites/Items/]
+- 판 자리 9칸은 1·10·20·30·40·50·60·70·80레벨에 열리고 80레벨 자리가 가운데다(`PlayerData._charmBoardSlots`). 참은 자리에 끼운 판에만 넣고 빼며 판 경계를 넘거나 막힌 칸·다른 참과 겹칠 수 없다. 박힌 참은 판과 함께 움직이고 팔린다. 열린 자리의 참 옵션은 `StatModifier`(출처 `CharmBoard`, SourceId = 판 인스턴스 Id)로 붙는다. [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md §6.1·§6.4·§6.5·LV21, Assets/Scripts/Common/Utility/PlayerLevelRules.cs, Assets/Scripts/Manager/PlayerManager_CharmBoard.cs, Assets/Scripts/Data/CharmData.cs]
+- 획득: 공통 드롭 판정에 참 3·판 1 칸을 더하고 꽝을 44 → 48로 다시 계산했다(던전 보스·상자도 같은 판정). NPC 전리품도 같은 몫으로 섞이고 NPC는 판을 끼우지 않고 판다. 상점은 기본 장비 칸 뒤에 참 칸(판 1칸, 참은 상점 등급 1~2에서 1칸·3~4에서 2칸, 아이템 레벨 = 지역 레벨)을 같은 rng로 이어 굴리고, 일반 매물 후보에서는 판·참을 뺐다. 판 판매가 = 판(막힌 칸 배율) + 박힌 참(아이템 레벨 판매 배율)이고 팔기 전 확인 창을 띄운다. [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md §6.5·§6.6, Assets/Scripts/Common/Utility/DropHelper.cs `ProcessDrop`, Assets/Scripts/Npc/NpcActivityResolver.cs `RollHuntLoot`, Assets/Scripts/Village/VillageManager.cs `RollCharmStock`·`GetPlayerSellPrice`, Assets/Scripts/Village/VillageTradeProfile.cs, Assets/Scripts/UI/UIShopMerchant.cs, Assets/_BinaryData/TableData/DropTable.bytes]
+
+**UI**: 스킬 바 위 경험치 바와 남은 포인트, 레벨업 "LEVEL UP" 글자와 판 자리 열림 알림(효과음은 프로젝트에 오디오 장치가 없어 없음), 캐릭터 창 레벨·분배·되돌리기·정확도/회피 줄(uGUI 프리팹을 고치지 않고 런타임에 줄·버튼을 붙임), 공용 확인 창(`UI/ConfirmDialog`), 참 판 창(`UI/CharmBoard`, P키, 끌어다 놓기·R/우클릭 회전·글자 툴팁), NPC 검사 창 회피 수치. 치트 창에 경험치 추가가 있다. [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md §8, Assets/Scripts/UI/UISkillBar.cs, Assets/Scripts/UI/FloatingTextManager.cs `ShowLevelUpText`, Assets/Scripts/UI/CharacterUI.cs `CreateProgressionLines`, Assets/Scripts/UI/UIConfirmDialog.cs, Assets/Scripts/UI/UICharmBoard.cs, Assets/Scripts/Item/CharmTooltipText.cs, Assets/Scripts/Common/System/System_Input.cs, Assets/Scripts/UI/UINpcInspect.cs, Assets/Scripts/UI/UICheat.cs]
+
+**검증 (2026-10-24)**: 적중률 점검 21/21·세이브 왕복 7/7(새 메뉴 `ARPG/Diagnostics/Player Level Charm`), 드롭 분포 전체 PASS(`Monster Affix Distribution`에 판·참 10항목 추가), NPC 시뮬레이션 30일 13/14다. 실패한 "개인 상한 초과 0"(39명)은 기존 NPC의 상한 기준값이 옛 전투력 식으로 저장된 탓이고, 사용자 결정으로 그대로 둔다. [src: Assets/Scripts/Editor/PlayerLevelCharmDiagnostics.cs, Assets/Scripts/Editor/MonsterAffixDiagnostics_CharmDrop.cs, Assets/Scripts/Editor/MonsterAffixDiagnostics_DropDistribution.cs, Assets/Scripts/Manager/NpcManager_Ambition.cs `GetNpcPowerCap`] [추론: 실행 결과는 2026-10-24 작업 보고 기준, 로그 파일은 남기지 않음]
+
 ## 연결된 것들
 
 - 전체 구현 현황: [current_status.md](current_status.md)
@@ -347,3 +402,6 @@ FinalAttackSpeedPerSecond
 - `ItemEnchantmentDiagnostics`에는 비용·후보·Group·상한·실패 무변경·성공 소비·신규 마을 Forge 보장 진단이 구현돼 있다. 실행 결과를 저장한 아티팩트는 저장소에 없으므로 Unity Editor 진단과 Tier 1/2/3·저장 왕복·장착 후 전투의 PlayMode 체크는 구현 완료 후 회귀 검증 항목으로 남긴다. [src: Assets/Scripts/Editor/ItemEnchantmentDiagnostics.cs, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §12] [추론: 저장소에 진단 실행 결과 파일이 없음]
 - CharacterUI는 슬롯 0 스킬의 치명타를 소수 둘째 자리까지 표시하지만, Spell의 공격속도 행을 숨기지는 않고 프로필 값 0을 표시한다. 주문 전용 UI 정책은 후속 작업이다. [src: Assets/Scripts/UI/CharacterUI.cs:L155-191, Assets/Scripts/Common/System/System_SkillAttackProfileCalculation.cs:L148-160]
 - 기존 장비 옵션 글로벌화의 장착/해제/교체·세이브 왕복·Attack/Spell 태그·실제 타격과 툴팁 일치에 대한 전체 플레이 모드 체크리스트도 별도 실측이 필요하다. [src: Docs/combat/ModSystem_Changelog.md §UI와 검증 상태]
+- 플레이어 레벨·참 판의 플레이 확인이 남았다: 캐릭터 창 줄 배치(29줄을 26px로 줄임)와 버튼, 참 판 창 끌어다 놓기·회전·툴팁 위치, 상점 참 칸과 판 판매 확인 창, 레벨업 글자·경험치 바. 툴팁의 판 그림은 글자 격자이고 판 가격은 마을 배율 전 "기본 가격(판 + 참)"이다. 캐릭터 창 회피 줄 문구는 줄 폭 때문에 "(피할 확률 약 X%)"로 줄였다. [src: Assets/Scripts/UI/CharacterUI.cs `UpdateProgressionLines`, Assets/Scripts/Item/CharmTooltipText.cs `BuildBoardBody`, Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md §8.3·§8.7]
+- `PLAYER_LEVEL_CHARM_DESIGN.md`의 상태 줄("미구현")과 구현 중 결정(NPC 정확도·전투력 회피 항·기존 세이브 1레벨·반복 장판 틱 미판정), 문서 §13의 다른 문서 반영(BALANCE §1.2·§4.1, combatSystem 회피 단계, MONSTER_AFFIX 111, ITEM_DROP_BALANCE 드롭 몫, NPC_SHOP_EQUIPMENT 회피 항)은 아직 하지 않았다. [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md 머리말·§13]
+- NPC 시뮬레이션의 "개인 상한 초과 0"은 FAIL(39명)로 남는다(사용자 결정). 판·참이 NPC 전리품 판매 수입을 바꿨는지는 기준 실행 없이 비교하지 않았다(문서 §6.6은 거의 그대로일 것으로 봄). 판 사이 시너지·사망 경험치·NPC 레벨은 보류다. [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md §6.6·§6.8·LV17·LV18, Assets/Scripts/Manager/NpcManager_Ambition.cs `GetNpcPowerCap`] [추론: 2026-10-24 작업 보고 기준]

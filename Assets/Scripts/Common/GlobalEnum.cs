@@ -172,7 +172,7 @@ public class GlobalEnum
         LightningAttackMax, // 번개 최대 공격력
         PoisonAttackMin,    // 독 최소 공격력
         PoisonAttackMax,    // 독 최대 공격력
-        Evasion,            // 회피
+        Evasion,            // 회피 수치 (확률이 아니다. 적중률은 정확도와 비교해 정한다, PLAYER_LEVEL_CHARM_DESIGN §5.2)
         BlockChance,        // 블록 확률
         BlockReduction,     // 막기 성공 시 피해 감소율 (%, 0이면 0.5 fallback)
         ProjectileCountAdd, // 발사체 추가 개수 (Add 합산만 의미 있음. SkillTable.BaseProjectileCount + 이 stat이 최종 발사 수)
@@ -190,6 +190,10 @@ public class GlobalEnum
         // 증가율 묶음 — Add·Multiply 모두 %p로 합산한다. 플레이어 값은 ① 묶음, 죽은 몬스터 값은 ② 묶음으로 읽힌다
         ItemQuantity,       // 아이템 수량 (%) — 드롭 판정 횟수를 늘린다
         ItemRarity,         // 아이템 희귀도 (%) — 장비 등급(희귀·마법)과 상위 화폐 비중을 올린다
+
+        // ===== 적중 판정 (PLAYER_LEVEL_CHARM_DESIGN.md §5) =====
+        Accuracy,           // 정확도 (고정값). 때리는 쪽 정확도 ÷ (정확도 + 맞는 쪽 회피)가 적중률이다
+        EvasionInc,         // 회피 증가 (%) — Add·Multiply 모두 회피의 증가율 묶음에 합산한다 (접사 "날렵한")
 
         // ===== SkillEffect 효과 종류 (구 SkillEffectType에서 통합) =====
         // 일반 stat과 같은 enum에 합쳐 SkillEffectTable.EffectType이 stat 가산도/효과 실행도 표현하도록 일원화
@@ -302,7 +306,21 @@ public class GlobalEnum
         Object = 12,    // 건축 자재
         SkillBook = 100,  // 스킬북 (새 스킬 획득)
         SkillPage = 101,  // 스킬 페이지 (스킬북에 장착하는 SkillEffect 조각)
+        CharmBoard = 102, // 참 판 — 3×3칸, 판 자리에 끼우고 참을 박는다 (PLAYER_LEVEL_CHARM_DESIGN §6.2)
+        Charm = 103,      // 참 — 모양별 1~9칸, 판에 박아 옵션을 얻는다 (§6.3)
+    }
 
+    /// <summary>
+    /// 참 모양 (PLAYER_LEVEL_CHARM_DESIGN §6.3). 아이템 표의 참 6행과 1:1이다. 저장은 이름 문자열.
+    /// </summary>
+    public enum CharmShape
+    {
+        Single,     // 1×1
+        Line2,      // 1×2
+        Line3,      // 1×3
+        LShape,     // L자 3칸
+        Square2,    // 2×2
+        Square3,    // 3×3 (막힌 칸 0인 판에만)
     }
 
     /// <summary>
@@ -371,6 +389,8 @@ public class GlobalEnum
 
         SkillBook = 100,          // 스킬북 (새 스킬 획득)
         SkillPage = 101,          // 스킬 페이지
+        CharmBoard = 102,         // 참 판
+        Charm = 103,              // 참
     }
 
     public enum TeamType
@@ -398,6 +418,7 @@ public class GlobalEnum
         Buff        = 1 << 11,
         Debuff      = 1 << 12,
         Move        = 1 << 13,  // 이동 계열 (점프, 대시, 순간이동 등)
+        Unevadable  = 1 << 14,  // 회피 불가 — 정확도·회피 판정 없이 항상 맞는다 (PLAYER_LEVEL_CHARM_DESIGN §5.1)
     }
 
     public enum SkillType
@@ -599,6 +620,7 @@ public class GlobalEnum
         Prefix,        // 접두
         Postfix,       // 접미
         Base,          // 모든 일반 장비의 표준 베이스 스탯 (EquipmentBaseStatTable에서 옴). 장비 자격 판별 기준
+        Charm,         // 참 전용 옵션 (PLAYER_LEVEL_CHARM_DESIGN §6.3). 장비 롤·마법부여 후보에 들어가지 않는다. 참 옵션 인스턴스도 이 슬롯이다
     }
 
     /// <summary>

@@ -88,7 +88,7 @@ namespace ARPG.EditorTools
                 {
                     Courage = saveData.NpcStat.Courage,
                     SkillLevel = saveData.SkillLevel,
-                    Power = NpcPowerEvaluator.EvaluateBreakdown(saveData.InventoryEquip, saveData.SkillLevel),
+                    Power = NpcPowerEvaluator.EvaluateBreakdown(saveData, saveData.InventoryEquip),
                 });
             }
             return result;

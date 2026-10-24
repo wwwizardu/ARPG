@@ -509,7 +509,7 @@
 | 제작 | `ItemEnchantmentService`(아이템 레벨 티어, `EvolveToMagic`·`RerollQuality`, 엑잘티드 마법 칸·일반 금지, 허용 목록에 두 스탯), `UIForge`·`Forge.uxml` 카드 2개 |
 | 던전 | `DungeonLayout.Generate`(입구 지역 레벨), `DungeonManager_Content`(보스 드롭 제거 코드 삭제·상자), `DungeonManager_Drop.cs`(장소 보너스·상자 드롭) |
 | 판매 | `Village/PlayerSellPriceRules.cs`, `VillageManager.GetPlayerSellPrice`, `UIShopMerchant` |
-| UI | 툴팁 등급 색·"Tier N · 등급"·품질 줄·품질 적용 Base, 비교 툴팁 품질 줄, `CharacterUI` 두 줄(프리팹 배열의 마지막 줄을 실행 중 복제) |
+| UI | 툴팁 등급 색·"Tier N · 등급"·품질 줄·품질 적용 Base, 비교 툴팁 품질 줄, 캐릭터 창 두 줄(2026-10-24부터 `Character.uxml`의 `item-quantity-text`·`item-rarity-text`, 글자는 `UICharacter_Stats.cs`) |
 | 데이터 | 새 탭 `DropBand`(gid 1276985023, A~Q 다운로드), Item 오브 3행, Monster M열 이름, MonsterArchetype H열 값·Elite 행·N열 `RarityPerAffix`, Dungeon Q~U열, `ItemEnchantmentCostTable.bytes` 행 3·4(시트 탭 없음) |
 
 **구현 중 정한 세부**

@@ -94,7 +94,7 @@ namespace ARPG.Utility
 
         /// <summary>
         /// 장비 화면에서 좌클릭(화면 왼쪽)·우클릭(화면 오른쪽)에 대응하는 장착 슬롯.
-        /// 캐릭터가 화면을 마주 보는 배치라 오른쪽 슬롯(WeaponRight·RingRight·EarringRight)이 화면 왼쪽에 있다 (CharacterUI.prefab).
+        /// 캐릭터가 화면을 마주 보는 배치라 오른쪽 슬롯(WeaponRight·RingRight·EarringRight)이 화면 왼쪽에 있다 (Assets/UI/Character/Character.uss 장비 칸 배치).
         /// 칸이 하나인 장비는 두 값 모두 그 슬롯이다.
         /// </summary>
         public static void GetScreenSideSlots(GE.EquipmentTypeMask inEquipType, out GE.EquipSlotType outScreenLeftSlot, out GE.EquipSlotType outScreenRightSlot)

@@ -22,9 +22,13 @@ namespace ARPG.UI
         private UIDocument? _document;
         private TextField? _itemInput;
         private TextField? _goldInput;
+
+        private TextField? _expInput;
         private TextField? _skillInput;
         private Button? _addItemBtn;
         private Button? _addGoldBtn;
+
+        private Button? _addExpBtn;
         private Button? _addSkillBookBtn;
         // 네임드 위협 개발 치트 (NAMED_THREAT_DESIGN §13)
         private Button? _namedAppearBtn;
@@ -86,9 +90,11 @@ namespace ARPG.UI
 
             _itemInput = root.Q<TextField>("item-input");
             _goldInput = root.Q<TextField>("gold-input");
+            _expInput = root.Q<TextField>("exp-input");
             _skillInput = root.Q<TextField>("skill-input");
             _addItemBtn = root.Q<Button>("add-item-btn");
             _addGoldBtn = root.Q<Button>("add-gold-btn");
+            _addExpBtn = root.Q<Button>("add-exp-btn");
             _addSkillBookBtn = root.Q<Button>("add-skillbook-btn");
             _namedAppearBtn = root.Q<Button>("named-appear-btn");
             _namedStageBtn = root.Q<Button>("named-stage-btn");
@@ -98,6 +104,7 @@ namespace ARPG.UI
 
             if (_addItemBtn != null) _addItemBtn.clicked += OnAddItem;
             if (_addGoldBtn != null) _addGoldBtn.clicked += OnAddGold;
+            if (_addExpBtn != null) _addExpBtn.clicked += OnAddExp;
             if (_addSkillBookBtn != null) _addSkillBookBtn.clicked += OnAddSkillBook;
             if (_namedAppearBtn != null) _namedAppearBtn.clicked += OnNamedAppear;
             if (_namedStageBtn != null) _namedStageBtn.clicked += OnNamedStage;
@@ -183,6 +190,28 @@ namespace ARPG.UI
 
             AR.s.Data.Player.Gold += amount;
             ShowPopup($"AddGold {amount}G — 현재 {AR.s.Data.Player.Gold}G");
+        }
+
+        /// <summary>경험치 추가 — 레벨업·포인트·판 자리 열림 확인용 (PLAYER_LEVEL_CHARM_DESIGN §3)</summary>
+        public void OnAddExp()
+        {
+            if (_expInput == null || string.IsNullOrEmpty(_expInput.value))
+                return;
+
+            if (int.TryParse(_expInput.value.Trim(), out int amount) == false || amount <= 0)
+            {
+                ShowPopup("경험치는 양수로 입력해주세요");
+                return;
+            }
+
+            if (AR.s.Data.Player == null)
+            {
+                ShowPopup("PlayerData가 없습니다");
+                return;
+            }
+
+            AR.s.Player.GainExp(amount);
+            ShowPopup($"AddExp {amount} — 레벨 {AR.s.Data.Player.Level}, 경험치 {AR.s.Data.Player.Exp}");
         }
 
         /// <summary>

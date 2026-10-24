@@ -1,0 +1,232 @@
+/* 참 판 창 — SkillBook 톤 (PLAYER_LEVEL_CHARM_DESIGN §8.4) */
+.charm-root {
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+}
+
+.charm-overlay {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+}
+
+.charm-panel {
+    width: 860px;
+    max-height: 92%;
+    padding: 20px;
+    border-radius: 12px;
+    background-color: rgba(28, 28, 32, 0.96);
+    border-width: 1px;
+    border-color: rgba(180, 140, 80, 0.4);
+}
+
+.charm-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.charm-title {
+    color: rgb(220, 180, 100);
+}
+
+.charm-close-icon {
+    --appui-iconbutton-size: 32px;
+}
+
+.charm-body {
+    flex-direction: row;
+    padding-top: 12px;
+    padding-bottom: 12px;
+}
+
+.charm-board-grid {
+    flex-direction: column;
+    margin-right: 20px;
+}
+
+.charm-slot-row {
+    flex-direction: row;
+}
+
+/* 판 자리 1칸 = 판 하나 (3×3칸). 판 경계는 굵은 선 */
+.charm-slot {
+    width: 122px;
+    height: 122px;
+    margin: 3px;
+    padding: 2px;
+    border-width: 3px;
+    border-color: rgba(200, 160, 90, 0.85);
+    background-color: rgba(40, 38, 44, 0.9);
+    flex-direction: column;
+}
+
+.charm-slot-empty {
+    border-color: rgba(200, 160, 90, 0.35);
+}
+
+.charm-slot-locked {
+    border-color: rgba(90, 90, 96, 0.8);
+    background-color: rgba(30, 30, 34, 0.9);
+    align-items: center;
+    justify-content: center;
+}
+
+.charm-slot-drop {
+    border-color: rgb(120, 220, 120);
+}
+
+.charm-cell-row {
+    flex-direction: row;
+}
+
+.charm-cell {
+    width: 36px;
+    height: 36px;
+    margin: 1px;
+    border-width: 1px;
+    border-color: rgba(120, 110, 95, 0.6);
+    background-color: rgba(58, 56, 64, 0.9);
+    align-items: center;
+    justify-content: center;
+}
+
+.charm-cell-blocked {
+    background-color: rgba(14, 14, 16, 0.95);
+    border-color: rgba(60, 60, 60, 0.8);
+}
+
+.charm-cell-hidden {
+    display: none;
+}
+
+.charm-cell-ok {
+    background-color: rgba(70, 170, 80, 0.85);
+}
+
+.charm-cell-bad {
+    background-color: rgba(190, 60, 60, 0.85);
+}
+
+.charm-cell-label {
+    font-size: 12px;
+    color: rgb(150, 150, 150);
+    -unity-text-align: middle-center;
+    margin: 0;
+    padding: 0;
+}
+
+.charm-lock-label {
+    font-size: 14px;
+    color: rgb(170, 170, 170);
+    -unity-text-align: middle-center;
+    white-space: normal;
+}
+
+.charm-side {
+    flex-grow: 1;
+    flex-direction: column;
+}
+
+.charm-section-title {
+    color: rgb(200, 200, 200);
+    margin-top: 4px;
+    margin-bottom: 6px;
+    font-size: 13px;
+}
+
+.charm-bag-scroll {
+    height: 230px;
+    margin-bottom: 8px;
+    border-width: 1px;
+    border-color: rgba(120, 110, 95, 0.4);
+}
+
+.charm-bag-grid {
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: 4px;
+}
+
+.charm-bag-item {
+    width: 64px;
+    height: 64px;
+    margin: 3px;
+    border-width: 1px;
+    border-color: rgba(180, 140, 80, 0.55);
+    background-color: rgba(50, 50, 58, 0.9);
+    align-items: center;
+    justify-content: center;
+}
+
+.charm-bag-item:hover {
+    border-color: rgba(255, 215, 130, 0.95);
+}
+
+.charm-bag-label {
+    font-size: 11px;
+    color: rgb(230, 220, 200);
+    -unity-text-align: middle-center;
+    margin: 0;
+    padding: 0;
+}
+
+.charm-mini-grid {
+    flex-direction: column;
+}
+
+.charm-mini-row {
+    flex-direction: row;
+}
+
+.charm-mini-cell {
+    width: 12px;
+    height: 12px;
+    margin: 1px;
+    background-color: rgba(110, 104, 92, 0.9);
+}
+
+.charm-mini-cell-blocked {
+    background-color: rgba(14, 14, 16, 0.95);
+}
+
+.charm-mini-cell-charm {
+    background-color: rgb(120, 190, 255);
+}
+
+.charm-mini-cell-off {
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.charm-totals {
+    font-size: 13px;
+    color: rgb(150, 220, 150);
+    white-space: normal;
+    min-height: 80px;
+}
+
+.charm-footer {
+    flex-direction: column;
+    padding-top: 8px;
+}
+
+.charm-status {
+    color: rgb(255, 190, 120);
+    font-size: 13px;
+    min-height: 18px;
+}
+
+.charm-hint {
+    color: rgb(150, 150, 150);
+    font-size: 12px;
+}
+
+.charm-ghost {
+    position: absolute;
+    display: none;
+    opacity: 0.85;
+}

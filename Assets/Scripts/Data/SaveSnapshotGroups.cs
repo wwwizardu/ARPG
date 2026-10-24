@@ -26,7 +26,7 @@ namespace ARPG.Data
     public enum PlayerSaveGroup : ulong
     {
         Identity = 1, Progress = 2, Vitality = 4, Location = 8,
-        Inventory = 16, Equipment = 32, SkillBooks = 64, All = 127,
+        Inventory = 16, Equipment = 32, SkillBooks = 64, CharmBoards = 128, All = 255,
     }
 
     [Flags]
@@ -91,11 +91,12 @@ namespace ARPG.Data
 
         public static ulong Player(string field) => (ulong)(field switch
         {
-            "Level" or "Exp" or "Gold" => PlayerSaveGroup.Progress,
+            "Level" or "Exp" or "Gold" or "AllocatedStr" or "AllocatedDex" or "AllocatedInt" or "UnspentAttributePoints" => PlayerSaveGroup.Progress,
             "CurrentHp" or "CurrentMp" => PlayerSaveGroup.Vitality,
             "_inventory" => PlayerSaveGroup.Inventory,
             "_inventoryEquip" => PlayerSaveGroup.Equipment,
             "_skillBookSlots" => PlayerSaveGroup.SkillBooks,
+            "_charmBoardSlots" => PlayerSaveGroup.CharmBoards,
             "Version" or "PlayerId" or "PlayerTableId" => PlayerSaveGroup.Identity,
             _ => PlayerSaveGroup.Location,
         });

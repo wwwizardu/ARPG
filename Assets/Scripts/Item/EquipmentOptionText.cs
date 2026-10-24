@@ -194,6 +194,7 @@ namespace ARPG.Item
                 case GlobalEnum.ModSlot.Implicit: return "고유";
                 case GlobalEnum.ModSlot.Prefix: return "접두";
                 case GlobalEnum.ModSlot.Postfix: return "접미";
+                case GlobalEnum.ModSlot.Charm: return "참";
                 default: return slot.ToString();
             }
         }

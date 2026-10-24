@@ -49,6 +49,8 @@ namespace ARPG.Data
         private ImmutableDictionary<int, Tables.DropBandTable> _dropBandTable = null!;
         private readonly Tables.DropBandTable?[] _dropBandByLevel =
             new Tables.DropBandTable?[Item.ItemLevelModTierRules.MAX_ITEM_LEVEL + 1];
+        // 플레이어 레벨 경험치 표 (PLAYER_LEVEL_CHARM_DESIGN §3.4). Id = 레벨
+        private ImmutableDictionary<int, Tables.ExpTable> _expTable = null!;
         private ImmutableDictionary<int, Tables.SkillTable> _skillTable = null!;
         private ImmutableDictionary<int, Tables.SkillEffectTable> _skillEffectTable = null!;
         private ImmutableDictionary<int, Tables.SkillPropagationTable> _skillPropagationTable = null!;
@@ -104,6 +106,7 @@ namespace ARPG.Data
                 LoadTable<Tables.DropCurrencyTable>("DropCurrencyTable.bytes", tables => _dropCurrencyTable = tables),
                 LoadTable<Tables.DropEquipmentTable>("DropEquipmentTable.bytes", tables => _dropWeaponBaseStatTable = tables),
                 LoadTable<Tables.DropBandTable>("DropBandTable.bytes", tables => _dropBandTable = tables),
+                LoadTable<Tables.ExpTable>("ExpTable.bytes", tables => _expTable = tables),
                 LoadTable<Tables.SkillTable>("SkillTable.bytes", tables => _skillTable = tables),
                 LoadTable<Tables.SkillEffectTable>("SkillEffectTable.bytes", tables => _skillEffectTable = tables),
                 LoadTable<Tables.SkillPropagationTable>("SkillPropagationTable.bytes", tables => _skillPropagationTable = tables),
@@ -611,6 +614,15 @@ namespace ARPG.Data
         public Tables.DropBandTable? GetDropBand(int level)
         {
             return _dropBandByLevel[Item.ItemLevelModTierRules.ClampItemLevel(level)];
+        }
+
+        /// <summary>레벨 행 (PLAYER_LEVEL_CHARM_DESIGN §3.4). 없으면 null.</summary>
+        public Tables.ExpTable? GetExp(int level)
+        {
+            if (_expTable != null && _expTable.TryGetValue(level, out var table))
+                return table;
+
+            return null;
         }
 
         public Tables.DropCurrencyTable? GetDropCurrency(int id)

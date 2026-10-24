@@ -37,6 +37,8 @@ namespace ARPG.Village
         AdventurerConsignment = 4,
         // NPC_SHOP_EQUIPMENT_DESIGN §4, D117 — 고정 옵션 기본 장비 칸. 기존 칸 뒤에 따로 롤하며 NPC 구매 후보는 이 칸뿐이다.
         BasicEquipment = 5,
+        // PLAYER_LEVEL_CHARM_DESIGN §6.6 — 참 판·참 칸. 기본 장비 칸 뒤에 따로 롤한다 (NPC 구매 후보 아님)
+        Charm = 6,
     }
 
     /// <summary>상점 UI에 표시할 지역 가격 사유 (§8.5).</summary>
@@ -273,6 +275,18 @@ namespace ARPG.Village
         public int GetBasicEquipmentSlotCount(int shopTier)
         {
             return ClampShopTier(shopTier) <= 2 ? 3 : 4;
+        }
+
+        /// <summary>ShopTier별 참 판 칸 수 (PLAYER_LEVEL_CHARM_DESIGN §6.6). 모든 등급 1칸.</summary>
+        public int GetCharmBoardSlotCount(int shopTier)
+        {
+            return 1;
+        }
+
+        /// <summary>ShopTier별 참 칸 수 (§6.6). 상점 등급 1~2는 1칸, 3~4는 2칸.</summary>
+        public int GetCharmSlotCount(int shopTier)
+        {
+            return ClampShopTier(shopTier) <= 2 ? 1 : 2;
         }
 
         /// <summary>ShopTier가 여는 최대 아이템 Tier (품질 해금, §8.4).</summary>

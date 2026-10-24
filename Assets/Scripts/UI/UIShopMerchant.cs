@@ -1,4 +1,5 @@
 #nullable enable
+using System.Collections.Generic;
 using ARPG.Base;
 using ARPG.Component;
 using ARPG.Data;
@@ -33,6 +34,8 @@ namespace ARPG.UI
         private bool _isBuyTab = true;
         private int _selectedSellSlotIndex = -1;
         private VisualElement? _lastRoot;
+        // 판매 칸 element — 인덱스 = 인벤토리 슬롯 인덱스. RebuildSellGrid가 다시 채운다.
+        private readonly List<VisualElement> _sellSlots = new();
 
         public override void Initialize(string inName, bool isForm = false)
         {
@@ -108,6 +111,12 @@ namespace ARPG.UI
             RefreshAll();
         }
 
+        public override void OnClose()
+        {
+            AR.s.Tooltip.Hide();
+            base.OnClose();
+        }
+
         // ========== 탭 전환 ==========
 
         public void OnClickBuyTab()
@@ -146,7 +155,24 @@ namespace ARPG.UI
                 Debug.Log($"[Shop] (테스트모드) 매각 slotIndex={_selectedSellSlotIndex}");
                 return;
             }
-            int gold = AR.s.Village.SellItemToMerchant(_villageId, _selectedSellSlotIndex, 1);
+            // 참이 박힌 판은 참이 함께 팔린다는 확인 창을 먼저 띄운다 (PLAYER_LEVEL_CHARM_DESIGN §6.5·§8.9)
+            ItemData? item = AR.s.Player?.Inventory?.GetItemBySlotIndex(_selectedSellSlotIndex);
+            int charmCount = item?.CharmBoard?.Charms.Count ?? 0;
+            if (charmCount > 0)
+            {
+                int price = Mathf.Max(0, AR.s.Village.GetPlayerSellPrice(_villageId, item));
+                int slotIndex = _selectedSellSlotIndex;
+                UIConfirmDialog? dialog = AR.s.UI.Show<UIConfirmDialog>(AddressablePath.ConfirmDialog, UIManager.Layer.Popup);
+                dialog?.Setup($"참 {charmCount}개가 함께 팔립니다. 판매 가격 {price:N0}골드", () => SellSlot(slotIndex));
+                return;
+            }
+
+            SellSlot(_selectedSellSlotIndex);
+        }
+
+        private void SellSlot(int slotIndex)
+        {
+            int gold = AR.s.Village.SellItemToMerchant(_villageId, slotIndex, 1);
             if (gold < 0) return;
             _selectedSellSlotIndex = -1;
             RefreshAll();
@@ -157,6 +183,9 @@ namespace ARPG.UI
         private void RefreshAll()
         {
             if (_lastRoot == null) return;
+
+            // 탭 전환·구매·판매로 목록을 다시 만들면 호버 중이던 element가 사라지므로 툴팁을 먼저 닫는다.
+            AR.s.Tooltip.Hide();
 
             // 골드 표시
             int gold = AR.s.Data.Player?.Gold ?? 0;
@@ -248,6 +277,9 @@ namespace ARPG.UI
                 // NPC_SHOP_EQUIPMENT D117: 고정 옵션 기본 장비 칸 표기.
                 else if (entry.SlotKind == TradeStockSlotKind.BasicEquipment)
                     reasonLabel = reasonLabel.Length > 0 ? $"기본 장비 · {reasonLabel}" : "기본 장비";
+                // PLAYER_LEVEL_CHARM_DESIGN §6.6: 참 칸 표기.
+                else if (entry.SlotKind == TradeStockSlotKind.Charm)
+                    reasonLabel = reasonLabel.Length > 0 ? $"참 칸 · {reasonLabel}" : "참 칸";
                 Text priceText = new()
                 {
                     text = reasonLabel.Length > 0
@@ -312,6 +344,7 @@ namespace ARPG.UI
             VisualElement? grid = _lastRoot.Q<VisualElement>("sell-grid");
             if (grid == null) return;
             grid.Clear();
+            _sellSlots.Clear();
 
             var inventory = AR.s.Player?.Inventory;
             if (inventory == null || inventory.Items == null || inventory.Items.Count == 0)
@@ -330,6 +363,7 @@ namespace ARPG.UI
 
                 VisualElement slot = new();
                 slot.AddToClassList("shop-sell-slot");
+                _sellSlots.Add(slot);
 
                 bool sellable = item != null && item.Table != null && item.Table.SellRatioBp > 0;
 
@@ -356,12 +390,20 @@ namespace ARPG.UI
                     }
 
                     slot.RegisterCallback<ClickEvent>(_ => OnSelectSellSlot(slotIdx));
-                    slot.tooltip = item.Table?.Name ?? string.Empty;
                     sellableCount++;
                 }
                 else if (item != null)
                 {
                     slot.AddToClassList("shop-sell-slot-disabled");
+                }
+
+                // 호버 툴팁 — 팔 수 없는 아이템도 무엇인지 알 수 있게 같은 툴팁을 띄운다.
+                if (item != null)
+                {
+                    slot.userData = item;
+                    VisualElement slotRef = slot;
+                    slot.RegisterCallback<MouseEnterEvent>(_ => AR.s.Tooltip.Show(slotRef.userData as ItemData, GetSlotScreenRect(slotRef)));
+                    slot.RegisterCallback<MouseLeaveEvent>(_ => AR.s.Tooltip.Hide());
                 }
 
                 grid.Add(slot);
@@ -379,7 +421,10 @@ namespace ARPG.UI
             if (item == null || item.Table == null || item.Table.SellRatioBp <= 0) return;
 
             _selectedSellSlotIndex = slotIndex;
-            RefreshAll();
+            // 칸을 다시 만들지 않고 선택 표시만 옮긴다 — 마우스 아래 칸이 그대로라 툴팁이 끊기지 않는다.
+            for (int i = 0; i < _sellSlots.Count; i++)
+                _sellSlots[i].EnableInClassList("shop-sell-slot-selected", i == slotIndex);
+            UpdateSellSelection();
         }
 
         private void UpdateSellSelection()

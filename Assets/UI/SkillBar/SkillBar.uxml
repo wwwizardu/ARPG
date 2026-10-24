@@ -4,6 +4,15 @@
          Toggle skillbar-slot-empty / skillbar-slot-equipped / skillbar-slot-cooldown /
          skillbar-slot-no-mana / skillbar-slot-active without rebuilding the visual tree. -->
     <ui:VisualElement name="skillbar-root" class="skillbar-root" picking-mode="Ignore">
+        <ui:VisualElement name="skillbar-hud" class="skillbar-hud" picking-mode="Ignore">
+        <!-- 경험치 바·남은 능력치 포인트 (PLAYER_LEVEL_CHARM_DESIGN §8.1). 마우스를 올리면 레벨·경험치 툴팁 -->
+        <ui:VisualElement name="exp-row" class="skillbar-exp-row" picking-mode="Ignore">
+            <ui:Label name="exp-level" text="Lv 1" class="skillbar-exp-level" picking-mode="Ignore"/>
+            <ui:VisualElement name="exp-bar" class="skillbar-exp-bar" picking-mode="Position">
+                <ui:VisualElement name="exp-fill" class="skillbar-exp-fill" picking-mode="Ignore"/>
+            </ui:VisualElement>
+            <ui:Label name="exp-points" text="" class="skillbar-exp-points" picking-mode="Ignore"/>
+        </ui:VisualElement>
         <ui:VisualElement name="skillbar-panel" class="skillbar-panel" picking-mode="Ignore">
             <ui:VisualElement name="primary-slots" class="skillbar-group skillbar-primary-group" picking-mode="Ignore">
                 <ui:VisualElement name="slot-0" class="skillbar-slot skillbar-slot-empty" picking-mode="Position" tooltip="빈 스킬 슬롯">
@@ -121,6 +130,7 @@
                 </ui:VisualElement>
             </ui:VisualElement>
             <ui:Button name="settings-btn" text="K  스킬 설정" class="skillbar-settings-button" focusable="false" tooltip="스킬 설정 창 열기"/>
+        </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

@@ -216,6 +216,9 @@ namespace ARPG.Village
             int unitPrice = GetMerchantBuyPrice(villageId, table);
             if (unitPrice < 0)
                 return -1;
+            // NPC가 판 참 판도 막힌 칸 배율을 따른다 (PLAYER_LEVEL_CHARM_DESIGN §6.2). 참은 레벨 배율 없이 표 가격
+            if (item.CharmBoard != null)
+                unitPrice = ARPG.Item.CharmPriceRules.ApplyBoardBlockedMul(unitPrice, item.CharmBoard);
             return unitPrice * Mathf.Max(1, item.Quantity);
         }
 

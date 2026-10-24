@@ -313,6 +313,21 @@ namespace ARPG.Manager
                         activeContent = _contentEquipment;
                     }
                     break;
+                // 참 판·참 (PLAYER_LEVEL_CHARM_DESIGN §8.7) — 일반 아이템 칸에 글자로 그린다
+                case GlobalEnum.ItemType.CharmBoard:
+                    if (item.CharmBoard != null)
+                    {
+                        BuildTextContent(item.Table.Name, CharmTooltipText.BuildBoardBody(item));
+                        activeContent = _contentItem;
+                    }
+                    break;
+                case GlobalEnum.ItemType.Charm:
+                    if (item.Charm != null)
+                    {
+                        BuildTextContent(item.Table.Name, CharmTooltipText.BuildCharmBody(item, null));
+                        activeContent = _contentItem;
+                    }
+                    break;
                 default:
                     BuildItemContent(item);
                     activeContent = _contentItem;
@@ -700,6 +715,17 @@ namespace ARPG.Manager
                     _itDesc.text = desc;
                     _itDesc.style.display = DisplayStyle.Flex;
                 }
+            }
+        }
+
+        private void BuildTextContent(string title, string body)
+        {
+            ApplyTierName(_itName, title, 0);
+            ApplyTierLabel(_itTier, 0);
+            if (_itDesc != null)
+            {
+                _itDesc.text = body;
+                _itDesc.style.display = string.IsNullOrEmpty(body) ? DisplayStyle.None : DisplayStyle.Flex;
             }
         }
 
@@ -1275,6 +1301,23 @@ namespace ARPG.Manager
             SetStatLine(_spCost, costText);
             SetStatLine(_spEfficiency, efficiencyText);
             SetStatLine(_spCondition, conditionText);
+        }
+
+        /// <summary>
+        /// 아이템이 아닌 대상(경험치 바, 능력치 줄, 잠긴 판 자리 등)의 글자 툴팁. 일반 아이템 칸을 재사용한다.
+        /// body가 비면 제목만 보인다 (PLAYER_LEVEL_CHARM_DESIGN §8).
+        /// </summary>
+        public void ShowText(string title, string body, Rect anchorScreenRect)
+        {
+            if (_isReady == false || _frame == null) return;
+
+            BuildTextContent(title, body);
+
+            SetSectionVisible(_compareHint, false);
+            HideCompareFrame();
+            ShowContent(_contentItem);
+            _frame.style.display = DisplayStyle.Flex;
+            RequestPositionUpdate(_frame, anchorScreenRect);
         }
 
         /// <summary>

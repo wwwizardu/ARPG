@@ -86,6 +86,15 @@ namespace ARPG.Systems
                     // 스킬 중지 처리
                     StopOwnerSkills(cm, entityId);
 
+                    // 처치 경험치 (PLAYER_LEVEL_CHARM_DESIGN §3.2): 플레이어 근처에서 죽은 몬스터는 누가 잡았든 준다.
+                    // 한 번만 주도록 읽은 뒤 바로 뗀다.
+                    if (cm.TryGetComponent<ExpRewardComponent>(entityId, out ExpRewardComponent expReward) == true)
+                    {
+                        cm.RemoveComponent<ExpRewardComponent>(entityId);
+                        if (cm.TryGetComponent<TransformComponent>(entityId, out TransformComponent deathTransform) == true)
+                            AR.s.Player.GrantMonsterKillExp(deathTransform.Position, expReward.MonsterLevel, expReward.ExpMul);
+                    }
+
                     // DropComponent가 있으면 아이템 드랍 처리
                     if (cm.TryGetComponent<DropComponent>(entityId, out DropComponent drop))
                     {

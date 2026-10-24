@@ -392,6 +392,13 @@ namespace ARPG.Item
                 case GlobalEnum.ItemType.SkillPage:
                     return CreateRandomSkillPageOfTier(itemTable.Tier, inRng);
 
+                // 참 판·참 (PLAYER_LEVEL_CHARM_DESIGN §6). 참은 행이 곧 모양이고, 아이템 레벨은 장비와 같은 rollOptions 값
+                case GlobalEnum.ItemType.CharmBoard:
+                    return CreateRandomCharmBoard(inRng);
+
+                case GlobalEnum.ItemType.Charm:
+                    return CreateCharm(CharmRules.GetShapeOfItemId(itemId), rollOptions.ItemLevel, inRng);
+
                 default:
                     return new ItemData
                     {

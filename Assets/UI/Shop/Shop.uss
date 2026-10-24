@@ -15,7 +15,7 @@
 }
 
 .shop-panel {
-    width: 720px;
+    width: 960px;
     max-height: 90%;
     padding: 24px;
     border-radius: 12px;
@@ -76,7 +76,7 @@
 
 /* 구매 리스트 */
 .shop-buy-scroll {
-    height: 320px;
+    height: 420px;
 }
 
 .shop-buy-list {
@@ -120,18 +120,20 @@
     font-size: 12px;
 }
 
-/* 판매 그리드 */
+/* 판매 그리드 — 1920 기준 한 줄 12칸 × 5줄로 60칸이 한 번에 보이고, 칸이 늘면 스크롤 */
+.shop-sell-scroll {
+    height: 420px;
+    margin-bottom: 8px;
+}
+
 .shop-sell-grid {
     flex-direction: row;
     flex-wrap: wrap;
-    margin-bottom: 8px;
-    height: 280px;
-    overflow: hidden;
 }
 
 .shop-sell-slot {
-    width: 56px;
-    height: 56px;
+    width: 64px;
+    height: 64px;
     margin: 4px;
     border-radius: 6px;
     background-color: rgba(50, 50, 60, 0.6);
@@ -160,8 +162,8 @@
 }
 
 .shop-sell-icon {
-    width: 44px;
-    height: 44px;
+    width: 52px;
+    height: 52px;
     -unity-background-scale-mode: scale-to-fit;
 }
 

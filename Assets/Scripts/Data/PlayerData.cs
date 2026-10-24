@@ -15,8 +15,15 @@ namespace ARPG.Data
         public int PlayerId; // 고유 플레이어 ID
         public int PlayerTableId;
         public int Level;
-        public int Exp;
+        public int Exp;     // 현재 레벨 안에서 모은 경험치 (다음 레벨 필요량 R(L)에 닿으면 레벨업, PLAYER_LEVEL_CHARM_DESIGN §3.4)
         public int Gold;
+
+        // 레벨업으로 받은 능력치 포인트 (PLAYER_LEVEL_CHARM_DESIGN §4.2). 넣은 포인트는 StatTable 기본 능력치 위에 더한다.
+        // 칸이 없는 옛 세이브는 0이다. 넣은 포인트 + 남은 포인트 = (레벨 − 1) × 5 (LoadCompleted가 맞춘다)
+        public int AllocatedStr;
+        public int AllocatedDex;
+        public int AllocatedInt;
+        public int UnspentAttributePoints;
 
         public float PositionX;
         public float PositionZ;
@@ -39,6 +46,10 @@ namespace ARPG.Data
         // 스킬북 슬롯 (SKILLBOOK_DESIGN.md §3.4) — 슬롯 0=좌클릭, 1=Space, 2~9=숫자키 1~8
         public ItemData?[] _skillBookSlots = new ItemData?[GlobalEnum.PLAYER_SKILL_SLOT_COUNT];
 
+        // 참 판 자리 9칸 (PLAYER_LEVEL_CHARM_DESIGN §6.1). 3×3 왼쪽 위부터 행 순서, 열리는 레벨은 PlayerLevelRules.
+        // 칸이 없는 옛 세이브는 빈 9칸으로 시작한다
+        public ItemData?[] _charmBoardSlots = new ItemData?[PlayerLevelRules.CHARM_BOARD_SLOT_COUNT];
+
         public void Initialize(int inPlayerId = 0)
         {
             PlayerId = inPlayerId;
@@ -46,6 +57,10 @@ namespace ARPG.Data
             Level = 1;
             Exp = 0;
             Gold = 0;
+            AllocatedStr = 0;
+            AllocatedDex = 0;
+            AllocatedInt = 0;
+            UnspentAttributePoints = 0;
 
             PositionX = 0;
             PositionZ = 0;
@@ -80,10 +95,14 @@ namespace ARPG.Data
             }
             SeedDefaultStarterSkillBook();
             SeedDefaultStarterWeapon();
+
+            _charmBoardSlots = new ItemData?[PlayerLevelRules.CHARM_BOARD_SLOT_COUNT];
         }
 
         public void LoadCompleted()
         {
+            NormalizeProgression();
+
             // 장착 아이템 테이블 세팅
             for (int i = 0; i < _inventoryEquip.Length; i++)
             {
@@ -101,6 +120,44 @@ namespace ARPG.Data
             {
                 _skillBookSlots[i]?.OnLoadCompleted();
             }
+
+            // 참 판 자리 (옛 세이브는 null 또는 길이가 다를 수 있다)
+            if (_charmBoardSlots == null || _charmBoardSlots.Length != PlayerLevelRules.CHARM_BOARD_SLOT_COUNT)
+            {
+                ItemData?[] loaded = _charmBoardSlots ?? System.Array.Empty<ItemData?>();
+                _charmBoardSlots = new ItemData?[PlayerLevelRules.CHARM_BOARD_SLOT_COUNT];
+                for (int i = 0; i < loaded.Length && i < _charmBoardSlots.Length; i++)
+                    _charmBoardSlots[i] = loaded[i];
+            }
+            for (int i = 0; i < _charmBoardSlots.Length; i++)
+            {
+                _charmBoardSlots[i]?.OnLoadCompleted();
+            }
+        }
+
+        /// <summary>
+        /// 레벨·경험치·포인트 칸을 규칙 범위로 맞춘다. 옛 세이브(Level 1, 포인트 칸 없음)는 그대로 1레벨·포인트 0이다.
+        /// 넣은 포인트가 레벨이 준 총합보다 많으면(손상) 모두 되돌려 남은 포인트로 돌린다.
+        /// </summary>
+        private void NormalizeProgression()
+        {
+            Level = PlayerLevelRules.ClampLevel(Level);
+            if (Level >= PlayerLevelRules.MAX_LEVEL || Exp < 0)
+                Exp = 0;
+
+            AllocatedStr = Math.Max(0, AllocatedStr);
+            AllocatedDex = Math.Max(0, AllocatedDex);
+            AllocatedInt = Math.Max(0, AllocatedInt);
+            int total = PlayerLevelRules.GetTotalAttributePoints(Level);
+            int allocated = AllocatedStr + AllocatedDex + AllocatedInt;
+            if (allocated > total)
+            {
+                AllocatedStr = 0;
+                AllocatedDex = 0;
+                AllocatedInt = 0;
+                allocated = 0;
+            }
+            UnspentAttributePoints = total - allocated;
         }
 
         /// <summary>

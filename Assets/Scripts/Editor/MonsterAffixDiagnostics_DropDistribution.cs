@@ -270,7 +270,10 @@ namespace ARPG.EditorTools
             Check(report, Math.Abs(exalted1 - 16.7) < 0.5 && Math.Abs(exalted90 - 33.3) < 0.5 && chaos == 0d,
                 $"화폐 비중 (희귀도 0%): 엑잘티드 레벨 1~9 {exalted1:F1}% (17), 90~99 {exalted90:F1}% (33), 카오스·신성 {chaos:F1}% (0)");
 
-            int otherRates = drop.CurrencyRate + drop.EquipmentRate + drop.SkillBookRate + drop.SkillPageRate;
+            // 참·참 판 칸(PLAYER_LEVEL_CHARM_DESIGN §6.6)도 아이템 칸이다. 꽝 48은 44 × (1 − 0.476) ÷ 0.476 = 48.4의 반올림이라
+            // 판정당 확률이 0.476 → 0.478로 0.002 오른다 — 허용 오차를 0.003으로 둔다
+            int otherRates = drop.CurrencyRate + drop.EquipmentRate + drop.SkillBookRate + drop.SkillPageRate
+                + drop.CharmRate + drop.CharmBoardRate;
             double perRoll = otherRates / (double)Math.Max(1, otherRates + drop.NothingRate);
             int[] levels = { 5, 25, 90 };
             double[] expected = { 0.476, 0.524, 0.595 };
@@ -280,7 +283,7 @@ namespace ARPG.EditorTools
             {
                 DropBandTable? band = AR.s.Data.GetDropBand(levels[i]);
                 double perMonster = perRoll * (1d + (band != null ? band.QuantityBonus : 0) / 100d);
-                ok &= Math.Abs(perMonster - expected[i]) < 0.002;
+                ok &= Math.Abs(perMonster - expected[i]) < 0.003;
                 line.Append($"레벨 {levels[i]} {perMonster:F3} ({expected[i]}) ");
             }
             Check(report, ok, line.ToString() + "(문서 §7.5)");

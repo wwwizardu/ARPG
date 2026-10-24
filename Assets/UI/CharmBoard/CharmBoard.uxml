@@ -1,0 +1,33 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements"
+         xmlns:appui="Unity.AppUI.UI"
+         editor-extension-mode="False">
+    <Style src="project://database/Assets/UI/CharmBoard/CharmBoard.uss"/>
+    <!-- 참 판 창 (PLAYER_LEVEL_CHARM_DESIGN §8.4~§8.7). 판 자리·칸·가방 항목은 UICharmBoard가 코드로 만든다 -->
+    <ui:VisualElement name="root" class="charm-root" picking-mode="Position">
+        <ui:VisualElement name="overlay" class="charm-overlay" picking-mode="Position"/>
+        <ui:VisualElement name="panel" class="charm-panel">
+            <ui:VisualElement class="charm-header">
+                <appui:Heading text="참 판" size="L" class="charm-title"/>
+                <appui:IconButton name="close-btn" icon="x" class="charm-close-icon"/>
+            </ui:VisualElement>
+            <appui:Divider/>
+            <ui:VisualElement class="charm-body">
+                <ui:VisualElement name="board-grid" class="charm-board-grid"/>
+                <ui:VisualElement class="charm-side">
+                    <appui:Text text="가방 (판·참)" class="charm-section-title"/>
+                    <ui:ScrollView name="bag-scroll" class="charm-bag-scroll">
+                        <ui:VisualElement name="bag-grid" class="charm-bag-grid"/>
+                    </ui:ScrollView>
+                    <appui:Text text="합계" class="charm-section-title"/>
+                    <appui:Text name="totals-text" text="" class="charm-totals"/>
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <appui:Divider/>
+            <ui:VisualElement class="charm-footer">
+                <appui:Text name="status-text" text="" class="charm-status"/>
+                <appui:Text text="끌어서 넣기 · 끄는 중 R 또는 우클릭: 회전 · 박힌 참 우클릭: 가방으로" class="charm-hint"/>
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement name="drag-ghost" class="charm-ghost" picking-mode="Ignore"/>
+    </ui:VisualElement>
+</ui:UXML>

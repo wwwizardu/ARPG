@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace ARPG.Manager
 {
-    public class PlayerManager
+    public partial class PlayerManager
     {
         private List<EntityBase> _players = new();
         private EntityBase? _myPlayer = null;

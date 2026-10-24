@@ -19,6 +19,9 @@ namespace ARPG.UI
         private const float RANDOM_X_OFFSET = 0.3f;
         private const float CANVAS_SCALE = 0.01f;
         private const float Y_OFFSET = 0.5f;
+        private const float LEVEL_UP_DURATION = 2.0f;
+        private const float LEVEL_UP_PUNCH_DURATION = 0.35f;
+        private const float LEVEL_UP_EXTRA_Y = 0.6f;
 
         private struct FloatingTextItem
         {
@@ -141,6 +144,39 @@ namespace ARPG.UI
             {
                 item.Root.SetActive(false);
             });
+        }
+
+        /// <summary>
+        /// 레벨업 순간 플레이어 머리 위 "LEVEL UP" 글자 (PLAYER_LEVEL_CHARM_DESIGN §8.1). 임시 연출 — 크고 천천히 떠오른다.
+        /// </summary>
+        public void ShowLevelUpText(Vector3 worldPosition, int level)
+        {
+            if (_pool.Count == 0)
+                return;
+
+            FloatingTextItem item = _pool[_nextIndex];
+            _nextIndex = (_nextIndex + 1) % _pool.Count;
+            DOTween.Kill(item.Root);
+
+            item.Text.text = $"LEVEL UP\n<size=60%>Lv {level}</size>";
+            item.Text.color = new Color(1f, 0.85f, 0.3f, 1f);
+            item.Text.fontSize = 46f;
+
+            Vector3 localPos = new Vector3(worldPosition.x / CANVAS_SCALE,
+                (worldPosition.y + Y_OFFSET + LEVEL_UP_EXTRA_Y) / CANVAS_SCALE, 0f);
+            item.RectTransform.localPosition = localPos;
+            item.CanvasGroup.alpha = 1f;
+            item.Root.transform.localScale = Vector3.one;
+            item.Root.SetActive(true);
+
+            Sequence seq = DOTween.Sequence();
+            seq.SetId(item.Root);
+            seq.Append(item.Root.transform.DOPunchScale(Vector3.one * PUNCH_SCALE_STRENGTH, LEVEL_UP_PUNCH_DURATION, vibrato: 2, elasticity: 0.5f));
+            seq.Join(item.RectTransform.DOLocalMoveY(localPos.y + FLOAT_DISTANCE / CANVAS_SCALE, LEVEL_UP_DURATION).SetEase(Ease.OutQuad));
+            seq.Insert(LEVEL_UP_DURATION * FADE_START_RATIO,
+                DOTween.To(() => item.CanvasGroup.alpha, x => item.CanvasGroup.alpha = x, 0f,
+                    LEVEL_UP_DURATION * (1f - FADE_START_RATIO)).SetEase(Ease.InQuad));
+            seq.OnComplete(() => item.Root.SetActive(false));
         }
 
         private FloatingTextItem CreateTextItem(int index)

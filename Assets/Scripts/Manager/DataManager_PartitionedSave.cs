@@ -1346,6 +1346,11 @@ namespace ARPG.Data
                     for (int slot = 0; slot < player._skillBookSlots.Length; slot++)
                         ScanItemInstanceId(player._skillBookSlots[slot], ref maxId);
                 }
+                if (player._charmBoardSlots != null)
+                {
+                    for (int slot = 0; slot < player._charmBoardSlots.Length; slot++)
+                        ScanItemInstanceId(player._charmBoardSlots[slot], ref maxId);
+                }
             }
 
             List<Npc.NpcSaveData> npcs = new List<Npc.NpcSaveData>(
@@ -1390,6 +1395,12 @@ namespace ARPG.Data
                 return;
             if (item.ItemInstanceId > maxId)
                 maxId = item.ItemInstanceId;
+            // 판에 박힌 참도 인스턴스 Id를 가진다 (PLAYER_LEVEL_CHARM_DESIGN §6.5)
+            if (item.CharmBoard?.Charms != null)
+            {
+                for (int i = 0; i < item.CharmBoard.Charms.Count; i++)
+                    ScanItemInstanceId(item.CharmBoard.Charms[i]?.Charm, ref maxId);
+            }
             if (item.SkillBook?.SocketedPages == null)
                 return;
             for (int i = 0; i < item.SkillBook.SocketedPages.Count; i++)

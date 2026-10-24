@@ -101,6 +101,14 @@ namespace ARPG.Factory
             {
                 ApplyMonsterArchetypeScaling(entityId, archetypeTable, effectiveLevel);
             }
+            // 정확도·회피는 능력치 없이 레벨 곡선 × 종 배율 (PLAYER_LEVEL_CHARM_DESIGN §4.4·§5.3)
+            ApplyMonsterHitCurve(entityId, table, effectiveLevel);
+            // 처치 경험치 (§3.2): 등급 배율은 HpMul과 같은 ExpMul
+            AR.s.Component.AddComponent(entityId, new ExpRewardComponent
+            {
+                MonsterLevel = Mathf.Max(1, effectiveLevel),
+                ExpMul = archetypeTable != null ? archetypeTable.ExpMul : 1f,
+            });
             // 접사는 등급 스케일링 다음에 적용한다 (MONSTER_AFFIX_DESIGN.md §6.1).
             int affixCount = ApplyMonsterAffixes(entityId, affixes);
             AR.s.Component.AddComponent(entityId, new MonsterArchetypeComponent { Archetype = archetype });
@@ -251,6 +259,9 @@ namespace ARPG.Factory
                 EquipHelper.ApplyAllEquipmentModifiers(entityId, saveData.InventoryEquip);
             }
 
+            // NPC 정확도 (PLAYER_LEVEL_CHARM_DESIGN §5.4): NPC 레벨이 생기기 전까지 고향 마을 지역 레벨의 A(L)
+            ApplyNpcAccuracy(entityId, saveData);
+
             RegisterToSystems(entityId, obj, table.AnimationId);
 
             if (table.AnimationData != null)
@@ -263,6 +274,18 @@ namespace ARPG.Factory
 
             Debug.Log($"[EntityFactory] NPC created - EntityId: {entityId}, TableId: {npcTableId}, Name: {table.Name}");
             return (entityId, entity);
+        }
+
+        private static void ApplyNpcAccuracy(int entityId, NpcSaveData? saveData)
+        {
+            if (AR.s.Component.TryGetComponent<StatComponent>(entityId, out var stat) == false)
+                return;
+
+            int zoneLevel = saveData != null && AR.s.Npc != null ? AR.s.Npc.GetNpcLootZoneLevel(saveData) : 1;
+            stat.BaseAccuracy = Skill.Combat.HitChanceRules.GetLevelAccuracy(zoneLevel);
+            stat.FinalAccuracy = stat.BaseAccuracy;
+            AR.s.Component.SetComponent(entityId, stat);
+            AR.s.Component.AddComponent(entityId, new StatDirtyTag());
         }
 
         /// <summary>
@@ -349,6 +372,11 @@ namespace ARPG.Factory
             // 저장된 장비의 스탯 modifier 복원
             EquipHelper.ApplyAllEquipmentModifiers(entityId, AR.s.Data.Player._inventoryEquip);
 
+            // 레벨 기본 정확도와 넣은 능력치 포인트 (PLAYER_LEVEL_CHARM_DESIGN §3.1·§4.2)
+            AR.s.Player.ApplyProgressionToEntity(entityId);
+            // 판 자리에 끼운 참 판의 참 옵션 (PLAYER_LEVEL_CHARM_DESIGN §6)
+            AR.s.Player.ApplyCharmBoardModifiersToEntity(entityId);
+
             // 플레이어 스킬 — _skillBookSlots에 장착된 책의 SkillId로 슬롯별 스킬 엔티티 생성 (SKILLBOOK_DESIGN.md §2.6)
             ItemData?[] skillBookSlots = AR.s.Data.Player._skillBookSlots;
             for (int i = 0; i < skillBookSlots.Length; i++)
@@ -420,6 +448,24 @@ namespace ARPG.Factory
 
             // AddCreatureComponents가 HP바를 기다리는 동안 첫 재계산이 끝났을 수 있다.
             // 바뀐 저항이 피격 감소 캐시(DamageDefenseCacheComponent)에 반영되도록 다시 계산을 요청한다.
+            AR.s.Component.AddComponent(entityId, new StatDirtyTag());
+        }
+
+        /// <summary>
+        /// 몬스터 정확도 M(L) = A(L) × AccuracyMul, 회피 E(L) = A(L) ÷ 9 × EvasionMul (PLAYER_LEVEL_CHARM_DESIGN §5.3).
+        /// 표의 회피 칸 값은 더한다(몬스터 행은 0). 회피 증가(접사 "날렵한")는 스탯 재계산이 곱한다.
+        /// </summary>
+        private static void ApplyMonsterHitCurve(int entityId, MonsterTable table, int effectiveLevel)
+        {
+            if (AR.s.Component.TryGetComponent<StatComponent>(entityId, out var stat) == false)
+                return;
+
+            int level = Mathf.Max(1, effectiveLevel);
+            stat.BaseAccuracy = Skill.Combat.HitChanceRules.GetMonsterAccuracy(level, table.AccuracyMul);
+            stat.BaseEvasion += Skill.Combat.HitChanceRules.GetMonsterEvasion(level, table.EvasionMul);
+            stat.FinalAccuracy = stat.BaseAccuracy;
+            stat.FinalEvasion = stat.BaseEvasion;
+            AR.s.Component.SetComponent(entityId, stat);
             AR.s.Component.AddComponent(entityId, new StatDirtyTag());
         }
 
@@ -1411,6 +1457,7 @@ namespace ARPG.Factory
             }
 
             // 독립 생성(연결 스킬 없음)은 장판 Damage를 기본 피해로 사용한다.
+            // 스킬 없이 생긴 장판은 때리는 쪽 정확도가 없으므로 회피 판정 없이 항상 맞는다 (PLAYER_LEVEL_CHARM_DESIGN §5.1).
             cm.TryGetComponent<StatComponent>(casterEntityId, out var casterStat);
             SkillAttackProfileComponent fallback = new()
             {
@@ -1418,6 +1465,7 @@ namespace ARPG.Factory
                 BaseDamageMul = 1f,
                 SkillDamageMul = casterStat.FinalSkillDamage > 0 ? casterStat.FinalSkillDamage / 100f : 1f,
                 CritMultiplier = 1.5f,
+                Unevadable = true,
             };
             int damage = Mathf.Max(0, table.Damage);
             switch (table.DamageType)
