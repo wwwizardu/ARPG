@@ -28,6 +28,7 @@ sources:
   - Docs/ai_monster/MONSTER_RARITY_DESIGN.md
   - Docs/combat/SKILL_RUNE_DESIGN.md
   - Docs/combat/POE2_CURSOR_TRACKING_PLAN.md
+  - Docs/combat/AI_SKILL_SELECTION_IMPLEMENTATION.md
   - Docs/npc/PLAYER_RECOGNITION_DESIGN.md
   - Docs/tech/SAVE_PARTITION_DESIGN.md
   - Docs/world_history/NARRATIVE_DIALOGUE_VARIETY_DESIGN.md
@@ -44,7 +45,7 @@ sources:
   - Assets/_BinaryData/TableData/
 ---
 
-# 현재 개발 현황 — 2026-10-24
+# 현재 개발 현황 — 2026-10-25
 
 ## 1. 한눈에 보기
 
@@ -76,6 +77,8 @@ sources:
 
 **2026-10-25 (커밋 대기)**: **참 등급**을 구현했다. 참도 장비처럼 일반·마법·희귀(옵션 0 / 1~2 / 3~4개, 확률 10·85·5)이고 옵션은 접두·접미로 나뉜다(한쪽 최대 2개). 옵션 수는 등급이, 붙을 수 있는 옵션 종류와 값 크기는 모양이 정해 큰 참일수록 좋은 옵션이 붙는다. 값은 새 시트 탭 `CharmModTier`(참 값 표)에 옵션·티어·모양(1×1·1×2·3칸·2×2)별 정수 범위로 직접 적는다. 같은 날 장비 값 × 모양 비율, 1칸 값 × 모양 배율을 거쳐 반올림 문제 때문에 이 방식이 됐다. 3×3 참을 빼서 모양은 5종이고, 참 전용 치명타 확률 증가·치명타 피해 증가가 중간 참부터 붙는다. 옛 세이브의 참은 읽을 때 접두·접미와 2×2로 바뀌고, 값은 참 값 표 범위 밖인 것만 범위 안으로 맞춘다. 세이브 왕복·드롭 분포 진단은 통과했고 플레이 확인이 남았다. 유니크 참은 장비 유니크와 함께 나중에 정한다. 상세는 [combat.md](combat.md). [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md LV25·LV26·§6.3, Wiki/combat.md]
 
+**2026-10-25 (커밋 대기)**: **몬스터 소환**을 구현했다. 몬스터 22종 중 14종이 같은 AI(평타·점프)를 써서 전투가 단조롭다는 문제의 첫 작업이다. 고블린 주술사의 화염탄은 PoE처럼 쿨타임 없이 1초 동안 외워 쏘고(피해 5~8), 보조로 15초 쿨타임의 소환을 써서 1.5초 동안 제자리에서 외운 뒤 화염임프 2마리를 부른다. 화염탄 80 / 소환 20이라 대략 20초에 한 번이다. 임프는 주술사가 노리던 대상을 공격하고, 12초 뒤나 주술사가 죽거나 비활성되면 사라지며, 아이템·경험치를 주지 않는다. 주 공격에 쿨타임이 있으면 보조 스킬이 가중치와 상관없이 쿨타임마다 나간다는 AI 규칙도 문서에 적었다. 컴파일·표 비교·AI 검사·공격 예고 빌드 검증은 통과했고 플레이 확인은 하지 않았다. 시전 끊기(기절)와 화염탄 예고선은 미뤘다. 상세는 [combat.md](combat.md). [src: Docs/combat/SKILL_DESIGN.md §6.12, Docs/combat/AI_SKILL_SELECTION_IMPLEMENTATION.md §선택 시점, Assets/_BinaryData/TableData/MonsterTable.bytes, Wiki/combat.md]
+
 **던전**: 마을마다 2~3개 슬롯, 마을 접근 시 입구 배치, E 입장, 분리된 맵 컨텍스트, ESC 퇴장, 사망 복귀, 보스 완료 트랜잭션, `dungeons` 저장 파티션이 구현됐다. 던전 안에서도 게임 시간·NPC·마을 시뮬·네임드 감독(새 출현 제외)이 계속 돌고, 월드 좌표가 필요한 시스템만 멈춘다(2026-10-19 구현, 사용자 실플레이 확인 전). [src: Docs/map/DUNGEON_RUNTIME_DESIGN.md 상태·§4, Docs/map/DUNGEON_WORLD_SIM_DESIGN.md 상태·§2] 2026-10-21부터 새로 만드는 던전은 입구 청크 지역 레벨 +2(보스 +4)이고, 보스 사망 드롭·상자 드롭·던전 안 수량 +70%가 있다. 완료 트랜잭션은 그대로다. [src: Docs/map/DUNGEON_RUNTIME_DESIGN.md §5.4, Docs/combat/ITEM_DROP_BALANCE_DESIGN.md §7.6]
 
 **몬스터·스킬**: 몬스터는 거리 링·슬롯·Warm 청크 캐시 기반으로 스폰되고, 공격 예고는 Phase 0~2가 구현됐다. [src: Wiki/monster_spawn_runtime.md, Docs/combat/MONSTER_ATTACK_TELEGRAPH_DESIGN.md 상태] 종은 청크 biome마다 `공용(Biome=Any) ∪ 그 biome 전용` 풀에서 그룹마다 균등하게 고른다(2026-07-24 구현). 어떤 종이 공용이고 어떤 종이 전용인지는 `MonsterTable`의 Biome 칸이 정본이다. [src: Docs/ai_monster/MONSTER_SPAWN_DESIGN.md §7.2.1, Assets/Scripts/Map/Biome/BiomeMonsterMapping.cs, Assets/Scripts/Data/DataManager_Table.cs, Assets/_BinaryData/TableData/MonsterTable.bytes] Chain Lightning(Instant 4연쇄)이 구현됐고 Projectile·분열·OnHit 전파는 코드만 있고 PlayMode 검증 전이다. [src: Docs/combat/SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md §0]
@@ -100,6 +103,7 @@ sources:
 | **스킬 전파** | 공용 연쇄·분열 런타임, Instant 4연쇄 Chain Lightning, 대기 주문, 결투 반영 적대 판정 [src: Wiki/skill_propagation.md, Docs/combat/SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md §0] | Projectile/분열/OnHit PlayMode 검증, EditMode 테스트 [src: Docs/combat/SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md §9] |
 | **넉백·당기기** | 판정 범위 중심 기준 밀기·당기기, SkillEffect `Knockback`/`Pull`(1030·1031), 장판 `ForcedMoveEffectId`, `System_ForcedMove`(2026-10-12). 돌진 경로 옆 밀기 1032(멧돼지 돌진이 사용)와 실행 단계 넉백 저항 `ForcedMoveImmune`(2026-10-13) [src: Docs/combat/SKILL_DESIGN.md §6.10, Wiki/combat.md] | 1030·1031·장판 연결(0건)과 손 조작 확인, 등급별 배율·벽 충돌 조건 [src: Docs/combat/SKILL_DESIGN.md §6.10] |
 | **돌진** | `SkillType.Dash`: 준비 중 조준 회전→출발 때 고정, 일정 속도 직진, 경로 선분 판정·관통·대상당 1회, 벽 즉시 멈춤, 직선 띠 예고, `System_Dash`(Update 805). 첫 콘텐츠 멧돼지 돌진(Skill 52·AI 6)(2026-10-13) [src: Docs/combat/SKILL_DESIGN.md §4 M4·§6.11, Wiki/combat.md] | 손 조작 체감 확인, 플레이어용 M3 Dash Strike 콘텐츠 [src: Docs/combat/SKILL_DESIGN.md §4 M3·§6.11 검증 결과] |
+| **몬스터 소환** | SkillEffect `SummonMonster`(1040), 효과만 있는 스킬의 1회 커밋, 최대 수 판정·대상 이어받기·주인과 함께 정리(`System_SummonedMonster`), 보상 없음. 고블린 주술사 화염탄(쿨타임 0·1초 시전) + 소환(214) 80/20(2026-10-25) [src: Docs/combat/SKILL_DESIGN.md §6.12, Wiki/combat.md] | 플레이 확인, 시전 끊기(기절)·화염탄 예고선(미룸), 다른 몬스터 고유 기술(14종이 AI 1), 플레이어 소환(진영 문제) [src: Docs/combat/SKILL_DESIGN.md §6.12, Assets/_BinaryData/TableData/MonsterTable.bytes] |
 | **스킬 페이지** | P-1 본체와 인스턴스 roll, 드랍·상점 일부 [src: Docs/combat/SKILL_RUNE_DESIGN.md §10] | Tier 2/3 콘텐츠, P-2 조건 처리, 장착 UI 폴리시 [src: Docs/combat/SKILL_RUNE_DESIGN.md §10] |
 | **경매장** | 설계와 기본값 확정 [src: Docs/economy/AUCTION_HOUSE_DESIGN.md §디자인] | GO 신호 전, 전부 미구현 [src: Docs/economy/AUCTION_HOUSE_DESIGN.md §구현 계획] |
 
@@ -109,7 +113,7 @@ sources:
 2. ~~**데이터 정리**: `AiTable` 4번(SwampToad)이 SkillTable에서 빠진 SkillId 205를 참조~~ → 2026-10-03 205번 행 복구, 빌드 검증기 통과. [src: Docs/combat/SKILL_DESIGN.md §2, Assets/_BinaryData/TableData/SkillTable.bytes, Assets/Scripts/Editor/AttackTelegraphBuildValidator.cs]
 3. **마을 골드 밸런스** (D109 ②): 매입 거절로 NPC 가방이 차는 문제, 가방 전리품에 따른 세이브 증가, 절도 빈도, 첫 며칠에 몰리는 NPC 구매를 함께 본다. [src: Docs/npc/NPC_AMBITION_DESIGN.md D109, Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §7·§11.2]
 4. **대화 사연 밸런스** (D109 ①): 자랑 토픽이 사연 자리에서 밀리는 문제. [src: Docs/npc/NPC_AMBITION_DESIGN.md D109]
-5. **PlayMode 검증 묶음**: 던전 Profiler·입구 배치 실패율, 마법부여 Tier·저장 왕복, 마을 V7 A~F, 스킬 조준·전파 대표 스킬, 공격 예고 가독성, 아이템 레벨 드랍(원거리 드랍 툴팁·기본 아이템 툴팁·상점 매물 레벨), 장비 등급·품질 드롭과 Forge 4작업·캐릭터 창 두 줄·판매가·던전 보스/상자 드롭(2026-10-21), 장비 비교 툴팁 남은 항목(비교 중 장비 변경·UI 닫기, 저장 상태 불변, 안내 없는 호버, 줄바꿈), 멧돼지 돌진과 몬스터 조준 회전의 손 조작 체감(밀어서 피하기·옆으로 비켜 피하기), 플레이어 레벨·참 판(캐릭터 창 줄 배치와 분배·되돌리기, 경험치 바·레벨업 글자, 참 판 창 끌어다 놓기·회전·툴팁, 상점 참 칸·판 판매 확인 창, 2026-10-24), 참 등급(툴팁 등급 색·등급 줄, 판에 박힌 참 툴팁, 치명타 옵션 피해 반영, 2026-10-25). [src: Docs/combat/SKILL_DESIGN.md §6.11 검증 결과, Docs/map/DUNGEON_RUNTIME_DESIGN.md §7, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §12, Docs/village/VILLAGE_REWORK_PLAN.md §V7, Docs/combat/POE2_CURSOR_TRACKING_PLAN.md, Docs/combat/MONSTER_ATTACK_TELEGRAPH_DESIGN.md, Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §8, Docs/combat/ITEM_DROP_BALANCE_DESIGN.md §16, Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md §구현 연결과 완료 기준, Wiki/combat.md]
+5. **PlayMode 검증 묶음**: 던전 Profiler·입구 배치 실패율, 마법부여 Tier·저장 왕복, 마을 V7 A~F, 스킬 조준·전파 대표 스킬, 공격 예고 가독성, 아이템 레벨 드랍(원거리 드랍 툴팁·기본 아이템 툴팁·상점 매물 레벨), 장비 등급·품질 드롭과 Forge 4작업·캐릭터 창 두 줄·판매가·던전 보스/상자 드롭(2026-10-21), 장비 비교 툴팁 남은 항목(비교 중 장비 변경·UI 닫기, 저장 상태 불변, 안내 없는 호버, 줄바꿈), 멧돼지 돌진과 몬스터 조준 회전의 손 조작 체감(밀어서 피하기·옆으로 비켜 피하기), 플레이어 레벨·참 판(캐릭터 창 줄 배치와 분배·되돌리기, 경험치 바·레벨업 글자, 참 판 창 끌어다 놓기·회전·툴팁, 상점 참 칸·판 판매 확인 창, 2026-10-24), 참 등급(툴팁 등급 색·등급 줄, 판에 박힌 참 툴팁, 치명타 옵션 피해 반영, 2026-10-25), 고블린 주술사 소환(화염탄 1.3초 주기, 소환 빈도·최대 2마리, 12초·주술사 사망 때 소멸, 임프 처치 보상 없음, 2026-10-25). [src: Docs/combat/SKILL_DESIGN.md §6.12,  Docs/combat/SKILL_DESIGN.md §6.11 검증 결과, Docs/map/DUNGEON_RUNTIME_DESIGN.md §7, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §12, Docs/village/VILLAGE_REWORK_PLAN.md §V7, Docs/combat/POE2_CURSOR_TRACKING_PLAN.md, Docs/combat/MONSTER_ATTACK_TELEGRAPH_DESIGN.md, Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §8, Docs/combat/ITEM_DROP_BALANCE_DESIGN.md §16, Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md §구현 연결과 완료 기준, Wiki/combat.md]
 6. **NPC 행적·반응 마무리**: 설계 문서 §8의 1~5단계는 모두 구현됐다. 남은 것은 커밋과 실제 플레이 확인(대화 화면의 부탁·보고 표시, 소문 교환 속도, 소망 공개·선물 목록·전달 대사, 부상 문구, 후속 소개와 이어지는 부탁)이다. 마을 평판은 보류다. [src: Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md 머리말·§8·§8.1~§8.4]
 7. **다음 설계 후보**: NPC 장비 강화(P6a), 평판(Renown), P3 협력·배신 재개, 관찰 반응 데이터. 경매장은 착수 승인이 없다. 던전 중 월드 시뮬은 2026-10-19에 구현해 후보에서 뺐다. [src: Docs/map/DUNGEON_WORLD_SIM_DESIGN.md 상태, Docs/npc/NPC_AMBITION_DESIGN.md §13·§14, Docs/npc/PLAYER_RECOGNITION_DESIGN.md, Docs/economy/AUCTION_HOUSE_DESIGN.md]
 

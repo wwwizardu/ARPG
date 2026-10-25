@@ -1063,7 +1063,8 @@ namespace ARPG.Systems
                 skill.Table.ProjectileId > 0,
                 skill.Table.AreaEffectId > 0,
                 skill.Table.UsesLandingCommit,
-                skill.Table.UsesDash);
+                skill.Table.UsesDash,
+                skill.SummonEffectId > 0);
             return SkillImpactTimingResolver.Resolve(input);
         }
 

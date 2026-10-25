@@ -1,6 +1,8 @@
 #nullable enable
+using System.Collections.Generic;
 using ARPG.Base;
 using ARPG.Component;
+using ARPG.Npc;
 using ARPG.Village;
 using Unity.AppUI.UI;
 using UnityEngine;
@@ -11,11 +13,12 @@ using Text = Unity.AppUI.UI.Text;
 namespace ARPG.UI
 {
     /// <summary>
-    /// 여관 UI — 휴식(+6h)/세이브 전용.
-    /// VILLAGE_NPC_BOUNDARY_DESIGN §5에 따라 여관은 방문자 고용이 없는 무인 서비스 건물.
-    /// Rest/Save 기능만 유지한다.
+    /// 여관 UI — 휴식(+6h)/세이브 스텁과 여관에서 쉬는 NPC 목록.
+    /// VILLAGE_NPC_BOUNDARY_DESIGN §5에 따라 여관은 방문자 고용이 없는 무인 서비스 건물이다.
+    /// 목록은 그 마을 소속으로 원정 부상에서 회복 중인 NPC다 (NPC_SIMULATION_DESIGN §3.1 D16). 회복이 빨리 끝나는 순으로 버튼을 보여 주고,
+    /// 고르면 UINpcInspect를 연다 — 여관 안 NPC는 실체화되지 않아도 대화할 수 있다. 버튼이라 ControllerUIFocus가 패드로 고른다.
     ///
-    /// Inn 세트 미완성 시 안내문 표시, Rest 비활성.
+    /// Inn 세트 미완성 시 Rest 비활성. 손님 목록은 세트와 관계없이 보여 준다.
     /// </summary>
     public class UIInn : UIBaseForm
     {
@@ -34,6 +37,7 @@ namespace ARPG.UI
         private int _villageId = -1;
         private bool _hasInnSet = false;
         private VisualElement? _lastRoot;
+        private readonly List<int> _guestIds = new();
 
         public override void Initialize(string inName, bool isForm = false)
         {
@@ -151,17 +155,64 @@ namespace ARPG.UI
                 _restBtn.SetEnabled(_hasInnSet);
             }
 
-            // 구 방문자 영역 — 무인 여관 안내만 표시 (고용 시스템 제거, D6)
-            if (_slotCountText != null)
-                _slotCountText.text = _hasInnSet ? "무인 여관" : "세트 미완성";
+            RefreshGuests();
+        }
 
-            if (_visitorList != null)
+        /// <summary>
+        /// 구 방문자 영역 → 여관에서 쉬는 NPC 목록 (NPC_SIMULATION_DESIGN §3.1 D16). 한 줄 = "이름 — 회복까지 N시간" 버튼.
+        /// 창을 열 때 다시 만든다. 열어 둔 사이 회복한 NPC를 골라도 NPC 창은 그대로 열린다.
+        /// </summary>
+        private void RefreshGuests()
+        {
+            _guestIds.Clear();
+            NpcManager? npcManager = AR.s.Npc;
+            if (_villageId >= 0 && npcManager != null)
+                npcManager.CollectInnGuests(_villageId, _guestIds);
+
+            if (_slotCountText != null)
+                _slotCountText.text = $"쉬고 있는 손님 {_guestIds.Count}명";
+
+            if (_visitorList == null)
+                return;
+
+            _visitorList.Clear();
+            if (npcManager == null || _guestIds.Count == 0)
             {
-                _visitorList.Clear();
-                AddEmptySlot(_visitorList, _hasInnSet
-                    ? "여관은 무인으로 운영됩니다 — 편히 쉬어가세요"
-                    : "여관 세트(Bed + Hearth)를 완성하면 휴식할 수 있습니다");
+                AddEmptySlot(_visitorList, "쉬고 있는 손님이 없습니다");
+                return;
             }
+
+            ScrollView scroll = new ScrollView(ScrollViewMode.Vertical);
+            scroll.AddToClassList("inn-guest-scroll");
+            float now = AR.s.Time.CurrentGameTime;
+            for (int i = 0; i < _guestIds.Count; i++)
+            {
+                int npcId = _guestIds[i];
+                NpcSaveData? guest = npcManager.GetSaveData(npcId);
+                if (guest == null)
+                    continue;
+
+                Button guestBtn = new() { title = $"{npcManager.GetDisplayName(npcId)} — {FormatRecovery(guest, now)}" };
+                guestBtn.AddToClassList("inn-guest-btn");
+                guestBtn.clicked += () => OnClickGuest(npcId);
+                scroll.Add(guestBtn);
+            }
+            _visitorList.Add(scroll);
+        }
+
+        private static string FormatRecovery(NpcSaveData guest, float now)
+        {
+            float remainingHours = guest.Activity.PhaseEndGameTime - now;
+            if (remainingHours < 1f)
+                return "곧 회복";
+            return $"회복까지 {Mathf.CeilToInt(remainingHours)}시간";
+        }
+
+        /// <summary>손님을 고르면 NPC 창을 연다. UIManager.Show가 정렬값을 올려 여관 창 위에 보인다.</summary>
+        private void OnClickGuest(int npcId)
+        {
+            UINpcInspect? ui = AR.s.UI.Show<UINpcInspect>(AddressablePath.NpcInspect, UIManager.Layer.Main);
+            ui?.Bind(npcId);
         }
 
         private static void AddEmptySlot(VisualElement parent, string message)

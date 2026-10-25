@@ -251,9 +251,13 @@ namespace ARPG.EditorTools
                     placedCount++;
                 }
                 ok &= placedCount == v.PlacedObjects.Count;
+                // 모든 단계에 여관이 하나 있다 — 원정 부상자가 소속 마을 여관에서 회복한다 (NPC_SIMULATION_DESIGN §3.1 D15)
+                int innCount = VillageConstructionLedger.CountPlaced(v,
+                    VillageInitialFacilityCatalog.INN_TABLE_ID);
+                ok &= innCount == 1;
 
                 dump.AppendLine($"### {stage} — Bounds {v.BoundsW}x{v.BoundsH}, " +
-                    $"시설 {v.PlacedObjects.Count}, 벽 {v.CompletedWallSegments}칸");
+                    $"시설 {v.PlacedObjects.Count}(여관 {innCount}), 벽 {v.CompletedWallSegments}칸");
                 dump.AppendLine();
                 for (int i = 0; i < placements.Count; i++)
                 {
@@ -264,7 +268,7 @@ namespace ARPG.EditorTools
                 dump.AppendLine();
 
                 Record(ok, passed, failed,
-                    $"{stage}: 초기 시설 {v.PlacedObjects.Count}종 전부 슬롯 배치 성공 (벽·시설 비겹침)");
+                    $"{stage}: 초기 시설 {v.PlacedObjects.Count}종(여관 {innCount}) 전부 슬롯 배치 성공 (벽·시설 비겹침)");
             }
         }
 

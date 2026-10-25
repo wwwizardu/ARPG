@@ -167,6 +167,11 @@ namespace ARPG.Utility
                     return false;
             }
 
+            // 부른 몬스터가 최대 수만큼 살아 있으면 소환 스킬은 고르지 않는다 (SKILL_DESIGN §6.12)
+            if (skill.SummonEffectId > 0 &&
+                ARPG.Skill.Combat.MonsterSummonRules.IsAtCapacity(ownerEntityId, skill.SummonEffectId) == true)
+                return false;
+
             float rangeMax = skill.Table.SkillRangeMax;
             if (rangeMax > 0f)
             {

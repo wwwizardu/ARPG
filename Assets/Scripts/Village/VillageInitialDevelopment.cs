@@ -20,6 +20,13 @@ namespace ARPG.Village
         DataError,
     }
 
+    public enum MinimumInnEnsureResult
+    {
+        Unchanged,
+        Created,
+        DataError,
+    }
+
     public sealed class VillageInitialDevelopmentResult
     {
         public int MilestonesApplied;
@@ -177,6 +184,62 @@ namespace ARPG.Village
             return normalized == true
                 ? MinimumShopEnsureResult.TierNormalized
                 : MinimumShopEnsureResult.Unchanged;
+        }
+
+        /// <summary>
+        /// 여관 최소 보장 (NPC_SIMULATION_DESIGN §3.1 D15). 원정 부상자가 소속 마을 여관 안에서 회복하므로
+        /// 사라진 터를 뺀 모든 마을에 여관을 둔다 — 대상 마을은 호출자가 고른다.
+        /// Inn 서비스 시설이 하나라도 있으면(배치 대기 포함) 그대로 두고, 없으면 여관 153을 좌표 미할당 완공 레코드로 추가한다.
+        /// "없으면 추가"라 다시 적용해도 결과가 같다(세이브 버전 유지). 여관 원장 불일치는 변경 없이 오류로 거부한다.
+        /// </summary>
+        public static MinimumInnEnsureResult EnsureMinimumInn(VillageData village,
+            Func<int, Tables.BuildableItemTable?> tableResolver, out string error)
+        {
+            error = string.Empty;
+            int innTableId = VillageInitialFacilityCatalog.INN_TABLE_ID;
+            int recordCount = 0;
+            int typeIdCount = 0;
+            int innServiceCount = 0;
+
+            for (int i = 0; i < village.PlacedObjects.Count; i++)
+            {
+                if (village.PlacedObjects[i].TableId == innTableId)
+                    recordCount++;
+            }
+            for (int i = 0; i < village.PlacedObjectTypeIds.Count; i++)
+            {
+                int typeId = village.PlacedObjectTypeIds[i];
+                if (typeId == innTableId)
+                    typeIdCount++;
+                Tables.BuildableItemTable? placed = tableResolver(typeId);
+                if (placed != null && ((ProvidedService)placed.ProvidedService & ProvidedService.Inn) != 0)
+                    innServiceCount++;
+            }
+
+            if (recordCount != typeIdCount)
+            {
+                error = $"Village {village.VillageId}: Inn {innTableId} 원장 불일치 " +
+                    $"(records={recordCount}, typeIds={typeIdCount})";
+                return MinimumInnEnsureResult.DataError;
+            }
+            if (innServiceCount > 0)
+                return MinimumInnEnsureResult.Unchanged;
+
+            Tables.BuildableItemTable? table = tableResolver(innTableId);
+            if (table == null || table.Id != innTableId
+                || table.SpawnType != GlobalEnum.BuildableSpawnType.Entity
+                || ((ProvidedService)table.ProvidedService & ProvidedService.Inn) == 0)
+            {
+                error = $"Village {village.VillageId}: Inn {innTableId} 테이블이 없거나 " +
+                    "Entity/Inn 서비스 계약을 충족하지 않음";
+                return MinimumInnEnsureResult.DataError;
+            }
+
+            VillageConstructionLedger.ApplyCompletedBuild(village, table,
+                VillageConstructionPosition.UnassignedTile,
+                VillageConstructionPosition.UnassignedTile);
+            village.PlacedObjects[village.PlacedObjects.Count - 1].FacilityTier = 1;
+            return MinimumInnEnsureResult.Created;
         }
 
         /// <summary>

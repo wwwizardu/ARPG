@@ -119,6 +119,10 @@ namespace ARPG.Systems
             // Priority 75: NPC Pickup System (FixedUpdate) - NPC 드랍 줍기 이동·도착 판정 (NPC_COMBAT_DESIGN §6, B5)
             RegisterSystems(new System_NpcPickup());
 
+            // Priority 76: NPC Village Walk System (FixedUpdate, 월드 전용) - 마을 안 원정 출발·귀환·여관 가기 이동과 강등 판정
+            // (NPC_SIMULATION_DESIGN §3.1 D13·D14). 줍기와 같은 자리: AI Behavior(50) 이후, Pathfinding(80) 이전
+            RegisterSystems(new System_NpcVillageWalk());
+
             // Priority 80: Pathfinding System (FixedUpdate) - PathfindingComponent A* + Waypoint 추적
             // AI Behavior(50) 이후, Move(100) 이전 — Velocity.Direction을 waypoint 방향으로 덮어씀
             System_Pathfinding pathfindingSystem = new();
@@ -164,6 +168,10 @@ namespace ARPG.Systems
 
             // Priority 140: Monster Aura System (Update) - 오라 접사 주변 같은 진영에 오라 버프 부여·갱신 (0.5초 간격, MONSTER_AFFIX_DESIGN §6.3)
             RegisterSystems(new System_MonsterAura());
+
+            // Priority 145: Summoned Monster System (FixedUpdate) - 주인이 죽거나 비활성된 소환 몬스터 제거 (SKILL_DESIGN §6.12)
+            // 생존 시간 만료는 Lifetime(70)이 맡는다. 던전 안에서도 돈다
+            RegisterSystems(new System_SummonedMonster());
 
             // Priority 150: Projectile System (FixedUpdate) - 발사체 이동 및 충돌
             System_Projectile projectileSystem = new();

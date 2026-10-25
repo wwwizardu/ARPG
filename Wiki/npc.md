@@ -4,7 +4,7 @@
 name: npc
 description: NPC 도메인 종합 — 정본 매핑, 코드 구현 현황, 마을 경제와의 경계.
 type: topic
-last_updated: 2026-10-18
+last_updated: 2026-10-25
 sources:
   - Docs/npc/VILLAGE_NPC_BOUNDARY_DESIGN.md
   - Docs/npc/NPC_OBJECTIVE_DESIGN.md
@@ -28,6 +28,7 @@ sources:
   - Assets/Scripts/Manager/NpcManager_Narrative.cs, Assets/Scripts/Manager/NpcManager_NarrativeDialogue.cs, Assets/Scripts/Manager/NpcManager_NarrativeWish.cs
   - Assets/Scripts/Npc/Narrative/NarrativeContentCatalog.cs, Assets/Scripts/Npc/Narrative/NarrativeReactionRules.cs, Assets/Scripts/Data/NarrativeSaveData.cs
   - Assets/Scripts/Manager/NpcManager_Objective.cs, Assets/Scripts/Manager/NpcManager_ObjectiveNarrative.cs, Assets/Scripts/Npc/NpcObjectiveRules.cs
+  - Assets/Scripts/Manager/NpcManager_VillageWalk.cs, Assets/Scripts/Manager/NpcManager_InnRecovery.cs, Assets/Scripts/Common/System/System_NpcVillageWalk.cs, Assets/Scripts/UI/UIInn.cs
 ---
 
 ## 1. 한눈에 보기
@@ -58,6 +59,8 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 
 **단기 목표(2026-10-18, 1단계, 커밋 대기)**: 사건이나 상황이 며칠짜리 목표가 되어 활동에 이유·대상·끝을 붙인다. NPC당 목표는 1개이고, 분류(강제 > 극적 > 일상)와 정의 표의 우선순위로 더 높은 목표가 밀어낸다. 1단계 목표는 소문 확인(옛 확인 원정 D76을 옮김)·장비 마련(예산을 넘어 못 산 업그레이드)·원수 갚기(같은 마을 관계자가 던전 원정에서 죽음, 관계자마다 각자 판정)·설욕(던전 원정 중상) 4종이다. 목표는 활동 확률만 기울이고(예: 극적 목표 실행 단계 던전 원정 ×4), 원정을 떠나면 목표 던전으로 간다. 이룸·꺾임은 끝(극적 목표는 결말 Deed 16·17)이고, 밀림·대상 없어짐·이주는 빠짐이다. 칸이 비면 최근 14일 기록에서 한 번 다시 계산하며, 극적 목표의 생성 판정은 결정론(salt 200)이라 다시 계산해도 같다. 검사 창 "목표" 줄, 진행·결말 화제(극적 목표의 진행 화제는 고정), 원수 갚기 부탁(narrative 원장 `Objective` 종류, 부탁 대사 표시 뒤 생성)이 있고, 정의 표는 시트 `NpcObjective` 탭이다. 진단 기준은 통과했다(결정론 불일치 0). 원수 갚기는 60일 실행에서 10건이 모두 꺾여 플레이어 부탁이 주 해결 경로다. 실제 플레이 확인 전이다. [src: Docs/npc/NPC_OBJECTIVE_DESIGN.md 머리말·§2·§3·§4·§6·§8·§12.1, Assets/Scripts/Manager/NpcManager_Objective.cs, Assets/Scripts/Manager/NpcManager_ObjectiveNarrative.cs]
 
+**마을 안 표현(2026-10-25, 커밋 대기)**: 마을 안에서 NPC가 멈춰 서 있지 않게 보이는 모습만 바꿨다 — 결과 판정·난수·치료 규칙·저장 형식은 그대로다. 화면 안 NPC는 원정을 시작하면 목표 쪽 화면 밖으로 걸어 나가 사라지고, 화면 밖에서 원정·이주를 마친 NPC는 귀환점이 활성 청크면 화면 바로 밖에서 나타나 걸어 들어온다. 이동 중 실체화는 마을 영역 안이면 걷기, 밖이면 지금처럼 조우 대기다. 원정 부상자는 치료 여부와 관계없이 소속 마을 여관 안에서 회복하며 실체화하지 않고, 회복이 끝나면 여관 문 앞에서 나온다. 여관 창에 그 마을의 회복 중 NPC 목록이 버튼으로 나와 대화할 수 있고, 몸이 없는 NPC에게는 결투 버튼을 숨긴다. 화면 처리는 `System_NpcSim`·실체화·결투 경로에만 두고 진단이 복제 데이터로 부르는 판정 메서드에는 넣지 않았다. 화면 안에서 출발한 사냥은 강등 때 경로를 다시 계산해 길이가 약 4.5~9시간으로 달라진다. 진단(컴파일·V3·V4·저장 스냅샷)은 통과했고 실제 플레이 확인 전이다. [src: Docs/npc/NPC_SIMULATION_DESIGN.md §3.1 D13~D16·구현 기록, Assets/Scripts/Manager/NpcManager_VillageWalk.cs, Assets/Scripts/Manager/NpcManager_InnRecovery.cs, Assets/Scripts/UI/UIInn.cs]
+
 ## 2. 정본 매핑 — "이걸 물으면 이 문서의 이 절"
 
 | 주제 | 정본 | 비고 |
@@ -72,6 +75,7 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 | NPC↔NPC 호감도 **런타임 변동** | [NPC_ACTIVITY_DESIGN §8.3](../Docs/npc/NPC_ACTIVITY_DESIGN.md) | **활동 기반**. 패시브 근접 drift(구 System_NpcRelationship)는 폐기 [src: NPC_RELATION_HISTORY §5.2] |
 | 모험가 자율 활동/원정(Venture)·부상·죽음 — 활동 *내용* | [NPC_ACTIVITY_DESIGN §4–10](../Docs/npc/NPC_ACTIVITY_DESIGN.md) | 활동 내용 설계. 시뮬 프레임은 아래 문서가 소유 |
 | NPC 시뮬 *기반*(개별 LOD·오프스크린 상태·로밍·월드영향) | [NPC_SIMULATION_DESIGN](../Docs/npc/NPC_SIMULATION_DESIGN.md) | MVP 구현 완료: Rest/솔로·파티 Hunt, 개인 LOD 전환, 결과 반영, `max(맵 최소값, 마을 수×8)` 총량/점진 보충. 300개 마을 기준 목표 2,400명. 이주·WORLD_EVENT 유발은 후속. [src: Docs/npc/NPC_SIMULATION_DESIGN.md D9·§11, Assets/Scripts/Common/System/System_NpcSim.cs, Assets/Scripts/Manager/NpcManager.cs] |
+| 마을 안 NPC 모습(원정 출발·귀환 걷기·부상자 여관 회복·여관 창 NPC 목록) | [NPC_SIMULATION_DESIGN §3.1](../Docs/npc/NPC_SIMULATION_DESIGN.md) D13~D16 | 구현하면서 정한 세부·검증은 같은 절 "구현 기록". 여관 단계는 VILLAGE_RUNTIME §4·VILLAGE_REWORK_PLAN §3.3, 결투 예외는 NPC_COMBAT D19 [src: Docs/npc/NPC_SIMULATION_DESIGN.md §3.1] |
 | NPC=모험가·경제 분리·자가 건설 | [VILLAGE_NPC_BOUNDARY_DESIGN](../Docs/npc/VILLAGE_NPC_BOUNDARY_DESIGN.md) | 현행 정본 |
 | 동료(파티 영입·명령·성장) | [companionSystem](../Docs/npc/companionSystem.md) | 최구식 문서 — §3 주의 필수 |
 | NPC 장비 12슬롯·검사 UI(UINpcInspect)·시작 장비 시드 | [NPC_EQUIPMENT_DESIGN](../Docs/npc/NPC_EQUIPMENT_DESIGN.md) | 구현 완료. 시작 장비는 기본 아이템(§3.3) |
@@ -118,6 +122,7 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 | NPC 간 절도(P4) | AMBITION §7.6, D98~D115 | `NpcManager_Theft` — 현장 적발·단서·판매 소문 늦은 발각 | ✅ 구현. 훔친 장비는 장착하지 않음(D119) [src: Assets/Scripts/Manager/NpcManager_Theft.cs] |
 | 사라진 터 강제 이주(NS4 일부) | AMBITION D138~D141 | `NpcManager_Relocation` — 터(폐허·합병) 소속 NPC가 72h 뒤 가장 가까운 상점 마을로 `Relocate`, 배분·보충에서 터 제외. `VillageId` = 소속 마을 | ✅ 구현(2026-10-03). 자발적 이주·거주 이력은 후속 [src: Assets/Scripts/Manager/NpcManager_Relocation.cs] |
 | 협력·배신(P3) | AMBITION §7.5–7.6·§14 | — | ⏸ 보류 [src: Docs/npc/NPC_AMBITION_DESIGN.md §14] |
+| 마을 안 표현(걷기 출발·귀환, 부상자 여관 회복, 여관 목록) | NPC_SIMULATION §3.1 D13~D16 | `NpcVillageWalkComponent`·`System_NpcVillageWalk`(Priority 76), `NpcManager_VillageWalk`(한 명 강등 `DemoteMaterializedNpc` 포함), `NpcManager_InnRecovery`, `UIInn` 손님 목록 | 🟨 구현·진단 PASS(2026-10-25, 커밋 대기), 실제 플레이 확인 전 [src: Docs/npc/NPC_SIMULATION_DESIGN.md §3.1 구현 기록, Assets/Scripts/Common/System/System_NpcVillageWalk.cs] |
 | 실전투·동행(던전 전용)·드랍 줍기·결투 | NPC_COMBAT B1~B5 | `System_AI_Perception` 조건부 인식, `NpcManager_Companion`·`NpcManager_Duel`·`NpcManager_Pickup`, `System_Duel` | ✅ 구현(드랍 줍기는 디버그 호출만). 도주·NPC 간 결투 화면 장면은 보류 [src: Docs/npc/NPC_COMBAT_DESIGN.md 상태, Assets/Scripts/Manager/NpcManager_Duel.cs] |
 | 전역 NPC 총량·점진 보충 | NPC_SIMULATION D9 | `NpcPopulationState`, `NpcManager.EnsureAllVillagesPopulated`/`TryReplenishGlobalPopulation` — 대형 맵 최소 1,200명, 마을당 8명 목표·최소 5명 | ✅ 구현. 300개 마을 기준 2,400명 [src: Docs/npc/NPC_SIMULATION_DESIGN.md D9, Assets/Scripts/Npc/NpcPopulationState.cs, Assets/Scripts/Manager/NpcManager.cs] |
 | NPC 저장 분할 | SAVE_PARTITION_DESIGN §3·§5·§8 | 책임 파티션 + NPC 상태 32샤드 + manifest 원자 커밋 | ✅ 현재 WorldDataVersion 21. 2026-10-10에 `narrative` 파트를 더했다. 21 미만 세이브는 빈 원장으로 열고, 21 이상에서 파트가 없거나 손상되면 로드 실패다. Narrative를 싣는 저장은 NPC 상태(시뮬 묶음)도 함께 싣는다. State·Social은 부분 저장도 함께 커밋하며 기억 이관 후 다음 저장은 전체로 승격. 장비 기본 행 번호·저장 복사기 기본값 생략은 이전 개정 유지 [src: Docs/tech/SAVE_PARTITION_DESIGN.md, Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md §7.7·§8.1, Assets/Scripts/Manager/DataManager.cs, Assets/Scripts/Manager/DataManager_PartitionedSave.cs, Assets/Scripts/Data/SaveDtoSnapshot.cs] |
@@ -134,7 +139,8 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 - **village**: 마을 경제(`v.Population`)는 물리 NPC와 무관하며 추상 인구에서 소싱한다. NPC 관련 시스템은 Village Priority 대역(50-69)의 Population 밴드(55-59)를 쓴다. [src: Docs/npc/VILLAGE_NPC_BOUNDARY_DESIGN.md §2, Docs/npc/NPC_ACTIVITY_DESIGN.md §12]
 - **손제작 마을(연대기 미연결, `SettlementId<0`)**: 초기 인구 배분에서 최소 가중치(1)로 밀려 0명이 되기 쉬워, `EnsureHandcraftedVillageQuota`가 물리 NPC 1명을 하한 보장한다(전역 총량은 최다 절차 마을에서 1명 이관). 대화 컨텍스트는 연대기 정착지 스냅샷이 없으므로 `VillageProfile.Race`로 홈 종족 정체성을 접지한다(관계·연대기 기반 sentiment는 없음 — solo 배치 결과. 향수 소망 후보는 2026-10-10 소망 스파이크와 함께 지웠다). [src: Assets/Scripts/Manager/NpcManager.cs (EnsureHandcraftedVillageQuota), Assets/Scripts/Npc/Narrative/NpcDialogueContextBuilder.cs (settlementId<0 폴백)]
 - **WORLD_EVENT**: 원정 결과 `EventTriggered` → 이벤트 디렉터 핸드오프. `Reunion` 소망 × "가족 구출 원정"(§3-E) 교차. [src: NPC_ACTIVITY §9, QUEST_SYSTEM §경계]
-- **아키텍처 관례**: 영속 관계·활동 상태의 정본은 `NpcManager` + `WorldData`/`NpcSaveData`다. 실체화 Hunt의 기본 AI만 멈추기 위해 `NpcActivityPausedTag`를 일시 ECS 태그로 사용한다. [src: Assets/Scripts/Manager/NpcManager.cs, Assets/Scripts/Common/System/System_NpcSim.cs]
+- **아키텍처 관례**: 영속 관계·활동 상태의 정본은 `NpcManager` + `WorldData`/`NpcSaveData`다. 마을 밖에서 실체화된 이동 중 NPC의 기본 AI만 멈추기 위해 `NpcActivityPausedTag`를 일시 ECS 태그로 사용하고, 마을 안 걷기(출발·귀환·여관 가기)는 저장하지 않는 `NpcVillageWalkComponent`가 이동을 소유한다. "여관 안" 부상자는 새 저장 필드 없이 부상 상태와 소속 마을의 여관 기록으로 판정한다. [src: Assets/Scripts/Manager/NpcManager_VillageWalk.cs, Assets/Scripts/Manager/NpcManager_InnRecovery.cs, Assets/Scripts/Common/System/System_NpcSim.cs]
+- **village(여관)**: 원정 부상자 회복을 위해 사라진 터를 뺀 모든 마을에 여관이 있다. 마을 쪽 계약은 [village.md](village.md) §1·§3. [src: Docs/npc/NPC_SIMULATION_DESIGN.md §3.1 D15, Docs/village/VILLAGE_RUNTIME_DESIGN.md §4]
 
 ## 6. 작업별 읽기 가이드
 
@@ -143,6 +149,7 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 | 관계·선물 루프 / 상호작용 구현 | interactionSystem §1–4 → QUEST_SYSTEM(소망 걸치면) |
 | 소망(퀘스트) 구현·확장 | NARRATIVE_CONTENT 머리말(3단계 결정)·§2.2·§8.2 → QUEST_SYSTEM §2.2(상태)·§8.2(대상 보장) → interactionSystem §4.7 → `NpcManager_NarrativeWish` → 진단 `ARPG/Dungeon/Run Storage and Generation Diagnostics` [src: Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md §8.2, Assets/Scripts/Editor/DungeonRuntimeDiagnostics_Scenarios.cs] |
 | 현재 NPC 자율 활동 | NPC_SIMULATION §11.1 → `System_NpcSim` → `NpcActivityResolver` |
+| 마을 안 NPC 모습(걷기·여관) 변경 | NPC_SIMULATION §3.1(구현 기록 포함) → `NpcManager_VillageWalk`·`NpcManager_InnRecovery` → 진단 `ARPG/Village/Run V3 Initial Facilities Diagnostics`·`Run V4 Layout Diagnostics`, 플레이 모드 `ARPG/Save/Diagnostics/Validate Village Save Snapshot`·`Validate Npc Save Snapshot` [src: Docs/npc/NPC_SIMULATION_DESIGN.md §3.1 구현 기록] |
 | NPC 경제·야망·소문·절도 규칙 변경 | AMBITION §2 결정표 → 해당 §7 절 → NPC_SIMULATION §11.1(salt 정본) → 진단 `ARPG/Npc/Diagnostics/Ambition Sim` |
 | 단기 목표 추가·수치 조정 | OBJECTIVE §3 → §4~§7 → §12.1 → 시트 `NpcObjective`와 메뉴 `ARPG/Download Table/NpcObjectiveTable` → 진단 `ARPG/Npc/Diagnostics/Ambition Sim`(요약의 "단기 목표" 절) [src: Docs/npc/NPC_OBJECTIVE_DESIGN.md §4.1·§12.1, Assets/Scripts/Editor/NpcAmbitionSimDiagnostics_Objectives.cs] |
 | NPC 장비·상점 기본 장비 | NPC_SHOP_EQUIPMENT §2·§11 → NPC_EQUIPMENT §3.3·§4 → 진단 `ARPG/Diagnostics/Basic Items` |

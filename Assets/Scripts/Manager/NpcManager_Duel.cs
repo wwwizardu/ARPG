@@ -145,7 +145,9 @@ namespace ARPG.Npc
 
             // 원정 중 화면 안에서 대기하던 NPC(NpcActivityPausedTag)도 결투할 수 있다 [D19].
             // 결투 동안만 대기를 풀고, 활동 판정은 System_NpcSim이 결투 중 NPC를 건너뛰어 보류한다(§9). 종료 시 다시 대기시킨다.
+            // 마을 안을 걷던 NPC(출발·귀환·여관 가기)도 걷기를 멈춰 결투 AI가 돌게 한다 (NPC_SIMULATION_DESIGN §3.1).
             cm.RemoveComponent<NpcActivityPausedTag>(npcId);
+            CancelVillageWalk(npcId);
             cm.AddComponent(npcId, new NpcCombatEnabledTag());
 
             if (cm.TryGetComponent<AIComponent>(npcId, out AIComponent ai) == true &&
@@ -267,7 +269,8 @@ namespace ARPG.Npc
 
         /// <summary>
         /// 결투 뒤 NPC는 싸움을 멈추고 대기 상태(기본 AI 상태)로 돌아간다 (§7.2).
-        /// 전투 허용 태그는 동행 중이 아닌 NPC만 뗀다(동행 NPC는 이어지는 귀환 처리가 정리). 원정 대기 중이던 NPC는 다시 대기시킨다.
+        /// 전투 허용 태그는 동행 중이 아닌 NPC만 뗀다(동행 NPC는 이어지는 귀환 처리가 정리). 원정 중이던 NPC는 활동이 남아 있으면
+        /// 마을 밖은 다시 대기, 마을 안은 다시 걷기, 부상이면 여관 가기로 돌린다 (NPC_SIMULATION_DESIGN §3.1).
         /// </summary>
         private void RestoreNpcAfterDuel(int npcId)
         {
@@ -283,8 +286,8 @@ namespace ARPG.Npc
             AIStateHelper.StopMovement(npcId);
             AIStateHelper.TransitionToState(npcId, AIStateHelper.GetDefaultState(npcId));
 
-            // 원정(Hunt 경로·파티) 중 화면 안에서 대기하던 NPC는 활동이 아직 진행 중이면 다시 대기 상태로 둔다
-            PauseMaterializedNpcActivity(npcId);
+            // 원정(Hunt 경로·파티) 중이던 NPC는 활동이 아직 진행 중이면 마을 밖은 다시 대기, 마을 안은 다시 걷기로 둔다
+            RefreshMaterializedActivityPresentation(npcId);
         }
 
         /// <summary>

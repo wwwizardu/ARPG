@@ -3,7 +3,7 @@
 > **목표**: 개별 NPC(모험가)가 **각자 행동하고, 월드를 돌아다니며, 월드에 영향을 주는 이벤트를 일으킨다.** 그 행적이 illusion(도착 시 생성)이 아니라 **실제로 축적·영속**되게 한다.
 >
 > **상태 (2026-10-04 갱신)**: 🟩 **MVP 구현 완료** — NS1~NS3의 개인 LOD 시뮬·결과 반영·LOD 전환과 D9 전역 총량/점진 보충이 코드에 반영되었다. 현재 활동은 **Rest, Hunt(솔로·파티), Trade, DungeonDelve(솔로·파티)** 이고, Rest가 끝날 때 소문 교환과 NPC 간 절도 판정이 붙는다. 활동 동기·경제·소문·파티 자동 구성·부상 등급·절도 규칙은 [NPC_AMBITION_DESIGN.md](NPC_AMBITION_DESIGN.md)(P1·P2·P4, D85~D96)가 소유한다(§11.1). 개인 기억은 **중요 사건 이력 + 공동 활동 통계 + 종류별 최신 사연**으로 저장한다(§5.1). 강제 이주는 구현됐으며 자발적 이주·거주 이력·WORLD_EVENT 유발은 후속이다. 잔여 = 실측 기반 튜닝과 §9의 후속/범위 밖 항목.
-> **2026-10-25 결정(미구현)**: 마을 안 표현 개정 — 원정 출발·귀환은 걸어서, 부상 회복은 여관 안, 모든 마을에 여관, 여관 창의 NPC 목록에서 대화(§3.1 D13~D16).
+> **2026-10-25 결정·구현**: 마을 안 표현 개정 — 원정·이주 출발·귀환은 걸어서, 부상 회복은 여관 안, 모든 마을에 여관, 여관 창의 NPC 목록에서 대화(§3.1 D13~D16). 같은 날 구현했다(커밋 대기, 실제 플레이 확인 전).
 > ~~상태 (2026-07-13): 현재 활동 범위는 Rest, 솔로 Hunt, Hunt 파티~~
 >
 > **이 문서의 위치**: NPC "시뮬레이션 **기반(substrate)**" — 개별 NPC를 어느 LOD 층위에서·어떻게 시뮬할지. 그 위에서 돌아가는 **활동 내용(원정 종류·파티·결과 롤)** 은 [NPC_ACTIVITY_DESIGN.md](NPC_ACTIVITY_DESIGN.md)가 담당한다. 본 문서는 NPC_ACTIVITY의 부품(`VentureState`/`RollOutcome`/`ScoreActivity`)을 **"개인·LOD무관"으로 승격**해 재사용한다(§10 supersession).
@@ -59,16 +59,17 @@ Phase A~D로 마을은 자라지만, 스폰된 NPC는 **개별 이동 AI(Patrol)
 | **멀리 (offscreen)** | 그 외 모든 모험가 | 경량 상태 레코드(`NpcSaveData` 확장) | coarse 활동 상태머신 tick(§4), 발진·판정·이벤트 유발 | O(틱 예산) — 시간분할 |
 
 **전환** (정착지 fold-back과 동형):
-- **멀리→근처 (승격)**: 청크 활성 → 오프스크린 상태 그대로 ECS 엔티티 스폰. 위치 = 그 시점 **analytic 좌표**(정착지에 있으면 노드 위치, 이동 중이면 `lerp` 지점, D11). **이동 중이던 NPC는 그 자리에 정지**해 상호작용 대기(배회 안 함 — 지나가버리면 조우 의미 없음). 단, 그 자리가 마을 안이면 정지 대신 걷고, 여관 안 부상자는 승격하지 않는다(§3.1 D13·D14, 2026-10-25 결정·미구현).
+- **멀리→근처 (승격)**: 청크 활성 → 오프스크린 상태 그대로 ECS 엔티티 스폰. 위치 = 그 시점 **analytic 좌표**(정착지에 있으면 노드 위치, 이동 중이면 `lerp` 지점, D11). **이동 중이던 NPC는 그 자리에 정지**해 상호작용 대기(배회 안 함 — 지나가버리면 조우 의미 없음). 단, 그 자리가 마을 안이면 정지 대신 걷고, 여관 안 부상자는 승격하지 않는다(§3.1 D13·D14, 2026-10-25 구현).
 - **근처→멀리 (강등)**: 청크 비활성 → ECS 파괴, 현재 위치·상태를 오프스크린 레코드로 접어 넣고 tick 재개. **정지했던 이동 NPC는 현재 위치에서 목적지로 이동 재개**(ETA 재계산).
 
 > 정착지 LOD(추상 인구 ↔ 실체화)와 **별개 층**이다. 정착지 경제 인구는 여전히 추상 숫자(D3), NPC는 그 위에서 개별로 산다.
 
-### 3.1 마을 안 표현 — 원정 출발·귀환, 부상 회복은 여관 (2026-10-25 결정, 미구현)
+### 3.1 마을 안 표현 — 원정 출발·귀환, 부상 회복은 여관 (2026-10-25 결정·구현)
 
 > 사용자 결정(2026-10-25): 마을 안에서 NPC가 멈춰 서 있지 않게 한다. 결과 판정·난수·치료 규칙·저장 형식은 바꾸지 않고 **보이는 모습만** 바꾼다. 게임 1시간 = 실제 60초다. [src: Assets/Scripts/Manager/TimeManager.cs]
+> 같은 날 구현했다. 구현하면서 정한 세부와 검증은 아래 "구현 기록"에 있다.
 
-**지금**
+**바뀌기 전 (2026-10-25 구현 이전)**
 
 | 경우 | 모습 | 실제 시간 |
 |---|---|---|
@@ -79,7 +80,7 @@ Phase A~D로 마을은 자라지만, 스폰된 NPC는 **개별 이동 AI(Patrol)
 
 [src: Assets/Scripts/Manager/NpcManager.cs `PauseMaterializedActivity`·`OnChunkActivated`·`UpdateOffscreenNpcPosition`, Assets/Scripts/Common/System/System_NpcSim.cs `StartNextActivity`·`ResolveHunt`·`ResolvePartyHunt`, Assets/Scripts/Manager/NpcManager_Delve.cs]
 
-여관은 Hamlet 단계부터 생기고, 가장 작은 마을(Settlement)과 시작 마을(BaseTown)에는 보장되지 않는다. 여관 창(`UIInn`)에는 휴식·세이브 스텁과 "무인 여관" 안내 칸뿐이다. [src: Assets/Scripts/Village/VillageGrowthPlan.cs `CreatePlan`, Assets/Scripts/History/HistoryManager.cs, Assets/Scripts/UI/UIInn.cs]
+여관은 Hamlet 단계부터 생겼고, 가장 작은 마을(Settlement)과 시작 마을(BaseTown)에는 보장되지 않았다. 여관 창(`UIInn`)에는 휴식·세이브 스텁과 "무인 여관" 안내 칸뿐이었다. [src: Assets/Scripts/Village/VillageGrowthPlan.cs `CreatePlan`, Assets/Scripts/History/HistoryManager.cs, Assets/Scripts/UI/UIInn.cs]
 
 **결정**
 
@@ -109,6 +110,7 @@ Phase A~D로 마을은 자라지만, 스폰된 NPC는 **개별 이동 AI(Patrol)
   - 파티는 파티원이 각자 같은 방향으로 걷고 각자 강등한다. 강등 뒤 위치는 지금처럼 파티 경로로 계산한다.
   - 길이 막히거나(문이 닫힘 등) 제한 시간을 넘기면 그 자리에서 강등한다.
 - **귀환**: 화면 밖 NPC의 원정이 성공·실패·도망으로 끝났을 때 귀환점이 활성 청크면, 귀환 경로 쪽 화면 바로 밖 빈 칸에서 실체화해 귀환점까지 걷고, 도착하면 기본 AI로 돌아간다. 그런 칸을 못 찾으면 지금처럼 다음 청크 활성화 때 나타난다. 부상자는 걷지 않고 여관 안으로 간다(D13).
+- **이주 도착도 귀환과 같다** (2026-10-25 구현 중 사용자 결정): 화면 밖 NPC가 이주(`Relocate`) 목적지 마을에 도착했을 때 그 자리가 활성 청크면, 출발지 쪽 화면 바로 밖에서 실체화해 도착점까지 걷는다. 이주 출발은 원래 화면 안 NPC에서 시작하지 않으므로(AMBITION D140, `TryStartRelocation`) 출발 걷기는 실제로 원정(Hunt·Delve)에만 생긴다. 이동 중 실체화에서는 이주가 편도라 도착점 쪽에 더 가까우면 오는 구간으로 본다.
 - **승격 위치가 마을 안일 때**: 청크 활성화로 이동 중 NPC를 실체화했는데 그 자리가 마을 영역 안이면, 정지(D11) 대신 가는 구간이면 출발 걷기, 돌아오는 구간이면 귀환점까지 걷기를 한다.
 - 마을 밖에서 실체화된 이동 중 NPC는 지금처럼 그 자리에 멈춰 조우를 기다린다(D11, [NPC_COMBAT_DESIGN](NPC_COMBAT_DESIGN.md) §3.1 예외 포함).
 - 결과 난수는 `OutcomeSeedGameTime` 기준이라 걷기·강등 시점의 영향을 받지 않는다. 도착 시각은 강등 때 다시 계산하는 지금 동작 그대로다.
@@ -122,7 +124,8 @@ Phase A~D로 마을은 자라지만, 스폰된 NPC는 **개별 이동 AI(Patrol)
 **D16 여관 NPC 목록과 대화**
 
 - `UIInn`의 안내 칸(`visitor-list`) 자리에 그 마을 소속 "여관 안" NPC를 회복이 빨리 끝나는 순으로 보여 준다. 한 줄 = 이름 · 남은 회복 시간. 없으면 "쉬고 있는 손님이 없습니다"를 보여 준다. 여관 세트(Bed + Hearth) 완성 여부와 관계없이 보여 준다.
-- 고르면 `UINpcInspect`를 그 NPC로 연다. 대화·서사 대화는 저장 데이터만 읽으므로 실체화 없이 된다. [src: Assets/Scripts/Npc/Narrative/ (ECS 컴포넌트 조회 없음), Assets/Scripts/UI/UINpcInspect.cs `RunDialogueAsync`]
+- 목록의 각 줄은 버튼(`Unity.AppUI.UI.Button`)으로 만든다. `UIManager`가 가진 `ControllerUIFocus`는 열린 창에서 버튼·토글 같은 컨트롤과 정해진 클래스의 칸만 모아 패드 방향키로 고르고 확인 버튼으로 누르게 한다. 그래서 버튼으로 만들면 패드 조작이 따로 손대지 않아도 된다. 버튼이 아닌 요소로 만들면 `ControllerUIFocus.Collect`의 클래스 목록에 추가해야 한다. 키 이름을 화면에 쓸 때는 고정 문자열 대신 `AR.s.UI.Input.Display("<액션>")`을 쓴다. [src: Assets/Scripts/UI/ControllerUIFocus.cs `Collect`·`Activate`, Assets/Scripts/Common/System/System_VillageInteractionPrompt.cs (커밋 664d37b)]
+- 고르면 `UINpcInspect`를 그 NPC로 연다. `UIManager.Show`가 기본 창이 아닌 UI Toolkit 창의 정렬값을 연 순서대로 올리므로(20 + 열린 창 수) 여관 창 위에 보인다. 대화·서사 대화는 저장 데이터만 읽으므로 실체화 없이 된다. [src: Assets/Scripts/Manager/UIManager.cs `Show`, Assets/Scripts/Npc/Narrative/ (ECS 컴포넌트 조회 없음), Assets/Scripts/UI/UINpcInspect.cs `RunDialogueAsync`]
 - NPC 창 보완:
   - **결투 버튼**: 실체화되지 않은 NPC면 숨긴다. 신청한 자리에서 싸우는 규칙(NPC_COMBAT D20)상 몸이 필요하다. NPC_COMBAT D19의 예외가 된다.
   - **성격 칸**: 지금은 ECS `NpcStatComponent`가 있는 NPC만 표시한다. 없으면 `NpcSaveData.NpcStat`으로 표시한다. [src: Assets/Scripts/UI/UINpcInspect.cs `RebuildPersonality`]
@@ -132,13 +135,67 @@ Phase A~D로 마을은 자라지만, 스폰된 NPC는 **개별 이동 AI(Patrol)
 
 **예시**: 사냥 갔던 로렌이 부상을 입는다. 화면 밖이었다면 바로 여관 안에 있고, 플레이어가 여관에서 상호작용하면 "로렌 — 회복까지 6시간"이 보이며 골라서 "호되게 당했소…"를 듣는다. 치료를 받았으면 8분, 안 받았으면 24분 뒤 여관 문에서 나온다. 같은 마을의 다른 NPC가 사냥을 고르면 마을 밖으로 걸어 나가 화면에서 사라지고, 사냥이 끝나면 화면 가장자리에서 걸어 들어온다.
 
-**구현 메모**
+**구현 메모 (설계 때)**
 
 - 걷기(여관 가기·출발·귀환)는 런타임 전용 ECS 컴포넌트와 시스템 하나가 이동을 소유한다. `System_NpcPickup`(이동 소유·제한 시간·길찾기 연속 실패 처리)을 본보기로 하고, `System_AI_Behavior`는 드랍 줍기처럼 이 컴포넌트가 있으면 건너뛴다. 저장하지 않는다 — 강등되면 사라지고, 다시 실체화될 때 D13·D14 규칙으로 다시 정한다.
 - 강등은 지금 청크 단위(`OnChunkDeactivated` → `SaveAndDeactivateNpc`)뿐이므로 NPC 하나를 강등하는 진입점이 필요하다. 실체화는 `SpawnNpc`가 이미 개별이다.
 - 여관 문 위치 = 여관 시설 엔티티 위치 근처 빈 칸(`CollisionUtil.TryFindNearestFree`).
 - 함께 고친 다른 문서: [NPC_COMBAT_DESIGN](NPC_COMBAT_DESIGN.md) D19(여관 안 NPC 결투 불가), [VILLAGE_RUNTIME_DESIGN](../village/VILLAGE_RUNTIME_DESIGN.md) §4·[VILLAGE_REWORK_PLAN](../village/VILLAGE_REWORK_PLAN.md) §3.3(여관 단계). 이 문서의 D11·§3 전환·§11.1 "LOD와 관측"에도 표시했다.
 - 진단·검증 범위는 구현 전에 정한다(AGENTS.md Validation). 여관 단계를 검사하는 유지 진단 — Village V3 Initial Facilities(Settlement 여관 0개 검사)와 V4 Layout(단계별 시설 배치) — 은 같은 변경에서 고친다.
+- 코드 대조: 커밋 664d37b(설정 UI·컨트롤러 입력, 2026-10-25) 기준으로 위에서 참조한 NPC·여관·마을 시설 코드와 유지 진단 파일이 바뀌지 않았음을 확인했다. 그 커밋에서 새로 따라야 할 것은 D16의 컨트롤러 포커스·키 표시 규칙뿐이다.
+
+**구현 기록 (2026-10-25, 커밋 대기)**
+
+어디에 있나:
+
+| 무엇 | 코드 |
+|---|---|
+| 걷기 상태 (출발·귀환·여관 가기, 저장 안 함) | `NpcVillageWalkComponent` — [src: Assets/Scripts/Common/Component/NpcVillageWalkComponent.cs] |
+| 걷기 진행·강등 판정 | `System_NpcVillageWalk` Priority 76, 월드 전용 — [src: Assets/Scripts/Common/System/System_NpcVillageWalk.cs] |
+| 출발·귀환·이동 중 실체화·결투 뒤 모습, 한 명 강등(`DemoteMaterializedNpc`) | [src: Assets/Scripts/Manager/NpcManager_VillageWalk.cs] |
+| "여관 안" 판정, 여관 창 목록, 회복 뒤 여관 문에서 나오기 | [src: Assets/Scripts/Manager/NpcManager_InnRecovery.cs] |
+| 여관 마을 판정·여관 문 위치·마을 영역 판정 (저장 기록 기준) | [src: Assets/Scripts/Village/VillageManager_Inn.cs] |
+| 여관 최소 보장·로드 보정 | `VillageInitialDevelopment.EnsureMinimumInn`, `HistoryManager.EnsureVillageInns` — [src: Assets/Scripts/Village/VillageInitialDevelopment.cs, Assets/Scripts/History/HistoryManager.cs] |
+| 화면 처리 호출 자리 | `System_NpcSim`(활동 시작·원정 종료·이주 도착·회복), `SpawnNpc`, 결투 시작·종료 — [src: Assets/Scripts/Common/System/System_NpcSim.cs, Assets/Scripts/Manager/NpcManager.cs, Assets/Scripts/Manager/NpcManager_Duel.cs] |
+
+구현하면서 정한 세부:
+
+| 항목 | 정한 내용 |
+|---|---|
+| 화면 밖 | 메인 카메라 직교 영역에 1.5칸 여유를 더한 사각형 밖 |
+| 화면 밖 지점 | 목표 쪽으로 화면을 벗어나는 점에서 3칸 더 간 칸. 활성 청크 안 빈 칸이어야 한다. 막히면 한 칸씩 더 나가 보고(최대 6칸), 그래도 없으면 방향을 ±25°·±50° 돌린다 |
+| 마을 영역 | 저장된 마을 경계(Bounds) 사각형. 경계가 아직 없으면 Stage 반경. 사라진 터를 포함한 모든 마을을 본다 |
+| 여관 찾기 | ECS 시설 엔티티 대신 마을 저장 기록에서 Inn 서비스이면서 배치된(좌표가 있는) 기록 |
+| 여관 문 | 여관 건물 가로 가운데의 바로 아래 칸. 막혔으면 활성 청크 안 가장 가까운 빈 칸 |
+| 제한 | 구간(지점 하나)당 40초, 길찾기 연속 실패 3초. 다음 지점을 다시 잡으면 구간 시간을 새로 센다 |
+| 실패 처리 | 출발·여관 가기는 그 자리에서 강등. 귀환은 화면 안에서 사라지지 않게 걷기만 끝내 그 자리에서 기본 AI. 활성 청크 밖으로 나간 귀환 NPC는 귀환점에 두고 강등 |
+| 귀환점이 이미 화면 밖 | 걷지 않고 귀환점에 바로 실체화 |
+| 걷기가 끝난 뒤 | 기본 AI 순찰은 실체화 자리(`SpawnPosition`) 주변을 돌므로 순찰 기준점을 도착 자리로 옮긴다. 결투로 끊긴 귀환은 귀환점을 기준점으로 둔다 |
+| 여관 창 한 줄 | 버튼 "이름 — 회복까지 N시간"(올림, 1시간 미만은 "곧 회복"). 목록은 스크롤 칸. 창을 열 때마다 다시 만든다 |
+| 여관 보장 시점 | `HistoryManager.Initialize`에서 매 부팅 — 새 게임은 시작 마을만 새로 생기고, 로드는 여관 없는 마을을 채운다 |
+
+설계와 다르게 구현한 점과 그 이유:
+
+- **부상 순간의 화면 처리는 `ApplyExpeditionWound` 안이 아니라 그 직후 `System_NpcSim`에서 한다.** 야망 시뮬 진단이 NPC 데이터를 복제해 `ApplyExpeditionWound`·`ResolveSoloDelve`·`CompleteRelocation`을 직접 부르는데, 복제본에도 저장된 `IsActive` 값이 들어와 그 안에서 ECS를 건드리면 실제 화면 NPC가 움직일 수 있다. 같은 틱이라 시점은 같다.
+- **귀환 실체화는 그 NPC의 판정이 다 끝난 뒤에 판단한다.** `System_NpcSim`은 원정을 마친 같은 틱에 다음 활동을 바로 고르므로, 곧바로 새 원정을 골랐으면 실체화하지 않는다. 실체화 중(비동기)에 새 원정을 골랐으면 만든 엔티티를 버린다. 귀환 실체화는 엔티티만 화면 밖에 만들고 저장 위치·청크 색인은 귀환점 그대로 둔다 — 같은 틱에 고른 새 원정의 출발점이 화면 가장자리로 바뀌지 않게 한다.
+- 이주 도착도 귀환과 같다(D14, 사용자 결정).
+
+알려진 영향 (결과·난수는 그대로):
+
+- 화면 안에서 출발한 원정은 강등 때 지금처럼 경로·도착 시각을 다시 계산하므로 길이가 달라진다. 사냥 목표가 출발지에서 8~16칸이라, 화면 밖까지 걸어 나간 만큼 줄거나 늘어 사냥 8시간이 약 4.5~9시간이 된다. 바뀌기 전에도 멈춰 서 있던 시간만큼 원정이 길어졌다. [src: Assets/Scripts/Npc/NpcActivityResolver.cs `GetHuntTargetPosition`, Assets/Scripts/Manager/NpcManager.cs `ResumeHuntPathFromCurrentPosition`]
+- 부상자는 마을에서 보이지 않는다. 라이브 세이브(게임 시각 약 69시간)를 로드했을 때 생존 NPC 2,401명 중 470명(약 20%)이 부상 중이었고 모두 "여관 안"으로 판정됐다.
+
+검증 (2026-10-25, 진단은 구현 전에 사용자가 고른 묶음):
+
+| 검사 | 결과 |
+|---|---|
+| Unity 컴파일, `dotnet build --no-restore` Runtime·Editor | 오류 0. 바꾼 파일에서 새 경고 0 |
+| Village V3 Initial Facilities | 27 통과 / 0 실패 — Settlement 여관 1개, 여관 최소 보장 6개 검사(새로 추가: 시작 마을 생성·반복·기존 여관 유지·구 원장 보정과 저장/복원·불일치 거부·테이블 누락) 포함 |
+| Village V4 Layout | 9 통과 / 0 실패 — Settlement~City 단계마다 여관 1개 포함 슬롯 배치(Settlement 여관 (103,48)) |
+| 라이브 세이브 로드 | 여관 보장으로 300개 마을 중 28곳에 여관 추가, 오류 0. 사라진 터 30곳 제외 전부 여관 마을. 시작 마을 여관은 로드 직후 배치됐고 나머지 268곳은 배치 대기 |
+| Validate Village / Npc Save Snapshot | 로드 직후와 약 2게임시간 실행 뒤 두 번 모두 PASS (마을 300 누락 0, NPC 2,401 누락 0·샤드 32/32 일치). 그 사이 화면 밖에서 사냥을 시작한 시작 마을 NPC 1명이 바로 강등되고 경로가 다시 계산된 것을 확인했다 |
+
+남은 확인: 실제 플레이 장면 — 걸어 나가기·걸어 들어오기·여관으로 걸어가기, 여관 창 목록·대화·결투 버튼 숨김, 패드로 목록 고르기. 플레이 모드 장면 확인은 이번 진단 묶음에서 뺐다.
 
 ---
 
@@ -383,7 +440,7 @@ phase 결과가 세계에 실제로 남는다 — 전부 기존 훅 재사용:
 
 #### LOD와 관측
 
-- 실체화된 Hunt NPC는 기본 AI 이동을 일시 정지하고, 오프스크린 전환 시 현재 좌표에서 목적지까지의 경로와 ETA를 다시 계산해 이어서 이동한다. (마을 안에서는 걸어서 출발·귀환하고 부상자는 여관에서 회복하도록 바꾸기로 결정 — §3.1, 2026-10-25, 미구현)
+- 마을 밖에서 실체화된 이동 중 NPC는 기본 AI 이동을 일시 정지하고, 오프스크린 전환 시 현재 좌표에서 목적지까지의 경로와 ETA를 다시 계산해 이어서 이동한다. 마을 안에서는 걸어서 출발·귀환하고, 부상자는 여관 안에서 회복한다(§3.1, 2026-10-25 구현).
 - 활성 NPC의 Hunt 결과는 모두 단일 토스트 알림으로 표시한다. 오프스크린 NPC는 토스트 덮어쓰기를 피하기 위해 현재 부상·사망만 알린다. 플레이어-NPC 친분도 게이트는 §9-12의 후속 작업이다.
 - `UINpcInspect`는 현재 활동, 남은 시간, 마지막 Hunt 결과와 성공 시 Food 획득량을 표시한다. 행적 목록은 보존된 중요 `Deeds`와 최신 절도 피해 1건을 최신순으로 표시한다. 관계 목록은 현재 호감도와 상대별 공동 활동 통계, 떠난 동료의 마지막 호감도·활동 기억, “고인 배우자 ○○” 같은 사망 관계 기억을 표시한다. 중상·사망·기본 장비 구매 업그레이드·던전 완료·결투·도둑의 발각 행적은 계속 보존하며, `AttackedWound`는 생성 경로가 P3·P5의 후속 작업이다. [src: Assets/Scripts/UI/UINpcInspect.cs, Assets/Scripts/Npc/NpcSaveData_PersonalStories.cs, Assets/Scripts/Manager/NpcManager_SharedActivities.cs]
 

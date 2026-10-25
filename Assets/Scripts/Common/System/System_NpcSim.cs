@@ -61,6 +61,19 @@ namespace ARPG.Systems
             if (AR.s.Npc.IsInPlayerDuel(entityId) == true)
                 return;
 
+            // 화면 밖에서 원정·이주를 마치고 돌아왔으면, 이 NPC의 판정(곧바로 고르는 다음 활동 포함)이 다 끝난 뒤
+            // 귀환점 쪽 화면 바로 밖에서 실체화해 걸어 들어오게 한다 (NPC_SIMULATION_DESIGN §3.1 D14).
+            if (AdvanceNpcActivityPhases(saveData, entityId, now, worldSeed, out Vector2 arrivedFrom) == true)
+                AR.s.Npc.TryMaterializeArrivingNpc(entityId, arrivedFrom);
+        }
+
+        /// <summary>활동 phase를 시간 순서대로 전진한다. 원정·이주가 이번 호출에서 끝났으면 true와 귀환 경로가 오는 쪽을 돌려준다.</summary>
+        private static bool AdvanceNpcActivityPhases(NpcSaveData saveData, int entityId, float now, int worldSeed,
+            out Vector2 arrivedFrom)
+        {
+            arrivedFrom = default;
+            bool arrived = false;
+
             // 평상시에는 now에서 다음 활동을 시작한다. 시간 점프 후에는 이전 phase 종료시각을
             // 다음 활동의 시작시각으로 사용해 과거 구간을 시간 순서대로 결제한다.
             float decisionTime = now;
@@ -68,9 +81,9 @@ namespace ARPG.Systems
             {
                 NpcActivityState activity = saveData.Activity;
                 if (activity.Phase == NpcActivityPhase.Dead)
-                    return;
+                    return arrived;
                 if (activity.PartyId >= 0)
-                    return;
+                    return arrived;
 
                 AR.s.Npc.UpdateSoloTravelPosition(entityId, saveData, now);
 
@@ -86,7 +99,7 @@ namespace ARPG.Systems
 
                 // 활동 중간에는 어떤 롤도 하지 않는다. 대부분의 라운드로빈 방문은 여기서 끝난다.
                 if (activity.PhaseEndGameTime > now)
-                    return;
+                    return arrived;
 
                 // 여기부터는 모든 경로가 이 NPC의 활동 상태를 바꾼다.
                 AR.s.Npc.MarkSaveDirty(entityId, NpcSaveGroup.ActivityTransition);
@@ -108,7 +121,8 @@ namespace ARPG.Systems
                     // "부상 회복 직후" 필요 판정의 기준 시각 (NPC_AMBITION_DESIGN §6.2)
                     activity.RecoveredGameTime = transitionTime;
                     saveData.LastSimGameTime = transitionTime;
-                    AR.s.Npc.ResumeMaterializedNpcActivity(entityId);
+                    // 여관 안에서 회복했으면 여관 문 앞에서 나온다 (NPC_SIMULATION_DESIGN §3.1 D13)
+                    AR.s.Npc.ApplyWoundRecoveredPresentation(entityId);
                     continue;
                 }
 
@@ -136,6 +150,8 @@ namespace ARPG.Systems
                 if (activity.Kind == NpcActivityKind.Hunt)
                 {
                     // Hunt는 종료 시점에 한 번의 결정론적 결과 롤을 수행한다.
+                    arrivedFrom = GetExpeditionFromPosition(activity);
+                    arrived = true;
                     ResolveHunt(saveData, entityId, transitionTime, worldSeed);
                     continue;
                 }
@@ -143,6 +159,8 @@ namespace ARPG.Systems
                 if (activity.Kind == NpcActivityKind.DungeonDelve)
                 {
                     // Delve도 종료 시점 1회 판정 (NPC_AMBITION_DESIGN §7.1, D55). 전리품·NPC 던전 완료까지 매니저가 확정한다.
+                    arrivedFrom = GetExpeditionFromPosition(activity);
+                    arrived = true;
                     ResolveDelve(saveData, entityId, transitionTime, worldSeed);
                     continue;
                 }
@@ -150,7 +168,11 @@ namespace ARPG.Systems
                 if (activity.Kind == NpcActivityKind.Relocate)
                 {
                     // 이주 도착 (D140): 소속·마을 명단을 목적지로 옮긴다. 진단과 같은 공용 메서드.
+                    // 도착도 귀환처럼 걸어 들어온다 (NPC_SIMULATION_DESIGN §3.1 D14, 2026-10-25 사용자 결정)
+                    arrivedFrom = GetExpeditionFromPosition(activity);
+                    arrived = true;
                     AR.s.Npc.CompleteRelocation(entityId, saveData, transitionTime);
+                    AR.s.Npc.ApplyExpeditionEndPresentation(entityId);
                     continue;
                 }
 
@@ -161,6 +183,17 @@ namespace ARPG.Systems
                 activity.PhaseEndGameTime = 0f;
                 saveData.LastSimGameTime = transitionTime;
             }
+            return arrived;
+        }
+
+        /// <summary>
+        /// 귀환 경로가 오는 쪽 = 원정 목표 지점. 강등 때 오는 구간으로 다시 계산돼 목표와 귀환점이 같아졌거나 편도(이주)면 출발 지점을 쓴다.
+        /// </summary>
+        private static Vector2 GetExpeditionFromPosition(NpcActivityState activity)
+        {
+            if ((activity.TargetPosition - activity.ReturnPosition).sqrMagnitude > 1f)
+                return activity.TargetPosition;
+            return activity.OriginPosition;
         }
 
         private static void StartNextActivity(NpcSaveData saveData, int entityId, float startGameTime, int worldSeed)
@@ -234,8 +267,9 @@ namespace ARPG.Systems
                 activity.OutcomeSeedGameTime = startGameTime;
             }
             saveData.LastSimGameTime = startGameTime;
+            // 화면 안 NPC는 멈추지 않고 걸어서 떠난다 (NPC_SIMULATION_DESIGN §3.1 D14)
             if (isExpedition)
-                AR.s.Npc.PauseMaterializedNpcActivity(entityId);
+                AR.s.Npc.ApplyActivityStartPresentation(entityId);
         }
 
         private static void StartPartyHunt(NpcPartyState party, float startGameTime, int worldSeed)
@@ -314,7 +348,8 @@ namespace ARPG.Systems
                 member.Activity.TargetKey = targetKey;
                 member.Activity.HasMovementPath = false;
                 member.LastSimGameTime = startGameTime;
-                AR.s.Npc.PauseMaterializedNpcPartyActivity(memberId);
+                // 화면 안 파티원은 각자 같은 방향으로 걸어서 떠나고 각자 강등된다 (D14). 강등 뒤 위치는 파티 경로가 정한다.
+                AR.s.Npc.ApplyActivityStartPresentation(memberId);
             }
 
             AR.s.Npc.UpdatePartyTravelPositions(party, startGameTime);
@@ -458,13 +493,18 @@ namespace ARPG.Systems
 
             AR.s.Npc.ApplyPartyRelationshipOutcome(memberIds, outcomes, successCount > 0, outcomeGameTime,
                 NpcActivityKind.Hunt);
+            Vector2 partyFrom = GetExpeditionFromPosition(partyActivity);
             for (int i = 0; i < members.Count; i++)
             {
                 int memberId = memberIds[i];
                 if (outcomes[i] == NpcHuntOutcome.Dead)
+                {
                     AR.s.Npc.MarkNpcDead(memberId, outcomeGameTime);
-                else
-                    AR.s.Npc.ResumeMaterializedNpcActivity(memberId);
+                    continue;
+                }
+                // 화면 안이면 부상자는 여관으로, 나머지는 기본 AI로. 화면 밖이면 귀환점 쪽에서 걸어 들어온다 (NPC_SIMULATION_DESIGN §3.1)
+                AR.s.Npc.ApplyExpeditionEndPresentation(memberId);
+                AR.s.Npc.TryMaterializeArrivingNpc(memberId, partyFrom);
             }
 
             NotifyPartyHuntOutcome(party, successCount, survivorCount, foodYield, threatId, threatWounded);
@@ -540,12 +580,14 @@ namespace ARPG.Systems
                     out _, out bool severe, null, threatId > 0 ? NamedThreatRules.SevereWoundChance : -1f, threatId);
                 if (threatId > 0)
                     AR.s.Npc.RecordNamedThreatEncounter(entityId, saveData, threatId, true, severe, outcomeGameTime);
+                // 화면 안 부상자는 여관 문으로 걸어가 들어간다. 화면 밖 부상자는 그대로 여관 안이다 (NPC_SIMULATION_DESIGN §3.1 D13)
+                AR.s.Npc.ApplyExpeditionEndPresentation(entityId);
                 return;
             }
 
             activity.Phase = NpcActivityPhase.Idle;
             activity.PhaseEndGameTime = 0f;
-            AR.s.Npc.ResumeMaterializedNpcActivity(entityId);
+            AR.s.Npc.ApplyExpeditionEndPresentation(entityId);
 
             if (outcome == NpcHuntOutcome.Success && saveData.VillageId >= 0)
             {
@@ -579,15 +621,15 @@ namespace ARPG.Systems
                 AR.s.Npc.MarkNpcDead(entityId, outcomeGameTime, report.DungeonId);
                 return;
             }
-            // 부상자는 회복이 끝날 때 재개한다 (Hunt와 같음)
-            if (outcome != NpcHuntOutcome.Wounded)
-                AR.s.Npc.ResumeMaterializedNpcActivity(entityId);
+            // 화면 안이면 부상자는 여관으로, 나머지는 기본 AI로 (Hunt와 같음, NPC_SIMULATION_DESIGN §3.1)
+            AR.s.Npc.ApplyExpeditionEndPresentation(entityId);
         }
 
         private static void ResolvePartyDelve(NpcPartyState party, float outcomeGameTime, int worldSeed)
         {
             int leaderId = party.LeaderId;
             int partySize = party.MemberIds.Count;
+            Vector2 partyFrom = GetExpeditionFromPosition(party.Activity);
             NpcDelveReport? report = AR.s.Npc.ResolvePartyDelve(party, outcomeGameTime, worldSeed);
             if (report == null)
                 return;
@@ -605,7 +647,9 @@ namespace ARPG.Systems
                     continue;
                 }
                 survivorCount++;
-                AR.s.Npc.ResumeMaterializedNpcActivity(memberId);
+                // 화면 안이면 부상자는 여관으로, 나머지는 기본 AI로. 화면 밖이면 귀환점 쪽에서 걸어 들어온다 (NPC_SIMULATION_DESIGN §3.1)
+                AR.s.Npc.ApplyExpeditionEndPresentation(memberId);
+                AR.s.Npc.TryMaterializeArrivingNpc(memberId, partyFrom);
             }
 
             NpcSaveData? leader = AR.s.Npc.GetSaveData(leaderId);

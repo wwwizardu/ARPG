@@ -24,13 +24,17 @@ namespace ARPG.Systems
             {
                 int entityId = behaviorPool.GetEntityId(i);
 
-                // 오프스크린 이동 중 승격된 NPC는 해당 위치에서 멈춰 조우를 기다린다.
+                // 마을 밖에서 오프스크린 이동 중 승격된 NPC는 해당 위치에서 멈춰 조우를 기다린다 (마을 안은 걷기, 아래).
                 // 청크 비활성화 시 엔티티와 태그가 함께 제거되어 오프스크린 경로가 다시 진행된다.
                 if (componentManager.HasComponent<NpcActivityPausedTag>(entityId))
                     continue;
 
                 // 드랍 줍기 중인 NPC는 System_NpcPickup이 이동을 소유한다 (NPC_COMBAT_DESIGN §6, B5)
                 if (componentManager.HasComponent<NpcPickupComponent>(entityId))
+                    continue;
+
+                // 마을 안을 걷는 NPC(원정 출발·귀환·여관 가기)는 System_NpcVillageWalk가 이동을 소유한다 (NPC_SIMULATION_DESIGN §3.1)
+                if (componentManager.HasComponent<NpcVillageWalkComponent>(entityId))
                     continue;
 
                 // 비활성 청크의 엔티티는 AI를 돌리지 않는다.

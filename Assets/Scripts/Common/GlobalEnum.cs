@@ -203,6 +203,7 @@ public class GlobalEnum
         SkillPropagation,    // OnSkillCommit/OnHit. Param1=SkillPropagationTable Id
         Knockback,           // OnHit. Param1=밀어내는 거리(칸), Param2=걸리는 시간(초). 판정 범위 중심에서 바깥으로 (SKILL_DESIGN §6.10)
         Pull,                // OnHit. Param1=끌어당기는 최대 거리(칸), Param2=걸리는 시간(초). 기준점을 넘지 않는다 (SKILL_DESIGN §6.10)
+        SummonMonster,       // OnSkillCommit. Param1=MonsterTable Id, Param2=한 번에 부르는 수 겸 동시 최대 수, Param3=생존 시간(초). 몬스터 시전자 전용 (SKILL_DESIGN §6.12)
     }
 
     /// <summary>

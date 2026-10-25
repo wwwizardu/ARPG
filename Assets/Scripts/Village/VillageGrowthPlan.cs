@@ -301,7 +301,9 @@ namespace ARPG.Village
         {
             List<VillageGrowthMilestone> milestones = new List<VillageGrowthMilestone>();
 
-            // Settlement (§3.3): 마을 중심 거점 + 기본 시장.
+            // Settlement (§3.3): 마을 중심 거점 + 기본 시장 + 여관/휴식소.
+            // 여관은 원정 부상자가 회복하는 곳이라 가장 작은 마을부터 둔다 (NPC_SIMULATION_DESIGN §3.1 D15, 2026-10-25 Hamlet에서 내림).
+            // 마일스톤 적용은 새 게임 때만 돌아서, 키가 바뀌어도 기존 세이브에 여관이 겹쳐 생기지 않는다.
             AddStageCaps(milestones, profile, VillageStage.Settlement);
             AddShopTier(milestones, VillageStage.Settlement, SHOP_TIER_SETTLEMENT);
             milestones.Add(new VillageGrowthMilestone(VillageStage.Settlement,
@@ -310,12 +312,12 @@ namespace ARPG.Village
             milestones.Add(new VillageGrowthMilestone(VillageStage.Settlement,
                 VillageGrowthRewardType.AddCoreFacility,
                 VillageInitialFacilityCatalog.MERCHANT_STALL_TABLE_ID, 1, 0, 0, 0, 0));
-
-            // Hamlet: 상호작용 가능한 여관/휴식소. (중심부 간격 축소는 V4 Layout 범위)
-            AddStageCaps(milestones, profile, VillageStage.Hamlet);
-            milestones.Add(new VillageGrowthMilestone(VillageStage.Hamlet,
+            milestones.Add(new VillageGrowthMilestone(VillageStage.Settlement,
                 VillageGrowthRewardType.AddCoreFacility,
                 VillageInitialFacilityCatalog.INN_TABLE_ID, 1, 0, 0, 0, 0));
+
+            // Hamlet: Cap만 늘린다. (중심부 간격 축소는 V4 Layout 범위)
+            AddStageCaps(milestones, profile, VillageStage.Hamlet);
 
             // Village: 주 특수 시설 Tier 1 + 지역 상점 프로필 활성화.
             AddStageCaps(milestones, profile, VillageStage.Village);

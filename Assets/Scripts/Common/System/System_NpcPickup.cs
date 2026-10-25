@@ -10,7 +10,7 @@ namespace ARPG.Systems
     /// NpcPickupComponent를 가진 NPC를 드랍 위치로 이동시키고, 도착하면 NpcManager.CompleteNpcPickup으로 줍기를 확정한다.
     /// 줍기 시작은 NpcManager.TryStartPickupNearestDrop(디버그 명령·이후 C1 배신 규칙)만 한다 — 평소 동행 중 자동 줍기는 없다(D16).
     /// 다음 경우에는 줍지 않고 취소한다: 대상 드랍이 사라짐(플레이어가 먼저 주움·컨텍스트 전환), NPC가 결투를 시작함,
-    /// 원정 대기(NpcActivityPausedTag)가 붙음, 제한 시간 초과, 길찾기 연속 실패.
+    /// 원정 대기(NpcActivityPausedTag)·마을 걷기(NpcVillageWalkComponent)가 붙음, 제한 시간 초과, 길찾기 연속 실패.
     /// </summary>
     public class System_NpcPickup : IFixedUpdateSystem
     {
@@ -59,6 +59,11 @@ namespace ARPG.Systems
                 if (cm.HasComponent<NpcActivityPausedTag>(npcId) == true)
                 {
                     AR.s.Npc.CancelNpcPickup(npcId, "원정 대기 전환");
+                    continue;
+                }
+                if (cm.HasComponent<NpcVillageWalkComponent>(npcId) == true)
+                {
+                    AR.s.Npc.CancelNpcPickup(npcId, "마을 걷기 전환");
                     continue;
                 }
                 if (AR.s.Item.IsContextDropSpawned(pickup.TargetItemInstanceId) == false)

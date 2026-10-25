@@ -69,6 +69,11 @@ namespace ARPG.Npc
                 message = "원정 중(화면 안 대기)인 NPC는 줍지 않습니다.";
                 return false;
             }
+            if (cm.HasComponent<NpcVillageWalkComponent>(npcId) == true)
+            {
+                message = "마을 안을 걸어가는 중(원정 출발·귀환·여관 가기)인 NPC는 줍지 않습니다.";
+                return false;
+            }
             if (cm.HasComponent<DuelComponent>(npcId) == true)
             {
                 message = "결투 중인 NPC는 줍지 않습니다.";

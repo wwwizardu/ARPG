@@ -35,6 +35,8 @@ namespace ARPG.History
                 EnsureNewGameMinimumForges();
                 EnsureNewGameBaseTownShops();
             }
+            // 새 게임(시작 마을)과 기존 세이브(로드) 모두 — "없으면 추가"라 매 부팅 적용해도 결과가 같다
+            EnsureVillageInns();
             RebuildSaveSnapshot();
         }
 
@@ -462,6 +464,42 @@ namespace ARPG.History
                     Debug.LogError($"[VillageBootstrap] 시작 마을 상점 보장 실패: {error}");
                 }
             }
+        }
+
+        /// <summary>
+        /// 사라진 터를 뺀 모든 마을에 여관을 보장한다 (NPC_SIMULATION_DESIGN §3.1 D15). 원정 부상자가 소속 마을 여관 안에서 회복한다.
+        /// 새 게임: 절차 마을은 성장 계획(Settlement 여관)이 이미 만들었으므로 시작 마을(BaseTown)만 새로 생긴다.
+        /// 기존 세이브: 여관 기록이 없는 마을에 완공·배치 대기 여관을 추가한다. 배치는 실체화 때 하고, 이미 실체화된 마을은 바로 재시도한다.
+        /// 저장 형식이 같아 세이브 버전은 올리지 않는다.
+        /// </summary>
+        private void EnsureVillageInns()
+        {
+            IReadOnlyList<VillageData> villages = AR.s.Village.GetAllVillages();
+            int created = 0;
+            int errors = 0;
+            for (int i = 0; i < villages.Count; i++)
+            {
+                VillageData village = villages[i];
+                if (AR.s.Village.IsAbandonedSite(village) == true)
+                    continue;
+
+                MinimumInnEnsureResult result = VillageInitialDevelopment.EnsureMinimumInn(village,
+                    AR.s.Data.GetBuildableItem, out string error);
+                if (result == MinimumInnEnsureResult.Created)
+                {
+                    created++;
+                    AR.s.Village.MarkSaveDirty(village.VillageId, ARPG.Data.VillageSaveGroup.Facilities);
+                    AR.s.Village.RetryPendingPlacements(village.VillageId);
+                }
+                else if (result == MinimumInnEnsureResult.DataError)
+                {
+                    errors++;
+                    Debug.LogError($"[VillageBootstrap] 여관 보장 실패: {error}");
+                }
+            }
+
+            if (created > 0 || errors > 0)
+                Debug.Log($"[VillageBootstrap] 여관 보장: villages={villages.Count}, created={created}, errors={errors}");
         }
 
         /// <summary>

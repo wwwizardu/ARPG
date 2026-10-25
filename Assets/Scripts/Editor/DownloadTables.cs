@@ -2193,6 +2193,19 @@ namespace ARPG.Editor
 
             if (table.EffectType == GlobalEnum.Stat.Knockback || table.EffectType == GlobalEnum.Stat.Pull)
                 ValidateForcedMoveEffect(table);
+            else if (table.EffectType == GlobalEnum.Stat.SummonMonster)
+                ValidateSummonMonsterEffect(table);
+        }
+
+        /// <summary>
+        /// 몬스터 소환 행 검사 (SKILL_DESIGN §6.12). 커밋 시점 액션이어야 하고 몬스터 Id·마릿수·생존 시간이 있어야 한다.
+        /// </summary>
+        private static void ValidateSummonMonsterEffect(SkillEffectTable table)
+        {
+            if (table.Kind != GlobalEnum.SkillEffectKind.EffectAction || table.Trigger != GlobalEnum.SkillTrigger.OnSkillCommit)
+                Debug.LogError($"[ParseSkillEffectTable] Id={table.Id}({table.Name}): SummonMonster는 Kind=EffectAction, Trigger=OnSkillCommit이어야 합니다. (Kind={table.Kind}, Trigger={table.Trigger})");
+            if (table.Param1 <= 0f || table.Param2 < 1f || table.Param3 <= 0f)
+                Debug.LogError($"[ParseSkillEffectTable] Id={table.Id}({table.Name}): SummonMonster는 Param1(MonsterTable Id)>0, Param2(마릿수)>=1, Param3(생존 시간)>0이어야 합니다. (Param1={table.Param1}, Param2={table.Param2}, Param3={table.Param3})");
         }
 
         /// <summary>
@@ -2219,6 +2232,7 @@ namespace ARPG.Editor
                 case GlobalEnum.Stat.SkillPropagation:
                 case GlobalEnum.Stat.Knockback:
                 case GlobalEnum.Stat.Pull:
+                case GlobalEnum.Stat.SummonMonster:
                     return GlobalEnum.SkillEffectKind.EffectAction;
                 default:
                     return GlobalEnum.SkillEffectKind.StatBonus;

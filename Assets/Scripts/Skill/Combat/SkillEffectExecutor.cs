@@ -79,6 +79,10 @@ namespace ARPG.Skill.Combat
                     ForcedMoveStarter.TryStartFromHit(effect, ctx);
                     break;
 
+                case GE.Stat.SummonMonster:
+                    ExecuteSummonMonster(effect, ref ctx);
+                    break;
+
                 default:
                     // 시트에서 Kind=EffectAction으로 분류됐는데 여기 case가 없음 = 미구현 액션.
                     Debug.LogWarning($"[SkillEffectExecutor] EffectAction case 누락: EffectType={effect.EffectType}, EffectId={effect.Id}");
@@ -111,6 +115,39 @@ namespace ARPG.Skill.Combat
 
             ctx.CancelOriginalCast = true;
             Debug.Log($"[SkillEffect] DelegateToTotem - Caster({ctx.OwnerEntityId}) → Totem({totemId}) casting SkillId({ctx.SkillId}) for {duration}s");
+        }
+
+        /// <summary>
+        /// 시전자 둘레에 몬스터를 부른다 (SKILL_DESIGN §6.12). 같은 효과로 부른 몬스터가 최대 수(Param2)보다 적으면 모자란 만큼만 부른다.
+        /// Param1: MonsterTable Id, Param2: 한 번에 부르는 수 겸 동시 최대 수, Param3: 생존 시간(초).
+        /// 소환 몬스터는 적 진영으로 생성되므로 몬스터 시전자 전용이다.
+        /// </summary>
+        private static void ExecuteSummonMonster(SkillEffectTable effect, ref SkillEffectContext ctx)
+        {
+            int monsterTableId = Mathf.RoundToInt(effect.Param1);
+            if (monsterTableId <= 0 || effect.Param3 <= 0f)
+            {
+                Debug.LogError($"[SkillEffect] SummonMonster requires Param1=MonsterTable Id and Param3=lifetime > 0. EffectId={effect.Id}");
+                return;
+            }
+
+            ComponentManager cm = AR.s.Component;
+            if (cm.HasComponent<MonsterTag>(ctx.OwnerEntityId) == false)
+            {
+                Debug.LogWarning($"[SkillEffect] SummonMonster is monster-only. Owner({ctx.OwnerEntityId}) EffectId={effect.Id}");
+                return;
+            }
+
+            if (cm.TryGetComponent<TransformComponent>(ctx.OwnerEntityId, out TransformComponent ownerTransform) == false)
+                return;
+
+            int spawnCount = MonsterSummonRules.GetMaxCount(effect)
+                - MonsterSummonRules.CountActiveSummons(ctx.OwnerEntityId, effect.Id);
+            for (int i = 0; i < spawnCount; i++)
+            {
+                MonsterSummonRules.TryPickPosition(ownerTransform.Position, out Vector2 position);
+                EntityFactory.CreateSummonedMonster(ctx.OwnerEntityId, effect.Id, monsterTableId, position, effect.Param3).Forget();
+            }
         }
 
         private static void ExecuteSkillPropagation(SkillEffectTable effect, ref SkillEffectContext ctx)

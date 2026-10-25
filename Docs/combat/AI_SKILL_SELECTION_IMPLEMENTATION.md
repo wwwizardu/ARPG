@@ -91,6 +91,7 @@ public static bool GetSkillCommandComponent(int slotIndex, int entityId, Vector2
 - `Start`, `Process`, `End` 동안에는 소유자가 `UseSkill` 상태이므로 추첨과 다음 명령 예약을 하지 않는다. 후딜까지 완료되어 `Normal`로 돌아온 뒤 다음 AI 틱에서 선택한다.
 - 이미 `SkillCommandComponent`가 있으면 처리될 때까지 다시 추첨하거나 명령을 덮어쓰지 않는다.
 - 가중치는 해당 시점의 쿨타임·사거리 조건을 만족하는 후보끼리 적용한다. 두 후보가 모두 사용 가능할 때만 80:20이 80%:20%가 된다.
+- 그래서 주 공격에 쿨타임이 있으면 그 쿨타임 동안 쓸 수 있는 스킬이 보조 스킬뿐이라, 보조 스킬은 가중치와 상관없이 자기 쿨타임이 찰 때마다 나간다. 보조 스킬을 가중치대로 드물게 쓰게 하려면 주 공격은 쿨타임 0으로 두고 시전 시간(Process·End)으로 속도를 정한다. 예: 몬스터 평타(2), 고블린 주술사 화염탄(204, 2026-10-25 — SKILL_DESIGN §6.12).
 
 ### 후보 제외 조건 (`IsFireCandidate`)
 
@@ -98,8 +99,9 @@ public static bool GetSkillCommandComponent(int slotIndex, int entityId, Vector2
 2. 스킬 엔티티 존재 안 함
 3. `SkillStateComponent.IsRunning == true`
 4. `SkillStateComponent.IsCooldownReady == false`
-5. `sqrDistance > (attacker.HitRadius + SkillRangeMax + target.HitRadius)²` (유효 사거리 초과)
-6. `sqrDistance < SkillRangeMin²` (너무 가까움 — 중심거리 기준, 몸 반경 보정 없음)
+5. 소환 스킬(`SkillComponent.SummonEffectId > 0`)이고 같은 효과로 부른 몬스터가 최대 수만큼 살아 있음 (`MonsterSummonRules.IsAtCapacity`, SKILL_DESIGN §6.12)
+6. `sqrDistance > (attacker.HitRadius + SkillRangeMax + target.HitRadius)²` (유효 사거리 초과)
+7. `sqrDistance < SkillRangeMin²` (너무 가까움 — 중심거리 기준, 몸 반경 보정 없음)
 
 ### 알고리즘 (2-pass)
 

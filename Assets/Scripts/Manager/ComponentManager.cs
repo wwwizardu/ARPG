@@ -90,6 +90,7 @@ namespace ARPG.Component
             { typeof(NamedThreatComponent), 4 },        // 네임드 위협 엔티티 (마을당 1마리, 플레이어 근처만 실체화 — NAMED_THREAT §12.1)
             { typeof(MonsterAffixComponent), 256 },     // 접사가 있는 몬스터 (필드 몬스터의 약 27%, 등급 컴포넌트와 같은 상한)
             { typeof(SpawnHpRefillTag), 64 },           // 접사 몬스터 스폰 직후 첫 재계산까지만 존재
+            { typeof(SummonedMonsterComponent), 32 },   // 소환된 몬스터 (주술사 1마리당 최대 2, 12초 일시 존재 — SKILL_DESIGN §6.12)
 
             // 적게 사용되는 컴포넌트 (스킬 엔티티용)
             { typeof(SkillComponent), 50 },
@@ -138,6 +139,7 @@ namespace ARPG.Component
             { typeof(NpcCompanionComponent), 8 },  // 동행 추종 NPC (v1은 1명)
             { typeof(DuelComponent), 4 },          // 결투 참가자 (플레이어↔NPC 1건 = 2개)
             { typeof(NpcPickupComponent), 8 },     // 드랍 줍기 중인 NPC (디버그·C1 배신 규칙 호출, 동시에 소수)
+            { typeof(NpcVillageWalkComponent), 64 }, // 마을 안을 걷는 NPC (원정 출발·귀환·여관 가기, 화면 근처 마을 NPC 수 이하)
             { typeof(VillageStorageComponent), 32 },   // 마을 1개당 1개, 현재 <10, 여유 32
             { typeof(VillageComponent), 32 },          // 마을 1개당 1개 (Phase C: Stage/Bounds/Threat)
             { typeof(WallPlanRequestTag), 32 },        // Stage 3 도달 시 부착, 처리 후 제거

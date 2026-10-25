@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
-using ARPG.AI;
 using ARPG.Component;
 using ARPG.Creature;
 using ARPG.Factory;
@@ -367,6 +366,10 @@ namespace ARPG.Npc
                     continue;
 
                 if (saveData.Condition == CharacterConditions.Dead)
+                    continue;
+
+                // 여관 안에서 회복 중인 부상자는 실체화하지 않는다 — 회복이 끝나면 여관 문에서 나온다 (NPC_SIMULATION_DESIGN §3.1 D13)
+                if (IsRecoveringInInn(saveData) == true)
                     continue;
 
                 SpawnNpc(entityId, saveData).Forget();
@@ -743,8 +746,10 @@ namespace ARPG.Npc
         ///   1) 생성 전에 스폰 위치를 확정 (막힌 자리면 프리팹 인스턴스화 자체를 하지 않음)
         ///   2) IsSpawning 플래그로 중복 호출 차단 (이중 스폰 방지)
         ///   3) CreateNpc 완료 후 청크 상태 재확인 → 비활성이면 GameObject 즉시 폐기 (orphan 방지)
+        /// 귀환 실체화(arrival)는 엔티티만 화면 바로 밖에 만들고 귀환점까지 걷게 한다. 저장 위치·청크 색인은 귀환점 그대로라
+        /// 생성이 취소돼도 되돌릴 것이 없다 (NPC_SIMULATION_DESIGN §3.1 D14).
         /// </summary>
-        private async UniTask SpawnNpc(int entityId, NpcSaveData saveData)
+        private async UniTask SpawnNpc(int entityId, NpcSaveData saveData, NpcArrivalSpawn? arrival = null)
         {
             if (AR.s.CurrentScene is GameScene == false)
                 return;
@@ -759,10 +764,16 @@ namespace ARPG.Npc
                 // 프리팹 인스턴스화와 장비 modifier 적용을 통째로 버리게 된다.
                 // 생성 후 검증과 입력값은 동일하다 — TransformComponent는 EntityBase.SetupEntityId가
                 // spawnPos3D로 만들고, moveRadius는 양쪽 다 NpcTable에서 나온다.
-                if (TryResolveNpcSpawnPosition(entityId, saveData) == false)
+                // 귀환 실체화 자리는 호출자가 활성 청크의 빈 칸으로 골랐다.
+                Vector2 spawnPosition = saveData.Position;
+                if (arrival.HasValue == true)
+                    spawnPosition = arrival.Value.SpawnPosition;
+                else if (TryResolveNpcSpawnPosition(entityId, saveData) == false)
                     return;
+                else
+                    spawnPosition = saveData.Position;
 
-                Vector3 spawnPos3D = new Vector3(saveData.Position.x, saveData.Position.y, -0.05f);
+                Vector3 spawnPos3D = new Vector3(spawnPosition.x, spawnPosition.y, -0.05f);
 
                 // 발급된 EntityId를 전달하여 동일한 ID로 엔티티 생성. saveData를 같이 넘겨 장비 modifier도 복원.
                 var (createdId, entity) = await EntityFactory.CreateNpc(saveData.NpcTableId, spawnPos3D, _npcParent, entityId, saveData);
@@ -773,9 +784,11 @@ namespace ARPG.Npc
                 if (createdId < 0 || entity == null)
                     return;
 
-                // await 도중 청크가 비활성화되었으면 GameObject 폐기 (orphan 방지)
+                // await 도중 청크가 비활성화되었으면 GameObject 폐기 (orphan 방지).
+                // 귀환 실체화는 그 사이 새 원정을 떠났거나 부상·사망했으면 보여 줄 귀환이 없으므로 같이 폐기한다.
                 Vector2Int chunkCoord = PositionToChunk(saveData.Position);
-                if (AR.s.WorldMap == null || AR.s.WorldMap.IsChunkActive(chunkCoord) == false)
+                if (AR.s.WorldMap == null || AR.s.WorldMap.IsChunkActive(chunkCoord) == false ||
+                    (arrival.HasValue == true && IsArrivalSpawnStillValid(entityId, saveData, spawnPosition) == false))
                 {
                     AR.s.Entity.DestroyEntity(createdId, allowRecycle: false, keepRegistered: true);
                     if (entity != null)
@@ -786,8 +799,6 @@ namespace ARPG.Npc
                 // NpcTag는 EntityFactory.CreateNpc가 AI 컴포넌트 부착 전에 추가함 (isNpc 판정용)
                 EntityFactory.AddActivationComponent(createdId, _activationDistance, _deactivationDistance);
 
-                PauseMaterializedActivity(createdId, saveData);
-
                 // 마을 데이터 복원
                 if (AR.s.Component.TryGetComponent<NpcVillageComponent>(createdId, out var village))
                 {
@@ -797,6 +808,14 @@ namespace ARPG.Npc
 
                 saveData.EntityId = createdId;
                 saveData.IsActive = true;
+
+                // 마을 안 모습 (NPC_SIMULATION_DESIGN §3.1): 귀환은 귀환점까지 걷기, 그 밖에는 활동 상태로 정한다
+                // (이동 중 마을 안 = 걷기, 마을 밖 = 조우 대기 D11, 부상 = 여관 가기). 강등할 수 있도록 IsActive 뒤에 부른다.
+                if (arrival.HasValue == true)
+                    BeginVillageWalk(createdId, NpcVillageWalkKind.Return, arrival.Value.WalkTarget,
+                        arrival.Value.WalkTarget);
+                else
+                    ApplyMaterializedPresentation(createdId, saveData);
             }
             finally
             {
@@ -886,26 +905,6 @@ namespace ARPG.Npc
 
             // 실체화 중에 산 업그레이드 장비를 ECS가 없어진 지금 장착한다 (NPC_AMBITION_DESIGN §7.2, NPC_SHOP_EQUIPMENT D119)
             ApplyDeferredPurchaseUpgrades(entityId, saveData);
-        }
-
-        private static void PauseMaterializedActivity(int entityId, NpcSaveData saveData)
-        {
-            NpcActivityState activity = saveData.Activity;
-            if (activity.PartyId >= 0)
-            {
-                AR.s.Component.AddComponent(entityId, new NpcActivityPausedTag());
-                AIStateHelper.StopMovement(entityId);
-                return;
-            }
-            // 이동 경로가 있는 활동(원정 Hunt·DungeonDelve, 이주)만 조우 대기로 멈춘다 — 같은 analytic 경로 표현을 쓴다 (NPC_AMBITION §7.1, D140)
-            if (NpcActivityResolver.HasTravelPath(activity.Kind) == false || activity.HasMovementPath == false)
-                return;
-            if (activity.PhaseEndGameTime <= AR.s.Time.CurrentGameTime)
-                return;
-
-            // Patrol이 새 스폰 직후 위치를 떠나지 않도록 AI/경로 이동을 중지한다.
-            AR.s.Component.AddComponent(entityId, new NpcActivityPausedTag());
-            AIStateHelper.StopMovement(entityId);
         }
 
         private void ResumeHuntPathFromCurrentPosition(NpcSaveData saveData, float now)
@@ -1678,16 +1677,6 @@ namespace ARPG.Npc
             return false;
         }
 
-        public void PauseMaterializedNpcPartyActivity(int entityId)
-        {
-            if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false ||
-                saveData.IsActive == false)
-                return;
-
-            AR.s.Component.AddComponent(entityId, new NpcActivityPausedTag());
-            AIStateHelper.StopMovement(entityId);
-        }
-
         /// <summary>
         /// 시간분할 NPC 시뮬레이션용 다음 NPC를 결정론적 순서로 반환한다.
         /// 활성 NPC도 같은 활동 시계로 처리하되, 위치 표현만 ECS 조우 상태에 맡긴다.
@@ -1723,20 +1712,9 @@ namespace ARPG.Npc
         }
 
         /// <summary>
-        /// 활성 청크 NPC가 Hunt를 시작하면 그 자리에서 AI를 정지시켜 조우 상태로 만든다.
-        /// 오프스크린 NPC는 다음 승격 시 SpawnNpc에서 같은 처리를 받는다.
+        /// 활동 결과가 확정된 활성 NPC의 조우 대기 태그를 제거해 기본 AI를 재개한다.
+        /// 게임의 원정·이주 종료 화면 처리는 ApplyExpeditionEndPresentation이 맡는다 — 이 메서드는 진단과 함께 쓰는 CompleteRelocation 경로용이다.
         /// </summary>
-        public void PauseMaterializedNpcActivity(int entityId)
-        {
-            if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)
-                return;
-            if (saveData.IsActive == false)
-                return;
-
-            PauseMaterializedActivity(entityId, saveData);
-        }
-
-        /// <summary>활동 결과가 확정된 활성 NPC의 조우 대기 태그를 제거해 기본 AI를 재개한다.</summary>
         public void ResumeMaterializedNpcActivity(int entityId)
         {
             if (_npcSaveDict.TryGetValue(entityId, out NpcSaveData? saveData) == false)

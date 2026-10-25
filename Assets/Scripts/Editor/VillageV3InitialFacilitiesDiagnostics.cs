@@ -40,6 +40,7 @@ namespace ARPG.EditorTools
             ValidateTierReplacement(resolver, passed, failed);
             ValidateExactlyOnce(resolver, passed, failed);
             ValidateMinimumBaseTownShop(resolver, passed, failed);
+            ValidateMinimumInn(resolver, passed, failed);
             ValidateSaveRoundTrip(resolver, passed, failed);
             ValidateZeroResourceAndNoTasks(resolver, passed, failed);
             ValidateNonInteractiveRejected(resolver, passed, failed);
@@ -194,6 +195,94 @@ namespace ARPG.EditorTools
                 "상점 테이블 누락 시 시설과 상권 Tier를 변경하지 않음", passed, failed);
         }
 
+        /// <summary>
+        /// 여관 최소 보장 (NPC_SIMULATION_DESIGN §3.1 D15). 새 게임 시작 마을과 기존 세이브 로드가 같은 함수를 쓴다.
+        /// </summary>
+        private static void ValidateMinimumInn(
+            Func<int, Tables.BuildableItemTable?> resolver,
+            List<string> passed, List<string> failed)
+        {
+            int innId = VillageInitialFacilityCatalog.INN_TABLE_ID;
+
+            // 시작 마을: Forge·상점 보장 뒤 여관이 없으면 배치 대기 완공 레코드 하나를 만든다.
+            VillageData baseTown = CreateVillage(20);
+            baseTown.SettlementId = -1;
+            VillageInitialDevelopment.EnsureMinimumForge(baseTown, resolver, out _);
+            VillageInitialDevelopment.EnsureMinimumShop(baseTown, resolver, out _);
+            MinimumInnEnsureResult first = VillageInitialDevelopment.EnsureMinimumInn(
+                baseTown, resolver, out string error);
+            PlacedObjectSaveData? inn = baseTown.PlacedObjects.Find(p => p.TableId == innId);
+            Check(first == MinimumInnEnsureResult.Created && error.Length == 0
+                && inn != null && inn.FacilityTier == 1 && inn.PlacementPending == true
+                && baseTown.PlacedObjects.Count == 3
+                && VillageConstructionLedger.CountPlaced(baseTown, innId) == 1
+                && baseTown.ActiveBuildTasks.Count == 0
+                && baseTown.AppliedGrowthMilestones.Count == 0,
+                "여관이 없는 마을(시작 마을)에 여관 하나만 배치 대기 완공으로 추가함",
+                passed, failed);
+
+            MinimumInnEnsureResult repeated = VillageInitialDevelopment.EnsureMinimumInn(
+                baseTown, resolver, out _);
+            Check(repeated == MinimumInnEnsureResult.Unchanged
+                && baseTown.PlacedObjects.Count == 3
+                && VillageConstructionLedger.CountPlaced(baseTown, innId) == 1,
+                "여관 보장을 다시 적용해도 여관이 겹치지 않음(로드마다 적용 가능)", passed, failed);
+
+            // 성장 계획이 이미 여관을 만든 절차 마을은 그대로 둔다.
+            VillageData procedural = CreateVillage(21);
+            VillageInitialDevelopment.ApplyInitialMilestones(procedural, GetDwarfPlan(),
+                VillageStage.Town, resolver);
+            int proceduralCount = procedural.PlacedObjects.Count;
+            MinimumInnEnsureResult existing = VillageInitialDevelopment.EnsureMinimumInn(
+                procedural, resolver, out _);
+            Check(existing == MinimumInnEnsureResult.Unchanged
+                && procedural.PlacedObjects.Count == proceduralCount
+                && CountOf(procedural, innId) == 1,
+                "성장 계획으로 여관이 있는 마을은 변경하지 않음", passed, failed);
+
+            // 기존 세이브 보정: 여관 없는 구 Settlement 원장(허브·시장만)에 여관을 더하고, 저장/복원 뒤 다시 적용해도 같다.
+            VillageData legacy = CreateVillage(22);
+            ApplyCompletedFor(legacy, VillageInitialFacilityCatalog.VILLAGE_HUB_TABLE_ID, resolver);
+            ApplyCompletedFor(legacy, VillageInitialFacilityCatalog.MERCHANT_STALL_TABLE_ID, resolver);
+            MinimumInnEnsureResult backfilled = VillageInitialDevelopment.EnsureMinimumInn(
+                legacy, resolver, out _);
+            VillageData loaded = JsonConvert.DeserializeObject<VillageData>(
+                JsonConvert.SerializeObject(legacy))!;
+            MinimumInnEnsureResult restored = VillageInitialDevelopment.EnsureMinimumInn(
+                loaded, resolver, out _);
+            Check(backfilled == MinimumInnEnsureResult.Created
+                && restored == MinimumInnEnsureResult.Unchanged
+                && CountOf(loaded, innId) == 1
+                && VillageSimulationParity.CompareFixedState(legacy, loaded, out string _) == true,
+                "여관 없는 기존 마을 원장에 여관을 더하고 저장/복원 뒤 재적용에도 유지됨", passed, failed);
+
+            loaded.PlacedObjectTypeIds.Add(innId);
+            string beforeError = JsonConvert.SerializeObject(loaded);
+            MinimumInnEnsureResult invalid = VillageInitialDevelopment.EnsureMinimumInn(
+                loaded, resolver, out _);
+            Check(invalid == MinimumInnEnsureResult.DataError
+                && JsonConvert.SerializeObject(loaded) == beforeError,
+                "여관 원장 불일치는 상태 변경 없이 거부함", passed, failed);
+
+            VillageData missingTable = CreateVillage(23);
+            MinimumInnEnsureResult missing = VillageInitialDevelopment.EnsureMinimumInn(
+                missingTable, _ => null, out _);
+            Check(missing == MinimumInnEnsureResult.DataError
+                && missingTable.PlacedObjects.Count == 0,
+                "여관 테이블 누락 시 시설을 변경하지 않음", passed, failed);
+        }
+
+        private static void ApplyCompletedFor(VillageData village, int tableId,
+            Func<int, Tables.BuildableItemTable?> resolver)
+        {
+            Tables.BuildableItemTable? table = resolver(tableId);
+            if (table == null)
+                return;
+            VillageConstructionLedger.ApplyCompletedBuild(village, table,
+                VillageConstructionPosition.UnassignedTile,
+                VillageConstructionPosition.UnassignedTile);
+        }
+
         private static void ValidateFacilityCatalogContract(
             Func<int, Tables.BuildableItemTable?> resolver,
             List<string> passed, List<string> failed)
@@ -266,18 +355,19 @@ namespace ARPG.EditorTools
                 "Stage Cap 150을 빠짐없이 포함함",
                 passed, failed);
 
-            // Settlement 초기 Stage: 허브+시장만, 여관·특수 시설 없음.
+            // Settlement 초기 Stage: 허브+시장+여관, 특수 시설 없음.
+            // 여관은 원정 부상자가 회복하는 곳이라 Settlement부터 둔다 (NPC_SIMULATION_DESIGN §3.1 D15, 2026-10-25).
             VillageData settlement = CreateVillage(2);
             VillageInitialDevelopment.ApplyInitialMilestones(settlement, dwarfPlan,
                 VillageStage.Settlement, resolver);
             Check(CountOf(settlement, VillageInitialFacilityCatalog.VILLAGE_HUB_TABLE_ID) == 1
                 && CountOf(settlement, VillageInitialFacilityCatalog.MERCHANT_STALL_TABLE_ID) == 1
-                && CountOf(settlement, VillageInitialFacilityCatalog.INN_TABLE_ID) == 0
+                && CountOf(settlement, VillageInitialFacilityCatalog.INN_TABLE_ID) == 1
                 && CountOf(settlement, VillageInitialFacilityCatalog.FORGE_TABLE_ID) == 0
                 && settlement.ShopTier == VillageGrowthPlanCatalog.SHOP_TIER_SETTLEMENT
                 && GetCap(settlement, GlobalEnum.ItemType.Wood)
                     == VillageGrowthPlanCatalog.STAGE_BASE_CAP_SETTLEMENT,
-                "Settlement 초기 Stage는 중심 거점+기본 시장·상점 Tier 1·기본 Cap만 생성함(상위 Stage 결과 미포함)",
+                "Settlement 초기 Stage는 중심 거점+기본 시장+여관·상점 Tier 1·기본 Cap만 생성함(상위 Stage 결과 미포함)",
                 passed, failed);
 
             // 비-Dwarf 기본 명세: 특수 시설 없음 (기능 미확정 시설은 외형만 먼저 만들지 않음).

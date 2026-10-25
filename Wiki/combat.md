@@ -106,6 +106,20 @@ sources:
   - Assets/_BinaryData/TableData/DropTable.bytes
   - Assets/Scripts/Village/VillageManager.cs
   - Assets/_BinaryData/TableData/CharmModTierTable.bytes
+  - Docs/combat/AI_SKILL_SELECTION_IMPLEMENTATION.md
+  - Assets/Scripts/Skill/Combat/MonsterSummonRules.cs
+  - Assets/Scripts/Skill/Combat/SkillEffectExecutor.cs
+  - Assets/Scripts/Skill/Telegraph/SkillImpactTimingResolver.cs
+  - Assets/Scripts/Common/System/System_SummonedMonster.cs
+  - Assets/Scripts/Common/System/System_Lifetime.cs
+  - Assets/Scripts/Skill/Combat/SkillInterruptRule.cs
+  - Assets/Scripts/Common/System/System_AI_Perception.cs
+  - Assets/Scripts/Common/Component/SummonedMonsterComponent.cs
+  - Assets/Scripts/Common/Component/SkillComponent.cs
+  - Assets/Scripts/Common/Utility/SkillHelper.cs
+  - Assets/Scripts/Factory/EntityFactory.cs
+  - Assets/Scripts/Editor/AttackTelegraphBuildValidator.cs
+  - Assets/_BinaryData/TableData/MonsterTable.bytes
 last_synced: 2026-09-01
 last_updated: 2026-10-25
 status: implemented-contract-active-validation-pending
@@ -115,7 +129,7 @@ status: implemented-contract-active-validation-pending
 
 ## 한 줄 요약
 
-무기의 고정 기본 능력과 인스턴스별 고유 강화만 무기 캐시에 들어가며, 장비의 Implicit/Prefix/Postfix는 부위와 무관한 글로벌 Modifier로 합산된다. 미장착 인벤토리 장비의 Prefix/Postfix는 Tier 1 이상 제련소에서 랜덤 교체·추가할 수 있고, 스킬 공격 프로필은 변경된 옵션까지 태그에 맞춰 한 번 계산해 예상값과 실제 전투가 같은 값을 소비한다. [src: Docs/combat/combatSystem.md §장비 옵션 책임 경계·§스킬 공격 프로필 구성, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §0–§8, Assets/Scripts/Item/ItemEnchantmentService.cs, Assets/Scripts/Common/System/System_SkillAttackProfileCalculation.cs] 새로 만드는 장비의 Prefix/Postfix 티어(T1~T12)는 장비에 저장된 아이템 레벨로 정해진다(2026-10-11). [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §1, Assets/Scripts/Item/ItemLevelModTierRules.cs] 명중 시 넉백·당기기(2026-10-12 구현)와 땅 위 직선 돌진·넉백 저항(2026-10-13 구현, 첫 콘텐츠는 멧돼지 돌진)도 이 페이지 뒤쪽에 정리한다. [src: Docs/combat/SKILL_DESIGN.md §6.10·§6.11] 인벤토리 장비는 Shift를 누르고 있는 동안 현재 장착 아이템과 수치·옵션 차이를 비교하고, 비교 중 좌·우클릭으로 화면 왼쪽·오른쪽 칸에 바로 장착한다(2026-10-13 구현). [src: Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md, Assets/Scripts/UI/UICharacter.cs] 2026-10-21부터 장비에 일반·마법·희귀 등급과 품질(0~20)이 있고, 플레이어 드롭은 몬스터 레벨 구간표·아이템 수량·희귀도로 양과 질이 정해진다. 마법부여 티어도 아이템 레벨을 따른다(구현, 플레이 확인 전). [src: Docs/combat/ITEM_DROP_BALANCE_DESIGN.md 상태·§4–§8·§16] 2026-10-24부터 플레이어 레벨·능력치 포인트, 정확도 대 회피 적중 판정, 3×3 참 판과 참이 있다(구현, 플레이 확인 전, 아래 절). [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md 머리말, Assets/Scripts/Skill/Combat/HitChanceRules.cs, Assets/Scripts/Manager/PlayerManager_CharmBoard.cs] 2026-10-25부터 참도 장비처럼 일반·마법·희귀 등급과 접두·접미 옵션을 가지고, 옵션 값은 모양별로 직접 적는 참 값 표가 정하며, 3×3 참은 빠졌다(구현, 플레이 확인 전). [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md LV25·LV26·§6.3, Assets/Scripts/Item/CharmRules.cs]
+무기의 고정 기본 능력과 인스턴스별 고유 강화만 무기 캐시에 들어가며, 장비의 Implicit/Prefix/Postfix는 부위와 무관한 글로벌 Modifier로 합산된다. 미장착 인벤토리 장비의 Prefix/Postfix는 Tier 1 이상 제련소에서 랜덤 교체·추가할 수 있고, 스킬 공격 프로필은 변경된 옵션까지 태그에 맞춰 한 번 계산해 예상값과 실제 전투가 같은 값을 소비한다. [src: Docs/combat/combatSystem.md §장비 옵션 책임 경계·§스킬 공격 프로필 구성, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §0–§8, Assets/Scripts/Item/ItemEnchantmentService.cs, Assets/Scripts/Common/System/System_SkillAttackProfileCalculation.cs] 새로 만드는 장비의 Prefix/Postfix 티어(T1~T12)는 장비에 저장된 아이템 레벨로 정해진다(2026-10-11). [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §1, Assets/Scripts/Item/ItemLevelModTierRules.cs] 명중 시 넉백·당기기(2026-10-12 구현)와 땅 위 직선 돌진·넉백 저항(2026-10-13 구현, 첫 콘텐츠는 멧돼지 돌진)도 이 페이지 뒤쪽에 정리한다. [src: Docs/combat/SKILL_DESIGN.md §6.10·§6.11] 인벤토리 장비는 Shift를 누르고 있는 동안 현재 장착 아이템과 수치·옵션 차이를 비교하고, 비교 중 좌·우클릭으로 화면 왼쪽·오른쪽 칸에 바로 장착한다(2026-10-13 구현). [src: Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md, Assets/Scripts/UI/UICharacter.cs] 2026-10-21부터 장비에 일반·마법·희귀 등급과 품질(0~20)이 있고, 플레이어 드롭은 몬스터 레벨 구간표·아이템 수량·희귀도로 양과 질이 정해진다. 마법부여 티어도 아이템 레벨을 따른다(구현, 플레이 확인 전). [src: Docs/combat/ITEM_DROP_BALANCE_DESIGN.md 상태·§4–§8·§16] 2026-10-24부터 플레이어 레벨·능력치 포인트, 정확도 대 회피 적중 판정, 3×3 참 판과 참이 있다(구현, 플레이 확인 전, 아래 절). [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md 머리말, Assets/Scripts/Skill/Combat/HitChanceRules.cs, Assets/Scripts/Manager/PlayerManager_CharmBoard.cs] 2026-10-25부터 참도 장비처럼 일반·마법·희귀 등급과 접두·접미 옵션을 가지고, 옵션 값은 모양별로 직접 적는 참 값 표가 정하며, 3×3 참은 빠졌다(구현, 플레이 확인 전). [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md LV25·LV26·§6.3, Assets/Scripts/Item/CharmRules.cs] 같은 날 몬스터가 다른 몬스터를 부르는 소환 효과가 생겼고, 첫 사용처는 고블린 주술사가 화염임프를 부르는 보조 기술이다(구현, 플레이 확인 전, 아래 절). [src: Docs/combat/SKILL_DESIGN.md §6.12]
 
 ## 문서 정본
 
@@ -350,6 +364,31 @@ FinalAttackSpeedPerSecond
 - **멧돼지 돌진(Skill 52)**: 멧돼지 전용 AI 6번(평타 70 : 돌진 30)이 쓴다. 사용 거리 2~4칸, 0.6초 준비(조준 45°/초, 제자리 `Locked`) → 0.5초에 6칸 → 0.8초 후딜, 쿨타임 6초, 피해 평타의 1.5배, 넉백 저항 켬, 맞으면 옆으로 2칸(1032). 처음 제안한 "0.4초 5칸·사용 2~5칸"은 최대 거리에서 출발하면 대상 앞에서 멈춰 관통이 안 돼 바꿨다. [src: Docs/combat/SKILL_DESIGN.md §4 M4, Assets/_BinaryData/TableData/SkillTable.bytes, Assets/_BinaryData/TableData/AiTable.bytes] [추론: 수치 변경 사유는 2026-10-13 작업 보고 기준]
 - **검증**: 2026-10-13 컴파일·단일 표 다운로드·공격 예고 빌드 검증과 PlayMode 측정을 통과했다. 준비 중 45°/초 회전, 준비 중 밀려 빗나감(경로가 약 2.5칸 비켜 감), 0.5초 6.00칸 일정 속도, 대상당 1회·옆 2칸 넉백·관통, 돌진 중 밀기 무시, 벽 앞 즉시 멈춤(4.19칸·0.36초), 돌진 중 피해를 확인했다. 손 조작 체감은 확인하지 않았다. [src: Docs/combat/SKILL_DESIGN.md §6.11 검증 결과]
 
+## 몬스터 소환
+
+2026-10-25 사용자 결정으로 구현했고 커밋·플레이 확인 전이다. 몬스터가 전투 중 다른 몬스터를 불러 앞을 막게 한다. 정본은 `SKILL_DESIGN.md` §6.12다. [src: Docs/combat/SKILL_DESIGN.md §6.12]
+
+**배경**: 몬스터 22종 중 14종이 같은 AI 1번(평타 80 : 점프 20)을 쓰고, 던전 보스 바위골렘(1008)도 그렇다. 원거리 5종의 주 공격은 같은 모양의 직선 발사체 한 발이다(독거미만 거미줄이 더 있다). 소환은 몬스터 전투를 다양하게 하려는 첫 작업이다. [src: Assets/_BinaryData/TableData/MonsterTable.bytes, Assets/_BinaryData/TableData/AiTable.bytes, Assets/_BinaryData/TableData/SkillTable.bytes] [추론: 작업 동기는 2026-10-25 사용자 요청 기준]
+
+**주 공격은 쿨타임 없이 긴 시전, 보조는 쿨타임** (PoE 방식): AI는 그 순간 쓸 수 있는 스킬끼리만 가중치를 비교한다. 그래서 주 공격에 쿨타임이 있으면 그 사이 남는 후보가 보조 스킬뿐이라, 보조 스킬은 가중치와 상관없이 자기 쿨타임이 찰 때마다 나간다. 보조 스킬을 드물게 쓰게 하려면 주 공격 쿨타임을 0으로 두고 시전 시간으로 속도를 정한다. 몬스터 평타(2)가 이미 이 방식이었다. [src: Docs/combat/AI_SKILL_SELECTION_IMPLEMENTATION.md §선택 시점, Docs/combat/SKILL_DESIGN.md §6.12 사용자 결정 1, Assets/Scripts/Common/Utility/SkillHelper.cs `PickFireSkill`·`IsFireCandidate`] 독거미(AI 5, 독액 쿨타임 0.5)의 거미줄도 같은 구조라 가중치 30과 상관없이 쿨타임마다 나갈 것이다. [추론: 같은 후보 규칙과 AiTable·SkillTable 값에서 유도, 실측하지 않음]
+
+| 항목 | 값 |
+|---|---|
+| 화염탄(204) | 쿨타임 0.5 → 0, 준비 1.0초(0.9초에 발사), 후딜 0.3초, 피해 3~5 → 5~8. 한 발 주기 약 0.8 → 1.3초, 초당 피해는 비슷 |
+| 소환(214) | 쿨타임 15초, 1.5초 동안 제자리(`Locked`)에서 외운 끝에 소환, 후딜 0.3초, 사거리 5(화염탄과 같게 해 교전 거리 그대로), 직접 타격 없음(`BaseDamageMul=0`) |
+| 소환 효과(1040) | 화염임프(1005) 한 번에 2마리, 같은 효과로 동시에 최대 2마리, 12초 뒤 소멸 |
+| AI 3(고블린 주술사) | 화염탄 80 / 소환 20. 소환 쿨타임이 찬 뒤 평균 4발쯤 더 쏘고 소환해 대략 20초에 1번 |
+
+[src: Docs/combat/SKILL_DESIGN.md §6.12 데이터, Assets/_BinaryData/TableData/SkillTable.bytes, Assets/_BinaryData/TableData/SkillEffectTable.bytes, Assets/_BinaryData/TableData/AiTable.bytes]
+
+- **데이터**: SkillEffect 행 `SummonMonster`(`EffectAction`·`OnSkillCommit`, Param1=MonsterTable Id·Param2=한 번에 부르는 수 겸 동시 최대 수·Param3=생존 시간). Tier 0이라 스킬 페이지로 드랍하지 않는다. 다운로드 검사가 Kind·Trigger와 세 칸 값을 확인한다. [src: Docs/combat/SKILL_DESIGN.md §6.12 데이터, Assets/Scripts/Editor/DownloadTables.cs `ValidateSummonMonsterEffect`]
+- **발동 시점**: 직접 타격·발사체·장판이 모두 없는 스킬은 원래 커밋이 없다. 소환 효과가 있으면 `DamageTime` 지점에 1회 커밋(`SkillImpactKind.EffectActivation`)을 만들어 `OnSkillCommit` 효과만 실행하고, 공격 예고는 그리지 않는다. 공격 예고 빌드 검증 메뉴가 이 1회 커밋과 "아무것도 없으면 커밋 없음"을 확인한다. [src: Docs/combat/SKILL_DESIGN.md §6.12 적용 규칙 1, Assets/Scripts/Skill/Telegraph/SkillImpactTimingResolver.cs, Assets/Scripts/Common/System/System_Skill.cs `ResolveImpactSchedule`, Assets/Scripts/Editor/AttackTelegraphBuildValidator.cs `ValidateCanonicalResolverContracts`]
+- **수·위치·대상**: 부르는 수 = 최대 수 − 같은 주인·같은 효과로 불러 아직 살아 있는 수이고, 생성 중(Addressables 로딩)인 몬스터는 세지 않는다. 위치는 주인 둘레 0.8~1.5칸의 걸을 수 있는 칸(8번 시도, 실패하면 주인 위치)이다. 생성 직후 주인이 노리던 대상을 이어받는다. 최대 수만큼 살아 있으면 AI가 소환 스킬을 후보에서 뺀다. [src: Docs/combat/SKILL_DESIGN.md §6.12 적용 규칙 2~4, Assets/Scripts/Skill/Combat/MonsterSummonRules.cs, Assets/Scripts/Common/System/System_AI_Perception.cs `InheritSummonerTarget`, Assets/Scripts/Common/Utility/SkillHelper.cs `IsFireCandidate`]
+- **소환된 몬스터**: 일반 등급·접사 없음·주인 레벨이고 `DropComponent`·`ExpRewardComponent`를 떼서 아이템·경험치가 없다. `SummonedMonsterComponent`(주인·효과 Id)와 `LifetimeComponent`를 붙이며 저장하지 않는다. 출신 청크·활성화 거리 컴포넌트가 없어 스폰 슬롯 생존 수에 들어가지 않는다. [src: Assets/Scripts/Factory/EntityFactory.cs `CreateSummonedMonster`, Assets/Scripts/Common/Component/SummonedMonsterComponent.cs, Assets/Scripts/Common/System/System_HpCheck.cs]
+- **정리**: `System_SummonedMonster`(FixedUpdate 145, 매 틱)가 주인이 없거나 HP 0·`DestroyTag`·비활성·출신 청크 비활성이면 소환 몬스터에 `DestroyTag`를 붙인다. 생존 시간 만료는 `System_Lifetime`이 맡는다. 어느 쪽이든 사망 연출 없이 사라진다. [src: Assets/Scripts/Common/System/System_SummonedMonster.cs, Assets/Scripts/Common/System/System_Lifetime.cs] [추론: 사망 경로(`System_HpCheck`)를 거치지 않으므로 DeathMessage가 없음]
+- **몬스터 전용**: 소환된 몬스터는 적 진영으로 생성되므로, 몬스터가 아닌 시전자의 소환 효과는 실행하지 않고 경고만 남긴다. [src: Assets/Scripts/Skill/Combat/SkillEffectExecutor.cs `ExecuteSummonMonster`, Assets/Scripts/Factory/EntityFactory.cs `CreateMonster`]
+- **검증 (2026-10-25)**: 컴파일 오류·경고 없음, 표 3개 행별 비교로 의도한 칸만 바뀜, AI 검사 오류 0(경고 8은 원거리 AI의 기존 `KeepDistance 7` 경고), 공격 예고 빌드 검증 통과. 플레이 모드 확인은 사용자 선택으로 하지 않았다. [src: Docs/combat/SKILL_DESIGN.md §6.12 검증 결과]
+
 ## 플레이어 레벨·능력치·적중 판정·참 판
 
 2026-10-24 구현했고 사용자 커밋·플레이 확인 전이다. 정본은 `PLAYER_LEVEL_CHARM_DESIGN.md`(결정 LV1~LV24, 수치 초안)이고, 문서 머리말 상태 줄은 아직 "미구현"이다. [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md 머리말·§2·§10]
@@ -401,6 +440,7 @@ FinalAttackSpeedPerSecond
 - 인벤토리 장비 비교 툴팁의 PlayMode 확인 결과는 원본 문서에 기록되지 않았다. 완료 기준 중 비교 중 장비 변경·UI 닫기 뒤 잔상, 비교만 열고 닫았을 때 저장 상태 불변, 스킬북·소비 아이템·장착 칸 호버의 안내 없음, `교체 시` 문구 줄바꿈(`<nobr>`) 화면은 아직 확인하지 않았다. 귀걸이는 아이템 테이블에 귀걸이 아이템이 없어 플레이로 확인할 수 없다. [src: Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md §구현 연결과 완료 기준, Assets/_BinaryData/TableData/ItemTable.bytes] [추론: 2026-10-13 작업 보고 기준]
 - 비교 묶음 배치와 옵션 비교 키는 처리 방향이 정해지지 않았다. 인벤토리가 화면 아래에 있어 세 장 묶음이 위로 자라면 장비 화면과 강조한 칸을 덮는다. 옵션 비교 키가 ModTableId + ModSlot뿐이라 같은 능력이 다른 행의 옵션이면 추가·제거 두 줄로 갈라진다. [src: Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md §장비 옵션, Assets/Scripts/Manager/TooltipManager.cs `PlaceElement`] [추론: 2026-10-13 PlayMode 화면 기준]
 - 넉백 콘텐츠는 멧돼지 돌진의 1032 하나뿐이고 1030·1031과 장판 연결은 없다. 손 조작 확인(밀리는 몬스터의 공격 계속, 플레이어 조작 복귀, 던전 출입, 체감)과 돌진의 실제 키보드 체감은 아직 하지 않았다. M3 Dash Strike(플레이어 돌진)는 공용 장치만 있고 콘텐츠가 없다. [src: Docs/combat/SKILL_DESIGN.md §4 M3·§6.11 검증 결과, Assets/_BinaryData/TableData/SkillEffectTable.bytes] AreaEffect↔SkillEffect 참조 대조는 전체 다운로드에서만 돌고, 단일 다운로드의 잘못된 Id는 실행 시 오류 로그 후 무시된다. 등급별 배율, 벽 충돌 조건(`WallNearby`·`KnockbackTarget`), 갈고리형 당기기는 후속이다. [src: Docs/combat/SKILL_DESIGN.md §6.10, Assets/Scripts/Editor/DownloadTables.cs `ValidateForcedMoveSetup`, Docs/combat/SKILL_RUNE_DESIGN.md §5.2]
+- 몬스터 소환은 플레이 확인 전이다. 화염탄 1.3초 주기, 소환 빈도·최대 2마리, 12초 소멸, 주술사 사망·비활성 때 소멸, 임프 처치 보상 없음을 실제로 보지 않았다. 생성 중인 몬스터를 세지 않으므로 소환 쿨타임이 생성 시간보다 짧은 스킬을 만들면 최대 수를 넘을 수 있다. 시전 끊기(기절)와 화염탄 방향선 예고는 사용자 결정으로 미뤘다. 기절 상태가 되면 스킬이 취소되고 예고가 지워지는 규칙(`SkillInterruptRule`)은 있지만 기절시키는 수단이 없고, 넉백은 시전을 끊지 않는다. 플레이어 소환은 진영·AI 대상 선택을 따로 정해야 한다. [src: Docs/combat/SKILL_DESIGN.md §6.10 적용 규칙 1·§6.12, Assets/Scripts/Skill/Combat/SkillInterruptRule.cs]
 - ~~마법부여가 T3 이하, 던전 드랍이 T1~T3~~ → 2026-10-21 마법부여 티어를 아이템 레벨에 연결했고, 던전 레벨을 입구 지역 레벨에 맞췄다(이미 만들어진 던전은 옛 레벨 유지). [src: Docs/combat/ITEM_DROP_BALANCE_DESIGN.md D9·D21·§7.6]
 - 장비 등급·품질·드롭의 플레이 확인(실제 드롭, 툴팁 색, Forge 카드 4개 스크롤, 캐릭터 창 두 줄 배치, 판매가, 던전 보스·상자 드롭)은 남았다. 진단 1~5는 통과했다. 구간표 값·마법 규칙 2배·판정 상한 40회·진화/품질 금액·판매가 배율·던전 초안 값은 진단과 플레이로 조정할 초안이다. [src: Docs/combat/ITEM_DROP_BALANCE_DESIGN.md §14·§16]
 - 아이템 44(초급 마법서, Shield)는 `EquipmentBaseStat`·`ItemImplicit` 행이 없어 장비 데이터 없이 만들어진다. 새 선택 경로에서는 방패 10구간 드롭의 절반이 이 아이템이다(이번 변경 전부터 있던 데이터 공백, 처리 방법 미정). [src: Docs/combat/ITEM_DROP_BALANCE_DESIGN.md §16, Assets/_BinaryData/TableData/EquipmentBaseStatTable.bytes, Assets/_BinaryData/TableData/ItemTable.bytes]

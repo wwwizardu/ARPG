@@ -148,6 +148,16 @@
     min-width: 120px;
 }
 
+/* 여관에서 쉬는 NPC 목록 (NPC_SIMULATION_DESIGN §3.1 D16) — 한 줄 = 버튼 */
+.inn-guest-scroll {
+    max-height: 260px;
+}
+
+.inn-guest-btn {
+    margin-bottom: 6px;
+    -unity-text-align: middle-left;
+}
+
 /* ========== 보조 영역 ========== */
 
 .inn-aux {

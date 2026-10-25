@@ -8,6 +8,7 @@ using ARPG.Data;
 using ARPG.Manager;
 using ARPG.Map;
 using ARPG.Npc;
+using ARPG.Skill.Combat;
 using ARPG.Tables;
 using ARPG.Utility;
 using ARPG.View;
@@ -921,6 +922,38 @@ namespace ARPG.Factory
             return totemId;
         }
 
+        /// <summary>
+        /// 몬스터가 소환한 몬스터 생성 (SKILL_DESIGN §6.12). 일반 등급·접사 없음·주인과 같은 레벨이며 아이템·경험치를 주지 않는다.
+        /// 저장하지 않는 일시 존재라 출신 청크·활성화 거리 없이 주인을 따라 System_SummonedMonster가 정리하고,
+        /// 생존 시간은 LifetimeComponent가 센다. 생성 직후 주인이 노리던 대상을 이어받는다.
+        /// </summary>
+        public static async UniTaskVoid CreateSummonedMonster(int ownerEntityId, int summonEffectId, int monsterTableId,
+            Vector2 position, float lifetime)
+        {
+            if (AR.s.CurrentScene is ARPG.Scene.GameScene gameScene == false)
+                return;
+
+            int level = MonsterSummonRules.ResolveOwnerLevel(ownerEntityId);
+            (int entityId, EntityBase? entity) = await CreateMonster(monsterTableId, new Vector3(position.x, position.y, 0f),
+                gameScene.MonsterRoot, level, GlobalEnum.MonsterArchetype.Normal);
+            if (entityId < 0 || entity == null)
+                return;
+
+            ComponentManager cm = AR.s.Component;
+            cm.RemoveComponent<DropComponent>(entityId);
+            cm.RemoveComponent<ExpRewardComponent>(entityId);
+            cm.AddComponent(entityId, new SummonedMonsterComponent
+            {
+                OwnerEntityId = ownerEntityId,
+                SummonEffectId = summonEffectId,
+            });
+            cm.AddComponent(entityId, new LifetimeComponent { Remaining = lifetime });
+
+            AR.s.Monster.AddMonster(entity);
+            ARPG.Systems.System_AI_Perception.InheritSummonerTarget(entityId, ownerEntityId);
+            Debug.Log($"[EntityFactory] Summoned monster - EntityId: {entityId}, TableId: {monsterTableId}, Owner: {ownerEntityId}, Level: {level}, Lifetime: {lifetime}s");
+        }
+
         private static async UniTask AttachTotemVisual(int totemId, Vector2 position)
         {
             ComponentManager cm = AR.s.Component;
@@ -1122,6 +1155,7 @@ namespace ARPG.Factory
                 SlotIndex = slotIndex,
                 Table = skillTable,
                 EffectiveSkillEffectIds = actionEffectIds,
+                SummonEffectId = MonsterSummonRules.FindSummonEffectId(actionEffectIds),
                 IsInitialized = true,
                 IsEnabled = true,
                 ExecutionType = skillTable.ExecutionType,

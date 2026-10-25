@@ -579,11 +579,12 @@ namespace ARPG.UI
             if (_personalityList == null) return;
             _personalityList.Clear();
 
-            // NpcStatComponent (성향)은 ECS 활성 NPC만 갖고 있음. 비활성/방문자(saveData만 있음)는 표시 불가.
-            if (_entityId < 0 || AR.s.Component == null)
+            // NpcStatComponent (성향)는 ECS 활성 NPC만 갖고 있다. 실체화되지 않은 NPC(여관에서 쉬는 부상자 등)는
+            // 강등 때 저장한 NpcSaveData.NpcStat으로 표시한다 (NPC_SIMULATION_DESIGN §3.1 D16).
+            if (_entityId < 0 || AR.s.Component == null || _saveData == null)
                 return;
             if (AR.s.Component.TryGetComponent<NpcStatComponent>(_entityId, out var nsc) == false)
-                return;
+                nsc = _saveData.NpcStat;
 
             AddPersonalityRow("친화력", nsc.Friendliness);
             AddPersonalityRow("정직함", nsc.Honesty);
@@ -751,7 +752,12 @@ namespace ARPG.UI
             if (_entityId < 0 || AR.s.Component == null)
                 return;
             if (AR.s.Component.TryGetComponent<StatComponent>(_entityId, out var sc) == false)
+            {
+                // 전투 능력치는 실체화된 NPC만 가진 값이다. 여관 안 NPC는 비워 두고 안내한다 (NPC_SIMULATION_DESIGN §3.1 D16)
+                if (_saveData != null && AR.s.Npc != null && AR.s.Npc.IsRecoveringInInn(_saveData) == true)
+                    AddStatRow("상태", "여관에서 쉬는 중");
                 return;
+            }
 
             AddStatRow("힘", sc.FinalStr.ToString());
             AddStatRow("민첩", sc.FinalDex.ToString());
@@ -853,8 +859,16 @@ namespace ARPG.UI
             if (_duelBtn == null || AR.s.Npc == null)
                 return;
 
-            // 결투는 한 번에 1건 — 진행 중이면 메뉴를 띄우지 않는다
-            _duelBtn.style.display = AR.s.Npc.IsPlayerInDuel == true ? DisplayStyle.None : DisplayStyle.Flex;
+            // 결투는 한 번에 1건 — 진행 중이면 메뉴를 띄우지 않는다.
+            // 신청한 자리에서 싸우므로(D20) 몸이 없는 NPC(여관에서 쉬는 부상자 등)에게는 띄우지 않는다 (NPC_COMBAT_DESIGN D19 예외)
+            bool hidden = AR.s.Npc.IsPlayerInDuel == true || IsMaterialized() == false;
+            _duelBtn.style.display = hidden == true ? DisplayStyle.None : DisplayStyle.Flex;
+        }
+
+        private bool IsMaterialized()
+        {
+            return _entityId >= 0 && _saveData != null && _saveData.IsActive == true &&
+                   AR.s.Component.HasComponent<NpcTag>(_entityId) == true;
         }
 
         private void OnClickDuel()

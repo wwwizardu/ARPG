@@ -11,6 +11,7 @@ namespace ARPG.Skill.Telegraph
         ChannelImpact,
         LandingImpact,
         DashLaunch,     // 돌진 출발(실행 단계 첫 틱). 피해는 돌진 중 경로 판정이 담당 (SKILL_DESIGN §6.11)
+        EffectActivation, // 직접 타격·발사체·장판 없이 커밋 효과만 실행하는 1회 커밋 (몬스터 소환, SKILL_DESIGN §6.12)
     }
 
     public enum SkillImpactExecutionMode : byte
@@ -34,6 +35,7 @@ namespace ARPG.Skill.Telegraph
         public readonly bool HasAreaEffect;
         public readonly bool UsesLandingCommit;
         public readonly bool UsesDash;
+        public readonly bool HasCommitEffect;   // OnSkillCommit 효과가 있는지 (현재: 몬스터 소환). 다른 전달이 없을 때만 커밋을 만든다
 
         public SkillImpactTimingInput(
             SkillImpactExecutionMode executionMode,
@@ -47,7 +49,8 @@ namespace ARPG.Skill.Telegraph
             bool hasProjectile,
             bool hasAreaEffect,
             bool usesLandingCommit,
-            bool usesDash = false)
+            bool usesDash = false,
+            bool hasCommitEffect = false)
         {
             ExecutionMode = executionMode;
             StartDuration = startDuration;
@@ -61,6 +64,7 @@ namespace ARPG.Skill.Telegraph
             HasAreaEffect = hasAreaEffect;
             UsesLandingCommit = usesLandingCommit;
             UsesDash = usesDash;
+            HasCommitEffect = hasCommitEffect;
         }
     }
 
@@ -163,6 +167,16 @@ namespace ARPG.Skill.Telegraph
                 // 담당하므로 스킬 쪽 커밋은 장판을 만드는 1회로 끝낸다(실행 타입과 무관).
                 return new SkillImpactSchedule(
                     SkillImpactKind.AreaActivation,
+                    input.StartDuration,
+                    damageOffset,
+                    0f,
+                    1);
+            }
+            else if (input.HasCommitEffect == true)
+            {
+                // 피해 없이 효과만 있는 스킬(몬스터 소환). DamageTime 지점의 1회 커밋에서 OnSkillCommit 효과만 실행한다
+                return new SkillImpactSchedule(
+                    SkillImpactKind.EffectActivation,
                     input.StartDuration,
                     damageOffset,
                     0f,

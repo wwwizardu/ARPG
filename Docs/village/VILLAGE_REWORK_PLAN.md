@@ -134,7 +134,7 @@ InitialStage = 고정 경제 인구가 충족하는 최고 Stage
 
 | Stage | 최소 인구 초안 | 게임 시작 시 포함할 기본 시설·상태 |
 |---|---:|---|
-| Settlement | 1 | 마을 중심 거점, 기본 시장, 여관(2026-10-25 Hamlet에서 내림·미구현 — [NPC_SIMULATION_DESIGN](../npc/NPC_SIMULATION_DESIGN.md) §3.1 D15) |
+| Settlement | 1 | 마을 중심 거점, 기본 시장, 여관(2026-10-25 Hamlet에서 내림·구현 — [NPC_SIMULATION_DESIGN](../npc/NPC_SIMULATION_DESIGN.md) §3.1 D15) |
 | Hamlet | 3 | Settlement 누적 + 중심부 시설 간격 축소 (여관은 Settlement로 이동) |
 | Village | 8 | Hamlet 누적 + 주 특수 시설 Tier 1, 지역 상점 프로필 활성화 |
 | Town | 15 | Village 누적 + 주 특수 시설 Tier 2, 보조 지역 시설, 상점 확장 |

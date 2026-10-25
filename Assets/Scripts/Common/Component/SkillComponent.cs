@@ -48,6 +48,12 @@ namespace ARPG.Component
         /// </summary>
         public SkillEffectIds EffectiveSkillEffectIds;
 
+        /// <summary>
+        /// EffectiveSkillEffectIds 중 몬스터 소환(SummonMonster) 효과 Id. 0이면 없음 (SKILL_DESIGN §6.12).
+        /// 직접 타격 없는 소환 스킬의 발동 시점과 AI의 최대 소환 수 판정이 매 틱 효과 목록을 다시 찾지 않도록 생성 때 정한다.
+        /// </summary>
+        public int SummonEffectId;
+
         /// <summary>스킬이 초기화되었는지 여부</summary>
         public bool IsInitialized;
 

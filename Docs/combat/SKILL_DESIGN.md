@@ -331,7 +331,7 @@
   - **EffectAction** — `SkillEffectExecutor.Trigger(...)` 단일 진입점이 EffectType별 switch로 분기. 예: `ApplyBuff`, `DelegateToTotem`, `SkillPropagation`.
 - `SkillEffectContext` (OwnerId/TargetId/SkillId/TargetPos/DamageResult/IsCrit/CancelOriginalCast, 2026-09-24 `PropagationRootEntityId`/`SuppressDefaultImpact` 추가)
 - `SkillTable.SkillEffectIds: List<int>` 컬럼 + 구글 시트 SkillEffect 시트
-- 등록된 효과: 1001 LifeSteal_15% (StatBonus), 1002 OnHit_Bleed (EffectAction), 1010 Delegate_Totem_8s (EffectAction), 1020 ChainLightningPropagation (EffectAction, `SkillPropagation`·`OnSkillCommit`, S3), 1030 Knockback_Short·1031 Pull_Short (EffectAction, `OnHit`, §6.10), 2003 MultiShot_3 (StatBonus, R2)
+- 등록된 효과: 1001 LifeSteal_15% (StatBonus), 1002 OnHit_Bleed (EffectAction), 1010 Delegate_Totem_8s (EffectAction), 1020 ChainLightningPropagation (EffectAction, `SkillPropagation`·`OnSkillCommit`, S3), 1030 Knockback_Short·1031 Pull_Short (EffectAction, `OnHit`, §6.10), 1032 Knockback_Charge (EffectAction, `OnHit`, §6.11), 1040 Summon_FireImp_2 (EffectAction, `SummonMonster`·`OnSkillCommit`, §6.12), 2003 MultiShot_3 (StatBonus, R2)
 
 **옵션 합산 컨벤션**: 옵션은 두 종류로 나뉨.
 - **(1) 스킬 고유 속성**: `SkillTable` 컬럼으로 표현 (예: `ProjectileId`, `BaseProjectileCount`). 발사체 개수처럼 "스킬마다 다를 수 있지만 하나의 스킬 내에선 base 값"인 항목.
@@ -521,6 +521,40 @@ SkillEffectTable                         // 새 테이블
 - 함정: Skill 시트 다운로드는 `DownloadTables`의 등록 범위(`range=A:AR`)로 잘려서 AS열이 처음엔 빠졌다. 등록 범위를 `A:AS`로 늘렸다. 시트 격자도 44칸이라 열을 직접 추가해야 했다. 열을 더 늘릴 때는 두 곳 모두 고친다.
 - 손 조작 확인(실제 키보드로 밀어 피하기, 체감)은 하지 않았다.
 
+### §6.12 몬스터 소환 ✅ *(2026-10-25 사용자 결정·구현, 플레이 확인 전)*
+
+**목적**: 몬스터가 전투 중 다른 몬스터를 불러 앞을 막게 한다. 첫 사용처는 고블린 주술사가 화염임프를 부르는 보조 기술이다. 주 공격(화염탄)은 PoE처럼 쿨타임 없이 긴 시전으로 쏘고, 소환은 쿨타임으로 빈도를 정한다.
+
+**사용자 결정 (2026-10-25)**:
+1. 소환은 보조다. 주 공격은 쿨타임을 없애고 시전 시간으로 속도를 정한다. 주 공격에 쿨타임이 있으면 그 사이 쓸 수 있는 스킬이 소환뿐이라 가중치와 상관없이 쿨타임이 찰 때마다 소환이 나간다(AI 후보는 그 순간 쓸 수 있는 스킬끼리만 가중치를 비교한다 — `AI_SKILL_SELECTION_IMPLEMENTATION.md`).
+2. 부르는 몬스터는 화염임프(1005), 한 번에 2마리이고 같은 효과로 동시에 최대 2마리다. 2마리가 살아 있으면 AI가 소환을 고르지 않는다.
+3. 소환된 몬스터는 12초 뒤 사라지고, 주인이 죽거나 사라지거나 비활성(거리·청크)되면 함께 사라진다. 저장하지 않는다.
+4. 소환된 몬스터는 아이템·경험치를 주지 않는다. 일반 등급, 접사 없음, 레벨은 주인과 같다.
+5. 화염탄 예고선은 넣지 않는다. 발사체는 예고하지 않는 기존 규칙(`AttackTelegraphGeometryResolver`)을 유지해, 준비하는 동안 보이는 것은 주술사의 공격 동작뿐이다. 예고선은 기절(시전 끊기)과 함께 나중에 다시 본다.
+
+**데이터**:
+- `SkillEffect` 행: `EffectType=SummonMonster`, `Kind=EffectAction`, `Trigger=OnSkillCommit`, `Param1`=MonsterTable Id, `Param2`=한 번에 부르는 수 겸 동시 최대 수, `Param3`=생존 시간(초). 등록 행 1040 `Summon_FireImp_2`(1005·2·12). `Tier=0`·`PageCost=0`이라 스킬 페이지로 드랍하지 않는다.
+- 소환 스킬 214 `GoblinShamanSummonImp`: 쿨타임 15초, 준비(Process) 1.5초 끝(`DamageTime=1`)에 소환, 후딜 0.3초, 사거리 5(화염탄과 같게 해 교전 거리를 바꾸지 않는다), `BaseDamageMul=0`(직접 타격 없음), `MovementMode=Locked`(외우는 동안 제자리).
+- 화염탄 204 `GoblinFirebolt`: 쿨타임 0.5 → 0, 준비 0.15 → 1.0초(0.9초에 발사), 후딜 0.15 → 0.3초, 피해 3~5 → 5~8. 한 발 주기는 약 0.8초 → 1.3초이고 초당 피해는 비슷하다.
+- AI 3(고블린 주술사): 화염탄 80 / 소환 20. 소환 쿨타임이 찬 뒤 화염탄을 평균 4발쯤 더 쏘고 소환하므로 대략 20초에 1번이다.
+
+**적용 규칙**:
+1. 직접 타격·발사체·장판이 없는 스킬은 원래 커밋이 없다. 소환 효과가 있으면 `DamageTime` 지점에 1회 커밋(`SkillImpactKind.EffectActivation`)을 만들어 `OnSkillCommit` 효과만 실행한다. 이 스킬은 공격 예고를 그리지 않는다.
+2. 소환 수 = 최대 수 − 같은 주인·같은 효과로 불러 아직 살아 있는 수. 생성 대기 중(Addressables 로딩)인 몬스터는 세지 않으므로 쿨타임이 생성 시간보다 길어야 한다.
+3. 위치는 주인 몸 둘레 0.8~1.5칸에서 걸을 수 있는 칸을 8번까지 고르고, 못 찾으면 주인 위치에 낸다.
+4. 소환된 몬스터는 생성 직후 주인이 노리던 대상을 이어받는다. 출신 청크·활성화 거리 컴포넌트가 없어 스폰 슬롯 생존 수에 들어가지 않는다.
+5. 소환 효과는 몬스터 시전자 전용이다. 소환된 몬스터가 적 진영으로 생성되므로 플레이어 스킬에 붙이면 실행하지 않고 경고만 남긴다. 플레이어 소환은 진영·AI 대상 선택을 따로 정해야 한다.
+
+**런타임 구조**:
+- `SkillComponent.SummonEffectId`: 생성 때 효과 목록에서 찾아 두고 커밋 스케줄과 AI 후보 판정이 쓴다.
+- `MonsterSummonRules`(정적, 상태 없음): 효과 찾기, 살아 있는 소환 수 세기, 최대 수 판정, 주인 레벨, 소환 위치.
+- `SkillEffectExecutor.ExecuteSummonMonster` → `EntityFactory.CreateSummonedMonster`: `CreateMonster` 뒤 `DropComponent`·`ExpRewardComponent`를 떼고 `SummonedMonsterComponent`(주인·효과 Id)와 `LifetimeComponent`를 붙인다. 대상 이어받기는 `System_AI_Perception.InheritSummonerTarget`.
+- `System_SummonedMonster`(FixedUpdate 145, 매 틱): 주인이 없거나 HP 0·`DestroyTag`·비활성·출신 청크 비활성이면 소환 몬스터에 `DestroyTag`를 붙인다. 생존 시간 만료는 `System_Lifetime`이 맡는다.
+- `SkillHelper.IsFireCandidate`: 최대 수만큼 살아 있으면 소환 스킬을 후보에서 뺀다.
+- 다운로드 검사: `SummonMonster` 행은 `Kind=EffectAction`·`Trigger=OnSkillCommit`·`Param1>0`·`Param2>=1`·`Param3>0`이어야 한다. 공격 예고 빌드 검증 메뉴가 효과만 있는 스킬의 1회 커밋 계약을 확인한다.
+
+**검증 결과 (2026-10-25)**: 런타임·에디터 컴파일 오류·경고 없음. 표 3개(Skill·SkillEffect·AI)를 받아 이전 파일과 행별로 비교해 위 값만 바뀐 것을 확인했다. AI 검사 오류 0, 경고 8은 모두 원거리 AI 5종·NPC 3종의 기존 `KeepDistance 7` 경고다. `ARPG/Validation/Attack Telegraph Build Contract` 통과. 플레이 모드 확인(화염탄 주기, 소환 빈도·최대 수, 12초 소멸, 주인 사망 시 소멸, 보상 없음)은 사용자 선택으로 하지 않았다.
+
 ---
 
 ## 10. 스킬 ID 예약 (제안)
@@ -538,7 +572,7 @@ SkillEffectTable                         // 새 테이블
 
 ProjectileId 대역도 동일 규칙 권장: 화살 100번대, 마법 200번대.
 
-기존 제안 ID 204와 205는 각각 몬스터 전용 `GoblinFirebolt`, `SwampToadPoisonSpit`이 사용 중이다. S5 Lightning Strike와 S6 Frost Bolt를 추가할 때 충돌하지 않는 새 ID를 배정한다. (2026-10-03: 205 행은 한때 `SkillTable`에서 빠졌다가 복구됐다 — §2. 206은 `FireRing`이 사용 중이다.)
+기존 제안 ID 204와 205는 각각 몬스터 전용 `GoblinFirebolt`, `SwampToadPoisonSpit`이 사용 중이다. S5 Lightning Strike와 S6 Frost Bolt를 추가할 때 충돌하지 않는 새 ID를 배정한다. (2026-10-03: 205 행은 한때 `SkillTable`에서 빠졌다가 복구됐다 — §2. 206은 `FireRing`이 사용 중이다.) 2026-10-25: 214는 몬스터 전용 `GoblinShamanSummonImp`(§6.12)가 사용 중이다.
 
 ---
 
@@ -572,3 +606,4 @@ ProjectileId 대역도 동일 규칙 권장: 화살 100번대, 마법 200번대.
 - 2026-10-12: §6.10 넉백·당기기(강제 이동) 설계 확정, 미구현. 판정 범위 중심을 기준점으로 밀거나 당기고, `SkillEffect` 행(`Knockback`/`Pull`)과 `AreaEffectTable.ForcedMoveEffectId`로 붙인다. §6.8의 `KnockbackOnHit` 표기를 갱신하고 `SKILL_EFFECT_IDEAS.md` #6 초안 메모를 대체했다.
 - 2026-10-12 (rev 2): §6.10 구현. `ForcedMoveComponent`·`ForcedMoveStarter`·`System_ForcedMove`(Update 810), SkillEffect 1030/1031, `AreaEffectTable.ForcedMoveEffectId`(시트 P열). 검증용 연결(Strike·불의 고리·독구름)은 측정 뒤 되돌려 현재 연결된 콘텐츠는 없다. PlayMode 측정 결과를 §6.10에 기록했고, 손으로 조작하는 확인은 콘텐츠에 붙일 때 한다.
 - 2026-10-13: §6.11 돌진(`SkillType.Dash`) 신설·구현. 경로 선분 판정·관통·대상당 1회, 벽 즉시 멈춤, 돌진 경로 옆 넉백(`HitOriginKind.Path`), 직선 띠 예고. `SkillTable.ForcedMoveImmune`(AS열, 실행 단계 넉백 저항)을 추가하고 §6.10 적용 규칙 6~8을 갱신했다. 멧돼지 돌진 `BoarCharge`(52)·효과 1032 `Knockback_Charge`·멧돼지 전용 AI 6번 추가, M3를 런타임 준비 완료로 옮기고 §2·§6.3·§10·§11을 갱신했다. 같은 날 몬스터도 표의 조준 방식을 따르게 바꿨다(POE2_CURSOR_TRACKING_PLAN §15).
+- 2026-10-25: §6.12 몬스터 소환 신설·구현. `SkillEffect` `SummonMonster`(1040), 소환 스킬 214, 효과만 있는 스킬의 1회 커밋(`SkillImpactKind.EffectActivation`), `SummonedMonsterComponent`·`System_SummonedMonster`(FixedUpdate 145)·`MonsterSummonRules`. 고블린 주술사 화염탄(204)을 쿨타임 없는 1초 시전·피해 5~8로 바꾸고 AI 3을 화염탄 80 / 소환 20으로 했다. 플레이 확인 전.

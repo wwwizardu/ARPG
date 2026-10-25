@@ -3,9 +3,11 @@ name: monster-spawn-runtime
 description: 청크 난이도 기반 스폰 슬롯, 플레이어 거리 기반 생성, 슬롯 쿨타임, Active/Warm/Expired 청크 캐시의 구현 계약.
 type: topic
 status: verified
-last_updated: 2026-10-03
+last_updated: 2026-10-25
 sources:
   - Docs/ai_monster/MONSTER_SPAWN_DESIGN.md
+  - Docs/combat/SKILL_DESIGN.md
+  - Assets/Scripts/Common/System/System_SummonedMonster.cs
   - Docs/map/MAP_DESIGN.md
   - Assets/Scripts/Common/System/System_MonsterSpawn.cs
   - Assets/Scripts/Manager/MonsterManager.cs
@@ -339,6 +341,11 @@ Expired 처리는 다음 순서를 보장한다.
 - 활성 청크는 TTL 만료 대상에서 제외한다.
 - 거리 링 이탈만으로 몬스터를 제거하거나 슬롯을 비우지 않는다. 첫 구현에서는 전투·추적 중인
   몬스터를 위해 출신 청크의 Warm 전환을 지연하는 별도 예외를 두지 않는다.
+- 예외: 다른 몬스터의 소환 효과로 생긴 몬스터(2026-10-25)는 슬롯 밖의 일시 존재다. 출신 청크·
+  활성화 거리 컴포넌트가 없어 슬롯 생존 수와 그룹 전멸 쿨타임에 들어가지 않고, 저장하지 않는다.
+  주인이 죽거나 사라지거나 비활성(거리·출신 청크)되면 숨기지 않고 지우며, 생존 시간이 지나도 지운다.
+  [src: Docs/combat/SKILL_DESIGN.md §6.12, Assets/Scripts/Factory/EntityFactory.cs `CreateSummonedMonster`,
+  Assets/Scripts/Common/System/System_SummonedMonster.cs]
 
 ## 9. 책임 경계
 
@@ -351,6 +358,7 @@ Expired 처리는 다음 순서를 보장한다.
 | 몬스터 ECS 조립 | `EntityFactory` |
 | 사망 시 슬롯 통지 | 사망/제거 시스템 → `MonsterManager` |
 | GameObject 거리 활성화 | `System_EntityActivation` |
+| 소환 몬스터 정리(주인 사망·비활성) | `System_SummonedMonster` (생존 시간은 `System_Lifetime`) |
 | 종 선택 | 기존 `BiomeMonsterMapping`, 향후 SpawnPool |
 
 `MONSTER_SPAWN_DESIGN.md`의 SpawnPool/가중치/Archetype은 “어떤 종을 뽑는가”를 담당하고 이

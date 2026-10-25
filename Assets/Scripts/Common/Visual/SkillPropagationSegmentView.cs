@@ -10,7 +10,7 @@ namespace ARPG.Visual
     {
         [SerializeField] private Transform _effectRoot = null!;
         [SerializeField, Min(0.01f)] private float _referenceLength = 10.73f;
-        [SerializeField, Min(0.01f)] private float _widthScale = 0.3f;
+        [SerializeField, Min(0.01f)] private float _widthScale = 0.55f;
 
         public void SetEndpoints(Vector2 inStartPosition, Vector2 inEndPosition)
         {

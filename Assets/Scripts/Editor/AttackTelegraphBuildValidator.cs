@@ -251,6 +251,40 @@ namespace ARPG.Editor
             Require(errors, area.Kind == SkillImpactKind.AreaActivation && area.CommitCount == 1,
                 "AreaEffect는 DamageTime 커밋에서 한 번만 활성화해야 합니다.");
 
+            // 몬스터 소환처럼 피해 없이 커밋 효과만 있는 스킬 (SKILL_DESIGN §6.12)
+            SkillImpactSchedule effectOnly = SkillImpactTimingResolver.Resolve(new SkillImpactTimingInput(
+                SkillImpactExecutionMode.Single,
+                0f,
+                1.5f,
+                1f,
+                0f,
+                0f,
+                1,
+                false,
+                false,
+                false,
+                false,
+                false,
+                true));
+            Require(errors, effectOnly.Kind == SkillImpactKind.EffectActivation && effectOnly.CommitCount == 1,
+                "피해 없이 커밋 효과만 있는 스킬은 한 번 커밋해야 합니다.");
+            RequireApproximately(errors, effectOnly.FirstCommitOffset, 1.5f,
+                "효과만 있는 스킬은 StartDuration + DamageTime × ProcessDuration에 커밋해야 합니다.");
+            SkillImpactSchedule noCommit = SkillImpactTimingResolver.Resolve(new SkillImpactTimingInput(
+                SkillImpactExecutionMode.Single,
+                0f,
+                1.5f,
+                1f,
+                0f,
+                0f,
+                1,
+                false,
+                false,
+                false,
+                false));
+            Require(errors, noCommit.Kind == SkillImpactKind.None,
+                "타격·발사체·장판·커밋 효과가 모두 없는 스킬은 커밋하지 않아야 합니다.");
+
             SkillImpactSchedule projectile = SkillImpactTimingResolver.Resolve(new SkillImpactTimingInput(
                 SkillImpactExecutionMode.Single,
                 0f,

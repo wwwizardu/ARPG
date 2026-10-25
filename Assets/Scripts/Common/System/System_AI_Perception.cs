@@ -83,6 +83,17 @@ namespace ARPG.Systems
             }
         }
 
+        /// <summary>소환된 몬스터가 주인이 노리던 대상을 바로 이어받는다 (SKILL_DESIGN §6.12).</summary>
+        public static void InheritSummonerTarget(int entityId, int ownerEntityId)
+        {
+            ComponentManager cm = AR.s.Component;
+            if (cm.TryGetComponent<AIComponent>(ownerEntityId, out var ownerAi) == false ||
+                TryGetLivingTarget(cm, ownerAi.TargetEntityId, out Vector2 targetPosition) == false)
+                return;
+
+            TryAlertGroupMember(cm, entityId, ownerAi.TargetEntityId, targetPosition);
+        }
+
         public void OnFixedUpdate(float inFixedDeltaTime)
         {
             // AIPerceptionComponent 풀 가져오기

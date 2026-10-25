@@ -209,12 +209,17 @@ namespace ARPG.EditorTools
             string lastDeed = saveData.Deeds.Count > 0
                 ? saveData.Deeds[saveData.Deeds.Count - 1].Kind.ToString()
                 : "(없음)";
+            // 마을 안 걷기 (NPC_SIMULATION_DESIGN §3.1): 출발·귀환·여관 가기와 목표 지점
+            string villageWalk = cm.TryGetComponent<NpcVillageWalkComponent>(npcId, out NpcVillageWalkComponent walk) == true
+                ? $"{walk.Kind}→{walk.Target}"
+                : "(없음)";
 
             Debug.Log($"[NpcCombatDebug] {AR.s.Npc.GetDisplayName(npcId)} (EntityId: {npcId}) " +
                       $"Faction: {faction}, Condition: {saveData.Condition}, Phase: {saveData.Activity.Phase}, " +
                       $"IsActive: {saveData.IsActive}, VillageId: {saveData.VillageId}, LastDeed: {lastDeed}, " +
                       $"AIState: {aiState}, CombatTag: {cm.HasComponent<NpcCombatEnabledTag>(npcId)}, " +
-                      $"PausedTag: {cm.HasComponent<NpcActivityPausedTag>(npcId)}, " +
+                      $"PausedTag: {cm.HasComponent<NpcActivityPausedTag>(npcId)}, VillageWalk: {villageWalk}, " +
+                      $"InnGuest: {AR.s.Npc.IsRecoveringInInn(saveData)}, " +
                       $"Duel: {cm.HasComponent<DuelComponent>(npcId)}, Position: {position}");
         }
 

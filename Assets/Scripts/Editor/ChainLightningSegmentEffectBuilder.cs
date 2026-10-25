@@ -20,7 +20,9 @@ namespace ARPG.Editor
         private const string SourcePrefabPath = "Assets/_ExternalAssets/Cartoon Coffee/2D Deluxe VFX/Prefabs/Bursts/Lightning_Small.prefab";
         private const string Address = "Effects/ChainLightningSegment";
         private const float SourceLength = 10.73f;
-        private const float WidthScale = 0.3f;
+        private const float WidthScale = 0.55f;
+        // Default layer keeps the effect below the fog overlay (order 32000).
+        private const int SortingOrder = 20;
 
         [MenuItem("ARPG/Effects/Build Chain Lightning Segment")]
         public static void Build()
@@ -39,6 +41,7 @@ namespace ARPG.Editor
                 effectRoot.name = "Lightning_Small_Oriented";
                 effectRoot.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
                 effectRoot.transform.localScale = Vector3.one * WidthScale;
+                ConfigureVisibility(effectRoot);
 
                 SerializedObject serializedView = new(segmentView);
                 serializedView.FindProperty("_effectRoot").objectReferenceValue = effectRoot.transform;
@@ -76,6 +79,17 @@ namespace ARPG.Editor
             if (serializedView.FindProperty("_effectRoot").objectReferenceValue == null)
                 throw new InvalidOperationException("Chain Lightning segment effect root is not assigned.");
 
+            if (Mathf.Approximately(serializedView.FindProperty("_widthScale").floatValue, WidthScale) == false)
+                throw new InvalidOperationException("Chain Lightning segment width does not match the builder.");
+
+            int sortingLayerId = SortingLayer.NameToID("Default");
+            foreach (ParticleSystemRenderer renderer in prefab.GetComponentsInChildren<ParticleSystemRenderer>(true))
+            {
+                int expectedOrder = renderer.name == "Lightning" ? SortingOrder + 1 : SortingOrder;
+                if (renderer.sortingLayerID != sortingLayerId || renderer.sortingOrder != expectedOrder)
+                    throw new InvalidOperationException($"Chain Lightning renderer order is incorrect: {renderer.name}.");
+            }
+
             string[] dependencies = AssetDatabase.GetDependencies(PrefabPath);
             if (Array.IndexOf(dependencies, SourcePrefabPath) < 0)
                 throw new InvalidOperationException($"Chain Lightning segment does not reference {SourcePrefabPath}.");
@@ -86,6 +100,40 @@ namespace ARPG.Editor
                 throw new InvalidOperationException($"Addressables entry is missing: {Address}");
 
             Debug.Log("[ChainLightningSegmentEffectBuilder] Validation passed.");
+        }
+
+        private static void ConfigureVisibility(GameObject effectRoot)
+        {
+            foreach (ParticleSystem particle in effectRoot.GetComponentsInChildren<ParticleSystem>(true))
+            {
+                ParticleSystem.MainModule main = particle.main;
+                switch (particle.name)
+                {
+                    case "Lightning":
+                        main.startColor = Color.white;
+                        break;
+                    case "Glow_Line":
+                    case "Glow":
+                        main.startColor = new Color(0.15f, 0.65f, 1f, 0.9f);
+                        break;
+                    case "Lightning_Sparks":
+                    case "Impact_Burst":
+                        main.startColor = new Color(0.5f, 0.85f, 1f, 1f);
+                        break;
+                    default:
+                        continue;
+                }
+
+                PrefabUtility.RecordPrefabInstancePropertyModifications(particle);
+            }
+
+            int sortingLayerId = SortingLayer.NameToID("Default");
+            foreach (ParticleSystemRenderer renderer in effectRoot.GetComponentsInChildren<ParticleSystemRenderer>(true))
+            {
+                renderer.sortingLayerID = sortingLayerId;
+                renderer.sortingOrder = renderer.name == "Lightning" ? SortingOrder + 1 : SortingOrder;
+                PrefabUtility.RecordPrefabInstancePropertyModifications(renderer);
+            }
         }
 
         private static void RegisterAddressable(string path, string address)
