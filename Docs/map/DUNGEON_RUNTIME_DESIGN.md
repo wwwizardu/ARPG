@@ -155,6 +155,8 @@ ESC는 현재 UIManager에서 열린 UI가 없을 때 `UIMainMenu`를 연다. �
 
 퇴장: 메뉴 버튼 → 중복 전환 잠금 → 던전 진행 상태와 플레이어 상태를 체크포인트로 저장 → 던전 엔티티/청크 비활성화 → 월드 컨텍스트 복원 → 저장한 입구 부근 안전 지점에 플레이어 배치 → 월드 청크 활성화 → UI 잠금 해제. 저장 실패 시 전환을 완료하지 않고 재시도할 수 있게 한다. [구현]
 
+**보스 완료 저장(2026-10-25 개정)**: 보상·완료 표시·슬롯 세대 교체·소문 해결·동행 기록을 `await` 없는 메인 스레드 처리로 한 번 적용하고, 기존 스냅샷 저장 큐로 저장한다. 완료 대기·저장 중에는 게임을 정지하지 않는다. 저장 실패 시 완료 결과나 이후 획득물을 되돌리지 않고 3초 뒤 저장만 재시도한다. 미저장 완료 revision이 있으면 모든 저장 요청에 Player·World·Dungeons·Narrative·Simulation을 함께 싣고, 실제로 캡처한 revision과 수명이 일치하는 manifest 성공만 저장 완료로 인정한다. 입장·퇴장·사망 전환의 저장 대기·실패 복구는 유지하며, 퇴장은 진행 중인 저장을 먼저 기다린다. 저장에 성공하기 전에 종료되면 마지막 성공한 manifest로 복원한다. [src: Assets/Scripts/Dungeon/DungeonManager.cs, Assets/Scripts/Manager/DataManager_PartitionedSave.cs]
+
 던전 사망: 플레이어 HP가 0 이하가 된 시점에 던전 진행 차이를 체크포인트로 저장하고, 일반 `DestroyTag`가 플레이어 엔티티를 제거하기 전에 사망 전환을 처리한다. 던전 컨텍스트를 닫고 원래 입구 부근의 안전한 월드 타일에서 플레이어를 복귀시키고 **HP를 최대치로 회복**한다(`DungeonManager.cs`). 사망 패널은 없다. 몬스터 처치·상자 등 내부 진행은 초기화하지 않는다. [`System_HpCheck.cs`](../../Assets/Scripts/Common/System/System_HpCheck.cs), [`System_EntityDestroy.cs`](../../Assets/Scripts/Common/System/System_EntityDestroy.cs) [확정: 복귀 위치·진행 유지, 구현: 처리 순서]
 
 실제 `GameScene`은 플레이어 위치를 `PlayerData.PositionX/Z`에서 생성하고, `PlayerManager.Save()`는 현재 플레이어 위치를 그대로 기록한다. 던전 중 저장한 좌표를 월드 시작 좌표로 잘못 읽지 않도록 Player 저장에 `CurrentMapKind`, `ActiveDungeonId`, `DungeonPositionX/Y`, `WorldReturnX/Y`를 분리했다(구현: `PlayerData.cs`). 로드 시 활성 던전 기록이 있으면 그 던전을 복원하고, 없으면 월드 위치에서 시작한다. [`GameScene.cs`](../../Assets/Scripts/Scene/GameScene.cs), [`PlayerManager.cs`](../../Assets/Scripts/Manager/PlayerManager.cs), [`PlayerData.cs`](../../Assets/Scripts/Data/PlayerData.cs)

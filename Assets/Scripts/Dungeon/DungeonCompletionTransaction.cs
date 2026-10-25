@@ -3,7 +3,7 @@ using ARPG.Data;
 
 namespace ARPG.Dungeon
 {
-    /// <summary>Reversible completion proposal. Dispose rolls back unless the manifest commit succeeded.</summary>
+    /// <summary>Synchronous completion stage. Commit keeps the live result before asynchronous persistence begins.</summary>
     public sealed class DungeonCompletionTransaction : IDisposable
     {
         private readonly DungeonSaveRoot _root;

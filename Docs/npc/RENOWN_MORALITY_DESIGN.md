@@ -257,7 +257,7 @@
 | 개념 | 위치 | 메모 |
 |---|---|---|
 | 점수표·단계 판정·판정 가산 | 새 무상태 규칙 클래스 1개 | 상태가 없고 여러 곳에서 쓰는 순수 계산이다(AGENTS.md 로직 배치 4번). 값을 바꾸는 일은 소유자(NpcManager·플레이어 데이터)가 하고 변경 표시도 함께 한다. 매 틱 도는 일이 아니므로 System으로 만들지 않는다 |
-| 플레이어 보스 완료 | `NpcManager_Narrative.StageDungeonCompletion` (280행) | 동행에게 `PlayerDeed` 소문을 주는 자리. 해결/클리어 구분(`stage.Resolved`)이 있다. 저장 실패 롤백(`RollbackDungeonCompletion`)에 두 값도 포함해야 한다 |
+| 플레이어 보스 완료 | `NpcManager_Narrative.StageDungeonCompletion` | 동행에게 `PlayerDeed` 소문을 주는 자리. 해결/클리어 구분(반환값 `resolved`)이 있다. 2026-10-25부터 보스 완료는 저장이 실패해도 되돌리지 않으므로, 두 값도 이 자리에서 한 번만 바꾸면 된다 |
 | 보고 확정 | `NpcManager_NarrativeDialogue.RunReportAsync` (472행) | 원수 갚기 부탁 보고도 같은 경로다(`PlayerDeedKind.RumorResolved`). 네임드 보고는 `CreateThreatDeedRumor` |
 | 소망 전달 | `NpcManager_NarrativeWish.DeliverWishItemAsync` (138행) | |
 | 네임드 처치 | `NamedThreatManager.HandleDeath` (198행) | 처치 순간에는 소문을 만들지 않는다. 명성은 이 순간에 바꾼다(RM8) |

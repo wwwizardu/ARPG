@@ -290,7 +290,7 @@ namespace ARPG.Npc
             instance.Ended = true;
             instance.ProgressGameTime = now;
             instance.Revision++;
-            ReleaseRequestOnEnd(instance, out _);
+            ReleaseRequestOnEnd(instance);
         }
 
         /// <summary>목표 주인이 살아서 아직 그 던전을 노리는가 (원장 정리의 현재 사건 판정).</summary>
@@ -302,12 +302,12 @@ namespace ARPG.Npc
         }
 
         /// <summary>
-        /// 플레이어 쪽 던전 완료 스테이징 (§6.4, 완료 저장과 같은 커밋): 그 던전의 열린 목표 부탁은 플레이어 측 처치면 해결, 아니면 미해결 종료.
+        /// 플레이어 쪽 던전 완료 적용 (§6.4, 보스 완료 묶음과 같은 저장): 그 던전의 열린 목표 부탁은 플레이어 측 처치면 해결, 아니면 미해결 종료.
         /// 플레이어 측이 부탁 없이 대신 닫았으면 그 던전을 노리던 DungeonClosed 목표 주인(동행 제외)에게 직접 말하기 사건을 만든다(보답 없음).
-        /// 저장이 실패하면 RollbackObjectiveDungeonCompletion이 되돌린다.
+        /// 저장이 실패해도 되돌리지 않는다 (NPC_NARRATIVE_CONTENT_DESIGN §7.4 2026-10-25 개정).
         /// </summary>
-        private void StageObjectiveDungeonCompletion(NarrativeCompletionStage stage, DungeonRecord record, int entranceX,
-            int entranceY, int companionNpcId, float now)
+        private void StageObjectiveDungeonCompletion(DungeonRecord record, int entranceX, int entranceY,
+            int companionNpcId, float now)
         {
             bool playerParty = record.BossKilledByPlayerParty;
             List<NarrativeContentInstance> instances = AR.s.Data.Narrative.Instances;
@@ -317,7 +317,6 @@ namespace ARPG.Npc
                 if (instance.Kind != NarrativeContentKind.Objective || instance.DungeonId != record.DungeonId ||
                     instance.IsOpen == false)
                     continue;
-                (stage.ObjectiveInstancesBefore ??= new List<NarrativeContentInstance>()).Add(instance.Clone());
                 MarkNarrativeInstanceDirty(instance, NarrativeSaveGroup.All);
                 instance.HasEntranceContext = true;
                 instance.EntranceX = entranceX;
@@ -330,12 +329,7 @@ namespace ARPG.Npc
                     continue;
                 }
                 instance.Ended = true;
-                NpcSaveData? requester = ReleaseRequestOnEnd(instance, out NpcNarrativeRequest? requestBefore);
-                if (requester != null)
-                {
-                    (stage.ObjectiveRequesters ??= new List<NpcSaveData>()).Add(requester);
-                    (stage.ObjectiveRequestsBefore ??= new List<NpcNarrativeRequest?>()).Add(requestBefore);
-                }
+                ReleaseRequestOnEnd(instance);
             }
 
             if (playerParty == false)
@@ -356,15 +350,12 @@ namespace ARPG.Npc
                     continue;
                 NarrativeContentInstance? created = AddObjectiveNarrative(NarrativeContentInstance.ObjectiveId(ownerId, now), ownerId,
                     owner, definition, owner.Objective, record.SlotIndex, record.Generation, true, now,
-                    out bool addedDefinition, out bool addedPolicy);
+                    out _, out _);
                 if (created == null)
                     continue;
                 created.HasEntranceContext = true;
                 created.EntranceX = entranceX;
                 created.EntranceY = entranceY;
-                (stage.ObjectiveCreated ??= new List<NarrativeContentInstance>()).Add(created);
-                (stage.ObjectiveCreatedDefinitions ??= new List<bool>()).Add(addedDefinition);
-                (stage.ObjectiveCreatedPolicies ??= new List<bool>()).Add(addedPolicy);
             }
         }
 
@@ -378,31 +369,6 @@ namespace ARPG.Npc
                     return true;
             }
             return false;
-        }
-
-        private void RollbackObjectiveDungeonCompletion(NarrativeCompletionStage stage)
-        {
-            if (stage.ObjectiveCreated != null && stage.ObjectiveCreatedDefinitions != null && stage.ObjectiveCreatedPolicies != null)
-            {
-                for (int i = stage.ObjectiveCreated.Count - 1; i >= 0; i--)
-                    RemoveNarrativeInstance(stage.ObjectiveCreated[i], stage.ObjectiveCreatedDefinitions[i],
-                        stage.ObjectiveCreatedPolicies[i]);
-            }
-            if (stage.ObjectiveInstancesBefore != null)
-            {
-                for (int i = 0; i < stage.ObjectiveInstancesBefore.Count; i++)
-                    ReplaceNarrativeInstance(stage.ObjectiveInstancesBefore[i]);
-            }
-            if (stage.ObjectiveRequesters != null && stage.ObjectiveRequestsBefore != null)
-            {
-                for (int i = 0; i < stage.ObjectiveRequesters.Count; i++)
-                {
-                    NpcSaveData requester = stage.ObjectiveRequesters[i];
-                    MarkSaveDirty(requester.EntityId, NpcSaveGroup.NarrativeRequest);
-                    requester.NarrativeRequest = stage.ObjectiveRequestsBefore[i];
-                    _narrative.InvalidateDialogues(requester.EntityId);
-                }
-            }
         }
     }
 }

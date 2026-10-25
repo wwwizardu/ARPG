@@ -423,7 +423,8 @@ namespace ARPG.Data
             return SavePartitionedAsync(scope);
         }
 
-        // Only DungeonManager's exclusive transition calls this after draining existing saves.
+        // Exclusive dungeon map transitions call this after draining existing saves.
+        // Boss completion uses the normal save queue after its live result is applied.
         public Task<bool> SaveDungeonTransactionAsync(SaveScope scope, bool rebuildSaveSnapshots = true) =>
             SavePartitionedAsync(scope, rebuildSaveSnapshots);
 

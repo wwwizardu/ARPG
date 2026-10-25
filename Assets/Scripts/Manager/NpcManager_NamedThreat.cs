@@ -180,7 +180,7 @@ namespace ARPG.Npc
                 return;
             }
             instance.Ended = true;
-            ReleaseRequestOnEnd(instance, out _);
+            ReleaseRequestOnEnd(instance);
         }
 
         // ================= 위치·이름 표현 (§8.3) =================

@@ -13,6 +13,9 @@ namespace ARPG.Dungeon
     /// <summary>Owns dungeon lifetimes and checkpoint transactions; systems schedule the work.</summary>
     public partial class DungeonManager
     {
+        public const SaveScope CompletionSaveScope = SaveScope.Player | SaveScope.World |
+            SaveScope.NpcState | SaveScope.Dungeons | SaveScope.Narrative;
+
         private ComponentManager _components;
         private List<ComponentManager.SuspendedEntity> _suspendedWorld = new();
         private DungeonRecord _active;
@@ -25,8 +28,12 @@ namespace ARPG.Dungeon
         private bool _menuOpen;
         private bool _recoveryRequired;
         private int _lifetime;
+        private long _completionRevision;
+        private long _savedCompletionRevision;
+        private Task<bool> _completionSaveTask;
         private float _nextCheckpoint;
         private float _nextRetry;
+        private float _nextCompletionSaveRetry;
 
         public DungeonSettings Settings { get; private set; } = new();
         public MapManager ActiveMap { get; private set; }
@@ -35,12 +42,12 @@ namespace ARPG.Dungeon
         public bool IsInitialized => _initialized;
         public bool IsCommitting => _committing;
         public bool CompletionPending => _completionPending;
+        public bool HasUnsavedCompletion => _completionRevision != _savedCompletionRevision;
+        public long CompletionRevision => _completionRevision;
+        public int CompletionLifetime => _lifetime;
         public bool HasPlayerSaveOverride => _playerSaveOverride;
         public bool RequiresCheckpoint => IsInside || _busy || AR.s.Data.Player.CurrentMapKind == MapKind.Dungeon;
-        public bool GameplayPaused => IsBusy || _deathPending ||
-                                      (_completionPending == true &&
-                                       (AR.s.Npc == null || AR.s.Npc.IsPlayerInDuel == false)) ||
-                                      (IsInside && _menuOpen);
+        public bool GameplayPaused => IsBusy || _deathPending || (IsInside && _menuOpen);
         public DungeonRecord ActiveRecord => _active;
 
         public void Initialize()
@@ -75,7 +82,9 @@ namespace ARPG.Dungeon
             _active = null;
             _busy = _playerSaveOverride = _committing = _completionPending = _deathPending = _menuOpen = false;
             _recoveryRequired = false;
-            _nextCheckpoint = _nextRetry = 0;
+            _completionRevision = _savedCompletionRevision = 0;
+            _completionSaveTask = null;
+            _nextCheckpoint = _nextRetry = _nextCompletionSaveRetry = 0;
         }
 
         public async Task<bool> EnterAsync(string dungeonId)
@@ -244,7 +253,9 @@ namespace ARPG.Dungeon
                 Notify("결투 중에는 던전에서 나갈 수 없습니다.");
                 return false;
             }
-            if (_completionPending == true && await CompleteAsync() == false) return false;
+            // Apply any pending boss result before staging the map transition. Its save scope is
+            // retained until a manifest commits, so the exit can persist it even after a failed save.
+            if (_completionPending == true && TryApplyCompletion() == false) return false;
             _busy = true;
             int lifetime = _lifetime;
             var player = AR.s.Data.Player;
@@ -272,7 +283,8 @@ namespace ARPG.Dungeon
                     player.CurrentHp = Mathf.Max(1, stat.FinalMaxHp);
                 _playerSaveOverride = true;
                 staged = true;
-                // 소문 해결은 보스 완료 커밋에서 이미 저장했다. 퇴장은 원장을 바꾸지 않는다 (NPC_NARRATIVE_CONTENT_DESIGN §7.4).
+                // 소문 해결은 보스 완료 때 이미 원장에 반영했다. 그 저장이 아직 성공하지 않았으면 이 퇴장 커밋이
+                // 완료 묶음을 함께 싣는다. 퇴장은 원장을 바꾸지 않는다 (NPC_NARRATIVE_CONTENT_DESIGN §7.4).
                 if (record.Completed == true) AR.s.Data.Dungeons.Dungeons.Remove(record);
                 // 퇴장(ESC·사망 공통) 시 동행 종료를 퇴장 커밋(World)에 함께 싣는다 (NPC_COMBAT_DESIGN §4.5)
                 companionId = AR.s.Npc.StageCompanionDungeonExit();
@@ -345,57 +357,19 @@ namespace ARPG.Dungeon
 
         public async Task<bool> CompleteAsync(SaveScope scope = SaveScope.Player | SaveScope.World | SaveScope.Dungeons)
         {
-            if (_busy == true || IsInside == false) return false;
-            if (AR.s.Npc.IsPlayerInDuel == true) return false;
-            if (_active.Completed == true) { _completionPending = false; return true; }
-            if (_completionPending == false || TryFindSlot(_active.DungeonId, out var village, out var slot) == false ||
-                slot.Generation != _active.Generation) return false;
-            _busy = true;
-            int lifetime = _lifetime;
-            try
-            {
-                await DrainAsync(ActiveMap.Context);
-                if (lifetime != _lifetime) return false;
-                if (DungeonCompletionTransaction.TryStage(AR.s.Data.Dungeons, AR.s.Data.Player,
-                    _active, AR.s.Data.WorldSeed, AR.s.Time.CurrentGameTime,
-                    _active.ReplacementCooldownHours, out var transaction) == false) return false;
-                using (transaction)
-                {
-                    // 보스 처치 결과를 공통 원장에 같은 커밋으로 기록한다. 플레이어 측 처치면 소문 해결과 동행의 행적 소문,
-                    // 아니면 미해결 종료다. 맵을 지우기 전에 해결 근거와 입구 위치를 원장에 남긴다 (NPC_NARRATIVE_CONTENT_DESIGN §7.4).
-                    var narrative = AR.s.Npc.StageDungeonCompletion(_active, slot.EntranceX, slot.EntranceY,
-                        CompanionInDungeonId(), AR.s.Time.CurrentGameTime);
-                    bool committed = false;
-                    try
-                    {
-                        // Completion runs during gameplay; flush marked changes without rebuilding every simulation snapshot.
-                        if (await CommitAsync(scope | SaveScope.Player | SaveScope.World |
-                                              SaveScope.NpcState | SaveScope.Dungeons | SaveScope.Narrative,
-                                              rebuildSaveSnapshots: false) == false)
-                        {
-                            Notify("보스 완료 저장 실패. 보상과 입구 교체를 함께 재시도합니다.");
-                            return false;
-                        }
-                        transaction.Commit(); committed = true;
-                    }
-                    finally
-                    {
-                        if (committed == false && lifetime == _lifetime)
-                            AR.s.Npc.RollbackDungeonCompletion(narrative);
-                    }
-                }
-                if (lifetime != _lifetime) return false;
-                _completionPending = false;
-                // 단기 목표: 이 던전을 노리던 마을 NPC의 원수 갚기는 이룸 — 동행한 주인은 "함께" (NPC_OBJECTIVE_DESIGN §6.4).
-                // 커밋이 끝난 뒤라 되돌릴 일이 없다. NPC 쪽 변화는 다음 저장에 실린다 (D47).
-                AR.s.Npc.NotifyObjectiveDungeonClosedByPlayer(_active.VillageId, _active.DungeonId, CompanionInDungeonId(),
-                    AR.s.Time.CurrentGameTime);
-                RefreshNarrativeSelections();
-                RebuildEntranceIndex();
-                Notify("던전 완료! ESC 메뉴에서 던전 나오기를 선택하세요.");
-                return true;
-            }
-            finally { if (lifetime == _lifetime) _busy = false; }
+            // async keeps exceptions in the returned task for fire-and-forget SaveAsync callers.
+            // Everything before the await still runs synchronously, so the live result applies at once.
+            if (_busy == true || IsInside == false || AR.s.Npc.IsPlayerInDuel == true) return false;
+            if (TryApplyCompletion() == false) return false;
+            if (HasUnsavedCompletion == false) return true;
+            _completionSaveTask = SaveCompletionAsync(scope);
+            return await _completionSaveTask;
+        }
+
+        public void MarkCompletionSaved(long capturedRevision, int capturedLifetime)
+        {
+            if (capturedLifetime == _lifetime && capturedRevision > _savedCompletionRevision)
+                _savedCompletionRevision = capturedRevision;
         }
 
         public void CaptureCheckpoint()
@@ -409,16 +383,82 @@ namespace ARPG.Dungeon
         public async void TickCheckpoint()
         {
             if (_initialized == false || _busy == true || IsInside == false || Time.unscaledTime < _nextRetry) return;
-            _nextRetry = Time.unscaledTime + 3f;
+            int lifetime = _lifetime;
             try
             {
-                if (_completionPending == true && await CompleteAsync() == false) return;
-                if (_deathPending == true) { await ExitAsync(true); return; }
+                // Normal completion/death starts immediately. Only a failed attempt needs a retry delay.
+                if (_completionPending == true)
+                {
+                    if (AR.s.Npc.IsPlayerInDuel == true) return;
+                    bool completed = await CompleteAsync();
+                    if (lifetime != _lifetime) return;
+                    _nextRetry = _completionPending == true && completed == false ? Time.unscaledTime + 3f : 0f;
+                    return;
+                }
+                if (_deathPending == true)
+                {
+                    bool exited = await ExitAsync(true);
+                    if (lifetime == _lifetime)
+                        _nextRetry = exited == true ? 0f : Time.unscaledTime + 3f;
+                    return;
+                }
+                if (HasUnsavedCompletion == true &&
+                    (_completionSaveTask == null || _completionSaveTask.IsCompleted == true) &&
+                    Time.unscaledTime >= _nextCompletionSaveRetry && AR.s.Npc.IsPlayerInDuel == false)
+                {
+                    await CompleteAsync();
+                    return;
+                }
                 if (Time.unscaledTime < _nextCheckpoint) return;
                 _nextCheckpoint = Time.unscaledTime + Mathf.Max(10f, Settings.AutoSaveSeconds);
                 await AR.s.Data.SaveAsync(SaveScope.Player | SaveScope.World | SaveScope.Dungeons);
             }
-            catch (Exception ex) { Notify("던전 체크포인트 오류: " + ex.Message); }
+            catch (Exception ex)
+            {
+                if (lifetime != _lifetime) return;
+                if (_completionPending == true || _deathPending == true)
+                    _nextRetry = Time.unscaledTime + 3f;
+                if (HasUnsavedCompletion == true)
+                    _nextCompletionSaveRetry = Time.unscaledTime + 3f;
+                Notify("던전 체크포인트 오류: " + ex.Message);
+            }
+        }
+
+        private bool TryApplyCompletion()
+        {
+            if (_active.Completed == true) { _completionPending = false; return true; }
+            if (_completionPending == false || TryFindSlot(_active.DungeonId, out _, out var slot) == false ||
+                slot.Generation != _active.Generation) return false;
+            if (DungeonCompletionTransaction.TryStage(AR.s.Data.Dungeons, AR.s.Data.Player,
+                _active, AR.s.Data.WorldSeed, AR.s.Time.CurrentGameTime,
+                _active.ReplacementCooldownHours, out var transaction) == false) return false;
+            using (transaction)
+            {
+                // No awaits: the completion and its NPC records become one live state before any
+                // snapshot is captured. Rollback is only possible inside this synchronous stage.
+                AR.s.Npc.StageDungeonCompletion(_active, slot.EntranceX, slot.EntranceY,
+                    CompanionInDungeonId(), AR.s.Time.CurrentGameTime);
+                transaction.Commit();
+            }
+            _completionPending = false;
+            _completionRevision++;
+            AR.s.Npc.NotifyObjectiveDungeonClosedByPlayer(_active.VillageId, _active.DungeonId, CompanionInDungeonId(),
+                AR.s.Time.CurrentGameTime);
+            RefreshNarrativeSelections();
+            RebuildEntranceIndex();
+            Notify("던전 완료! ESC 메뉴에서 던전 나오기를 선택하세요.");
+            return true;
+        }
+
+        private async Task<bool> SaveCompletionAsync(SaveScope scope)
+        {
+            int lifetime = _lifetime;
+            bool saved = await AR.s.Data.SaveAsync(scope | CompletionSaveScope);
+            if (lifetime != _lifetime) return false;
+            _nextCompletionSaveRetry = saved == true ? 0f : Time.unscaledTime + 3f;
+            if (saved == false)
+                Notify("던전 완료 저장에 실패했습니다. 완료 상태를 유지하고 저장을 재시도합니다.");
+            return saved;
         }
 
         // 던전 안에 실제로 소환된 동행 NPC. 없으면 -1.

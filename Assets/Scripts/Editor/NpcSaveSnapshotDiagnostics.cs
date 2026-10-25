@@ -52,6 +52,8 @@ namespace ARPG.Editor
             object dungeonManager = AR.s.Dungeon;
             FieldInfo completionSaved = Field(dungeonManager, "_savedNpcCompletionRevision");
             object? savedCompletion = completionSaved.GetValue(dungeonManager);
+            FieldInfo playerCompletionSaved = Field(dungeonManager, "_savedCompletionRevision");
+            object? savedPlayerCompletion = playerCompletionSaved.GetValue(dungeonManager);
             float timeScale = Time.timeScale;
             SaveScope[] scopes = { SaveScope.NpcSocial, SaveScope.NpcParties, SaveScope.NpcMeta, SaveScope.WorldSim };
             string[] partNames = { "npc_social", "npc_parties", "npc_meta", "world_sim" };
@@ -109,6 +111,7 @@ namespace ARPG.Editor
                 finally
                 {
                     completionSaved.SetValue(dungeonManager, savedCompletion);
+                    playerCompletionSaved.SetValue(dungeonManager, savedPlayerCompletion);
                     Time.timeScale = timeScale;
                     UnityEngine.Object.DestroyImmediate(owner);
                     if (Directory.Exists(root) == true) Directory.Delete(root, true);
@@ -225,6 +228,7 @@ namespace ARPG.Editor
                 Swap(AR.s, "_buildingManager", buildingManager); Swap(AR.s, "_mapManager", mapManager);
                 Field(buildingManager, "_buildingSaveDict").SetValue(buildingManager, world.BuildingSaveDatas);
                 Swap(AR.s.Dungeon, "_npcCompletionRevision", 0L); Swap(AR.s.Dungeon, "_savedNpcCompletionRevision", 0L);
+                Swap(AR.s.Dungeon, "_completionRevision", 0L); Swap(AR.s.Dungeon, "_savedCompletionRevision", 0L);
                 Field(npc, "_npcSaveDict").SetValue(npc, world.NpcSaveDatas);
                 Field(npc, "_npcPartyDict").SetValue(npc, new Dictionary<int, NpcPartyState> { { 7, party } });
                 Field(npc, "_simulationPartyIds").SetValue(npc, new List<int> { 7 });

@@ -255,37 +255,19 @@ namespace ARPG.Npc
 
         // ================= 던전 결과 (§3.1·§7.4) =================
 
-        /// <summary>보스 완료 커밋 전에 바꾼 원장·NPC 상태. 저장이 실패하면 RollbackDungeonCompletion으로 되돌린다.</summary>
-        public sealed class NarrativeCompletionStage
-        {
-            internal NarrativeContentInstance? InstanceBefore;
-            internal NpcSaveData? Requester;
-            internal NpcNarrativeRequest? RequestBefore;
-            internal NpcSaveData? Companion;
-            internal List<NpcRumor>? CompanionRumorsBefore;
-            // 단기 목표 부탁 (NPC_OBJECTIVE_DESIGN §6.4·§8.3): 바꾼 인스턴스의 사본, 비운 부탁 칸, 직접 말하기용으로 새로 만든 인스턴스
-            internal List<NarrativeContentInstance>? ObjectiveInstancesBefore;
-            internal List<NpcSaveData>? ObjectiveRequesters;
-            internal List<NpcNarrativeRequest?>? ObjectiveRequestsBefore;
-            internal List<NarrativeContentInstance>? ObjectiveCreated;
-            internal List<bool>? ObjectiveCreatedDefinitions;
-            internal List<bool>? ObjectiveCreatedPolicies;
-            public bool Resolved { get; internal set; }
-        }
-
         /// <summary>
-        /// 보스 처치로 던전이 닫힐 때 부른다 (완료 저장과 같은 커밋). 플레이어 측 처치면 소문을 해결로 기록하고,
+        /// 보스 처치로 던전이 닫힐 때 부른다 (DungeonManager의 await 없는 완료 적용 안). 플레이어 측 처치면 소문을 해결로 기록하고,
         /// 아니면 미해결 종료로 기록해 부탁 칸을 비운다. 던전 안에 있던 동행은 행적 소문을 직접 겪은 것으로 받는다.
+        /// 저장이 실패해도 되돌리지 않고 저장만 다시 한다 (NPC_NARRATIVE_CONTENT_DESIGN §7.4 2026-10-25 개정). 소문을 해결했으면 true.
         /// </summary>
-        public NarrativeCompletionStage StageDungeonCompletion(DungeonRecord record, int entranceX, int entranceY,
+        public bool StageDungeonCompletion(DungeonRecord record, int entranceX, int entranceY,
             int companionNpcId, float now)
         {
-            var stage = new NarrativeCompletionStage();
             NarrativeContentInstance? instance = GetDungeonNarrative(record.DungeonId);
             bool playerParty = record.BossKilledByPlayerParty;
+            bool resolved = false;
             if (instance != null && instance.IsOpen == true)
             {
-                stage.InstanceBefore = instance.Clone();
                 MarkNarrativeInstanceDirty(instance, NarrativeSaveGroup.All);
                 instance.HasEntranceContext = true;
                 instance.EntranceX = entranceX;
@@ -295,47 +277,25 @@ namespace ARPG.Npc
                 if (playerParty == true)
                 {
                     instance.Progress = NarrativeRumorProgress.Resolved;
-                    stage.Resolved = true;
+                    resolved = true;
                 }
                 else
                 {
                     instance.Ended = true;
-                    stage.Requester = ReleaseRequestOnEnd(instance, out stage.RequestBefore);
+                    ReleaseRequestOnEnd(instance);
                 }
             }
             if (playerParty == true && companionNpcId >= 0 && IsNpcAlive(companionNpcId) == true)
             {
                 NpcSaveData companion = GetSaveData(companionNpcId)!;
-                stage.Companion = companion;
-                stage.CompanionRumorsBefore = new List<NpcRumor>(companion.Rumors);
-                companion.Rumors = new List<NpcRumor>(companion.Rumors);
-                AddRumor(companion, CreateDeedRumor(stage.Resolved == true ? PlayerDeedKind.RumorResolved : PlayerDeedKind.DungeonCleared,
-                    stage.Resolved == true ? instance!.InstanceId : string.Empty, record.VillageId, record.SlotIndex, record.Generation,
+                AddRumor(companion, CreateDeedRumor(resolved == true ? PlayerDeedKind.RumorResolved : PlayerDeedKind.DungeonCleared,
+                    resolved == true ? instance!.InstanceId : string.Empty, record.VillageId, record.SlotIndex, record.Generation,
                     now, record.CompletionGold, -1, false), now);
                 _rumorCounters.CreatedPlayerDeed++;
             }
             // 단기 목표 부탁: 같은 던전을 노리던 원수 갚기 부탁을 해결·미해결 종료로, 부탁 없이 대신 닫았으면 직접 말하기 사건을 만든다
-            StageObjectiveDungeonCompletion(stage, record, entranceX, entranceY, companionNpcId, now);
-            return stage;
-        }
-
-        public void RollbackDungeonCompletion(NarrativeCompletionStage stage)
-        {
-            RollbackObjectiveDungeonCompletion(stage);
-            if (stage.InstanceBefore != null)
-                ReplaceNarrativeInstance(stage.InstanceBefore);
-            if (stage.Requester != null)
-            {
-                MarkSaveDirty(stage.Requester.EntityId, NpcSaveGroup.NarrativeRequest);
-                stage.Requester.NarrativeRequest = stage.RequestBefore;
-                _narrative.InvalidateDialogues(stage.Requester.EntityId);
-            }
-            if (stage.Companion != null && stage.CompanionRumorsBefore != null)
-            {
-                MarkSaveDirty(stage.Companion.EntityId, NpcSaveGroup.Rumors);
-                stage.Companion.Rumors = stage.CompanionRumorsBefore;
-                _narrative.InvalidateDialogues(stage.Companion.EntityId);
-            }
+            StageObjectiveDungeonCompletion(record, entranceX, entranceY, companionNpcId, now);
+            return resolved;
         }
 
         /// <summary>
@@ -357,24 +317,21 @@ namespace ARPG.Npc
             instance.Ended = true;
             instance.ProgressGameTime = now;
             instance.Revision++;
-            ReleaseRequestOnEnd(instance, out _);
+            ReleaseRequestOnEnd(instance);
         }
 
         // 미해결 종료: 칸을 비우고, 부탁한 NPC가 살아 있으면 다음 대화에서 알린다 (§4.1).
-        private NpcSaveData? ReleaseRequestOnEnd(NarrativeContentInstance instance, out NpcNarrativeRequest? requestBefore)
+        private void ReleaseRequestOnEnd(NarrativeContentInstance instance)
         {
-            requestBefore = null;
             if (instance.RequesterNpcId < 0)
-                return null;
+                return;
             instance.EndNoticePending = IsNpcAlive(instance.RequesterNpcId);
             NpcSaveData? requester = GetSaveData(instance.RequesterNpcId);
             if (requester == null || requester.NarrativeRequest == null || requester.NarrativeRequest.InstanceId != instance.InstanceId)
-                return null;
-            requestBefore = requester.NarrativeRequest;
+                return;
             MarkSaveDirty(requester.EntityId, NpcSaveGroup.NarrativeRequest);
             requester.NarrativeRequest = null;
             _narrative.InvalidateDialogues(requester.EntityId);
-            return requester;
         }
 
         /// <summary>칸의 주인이 죽으면 보고 대상이 없으므로 보답·전파 없이 칸을 비운다 (§4.1). 사망 체크포인트와 함께 저장된다.</summary>

@@ -597,6 +597,12 @@ namespace ARPG.Data
                 SaveScope scope = requestedScope;
                 if (captureRuntimeManagers == true && AR.s.Dungeon.RequiresCheckpoint == true)
                     scope |= SaveScope.Player | SaveScope.World | SaveScope.Dungeons;
+                // A live boss completion is never rolled back after capture. Every later save must
+                // include its whole dependency set until a manifest acknowledges that revision.
+                long completionRevision = captureRuntimeManagers == true ? AR.s.Dungeon.CompletionRevision : 0;
+                int completionLifetime = captureRuntimeManagers == true ? AR.s.Dungeon.CompletionLifetime : 0;
+                if (captureRuntimeManagers == true && AR.s.Dungeon.HasUnsavedCompletion == true)
+                    scope |= Dungeon.DungeonManager.CompletionSaveScope;
                 // NPC 던전 완료(NPC_AMBITION D58)는 즉시 저장하지 않는다. 대신 슬롯 변경(Dungeons)과 NPC 보상(NpcState)이
                 // 한쪽만 저장되지 않도록, 둘 중 하나를 싣는 다음 저장이 나머지도 함께 싣는다.
                 const SaveScope npcCompletionScope = SaveScope.Dungeons | SaveScope.NpcState;
@@ -677,6 +683,9 @@ namespace ARPG.Data
                 if (scope == SaveScope.All) _needsFullSaveAfterMigration = false;
                 if (captureRuntimeManagers == true && (scope & npcCompletionScope) == npcCompletionScope)
                     AR.s.Dungeon.MarkNpcCompletionSaved(npcCompletionRevision);
+                if (captureRuntimeManagers == true &&
+                    (scope & Dungeon.DungeonManager.CompletionSaveScope) == Dungeon.DungeonManager.CompletionSaveScope)
+                    AR.s.Dungeon.MarkCompletionSaved(completionRevision, completionLifetime);
                 if (captureRuntimeManagers == true && (scope & SaveScope.Narrative) != 0)
                     AR.s.Npc.MarkNarrativeSaved(narrativeRevision);
                 commitTimer.Stop();

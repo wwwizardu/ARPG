@@ -55,6 +55,11 @@ namespace ARPG.EditorTools
                     GreetingEncounter.FirstMeeting, string.Empty).Contains("숨겨진") == false,
                 "unselected threat context cannot enter general dialogue");
 
+            using (var completionFixture = new NarrativeDiagnosticFixture(tables, monsters, items))
+            {
+                try { await ValidateCompletionPersistence(completionFixture, report); }
+                finally { await completionFixture.Data.WaitForSaveIdleAsync(); }
+            }
             using var fixture = new NarrativeDiagnosticFixture(tables, monsters, items);
             try
             {
@@ -62,8 +67,199 @@ namespace ARPG.EditorTools
                 await ValidateNarrativeFlow(fixture, report);
                 await ValidateFollowUps(fixture, report);
                 ValidateRecentWoundStory(fixture, report);
+                ValidateCheckpointRetryScheduling(fixture, report);
             }
             finally { await fixture.Data.WaitForSaveIdleAsync(); }
+        }
+
+        private static async Task ValidateCompletionPersistence(NarrativeDiagnosticFixture fixture, StringBuilder report)
+        {
+            DungeonManager dungeon = fixture.Ar.Dungeon;
+            DataManager data = fixture.Data;
+            NpcManager npc = fixture.Npc;
+            DungeonSlot slot = fixture.Slot(fixture.RumorVillage, 0);
+            DungeonRecord record = DungeonLayout.Generate(fixture.World.WorldSeed, fixture.RumorVillage, slot,
+                fixture.Table, _diagnosticEliteIds);
+            npc.SetNarrativeOwnerSelectionReady();
+            Invoke(dungeon, "RefreshNarrativeSelections");
+            NarrativeContentInstance instance = npc.GetDungeonNarrative(record.DungeonId);
+            Require(instance != null, "live completion has a narrative instance");
+            data.Dungeons.Dungeons.Add(record);
+            fixture.Activate(record);
+            data.Player.CurrentMapKind = MapKind.Dungeon;
+            data.Player.ActiveDungeonId = record.DungeonId;
+            fixture.World.NpcCompanion.IsInDungeon = true;
+            fixture.Components.SetComponent(13, new NpcCompanionComponent());
+            Set(dungeon, "_nextCheckpoint", float.PositiveInfinity);
+            Require(await data.SaveDungeonTransactionAsync(SaveScope.All), "live completion baseline");
+            await data.WaitForSaveIdleAsync();
+            long baseline = ReadManifest(fixture.SlotPath).Revision;
+            int initialGold = data.Player.Gold;
+            long initialCount = data.Dungeons.CompletedCount;
+            int bossId = record.Objects.Find(o => o.Kind == DungeonObjectKind.Boss).Id;
+            fixture.Components.SetComponent(102, new DungeonObjectComponent
+                { DungeonId = record.DungeonId, ObjectId = bossId, IsBoss = true });
+            dungeon.HandleDeath(102, new KillCreditComponent { PlayerParty = true });
+            Require(dungeon.GameplayPaused == false, "a boss event does not pause gameplay while awaiting its update");
+
+            for (int i = 0; i < _narrativeFailurePoints.Length; i++)
+            {
+                data.DiagnosticFailurePoint = _narrativeFailurePoints[i];
+                Task<bool> save = i == 0 ? dungeon.CompleteAsync() : data.SaveAsync(SaveScope.World);
+                Require(record.Completed && dungeon.CompletionPending == false && dungeon.HasUnsavedCompletion &&
+                    dungeon.IsBusy == false && dungeon.GameplayPaused == false &&
+                    data.Player.Gold == initialGold + record.CompletionGold + i,
+                    "live completion applies once without a gameplay lock: " + _narrativeFailurePoints[i]);
+                // Gameplay can mutate the live owner after the worker's snapshot has been captured.
+                data.Player.Gold++;
+                data.MarkPlayerSaveDirty(data.Player, PlayerSaveGroup.Progress);
+                if (i == 0)
+                {
+                    data.Player._inventory[0] = new ItemData { Id = 16, ItemInstanceId = 1000000, Quantity = 1 };
+                    data.MarkPlayerSaveDirty(data.Player, PlayerSaveGroup.Inventory);
+                    npc.GetSaveData(13).Rumors.Add(DeedRumor(fixture.RumorVillage, 1, 99, 0f));
+                    npc.MarkSaveDirty(13, NpcSaveGroup.Rumors);
+                }
+                Require(await save == false, "injected live completion save failure: " + _narrativeFailurePoints[i]);
+                await data.WaitForSaveIdleAsync();
+                Require(record.Completed && dungeon.HasUnsavedCompletion && dungeon.GameplayPaused == false &&
+                    data.Player.Gold == initialGold + record.CompletionGold + i + 1 && data.Player._inventory[0].Quantity == 1 &&
+                    npc.GetSaveData(13).Rumors.Exists(r => r.Generation == 99) &&
+                    npc.GetSaveData(13).Rumors.FindAll(r => r.InstanceId == instance.InstanceId).Count == 1 &&
+                    instance.Progress == NarrativeRumorProgress.Resolved &&
+                    fixture.Slot(fixture.RumorVillage, 0).Generation == record.Generation + 1 &&
+                    data.Dungeons.CompletedCount == initialCount + 1 && ReadManifest(fixture.SlotPath).Revision == baseline,
+                    "save failure preserves completion, later pickups and NPC changes without duplicate rewards");
+            }
+            data.DiagnosticFailurePoint = null;
+            FieldInfo saveTaskField = typeof(DungeonManager).GetField("_completionSaveTask", BindingFlags.Instance | BindingFlags.NonPublic);
+            object failedTask = saveTaskField.GetValue(dungeon);
+            Set(dungeon, "_nextCompletionSaveRetry", Time.unscaledTime + 30f);
+            dungeon.TickCheckpoint();
+            Require(ReferenceEquals(failedTask, saveTaskField.GetValue(dungeon)), "failed persistence respects its retry delay");
+
+            var captured = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var allowCommit = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            data.DiagnosticBeforeCommit = async () => { captured.TrySetResult(true); await allowCommit.Task; };
+            Task<bool> retry = null;
+            Task<bool> duplicate = null;
+            int capturedGold = data.Player.Gold;
+            try
+            {
+                Set(dungeon, "_nextCompletionSaveRetry", 0f);
+                dungeon.TickCheckpoint();
+                retry = (Task<bool>)saveTaskField.GetValue(dungeon);
+                Require(await Task.WhenAny(captured.Task, Task.Delay(15000)) == captured.Task, "completion retry capture timeout");
+                Require(retry.IsCompleted == false && dungeon.GameplayPaused == false && dungeon.IsBusy == false,
+                    "gameplay continues for the full background-save wait");
+                data.Player.Gold += 11;
+                data.Player._inventory[0].Quantity = 2;
+                data.MarkPlayerSaveDirty(data.Player, PlayerSaveGroup.Progress | PlayerSaveGroup.Inventory);
+                duplicate = dungeon.CompleteAsync();
+                Require(data.Player.Gold == capturedGold + 11 && data.Dungeons.CompletedCount == initialCount + 1,
+                    "duplicate completion during a save queues persistence without reapplying the reward");
+            }
+            finally
+            {
+                data.DiagnosticBeforeCommit = null;
+                allowCommit.TrySetResult(true);
+            }
+            Require(await retry && await duplicate, "automatic persistence retry and queued completion save succeed");
+            await data.WaitForSaveIdleAsync();
+            object previous = ReadSnapshot(data, fixture.SlotPath, "manifest.prev.json");
+            object latest = ReadSnapshot(data, fixture.SlotPath, "manifest.json");
+            Require(((PlayerSaveRoot)Field(previous, "Player")).Players[0].Gold == capturedGold &&
+                ((PlayerSaveRoot)Field(latest, "Player")).Players[0].Gold == capturedGold + 11 &&
+                ((PlayerSaveRoot)Field(latest, "Player")).Players[0]._inventory[0].Quantity == 2 &&
+                ((DungeonSaveRoot)Field(latest, "Dungeons")).Dungeons.Find(d => d.DungeonId == record.DungeonId).Completed &&
+                ((NarrativeSaveRoot)Field(latest, "Narrative")).Instances.Find(n => n.InstanceId == instance.InstanceId).Progress == NarrativeRumorProgress.Resolved &&
+                ((Dictionary<int, NpcSaveData>)Field(latest, "Npcs"))[13].Rumors.Exists(r => r.Generation == 99) &&
+                (data.DiagnosticCommittedScope & (DungeonManager.CompletionSaveScope | SaveScope.Simulation)) ==
+                (DungeonManager.CompletionSaveScope | SaveScope.Simulation) && dungeon.HasUnsavedCompletion == false,
+                "retry commits the completion bundle atomically and a queued save captures later gameplay changes");
+
+            // A map transition must drain even an unrelated in-flight save before touching the map.
+            captured = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            allowCommit = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            data.DiagnosticBeforeCommit = async () => { captured.TrySetResult(true); await allowCommit.Task; };
+            Task<bool> inFlight = data.SaveAsync(SaveScope.Player);
+            Task<bool> exit = null;
+            int lifetime = dungeon.CompletionLifetime;
+            try
+            {
+                Require(await Task.WhenAny(captured.Task, Task.Delay(15000)) == captured.Task, "exit ordering capture timeout");
+                exit = dungeon.ExitAsync();
+                Require(exit.IsCompleted == false && dungeon.IsBusy && data.Player.CurrentMapKind == MapKind.Dungeon,
+                    "exit pauses only the map transition and waits for the existing save");
+                Set(dungeon, "_lifetime", lifetime + 1);
+                Set(dungeon, "_savedCompletionRevision", 0L);
+                dungeon.MarkCompletionSaved(dungeon.CompletionRevision, lifetime);
+                Require(dungeon.HasUnsavedCompletion, "an old-lifetime acknowledgement cannot clear new pending state");
+            }
+            finally
+            {
+                data.DiagnosticBeforeCommit = null;
+                allowCommit.TrySetResult(true);
+            }
+            Require(await inFlight && await exit == false && data.Player.CurrentMapKind == MapKind.Dungeon,
+                "lifetime change cancels a draining exit before it stages a new map");
+            Set(dungeon, "_busy", false);
+            report.AppendLine("PASS: live boss completion never pauses gameplay; four persistence failures preserve rewards/pickups/NPC changes; save-only retries, duplicate completion and queued snapshots preserve one reward; completion dependencies share a manifest; exit drains saves and stale-lifetime callbacks are ignored.");
+        }
+
+        private static void ValidateCheckpointRetryScheduling(NarrativeDiagnosticFixture fixture, StringBuilder report)
+        {
+            DungeonManager dungeon = fixture.Ar.Dungeon;
+            DungeonSlot slot = fixture.Slot(fixture.EmptyVillage, 0);
+            DungeonRecord record = DungeonLayout.Generate(fixture.World.WorldSeed, fixture.EmptyVillage, slot,
+                fixture.Table, _diagnosticEliteIds);
+            FieldInfo checkpointDeadline = typeof(DungeonManager).GetField("_nextCheckpoint", BindingFlags.Instance | BindingFlags.NonPublic);
+            FieldInfo retryDeadline = typeof(DungeonManager).GetField("_nextRetry", BindingFlags.Instance | BindingFlags.NonPublic);
+            float nextCheckpoint = (float)checkpointDeadline.GetValue(dungeon);
+            fixture.Activate(record);
+            Set(dungeon, "_completionPending", false);
+            Set(dungeon, "_nextCheckpoint", float.PositiveInfinity);
+            Set(dungeon, "_nextRetry", 0f);
+            try
+            {
+                dungeon.TickCheckpoint();
+                Require((float)retryDeadline.GetValue(dungeon) == 0f,
+                    "an idle checkpoint tick does not delay a subsequent boss completion");
+
+                // An already committed boss exercises the successful scheduling path without another save.
+                record.Completed = true;
+                Set(dungeon, "_completionPending", true);
+                dungeon.TickCheckpoint();
+                Require(dungeon.CompletionPending == false && (float)retryDeadline.GetValue(dungeon) == 0f,
+                    "completion is handled on the first tick after the boss event");
+
+                record.Completed = false;
+                record.Generation = slot.Generation + 1; // Reject completion before mutating the ledger.
+                Set(dungeon, "_completionPending", true);
+                float failedAt = Time.unscaledTime;
+                dungeon.TickCheckpoint();
+                float retryAt = (float)retryDeadline.GetValue(dungeon);
+                Require(dungeon.CompletionPending == true && dungeon.IsBusy == false && retryAt >= failedAt + 3f,
+                    "failed completion remains pending and schedules a three-second retry");
+
+                record.Completed = true;
+                dungeon.TickCheckpoint();
+                Require(dungeon.CompletionPending == true && (float)retryDeadline.GetValue(dungeon) == retryAt,
+                    "ticks before the retry deadline neither retry nor extend the delay");
+
+                Set(dungeon, "_nextRetry", Time.unscaledTime);
+                dungeon.TickCheckpoint();
+                Require(dungeon.CompletionPending == false && (float)retryDeadline.GetValue(dungeon) == 0f,
+                    "retry runs at its deadline and success clears the retry delay");
+                report.AppendLine("PASS: idle ticks do not throttle boss completion; first completion tick is immediate; only failure schedules a three-second retry; successful retry clears the delay.");
+            }
+            finally
+            {
+                fixture.Deactivate();
+                Set(dungeon, "_completionPending", false);
+                Set(dungeon, "_nextRetry", 0f);
+                Set(dungeon, "_nextCheckpoint", nextCheckpoint);
+            }
         }
 
         // ── 작성 팩 (§5.1·§5.2) ──
@@ -459,47 +655,14 @@ namespace ARPG.EditorTools
             Set(dungeon, "_completionPending", false);
             Require(record.BossKilledByPlayerParty, "companion solo boss kill credits the player party");
             fixture.Deactivate();
-            int companionDeedsBefore = npc.GetSaveData(13).Rumors.Count;
             const SaveScope completionScope = SaveScope.Player | SaveScope.World | SaveScope.NpcState | SaveScope.Dungeons | SaveScope.Narrative;
             Require(await data.SaveDungeonTransactionAsync(completionScope), "pre-completion checkpoint seeds snapshot caches");
             SaveManifest beforeCompletion = ReadManifest(fixture.SlotPath);
-            baseline = beforeCompletion.Revision;
             int completionGoldBefore = data.Player.Gold;
             long completedBefore = data.Dungeons.CompletedCount;
             int unchangedShard = DataManager.GetNpcShardIndex(30);
             long unchangedShardGeneration = npc.GetSaveShardGeneration(unchangedShard);
-            foreach (string failure in _narrativeFailurePoints)
-            {
-                Require(DungeonCompletionTransaction.TryStage(data.Dungeons, data.Player, record, seed, now, record.ReplacementCooldownHours,
-                    out var failed), "stage completion");
-                using (failed)
-                {
-                    var stage = npc.StageDungeonCompletion(record, rumorSlot.EntranceX, rumorSlot.EntranceY, 13, now);
-                    Require(stage.Resolved && npc.GetNarrativeInstance(rumorId).Progress == NarrativeRumorProgress.Resolved, "staged resolution");
-                    data.DiagnosticFailurePoint = failure;
-                    Require(await (Task<bool>)Invoke(dungeon, "CommitAsync", completionScope, false) == false,
-                        "injected incremental completion failure " + failure);
-                    data.DiagnosticFailurePoint = null;
-                    npc.RollbackDungeonCompletion(stage);
-                }
-                Require(npc.GetNarrativeInstance(rumorId).IsOpen && npc.GetSaveData(13).Rumors.Count == companionDeedsBefore &&
-                    npc.GetSaveData(owner).NarrativeRequest != null && ReadManifest(fixture.SlotPath).Revision == baseline &&
-                    record.Completed == false && data.Player.Gold == completionGoldBefore && data.Dungeons.CompletedCount == completedBefore,
-                    "completion failure rolls back resolution, companion deed and slot: " + failure);
-                // Persist the rollback incrementally too: a later retry must not hide stale staged snapshots.
-                Require(await data.SaveDungeonTransactionAsync(completionScope, rebuildSaveSnapshots: false),
-                    "incremental checkpoint after completion rollback " + failure);
-                snapshot = ReadSnapshot(data, fixture.SlotPath, "manifest.json");
-                var rolledBackDungeons = (DungeonSaveRoot)Field(snapshot, "Dungeons");
-                Require(((NarrativeSaveRoot)Field(snapshot, "Narrative")).Instances.Find(i => i.InstanceId == rumorId).IsOpen &&
-                    ((Dictionary<int, NpcSaveData>)Field(snapshot, "Npcs"))[13].Rumors.Count == companionDeedsBefore &&
-                    ((PlayerSaveRoot)Field(snapshot, "Player")).Players[0].Gold == completionGoldBefore &&
-                    rolledBackDungeons.CompletedCount == completedBefore &&
-                    rolledBackDungeons.Dungeons.Find(d => d.DungeonId == record.DungeonId).Completed == false &&
-                    rolledBackDungeons.Villages.Find(v => v.VillageId == record.VillageId).Slots[record.SlotIndex].Generation == record.Generation,
-                    "incremental save persists restored completion state " + failure);
-                baseline = ReadManifest(fixture.SlotPath).Revision;
-            }
+            // Save failures never roll a live completion back; ValidateCompletionPersistence covers them.
             Require(DungeonCompletionTransaction.TryStage(data.Dungeons, data.Player, record, seed, now, record.ReplacementCooldownHours,
                 out var completion), "stage completion retry");
             using (completion)
@@ -530,7 +693,7 @@ namespace ARPG.EditorTools
                     "incremental completion reuses unchanged file " + unchangedParts[i]);
             Require(npc.GetSaveShardGeneration(unchangedShard) == unchangedShardGeneration,
                 "completion does not rebuild an unrelated NPC shard");
-            report.AppendLine("PASS: incremental boss completion reuses unchanged simulation files; four failure rollbacks persist before retry; gold, slot, count and companion deed share one revision.");
+            report.AppendLine("PASS: incremental boss completion reuses unchanged simulation files; gold, slot, count and companion deed share one revision.");
             fixture.World.NpcCompanion.IsInDungeon = false;
             fixture.Components.RemoveComponent<NpcCompanionComponent>(13);
 
@@ -543,15 +706,17 @@ namespace ARPG.EditorTools
             secondRecord.BossKilledByPlayerParty = false;
             Require(DungeonCompletionTransaction.TryStage(data.Dungeons, data.Player, secondRecord, seed, now, secondRecord.ReplacementCooldownHours,
                 out var unrelated), "stage unrelated completion");
+            // Runtime never rolls a completion back. Restore this uncommitted case directly so the next check can reuse it.
+            NarrativeContentInstance secondBefore = npc.GetNarrativeInstance(secondId).Clone();
             using (unrelated)
             {
-                var stage = npc.StageDungeonCompletion(secondRecord, secondSlot.EntranceX, secondSlot.EntranceY, -1, now);
-                Require(stage.Resolved == false && npc.GetNarrativeInstance(secondId).Ended &&
+                bool secondResolved = npc.StageDungeonCompletion(secondRecord, secondSlot.EntranceX, secondSlot.EntranceY, -1, now);
+                Require(secondResolved == false && npc.GetNarrativeInstance(secondId).Ended &&
                     npc.GetNarrativeInstance(secondId).Progress == NarrativeRumorProgress.Unresolved, "non-party boss kill ends the rumor unresolved");
-                npc.RollbackDungeonCompletion(stage);
+                Invoke(npc, "ReplaceNarrativeInstance", secondBefore);
             }
-            Require(npc.GetNarrativeInstance(secondId).IsOpen, "rollback reopens the unrelated case");
-            report.AppendLine("PASS: monster placement, normal kill keeps rumor open, companion solo boss resolution, four completion failure rollbacks, non-party end.");
+            Require(npc.GetNarrativeInstance(secondId).IsOpen, "restoring the copy reopens the unrelated case");
+            report.AppendLine("PASS: monster placement, normal kill keeps rumor open, companion solo boss resolution, non-party end.");
 
             // 4. 보고 — 보고 전에는 아무도 반응하지 않는다. 정책은 사건이 고정한 스냅샷을 쓴다.
             Require(npc.FindNarrativeConversation(listener).Kind == NarrativeConversationKind.None, "before the report nobody reacts");

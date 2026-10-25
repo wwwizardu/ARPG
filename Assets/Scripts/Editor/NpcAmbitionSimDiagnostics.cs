@@ -752,6 +752,8 @@ namespace ARPG.EditorTools
                 Swap(swaps, dungeon, "_entranceIndexDirty", false);
                 Swap(swaps, dungeon, "_npcCompletionRevision", 0L);
                 Swap(swaps, dungeon, "_savedNpcCompletionRevision", 0L);
+                Swap(swaps, dungeon, "_completionRevision", 0L);
+                Swap(swaps, dungeon, "_savedCompletionRevision", 0L);
                 Swap(swaps, dungeon, "_busy", false);
 
                 VillageDungeonSlots? two = FindCleanVillage(root, 2);
@@ -1128,6 +1130,8 @@ namespace ARPG.EditorTools
             Swap(swaps, dungeon, "_entranceIndexDirty", false);
             Swap(swaps, dungeon, "_npcCompletionRevision", 0L);
             Swap(swaps, dungeon, "_savedNpcCompletionRevision", 0L);
+            Swap(swaps, dungeon, "_completionRevision", 0L);
+            Swap(swaps, dungeon, "_savedCompletionRevision", 0L);
             Swap(swaps, dungeon, "_busy", false);
             if (NpcManager.SaveSnapshotEnabled == true)
                 AR.s.Npc.RebuildSaveSnapshot();
@@ -6248,7 +6252,8 @@ namespace ARPG.EditorTools
             sb.Append("dungeons=").Append(JsonConvert.SerializeObject(AR.s.Data.Dungeons, JsonSettings.Default)).Append('\n');
             object dungeon = AR.s.Dungeon;
             string[] dungeonFields = { "_villageSlots", "_entranceIndexDirty", "_npcCompletionRevision",
-                "_savedNpcCompletionRevision", "_busy" };
+                "_savedNpcCompletionRevision", "_completionRevision", "_savedCompletionRevision",
+                "_completionSaveTask", "_nextCompletionSaveRetry", "_busy" };
             for (int i = 0; i < dungeonFields.Length; i++)
             {
                 object? value = GetField(dungeon, dungeonFields[i]).GetValue(dungeon);
