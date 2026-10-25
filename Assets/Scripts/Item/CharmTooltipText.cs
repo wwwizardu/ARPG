@@ -27,7 +27,7 @@ namespace ARPG.Item
                 case GE.CharmShape.Line3: return "1×3";
                 case GE.CharmShape.LShape: return "L자";
                 case GE.CharmShape.Square2: return "2×2";
-                default: return "3×3";
+                default: return shape.ToString();
             }
         }
 
@@ -49,7 +49,8 @@ namespace ARPG.Item
                     ItemData? charm = data.Charms[i].Charm;
                     if (charm?.Charm == null)
                         continue;
-                    sb.Append("· ").Append(charm.Table?.Name ?? "참").Append(": ");
+                    sb.Append("· ").Append(charm.Table?.Name ?? "참")
+                        .Append(" (").Append(EquipmentOptionText.GetGradeName(charm.Charm.GetGrade())).Append("): ");
                     AppendModsInline(sb, charm.Charm.Mods);
                     sb.Append('\n');
                 }
@@ -102,7 +103,7 @@ namespace ARPG.Item
             return sb.ToString().TrimEnd('\n');
         }
 
-        /// <summary>판 기본 가격 + 박힌 참 기본 가격 × 레벨 배율 (마을 거래 성향·물가 전).</summary>
+        /// <summary>판 기본 가격 + 박힌 참 기본 가격 × 등급·레벨 배율 (마을 거래 성향·물가 전).</summary>
         public static int GetBaseSellValue(ItemData board)
         {
             if (board.CharmBoard == null)
@@ -113,7 +114,7 @@ namespace ARPG.Item
                 ItemData? charm = board.CharmBoard.Charms[i].Charm;
                 if (charm?.Charm == null || charm.Table == null)
                     continue;
-                total += CharmPriceRules.ApplyCharmLevelMul(charm.Table.BasePrice, AR.s.Data.GetDropBand(charm.Charm.ItemLevel));
+                total += CharmPriceRules.ApplyCharmSellMul(charm.Table.BasePrice, charm.Charm, AR.s.Data.GetDropBand(charm.Charm.ItemLevel));
             }
             return total > int.MaxValue ? int.MaxValue : (int)total;
         }
@@ -204,7 +205,6 @@ namespace ARPG.Item
                 ModInstance total = new ModInstance
                 {
                     ModTableId = modId,
-                    Slot = GE.ModSlot.Charm,
                     Value1 = (ushort)System.Math.Min(_totalScratch[modId], ushort.MaxValue),
                 };
                 total.OnLoadCompleted();

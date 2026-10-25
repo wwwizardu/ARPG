@@ -46,6 +46,13 @@ namespace ARPG.Data
 
         public void OnLoadCompleted()
         {
+            // 2026-10-25 제거된 3×3 참(아이템 표 행 없음)은 2×2 참으로 바꾼다 (PLAYER_LEVEL_CHARM_DESIGN §6.3)
+            if (Charm != null && Charm.MigrateRemovedShape() == true)
+            {
+                Id = ARPG.Item.CharmRules.GetCharmItemId(Charm.Shape);
+                Table = null;
+            }
+
             if (Table == null)
             {
                 Table = AR.s.Data.GetItem(Id);

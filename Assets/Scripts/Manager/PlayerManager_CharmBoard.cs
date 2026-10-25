@@ -203,10 +203,18 @@ namespace ARPG.Manager
                         ModInstance mod = charm.Mods[m];
                         if (mod.Table == null)
                             mod.OnLoadCompleted();
-                        if (mod.Table == null || mod.Table.EffectType != GE.ModEffectType.FlatStat || mod.Value1 <= 0)
+                        if (mod.Table == null || mod.Value1 <= 0)
+                            continue;
+                        // 장비 옵션과 같은 적용: 고정 수치는 더하기, % 증가(치명타 확률 증가)는 증가율 묶음 (EquipHelper)
+                        StatModifierType type;
+                        if (mod.Table.EffectType == GE.ModEffectType.FlatStat)
+                            type = StatModifierType.Add;
+                        else if (mod.Table.EffectType == GE.ModEffectType.IncreasedStat)
+                            type = StatModifierType.Multiply;
+                        else
                             continue;
                         dm.AddStatModifier(entityId, StatModifierSource.CharmBoard, board.ItemInstanceId,
-                            mod.Table.TargetStat, StatModifierType.Add, mod.Value1);
+                            mod.Table.TargetStat, type, mod.Value1, tags: mod.Table.Tags);
                     }
                 }
             }

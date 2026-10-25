@@ -324,7 +324,7 @@ namespace ARPG.Manager
                 case GlobalEnum.ItemType.Charm:
                     if (item.Charm != null)
                     {
-                        BuildTextContent(item.Table.Name, CharmTooltipText.BuildCharmBody(item, null));
+                        BuildCharmContent(item, null);
                         activeContent = _contentItem;
                     }
                     break;
@@ -722,6 +722,24 @@ namespace ARPG.Manager
         {
             ApplyTierName(_itName, title, 0);
             ApplyTierLabel(_itTier, 0);
+            SetDescription(body);
+        }
+
+        /// <summary>참: 이름은 등급 색, 등급 이름 줄, 본문은 모양·옵션 글자 (PLAYER_LEVEL_CHARM_DESIGN §6.3·§8.7).</summary>
+        private void BuildCharmContent(ItemData item, string? locationLine)
+        {
+            GlobalEnum.EquipmentGrade grade = item.Charm != null ? item.Charm.GetGrade() : GlobalEnum.EquipmentGrade.Normal;
+            ApplyGradeName(_itName, item.Table?.Name ?? "참", grade);
+            if (_itTier != null)
+            {
+                _itTier.text = EquipmentOptionText.GetGradeName(grade);
+                _itTier.style.display = DisplayStyle.Flex;
+            }
+            SetDescription(CharmTooltipText.BuildCharmBody(item, locationLine));
+        }
+
+        private void SetDescription(string body)
+        {
             if (_itDesc != null)
             {
                 _itDesc.text = body;
@@ -1203,6 +1221,9 @@ namespace ARPG.Manager
             label.text = text;
             for (int i = 0; i < TIER_CLASSES.Length; i++)
                 label.RemoveFromClassList(TIER_CLASSES[i]);
+            // 같은 이름 라벨을 참 툴팁(등급 색)과 같이 쓴다
+            for (int i = 0; i < GRADE_CLASSES.Length; i++)
+                label.RemoveFromClassList(GRADE_CLASSES[i]);
             if (1 <= tier && tier <= TIER_CLASSES.Length)
                 label.AddToClassList(TIER_CLASSES[tier - 1]);
         }
@@ -1210,14 +1231,20 @@ namespace ARPG.Manager
         /// <summary>장비 이름: 등급 색 (일반 흰색·마법 파랑·희귀 노랑). 장비 데이터가 없으면 색을 붙이지 않는다.</summary>
         private static void ApplyEquipmentName(Label? label, string text, EquipmentData? equip)
         {
+            ApplyGradeName(label, text, equip != null ? equip.GetGrade() : (GlobalEnum.EquipmentGrade?)null);
+        }
+
+        /// <summary>장비·참 이름의 등급 색. grade가 없으면 색을 붙이지 않는다.</summary>
+        private static void ApplyGradeName(Label? label, string text, GlobalEnum.EquipmentGrade? grade)
+        {
             if (label == null) return;
             label.text = text;
             for (int i = 0; i < TIER_CLASSES.Length; i++)
                 label.RemoveFromClassList(TIER_CLASSES[i]);
             for (int i = 0; i < GRADE_CLASSES.Length; i++)
                 label.RemoveFromClassList(GRADE_CLASSES[i]);
-            if (equip != null)
-                label.AddToClassList(GRADE_CLASSES[(int)equip.GetGrade()]);
+            if (grade.HasValue == true)
+                label.AddToClassList(GRADE_CLASSES[(int)grade.Value]);
         }
 
         /// <summary>"Tier 2 · 마법"처럼 아이템 Tier와 장비 등급을 한 줄로. 둘 다 없으면 null.</summary>
@@ -1312,6 +1339,25 @@ namespace ARPG.Manager
             if (_isReady == false || _frame == null) return;
 
             BuildTextContent(title, body);
+
+            SetSectionVisible(_compareHint, false);
+            HideCompareFrame();
+            ShowContent(_contentItem);
+            _frame.style.display = DisplayStyle.Flex;
+            RequestPositionUpdate(_frame, anchorScreenRect);
+        }
+
+        /// <summary>판에 박힌 참처럼 위치 줄을 덧붙이는 참 툴팁. 가방의 참은 Show(item)이 같은 내용을 그린다.</summary>
+        public void ShowCharm(ItemData charm, string? locationLine, Rect anchorScreenRect)
+        {
+            if (_isReady == false || _frame == null) return;
+            if (charm.Charm == null)
+            {
+                Hide();
+                return;
+            }
+
+            BuildCharmContent(charm, locationLine);
 
             SetSectionVisible(_compareHint, false);
             HideCompareFrame();

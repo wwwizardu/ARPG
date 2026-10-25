@@ -584,10 +584,10 @@ namespace ARPG.Npc
             if (pick < skillPageRate)
                 return AR.s.Item.CreateRandomSkillPageOfTier(dropTable.Tier, rng);
 
-            // 참의 아이템 레벨 = 기준 레벨 (장비 전리품과 같은 기준)
+            // 참의 아이템 레벨 = 기준 레벨 (장비 전리품과 같은 기준). 등급은 희귀도 보너스 없이 기본 확률
             pick -= skillPageRate;
             if (pick < charmRate)
-                return AR.s.Item.CreateRandomCharm(zoneLevel, rng);
+                return AR.s.Item.CreateRandomCharm(zoneLevel, 1f, rng);
 
             return AR.s.Item.CreateRandomCharmBoard(rng);
         }

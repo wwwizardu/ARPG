@@ -434,8 +434,7 @@ namespace ARPG.UI
                 if (placement >= 0)
                 {
                     ItemData charm = board.CharmBoard.Charms[placement].Charm;
-                    AR.s.Tooltip.ShowText(charm.Table?.Name ?? "참",
-                        CharmTooltipText.BuildCharmBody(charm, $"참 판 자리 {slotIndex + 1}의 판에 박혀 있음"), rect);
+                    AR.s.Tooltip.ShowCharm(charm, $"참 판 자리 {slotIndex + 1}의 판에 박혀 있음", rect);
                     return;
                 }
             }

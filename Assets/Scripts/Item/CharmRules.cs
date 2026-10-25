@@ -8,7 +8,7 @@ using GE = GlobalEnum;
 namespace ARPG.Item
 {
     /// <summary>
-    /// 참 판·참 규칙 (PLAYER_LEVEL_CHARM_DESIGN.md §6). 모양·회전·넣기 판정, 막힌 칸·모양·옵션 비중, 가격 배율.
+    /// 참 판·참 규칙 (PLAYER_LEVEL_CHARM_DESIGN.md §6). 모양·회전·넣기 판정, 막힌 칸·모양 비중, 참 등급·모양별 옵션 풀, 참 값 표의 모양 칸 읽기.
     /// 가격은 CharmPriceRules가 맡는다. 상태 없는 계산이다. 판과 참의 상태는 ItemData(CharmBoardData·CharmData)가, 판 자리는 PlayerData가 갖는다.
     /// 칸 번호는 판 왼쪽 위부터 행 순서 0~8 (번호 = 행 × 3 + 열).
     /// </summary>
@@ -18,16 +18,16 @@ namespace ARPG.Item
         public const int CELL_COUNT = BOARD_SIZE * BOARD_SIZE;
         public const int ROTATION_COUNT = 4;
 
-        // 아이템 표 행 (§7): 판 1행, 참은 모양 순서대로 6행
+        // 아이템 표 행 (§7): 판 1행, 참은 모양 순서대로 5행
         public const int BOARD_ITEM_ID = 8000;
         public const int CHARM_ITEM_ID_FIRST = 8001;
-        public const int SHAPE_COUNT = 6;
+        public const int SHAPE_COUNT = 5;
 
         // 판 막힌 칸 수 비중 0·1·2·3칸 (§6.2). 아이템 레벨과 무관
         private static readonly int[] _blockedCountWeights = { 10, 35, 35, 20 };
 
         // 참 모양 드롭 비중 (§6.3) — CharmShape 순서
-        private static readonly int[] _shapeWeights = { 30, 25, 12, 12, 15, 6 };
+        private static readonly int[] _shapeWeights = { 30, 25, 12, 12, 15 };
 
         // 모양 기본 방향의 칸 (행, 열)
         private static readonly Vector2Int[][] _shapeCells =
@@ -37,35 +37,53 @@ namespace ARPG.Item
             new[] { new Vector2Int(0, 0), new Vector2Int(0, 1), new Vector2Int(0, 2) },
             new[] { new Vector2Int(0, 0), new Vector2Int(1, 0), new Vector2Int(1, 1) },
             new[] { new Vector2Int(0, 0), new Vector2Int(0, 1), new Vector2Int(1, 0), new Vector2Int(1, 1) },
-            new[]
-            {
-                new Vector2Int(0, 0), new Vector2Int(0, 1), new Vector2Int(0, 2),
-                new Vector2Int(1, 0), new Vector2Int(1, 1), new Vector2Int(1, 2),
-                new Vector2Int(2, 0), new Vector2Int(2, 1), new Vector2Int(2, 2),
-            },
         };
 
-        // 모양별 옵션 수 후보 (반반) — 두 값이 같으면 고정 (§6.3)
-        private static readonly int[] _optionCountMin = { 1, 1, 2, 2, 2, 3 };
-        private static readonly int[] _optionCountMax = { 1, 2, 2, 2, 3, 4 };
+        // 모양 크기 묶음 (§6.3): 큰 묶음일수록 붙을 수 있는 옵션이 많다
+        public const int SIZE_SMALL = 0;    // 1×1·1×2
+        public const int SIZE_MEDIUM = 1;   // 1×3·L자
+        public const int SIZE_LARGE = 2;    // 2×2
+        private static readonly int[] _shapeSizeClass = { SIZE_SMALL, SIZE_SMALL, SIZE_MEDIUM, SIZE_MEDIUM, SIZE_LARGE };
 
-        // 옵션 풀 (§6.3): 힘·민첩·지능·회피는 참 전용 Mod, 나머지는 장비 Mod를 같이 쓴다
+        // 등급 (§6.3): 일반 0개 / 마법 1~2개 (접두·접미 각 1까지) / 희귀 3~4개 (접두·접미 각 2까지)
+        public const int MAGIC_OPTION_MIN = 1;
+        public const int MAGIC_OPTION_MAX = 2;
+        public const int RARE_OPTION_MIN = 3;
+        public const int RARE_OPTION_MAX = 4;
+        public const int AFFIX_LIMIT = 2;
+
+        // 등급 확률 (%): 일반 10 · 마법 85 · 희귀 5. 아이템 레벨과 무관하다
+        public const int MAGIC_RATE = 85;
+        public const int RARE_RATE = 5;
+        public const int GRADE_ROLL_SCALE = 10000;
+
+        // 참 전용 Mod (§6.3·§7). 시트 AllowedEquipTypes가 비어 있어 장비 롤·마법부여 후보에 들어가지 않는다
         public const int MOD_STR = 1300;
         public const int MOD_DEX = 1301;
         public const int MOD_INT = 1302;
         public const int MOD_EVASION = 1303;
+        public const int MOD_CRIT_RATE = 1304;
+        public const int MOD_CRIT_DAMAGE = 1305;
+
+        // 옵션 풀 (§6.3): 접두·접미는 Mod 표 Slot 칸이 정한다. 크기 묶음이 그 값 이상인 모양에만 붙는다
         private static readonly int[] _optionModIds =
         {
-            MOD_STR, MOD_DEX, MOD_INT,
-            1000,   // 최대 체력
-            1200,   // 최대 마나
-            1201,   // 체력 재생
-            1202,   // 마나 재생
-            1209,   // 정확도
-            MOD_EVASION,
-            1203, 1204, 1205, 1206, // 화염·냉기·번개·독 저항
+            1203, 1204, 1205, 1206,         // 화염·냉기·번개·독 저항 (접미)
+            1201, 1202,                     // 체력·마나 재생 (접두)
+            1200,                           // 최대 마나 (접두)
+            1209,                           // 정확도 (접미)
+            MOD_EVASION,                    // 회피 (접두)
+            MOD_CRIT_RATE, MOD_CRIT_DAMAGE, // 치명타 확률 증가·치명타 피해 증가 (접미)
+            1000,                           // 최대 체력 (접두)
+            MOD_STR, MOD_DEX, MOD_INT,      // 힘·민첩·지능 (접미)
         };
-        private static readonly int[] _optionWeights = { 100, 100, 100, 100, 100, 100, 100, 100, 100, 50, 50, 50, 50 };
+        private static readonly int[] _optionWeights = { 50, 50, 50, 50, 100, 100, 100, 100, 100, 50, 50, 100, 100, 100, 100 };
+        private static readonly int[] _optionMinSizeClass =
+        {
+            SIZE_SMALL, SIZE_SMALL, SIZE_SMALL, SIZE_SMALL, SIZE_SMALL, SIZE_SMALL,
+            SIZE_MEDIUM, SIZE_MEDIUM, SIZE_MEDIUM, SIZE_MEDIUM, SIZE_MEDIUM,
+            SIZE_LARGE, SIZE_LARGE, SIZE_LARGE, SIZE_LARGE,
+        };
 
         // 참은 일반 판정 T1~T10만 쓴다 (T11·T12 특수 판정 없음)
         public const int MAX_CHARM_TIER = 10;
@@ -80,6 +98,12 @@ namespace ARPG.Item
             return itemId >= CHARM_ITEM_ID_FIRST && itemId < CHARM_ITEM_ID_FIRST + SHAPE_COUNT;
         }
 
+        /// <summary>지금 만들 수 있는 모양인가. 옛 세이브 읽기용 Square3은 아니다.</summary>
+        public static bool IsValidShape(GE.CharmShape shape)
+        {
+            return (int)shape >= 0 && (int)shape < SHAPE_COUNT;
+        }
+
         public static int GetCharmItemId(GE.CharmShape shape)
         {
             return CHARM_ITEM_ID_FIRST + (int)shape;
@@ -92,35 +116,97 @@ namespace ARPG.Item
 
         public static int GetCellCount(GE.CharmShape shape)
         {
-            return _shapeCells[(int)shape].Length;
+            return IsValidShape(shape) ? _shapeCells[(int)shape].Length : 0;
         }
 
-        public static int GetOptionCountMin(GE.CharmShape shape) => _optionCountMin[(int)shape];
-        public static int GetOptionCountMax(GE.CharmShape shape) => _optionCountMax[(int)shape];
+        public static int GetSizeClass(GE.CharmShape shape)
+        {
+            return IsValidShape(shape) ? _shapeSizeClass[(int)shape] : SIZE_SMALL;
+        }
+
+        /// <summary>옵션 풀의 optionIndex번 옵션이 이 모양에 붙을 수 있는가 (크기 묶음 조건).</summary>
+        public static bool IsOptionAllowed(int optionIndex, GE.CharmShape shape)
+        {
+            return _optionMinSizeClass[optionIndex] <= GetSizeClass(shape);
+        }
+
+        /// <summary>Mod Id가 이 모양의 옵션 풀에 있는가.</summary>
+        public static bool IsOptionAllowedForShape(int modId, GE.CharmShape shape)
+        {
+            int index = System.Array.IndexOf(_optionModIds, modId);
+            return index >= 0 && IsOptionAllowed(index, shape);
+        }
+
+        public static int GetOptionMinSizeClass(int optionIndex) => _optionMinSizeClass[optionIndex];
+
+        /// <summary>참에만 붙는 Mod인가 (시트 AllowedEquipTypes 빈칸 허용 대상).</summary>
+        public static bool IsCharmOnlyMod(int modId)
+        {
+            return modId >= MOD_STR && modId <= MOD_CRIT_DAMAGE;
+        }
 
         /// <summary>
-        /// 옵션 1개 값 = 같은 티어 장비 기준값 × 이 비율(%) (§6.3).
-        /// 비율 = 칸당 8% × 칸 수 × 크기 보너스(1~2칸 ×1.0, 3칸 ×1.1, 4칸 ×1.2, 9칸 ×1.4) ÷ 옵션 수, 문서 표 값으로 반올림.
+        /// 등급 판정. 희귀 → 마법 → 일반 순서로 확인한다 — 장비 등급 판정(DropBonusResolver.ResolveGrade)과 같은 식이다.
+        /// 희귀 확인 = min(1, 5% × M), 마법 확인 = min(1, 85 ÷ 95 × M). roll은 [0, GRADE_ROLL_SCALE).
+        /// M은 아이템 희귀도 배율이다 — 플레이어 드롭만 1보다 크고 NPC 전리품·상점은 1이다.
         /// </summary>
-        public static int GetOptionRatioPercent(GE.CharmShape shape, int optionCount)
+        public static GE.EquipmentGrade ResolveGrade(float rarityMultiplier, int rareRoll, int magicRoll)
+        {
+            if (rareRoll < Mathf.RoundToInt(GetRareChance(rarityMultiplier) * GRADE_ROLL_SCALE))
+                return GE.EquipmentGrade.Rare;
+            if (magicRoll < Mathf.RoundToInt(GetMagicCheckChance(rarityMultiplier) * GRADE_ROLL_SCALE))
+                return GE.EquipmentGrade.Magic;
+            return GE.EquipmentGrade.Normal;
+        }
+
+        public static float GetRareChance(float rarityMultiplier)
+        {
+            return Mathf.Clamp01(RARE_RATE / 100f * rarityMultiplier);
+        }
+
+        /// <summary>희귀가 아닐 때의 마법 확인 확률 (전체 확률이 아니다).</summary>
+        public static float GetMagicCheckChance(float rarityMultiplier)
+        {
+            return Mathf.Clamp01((float)MAGIC_RATE / (100 - RARE_RATE) * rarityMultiplier);
+        }
+
+        /// <summary>
+        /// 참 옵션 값 범위 (§6.3): 참 값 표에서 그 모양 칸의 최소·최대를 그대로 읽는다(1×3·L자는 3칸 칸).
+        /// 칸이 비어 있으면(0) 그 모양에 붙지 않는 옵션이라 false.
+        /// </summary>
+        public static bool TryGetOptionValueRange(CharmModTierTable row, GE.CharmShape shape, out int min, out int max)
         {
             switch (shape)
             {
-                case GE.CharmShape.Single: return 8;
-                case GE.CharmShape.Line2: return optionCount <= 1 ? 16 : 8;
+                case GE.CharmShape.Single:
+                    min = row.Min1x1;
+                    max = row.Max1x1;
+                    break;
+                case GE.CharmShape.Line2:
+                    min = row.Min1x2;
+                    max = row.Max1x2;
+                    break;
                 case GE.CharmShape.Line3:
-                case GE.CharmShape.LShape: return 13;
-                case GE.CharmShape.Square2: return optionCount <= 2 ? 19 : 13;
-                case GE.CharmShape.Square3: return optionCount <= 3 ? 34 : 25;
-                default: return 8;
+                case GE.CharmShape.LShape:
+                    min = row.Min3Cell;
+                    max = row.Max3Cell;
+                    break;
+                case GE.CharmShape.Square2:
+                    min = row.Min2x2;
+                    max = row.Max2x2;
+                    break;
+                default:
+                    min = 0;
+                    max = 0;
+                    break;
             }
-        }
-
-        /// <summary>참 옵션 값 범위: 장비 티어 최솟값·최댓값에 비율을 곱해 각각 반올림, 최소 1 (§6.3).</summary>
-        public static void GetOptionValueRange(ModTierTable tier, int ratioPercent, out int min, out int max)
-        {
-            min = Mathf.Max(1, Mathf.RoundToInt(tier.Min1 * ratioPercent / 100f));
-            max = Mathf.Max(min, Mathf.RoundToInt(tier.Max1 * ratioPercent / 100f));
+            if (min <= 0 || max < min)
+            {
+                min = 0;
+                max = 0;
+                return false;
+            }
+            return true;
         }
 
         /// <summary>
@@ -130,7 +216,7 @@ namespace ARPG.Item
         public static bool TryGetCells(GE.CharmShape shape, int rotation, int anchorCell, List<int> outCells)
         {
             outCells.Clear();
-            if (anchorCell < 0 || anchorCell >= CELL_COUNT)
+            if (anchorCell < 0 || anchorCell >= CELL_COUNT || IsValidShape(shape) == false)
                 return false;
 
             Vector2Int[] cells = _shapeCells[(int)shape];

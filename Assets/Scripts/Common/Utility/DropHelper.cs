@@ -119,10 +119,10 @@ namespace ARPG.Utility
                 return;
             }
 
-            // 참 — 아이템 레벨 = 몬스터 레벨 (PLAYER_LEVEL_CHARM_DESIGN §6.6). 그 밖은 참 판
+            // 참 — 아이템 레벨 = 몬스터 레벨, 등급은 희귀도 배율을 받는다 (PLAYER_LEVEL_CHARM_DESIGN §6.3·§6.6). 그 밖은 참 판
             if (randomValue < pageThreshold + dropTable.CharmRate)
             {
-                ItemData? charm = AR.s.Item.CreateRandomCharm(monsterLevel);
+                ItemData? charm = AR.s.Item.CreateRandomCharm(monsterLevel, bonus.RarityMultiplier);
                 if (charm != null) CreateDropItemFromDataAsync(charm, position);
                 return;
             }

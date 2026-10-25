@@ -1096,6 +1096,26 @@ namespace ARPG.Tables
     }
 
     /// <summary>
+    /// 참 옵션 값 표 (PLAYER_LEVEL_CHARM_DESIGN.md §6.3). Mod·티어마다 모양별로 실제로 붙는 값의 범위를 정수로 적는다.
+    /// 1×3과 L자는 같은 3칸 칸을 쓴다. 0(시트 빈칸)이면 그 모양에 붙지 않는 옵션이다.
+    /// 어떤 티어가 나올지는 ModTierTable(열리는 레벨·가중치)이 정한다. Id = ModId × 100 + Tier.
+    /// </summary>
+    [Serializable]
+    public class CharmModTierTable : TableBase
+    {
+        [JsonProperty("ModId")] public int ModId;
+        [JsonProperty("Tier")] public int Tier;
+        [JsonProperty("Min1x1")] public int Min1x1;
+        [JsonProperty("Max1x1")] public int Max1x1;
+        [JsonProperty("Min1x2")] public int Min1x2;
+        [JsonProperty("Max1x2")] public int Max1x2;
+        [JsonProperty("Min3Cell")] public int Min3Cell;     // 1×3·L자
+        [JsonProperty("Max3Cell")] public int Max3Cell;
+        [JsonProperty("Min2x2")] public int Min2x2;
+        [JsonProperty("Max2x2")] public int Max2x2;
+    }
+
+    /// <summary>
     /// 아이템별 기본 내장(Implicit) Mod 매핑
     /// </summary>
     [Serializable]

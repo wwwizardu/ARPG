@@ -64,6 +64,9 @@ namespace ARPG.Data
         private ImmutableDictionary<int, Tables.AreaEffectTable> _areaEffectTable = null!;
         private ImmutableDictionary<int, Tables.ModTable> _modTable = null!;
         private ImmutableDictionary<int, Tables.ModTierTable> _modTierTable = null!;
+        // 참 옵션 1칸 값 (PLAYER_LEVEL_CHARM_DESIGN §6.3). ModId × 100 + Tier → 행
+        private ImmutableDictionary<int, Tables.CharmModTierTable> _charmModTierTable = null!;
+        private readonly Dictionary<int, Tables.CharmModTierTable> _charmModTierByModTier = new();
         private ImmutableDictionary<int, Tables.ItemImplicitTable> _itemImplicitTable = null!;
         // 상점용 기본 아이템 (NPC_SHOP_EQUIPMENT_DESIGN §3, D116). 검증 통과 행만 ItemId 인덱스에 들어간다.
         private ImmutableDictionary<int, Tables.BasicItemTable> _basicItemTable = null!;
@@ -119,6 +122,7 @@ namespace ARPG.Data
                 LoadTable<Tables.AreaEffectTable>("AreaEffectTable.bytes", tables => _areaEffectTable = tables),
                 LoadTable<Tables.ModTable>("ModTable.bytes", tables => _modTable = tables),
                 LoadTable<Tables.ModTierTable>("ModTierTable.bytes", tables => _modTierTable = tables),
+                LoadTable<Tables.CharmModTierTable>("CharmModTierTable.bytes", tables => _charmModTierTable = tables),
                 LoadTable<Tables.ItemImplicitTable>("ItemImplicitTable.bytes", tables => _itemImplicitTable = tables),
                 LoadTable<Tables.BasicItemTable>("BasicItemTable.bytes", tables => _basicItemTable = tables),
                 LoadTable<Tables.ItemEnchantmentCostTable>("ItemEnchantmentCostTable.bytes", tables => _itemEnchantmentCostTable = tables),
@@ -237,6 +241,15 @@ namespace ARPG.Data
             foreach (var table in _modTierTable.Values)
             {
                 table.LoadLate();
+            }
+
+            // CharmModTierTable: Mod·티어 인덱스. 겹치면 Id가 먼저 들어온 행을 쓴다 (다운로드 검증이 겹침을 막는다)
+            _charmModTierByModTier.Clear();
+            foreach (var table in _charmModTierTable.Values)
+            {
+                int key = GetCharmModTierKey(table.ModId, table.Tier);
+                if (_charmModTierByModTier.ContainsKey(key) == false)
+                    _charmModTierByModTier.Add(key, table);
             }
 
             // ItemImplicitTable → ModTable/ModTierTable 참조 연결
@@ -911,6 +924,17 @@ namespace ARPG.Data
             }
 
             return null;
+        }
+
+        /// <summary>참 옵션 1칸 값 행 (PLAYER_LEVEL_CHARM_DESIGN §6.3). 없으면 null.</summary>
+        public Tables.CharmModTierTable? GetCharmModTier(int modId, int tier)
+        {
+            return _charmModTierByModTier.TryGetValue(GetCharmModTierKey(modId, tier), out var table) ? table : null;
+        }
+
+        private static int GetCharmModTierKey(int modId, int tier)
+        {
+            return modId * 100 + tier;
         }
 
         /// <summary>

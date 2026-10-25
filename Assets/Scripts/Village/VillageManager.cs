@@ -1682,7 +1682,7 @@ namespace ARPG.Village
 
         /// <summary>
         /// 플레이어 판매가: 상인 매입가 × 장비 등급 배율 × 아이템 레벨 배율 (ITEM_DROP_BALANCE_DESIGN §9, D10).
-        /// 장비가 아니면 상인 매입가와 같다. NPC 판매가는 GetNpcSellPrice(배율 없음)를 쓴다.
+        /// 참도 같은 두 배율을 쓰고, 판은 막힌 칸 배율이다. 그 밖은 상인 매입가와 같다. NPC 판매가는 GetNpcSellPrice(배율 없음)를 쓴다.
         /// </summary>
         public int GetPlayerSellPrice(int villageId, ARPG.Data.ItemData? item)
         {
@@ -1695,9 +1695,9 @@ namespace ARPG.Village
                 return price < 0 ? price : GetCharmBoardSellPrice(villageId, item, price);
             if (price <= 0)
                 return price;
-            // 참은 아이템 레벨 구간 판매 배율 (§6.3)
+            // 참은 장비와 같은 등급 배율 × 아이템 레벨 구간 판매 배율 (§6.3)
             if (item.Charm != null)
-                return ARPG.Item.CharmPriceRules.ApplyCharmLevelMul(price, AR.s.Data.GetDropBand(item.Charm.ItemLevel));
+                return ARPG.Item.CharmPriceRules.ApplyCharmSellMul(price, item.Charm, AR.s.Data.GetDropBand(item.Charm.ItemLevel));
             if (item.Equipment == null)
                 return price;
             return PlayerSellPriceRules.Apply(price, item, AR.s.Data.GetDropBand(item.Equipment.ItemLevel));
@@ -1938,7 +1938,7 @@ namespace ARPG.Village
             int charmSlots = trade.GetCharmSlotCount(v.ShopTier);
             for (int i = 0; i < charmSlots; i++)
             {
-                if (AddCharmStockEntry(v, trade, cycle, AR.s.Item.CreateRandomCharm(zoneLevel, rng)) == true)
+                if (AddCharmStockEntry(v, trade, cycle, AR.s.Item.CreateRandomCharm(zoneLevel, 1f, rng)) == true)
                     added++;
             }
             return added;

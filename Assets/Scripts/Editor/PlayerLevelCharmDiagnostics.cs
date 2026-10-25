@@ -80,6 +80,7 @@ namespace ARPG.EditorTools
             {
                 failures += CheckRoundTrip(report);
                 failures += CheckLegacySave(report);
+                failures += CheckLegacyCharm(report);
                 failures += CheckInstanceIdScan(report);
             }
             catch (Exception e)
@@ -344,10 +345,12 @@ namespace ARPG.EditorTools
                     ModInstance ma = a.Charm.Charm.Mods[m];
                     ModInstance mb = b.Charm!.Charm!.Mods[m];
                     charmsEqual = ma.ModTableId == mb.ModTableId && ma.Tier == mb.Tier && ma.Value1 == mb.Value1
-                        && mb.Slot == GE.ModSlot.Charm && mb.Table != null;
+                        && mb.Slot == ma.Slot && (mb.Slot == GE.ModSlot.Prefix || mb.Slot == GE.ModSlot.Postfix)
+                        && mb.Table != null;
                 }
+                charmsEqual = charmsEqual == true && a.Charm.Charm!.GetGrade() == b.Charm!.Charm!.GetGrade();
             }
-            failures += Check(report, charmsEqual, "박힌 참: 위치·회전·인스턴스 Id·모양·아이템 레벨·옵션(티어·값·Charm 슬롯)·표 연결이 같다");
+            failures += Check(report, charmsEqual, "박힌 참: 위치·회전·인스턴스 Id·모양·아이템 레벨·옵션(티어·값·접두/접미 칸)·등급·표 연결이 같다");
 
             ItemData? loadedBag = loaded._inventory.Count > 0 ? loaded._inventory[0] : null;
             failures += Check(report, loadedBag?.CharmBoard != null && loadedBag.CharmBoard.Charms.Count == bagBoard.CharmBoard!.Charms.Count
@@ -390,6 +393,58 @@ namespace ARPG.EditorTools
             return failures;
         }
 
+        /// <summary>
+        /// 2026-10-25 참 등급 개편 전 세이브 (§6.3): 옵션 칸 "Charm"은 Mod 표의 접두·접미로, 3×3 참(아이템 8006)은
+        /// 같은 기준 칸의 2×2 참으로 바뀐다. 옵션·티어는 그대로고, 값은 지금 참 값 표 범위를 벗어난 것만 범위 안으로 맞춘다.
+        /// 샘플 값은 2×2 T8 범위(최대 HP 27~35, 힘 13~17, 화염 저항 11) 위·안·아래를 하나씩 둔다. 바뀐 2×2는 판에 그대로 들어간다.
+        /// </summary>
+        private static int CheckLegacyCharm(StringBuilder report)
+        {
+            int[] originals = { 40, 15, 1 };
+            const string legacyMods = "[{\"ModTableId\":1000,\"Slot\":\"Charm\",\"Tier\":8,\"Value1\":40,\"Value2\":0},"
+                + "{\"ModTableId\":1300,\"Slot\":\"Charm\",\"Tier\":8,\"Value1\":15,\"Value2\":0},"
+                + "{\"ModTableId\":1203,\"Slot\":\"Charm\",\"Tier\":8,\"Value1\":1,\"Value2\":0}]";
+            const string boardJson = "{\"Id\":8000,\"ItemInstanceId\":900001,\"CharmBoard\":{\"BlockedMask\":0,\"Charms\":[{\"Charm\":"
+                + "{\"Id\":8006,\"ItemInstanceId\":900002,\"Charm\":{\"Shape\":\"Square3\",\"ItemLevel\":72,\"Mods\":" + legacyMods + "}},"
+                + "\"AnchorCell\":0,\"Rotation\":0}]}}";
+            ItemData? board = JsonConvert.DeserializeObject<ItemData>(boardJson, JsonSettings.Default);
+            if (board?.CharmBoard == null)
+                return Check(report, false, "옛 참: JSON을 읽지 못함");
+            board.OnLoadCompleted();
+
+            ItemData? charm = board.CharmBoard.Charms.Count == 1 ? board.CharmBoard.Charms[0].Charm : null;
+            CharmData? data = charm?.Charm;
+            List<int> scratch = new List<int>();
+            bool shapeOk = charm != null && data != null && charm.Id == CharmRules.GetCharmItemId(GE.CharmShape.Square2)
+                && charm.Table != null && data.Shape == GE.CharmShape.Square2
+                && CharmRules.CanPlace(board.CharmBoard, data.Shape, 0, 0, 0, scratch) == true;
+            bool modsOk = data != null && data.Mods.Count == 3
+                && data.Mods[0].Slot == GE.ModSlot.Prefix && data.Mods[0].Tier == 8
+                && data.Mods[1].Slot == GE.ModSlot.Postfix && data.Mods[2].Slot == GE.ModSlot.Postfix
+                && data.GetGrade() == GE.EquipmentGrade.Rare;
+
+            // 값: 범위 밖만 범위 안으로 (위 → 최대, 안 → 그대로, 아래 → 최소)
+            bool valuesOk = data != null && data.Mods.Count == originals.Length;
+            int[] side = new int[3];
+            StringBuilder valueLine = new StringBuilder();
+            for (int i = 0; valuesOk == true && i < originals.Length; i++)
+            {
+                ModInstance mod = data!.Mods[i];
+                CharmModTierTable? valueRow = AR.s.Data.GetCharmModTier(mod.ModTableId, mod.Tier);
+                if (valueRow == null || CharmRules.TryGetOptionValueRange(valueRow, GE.CharmShape.Square2, out int min, out int max) == false)
+                {
+                    valuesOk = false;
+                    break;
+                }
+                valuesOk &= mod.Value1 == Mathf.Clamp(originals[i], min, max);
+                side[originals[i] > max ? 0 : originals[i] < min ? 2 : 1]++;
+                valueLine.Append($" {originals[i]}→{mod.Value1}({min}~{max})");
+            }
+            bool coversAll = side[0] > 0 && side[1] > 0 && side[2] > 0;
+            return Check(report, shapeOk && modsOk && valuesOk && coversAll,
+                $"옛 참: 3×3 → {data?.Shape} (아이템 {charm?.Id}, 판에 그대로 들어감={shapeOk}), 옵션 칸 Charm → 최대 HP 접두·힘·화염 저항 접미, 등급 {data?.GetGrade()} (희귀)={modsOk}, 값 범위 맞춤{valueLine}={valuesOk}, 범위 위·안·아래 모두 확인={coversAll}");
+        }
+
         /// <summary>저장 로드 때 다음 아이템 인스턴스 Id를 고르는 스캔이 판에 박힌 참까지 보는지.</summary>
         private static int CheckInstanceIdScan(StringBuilder report)
         {
@@ -430,15 +485,16 @@ namespace ARPG.EditorTools
 
             bagBoard = AR.s.Item.CreateRandomCharmBoard()!;
             bagBoard.CharmBoard!.BlockedMask = 0;
-            PlaceCharm(bagBoard, GE.CharmShape.Square3, 0, 0);
+            PlaceCharm(bagBoard, GE.CharmShape.Square2, 0, 0);          // 0·1·3·4칸
+            PlaceCharm(bagBoard, GE.CharmShape.Line3, 6, 0);            // 6·7·8칸 (아랫줄 가로)
             player._inventory[0] = bagBoard;
-            player._inventory[1] = AR.s.Item.CreateCharm(GE.CharmShape.Square2, 45);
+            player._inventory[1] = AR.s.Item.CreateCharm(GE.CharmShape.Square2, GE.EquipmentGrade.Magic, 45);
             return player;
         }
 
         private static void PlaceCharm(ItemData board, GE.CharmShape shape, int anchor, int rotation)
         {
-            ItemData charm = AR.s.Item.CreateCharm(shape, 72)!;
+            ItemData charm = AR.s.Item.CreateCharm(shape, GE.EquipmentGrade.Rare, 72)!;
             List<int> scratch = new List<int>();
             if (CharmRules.CanPlace(board.CharmBoard!, shape, rotation, anchor, -1, scratch) == false)
                 throw new InvalidOperationException($"샘플 참 배치 실패: {shape} 기준 {anchor} 회전 {rotation}");

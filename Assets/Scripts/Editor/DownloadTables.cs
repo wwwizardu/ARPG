@@ -83,6 +83,9 @@ namespace ARPG.Editor
             Register<ProjectileTable>(list, "1810235418&range=A:G");
             Register<ModTable>(list, "1571193978&range=A:J");
             Register<ModTierTable>(list, "1782637736&range=A:J");
+            // 참 옵션 값 (PLAYER_LEVEL_CHARM_DESIGN §6.3). A=Id(ModId×100+Tier), B=ModName(가독성용), C=ModId, D=Tier,
+            // E~L = 1×1·1×2·3칸(1×3·L자)·2×2의 최소·최대 정수. 빈칸 = 그 모양에 붙지 않음
+            Register<CharmModTierTable>(list, "1876501976&range=A:L");
             Register<ItemImplicitTable>(list, "547967325&range=A:D");
             // BasicItem — 상점용 기본 아이템 (NPC_SHOP_EQUIPMENT_DESIGN §3.1). A~F 데이터, G~H는 보조 컬럼(다운로드 제외).
             Register<BasicItemTable>(list, "786446863&range=A:F");
@@ -145,6 +148,12 @@ namespace ARPG.Editor
             if (ValidateExpSetup() == false)
             {
                 Debug.LogError("[DownloadTables] Exp 검증 실패로 전체 테이블 저장을 중단합니다.");
+                return;
+            }
+
+            if (ValidateCharmModTierSetup() == false)
+            {
+                Debug.LogError("[DownloadTables] CharmModTier 검증 실패로 전체 테이블 저장을 중단합니다.");
                 return;
             }
 
@@ -292,6 +301,28 @@ namespace ARPG.Editor
 
         [MenuItem("ARPG/Download Table/DropEquipmentTable", false, 100)]
         private static async void DownloadDropEquipmentTable() => await DownloadSingleTable<DropEquipmentTable>();
+
+        [MenuItem("ARPG/Download Table/CharmModTierTable", false, 100)]
+        private static async void DownloadCharmModTierTable()
+        {
+            TableEntry entry = GetTableEntry<CharmModTierTable>();
+            if (entry == null)
+            {
+                Debug.LogError("[DownloadTables] CharmModTierTable 등록 정보를 찾을 수 없습니다.");
+                return;
+            }
+
+            _tableDic = new();
+            if (await entry.DownloadAction() == false || ValidateCharmModTierSetup() == false)
+            {
+                Debug.LogError("[DownloadTables] CharmModTier 다운로드 또는 검증 실패로 저장하지 않습니다.");
+                return;
+            }
+
+            SaveTable(typeof(CharmModTierTable).Name, _tableDic[typeof(CharmModTierTable)], entry.SaveType);
+            AssetDatabase.Refresh();
+            Debug.Log("download CharmModTierTable Completed...");
+        }
 
         [MenuItem("ARPG/Download Table/DropTable", false, 100)]
         private static async void DownloadDropTable() => await DownloadSingleTable<DropTable>();
@@ -608,17 +639,49 @@ namespace ARPG.Editor
 
                 bool isAffix = mod.Slot == GlobalEnum.ModSlot.Prefix
                     || mod.Slot == GlobalEnum.ModSlot.Postfix;
-                bool needsTiers = isAffix || mod.Slot == GlobalEnum.ModSlot.Charm;
-                if (needsTiers == true && string.IsNullOrWhiteSpace(mod.Group) == true)
+                if (isAffix == true && string.IsNullOrWhiteSpace(mod.Group) == true)
                 {
                     Debug.LogError($"[ValidateMod] Mod Id={mod.Id}의 Group이 비어 있습니다.");
                     errors++;
                 }
 
-                if (isAffix == true
+                // ModSlot.Charm은 옛 세이브 읽기용이다. 참 옵션도 장비처럼 Prefix/Postfix다 (PLAYER_LEVEL_CHARM_DESIGN §6.3)
+                if (mod.Slot == GlobalEnum.ModSlot.Charm)
+                {
+                    Debug.LogError($"[ValidateMod] Mod Id={mod.Id}의 Slot이 Charm입니다. 참 옵션은 Prefix/Postfix로 적습니다.");
+                    errors++;
+                }
+
+                // 참 전용 옵션은 AllowedEquipTypes를 비워 장비 롤·마법부여 후보에서 빠진다. 장비 옵션은 반드시 채운다
+                bool isCharmOnly = CharmRules.IsCharmOnlyMod(mod.Id);
+                if (isAffix == true && isCharmOnly == false
                     && mod.AllowedEquipTypes == GlobalEnum.EquipmentTypeMask.None)
                 {
                     Debug.LogError($"[ValidateMod] Mod Id={mod.Id}의 AllowedEquipTypes가 비어 있습니다.");
+                    errors++;
+                }
+                if (isCharmOnly == true && mod.AllowedEquipTypes != GlobalEnum.EquipmentTypeMask.None)
+                {
+                    Debug.LogError($"[ValidateMod] 참 전용 Mod Id={mod.Id}의 AllowedEquipTypes가 채워져 있어 장비에도 붙습니다. 비워 두세요.");
+                    errors++;
+                }
+            }
+
+            // 참 옵션 풀(CharmRules)의 Mod는 모두 있고 Prefix/Postfix여야 한다 — 접두·접미 구분을 이 칸에서 읽는다
+            Dictionary<int, ModTable> modById = new Dictionary<int, ModTable>();
+            for (int i = 0; i < mods.Count; i++)
+                modById[mods[i].Id] = mods[i];
+            for (int i = 0; i < CharmRules.OptionModIds.Count; i++)
+            {
+                int charmModId = CharmRules.OptionModIds[i];
+                if (modById.TryGetValue(charmModId, out ModTable charmMod) == false)
+                {
+                    Debug.LogError($"[ValidateMod] 참 옵션 Mod Id={charmModId}가 ModTable에 없습니다.");
+                    errors++;
+                }
+                else if (charmMod.Slot != GlobalEnum.ModSlot.Prefix && charmMod.Slot != GlobalEnum.ModSlot.Postfix)
+                {
+                    Debug.LogError($"[ValidateMod] 참 옵션 Mod Id={charmModId}의 Slot({charmMod.Slot})이 Prefix/Postfix가 아닙니다.");
                     errors++;
                 }
             }
@@ -706,11 +769,10 @@ namespace ARPG.Editor
             {
                 ModTable mod = mods[i];
                 bool needsTiers = mod.Slot == GlobalEnum.ModSlot.Prefix
-                    || mod.Slot == GlobalEnum.ModSlot.Postfix
-                    || mod.Slot == GlobalEnum.ModSlot.Charm;
+                    || mod.Slot == GlobalEnum.ModSlot.Postfix;
                 if (needsTiers == true && modsWithTier.Contains(mod.Id) == false)
                 {
-                    Debug.LogError($"[ValidateMod] Prefix/Postfix/Charm Mod Id={mod.Id}에 Tier 행이 없습니다.");
+                    Debug.LogError($"[ValidateMod] Prefix/Postfix Mod Id={mod.Id}에 Tier 행이 없습니다.");
                     errors++;
                 }
             }
@@ -835,6 +897,10 @@ namespace ARPG.Editor
                 else if (table is DropBandTable dropBandTable)
                 {
                     ParseDropBandTable(dropBandTable, values);
+                }
+                else if (table is CharmModTierTable charmModTierTable)
+                {
+                    ParseCharmModTierTable(charmModTierTable, values);
                 }
                 else if (table is ExpTable expTable)
                 {
@@ -1316,6 +1382,140 @@ namespace ARPG.Editor
             table.ExpMul = values.Length > 14 && string.IsNullOrWhiteSpace(values[14]) == false
                 ? Mathf.Max(0f, ParseFloatSafe(values, 14))
                 : 1f;
+        }
+
+        /// <summary>
+        /// CharmModTierTable 파싱 (PLAYER_LEVEL_CHARM_DESIGN §6.3).
+        /// 컬럼: Id, ModName(읽지 않음), ModId, Tier, Min1x1, Max1x1, Min1x2, Max1x2, Min3Cell, Max3Cell, Min2x2, Max2x2. 빈칸은 0
+        /// </summary>
+        private static void ParseCharmModTierTable(CharmModTierTable table, string[] values)
+        {
+            if (values.Length < 4)
+            {
+                Debug.LogError($"[ParseCharmModTierTable] Invalid data length. Expected at least 4, got {values.Length}. Id: {table.Id}");
+                return;
+            }
+
+            table.ModId = int.Parse(values[2]);
+            table.Tier = int.Parse(values[3]);
+            table.Min1x1 = ParseIntSafe(values, 4);
+            table.Max1x1 = ParseIntSafe(values, 5);
+            table.Min1x2 = ParseIntSafe(values, 6);
+            table.Max1x2 = ParseIntSafe(values, 7);
+            table.Min3Cell = ParseIntSafe(values, 8);
+            table.Max3Cell = ParseIntSafe(values, 9);
+            table.Min2x2 = ParseIntSafe(values, 10);
+            table.Max2x2 = ParseIntSafe(values, 11);
+        }
+
+        // 참 값 표의 모양 칸 순서와 각 칸을 대표하는 모양 (1×3·L자는 3칸 칸 하나)
+        private static readonly GlobalEnum.CharmShape[] CharmValueColumnShapes =
+        {
+            GlobalEnum.CharmShape.Single, GlobalEnum.CharmShape.Line2, GlobalEnum.CharmShape.Line3, GlobalEnum.CharmShape.Square2,
+        };
+        private static readonly string[] CharmValueColumnNames = { "1×1", "1×2", "3칸", "2×2" };
+
+        private static void GetCharmValueColumn(CharmModTierTable row, int column, out int min, out int max)
+        {
+            switch (column)
+            {
+                case 0: min = row.Min1x1; max = row.Max1x1; break;
+                case 1: min = row.Min1x2; max = row.Max1x2; break;
+                case 2: min = row.Min3Cell; max = row.Max3Cell; break;
+                default: min = row.Min2x2; max = row.Max2x2; break;
+            }
+        }
+
+        /// <summary>
+        /// CharmModTierTable 검증 (§6.3): 참 옵션 풀(CharmRules)의 Mod마다 T1~T10이 빠짐없이 있고, 풀 밖 Mod·범위 밖 티어·겹침이 없다.
+        /// 모양 칸은 그 옵션이 붙는 모양(CharmRules 크기 묶음)이면 정수 1 이상·최대 ≥ 최소·티어가 올라갈수록 줄지 않아야 하고,
+        /// 붙지 않는 모양이면 비어 있어야(0) 한다.
+        /// </summary>
+        private static bool ValidateCharmModTierSetup()
+        {
+            List<CharmModTierTable> rows = GetTableList<CharmModTierTable>();
+            if (rows == null || rows.Count == 0)
+            {
+                Debug.LogError("[ValidateCharmModTier] CharmModTierTable 행이 없습니다.");
+                return false;
+            }
+
+            int errors = 0;
+            HashSet<int> poolModIds = new HashSet<int>();
+            for (int i = 0; i < CharmRules.OptionModIds.Count; i++)
+                poolModIds.Add(CharmRules.OptionModIds[i]);
+
+            Dictionary<long, CharmModTierTable> byModTier = new Dictionary<long, CharmModTierTable>();
+            for (int i = 0; i < rows.Count; i++)
+            {
+                CharmModTierTable row = rows[i];
+                if (poolModIds.Contains(row.ModId) == false)
+                {
+                    Debug.LogError($"[ValidateCharmModTier] Id={row.Id}의 ModId={row.ModId}는 참 옵션 풀에 없습니다.");
+                    errors++;
+                }
+                if (row.Tier < 1 || row.Tier > CharmRules.MAX_CHARM_TIER)
+                {
+                    Debug.LogError($"[ValidateCharmModTier] Id={row.Id}의 Tier={row.Tier}가 1~{CharmRules.MAX_CHARM_TIER} 밖입니다.");
+                    errors++;
+                }
+                for (int column = 0; column < CharmValueColumnShapes.Length; column++)
+                {
+                    GetCharmValueColumn(row, column, out int min, out int max);
+                    bool allowed = CharmRules.IsOptionAllowedForShape(row.ModId, CharmValueColumnShapes[column]);
+                    if (allowed == true && (min < 1 || max < min))
+                    {
+                        Debug.LogError($"[ValidateCharmModTier] Id={row.Id}의 {CharmValueColumnNames[column]} 값({min}~{max})이 올바르지 않습니다. " +
+                            "이 모양에 붙는 옵션이라 정수 1 이상이고 최대 ≥ 최소여야 합니다.");
+                        errors++;
+                    }
+                    else if (allowed == false && (min != 0 || max != 0))
+                    {
+                        Debug.LogError($"[ValidateCharmModTier] Id={row.Id}의 {CharmValueColumnNames[column]} 칸({min}~{max})은 비워야 합니다. " +
+                            "이 모양에 붙지 않는 옵션입니다(CharmRules 모양별 옵션).");
+                        errors++;
+                    }
+                }
+                long key = ((long)row.ModId << 32) | (uint)row.Tier;
+                if (byModTier.ContainsKey(key) == true)
+                {
+                    Debug.LogError($"[ValidateCharmModTier] ModId={row.ModId}, Tier={row.Tier} 조합이 겹칩니다 (Id={row.Id}).");
+                    errors++;
+                    continue;
+                }
+                byModTier.Add(key, row);
+            }
+
+            foreach (int modId in poolModIds)
+            {
+                CharmModTierTable previous = null;
+                for (int tier = 1; tier <= CharmRules.MAX_CHARM_TIER; tier++)
+                {
+                    if (byModTier.TryGetValue(((long)modId << 32) | (uint)tier, out CharmModTierTable row) == false)
+                    {
+                        Debug.LogError($"[ValidateCharmModTier] 참 옵션 Mod {modId}의 T{tier} 행이 없습니다.");
+                        errors++;
+                        previous = null;
+                        continue;
+                    }
+                    for (int column = 0; previous != null && column < CharmValueColumnShapes.Length; column++)
+                    {
+                        GetCharmValueColumn(row, column, out int min, out int max);
+                        GetCharmValueColumn(previous, column, out int previousMin, out int previousMax);
+                        if (min < previousMin || max < previousMax)
+                        {
+                            Debug.LogError($"[ValidateCharmModTier] 참 옵션 Mod {modId}의 T{tier} {CharmValueColumnNames[column]} 값({min}~{max})이 " +
+                                $"아래 티어({previousMin}~{previousMax})보다 작습니다.");
+                            errors++;
+                        }
+                    }
+                    previous = row;
+                }
+            }
+
+            if (errors == 0)
+                Debug.Log($"[ValidateCharmModTier] PASS — Rows={rows.Count}");
+            return errors == 0;
         }
 
         /// <summary>ExpTable 파싱 (PLAYER_LEVEL_CHARM_DESIGN §3.4). 컬럼: Id(레벨), RequiredExp, MonsterExp</summary>
@@ -2486,7 +2686,7 @@ namespace ARPG.Editor
         {
             bool isImplicit = (slot == GlobalEnum.ModSlot.Implicit);
             // 참 전용 옵션은 장비에 붙지 않으므로 빈 칸을 허용한다 (PLAYER_LEVEL_CHARM_DESIGN §7)
-            bool allowsEmpty = isImplicit || slot == GlobalEnum.ModSlot.Charm;
+            bool allowsEmpty = isImplicit || CharmRules.IsCharmOnlyMod(tableId);
 
             if (values.Length <= index || string.IsNullOrEmpty(values[index]))
             {

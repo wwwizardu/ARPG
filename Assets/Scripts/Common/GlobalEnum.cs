@@ -307,11 +307,11 @@ public class GlobalEnum
         SkillBook = 100,  // 스킬북 (새 스킬 획득)
         SkillPage = 101,  // 스킬 페이지 (스킬북에 장착하는 SkillEffect 조각)
         CharmBoard = 102, // 참 판 — 3×3칸, 판 자리에 끼우고 참을 박는다 (PLAYER_LEVEL_CHARM_DESIGN §6.2)
-        Charm = 103,      // 참 — 모양별 1~9칸, 판에 박아 옵션을 얻는다 (§6.3)
+        Charm = 103,      // 참 — 모양별 1~4칸, 판에 박아 옵션을 얻는다 (§6.3)
     }
 
     /// <summary>
-    /// 참 모양 (PLAYER_LEVEL_CHARM_DESIGN §6.3). 아이템 표의 참 6행과 1:1이다. 저장은 이름 문자열.
+    /// 참 모양 (PLAYER_LEVEL_CHARM_DESIGN §6.3). 앞의 5개가 아이템 표의 참 5행과 1:1이다. 저장은 이름 문자열.
     /// </summary>
     public enum CharmShape
     {
@@ -320,7 +320,8 @@ public class GlobalEnum
         Line3,      // 1×3
         LShape,     // L자 3칸
         Square2,    // 2×2
-        Square3,    // 3×3 (막힌 칸 0인 판에만)
+        // 2026-10-25 제거된 3×3. 세이브가 이름 문자열이라 옛 세이브를 읽으려고만 남긴다 — 로드 때 2×2로 바뀐다(ItemData.OnLoadCompleted)
+        Square3,
     }
 
     /// <summary>
@@ -349,13 +350,13 @@ public class GlobalEnum
     }
 
     /// <summary>
-    /// 장비 등급 (ITEM_DROP_BALANCE_DESIGN §4.1). 저장하지 않고 붙어 있는 접두·접미 수로 판정한다.
+    /// 장비·참 등급 (ITEM_DROP_BALANCE_DESIGN §4.1, PLAYER_LEVEL_CHARM_DESIGN §6.3). 저장하지 않고 붙어 있는 접두·접미 수로 판정한다.
     /// </summary>
     public enum EquipmentGrade
     {
         Normal,     // 접두·접미 0개
         Magic,      // 접두·접미 각 1개 이하 (1~2개)
-        Rare,       // 그 밖 (3~6개)
+        Rare,       // 그 밖 (장비 3~6개, 참 3~4개)
     }
 
     public enum ItemCategory
@@ -620,7 +621,9 @@ public class GlobalEnum
         Prefix,        // 접두
         Postfix,       // 접미
         Base,          // 모든 일반 장비의 표준 베이스 스탯 (EquipmentBaseStatTable에서 옴). 장비 자격 판별 기준
-        Charm,         // 참 전용 옵션 (PLAYER_LEVEL_CHARM_DESIGN §6.3). 장비 롤·마법부여 후보에 들어가지 않는다. 참 옵션 인스턴스도 이 슬롯이다
+        // 2026-10-25까지 참 옵션이 쓰던 칸. 지금 참 옵션은 장비처럼 Prefix/Postfix다(PLAYER_LEVEL_CHARM_DESIGN §6.3).
+        // 세이브가 이름 문자열이라 옛 세이브를 읽으려고만 남긴다 — 로드 때 Mod 표의 칸으로 바뀐다(CharmData.OnLoadCompleted)
+        Charm,
     }
 
     /// <summary>
