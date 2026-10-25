@@ -39,6 +39,7 @@ namespace ARPG.Village
         BasicEquipment = 5,
         // PLAYER_LEVEL_CHARM_DESIGN §6.6 — 참 판·참 칸. 기본 장비 칸 뒤에 따로 롤한다 (NPC 구매 후보 아님)
         Charm = 6,
+        RecoverySupply = 7,
     }
 
     /// <summary>상점 UI에 표시할 지역 가격 사유 (§8.5).</summary>

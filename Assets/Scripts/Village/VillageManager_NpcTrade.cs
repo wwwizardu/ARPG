@@ -146,7 +146,8 @@ namespace ARPG.Village
             for (int i = 0; i < v.MerchantStock.Count; i++)
             {
                 TradeStockSlotKind slotKind = v.MerchantStock[i].SlotKind;
-                if (slotKind != TradeStockSlotKind.AdventurerConsignment && slotKind != TradeStockSlotKind.BasicEquipment)
+                if (slotKind != TradeStockSlotKind.AdventurerConsignment && slotKind != TradeStockSlotKind.BasicEquipment
+                    && slotKind != TradeStockSlotKind.RecoverySupply)
                     kinds++;
             }
             int limit = Mathf.FloorToInt(kinds * NpcPurchaseStockShare);

@@ -9,10 +9,29 @@ namespace ARPG.UI
     {
         private Button _exitDungeon;
         private bool _saving;
+        private bool _settingsButtonsCreated;
 
         public override void OnOpen()
         {
             base.OnOpen();
+            if (_settingsButtonsCreated == false)
+            {
+                var template = GetComponentInChildren<Button>(true);
+                if (template != null)
+                {
+                    if (template.GetComponentInParent<LayoutGroup>() == null)
+                    {
+                        ((RectTransform)template.transform).anchoredPosition = new Vector2(0, 195f);
+                        if (template.transform.parent is RectTransform menu) menu.sizeDelta = new Vector2(menu.sizeDelta.x, 540f);
+                    }
+                    AddMenuButton(template, "설정", -65f, OnClickSettings);
+                    AddMenuButton(template, "아이템 퀵슬롯", -130f, OnClickQuickSlots);
+                    AddMenuButton(template, "인벤토리", -195f, OnClickInventory);
+                    AddMenuButton(template, "스킬북", -260f, OnClickSkillBook);
+                    AddMenuButton(template, "참 판", -325f, OnClickCharmBoard);
+                    _settingsButtonsCreated = true;
+                }
+            }
             if (_exitDungeon == null)
             {
                 var save = GetComponentInChildren<Button>(true);
@@ -27,7 +46,7 @@ namespace ARPG.UI
                     var legacyText = _exitDungeon.GetComponentInChildren<Text>();
                     if (legacyText != null) legacyText.text = "던전 나오기";
                     if (save.GetComponentInParent<LayoutGroup>() == null)
-                        ((RectTransform)_exitDungeon.transform).anchoredPosition += new Vector2(0, -65);
+                        ((RectTransform)_exitDungeon.transform).anchoredPosition += new Vector2(0, -390);
                 }
             }
             if (_exitDungeon != null)
@@ -72,6 +91,22 @@ namespace ARPG.UI
             _saving = true;
             try { if (await AR.s.Dungeon.ExitAsync() == true) Close(); }
             finally { _saving = false; }
+        }
+
+        public void OnClickSettings() => AR.s.UI.Show<UISettings>(AddressablePath.Settings, UIManager.Layer.Main);
+        public void OnClickQuickSlots() => AR.s.UI.Show<UIQuickSlots>(AddressablePath.QuickSlots, UIManager.Layer.Main);
+        public void OnClickInventory() => AR.s.UI.Show<UICharacter>(AddressablePath.Character, UIManager.Layer.Main);
+        public void OnClickSkillBook() => AR.s.UI.Show<UISkillBook>(AddressablePath.SkillBook, UIManager.Layer.Main);
+        public void OnClickCharmBoard() => AR.s.UI.Show<UICharmBoard>(AddressablePath.CharmBoard, UIManager.Layer.Main);
+
+        private void AddMenuButton(Button template, string label, float offset, UnityEngine.Events.UnityAction handler)
+        {
+            var button = Instantiate(template, template.transform.parent);
+            button.name = label;
+            button.onClick = new Button.ButtonClickedEvent(); button.onClick.AddListener(handler);
+            var text = button.GetComponentInChildren<TMP_Text>(); if (text != null) text.text = label;
+            var legacy = button.GetComponentInChildren<Text>(); if (legacy != null) legacy.text = label;
+            if (template.GetComponentInParent<LayoutGroup>() == null) ((RectTransform)button.transform).anchoredPosition += new Vector2(0, offset);
         }
     }    
 }

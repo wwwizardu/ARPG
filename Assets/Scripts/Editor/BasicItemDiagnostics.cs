@@ -491,7 +491,8 @@ namespace ARPG.EditorTools
                     int kinds = 0;
                     for (int s = 0; s < first.MerchantStock.Count; s++)
                     {
-                        if (first.MerchantStock[s].SlotKind != TradeStockSlotKind.BasicEquipment)
+                        if (first.MerchantStock[s].SlotKind != TradeStockSlotKind.BasicEquipment
+                            && first.MerchantStock[s].SlotKind != TradeStockSlotKind.RecoverySupply)
                             kinds++;
                     }
                     int expectedLimit = Mathf.Clamp(Mathf.FloorToInt(kinds * VillageManager.NpcPurchaseStockShare),
@@ -581,7 +582,8 @@ namespace ARPG.EditorTools
             {
                 MerchantStockEntry entry = stock[i];
                 if (legacyOnly == true && (entry.SlotKind == TradeStockSlotKind.BasicEquipment ||
-                                           entry.SlotKind == TradeStockSlotKind.AdventurerConsignment))
+                                           entry.SlotKind == TradeStockSlotKind.AdventurerConsignment ||
+                                           entry.SlotKind == TradeStockSlotKind.RecoverySupply))
                     continue;
                 sb.Append(entry.SlotKind).Append(':').Append(entry.Item != null ? entry.Item.Id : 0).Append(':')
                     .Append(entry.UnitPrice).Append(':').Append(entry.PriceReason).Append(':');

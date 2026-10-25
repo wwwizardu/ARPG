@@ -425,8 +425,18 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c85757253dbed8d4d8bbcd5bb309c039
+    m_Address: UI/Settings
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c92ae5f679ea49c18bc9a8f4e7d286fc
     m_Address: Projectile/Projectile_SwampToadPoisonSpit
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ce5cc36d4cf6e414485e96e60a21bf1d
+    m_Address: UI/QuickSlots
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

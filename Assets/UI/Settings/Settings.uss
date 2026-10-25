@@ -1,0 +1,24 @@
+.settings-root { width: 100%; height: 100%; align-items: center; justify-content: center; background-color: rgba(0,0,0,0.62); color: rgb(235,229,214); font-size: 22px; -unity-font: url("../../Art/Font/FontSource/BMJUA_ttf.ttf"); }
+.settings-panel { width: 1120px; max-width: 94%; height: 850px; max-height: 94%; padding: 28px; background-color: rgb(28,28,32); border-width: 1px; border-color: rgb(125,99,59); border-radius: 12px; }
+.settings-title { font-size: 32px; -unity-font-style: bold; margin-bottom: 18px; color: rgb(233,199,133); }
+.settings-row { flex-direction: row; align-items: center; margin-top: 8px; margin-bottom: 8px; flex-shrink: 0; }
+.settings-row > .unity-button { flex-grow: 1; min-height: 46px; margin-left: 4px; margin-right: 4px; }
+.settings-content { flex-grow: 1; margin-top: 16px; margin-bottom: 12px; }
+.settings-content .unity-base-field { min-height: 48px; margin-bottom: 16px; }
+.settings-content .unity-base-field__label { min-width: 230px; }
+.settings-content .unity-base-field__input { min-height: 36px; }
+.settings-content .unity-toggle__checkmark { width: 28px; height: 28px; }
+.settings-content .unity-button { min-height: 42px; }
+.binding-row { border-bottom-width: 1px; border-bottom-color: rgba(180,140,80,0.22); padding-bottom: 6px; }
+.binding-name { width: 300px; }
+.binding-row > .unity-button { width: 260px; }
+.settings-status { min-height: 46px; white-space: normal; color: rgb(231,191,113); }
+.quickitem-register-slot { height: 100px; white-space: normal; }
+.quickitem-selected { border-color: rgb(246,199,101); border-width: 3px; }
+.quickitem-inventory-item { min-height: 60px; margin-bottom: 8px; -unity-text-align: middle-left; white-space: normal; }
+.settings-confirmation { background-color: rgba(125,99,59,0.18); }
+.unity-button { color: rgb(238,231,215); background-color: rgb(58,54,48); border-radius: 5px; }
+.unity-button:hover { background-color: rgb(79,69,52); }
+.unity-button:focus { border-color: rgb(246,199,101); border-width: 2px; }
+.settings-content .unity-popup-field__input, .settings-content .unity-text-field__input, .settings-content .unity-base-popup-field__input { background-color: rgb(49,48,47); color: rgb(239,232,216); border-color: rgb(107,94,71); }
+.settings-content .unity-base-popup-field__arrow { -unity-background-image-tint-color: rgb(239,232,216); }

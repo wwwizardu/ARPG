@@ -393,6 +393,9 @@ namespace ARPG.Tables
     [Serializable]
     public class ItemTable : TableBase
     {
+        [JsonProperty("RestoreHpPercent")] public int RestoreHpPercent;
+        [JsonProperty("RestoreMpPercent")] public int RestoreMpPercent;
+        [JsonProperty("UseCooldownSeconds")] public float UseCooldownSeconds;
         [JsonProperty("Tier")] public int Tier;
 
         [JsonProperty("Name")] public string Name = string.Empty;

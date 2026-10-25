@@ -264,6 +264,8 @@ namespace ARPG.Systems
             }
 
             // 커맨드 타입에 따라 처리
+            target.ControllerAimPoint = inCommand.TargetPosition;
+            target.ControllerTargetId = (int)inCommand.TargetId;
             switch (inCommand.TargetType)
             {
                 case GlobalEnum.SkillTargetType.Direction:
@@ -959,10 +961,12 @@ namespace ARPG.Systems
                 {
                     target.TargetPosition = SkillAimResolver.ResolveTargetPosition(
                         ownerTransform.Position,
-                        input.MouseWorldPosition,
+                        input.IsGamepad == true ? target.ControllerAimPoint : input.MouseWorldPosition,
                         target.TargetDirection,
                         skill.Table.SkillRangeMin,
                         skill.Table.SkillRangeMax);
+                    if (input.IsGamepad == true)
+                        target.TargetPosition = System_ControllerAim.ClampDestination(skill.OwnerEntityId, skill.Table, ownerTransform.Position, target.TargetPosition);
                 }
                 else if (trackingMode != GlobalEnum.SkillAimTrackingMode.SnapshotOnCommand
                     && pools.AI.TryGet(skill.OwnerEntityId, out AIComponent ai) == true

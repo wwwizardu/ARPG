@@ -68,6 +68,8 @@
 
 **신규 게임의 최소 시설 보장**: `HistoryManager.Initialize()`는 절차 마을의 누적 초기 발전 뒤 모든 마을에 Forge 160을 최소 Tier 1로 보장한다. 이어서 연대기 미연결 시작 마을(BaseTown, `SettlementId < 0`)에는 MerchantStall 151과 `ShopTier`를 최소 1로 보장한다(`EnsureNewGameBaseTownShops` → `VillageInitialDevelopment.EnsureMinimumShop`). BaseTown에 성장 계획 전체를 적용하지 않으므로 이 경로에서 거점·여관·Stage·Cap은 추가하거나 변경하지 않는다.
 
+**모든 마을에 여관 (2026-10-25 결정, 미구현)**: 원정 부상자가 소속 마을 여관 안에서 회복하도록 바꾸면서([NPC_SIMULATION_DESIGN](../npc/NPC_SIMULATION_DESIGN.md) §3.1 D13·D15), 사라진 터를 뺀 모든 마을에 여관(153)을 둔다. 절차 마을은 성장 계획의 여관 마일스톤을 Hamlet에서 Settlement로 내리고, 시작 마을은 새 게임에서 상점과 같은 방식으로 여관을 보장한다. 기존 세이브는 로드할 때 여관 기록이 없는 마을에 완공·배치 대기 여관을 추가한다("없으면 추가", 세이브 버전 유지). 이 결정은 바로 아래 문단의 "기존 세이브 일괄 보정은 하지 않는다"의 여관 예외다.
+
 상점이 없으면 자원·건설시간·task 없이 완공 원장에 추가하고, 기존 상점과 상권의 상위 Tier는 유지한다. 원장 중복·불일치는 변경 없이 오류로 거부한다. 저장 변경을 표시한 뒤 `RetryPendingPlacements`로 이미 실체화된 시작 마을에 배치하며, 배치 실패는 `PlacementPending`으로 보존한다. 이 최소 시설 보장은 신규 게임에서만 실행하며, 기존 세이브의 상점 일괄 보정은 하지 않는다. 상세 초기화 순서는 [ABSTRACT_CONSTRUCTION_DESIGN.md](ABSTRACT_CONSTRUCTION_DESIGN.md) §11을 따른다.
 
 ---

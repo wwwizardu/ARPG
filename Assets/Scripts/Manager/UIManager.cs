@@ -36,6 +36,8 @@ namespace ARPG
         // 스킬북 UI (SKILLBOOK_DESIGN.md §5)
         public const string SkillBook = "UI/SkillBook";
         public const string SkillBar = "UI/SkillBar";
+        public const string Settings = "UI/Settings";
+        public const string QuickSlots = "UI/QuickSlots";
 
         // NPC 장비/인벤토리 검사 UI (NPC_EQUIPMENT_DESIGN.md UI 패스)
         public const string NpcInspect = "UI/NpcInspect";
@@ -137,6 +139,7 @@ namespace ARPG
         private Canvas? _canvas;
 
         private Input.ArpgInput _input = new();
+        private readonly ControllerUIFocus _controllerFocus = new();
 
         private Input.ArpgInputAction _inputSystem = null!;
 
@@ -165,6 +168,7 @@ namespace ARPG
         public bool IsPressed { get { return _isPressed == true && 0.5f < _pressedTime; } }
 
         public Input.ArpgInput Input { get { return _input; } }
+        public Manager.GameSettingsManager Settings { get; } = new();
 
         // public bool IsUIMode { get { return _input.IsUIMode; } }
 
@@ -191,6 +195,26 @@ namespace ARPG
             _inputSystem = new ARPG.Input.ArpgInputAction();
             _inputSystem.Enable();
             _input.Initialize(_inputSystem);
+            _controllerFocus.Initialize();
+            var eventSystem = EventSystem.current;
+            if (eventSystem != null)
+            {
+                var module = eventSystem.GetComponent<UnityEngine.InputSystem.UI.InputSystemUIInputModule>();
+                if (module != null) module.actionsAsset = _inputSystem.asset;
+            }
+            _input.Audio.Initialize(gameObject);
+            Settings.Initialize(_input);
+        }
+
+        private void OnEnable()
+        {
+            if (_input.Asset != null) _input.RestoreActionMaps();
+        }
+
+        private void OnDisable()
+        {
+            if (_input.Asset != null) _input.Asset.Disable();
+            _input.StopVibration();
         }
 
         public void Initialize()
@@ -200,6 +224,8 @@ namespace ARPG
 
         public void Reset()
         {
+            _controllerFocus.Reset();
+            Settings.Reset();
             if (_uiList.ContainsKey(AddressablePath.SkillBar) == true)
                 Close(AddressablePath.SkillBar, true);
         }
@@ -331,6 +357,8 @@ namespace ARPG
 
             ui.gameObject.SetActive(true);
             ui.OnOpen();
+            var document = ui.GetComponent<UnityEngine.UIElements.UIDocument>();
+            if (document != null && ui.IsBase == false) document.sortingOrder = 20 + _uiCurrentList.Count;
 
             // _uiCurrentList.Count가 0보다 크면 Input ActionMap을 UI로 세팅, 아니라면 Player 타입으로 세팅
             UpdateInputActionMap();
@@ -1075,7 +1103,7 @@ namespace ARPG
 #endif
 
             // V 키 입력 시 마을 UI 토글 (마을 안에 있을 때만 열림)
-            if (AR.s.Dungeon.IsInside == false && UnityEngine.Input.GetKeyDown(KeyCode.V) == true)
+            if (AR.s.Dungeon.IsInside == false && _input.Pressed("Village") == true)
             {
                 if (IsShow("UI/UIVillage") == true)
                 {
@@ -1109,6 +1137,7 @@ namespace ARPG
             }
 
             bool isAllPass = true;
+            _controllerFocus.Update(CurrentUI, _input);
             for (int i = _uiCurrentList.Count - 1; 0 <= i; i--) // 활성화된 UI Input 처리
             {
                 if (_uiCurrentList[i].UpdateInput(_input) == true)
@@ -1130,7 +1159,7 @@ namespace ARPG
                 }
             }
 
-            return isAllPass;
+            return isAllPass && _uiCurrentList.Count == 0 && _isLocked == false;
         }
 
         private void ReleaseDummySlot()
@@ -1463,6 +1492,8 @@ namespace ARPG
         // hACK;
         private void OnDestroy()
         {
+            _controllerFocus.Reset();
+            _input.Dispose();
             DisableInputSystem();
         }
 

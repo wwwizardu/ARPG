@@ -33,6 +33,7 @@ namespace ARPG.Base
 
         public virtual void OnOpen()
         {
+            if (_openSound != null) AR.s.UI.Input.Audio.Play(_openSound, Input.GameAudioChannel.UI);
             gameObject.SetActive(true);
             if (_rectTransform != null)
                 _rectTransform.SetAsLastSibling();
@@ -47,6 +48,7 @@ namespace ARPG.Base
 
         public virtual void OnClose()
         {
+            if (_closeSound != null) AR.s.UI.Input.Audio.Play(_closeSound, Input.GameAudioChannel.UI);
             //if (_closeSound != null)
             //{
             //    RGM.Instance.AudioMgr.Play(AudioSourceType.Effect, _closeSound);

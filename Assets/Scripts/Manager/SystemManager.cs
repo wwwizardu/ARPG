@@ -39,6 +39,10 @@ namespace ARPG.Systems
             // Priority 0: Input System (Update) - 입력 수집
             System_Input inputSystem = new();
             RegisterSystems(inputSystem);
+            // Priority 120 (Update): consume one-shot quick-item requests.
+            RegisterSystems(new System_QuickItem());
+            // Priority 185 (FixedUpdate): controller targets before aim tracking (190) and skill execution (200).
+            RegisterSystems(new System_ControllerAim());
 
             // Priority 30: AI Perception System (FixedUpdate) - AI 타겟 감지
             System_AI_Perception aiPerceptionSystem = new();

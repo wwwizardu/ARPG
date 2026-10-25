@@ -22,7 +22,7 @@ namespace ARPG.UI
     /// 박힌 참 → 다른 칸·다른 판·가방. 끄는 중 R키·우클릭으로 90도 회전. 박힌 참 우클릭은 가방으로.
     /// 데이터 변경은 PlayerManager(참 판 자리)가 맡고, 이 창은 CharmBoardChangedMessage를 받아 다시 그린다.
     /// </summary>
-    public class UICharmBoard : UIBaseForm
+    public partial class UICharmBoard : UIBaseForm
     {
         private const float GHOST_CELL_SIZE = 30f;
         private const float DRAG_THRESHOLD_SQ = 16f;
@@ -126,6 +126,7 @@ namespace ARPG.UI
 
         public override void OnOpen()
         {
+            ClearControllerSelection();
             base.OnOpen();
             EnsureBound();
             AR.s.Message.Subscribe(_boardChangedHandler);
@@ -146,7 +147,7 @@ namespace ARPG.UI
         /// <summary>P키를 다시 누르면 닫는다 (끄는 중이면 무시).</summary>
         public override bool UpdateInput(Input.ArpgInput inInput)
         {
-            if (_dragKind == DragKind.None && Keyboard.current != null && Keyboard.current.pKey.wasPressedThisFrame == true)
+            if (_dragKind == DragKind.None && AR.s.UI.Input.KeyboardShortcutPressed("CharmBoard") == true)
             {
                 Close();
                 return true;

@@ -13,6 +13,8 @@ namespace ARPG.Component
 
         /// <summary>회전 제한이 적용된 현재 유효 조준 방향. 전투 판정과 방향 View의 정본</summary>
         public Vector2 TargetDirection;
+        public Vector2 ControllerAimPoint;
+        public int ControllerTargetId;
 
         /// <summary>
         /// 위치 타겟 설정
@@ -37,6 +39,8 @@ namespace ARPG.Component
         {
             TargetPosition = Vector2.zero;
             TargetDirection = Vector2.zero;
+            ControllerAimPoint = Vector2.zero;
+            ControllerTargetId = -1;
         }
     }
 }

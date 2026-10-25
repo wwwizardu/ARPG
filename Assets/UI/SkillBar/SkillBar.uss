@@ -259,3 +259,4 @@
 .skillbar-settings-button:active {
     background-color: rgba(116, 86, 44, 0.95);
 }
+#quickitem-hud { -unity-font: url("../../Art/Font/FontSource/BMJUA_ttf.ttf"); }

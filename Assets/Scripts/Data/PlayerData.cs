@@ -42,6 +42,7 @@ namespace ARPG.Data
 
         // 인벤토리 아이템
         public List<ItemData?> _inventory = new List<ItemData?>();
+        public int[] _quickItemIds = new int[4];
 
         // 스킬북 슬롯 (SKILLBOOK_DESIGN.md §3.4) — 슬롯 0=좌클릭, 1=Space, 2~9=숫자키 1~8
         public ItemData?[] _skillBookSlots = new ItemData?[GlobalEnum.PLAYER_SKILL_SLOT_COUNT];
@@ -95,12 +96,28 @@ namespace ARPG.Data
             }
             SeedDefaultStarterSkillBook();
             SeedDefaultStarterWeapon();
+            _quickItemIds = new int[4];
+            for (int i = 0; i < 2; i++)
+            {
+                ItemData? potion = AR.s.Item.CreateInventoryItemData(9000 + i, 5);
+                if (potion == null) continue;
+                _inventory[i] = potion;
+                _quickItemIds[i] = potion.Id;
+            }
 
             _charmBoardSlots = new ItemData?[PlayerLevelRules.CHARM_BOARD_SLOT_COUNT];
         }
 
         public void LoadCompleted()
         {
+            if (_quickItemIds == null || _quickItemIds.Length != 4)
+            {
+                int[] previous = _quickItemIds ?? Array.Empty<int>();
+                _quickItemIds = new int[4];
+                Array.Copy(previous, _quickItemIds, Math.Min(previous.Length, 4));
+            }
+            for (int i = 0; i < 4; i++)
+                if (AR.s.Data.GetItem(_quickItemIds[i])?.ItemType != GlobalEnum.ItemType.Consumable) _quickItemIds[i] = 0;
             NormalizeProgression();
 
             // 장착 아이템 테이블 세팅

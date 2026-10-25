@@ -254,6 +254,7 @@ namespace ARPG.UI
                     if (sprite != null) icon.style.backgroundImage = new StyleBackground(sprite);
                 }
                 row.Add(icon);
+                RecoveryPotionIcon.Draw(icon, table);
 
                 // 이름 + 재고 — 스킬북은 책 이름 옆에 스킬명, 스킬 페이지는 페이지 이름 옆에 효과명 부기
                 string displayName = table.Name;
@@ -381,6 +382,7 @@ namespace ARPG.UI
                         if (sprite != null) icon.style.backgroundImage = new StyleBackground(sprite);
                     }
                     slot.Add(icon);
+                    RecoveryPotionIcon.Draw(icon, item.Table);
 
                     if (item.Quantity > 1)
                     {

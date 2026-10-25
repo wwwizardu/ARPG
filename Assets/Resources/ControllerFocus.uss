@@ -1,0 +1,1 @@
+.controller-focused { border-left-width: 3px; border-right-width: 3px; border-top-width: 3px; border-bottom-width: 3px; border-left-color: rgb(246,199,101); border-right-color: rgb(246,199,101); border-top-color: rgb(246,199,101); border-bottom-color: rgb(246,199,101); }

@@ -81,7 +81,7 @@ namespace ARPG.Systems
                 Vector2 aimPoint;
                 if (hasPlayerInput == true)
                 {
-                    aimPoint = input.MouseWorldPosition;
+                    aimPoint = input.IsGamepad == true ? target.ControllerAimPoint : input.MouseWorldPosition;
                 }
                 else if (TryGetAiAimPoint(skill.OwnerEntityId, out aimPoint) == false)
                 {

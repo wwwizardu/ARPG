@@ -67,7 +67,7 @@ namespace ARPG.Systems
                 return;
             }
 
-            Show($"[{INTERACT_KEY_LABEL}] {ServiceUIRouter.GetPrompt(candidate)}", anchor);
+            Show($"[{AR.s.UI.Input.Display("Interact")}] {ServiceUIRouter.GetPrompt(candidate)}", anchor);
         }
 
         public void OnReset()

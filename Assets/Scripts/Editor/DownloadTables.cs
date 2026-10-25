@@ -59,7 +59,7 @@ namespace ARPG.Editor
             // NPC 단기 목표 정의 (NPC_OBJECTIVE_DESIGN §4.1, D147). 33열 A~AG — 새 탭은 33열 격자로 만들었다.
             Register<NpcObjectiveTable>(list, "182851152&range=A:AG");
             Register<StatTable>(list, "318209064&range=A:AJ");
-            Register<ItemTable>(list, "2064107837&range=A:S");
+            Register<ItemTable>(list, "2064107837&range=A:V");
             Register<BuildableItemTable>(list, "534887250&range=A:AA");
             // Phase D: JobBonusTable (직업별 시간당 가산 자원)
             Register<JobBonusTable>(list, "470575350&range=A:F");
@@ -1650,7 +1650,7 @@ namespace ARPG.Editor
 
         private static void ParseItemTable(ItemTable table, string[] values)
         {
-            // 전체 범위: A:S = 19개 컬럼 (Phase D에서 4개 + 트랙 A SourceMonsterId 1개 추가)
+            // A:V: existing item fields plus instant recovery percentages and shared-family cooldown.
             if (values.Length < 14)
             {
                 Debug.LogError($"[ParseItemTable] Invalid data length. Expected at least 14, got {values.Length}. Id: {table.Id}");
@@ -1681,6 +1681,9 @@ namespace ARPG.Editor
 
             // 트랙 A 신규 컬럼 (시트 갱신 전에는 길이 < 19일 수 있어 안전 가드)
             table.SourceMonsterId = ParseIntSafe(values, 18);
+            table.RestoreHpPercent = ParseIntSafe(values, 19);
+            table.RestoreMpPercent = ParseIntSafe(values, 20);
+            table.UseCooldownSeconds = ParseFloatSafe(values, 21);
         }
 
         private static void ParseBuildableItemTable(BuildableItemTable table, string[] values)

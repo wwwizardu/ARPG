@@ -69,6 +69,7 @@ namespace ARPG.Component
 
             // 보통 사용되는 컴포넌트
             { typeof(InputComponent), 100 },
+            { typeof(QuickItemCooldownComponent), 8 },
             { typeof(SkillAimIndicatorComponent), 8 },
             { typeof(SkillMovementPenaltyComponent), 20 },
             { typeof(SkillChannelEffectComponent), 32 },

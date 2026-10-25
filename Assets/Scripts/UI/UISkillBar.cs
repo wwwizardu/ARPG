@@ -13,7 +13,7 @@ using UnityEngine.UIElements;
 namespace ARPG.UI
 {
     [RequireComponent(typeof(UIDocument))]
-    public class UISkillBar : UIBaseForm
+    public partial class UISkillBar : UIBaseForm
     {
         [SerializeField, Range(0.5f, 1.25f)]
         [Tooltip("스킬 바 전체 배율. 1 = 원래 크기, 0.8 = 80%. 실행 중에도 조절할 수 있습니다.")]
@@ -131,6 +131,7 @@ namespace ARPG.UI
 
             EnsureBound();
             int playerEntityId = _ar.Data.CurrentPlayerEntityId;
+            RefreshKeysAndQuickItems();
             if (_playerEntityId != playerEntityId)
             {
                 _playerEntityId = playerEntityId;
@@ -165,6 +166,7 @@ namespace ARPG.UI
             _lastRoot = root;
             // 배율·포인터 판정은 경험치 바까지 포함한 묶음 기준이다
             _panel = root.Q<VisualElement>("skillbar-hud") ?? root.Q<VisualElement>("skillbar-panel");
+            BindQuickItemBar(root);
             ApplyScale();
             _expBar = root.Q<VisualElement>("exp-bar");
             _expFill = root.Q<VisualElement>("exp-fill");
@@ -271,7 +273,7 @@ namespace ARPG.UI
             if (player != null && _ar.Component.TryGetComponent<TransformComponent>(player.EntityId, out var transform) == true)
                 _ar.FloatingText.ShowLevelUpText(transform.Position, message.Level);
             if (message.CharmBoardSlotOpened == true)
-                _ar.UI.SetNotify("참 판 자리가 열렸습니다 (P)");
+                _ar.UI.SetNotify($"참 판 자리가 열렸습니다 ({_ar.UI.Input.Display("CharmBoard")})");
         }
 
         /// <summary>경험치 바 채움·레벨·남은 포인트 (§8.1). 남은 포인트가 0이면 숨긴다.</summary>
@@ -287,7 +289,7 @@ namespace ARPG.UI
             if (_expPoints != null)
             {
                 bool hasPoints = data.UnspentAttributePoints > 0;
-                _expPoints.text = hasPoints ? $"능력치 포인트 {data.UnspentAttributePoints} (I)" : string.Empty;
+                _expPoints.text = hasPoints ? $"능력치 포인트 {data.UnspentAttributePoints} ({_ar.UI.Input.Display("Inventory")})" : string.Empty;
                 _expPoints.EnableInClassList("skillbar-exp-points-visible", hasPoints);
             }
         }

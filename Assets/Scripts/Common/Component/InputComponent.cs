@@ -8,6 +8,11 @@ namespace ARPG.Component
         public Vector2 MoveDirection;    // 이동 방향 (WASD)
         public Vector2 MousePosition;    // 시선 방향 (마우스)
         public Vector2 MouseWorldPosition; // UI가 입력을 소유하지 않은 마지막 마우스 월드 위치
+        public bool IsGamepad;
+        public Vector2 AimDirection;
+        public int QuickItemPressedMask;
+        public bool RequireSkillRelease;
+        public int ControllerTargetId;
         public bool IsAttacking;         // 공격 입력
         public bool IsInteracting;       // 상호작용 입력
         public bool IsSprinting;         // 달리기 입력

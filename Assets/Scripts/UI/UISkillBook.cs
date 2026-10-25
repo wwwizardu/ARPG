@@ -17,7 +17,7 @@ namespace ARPG.UI
     /// 호버 툴팁은 글로벌 매니저(AR.s.Tooltip)에 위임 — 어떤 ItemData든 동일 호출.
     /// 데이터 변경 알림: SkillBookChangedMessage 구독.
     /// </summary>
-    public class UISkillBook : UIBaseForm
+    public partial class UISkillBook : UIBaseForm
     {
         // 슬롯별 키 라벨 (디자인 §2.3)
         private static readonly string[] SLOT_KEY_LABELS =
@@ -129,6 +129,7 @@ namespace ARPG.UI
 
         public override void OnOpen()
         {
+            _controllerSelectedBook = null;
             base.OnOpen();
             EnsureBound();
             AR.s.Message.Subscribe<SkillBookChangedMessage>(OnSkillBookChanged);
@@ -219,7 +220,7 @@ namespace ARPG.UI
                 slot.userData = null;
 
                 // 키 라벨 (항상 표시)
-                Text keyLabel = new() { text = i < SLOT_KEY_LABELS.Length ? SLOT_KEY_LABELS[i] : i.ToString() };
+                Text keyLabel = new() { text = AR.s.UI.Input.Display(Input.GameInputBindings.SkillNames[i]) };
                 keyLabel.AddToClassList("skillbook-slot-keylabel");
                 slot.Add(keyLabel);
 

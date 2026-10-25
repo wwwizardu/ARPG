@@ -93,7 +93,7 @@ namespace ARPG.Data
         {
             "Level" or "Exp" or "Gold" or "AllocatedStr" or "AllocatedDex" or "AllocatedInt" or "UnspentAttributePoints" => PlayerSaveGroup.Progress,
             "CurrentHp" or "CurrentMp" => PlayerSaveGroup.Vitality,
-            "_inventory" => PlayerSaveGroup.Inventory,
+            "_inventory" or "_quickItemIds" => PlayerSaveGroup.Inventory,
             "_inventoryEquip" => PlayerSaveGroup.Equipment,
             "_skillBookSlots" => PlayerSaveGroup.SkillBooks,
             "_charmBoardSlots" => PlayerSaveGroup.CharmBoards,

@@ -1652,12 +1652,11 @@ namespace ARPG.Village
             float now = AR.s.Time.CurrentGameTime;
             VillageTradeProfile trade = ResolveTradeProfile(v);
             int cycle = VillageTradeStockRoller.GetRestockCycle(now, trade);
-
             if (v.MerchantRestockCycle == cycle && v.MerchantStock.Count > 0)
-                return;
+            { EnsureRecoveryPotionStock(v, trade, cycle); return; }
             if (v.MerchantRestockCycle < 0 && v.MerchantStock.Count > 0
                 && now - v.LastMerchantRollGameTime < trade.RestockIntervalHours)
-                return;
+            { EnsureRecoveryPotionStock(v, trade, cycle); return; }
 
             MarkSaveDirty(villageId, ARPG.Data.VillageSaveGroup.Shop);
             RollMerchantStock(v, trade, cycle);
@@ -1919,6 +1918,7 @@ namespace ARPG.Village
             // PLAYER_LEVEL_CHARM_DESIGN §6.6: 참 칸은 기본 장비 칸 뒤에 같은 rng를 이어 롤한다 — 앞 칸의 결과는 그대로다.
             // 판 막힌 칸·참 모양 비중은 드롭과 같고, 참 아이템 레벨 = 지역 레벨
             int charmCount = RollCharmStock(v, trade, cycle, stockRollOptions.ItemLevel, rng);
+            EnsureRecoveryPotionStock(v, trade, cycle);
 
             Debug.Log($"[Shop] v{v.VillageId} 매물 재롤: {v.MerchantStock.Count}건 (기본 장비 {basicCount}, 참 칸 {charmCount}) " +
                 $"(trade={trade.TradeProfileId}, cycle={cycle}, shopTier={v.ShopTier}, " +

@@ -114,6 +114,8 @@ namespace ARPG.UI
 
         public override void OnOpen()
         {
+            _controllerMoveItem = null; _controllerMoveIndex = -1;
+            _controllerBindingRevision = -1;
             base.OnOpen();
             EnsureBound();
             SubscribeStatMessages();
@@ -144,6 +146,7 @@ namespace ARPG.UI
 
             // 참 판 창처럼 위에 뜬 창이 인벤토리를 바꿔도 따라간다 (바뀐 칸만 다시 그림)
             SyncSlots(false);
+            RefreshControllerBindingLabels(inInput);
             if (_dragSource != null && (IsDragSourceCurrent() == false || AR.s.UI.CurrentUI != this))
                 EndInventoryDrag();
             UpdateHoverDisplay(inInput);
@@ -174,6 +177,7 @@ namespace ARPG.UI
 
         private void CreateHandlers()
         {
+            _quickSlotsClickedHandler = OnOpenQuickSlots;
             _closeClickedHandler = OnClickClose;
             _rootPointerUpHandler = OnRootPointerUp;
             _rootPointerMoveHandler = OnRootPointerMove;
@@ -201,6 +205,13 @@ namespace ARPG.UI
 
             EndInventoryDrag();
             _lastRoot = root;
+            VisualElement? header = root.Q<VisualElement>(className: "char-header");
+            if (header != null)
+            {
+                var quickSlots = new UnityEngine.UIElements.Button(_quickSlotsClickedHandler) { text = "아이템 퀵슬롯" };
+                quickSlots.style.fontSize = 18; quickSlots.style.minHeight = 38; quickSlots.style.marginLeft = 12;
+                header.Insert(header.childCount - 1, quickSlots);
+            }
 
             IconButton? closeBtn = root.Q<IconButton>("close-btn");
             if (closeBtn != null) closeBtn.clicked += _closeClickedHandler;
@@ -343,6 +354,7 @@ namespace ARPG.UI
                     sprite = AR.s.Data.GetSprite(item.Table.SpriteName);
             }
             view.Icon.style.backgroundImage = sprite != null ? new StyleBackground(sprite) : new StyleBackground(StyleKeyword.None);
+            RecoveryPotionIcon.Draw(view.Icon, item?.Table);
             view.Root.EnableInClassList("char-slot-filled", item != null);
 
             if (view.Quantity != null)
@@ -543,6 +555,8 @@ namespace ARPG.UI
 
             if (press.IsCompare == true)
                 EquipFromComparison(view.Index, press); // 비교 중: 누른 버튼의 화면 위치 슬롯
+            else if (press.Item?.Table?.ItemType == GlobalEnum.ItemType.Consumable)
+                AR.s.UI.Show<UIQuickSlots>(AddressablePath.QuickSlots, UIManager.Layer.Main)?.SelectItem(press.Item.Id);
             else
                 EquipFromInventoryAuto(view.Index);     // Shift 없는 클릭: 현행 자동 선택 (버튼 구분 없음)
             SyncSlots(false);

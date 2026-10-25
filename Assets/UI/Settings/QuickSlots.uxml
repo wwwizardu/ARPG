@@ -1,0 +1,4 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="project://database/Assets/UI/Settings/Settings.uss"/>
+    <ui:VisualElement name="quickslots-root" class="settings-root"/>
+</ui:UXML>
