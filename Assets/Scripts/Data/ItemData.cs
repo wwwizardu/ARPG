@@ -270,6 +270,53 @@ namespace ARPG.Data
             _weaponStatsDirty = true;
         }
 
+        /// <summary>
+        /// 툴팁용 무기 능력. 품질·고유 강화가 반영된 Base 피해에 이 장비의 고정 추가 피해만 합산한다.
+        /// 일반 Attack에 적용되는 Passive 옵션만 포함하며, 조건부·발동형·증가율 옵션은 상세에 남긴다.
+        /// 전투용 WeaponStats 캐시와 원본 옵션은 변경하지 않는다.
+        /// </summary>
+        public WeaponStatCache GetWeaponDisplayStats()
+        {
+            WeaponStatCache stats = WeaponStats;
+            WeaponStatCache added = new WeaponStatCache();
+            for (int i = 0; i < Mods.Count; i++)
+            {
+                ModInstance mod = Mods[i];
+                if (mod.Slot == GE.ModSlot.Base || mod.Table == null
+                    || mod.Table.ApplyType != GE.ModApplyType.Passive
+                    || (mod.Table.Tags & ~GE.SkillTag.Attack) != 0)
+                    continue;
+
+                switch (mod.Table.EffectType)
+                {
+                    case GE.ModEffectType.AddedPhysDamage:
+                        added.Physics.Add(mod.Value1, mod.Value2);
+                        break;
+                    case GE.ModEffectType.AddedFireDamage:
+                        added.Fire.Add(mod.Value1, mod.Value2);
+                        break;
+                    case GE.ModEffectType.AddedIceDamage:
+                        added.Ice.Add(mod.Value1, mod.Value2);
+                        break;
+                    case GE.ModEffectType.AddedLightningDamage:
+                        added.Lightning.Add(mod.Value1, mod.Value2);
+                        break;
+                    case GE.ModEffectType.AddedPoisonDamage:
+                        added.Poison.Add(mod.Value1, mod.Value2);
+                        break;
+                    case GE.ModEffectType.FlatStat:
+                        AccumulateFlatStat(ref added, mod);
+                        break;
+                }
+            }
+            stats.Physics.Add(added.Physics.Min, added.Physics.Max);
+            stats.Fire.Add(added.Fire.Min, added.Fire.Max);
+            stats.Ice.Add(added.Ice.Min, added.Ice.Max);
+            stats.Lightning.Add(added.Lightning.Min, added.Lightning.Max);
+            stats.Poison.Add(added.Poison.Min, added.Poison.Max);
+            return stats;
+        }
+
         // ========== 장비 등급 (ITEM_DROP_BALANCE_DESIGN.md §4.1) ==========
 
         /// <summary>

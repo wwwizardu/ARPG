@@ -19,8 +19,11 @@
             <appui:Divider/>
             <ui:VisualElement class="forge-columns">
                 <ui:VisualElement class="forge-column forge-column-left">
-                    <appui:Text text="1. 인벤토리 미장착 장비" class="forge-section-title"/>
+                    <appui:Text text="1. 마법부여할 장비" class="forge-section-title"/>
                     <ui:ScrollView name="equipment-scroll" class="forge-scroll forge-equipment-scroll">
+                        <appui:Text text="장착 중" class="forge-equipment-heading"/>
+                        <ui:VisualElement name="equipped-grid" class="forge-inventory-grid"/>
+                        <appui:Text text="가방" class="forge-equipment-heading"/>
                         <ui:VisualElement name="inventory-grid" class="forge-inventory-grid"/>
                     </ui:ScrollView>
                     <appui:Text name="selected-text" text="장비를 선택하세요" class="forge-selected"/>

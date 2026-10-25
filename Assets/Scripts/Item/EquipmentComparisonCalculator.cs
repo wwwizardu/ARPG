@@ -10,7 +10,7 @@ namespace ARPG.Item
     /// <summary>비교 행이 속한 툴팁 영역. 값 순서가 표시 순서다.</summary>
     public enum EquipmentComparisonSection
     {
-        Base,         // 무기 기본 능력(WeaponStats) 또는 방어구 Base 옵션
+        Base,         // 무기 능력(기본+추가 피해) 또는 방어구 Base 옵션
         Enhancement,  // 무기 고유 강화 상세 (차이는 무기 기본 능력에 이미 반영)
         Options,      // Implicit·Prefix·Postfix 장비 옵션
     }
@@ -39,7 +39,7 @@ namespace ARPG.Item
     /// <summary>
     /// 인벤토리 장비 비교 계산 (INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md §능력 차이 표시).
     /// 두 아이템 데이터만 읽는 순수 로직이며 장착 카드마다 한 번 호출한다. 아이템·장비·저장 상태를 바꾸지 않는다.
-    /// 무기 기본 능력은 WeaponStats(고유 강화 반영 캐시)를 그대로 쓴다.
+    /// 무기 피해는 기본 능력(품질·고유 강화 반영)과 해당 장비의 고정 추가 피해를 합산한다.
     /// 옵션은 같은 ModTableId + 같은 ModSlot끼리만 비교하고, 그 밖의 옵션은 합치지 않고 추가·제거로 표시한다.
     /// </summary>
     public static class EquipmentComparisonCalculator
@@ -255,7 +255,7 @@ namespace ARPG.Item
             bool isWeapon = equip.EquipType == GE.EquipmentTypeMask.Weapon;
             if (isWeapon == true)
             {
-                WeaponStatCache stats = equip.WeaponStats;
+                WeaponStatCache stats = equip.GetWeaponDisplayStats();
                 AddWeaponDamage(output, WeaponPhysics, "물리 피해", stats.Physics);
                 AddWeaponDamage(output, WeaponFire, "화염 피해", stats.Fire);
                 AddWeaponDamage(output, WeaponIce, "냉기 피해", stats.Ice);

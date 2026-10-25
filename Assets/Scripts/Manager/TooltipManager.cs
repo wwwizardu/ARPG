@@ -579,7 +579,7 @@ namespace ARPG.Manager
         }
 
         /// <summary>
-        /// Equipment 컨텐츠를 기본 능력 / 무기 고유 강화 / 글로벌 장비 옵션으로 분리해 구성한다.
+        /// Equipment 컨텐츠를 능력 요약 / 무기 고유 강화 / 글로벌 장비 옵션으로 분리해 구성한다.
         /// </summary>
         private void BuildEquipmentContent(ItemData equipItem)
         {
@@ -596,7 +596,7 @@ namespace ARPG.Manager
 
             bool isWeapon = equip != null && equip.EquipType == GlobalEnum.EquipmentTypeMask.Weapon;
             if (_eqBaseTitle != null)
-                _eqBaseTitle.text = isWeapon == true ? "무기 기본 능력" : "기본 능력";
+                _eqBaseTitle.text = isWeapon == true ? "무기 능력" : "기본 능력";
 
             ClearChildren(_eqBaseMods);
             ClearChildren(_eqLocalEnhancements);
@@ -609,7 +609,7 @@ namespace ARPG.Manager
 
             if (isWeapon == true && equip != null)
             {
-                WeaponStatCache stats = equip.WeaponStats;
+                WeaponStatCache stats = equip.GetWeaponDisplayStats();
                 SetStatLine(_eqDmgPhysics, EquipmentOptionText.FormatWeaponDamageLine("물리 피해", stats.Physics));
                 SetStatLine(_eqDmgFire, EquipmentOptionText.FormatWeaponDamageLine("화염 피해", stats.Fire));
                 SetStatLine(_eqDmgIce, EquipmentOptionText.FormatWeaponDamageLine("냉기 피해", stats.Ice));
@@ -674,7 +674,7 @@ namespace ARPG.Manager
                 ModInstance mod = equip.Mods[i];
                 if (mod.Table == null) continue;
                 if (mod.Slot != GlobalEnum.ModSlot.Implicit) continue;
-                AppendModLine(_eqImplicitMods, mod, isImplicit: true);
+                AppendModLine(_eqImplicitMods, mod, isImplicit: true, showCondition: isWeapon);
                 hasOptionContent = true;
             }
 
@@ -683,7 +683,7 @@ namespace ARPG.Manager
                 ModInstance mod = equip.Mods[i];
                 if (mod.Table == null) continue;
                 if (mod.Slot != GlobalEnum.ModSlot.Prefix && mod.Slot != GlobalEnum.ModSlot.Postfix) continue;
-                AppendModLine(_eqAffixMods, mod, isImplicit: false);
+                AppendModLine(_eqAffixMods, mod, isImplicit: false, showCondition: isWeapon);
                 hasOptionContent = true;
             }
 
@@ -747,11 +747,14 @@ namespace ARPG.Manager
             }
         }
 
-        private static void AppendModLine(VisualElement? container, ModInstance mod, bool isImplicit)
+        private static void AppendModLine(VisualElement? container, ModInstance mod, bool isImplicit,
+            bool showCondition = false)
         {
             if (container == null || mod.Table == null) return;
 
             string body = EquipmentOptionText.FormatModLine(mod);
+            if (showCondition == true && (mod.Table.Tags & ~GlobalEnum.SkillTag.Attack) != 0)
+                body += $" ({EquipmentOptionText.FormatSkillTagCondition(mod.Table.Tags)})";
 
             Label line = CreateIgnoredLabel(body, isImplicit ? "tooltip-statline-implicit" : "tooltip-modline");
             container.Add(line);
@@ -1119,7 +1122,7 @@ namespace ARPG.Manager
             switch (section)
             {
                 case EquipmentComparisonSection.Base:
-                    return item?.Equipment?.EquipType == GlobalEnum.EquipmentTypeMask.Weapon ? "무기 기본 능력" : "기본 능력";
+                    return item?.Equipment?.EquipType == GlobalEnum.EquipmentTypeMask.Weapon ? "무기 능력" : "기본 능력";
                 case EquipmentComparisonSection.Enhancement:
                     return "무기 고유 강화";
                 default:

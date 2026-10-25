@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using ARPG.Component;
 using ARPG.Data;
 using ARPG.Tables;
+using ARPG.Utility;
 using ARPG.Village;
 using UnityEngine;
 
@@ -36,10 +37,18 @@ namespace ARPG.Item
         RequiresAffixedGrade,   // 엑잘티드 오브는 마법·희귀 장비에만 — 일반은 진화의 오브부터 (§6.1)
     }
 
+    public enum ItemEnchantmentTargetLocation
+    {
+        Inventory,
+        Equipped,
+    }
+
     public sealed class ItemEnchantmentRequest
     {
         public int ForgeEntityId;
+        public ItemEnchantmentTargetLocation TargetLocation;
         public int TargetInventorySlot;
+        public GlobalEnum.EquipSlotType TargetEquipSlot = GlobalEnum.EquipSlotType.Max;
         public int TargetItemInstanceId;
         public GlobalEnum.ItemEnchantmentOperation Operation;
     }
@@ -394,6 +403,23 @@ namespace ARPG.Item
             return ExecuteInternal(request, null);
         }
 
+        /// <summary>미리보기·실행·UI가 같은 위치와 인스턴스를 검증한다. 다른 슬롯으로 이동한 대상은 거부한다.</summary>
+        public static ItemEnchantmentFailureReason ResolveTarget(ItemEnchantmentRequest request,
+            Inventory? inventory, PlayerData? playerData, out ItemData? targetItem)
+        {
+            targetItem = null;
+            if (request.TargetLocation == ItemEnchantmentTargetLocation.Inventory)
+                targetItem = inventory?.GetItemBySlotIndex(request.TargetInventorySlot);
+            else if (request.TargetLocation == ItemEnchantmentTargetLocation.Equipped)
+            {
+                int slot = (int)request.TargetEquipSlot;
+                if (playerData != null && slot >= 0 && slot < (int)GlobalEnum.EquipSlotType.Max
+                    && slot < playerData._inventoryEquip.Length)
+                    targetItem = playerData._inventoryEquip[slot];
+            }
+            return ValidateTarget(targetItem, request);
+        }
+
         public bool TryResolveForgeTier(int forgeEntityId, out GlobalEnum.ForgeTier tier)
         {
             tier = GlobalEnum.ForgeTier.None;
@@ -441,16 +467,18 @@ namespace ARPG.Item
         }
 
         /// <summary>
-        /// 실제 랜덤 선택·커밋·저장 콜백 경로를 AR singleton 없이 검증한다. itemLevel은 장비의 아이템 레벨 자리다.
+        /// 실제 랜덤 선택·커밋·저장 콜백 경로를 검증한다. itemLevel은 장비의 아이템 레벨 자리다.
+        /// equippedItem을 넘긴 효과 재등록 검증은 PlayMode에서 실행하고, 기본 경로는 AR singleton 없이 실행한다.
         /// </summary>
         public ItemEnchantmentResult ExecuteForDiagnostics(EquipmentData equipment,
             Inventory inventory, PlayerData playerData,
             GlobalEnum.ItemEnchantmentOperation operation, int itemLevel,
             IReadOnlyList<ModTable> modPool, IReadOnlyList<ModTierTable> tiers,
-            ItemEnchantmentCostTable cost, Func<int, ModTable?> tableResolver)
+            ItemEnchantmentCostTable cost, Func<int, ModTable?> tableResolver,
+            ItemData? equippedItem = null)
         {
             return ExecuteValidated(equipment, inventory, playerData, operation,
-                itemLevel, modPool, tiers, cost, tableResolver);
+                itemLevel, modPool, tiers, cost, tableResolver, equippedItem);
         }
 #endif
 
@@ -516,8 +544,8 @@ namespace ARPG.Item
                 return preview;
             }
 
-            ItemData? targetItem = inventory.GetItemBySlotIndex(request.TargetInventorySlot);
-            ItemEnchantmentFailureReason targetFailure = ValidateTarget(targetItem, request);
+            ItemEnchantmentFailureReason targetFailure = ResolveTarget(request,
+                inventory, playerData, out ItemData? targetItem);
             if (targetFailure != ItemEnchantmentFailureReason.None)
             {
                 preview.FailureReason = targetFailure;
@@ -637,25 +665,29 @@ namespace ARPG.Item
 
             Inventory inventory = AR.s.Player.Inventory;
             PlayerData playerData = AR.s.Data.Player;
-            ItemData? targetItem = inventory.GetItemBySlotIndex(request.TargetInventorySlot);
+            ItemEnchantmentFailureReason targetFailure = ResolveTarget(request,
+                inventory, playerData, out ItemData? targetItem);
             ItemEnchantmentCostTable? cost = AR.s.Data.GetItemEnchantmentCost(
                 request.Operation);
-            if (targetItem == null || targetItem.Equipment == null || targetItem.Table == null
-                || targetItem.ItemInstanceId != request.TargetItemInstanceId || cost == null)
+            if (targetFailure != ItemEnchantmentFailureReason.None)
+                return Failure(targetFailure);
+            if (targetItem == null || targetItem.Equipment == null || cost == null)
                 return Failure(ItemEnchantmentFailureReason.TargetChanged);
 
             List<ModTable> modPool = GetRuntimeModPool(targetItem.Equipment);
             List<ModTierTable> tiers = GetRuntimeTiers(modPool);
             return ExecuteValidated(targetItem.Equipment, inventory, playerData,
                 request.Operation, targetItem.Equipment.ItemLevel, modPool, tiers, cost,
-                AR.s.Data.GetMod);
+                AR.s.Data.GetMod,
+                request.TargetLocation == ItemEnchantmentTargetLocation.Equipped ? targetItem : null);
         }
 
         private ItemEnchantmentResult ExecuteValidated(EquipmentData equipment,
             Inventory inventory, PlayerData playerData,
             GlobalEnum.ItemEnchantmentOperation operation, int itemLevel,
             IReadOnlyList<ModTable> modPool, IReadOnlyList<ModTierTable> tiers,
-            ItemEnchantmentCostTable cost, Func<int, ModTable?> tableResolver)
+            ItemEnchantmentCostTable cost, Func<int, ModTable?> tableResolver,
+            ItemData? equippedItem = null)
         {
             if (IsSupportedOperation(operation) == false)
                 return Failure(ItemEnchantmentFailureReason.UnsupportedOperation);
@@ -735,6 +767,14 @@ namespace ARPG.Item
                     replacementIndex, appliedMod, newQuality, inventory, playerData, cost,
                     out ItemEnchantmentFailureReason commitFailure) == false)
                 return Failure(commitFailure);
+
+            if (equippedItem != null)
+            {
+                // 커밋 전 실패는 기존 효과를 건드리지 않는다. 같은 SourceId의 효과만 교체한다.
+                // StatDirtyTag 이후의 스탯·공격 프로필·표시 갱신은 System_StatCalculation이 담당한다.
+                EquipHelper.RemoveEquipmentModifiers(playerData.PlayerId, equippedItem.ItemInstanceId);
+                EquipHelper.ApplyEquipmentModifiers(playerData.PlayerId, equippedItem);
+            }
 
             List<EquipmentOptionSnapshot> after = CreateOptionSnapshots(
                 equipment, tableResolver);

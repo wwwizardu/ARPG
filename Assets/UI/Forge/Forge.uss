@@ -150,6 +150,23 @@
     -unity-background-scale-mode: scale-to-fit;
 }
 
+.forge-equipment-heading {
+    color: rgb(205, 205, 210);
+    font-size: 12px;
+    margin-left: 10px;
+    margin-top: 8px;
+}
+
+.forge-equipped-slot {
+    height: 76px;
+}
+
+.forge-equipped-label {
+    color: rgb(225, 205, 165);
+    font-size: 10px;
+    margin-top: 3px;
+}
+
 .forge-inv-empty-text,
 .forge-list-empty {
     color: rgb(135, 135, 140);

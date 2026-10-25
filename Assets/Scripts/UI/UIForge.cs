@@ -12,7 +12,7 @@ using Text = Unity.AppUI.UI.Text;
 namespace ARPG.UI
 {
     /// <summary>
-    /// 미장착 장비와 마법부여 작업(품질 다시 굴리기·진화·랜덤 교체·추가)만 선택하는 Forge UI.
+    /// 장착·가방 장비와 마법부여 작업(품질 다시 굴리기·진화·랜덤 교체·추가)을 선택하는 Forge UI.
     /// 후보 구성·옵션 롤·비용·데이터 변경은 ItemEnchantmentService만 수행한다.
     /// </summary>
     public class UIForge : UIBaseForm
@@ -43,6 +43,7 @@ namespace ARPG.UI
         private int _forgeEntityId = -1;
         private GlobalEnum.ForgeTier _tier = GlobalEnum.ForgeTier.None;
         private int _selectedSlotIndex = -1;
+        private ItemEnchantmentTargetLocation _selectedTargetLocation;
         private int _selectedItemInstanceId = -1;
         private bool _testBinding;
         private ItemEnchantmentResult? _lastResult;
@@ -217,9 +218,23 @@ namespace ARPG.UI
         private void OnSelectSlot(int slotIndex)
         {
             ItemData? item = AR.s.Player?.Inventory?.GetItemBySlotIndex(slotIndex);
-            if (IsEnchantableInventoryEquipment(item) == false)
+            if (IsEnchantableEquipment(item) == false)
                 return;
 
+            _selectedTargetLocation = ItemEnchantmentTargetLocation.Inventory;
+            _selectedSlotIndex = slotIndex;
+            _selectedItemInstanceId = item!.ItemInstanceId;
+            _lastResult = null;
+            RefreshAll();
+        }
+
+        private void OnSelectEquippedSlot(int slotIndex)
+        {
+            ItemData? item = AR.s.Data.Player.GetEquipedItem((GlobalEnum.EquipSlotType)slotIndex);
+            if (IsEnchantableEquipment(item) == false)
+                return;
+
+            _selectedTargetLocation = ItemEnchantmentTargetLocation.Equipped;
             _selectedSlotIndex = slotIndex;
             _selectedItemInstanceId = item!.ItemInstanceId;
             _lastResult = null;
@@ -228,7 +243,10 @@ namespace ARPG.UI
 
         private void RefreshAll()
         {
+            if (GetSelectedItem() == null)
+                ResetSelections();
             RefreshTier();
+            RebuildEquippedGrid();
             RebuildInventoryGrid();
             RebuildSelectedOptions();
             RefreshOperations();
@@ -247,6 +265,58 @@ namespace ARPG.UI
                 GlobalEnum.ForgeTier.Basic => "제련소 Tier 1 — 품질·진화·옵션 변경·추가 사용 가능",
                 _ => "마법부여 불가 — 유효한 제련소가 없습니다",
             };
+        }
+
+        private void RebuildEquippedGrid()
+        {
+            VisualElement? grid = _document?.rootVisualElement.Q<VisualElement>("equipped-grid");
+            if (grid == null)
+                return;
+            grid.Clear();
+            ItemData?[]? items = AR.s.Data.Player?._inventoryEquip;
+            int equipmentCount = 0;
+            if (items != null)
+            {
+                for (int i = 0; i < items.Length && i < (int)GlobalEnum.EquipSlotType.Max; i++)
+                {
+                    ItemData? item = items[i];
+                    if (IsEnchantableEquipment(item) == false)
+                        continue;
+                    int slotIndex = i;
+                    VisualElement slot = CreateEquipmentSlot(item!,
+                        ItemEnchantmentTargetLocation.Equipped, slotIndex);
+                    slot.name = $"equipped-slot-{(GlobalEnum.EquipSlotType)slotIndex}";
+                    slot.AddToClassList("forge-equipped-slot");
+                    string slotName = GetEquipSlotName((GlobalEnum.EquipSlotType)slotIndex);
+                    AddMessage(slot, slotName, "forge-equipped-label");
+                    slot.tooltip = $"장착 중 · {slotName}\n{item!.Table!.Name}";
+                    slot.RegisterCallback<ClickEvent>(_ => OnSelectEquippedSlot(slotIndex));
+                    grid.Add(slot);
+                    equipmentCount++;
+                }
+            }
+            if (equipmentCount == 0)
+                AddMessage(grid, "장착 중인 장비가 없습니다", "forge-inv-empty-text");
+        }
+
+        private VisualElement CreateEquipmentSlot(ItemData item,
+            ItemEnchantmentTargetLocation location, int slotIndex)
+        {
+            VisualElement slot = new VisualElement();
+            slot.AddToClassList("forge-inv-slot");
+            slot.AddToClassList("forge-inv-slot-equipment");
+            if (location == _selectedTargetLocation && slotIndex == _selectedSlotIndex
+                && item.ItemInstanceId == _selectedItemInstanceId)
+                slot.AddToClassList("forge-inv-slot-selected");
+            VisualElement icon = new VisualElement();
+            icon.AddToClassList("forge-inv-icon");
+            Sprite? sprite = string.IsNullOrEmpty(item.Table!.SpriteName) == false
+                ? AR.s.Data.GetSprite(item.Table.SpriteName) : null;
+            if (sprite != null)
+                icon.style.backgroundImage = new StyleBackground(sprite);
+            slot.Add(icon);
+            slot.tooltip = item.Table.Name;
+            return slot;
         }
 
         private void RebuildInventoryGrid()
@@ -271,33 +341,25 @@ namespace ARPG.UI
             {
                 int slotIndex = i;
                 ItemData? item = items[i];
-                VisualElement slot = new VisualElement();
-                slot.AddToClassList("forge-inv-slot");
+                VisualElement slot;
 
-                if (IsEnchantableInventoryEquipment(item) == true)
+                if (IsEnchantableEquipment(item) == true)
                 {
-                    slot.AddToClassList("forge-inv-slot-equipment");
-                    if (slotIndex == _selectedSlotIndex)
-                        slot.AddToClassList("forge-inv-slot-selected");
-
-                    VisualElement icon = new VisualElement();
-                    icon.AddToClassList("forge-inv-icon");
-                    Sprite? sprite = string.IsNullOrEmpty(item!.Table!.SpriteName) == false
-                        ? AR.s.Data.GetSprite(item.Table.SpriteName)
-                        : null;
-                    if (sprite != null)
-                        icon.style.backgroundImage = new StyleBackground(sprite);
-                    slot.Add(icon);
+                    slot = CreateEquipmentSlot(item!, ItemEnchantmentTargetLocation.Inventory, slotIndex);
                     slot.RegisterCallback<ClickEvent>(_ => OnSelectSlot(slotIndex));
-                    slot.tooltip = item.Table.Name;
                     equipmentCount++;
                 }
-                else if (item != null)
+                else
                 {
-                    slot.AddToClassList("forge-inv-slot-disabled");
-                    slot.tooltip = item.Table?.ItemType == GlobalEnum.ItemType.Equipment
-                        ? "인스턴스 1개로 분리된 장비만 마법부여할 수 있습니다"
-                        : string.Empty;
+                    slot = new VisualElement();
+                    slot.AddToClassList("forge-inv-slot");
+                    if (item != null)
+                    {
+                        slot.AddToClassList("forge-inv-slot-disabled");
+                        slot.tooltip = item.Table?.ItemType == GlobalEnum.ItemType.Equipment
+                            ? "인스턴스 1개로 분리된 장비만 마법부여할 수 있습니다"
+                            : string.Empty;
+                    }
                 }
                 grid.Add(slot);
             }
@@ -313,7 +375,8 @@ namespace ARPG.UI
             ItemData? selected = GetSelectedItem();
             if (_selectedText != null)
                 _selectedText.text = selected != null
-                    ? FormatSelectedText(selected)
+                    ? FormatSelectedText(selected) + (_selectedTargetLocation == ItemEnchantmentTargetLocation.Equipped
+                        ? $" · 장착 중 ({GetEquipSlotName((GlobalEnum.EquipSlotType)_selectedSlotIndex)})" : " · 가방")
                     : "장비를 선택하세요";
             if (selected == null)
             {
@@ -462,11 +525,9 @@ namespace ARPG.UI
         {
             if (_selectedSlotIndex < 0 || _selectedItemInstanceId < 0)
                 return null;
-            ItemData? item = AR.s.Player?.Inventory?.GetItemBySlotIndex(_selectedSlotIndex);
-            return IsEnchantableInventoryEquipment(item) == true
-                && item!.ItemInstanceId == _selectedItemInstanceId
-                ? item
-                : null;
+            return ItemEnchantmentService.ResolveTarget(CreateRequest(default),
+                AR.s.Player?.Inventory, AR.s.Data.Player, out ItemData? item)
+                == ItemEnchantmentFailureReason.None ? item : null;
         }
 
         private ItemEnchantmentRequest CreateRequest(
@@ -475,7 +536,11 @@ namespace ARPG.UI
             return new ItemEnchantmentRequest
             {
                 ForgeEntityId = _forgeEntityId,
-                TargetInventorySlot = _selectedSlotIndex,
+                TargetLocation = _selectedTargetLocation,
+                TargetInventorySlot = _selectedTargetLocation == ItemEnchantmentTargetLocation.Inventory
+                    ? _selectedSlotIndex : -1,
+                TargetEquipSlot = _selectedTargetLocation == ItemEnchantmentTargetLocation.Equipped
+                    ? (GlobalEnum.EquipSlotType)_selectedSlotIndex : GlobalEnum.EquipSlotType.Max,
                 TargetItemInstanceId = _selectedItemInstanceId,
                 Operation = operation,
             };
@@ -483,18 +548,39 @@ namespace ARPG.UI
 
         private void ResetSelections()
         {
+            _selectedTargetLocation = ItemEnchantmentTargetLocation.Inventory;
             _selectedSlotIndex = -1;
             _selectedItemInstanceId = -1;
             _lastResult = null;
         }
 
-        private static bool IsEnchantableInventoryEquipment(ItemData? item)
+        private static bool IsEnchantableEquipment(ItemData? item)
         {
             return item != null
                 && item.Table != null
                 && item.Table.ItemType == GlobalEnum.ItemType.Equipment
                 && item.Equipment != null
                 && item.Quantity == 1;
+        }
+
+        private static string GetEquipSlotName(GlobalEnum.EquipSlotType slot)
+        {
+            return slot switch
+            {
+                GlobalEnum.EquipSlotType.WeaponRight => "오른손",
+                GlobalEnum.EquipSlotType.WeaponLeft => "왼손",
+                GlobalEnum.EquipSlotType.Helmet => "투구",
+                GlobalEnum.EquipSlotType.Armor => "갑옷",
+                GlobalEnum.EquipSlotType.Gloves => "장갑",
+                GlobalEnum.EquipSlotType.Boots => "장화",
+                GlobalEnum.EquipSlotType.Necklace => "목걸이",
+                GlobalEnum.EquipSlotType.RingRight => "오른 반지",
+                GlobalEnum.EquipSlotType.RingLeft => "왼 반지",
+                GlobalEnum.EquipSlotType.Belt => "허리띠",
+                GlobalEnum.EquipSlotType.EarringRight => "오른 귀걸이",
+                GlobalEnum.EquipSlotType.EarringLeft => "왼 귀걸이",
+                _ => "장비",
+            };
         }
 
         private static void AddOptionLines(VisualElement container,
@@ -528,10 +614,10 @@ namespace ARPG.UI
                 ItemEnchantmentFailureReason.None => string.Empty,
                 ItemEnchantmentFailureReason.ForgeNotFound => "유효한 제련소를 확인할 수 없습니다.",
                 ItemEnchantmentFailureReason.ForgeTierInsufficient => "Tier 1 이상 제련소가 필요합니다.",
-                ItemEnchantmentFailureReason.TargetNotFound => "선택한 장비를 인벤토리에서 찾을 수 없습니다.",
+                ItemEnchantmentFailureReason.TargetNotFound => "선택한 장비를 찾을 수 없습니다. 다시 선택하세요.",
                 ItemEnchantmentFailureReason.TargetChanged => "장비 슬롯이 변경되었습니다. 다시 선택하세요.",
                 ItemEnchantmentFailureReason.TargetQuantityInvalid => "인스턴스 1개로 분리된 장비만 마법부여할 수 있습니다.",
-                ItemEnchantmentFailureReason.NotEquipment => "미장착 장비만 마법부여할 수 있습니다.",
+                ItemEnchantmentFailureReason.NotEquipment => "장비 아이템만 마법부여할 수 있습니다.",
                 ItemEnchantmentFailureReason.ImmutableSlot => "Base·Implicit·무기 고유 강화는 변경할 수 없습니다.",
                 ItemEnchantmentFailureReason.AmbiguousExistingGroup => "같은 Slot·Group 옵션이 여러 개인 구 세이브 데이터 오류입니다.",
                 ItemEnchantmentFailureReason.AffixLimitReached => "Prefix와 Postfix가 모두 가득 찼습니다.",

@@ -3,8 +3,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using ARPG.Data;
+using ARPG.Component;
 using ARPG.Item;
 using ARPG.Tables;
+using ARPG.Utility;
 using ARPG.Village;
 using Newtonsoft.Json;
 using UnityEditor;
@@ -15,7 +17,7 @@ namespace ARPG.Editor
     /// <summary>
     /// ITEM_ENCHANTMENT_DESIGN MVP의 순수 규칙·메모리 트랜잭션·JSON 왕복과
     /// 신규 게임 공통 Forge 후조건을 실제 로컬 bytes 데이터로 검증한다.
-    /// 사용자 세이브와 PlayMode singleton은 변경하지 않는다.
+    /// 사용자 세이브는 변경하지 않는다. PlayMode에서는 임시 엔티티의 장착 효과도 확인한다.
     /// </summary>
     public static partial class ItemEnchantmentDiagnostics
     {
@@ -29,6 +31,14 @@ namespace ARPG.Editor
                 Debug.Log(report);
             else
                 Debug.LogError(report);
+
+            if (Application.isPlaying == true)
+            {
+                if (RunEquippedRuntime(out string runtimeReport) == true)
+                    Debug.Log(runtimeReport);
+                else
+                    Debug.LogError(runtimeReport);
+            }
         }
 
         /// <summary>
@@ -66,6 +76,7 @@ namespace ARPG.Editor
                 VerifyEnchantmentRules(modById, tiers, errors, ref assertions);
                 VerifyTransactionsAndSaveRoundTrip(modById, tiers, costs, itemById,
                     errors, ref assertions);
+                VerifyEquipmentTargets(itemById, errors, ref assertions);
                 VerifyItemLevelTierRules(modById, tiers, archetypes, errors, ref assertions);
                 VerifyDropBalanceEnchantment(modById, tiers, costs, itemById, errors, ref assertions);
                 villageCases = VerifyVillageForgeGuarantee(buildableById,
@@ -86,6 +97,165 @@ namespace ARPG.Editor
             report = $"[ItemEnchantmentDiagnostics] FAIL ({errors.Count})\n- " +
                 string.Join("\n- ", errors);
             return false;
+        }
+
+        /// <summary>PlayMode의 임시 엔티티와 가득 찬 별도 가방으로 실제 효과 재등록을 검사한다. 사용자 저장은 호출하지 않는다.</summary>
+        public static bool RunEquippedRuntime(out string report)
+        {
+            if (Application.isPlaying == false || AR.s?.Data == null)
+            {
+                report = "[ItemEnchantmentDiagnostics] Equipped runtime requires PlayMode.";
+                return false;
+            }
+            List<string> errors = new List<string>();
+            int assertions = 0;
+            int entityId = AR.s.Entity.CreateEntity();
+            ComponentManager cm = AR.s.Component;
+            try
+            {
+                ModTable hp = new ModTable { Id = 990010, Name = "진단 체력", Slot = GlobalEnum.ModSlot.Prefix,
+                    Group = "DiagnosticHp", ApplyType = GlobalEnum.ModApplyType.Passive,
+                    EffectType = GlobalEnum.ModEffectType.FlatStat, TargetStat = GlobalEnum.Stat.Hp,
+                    AllowedEquipTypes = GlobalEnum.EquipmentTypeMask.Armor };
+                ModTable defense = new ModTable { Id = 990011, Name = "진단 방어", Slot = GlobalEnum.ModSlot.Prefix,
+                    Group = "DiagnosticDefense", ApplyType = GlobalEnum.ModApplyType.Passive,
+                    EffectType = GlobalEnum.ModEffectType.FlatStat, TargetStat = GlobalEnum.Stat.Defense,
+                    AllowedEquipTypes = GlobalEnum.EquipmentTypeMask.Armor };
+                ModTable active = new ModTable { Id = 990012, Name = "진단 고정 효과", Slot = GlobalEnum.ModSlot.Implicit,
+                    ApplyType = GlobalEnum.ModApplyType.OnEvent, EffectType = GlobalEnum.ModEffectType.FlatStat };
+                List<ModTable> mods = new List<ModTable> { hp, defense };
+                List<ModTierTable> tiers = new List<ModTierTable>
+                {
+                    new ModTierTable { ModId = hp.Id, Tier = 1, RequiredLevel = 1, Weight = 100, Min1 = 10, Max1 = 10 },
+                    new ModTierTable { ModId = defense.Id, Tier = 1, RequiredLevel = 1, Weight = 100, Min1 = 20, Max1 = 20 },
+                };
+                EquipmentData equipment = new EquipmentData { EquipType = GlobalEnum.EquipmentTypeMask.Armor, ItemLevel = 1 };
+                equipment.Mods.Add(CreateMod(hp, 1, 10, 0));
+                equipment.Mods.Add(CreateMod(active, 0, 5, 0));
+                ItemData item = new ItemData { ItemInstanceId = 990100, Quantity = 1, Equipment = equipment };
+                PlayerData player = new PlayerData { PlayerId = entityId, Gold = 100 };
+                player._inventoryEquip[(int)GlobalEnum.EquipSlotType.Armor] = item;
+                Inventory inventory = new Inventory();
+                inventory.Initialize(new List<ItemData?> { new ItemData { Id = 1001, Quantity = 3 } }, 1);
+                player._inventory = inventory.Items;
+                cm.SetComponent(entityId, new StatComponent { BaseMaxHp = 100 });
+                ItemEnchantmentCostTable cost = new ItemEnchantmentCostTable
+                {
+                    Operation = GlobalEnum.ItemEnchantmentOperation.ReplaceAffix, MaterialItemId = 1001,
+                    MaterialCount = 1, GoldCost = 25,
+                };
+                int saves = 0;
+                ItemEnchantmentService service = new ItemEnchantmentService(_ => 0, () => saves++);
+                AR.s.Data.AddStatModifier(entityId, StatModifierSource.Buff, 990200,
+                    GlobalEnum.Stat.Hp, StatModifierType.Add, 7);
+                EquipHelper.ApplyEquipmentModifiers(entityId, item);
+                for (int i = 0; i < 2; i++)
+                {
+                    ItemEnchantmentResult result = service.ExecuteForDiagnostics(equipment, inventory, player,
+                        GlobalEnum.ItemEnchantmentOperation.ReplaceAffix, 1, mods, tiers, cost,
+                        id => id == hp.Id ? hp : id == defense.Id ? defense : active, item);
+                    List<StatModifier>? effects = AR.s.Data.GetModifiers(entityId);
+                    Require(result.Success == true && saves == i + 1 && effects?.Count == 2
+                        && effects.Exists(m => m.Source == StatModifierSource.Buff && m.Value == 7)
+                        && effects.Exists(m => m.SourceId == item.ItemInstanceId
+                            && m.StatType == (i == 0 ? GlobalEnum.Stat.Defense : GlobalEnum.Stat.Hp)
+                            && m.Value == (i == 0 ? 20 : 10)),
+                        "장착 장비의 반복 변경에서 이전 효과가 남거나 다른 출처의 효과가 사라짐", errors, ref assertions);
+                    Require(AR.s.Component.TryGetComponent<ModPoolComponent>(entityId, out var pool)
+                        && pool.Count == 1 && pool.GetByIndex(0).SourceItemInstanceId == item.ItemInstanceId
+                        && AR.s.Component.HasComponent<StatDirtyTag>(entityId),
+                        "장착 장비의 활성 효과 중복 또는 스탯 갱신 요청 누락", errors, ref assertions);
+                    new Systems.System_StatCalculation().OnUpdate(0f);
+                    Require(cm.TryGetComponent<StatComponent>(entityId, out var stat)
+                        && stat.FinalMaxHp == (i == 0 ? 107 : 117)
+                        && stat.FinalDefense == (i == 0 ? 20 : 0),
+                        "옵션 교체 후 최종 능력치에 이전 옵션이 남거나 새 옵션이 반영되지 않음", errors, ref assertions);
+                }
+                PlayerData? loaded = JsonConvert.DeserializeObject<PlayerData>(
+                    JsonConvert.SerializeObject(player, JsonSettings.Default), JsonSettings.Default);
+                ItemData? loadedItem = loaded?.GetEquipedItem(GlobalEnum.EquipSlotType.Armor);
+                Require(loadedItem?.ItemInstanceId == item.ItemInstanceId && loadedItem.Equipment?.Mods[0].ModTableId == hp.Id
+                    && loadedItem.Equipment.Mods[0].Value1 == 10 && loaded?.Gold == 50
+                    && loaded._inventory.Count == 1 && loaded._inventory[0]?.Quantity == 1,
+                    "마법부여한 장착 장비·비용·가방이 저장 왕복 후 보존되지 않음", errors, ref assertions);
+                player.Gold = 0;
+                string before = CaptureState(equipment, inventory, player);
+                ItemEnchantmentResult failure = service.ExecuteForDiagnostics(equipment, inventory, player,
+                    GlobalEnum.ItemEnchantmentOperation.ReplaceAffix, 1, mods, tiers, cost,
+                    id => id == hp.Id ? hp : id == defense.Id ? defense : active, item);
+                Require(failure.FailureReason == ItemEnchantmentFailureReason.GoldInsufficient && saves == 2
+                    && CaptureState(equipment, inventory, player) == before
+                    && AR.s.Data.GetModifiers(entityId)?.Count == 2
+                    && cm.HasComponent<StatDirtyTag>(entityId) == false,
+                    "실패한 장착 장비 작업이 데이터·효과·저장을 변경함", errors, ref assertions);
+                Require(ReferenceEquals(player.GetEquipedItem(GlobalEnum.EquipSlotType.Armor), item)
+                    && inventory.Items.Count == 1 && inventory.Items[0]?.Quantity == 1,
+                    "가방이 가득 찬 작업이 장착 위치 또는 가방 슬롯을 변경함", errors, ref assertions);
+            }
+            catch (Exception ex)
+            {
+                errors.Add(ex.ToString());
+            }
+            finally
+            {
+                AR.s.Entity.DestroyEntity(entityId);
+            }
+            report = errors.Count == 0
+                ? $"[ItemEnchantmentDiagnostics] Equipped runtime PASS — assertions={assertions}. 사용자 세이브 쓰기 0회."
+                : "[ItemEnchantmentDiagnostics] Equipped runtime FAIL\n" + string.Join("\n", errors);
+            return errors.Count == 0;
+        }
+
+        private static void VerifyEquipmentTargets(Dictionary<int, ItemTable> itemById,
+            List<string> errors, ref int assertions)
+        {
+            ItemData equipped = new ItemData { Id = 1, ItemInstanceId = 8001, Quantity = 1,
+                Table = itemById[1], Equipment = CreateEquipmentWithImmutableOptions() };
+            ItemData bagItem = new ItemData { Id = 1, ItemInstanceId = 8002, Quantity = 1,
+                Table = itemById[1], Equipment = CreateEquipmentWithImmutableOptions() };
+            PlayerData player = new PlayerData();
+            player._inventoryEquip[(int)GlobalEnum.EquipSlotType.WeaponRight] = equipped;
+            Inventory inventory = CreateInventory(bagItem);
+            ItemEnchantmentRequest request = new ItemEnchantmentRequest
+            {
+                TargetLocation = ItemEnchantmentTargetLocation.Equipped,
+                TargetEquipSlot = GlobalEnum.EquipSlotType.WeaponRight,
+                TargetInventorySlot = 0, TargetItemInstanceId = equipped.ItemInstanceId,
+            };
+            Require(ItemEnchantmentService.ResolveTarget(request, inventory, player, out ItemData? resolved)
+                == ItemEnchantmentFailureReason.None && ReferenceEquals(resolved, equipped),
+                "같은 인덱스의 가방 아이템 대신 장착 슬롯의 인스턴스를 조회해야 함", errors, ref assertions);
+            request.TargetLocation = ItemEnchantmentTargetLocation.Inventory;
+            Require(ItemEnchantmentService.ResolveTarget(request, inventory, player, out _)
+                == ItemEnchantmentFailureReason.TargetChanged,
+                "위치가 다른 동일 슬롯의 아이템을 인스턴스 확인 없이 허용함", errors, ref assertions);
+            request.TargetItemInstanceId = bagItem.ItemInstanceId;
+            Require(ItemEnchantmentService.ResolveTarget(request, inventory, player, out resolved)
+                == ItemEnchantmentFailureReason.None && ReferenceEquals(resolved, bagItem),
+                "기존 가방 장비 조회가 유지되어야 함", errors, ref assertions);
+            request.TargetLocation = ItemEnchantmentTargetLocation.Equipped;
+            Require(ItemEnchantmentService.ResolveTarget(request, inventory, player, out _)
+                == ItemEnchantmentFailureReason.TargetChanged, "교체된 장착 인스턴스를 거부해야 함", errors, ref assertions);
+            request.TargetItemInstanceId = equipped.ItemInstanceId;
+            equipped.Quantity = 2;
+            Require(ItemEnchantmentService.ResolveTarget(request, inventory, player, out _)
+                == ItemEnchantmentFailureReason.TargetQuantityInvalid, "중첩된 장착 장비를 허용함", errors, ref assertions);
+            equipped.Quantity = 1;
+            foreach (GlobalEnum.EquipSlotType slot in new[] { (GlobalEnum.EquipSlotType)(-1), GlobalEnum.EquipSlotType.Max,
+                GlobalEnum.EquipSlotType.WeaponLeft })
+            {
+                request.TargetEquipSlot = slot;
+                Require(ItemEnchantmentService.ResolveTarget(request, inventory, player, out _)
+                    == ItemEnchantmentFailureReason.TargetNotFound,
+                    "범위 밖 또는 빈 장착 슬롯을 허용함", errors, ref assertions);
+            }
+            player._inventory = inventory.Items;
+            PlayerData? loaded = JsonConvert.DeserializeObject<PlayerData>(
+                JsonConvert.SerializeObject(player, JsonSettings.Default), JsonSettings.Default);
+            Require(loaded?.GetEquipedItem(GlobalEnum.EquipSlotType.WeaponRight)?.ItemInstanceId == 8001
+                && loaded.GetEquipedItem(GlobalEnum.EquipSlotType.WeaponRight)?.Equipment?.Mods.Count == 2
+                && loaded._inventory[0]?.ItemInstanceId == 8002,
+                "장착·가방 인스턴스와 옵션이 저장 왕복 후 보존되지 않음", errors, ref assertions);
         }
 
         private static void VerifyCostAndTierData(Dictionary<int, ItemTable> itemById,

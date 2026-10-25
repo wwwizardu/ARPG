@@ -49,6 +49,8 @@ namespace ARPG.UI
         }
 
         private const int POINTER_BUTTON_COUNT = 3; // PointerEventBase.button: 0 왼쪽, 1 오른쪽, 2 휠
+        private const float DRAG_THRESHOLD_SQ = 36f;
+        private const float DRAG_GHOST_HALF_SIZE = 28f;
 
         private UIDocument? _document;
         private VisualElement? _lastRoot;
@@ -67,10 +69,20 @@ namespace ARPG.UI
         private readonly PressRecord[] _pressRecords = new PressRecord[POINTER_BUTTON_COUNT];
         private readonly int[] _pressedEquipSlots = { -1, -1, -1 };
 
+        private SlotView? _dragSource;
+        private ItemData? _dragItem;
+        private int _dragPointerId = -1;
+        private Vector2 _dragStartPosition;
+        private bool _dragActive;
+        private VisualElement? _dragGhost;
+        private SlotView? _dragHighlight;
+
         // 칸·버튼 콜백. Initialize는 Show마다 불리므로 처음 한 번만 만들고, 칸을 다시 만들 때도 같은 인스턴스를 쓴다.
         private bool _handlersCreated;
         private System.Action _closeClickedHandler = null!;
         private EventCallback<PointerUpEvent> _rootPointerUpHandler = null!;
+        private EventCallback<PointerMoveEvent> _rootPointerMoveHandler = null!;
+        private EventCallback<PointerCaptureOutEvent> _rootCaptureOutHandler = null!;
         private EventCallback<PointerEnterEvent> _inventoryEnterHandler = null!;
         private EventCallback<PointerLeaveEvent> _inventoryLeaveHandler = null!;
         private EventCallback<PointerDownEvent> _inventoryDownHandler = null!;
@@ -112,6 +124,7 @@ namespace ARPG.UI
         public override void OnClose()
         {
             // 닫으면 비교와 슬롯 강조를 남기지 않는다. 툴팁은 UIManager.Close가 닫는다.
+            EndInventoryDrag();
             ClearHover();
             ClearPressRecords();
             UnsubscribeStatMessages();
@@ -131,20 +144,40 @@ namespace ARPG.UI
 
             // 참 판 창처럼 위에 뜬 창이 인벤토리를 바꿔도 따라간다 (바뀐 칸만 다시 그림)
             SyncSlots(false);
+            if (_dragSource != null && (IsDragSourceCurrent() == false || AR.s.UI.CurrentUI != this))
+                EndInventoryDrag();
             UpdateHoverDisplay(inInput);
             return false;
         }
 
         protected override void OnDestroy()
         {
+            EndInventoryDrag();
             UnsubscribeStatMessages();
             base.OnDestroy();
+        }
+
+        private void OnDisable()
+        {
+            EndInventoryDrag();
+            ClearPressRecords();
+        }
+
+        private void OnApplicationFocus(bool hasFocus)
+        {
+            if (hasFocus == false)
+            {
+                EndInventoryDrag();
+                ClearPressRecords();
+            }
         }
 
         private void CreateHandlers()
         {
             _closeClickedHandler = OnClickClose;
             _rootPointerUpHandler = OnRootPointerUp;
+            _rootPointerMoveHandler = OnRootPointerMove;
+            _rootCaptureOutHandler = OnRootCaptureOut;
             _inventoryEnterHandler = OnInventorySlotEnter;
             _inventoryLeaveHandler = OnInventorySlotLeave;
             _inventoryDownHandler = OnInventorySlotDown;
@@ -166,12 +199,15 @@ namespace ARPG.UI
             if (root == null) return;
             if (root == _lastRoot) return;
 
+            EndInventoryDrag();
             _lastRoot = root;
 
             IconButton? closeBtn = root.Q<IconButton>("close-btn");
             if (closeBtn != null) closeBtn.clicked += _closeClickedHandler;
             // 칸 콜백(대상 단계)이 끝난 뒤 올라오는 뗌으로 누름 기록을 지운다 — 칸 밖에서 뗀 누름이 다음 클릭으로 남지 않게
             root.RegisterCallback(_rootPointerUpHandler);
+            root.RegisterCallback(_rootPointerMoveHandler);
+            root.RegisterCallback(_rootCaptureOutHandler);
 
             BindEquipSlots(root);
             BindInventorySlots(root);
@@ -220,6 +256,7 @@ namespace ARPG.UI
 
         private void BindInventorySlots(VisualElement root)
         {
+            EndInventoryDrag();
             _inventorySlots.Clear();
             VisualElement? grid = root.Q<VisualElement>("inventory-grid");
             if (grid == null)
@@ -335,6 +372,23 @@ namespace ARPG.UI
 
         private void OnRootPointerUp(PointerUpEvent evt)
         {
+            if (_dragSource != null && evt.pointerId == _dragPointerId && evt.button == (int)MouseButton.LeftMouse)
+            {
+                bool wasDragging = _dragActive;
+                SlotView? target = PickInventorySlot(evt.position);
+                if (wasDragging == true && target != null && target != _dragSource
+                    && IsDragSourceCurrent() == true && AR.s.UI.CurrentUI == this)
+                    AR.s.Player.Inventory.MoveItem(_dragSource.Index, target.Index);
+
+                EndInventoryDrag();
+                if (wasDragging == true)
+                {
+                    SyncSlots(false);
+                    _hoveredInventoryIndex = target != null ? target.Index : -1;
+                    RefreshHoverDisplay(AR.s.UI.Input);
+                    evt.StopPropagation();
+                }
+            }
             if (IsValidButton(evt.button) == false)
                 return;
             _pressRecords[evt.button] = default;
@@ -345,6 +399,8 @@ namespace ARPG.UI
 
         private void OnEquipSlotEnter(PointerEnterEvent evt)
         {
+            if (_dragActive == true)
+                return;
             if (TryGetSlotView(evt.currentTarget, out SlotView view) == false)
                 return;
 
@@ -406,6 +462,8 @@ namespace ARPG.UI
 
         private void OnInventorySlotEnter(PointerEnterEvent evt)
         {
+            if (_dragActive == true)
+                return;
             if (TryGetSlotView(evt.currentTarget, out SlotView view) == false)
                 return;
 
@@ -457,6 +515,16 @@ namespace ARPG.UI
                     record.TargetEquippedInstanceId = record.TargetEquipped.ItemInstanceId;
             }
             _pressRecords[evt.button] = record;
+
+            // Shift 비교 중의 누름은 기존 클릭 장착을 유지한다.
+            ItemData? item = AR.s.Player.Inventory.GetItemBySlotIndex(view.Index);
+            if (evt.button == (int)MouseButton.LeftMouse && record.IsCompare == false && item != null)
+            {
+                _dragSource = view;
+                _dragItem = item;
+                _dragPointerId = evt.pointerId;
+                _dragStartPosition = evt.position;
+            }
         }
 
         private void OnInventorySlotUp(PointerUpEvent evt)
@@ -466,6 +534,10 @@ namespace ARPG.UI
 
             PressRecord press = _pressRecords[evt.button];
             _pressRecords[evt.button] = default;
+            if (_dragActive == true)
+                return; // 캡처한 root에서 드롭만 처리한다. 원래 칸에 놓아도 장착하지 않는다.
+            if (_dragSource != null && evt.pointerId == _dragPointerId && evt.button == (int)MouseButton.LeftMouse)
+                EndInventoryDrag();
             if (press.IsPressed == false || press.SlotIndex != view.Index)
                 return; // 다른 칸에서 누르고 여기서 뗐다 — 클릭이 아니다
 
@@ -487,6 +559,92 @@ namespace ARPG.UI
             {
                 _pressRecords[i] = default;
                 _pressedEquipSlots[i] = -1;
+            }
+        }
+
+        // ========== 인벤토리 내부 드래그 — 빈 칸 이동·아이템 위치 교환 ==========
+
+        private void OnRootPointerMove(PointerMoveEvent evt)
+        {
+            if (_dragSource == null || evt.pointerId != _dragPointerId)
+                return;
+            if ((evt.pressedButtons & 1) == 0 || IsDragSourceCurrent() == false || AR.s.UI.CurrentUI != this)
+            {
+                EndInventoryDrag();
+                return;
+            }
+
+            if (_dragActive == false)
+            {
+                if (((Vector2)evt.position - _dragStartPosition).sqrMagnitude < DRAG_THRESHOLD_SQ)
+                    return;
+                _dragActive = true;
+                ClearPressRecords();
+                ClearHover();
+                AR.s.Tooltip.Hide();
+                _dragSource.Root.AddToClassList("char-inv-slot-dragging");
+                _dragGhost = new VisualElement { pickingMode = PickingMode.Ignore };
+                _dragGhost.AddToClassList("char-inv-drag-ghost");
+                _dragGhost.style.backgroundImage = _dragSource.Icon.style.backgroundImage;
+                _lastRoot!.Add(_dragGhost);
+                _lastRoot.CapturePointer(_dragPointerId);
+            }
+
+            Vector2 localPosition = _lastRoot!.WorldToLocal(evt.position);
+            _dragGhost!.style.left = localPosition.x - DRAG_GHOST_HALF_SIZE;
+            _dragGhost.style.top = localPosition.y - DRAG_GHOST_HALF_SIZE;
+            SlotView? target = PickInventorySlot(evt.position);
+            if (target == _dragSource)
+                target = null;
+            if (target != _dragHighlight)
+            {
+                _dragHighlight?.Root.RemoveFromClassList("char-inv-slot-droptarget");
+                _dragHighlight = target;
+                _dragHighlight?.Root.AddToClassList("char-inv-slot-droptarget");
+            }
+        }
+
+        private void OnRootCaptureOut(PointerCaptureOutEvent evt)
+        {
+            if (evt.target == _lastRoot && evt.pointerId == _dragPointerId)
+                EndInventoryDrag();
+        }
+
+        private bool IsDragSourceCurrent()
+        {
+            return _dragSource != null && _dragItem != null
+                && AR.s.Player.Inventory.GetItemBySlotIndex(_dragSource.Index) == _dragItem;
+        }
+
+        private SlotView? PickInventorySlot(Vector2 position)
+        {
+            VisualElement? element = _lastRoot?.panel?.Pick(position);
+            while (element != null)
+            {
+                if (element.ClassListContains("char-inv-slot") == true && element.userData is SlotView view)
+                    return view;
+                element = element.parent;
+            }
+            return null;
+        }
+
+        private void EndInventoryDrag()
+        {
+            int pointerId = _dragPointerId;
+            _dragPointerId = -1; // ReleasePointer가 CaptureOut을 보내도 재진입하지 않는다.
+            _dragSource?.Root.RemoveFromClassList("char-inv-slot-dragging");
+            _dragHighlight?.Root.RemoveFromClassList("char-inv-slot-droptarget");
+            _dragGhost?.RemoveFromHierarchy();
+            _dragSource = null;
+            _dragItem = null;
+            _dragHighlight = null;
+            _dragGhost = null;
+            _dragActive = false;
+            if (pointerId >= 0)
+            {
+                _pressRecords[(int)MouseButton.LeftMouse] = default;
+                if (_lastRoot?.HasPointerCapture(pointerId) == true)
+                    _lastRoot.ReleasePointer(pointerId);
             }
         }
 
@@ -620,7 +778,7 @@ namespace ARPG.UI
 
         private void UpdateHoverDisplay(Input.ArpgInput inInput)
         {
-            if (_hoveredInventoryIndex < 0)
+            if (_dragActive == true || _hoveredInventoryIndex < 0)
                 return;
 
             if (IsHoverDisplayStale(inInput) == true)
@@ -660,6 +818,8 @@ namespace ARPG.UI
 
         private void RefreshHoverDisplay(Input.ArpgInput inInput)
         {
+            if (_dragActive == true)
+                return;
             if (_hoveredInventoryIndex < 0 || _hoveredInventoryIndex >= _inventorySlots.Count)
             {
                 ClearHover();

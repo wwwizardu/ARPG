@@ -211,3 +211,20 @@
     color: rgb(255, 255, 255);
     font-size: 11px;
 }
+
+.char-inv-slot-dragging {
+    opacity: 0.4;
+}
+
+.char-inv-slot-droptarget {
+    border-color: rgb(255, 215, 100);
+    background-color: rgba(120, 90, 40, 0.7);
+}
+
+.char-inv-drag-ghost {
+    position: absolute;
+    width: 56px;
+    height: 56px;
+    opacity: 0.8;
+    -unity-background-scale-mode: scale-to-fit;
+}
