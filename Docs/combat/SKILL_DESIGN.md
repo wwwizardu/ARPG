@@ -544,6 +544,7 @@ SkillEffectTable                         // 새 테이블
 3. 위치는 주인 몸 둘레 0.8~1.5칸에서 걸을 수 있는 칸을 8번까지 고르고, 못 찾으면 주인 위치에 낸다.
 4. 소환된 몬스터는 생성 직후 주인이 노리던 대상을 이어받는다. 출신 청크·활성화 거리 컴포넌트가 없어 스폰 슬롯 생존 수에 들어가지 않는다.
 5. 소환 효과는 몬스터 시전자 전용이다. 소환된 몬스터가 적 진영으로 생성되므로 플레이어 스킬에 붙이면 실행하지 않고 경고만 남긴다. 플레이어 소환은 진영·AI 대상 선택을 따로 정해야 한다.
+6. (2026-10-25 사용자 결정) 몬스터는 종 그림을 다 불러온 뒤에 만든다. 첫 플레이에서 소환된 임프가 그림을 불러오는 0.6초 안쪽 동안 엔티티 프리팹 기본 그림(기사 `KnightSpriteSheet`)으로 점프하는 것이 보였다. 그림이 오기 전엔 몬스터가 존재하지 않으므로 숨긴 채 움직이거나 공격하지 않는다. 대가로 그 종의 그림을 처음 불러올 때 한 번만 등장이 늦고, 불러온 그림은 해제하지 않아 두 번째부터는 기다리지 않는다. 필드·던전·네임드·소환 몬스터 모두 같은 `EntityFactory.CreateMonster` 경로다.
 
 **런타임 구조**:
 - `SkillComponent.SummonEffectId`: 생성 때 효과 목록에서 찾아 두고 커밋 스케줄과 AI 후보 판정이 쓴다.
@@ -551,9 +552,10 @@ SkillEffectTable                         // 새 테이블
 - `SkillEffectExecutor.ExecuteSummonMonster` → `EntityFactory.CreateSummonedMonster`: `CreateMonster` 뒤 `DropComponent`·`ExpRewardComponent`를 떼고 `SummonedMonsterComponent`(주인·효과 Id)와 `LifetimeComponent`를 붙인다. 대상 이어받기는 `System_AI_Perception.InheritSummonerTarget`.
 - `System_SummonedMonster`(FixedUpdate 145, 매 틱): 주인이 없거나 HP 0·`DestroyTag`·비활성·출신 청크 비활성이면 소환 몬스터에 `DestroyTag`를 붙인다. 생존 시간 만료는 `System_Lifetime`이 맡는다.
 - `SkillHelper.IsFireCandidate`: 최대 수만큼 살아 있으면 소환 스킬을 후보에서 뺀다.
+- `EntityFactory.CreateMonster`(적용 규칙 6): `PreloadSpriteLibraryAsync`로 그림을 먼저 불러오고, 프리팹을 만든 직후 `CreateSpriteAnimationData`가 첫 그림을 넣은 뒤(HP바 생성을 기다리는 동안에도 기본 그림이 안 보임) 컴포넌트 조립 끝에 `RegisterSpriteAnimationData`로 등록한다. 미리 불러오기에 실패하면 이전처럼 생성 뒤 `LoadAnimationAsync`로 따로 불러온다. 따로 불러오는 경로(NPC·플레이어 포함)도 등록 순간 현재 애니메이션 위치의 그림을 바로 넣는다.
 - 다운로드 검사: `SummonMonster` 행은 `Kind=EffectAction`·`Trigger=OnSkillCommit`·`Param1>0`·`Param2>=1`·`Param3>0`이어야 한다. 공격 예고 빌드 검증 메뉴가 효과만 있는 스킬의 1회 커밋 계약을 확인한다.
 
-**검증 결과 (2026-10-25)**: 런타임·에디터 컴파일 오류·경고 없음. 표 3개(Skill·SkillEffect·AI)를 받아 이전 파일과 행별로 비교해 위 값만 바뀐 것을 확인했다. AI 검사 오류 0, 경고 8은 모두 원거리 AI 5종·NPC 3종의 기존 `KeepDistance 7` 경고다. `ARPG/Validation/Attack Telegraph Build Contract` 통과. 플레이 모드 확인(화염탄 주기, 소환 빈도·최대 수, 12초 소멸, 주인 사망 시 소멸, 보상 없음)은 사용자 선택으로 하지 않았다.
+**검증 결과 (2026-10-25)**: 런타임·에디터 컴파일 오류·경고 없음. 표 3개(Skill·SkillEffect·AI)를 받아 이전 파일과 행별로 비교해 위 값만 바뀐 것을 확인했다. AI 검사 오류 0, 경고 8은 모두 원거리 AI 5종·NPC 3종의 기존 `KeepDistance 7` 경고다. `ARPG/Validation/Attack Telegraph Build Contract` 통과. 플레이 모드 확인(화염탄 주기, 소환 빈도·최대 수, 12초 소멸, 주인 사망 시 소멸, 보상 없음)은 사용자 선택으로 하지 않았다. 같은 날 사용자 플레이 기록에서 소환 4마리 모두 `TableId 1005(FireImp)`로 생성되고 그림을 불러온 것을 확인했고, 처음 두 마리는 그림이 생성 뒤 점프 도중에 들어와 기사 그림이 잠깐 보였다(적용 규칙 6의 원인). 규칙 6 적용 뒤에는 컴파일만 확인했다.
 
 ---
 

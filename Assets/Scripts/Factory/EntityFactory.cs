@@ -54,7 +54,14 @@ namespace ARPG.Factory
                 return (-1, null);
             }
 
-            // 2. Addressable로 프리팹 인스턴스 생성
+            // 2. 종 그림(SpriteLibrary)을 먼저 불러온 뒤 엔티티를 만든다. 그림이 오기 전에 몬스터가
+            //    프리팹 기본 그림(기사)으로 움직이고 공격하는 시간이 생기지 않게 한다 (SKILL_DESIGN §6.12).
+            //    불러온 그림은 해제하지 않으므로 같은 종의 두 번째부터는 기다리지 않는다
+            SpriteLibraryAsset? spriteLibrary = await PreloadSpriteLibraryAsync(table.AnimationData);
+            if (contextLoad.IsCurrent == false)
+                return (-1, null);
+
+            // 3. Addressable로 프리팹 인스턴스 생성
             Vector3 spawnPos = new Vector3(position.x, position.y, -0.01f);
             GameObject obj = await Addressables.InstantiateAsync(ENTITY_PREFAB_KEY, spawnPos, Quaternion.identity, parent).ToUniTask();
             if (obj == null)
@@ -76,6 +83,9 @@ namespace ARPG.Factory
                 Object.Destroy(obj);
                 return (-1, null);
             }
+
+            // 그림이 준비됐으면 첫 그림을 바로 넣는다. 아래 HP바 생성을 기다리는 동안에도 기본 그림이 보이지 않는다
+            SpriteAnimationData? spriteAnimation = CreateSpriteAnimationData(-1, obj, spriteLibrary);
 
             // 3. EntityId 발급 + TransformComponent
             entity.SetupEntityId();
@@ -158,7 +168,11 @@ namespace ARPG.Factory
 
             if (table.AnimationData != null)
             {
-                LoadAnimationAsync(entityId, obj, table.AnimationData).Forget();
+                // 미리 불러온 그림이 있으면 바로 등록하고, 미리 불러오기에 실패했으면 이전처럼 따로 불러온다
+                if (spriteAnimation != null)
+                    RegisterSpriteAnimationData(entityId, table.AnimationData, spriteAnimation);
+                else
+                    LoadAnimationAsync(entityId, obj, table.AnimationData).Forget();
             }
 
             // 자식 프리팹의 IEntityMessageHandler 자동 등록
@@ -1406,43 +1420,16 @@ namespace ARPG.Factory
                     return;
                 }
 
-                // 2. EntityBase 조회 (SpriteAnimationData가 slAsset을 직접 사용하므로 컴포넌트 세팅 불필요)
-                EntityBase? entity = obj.GetComponent<EntityBase>();
-
-                // 3. 오브젝트 파괴 확인
-                if (obj == null)
-                {
-                    return;
-                }
-
-                // 4. SpriteAnimationData 생성 및 System_Animation에 등록
-                SpriteRenderer? sr = entity != null ? entity.SpriteRenderer : obj.GetComponentInChildren<SpriteRenderer>();
-                if (sr == null)
+                // 2. SpriteAnimationData 생성(첫 그림 즉시 반영) 및 System_Animation에 등록
+                SpriteAnimationData? animDataCache = CreateSpriteAnimationData(entityId, obj, slAsset);
+                if (animDataCache == null)
                 {
                     Debug.LogWarning($"[EntityFactory] SpriteRenderer not found for Entity {entityId}");
                     UpdateAnimationLoadState(entityId, AnimationLoadState.Failed);
                     return;
                 }
 
-                SpriteAnimationData animDataCache = new SpriteAnimationData(sr, slAsset);
-
-                // AnimationTable에서 기본 FrameDuration 배열 생성
-                float[] defaultFrameDurations = new float[]
-                {
-                    animData.IdleFrame,    // AnimCategory.Idle = 0
-                    animData.MoveFrame,    // AnimCategory.Move = 1
-                    animData.AttackFrame,  // AnimCategory.Attack = 2
-                    animData.DeadFrame,    // AnimCategory.Dead = 3
-                };
-
-                var animSystem = AR.s.System.GetSystem<Systems.System_Animation>();
-                if (animSystem != null)
-                {
-                    animSystem.RegisterSpriteAnimation(entityId, animDataCache, defaultFrameDurations);
-                }
-
-                UpdateAnimationLoadState(entityId, AnimationLoadState.Loaded);
-                Debug.Log($"[EntityFactory] SpriteAnimation loaded for Entity {entityId}");
+                RegisterSpriteAnimationData(entityId, animData, animDataCache);
             }
             catch (System.OperationCanceledException)
             {
@@ -1458,6 +1445,74 @@ namespace ARPG.Factory
             {
                 cts.Dispose();
             }
+        }
+
+        /// <summary>
+        /// 몬스터 생성 전에 종 그림을 불러온다. 경로가 없거나 실패하면 null을 돌려주고, 호출자는 이전처럼 생성 뒤 따로 불러온다.
+        /// 이미 불러온 그림은 바로 끝난다.
+        /// </summary>
+        private static async UniTask<SpriteLibraryAsset?> PreloadSpriteLibraryAsync(AnimationTable? animData)
+        {
+            if (animData == null || string.IsNullOrEmpty(animData.SpriteLibraryPath) == true)
+                return null;
+
+            try
+            {
+                return await Addressables.LoadAssetAsync<SpriteLibraryAsset>(animData.SpriteLibraryPath).ToUniTask();
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"[EntityFactory] Failed to preload SpriteLibraryAsset: {animData.SpriteLibraryPath} ({e.Message})");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// 불러온 그림으로 SpriteAnimationData를 만들고 첫 그림을 SpriteRenderer에 바로 넣는다.
+        /// 다음 애니메이션 갱신(System_Animation)까지 프리팹 기본 그림이 보이지 않게 한다.
+        /// entityId가 아직 없으면(-1) Idle 첫 그림, 있으면 현재 애니메이션 위치의 그림이다.
+        /// </summary>
+        private static SpriteAnimationData? CreateSpriteAnimationData(int entityId, GameObject obj, SpriteLibraryAsset? slAsset)
+        {
+            if (slAsset == null || obj == null)
+                return null;
+
+            EntityBase? entity = obj.GetComponent<EntityBase>();
+            SpriteRenderer? sr = entity != null ? entity.SpriteRenderer : obj.GetComponentInChildren<SpriteRenderer>();
+            if (sr == null)
+                return null;
+
+            SpriteAnimationData animationData = new SpriteAnimationData(sr, slAsset);
+            GlobalEnum.AnimCategory category = GlobalEnum.AnimCategory.Idle;
+            int frame = 0;
+            if (entityId >= 0 && AR.s.Component.TryGetComponent<SpriteAnimationComponent>(entityId, out SpriteAnimationComponent spriteAnim) == true)
+            {
+                category = spriteAnim.CurrentCategory;
+                frame = spriteAnim.CurrentFrame;
+            }
+            animationData.SetSprite(category, frame);
+            return animationData;
+        }
+
+        private static void RegisterSpriteAnimationData(int entityId, AnimationTable animData, SpriteAnimationData animationData)
+        {
+            // AnimationTable에서 기본 FrameDuration 배열 생성
+            float[] defaultFrameDurations = new float[]
+            {
+                animData.IdleFrame,    // AnimCategory.Idle = 0
+                animData.MoveFrame,    // AnimCategory.Move = 1
+                animData.AttackFrame,  // AnimCategory.Attack = 2
+                animData.DeadFrame,    // AnimCategory.Dead = 3
+            };
+
+            var animSystem = AR.s.System.GetSystem<Systems.System_Animation>();
+            if (animSystem != null)
+            {
+                animSystem.RegisterSpriteAnimation(entityId, animationData, defaultFrameDurations);
+            }
+
+            UpdateAnimationLoadState(entityId, AnimationLoadState.Loaded);
+            Debug.Log($"[EntityFactory] SpriteAnimation loaded for Entity {entityId}");
         }
 
         private static void SnapshotAreaAttack(ComponentManager cm, int areaEntityId, int casterEntityId,
