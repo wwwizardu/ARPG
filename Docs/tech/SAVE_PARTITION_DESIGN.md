@@ -1,6 +1,7 @@
 # 세이브 파티션 설계
 
 > **상태 (2026-10-05)**: 파티션 저장과 S-1~S-3 상시 스냅샷 구현 완료·핵심 기능 검증 통과. 그 위에 시뮬 6개 파트 묶음·증분 파일 쓰기를 구현했다(§5, SAVE_SNAPSHOT_DESIGN §13). S-2/S-3 장기 시뮬·실제 상점/던전 통합 비용 실측은 후속이다. 이번 개정의 진단 결과는 스냅샷 문서 §13.2에 기록한다.
+> **광맥 파트 (2026-10-31)**: 월드 광맥 기록 `ore_veins` 파트(`SaveScope.OreVeins = 1 << 14`, `All` 포함)를 더했다. WorldDataVersion은 **22 그대로**이고, 파트가 없는 세이브는 빈 기록으로 연다. Player를 싣는 저장은 이 파트도 싣는다(§5). 기획은 [WORLD_ORE_VEIN_PLAN §8.1](../map/WORLD_ORE_VEIN_PLAN.md).
 > **탐험 파트 도입·제거 (2026-10-10)**: 현재 WorldDataVersion은 **22**. 시야·안개의 탐험 기억 `exploration` 파트와 던전 기록의 탐험 칸을 더했다가 같은 날 제거했다. 22 세이브에 남은 것은 읽지 않고 다음 저장에서 빠진다(§8). 경위는 [FOG_OF_WAR_DESIGN §6](../map/FOG_OF_WAR_DESIGN.md).
 > **내러티브 파트 개정 (2026-10-10)**: WorldDataVersion **21**. NPC 행적·반응의 진행 원장 `narrative` 파트(`SaveScope.Narrative`)를 더했다(§2·§3·§5·§8). 원장 안의 형식·dirty 그룹은 [NPC_NARRATIVE_CONTENT_DESIGN §7](../npc/NPC_NARRATIVE_CONTENT_DESIGN.md)을 따른다.
 > **기억 저장 개정 (2026-10-04)**: WorldDataVersion을 **19**로 올렸다. 공동 활동 통계·최신 개인 사연·과거 동료 기억을 저장하고, `NpcState`와 `NpcSocial`은 부분 저장에서도 같은 revision으로 커밋한다. 기억 진단은 통과했으며 전체 플레이 모드·장애 주입 검증은 여전히 후속이다(§9).
@@ -35,6 +36,7 @@ Saved/Slot_0/
     map.r{revision}.{guid}.json
     dungeons.r{revision}.{guid}.json
     narrative.r{revision}.{guid}.json
+    ore_veins.r{revision}.{guid}.json
     villages.r{revision}.{guid}.json
     buildings.r{revision}.{guid}.json
     chronicle.r{revision}.{guid}.json
@@ -57,6 +59,7 @@ Saved/Slot_0/
 | Map | 월드 드랍 아이템, 타일 변경 |
 | Dungeons | `DungeonSaveRoot`: 던전 슬롯·세대·입구, 방문한 던전의 맵·방·배치·몬스터 상태·처치·클리어·드롭 ([DUNGEON_RUNTIME_DESIGN](../map/DUNGEON_RUNTIME_DESIGN.md)) |
 | Narrative | `NarrativeSaveRoot`: 콘텐츠 실행 인스턴스(던전 소문 사건의 대상·소문 주인·진행·보고·보답, 소망의 주인·대상 아이템·진행·전달 반응·보답), 정의·정책 해시 스냅샷, 세대 선정 기록 ([NPC_NARRATIVE_CONTENT_DESIGN §7.2](../npc/NPC_NARRATIVE_CONTENT_DESIGN.md)) |
+| OreVeins | `OreVeinSaveRoot`: 광맥이 있거나 고갈 대기 중인 청크의 광맥 기록(청크 좌표·광종·칸·잔량·굴린 날짜·상태·재생 가능 시각·마지막 활성 시각). 소유자는 `OreVeinManager` ([WORLD_ORE_VEIN_PLAN §4.2](../map/WORLD_ORE_VEIN_PLAN.md)) |
 | Villages | `VillageData` 목록 |
 | Buildings | `BuildingSaveData` 딕셔너리 |
 | Chronicle | 정착지 연대기와 왕국 스냅샷 |
@@ -92,6 +95,7 @@ Saved/Slot_0/
 | `PlayerDeed` 소문 반응 | Player + World + Simulation |
 | 던전 보스 완료 | 기존 완료 범위 + Narrative(소문 해결·미해결 종료를 같은 manifest로) |
 | 거점·메뉴 수동 저장, 최초 월드 저장 | 전체 파티션 |
+| Player를 싣는 모든 저장 | 요청 범위 + OreVeins (캔 광석과 광맥 잔량을 같은 manifest로) |
 
 NPC 죽음처럼 NPC 상태·관계·파티·연대기가 함께 바뀌는 체크포인트는 manifest 한 revision에
 묶인다. 향후 자동저장을 추가할 때도 변경된 샤드와 연관 파티션을 같은 revision으로 요청한다.
@@ -99,6 +103,8 @@ NPC 죽음처럼 NPC 상태·관계·파티·연대기가 함께 바뀌는 체�
 **현재 결합 계약(2026-10-05)**: 저장 스냅샷을 잡기 전에 `SaveScope.Simulation`의 여섯 파트 중 하나라도 요청되면 묶음 전체로 확장한다. 여섯 상태는 같은 메인 스레드에서 캡처되어 하나의 manifest 교체로 확정된다. `Chronicle`은 자동으로 추가하지 않는다. 미저장 NPC 던전 완료가 있으면 `Dungeons` 또는 묶음 요청에 Dungeons와 Simulation 전체를 함께 싣고, 캡처한 완료 revision만 성공 후 확정한다. 이관으로 전체 저장이 필요한 상태면 요청과 관계없이 `All`로 승격한다. 기존 파티 경로 위치 복원(S13)과 State/Social 공동 활동 일관성도 이 묶음에 포함된다. [src: Assets/Scripts/Manager/DataManager_PartitionedSave.cs, Assets/Scripts/Data/SavePartitionData.cs]
 
 **Narrative 결합(2026-10-10)**: NPC의 부탁 칸과 `PlayerDeed` 소문(NpcState)이 원장의 사건(Narrative)을 가리키므로, Narrative를 싣는 저장은 NpcState도 싣고 그래서 시뮬 묶음 전체가 된다. 즉시 저장하지 않는 사건 변경(새 세대 선정·소문 주인 선정·미해결 종료)은 NPC 던전 완료와 같은 방식으로 처리한다. Dungeons나 시뮬 묶음을 싣는 다음 저장에 Narrative와 시뮬 묶음을 붙이고, 캡처한 Narrative revision만 성공 뒤 확정한다. [src: Assets/Scripts/Manager/DataManager_PartitionedSave.cs, Assets/Scripts/Manager/NpcManager_Narrative.cs, Assets/Scripts/Manager/NpcManager_NarrativeDialogue.cs, Assets/Scripts/Dungeon/DungeonManager.cs]
+
+**광맥 결합(2026-10-31)**: Player를 싣는 저장은 `OreVeins`도 싣는다. 결합 규칙은 저장 계층(`WritePartitionSnapshotAsync`)의 Narrative→NpcState 규칙 옆에 한 줄로 둔다. 그래서 아이템 줍기·스킬·마법부여·상점·던전 입장/퇴장/자동 저장/완료·결투·소망·보고 저장과, 던전 안이라 Player가 자동으로 더해지는 저장이 모두 광맥 파트를 싣는다. 광맥 기록 변경은 owned 스냅샷 캐시에 청크 키로 표시만 하고 즉시 저장하지 않는다. 내용이 같으면 기존 파일 참조를 재사용한다. [src: Assets/Scripts/Manager/DataManager_PartitionedSave.cs, Assets/Scripts/Manager/DataManager_SaveSnapshot.cs, Assets/Scripts/OreVein/OreVeinManager.cs]
 
 **증분 파일 쓰기**: 프레임 정리와 독립된 캐시/샤드 세대를 `DataManager`의 마지막 성공 세대와 비교한다. 같으면 기존 참조를 재사용하고 JSON 직렬화를 건너뛴다. 후보 파트도 schema·JSON 길이·SHA-256이 기존과 같으면 새 파일을 만들지 않는다. 성공 후 캡처 세대만 확정하며 저장 도중 추가 변경·실패한 변경은 다음 요청에 남긴다. Reset/Load는 성공 세대를 비운다. 여섯 파트의 파일 생성 revision은 서로 달라도 하나의 manifest가 함께 선택한 전체 상태다. 계약·진단은 [SAVE_SNAPSHOT_DESIGN §13](SAVE_SNAPSHOT_DESIGN.md)을 따른다. [src: Assets/Scripts/Manager/DataManager_PartitionedSave.cs]
 
@@ -143,6 +149,8 @@ manifest가 없고 `WorldData.json`/`PlayerData.json`이 있으면 기존 버전
 **버전 21의 narrative 파트(2026-10-10)**: 21 미만 세이브는 narrative 파트가 없어도 정상이며 빈 원장으로 연다. 버전 이관이 일어났으므로 첫 저장은 `All`로 승격해 파트를 처음 쓴다. 21 이상인데 파트가 없거나, 읽을 수 없거나, 원장 정합성 검사(`NarrativeSaveValidation`)를 통과하지 못하면 로드 실패로 처리한다. dungeons 파트의 15 이상 검사와 같은 방식이다. 구 던전 시나리오 필드가 남은 개발 세이브는 그 필드만 무시하고 연다. [src: Assets/Scripts/Manager/DataManager.cs, Assets/Scripts/Manager/DataManager_PartitionedSave.cs, Assets/Scripts/Npc/Narrative/NarrativeSaveValidation.cs, Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md §7.7]
 
 **버전 22 — exploration 파트 도입 뒤 제거(2026-10-10)**: 시야 탐험 기억용 `exploration` 파트와 던전 기록의 `ExploredBlocks`·`ExploredGameTime`을 더해 22로 올렸다가 같은 날 제거했다. 버전은 22를 유지하고 데이터 이관은 없다. 22 세이브에 남은 `exploration` 파트는 읽지 않으며, 다음 저장의 manifest로 옮기지 않는다(`OBSOLETE_PARTS`). 파일은 이전 manifest도 가리키지 않게 된 뒤 정리 단계가 지운다. 던전 기록의 옛 칸은 JSON 기본 설정(모르는 필드 무시)으로 읽히고 다음 던전 저장에서 빠진다. `SaveScope`의 `1 << 13`은 다시 쓰지 않는다. [src: Assets/Scripts/Manager/DataManager.cs, Assets/Scripts/Manager/DataManager_PartitionedSave.cs, Assets/Scripts/Data/SavePartitionData.cs, Docs/map/FOG_OF_WAR_DESIGN.md §6]
+
+**ore_veins 파트(2026-10-31)**: 버전을 올리지 않는다(22 유지). 파트가 없으면 버전과 상관없이 빈 기록으로 열고 청크가 켜질 때 새로 굴린다. 있는데 읽을 수 없거나 루트 버전이 1이 아니면 그 manifest를 거절한다(이전 manifest 폴백). 광맥 기록은 다시 굴리면 되는 데이터라 전체 저장 승격이 필요 없다. 로드 뒤 `OreVeinManager.Initialize`가 잘못된 기록·같은 청크 중복을 버린다. [src: Assets/Scripts/Manager/DataManager_PartitionedSave.cs, Assets/Scripts/OreVein/OreVeinManager.cs]
 
 ## 9. 검증 현황과 후속 검증
 

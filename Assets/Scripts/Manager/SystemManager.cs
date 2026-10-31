@@ -166,6 +166,10 @@ namespace ARPG.Systems
             // Priority 137: Named Threat Trail (FixedUpdate, World, 0.5초) - 영역 안 흔적 자막
             RegisterSystems(new System_NamedThreatTrail());
 
+            // Priority 138: Ore Vein Cleanup (FixedUpdate, WorldSim, 10초) - 오래 비활성인 광맥 기록·재생 시각이 지난 고갈 기록 정리, 게임 하루 1회 (WORLD_ORE_VEIN_PLAN §6.3)
+            // 굴림·복원은 청크 활성화 hook(OreVeinManager)이 맡는다
+            RegisterSystems(new System_OreVeinCleanup());
+
             // Priority 140: Monster Aura System (Update) - 오라 접사 주변 같은 진영에 오라 버프 부여·갱신 (0.5초 간격, MONSTER_AFFIX_DESIGN §6.3)
             RegisterSystems(new System_MonsterAura());
 
@@ -207,6 +211,10 @@ namespace ARPG.Systems
 
             // Priority 255: Duel System (FixedUpdate) - 결투 패배 확정·시간 제한(3분)·참가자 소멸 종료 (NPC_COMBAT_DESIGN §7.2)
             RegisterSystems(new System_Duel());
+
+            // Priority 258: Player Mining (FixedUpdate) - E로 시작한 채광 1.2초 진행, 이동·피격·공격/스킬 취소, 완료 시 광석 지급·광맥 잔량 소비·저장 (WORLD_ORE_VEIN_PLAN §7.1)
+            // 피해 적용(Skill 200~AreaEffect 240)과 HP Check(250) 뒤라 같은 틱의 피격을 본다
+            RegisterSystems(new System_PlayerMining());
 
             // Priority 500: Entity Activation System (FixedUpdate) - 거리 기반 엔티티 활성화/비활성화 (0.5초 간격)
             System_EntityActivation entityActivationSystem = new();

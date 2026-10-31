@@ -30,6 +30,8 @@ namespace ARPG.Data
         private const string PART_MAP = "map";
         private const string PART_DUNGEONS = "dungeons";
         private const string PART_NARRATIVE = "narrative";
+        // 월드 광맥 기록 (WORLD_ORE_VEIN_PLAN §8.1). 없는 세이브는 빈 기록으로 연다 (WorldDataVersion 요구 없음)
+        private const string PART_ORE_VEINS = "ore_veins";
         private const string PART_VILLAGES = "villages";
         private const string PART_BUILDINGS = "buildings";
         private const string PART_CHRONICLE = "chronicle";
@@ -331,6 +333,16 @@ namespace ARPG.Data
                 if (Npc.Narrative.NarrativeSaveValidation.IsConsistent(narrative, world.WorldSeed) == false)
                     return false;
 
+                // 광맥 기록은 다시 굴리면 되는 데이터라 파트가 없어도(이 기능 이전 세이브) 빈 기록으로 연다. 있는데 읽을 수 없으면 다른 파트와 같이 거절한다.
+                OreVeinSaveRoot oreVeins = new();
+                if (manifest.Parts.ContainsKey(PART_ORE_VEINS) == true)
+                {
+                    if (TryReadPart(slotPath, manifest, PART_ORE_VEINS, out OreVeinSaveRoot? loadedOreVeins) == false ||
+                        loadedOreVeins == null || loadedOreVeins.Version != PARTITION_SCHEMA_VERSION || loadedOreVeins.Veins == null)
+                        return false;
+                    oreVeins = loadedOreVeins;
+                }
+
                 Dictionary<int, Npc.NpcSaveData> npcs = new();
                 for (int shardIndex = 0; shardIndex < NPC_SHARD_COUNT; shardIndex++)
                 {
@@ -358,6 +370,7 @@ namespace ARPG.Data
                     World = world!,
                     Dungeons = dungeons,
                     Narrative = narrative,
+                    OreVeins = oreVeins,
                     Map = map!,
                     Villages = villages!,
                     Buildings = buildings!,
@@ -436,6 +449,7 @@ namespace ARPG.Data
                 NpcCompanion = snapshot.World.NpcCompanion ?? new(),
                 GoldPrice = snapshot.World.GoldPrice ?? new(),
                 NamedThreats = snapshot.World.NamedThreats ?? new(),
+                OreVeins = snapshot.OreVeins.Veins ?? new(),
                 WorldSim = snapshot.WorldSim.WorldSim ?? new(),
             };
 
@@ -613,6 +627,10 @@ namespace ARPG.Data
                 // (NPC_NARRATIVE_CONTENT_DESIGN §7.3·§7.5).
                 if ((scope & SaveScope.Narrative) != 0)
                     scope |= SaveScope.NpcState;
+                // 캔 광석(Player 가방)과 광맥 잔량(OreVeins)을 한 manifest로 확정한다. Player를 싣는 모든 저장(아이템 줍기·던전 입장·퇴장 등)이
+                // 광맥 파트도 싣는다. 한쪽만 저장된 채 꺼지면 광석이 복사된다 (WORLD_ORE_VEIN_PLAN §8.1).
+                if ((scope & SaveScope.Player) != 0)
+                    scope |= SaveScope.OreVeins;
                 // 여섯 시뮬 파트는 한 상태로 확정한다. 변경 없는 파일도 다음 manifest에 기존 참조로 포함한다.
                 if ((scope & SaveScope.Simulation) != 0)
                     scope |= SaveScope.Simulation;
@@ -861,6 +879,13 @@ namespace ARPG.Data
                 if (captureRuntimeManagers == true && GroupedSaveSnapshotEnabled == true)
                     AddPendingSnapshotPart(pending, PART_MAP, CaptureOwnedMap(root, rebuildSaveSnapshots));
                 else AddPendingPart(pending, PART_MAP, root);
+            }
+
+            if ((scope & SaveScope.OreVeins) != 0)
+            {
+                if (captureRuntimeManagers == true && GroupedSaveSnapshotEnabled == true)
+                    AddPendingSnapshotPart(pending, PART_ORE_VEINS, CaptureOwnedOreVeins(_worldData.OreVeins, rebuildSaveSnapshots));
+                else AddPendingPart(pending, PART_ORE_VEINS, new OreVeinSaveRoot { Veins = _worldData.OreVeins });
             }
 
             if ((scope & SaveScope.Villages) != 0)
@@ -1436,6 +1461,7 @@ namespace ARPG.Data
             public WorldSaveRoot World = null!;
             public DungeonSaveRoot Dungeons = new();
             public NarrativeSaveRoot Narrative = new();
+            public OreVeinSaveRoot OreVeins = new();
             public MapSaveRoot Map = null!;
             public VillageSaveRoot Villages = null!;
             public BuildingSaveRoot Buildings = null!;

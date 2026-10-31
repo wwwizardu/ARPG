@@ -714,6 +714,9 @@ namespace ARPG.Map
                 int entityId = AR.s.Building.PlaceBuilding(worldX, worldY, objectId,
                     resolvedVillageId, isUnderConstruction, currentHp);
                 buildingEntityId = entityId;
+                // 마을 건설이 광맥 칸을 덮으면 마을이 우선한다: 그 칸의 광맥 기록을 지운다 (WORLD_ORE_VEIN_PLAN §6.2)
+                if (entityId >= 0)
+                    AR.s.OreVein.RemoveVeinsInFootprint(worldX, worldY, table.Size_Width, table.Size_Height);
                 return entityId >= 0;
             }
 
@@ -751,6 +754,8 @@ namespace ARPG.Map
                 }
             }
 
+            // 벽·성문 같은 타일 오브젝트도 광맥 칸을 덮으면 마을이 우선한다 (WORLD_ORE_VEIN_PLAN §6.2)
+            AR.s.OreVein.RemoveVeinsInFootprint(worldX, worldY, 1, 1);
             return true;
         }
 

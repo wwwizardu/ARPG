@@ -35,6 +35,8 @@ namespace ARPG
         private readonly Dungeon.DungeonManager _dungeonManager = new();
         // 네임드 위협 (NAMED_THREAT_DESIGN §12.1). plain class — 세계 저장 기록의 소유자
         private readonly ARPG.NamedThreat.NamedThreatManager _namedThreatManager = new();
+        // 월드 광맥 (WORLD_ORE_VEIN_PLAN). plain class — ore_veins 저장 기록의 소유자
+        private readonly ARPG.OreVein.OreVeinManager _oreVeinManager = new();
         // 시야·안개와 탐험 기억 (FOG_OF_WAR_DESIGN). plain class, 덮개 GameObject는 Initialize에서 AR 아래에 만든다
         private FogOfWarManager _fogManager = new();
         private PlayerSkillManager _playerSkillManager = new PlayerSkillManager();
@@ -69,6 +71,7 @@ namespace ARPG
         public MapManager WorldMap => _mapManager;
         public Dungeon.DungeonManager Dungeon => _dungeonManager;
         public ARPG.NamedThreat.NamedThreatManager NamedThreat => _namedThreatManager;
+        public ARPG.OreVein.OreVeinManager OreVein => _oreVeinManager;
         public FogOfWarManager Fog => _fogManager;
         public UIManager UI => _uiManager;
         public Monster.MonsterManager Monster => _monsterManager;
@@ -111,6 +114,8 @@ namespace ARPG
             _systemManager.Initialize();
             _uiManager.Initialize();
             _mapManager.Initialize();
+            // 로드한 광맥 기록으로 청크 색인을 만든다. 마을 복원이 PlaceObject로 광맥 칸을 덮기 전이어야 한다 (WORLD_ORE_VEIN_PLAN §6.2)
+            _oreVeinManager.Initialize();
             _itemManager.Initialize();
             _monsterManager.Initialize();
             _npcManager.Initialize();
@@ -144,6 +149,7 @@ namespace ARPG
             _itemManager.UnloadContextDrops();
             _dungeonManager.Reset();
             _namedThreatManager.Reset();
+            _oreVeinManager.Reset();
             _fogManager.Reset();
 
             _dataManager.Reset();

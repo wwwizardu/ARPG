@@ -37,6 +37,8 @@ namespace ARPG.EditorTools
                 await ValidateScenarios(report);
                 await ValidatePersistence(report);
                 await ValidateSaveScheduling(report);
+                // 월드 광맥 (WORLD_ORE_VEIN_PLAN §9 1·2단계): 굴림·위치 조건·고갈·재생·정리·저장 범위
+                await ValidateOreVeins(report);
                 report.AppendLine("PASS: all dungeon generation/storage diagnostics.");
             }
             catch (Exception ex) { report.AppendLine("FAIL: " + ex); }
@@ -387,7 +389,7 @@ namespace ARPG.EditorTools
                 report.AppendLine("PASS: narrative partition presence, pre-21 empty ledger, v21 missing/corrupt rejection.");
                 // 제거한 exploration 파트 (FOG_OF_WAR_DESIGN §6): 같은 날 잠시 쓰인 WorldDataVersion 22 세이브에 남아 있어도
                 // 로드를 막지 않고, 다음 저장의 manifest로 옮기지 않는다. 던전 기록의 옛 탐험 칸도 무시하고 읽는다.
-                Require(first.Parts.ContainsKey("exploration") == false && first.Parts.Count == 44, "current writer has no exploration partition");
+                Require(first.Parts.ContainsKey("exploration") == false && first.Parts.Count == 45, "current writer has no exploration partition");
                 string obsolete = Path.Combine(root, "obsolete-exploration");
                 Directory.CreateDirectory(Path.Combine(obsolete, "parts"));
                 SaveManifest obsoleteManifest = JsonConvert.DeserializeObject<SaveManifest>(JsonConvert.SerializeObject(first));
@@ -405,7 +407,7 @@ namespace ARPG.EditorTools
                 Require(ReadSnapshot(data, obsolete, "manifest.json") != null, "v22 save with an obsolete exploration partition loads");
                 var cloned = (SaveManifest)typeof(DataManager).GetMethod("CloneManifest", BindingFlags.Static | BindingFlags.NonPublic)
                     .Invoke(null, new object[] { obsoleteManifest, obsoleteManifest.Revision + 1 });
-                Require(cloned.Parts.ContainsKey("exploration") == false && cloned.Parts.Count == 44, "next manifest drops the obsolete exploration partition");
+                Require(cloned.Parts.ContainsKey("exploration") == false && cloned.Parts.Count == 45, "next manifest drops the obsolete exploration partition");
                 var oldRecord = JsonConvert.DeserializeObject<DungeonRecord>(
                     "{\"DungeonId\":\"old\",\"ExploredBlocks\":[{\"X\":0,\"Y\":0,\"Bits\":\"AA==\"}],\"ExploredGameTime\":3.5}", JsonSettings.Default);
                 Require(oldRecord != null && oldRecord.DungeonId == "old", "old dungeon exploration fields are ignored");
@@ -797,7 +799,7 @@ namespace ARPG.EditorTools
                 Require(ReadManifest(slot).Revision == revision && ReadSnapshot(data, slot, "manifest.prev.json") != null,
                     "failed replacement preserves active AND previous manifests");
 
-                // Migration must capture all 44 partitions (narrative 포함); unchanged files can keep their creation revision.
+                // Migration must capture all 45 partitions (narrative·ore_veins 포함); unchanged files can keep their creation revision.
                 typeof(DataManager).GetMethod("MigrateWorldData", BindingFlags.Instance | BindingFlags.NonPublic)
                     .Invoke(data, new object[] { (ushort)15, (ushort)16 });
                 data.DiagnosticFailurePoint = "serialize";
@@ -809,8 +811,8 @@ namespace ARPG.EditorTools
                 await data.WaitForSaveIdleAsync();
                 SaveManifest migrated = ReadManifest(slot);
                 var parts = new List<SavePartReference>(migrated.Parts.Values);
-                Require(parts.Count == 44, "all partitions including 32 NPC shards and narrative");
-                Require(data.DiagnosticCommittedScope == SaveScope.All && data.DiagnosticPreparedPartCount == 44,
+                Require(parts.Count == 45, "all partitions including 32 NPC shards, narrative and ore veins");
+                Require(data.DiagnosticCommittedScope == SaveScope.All && data.DiagnosticPreparedPartCount == 45,
                     "migration captures every part before content reuse");
                 string migratedNpcFile = migrated.Parts["npc_state_00"].FileName;
                 Require(await QueueWrite(data, SaveScope.Player | SaveScope.World | SaveScope.Dungeons), "normal save after migration");
@@ -903,7 +905,7 @@ namespace ARPG.EditorTools
                     BindingFlags.Instance | BindingFlags.NonPublic).Invoke(data, null);
                 await data.WaitForSaveIdleAsync();
                 string slot = Path.Combine(root, "Slot_0");
-                Require(migrated && ReadManifest(slot).Parts.Count == 44 && ReadSnapshot(data, slot, "manifest.json") != null,
+                Require(migrated && ReadManifest(slot).Parts.Count == 45 && ReadSnapshot(data, slot, "manifest.json") != null,
                     "legacy monolith migration writes a readable full revision");
                 Require(File.ReadAllText(Path.Combine(root, "WorldData.json")) == worldJson &&
                     File.ReadAllText(Path.Combine(root, "PlayerData.json")) == playerJson, "legacy files preserved");

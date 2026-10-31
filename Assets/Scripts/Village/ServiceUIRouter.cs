@@ -6,16 +6,16 @@ using UnityEngine;
 namespace ARPG.Village
 {
     /// <summary>
-    /// Interact 키 입력 시 PlayerNearbyServicesComponent를 보고 가장 가까운 후보의 UI 라우팅.
-    /// 후보: 마을 시설(Shop/Forge/Inn/Shrine) + V4 VillageHub(100)·Gate(벽 세그먼트) + 활성 NPC.
+    /// Interact(E) 키 입력 시 PlayerNearbyServicesComponent를 보고 가장 가까운 후보의 UI 라우팅.
+    /// 후보: 마을 시설(Shop/Forge/Inn/Shrine) + V4 VillageHub(100)·Gate(벽 세그먼트) + 활성 NPC + 던전 입구·상자 + 월드 광맥.
     /// 정책: 임계 거리(System_VillageServiceProximity 상수) 안에 들어온 후보 중 거리 sqr 최소.
     /// 각 UI 클래스의 Bind(entityId)로 어떤 엔티티 기준인지 전달.
     /// 후보 선택 로직은 System_VillageInteractionPrompt의 프롬프트 표시와 공유한다 (1건물=1상호작용,
-    /// 프롬프트에 보이는 대상과 F키가 여는 대상이 항상 같도록).
+    /// 프롬프트에 보이는 대상과 E키가 여는 대상이 항상 같도록).
     /// </summary>
     public static class ServiceUIRouter
     {
-        public enum CandidateKind { None, Shop, Forge, Inn, Shrine, Hub, Gate, Npc, Dungeon, DungeonChest }
+        public enum CandidateKind { None, Shop, Forge, Inn, Shrine, Hub, Gate, Npc, Dungeon, DungeonChest, OreVein }
 
         // 던전 안 NPC 상호작용 임계 — 월드 NPC 임계(System_VillageServiceProximity, 1.5타일)와 같다
         private const float DUNGEON_NPC_RANGE = 1.5f;
@@ -23,7 +23,7 @@ namespace ARPG.Village
         public struct Candidate
         {
             public CandidateKind Kind;
-            public int EntityId;          // 시설/NPC 후보의 엔티티. Gate는 -1
+            public int EntityId;          // 시설/NPC/광맥 후보의 엔티티. Gate는 -1
             public int GateVillageId;     // Gate 후보 전용
             public int GateSegmentId;
             public bool GateIsOpen;
@@ -36,7 +36,7 @@ namespace ARPG.Village
         }
 
         /// <summary>
-        /// 거리 최소 후보 선택 — 프롬프트 표시와 F키 라우팅이 같은 결과를 공유한다.
+        /// 거리 최소 후보 선택 — 프롬프트 표시와 E키 라우팅이 같은 결과를 공유한다.
         /// </summary>
         public static bool TryGetBestCandidate(in PlayerNearbyServicesComponent cached,
             out Candidate candidate)
@@ -126,14 +126,20 @@ namespace ARPG.Village
 
             if (candidate.Kind == CandidateKind.Npc) bestSqr = candidate.DistanceSqr;
             if (AR.s.Dungeon.TryGetInteraction(out var dungeon) && dungeon.DistanceSqr < bestSqr)
+            {
                 candidate = dungeon;
+                bestSqr = dungeon.DistanceSqr;
+            }
+            // 월드 광맥 (WORLD_ORE_VEIN_PLAN §7.1): 1.5칸 안의 가장 가까운 광맥이 다른 후보보다 가까우면 채광
+            if (AR.s.OreVein.TryGetInteraction(out var vein) && vein.DistanceSqr < bestSqr)
+                candidate = vein;
 
             return candidate.Kind != CandidateKind.None;
         }
 
         /// <summary>
         /// 후보의 상호작용 프롬프트 텍스트 (V0 InteractiveFacility 계약 문자열).
-        /// System_VillageInteractionPrompt가 "[F] {prompt}"로 표시한다.
+        /// System_VillageInteractionPrompt가 "[E] {prompt}"로 표시한다.
         /// </summary>
         public static string GetPrompt(in Candidate candidate)
         {
@@ -141,6 +147,7 @@ namespace ARPG.Village
             {
                 case CandidateKind.Dungeon: return "던전 입장";
                 case CandidateKind.DungeonChest: return "상자 열기";
+                case CandidateKind.OreVein: return AR.s.OreVein.GetInteractionPrompt(candidate.EntityId);
                 case CandidateKind.Shop:
                     return GetFacilityPrompt(VillageInitialFacilityCatalog.MERCHANT_STALL_TABLE_ID, "거래");
                 case CandidateKind.Forge:
@@ -179,6 +186,9 @@ namespace ARPG.Village
                     return true;
                 case CandidateKind.DungeonChest:
                     return AR.s.Dungeon.OpenChest(candidate.DungeonObjectId);
+                case CandidateKind.OreVein:
+                    // 진행·취소·완료는 System_PlayerMining이 판단한다
+                    return AR.s.OreVein.TryBeginMining(AR.s.Data.CurrentPlayerEntityId, candidate.EntityId);
                 case CandidateKind.Shop:
                 {
                     Debug.Log($"[Service] v{nearby.NearestVillageId} 열기: Shop (entityId={bestEntityId}, sqr={bestSqr:F2})");

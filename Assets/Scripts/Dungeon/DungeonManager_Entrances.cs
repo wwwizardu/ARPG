@@ -259,8 +259,33 @@ namespace ARPG.Dungeon
                 {
                     queries++;
                     if (AR.s.WorldMap.IsEntranceTileClear(x + dx, y + dy) == false) return false;
+                    // 광맥 칸은 피한다 (WORLD_ORE_VEIN_PLAN §6.2)
+                    if (AR.s.OreVein.IsVeinTile(x + dx, y + dy) == true) return false;
                 }
             return true;
+        }
+
+        /// <summary>
+        /// 칸 중심에서 distance 미만 거리에 놓인 던전 입구가 있는가 (광맥 위치 조건, WORLD_ORE_VEIN_PLAN §5).
+        /// 청크별 입구 목록에서 주변 청크만 보므로 지형을 조회하지 않는다.
+        /// </summary>
+        public bool HasEntranceWithin(int x, int y, float distance)
+        {
+            int size = AR.s.WorldMap.chunkSize;
+            int reach = Mathf.Max(1, Mathf.CeilToInt(distance / size));
+            int chunkX = Mathf.FloorToInt((float)x / size);
+            int chunkY = Mathf.FloorToInt((float)y / size);
+            var center = new Vector2(x + 0.5f, y + 0.5f);
+            float limit = distance * distance;
+            for (int cx = chunkX - reach; cx <= chunkX + reach; cx++)
+                for (int cy = chunkY - reach; cy <= chunkY + reach; cy++)
+                {
+                    if (_entrancesByChunk.TryGetValue(new Vector2Int(cx, cy), out var slots) == false) continue;
+                    for (int i = 0; i < slots.Count; i++)
+                        if (slots[i].HasEntrance == true && Vector2.SqrMagnitude(center -
+                            new Vector2(slots[i].EntranceX + 0.5f, slots[i].EntranceY + 0.5f)) < limit) return true;
+                }
+            return false;
         }
 
         private bool TryFindSlot(string id, out VillageDungeonSlots owner, out DungeonSlot slot)

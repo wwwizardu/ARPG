@@ -46,6 +46,9 @@ namespace ARPG.History
         // worldSeed + 네임드 일련번호 + 용도(NamedThreatRules.Purpose*)를 섞는다. NPC 활동 채널 salt와 따로다.
         public const ulong ChannelNamedThreat = 0x4E_41_4D_45_44_54_48_52UL; // "NAMEDTHR"
 
+        // WORLD_ORE_VEIN_PLAN §4.1 — 청크별 광맥 굴림 (worldSeed + 청크 좌표 + 게임 날짜를 섞는다).
+        public const ulong ChannelOreVein = 0x4F_52_45_56_45_49_4E_5FUL; // "OREVEIN_"
+
         public static ulong Derive(int worldSeed, ulong channel)
         {
             ulong x = unchecked((ulong)worldSeed * 0x9E3779B97F4A7C15UL) ^ channel;

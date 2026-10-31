@@ -28,6 +28,9 @@ namespace ARPG.Map
             {
                 AR.s.Building.OnChunkActivated(chunkCoord);
             }
+
+            // 광맥 굴림·복원 (WORLD_ORE_VEIN_PLAN §4·§6.1). 이 청크의 타일 데이터만 쓴다
+            AR.s.OreVein.OnChunkActivated(chunkCoord, chunkData);
         }
 
         public void OnChunkDeactivated(Vector2Int chunkCoord)
@@ -50,6 +53,9 @@ namespace ARPG.Map
             {
                 AR.s.Building.OnChunkDeactivated(chunkCoord);
             }
+
+            // 광맥 엔티티만 정리한다. 기록은 지우거나 다시 굴리지 않는다 (WORLD_ORE_VEIN_PLAN §8.2)
+            AR.s.OreVein.OnChunkDeactivated(chunkCoord);
         }
     }
 }

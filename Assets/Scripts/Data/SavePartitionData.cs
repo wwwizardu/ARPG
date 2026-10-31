@@ -27,9 +27,11 @@ namespace ARPG.Data
         // 공통 콘텐츠 실행 원장 (NPC_NARRATIVE_CONTENT_DESIGN §7.3). 부탁 칸·행적 소문이 사건을 가리키므로 NpcState와 함께 확정한다.
         Narrative = 1 << 12,
         // 1 << 13: (제거 2026-10-10) Exploration — 시야 탐험 기억 파트 (FOG_OF_WAR_DESIGN §6). 다시 쓰지 않는다.
+        // 월드 광맥 기록 (WORLD_ORE_VEIN_PLAN §8.1). Player를 싣는 저장은 이 파트도 싣는다 — 캔 광석과 광맥 잔량을 한 manifest로 확정한다.
+        OreVeins = 1 << 14,
         Simulation = Villages | WorldSim | NpcMeta | NpcState | NpcSocial | NpcParties,
         All = Player | World | Map | Villages | Buildings | Chronicle |
-              WorldSim | NpcMeta | NpcState | NpcSocial | NpcParties | Dungeons | Narrative,
+              WorldSim | NpcMeta | NpcState | NpcSocial | NpcParties | Dungeons | Narrative | OreVeins,
     }
 
     [Serializable]
@@ -83,6 +85,14 @@ namespace ARPG.Data
         public int Version = 1;
         public List<WorldDropItemData> WorldDropItems = new();
         public List<ChunkModificationData> TileModifications = new();
+    }
+
+    /// <summary>월드 광맥 기록 (WORLD_ORE_VEIN_PLAN §4.2·§8.1). 광맥이 있거나 고갈 대기 중인 청크만 담는다. 이 파트가 없는 세이브는 빈 기록으로 연다.</summary>
+    [Serializable]
+    public sealed class OreVeinSaveRoot
+    {
+        public int Version = 1;
+        public List<OreVeinRecord> Veins = new();
     }
 
     [Serializable]

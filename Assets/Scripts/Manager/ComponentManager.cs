@@ -123,6 +123,8 @@ namespace ARPG.Component
             { typeof(DungeonChestTag), 32 },                  // 활성 던전 청크의 미개봉 상자
             { typeof(DungeonEntranceComponent), 32 },         // 활성 월드 청크의 던전 입구 (마을당 2~3개)
             { typeof(DungeonEntranceSignComponent), 32 },     // 소문 징후 자막이 있는 입구만
+            { typeof(OreVeinComponent), 32 },                 // 활성 월드 청크의 광맥 (청크당 최대 1개, 활성 5×5 — WORLD_ORE_VEIN_PLAN §8.2)
+            { typeof(MiningComponent), 4 },                   // 채광 중인 플레이어 (§7.1)
             { typeof(KillCreditComponent), 128 },
             // 시야·안개 (FOG_OF_WAR_DESIGN §5)
             { typeof(VisionComponent), 4 },                   // 시야를 주는 엔티티 (플레이어 전용)

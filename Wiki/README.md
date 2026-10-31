@@ -2,9 +2,10 @@
 name: wiki-map
 description: Docs/ 전체 주제를 얕고 넓게 조망하는 지도 페이지. 주제별 상세 위키 페이지의 진입점.
 type: map
-last_updated: 2026-10-25
+last_updated: 2026-10-31
 sources:
   - Wiki/current_status.md
+  - Docs/map/WORLD_ORE_VEIN_PLAN.md
   - Wiki/combat.md
   - Wiki/skill_aim.md
   - Wiki/skill_propagation.md
@@ -43,13 +44,13 @@ sources:
 
 | 주제 | 한 줄 요약 | 문서 위치 | 흩어짐 | 코드 연결도 |
 |------|-----------|----------|:------:|:----------:|
-| **current_status** → [current_status.md](current_status.md) | 2026-10-25 기준 구현 현황·미검증 항목·권장 재개 순서 [src: Wiki/current_status.md] | 최신 관련 Docs + 코드·테이블 대조 | — | 상 |
+| **current_status** → [current_status.md](current_status.md) | 2026-10-31 기준 구현 현황·미검증 항목·권장 재개 순서 [src: Wiki/current_status.md] | 최신 관련 Docs + 코드·테이블 대조 | — | 상 |
 | **overview** | 게임 컨셉(3대 축)과 시스템별 구현 현황·로드맵 | `Docs/overview/` 2장 (gameOverview, implementationStatus) + `Docs/README.md`(대시보드) | 하 | 하 |
 | **combat** → [combat.md](combat.md) | 장비 옵션·마법부여·공격 프로필, 아이템 레벨과 옵션 티어 T1~T12(구현, 2026-10-11), 장비 등급·품질·드롭 구간표·수량/희귀도·마법부여 아이템 레벨 티어·진화/품질 작업·던전 드롭·판매가 배율(구현, 2026-10-21, 플레이 확인 전), 무기 범위·장착·쌍수·표창 제외·주문 무기 성장·책별 스킬 레벨과 골드 성장의 확정 방식(미구현), 계열별 기준 성능과 장비 공백 정리, 명중 시 넉백·당기기(구현, 2026-10-12), 인벤토리 장비 비교 툴팁(구현, 2026-10-13), 땅 위 돌진·실행 단계 넉백 저항과 멧돼지 돌진(구현, 2026-10-13), 플레이어 레벨·능력치·정확도 대 회피 적중 판정·3×3 참 판(구현, 2026-10-24, 플레이 확인 전), 참 일반·마법·희귀 등급과 접두·접미·모양별 옵션·모양별 참 값 표(구현, 2026-10-25, 플레이 확인 전), 몬스터 소환과 고블린 주술사의 쿨타임 없는 긴 시전 화염탄 + 보조 소환(구현, 2026-10-25, 플레이 확인 전) [src: Wiki/combat.md, Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md, Docs/combat/SKILL_DESIGN.md §6.10·§6.11·§6.12, Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md, Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md, Docs/combat/ITEM_DROP_BALANCE_DESIGN.md, Docs/combat/WEAPON_SKILL_RANGE_DESIGN.md, Docs/combat/WEAPON_PROGRESSION_DESIGN.md] | `Docs/combat/` + 마법부여·전투 코드와 테이블 [src: Docs/combat/, Assets/Scripts/Item/] | 상 | 상 |
 | **skill_aim** → [skill_aim.md](skill_aim.md) | 커서 조준 추적·효과 커밋, 플레이어 방향 화살표 View, 스킬 사용 중 이동 감속, 몬스터 스킬도 표의 조준 방식으로 대상 추적(2026-10-13) [src: Wiki/skill_aim.md, Docs/combat/POE2_CURSOR_TRACKING_PLAN.md §15] | `Docs/combat/POE2_CURSOR_TRACKING_PLAN.md` + 조준·스킬·이동 코드 | 중 | 상 |
 | **skill_propagation** → [skill_propagation.md](skill_propagation.md) | 연쇄·분열 공용 전파 런타임, 대상에 붙는 대기 주문, Chain Lightning 수직 슬라이스 [src: Wiki/skill_propagation.md] | `Docs/combat/SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md` + `Skill/Propagation/`·전파 시스템 코드 | 하 | 상 |
 | **ai_monster** → [monster_spawn_runtime.md](monster_spawn_runtime.md) | 몬스터 AI·데이터 주도 종 풀, 거리 기반 스폰/Warm 청크 캐시(구현·대조 완료), 공격 예고(Phase 0~2 구현), 스폰 슬롯 밖에서 주인을 따라 사라지는 소환 몬스터(2026-10-25, 상세는 combat) [src: Wiki/monster_spawn_runtime.md, Docs/combat/MONSTER_ATTACK_TELEGRAPH_DESIGN.md 상태, Docs/combat/SKILL_DESIGN.md §6.12] | `Docs/ai_monster/` 2장 + 런타임 스폰 제안 | 중 | 상 |
-| **map** | 청크 기반 오픈월드 맵 생성·바이옴 타일셋·충돌/길찾기, 절차 던전 런타임(구현), 던전 중 월드 시뮬(구현 2026-10-19, 실플레이 확인 전), 던전 드롭(입구 지역 레벨·보스/상자 드롭, 구현 2026-10-21) [src: Docs/map/DUNGEON_RUNTIME_DESIGN.md 상태·§5.4, Docs/map/DUNGEON_WORLD_SIM_DESIGN.md 상태] | `Docs/map/` (MAP_DESIGN, COLLISION_PATHFINDING_DESIGN, THEME_TILESET_REFACTOR, DUNGEON_RUNTIME_DESIGN, DUNGEON_WORLD_SIM_DESIGN 등) | 중 | 중 |
+| **map** | 청크 기반 오픈월드 맵 생성·바이옴 타일셋·충돌/길찾기, 절차 던전 런타임(구현), 던전 중 월드 시뮬(구현 2026-10-19, 실플레이 확인 전), 던전 드롭(입구 지역 레벨·보스/상자 드롭, 구현 2026-10-21), 월드 광맥 청크별 날짜 굴림·고갈·재생·정리·`ore_veins` 저장·구역별 구리/주석/철·E키 채광(0~4단계 구현 2026-10-31, 플레이 확인 전) [src: Docs/map/DUNGEON_RUNTIME_DESIGN.md 상태·§5.4, Docs/map/DUNGEON_WORLD_SIM_DESIGN.md 상태, Docs/map/WORLD_ORE_VEIN_PLAN.md 상태·§11·§11.4] | `Docs/map/` (MAP_DESIGN, COLLISION_PATHFINDING_DESIGN, THEME_TILESET_REFACTOR, DUNGEON_RUNTIME_DESIGN, DUNGEON_WORLD_SIM_DESIGN, WORLD_ORE_VEIN_PLAN 등) | 중 | 중 |
 | **village** → [village.md](village.md) | 마을 자가성장 LOD·서비스와 신규 게임 전 마을 Forge Tier 1 접근성 [src: Wiki/village.md] | `Docs/village/` + 마법부여 Forge 접근성 계약 [src: Docs/village/, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md] | 중 | 상 |
 | **npc** → [npc.md](npc.md) | NPC 관계·상호작용·소망(퀘스트)·자율 활동, 야망·모험가 경제(구현 P1·P2·P4), 실전투·동행·결투(B1~B5), 장비(상점 기본 아이템), 던전 소문·부탁·행적 반응·소망 ItemGift·최근 부상 사연 문구·후속 소개(NARRATIVE 1~5단계) [src: Wiki/npc.md] | `Docs/npc/` (VILLAGE_NPC_BOUNDARY, NPC_AMBITION, NPC_COMBAT, NPC_SHOP_EQUIPMENT, NPC_NARRATIVE_CONTENT 포함) | 상 | 상 |
 | **world_history** → [world_history.md](world_history.md) | 절차적 역사 생성(정착지 연대기)과 LLM 내러티브 엔진(대화·소망 생성) | `Docs/world_history/` 5장 (PROCEDURAL_HISTORY_DESIGN, WORLD_HISTORY_PLAN, WORLD_EVENT_DESIGN, NARRATIVE_ENGINE_DESIGN, NARRATIVE_ENGINE_SPIKE) | 상 | 중 |

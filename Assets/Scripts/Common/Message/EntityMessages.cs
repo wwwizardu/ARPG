@@ -219,4 +219,19 @@ namespace ARPG.Message
         /// <summary>true면 자막 표시, false면 숨김.</summary>
         public bool Active;
     }
+
+    /// <summary>
+    /// 플레이어 채광 진행 메시지 (WORLD_ORE_VEIN_PLAN §7.1). System_PlayerMining이 작업 중 매 틱과 끝날 때 보내고,
+    /// MiningProgressView(임시 진행 막대)가 받아 막대만 그린다.
+    /// </summary>
+    public struct MiningProgressMessage : IEntityMessage
+    {
+        public int TargetEntityId { get; set; }
+
+        /// <summary>0~1 진행률.</summary>
+        public float Progress;
+
+        /// <summary>false면 작업이 끝났거나 취소되어 막대를 숨긴다.</summary>
+        public bool Active;
+    }
 }

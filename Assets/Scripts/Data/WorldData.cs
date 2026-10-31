@@ -39,6 +39,8 @@ namespace ARPG.Data
         public GoldPriceIndexState GoldPrice = new();
         // NAMED_THREAT_DESIGN §10.1 — 네임드 위협 기록 (World 파티션). 구 세이브는 빈 상태로 연다.
         public NamedThreatWorldState NamedThreats = new();
+        // WORLD_ORE_VEIN_PLAN §4.2 — 월드 광맥 기록 (ore_veins 파티션). 소유자는 OreVeinManager. 구 세이브는 빈 기록으로 연다.
+        public List<OreVeinRecord> OreVeins = new();
 
         // PROCEDURAL_HISTORY §0 런타임 LOD — 게임 중 변동하는 정착지 라이브 추상 층.
         // Chronicle(정지 스냅샷)과 분리. 최초/구세이브는 HistoryManager가 Chronicle에서 초기화.
@@ -90,6 +92,9 @@ namespace ARPG.Data
             if (NamedThreats == null)
                 NamedThreats = new();
             NamedThreats.Sanitize();
+            // 잘못된 기록·중복 청크는 OreVeinManager.Initialize가 색인을 만들며 버린다
+            if (OreVeins == null)
+                OreVeins = new();
             if (Chronicle == null)
                 Chronicle = new();
             if (Chronicle.Events == null)

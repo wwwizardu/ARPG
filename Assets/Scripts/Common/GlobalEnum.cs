@@ -305,6 +305,7 @@ public class GlobalEnum
         Gold = 10,      // 골드 (화폐)
         Herb = 11,      // 약초/마법 재료
         Object = 12,    // 건축 자재
+        Tin = 13,       // 주석 (월드 광맥 3단계, WORLD_ORE_VEIN_PLAN §2)
         SkillBook = 100,  // 스킬북 (새 스킬 획득)
         SkillPage = 101,  // 스킬 페이지 (스킬북에 장착하는 SkillEffect 조각)
         CharmBoard = 102, // 참 판 — 3×3칸, 판 자리에 끼우고 참을 박는다 (PLAYER_LEVEL_CHARM_DESIGN §6.2)

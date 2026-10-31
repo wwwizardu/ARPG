@@ -71,6 +71,8 @@ namespace ARPG.Data
         public GoldPriceIndexState GoldPrice => _worldData.GoldPrice;
         // NAMED_THREAT_DESIGN §10.1 — 네임드 위협 기록 (World 파티션). 소유자는 NamedThreatManager
         public NamedThreatWorldState NamedThreats => _worldData.NamedThreats;
+        // WORLD_ORE_VEIN_PLAN §4.2 — 월드 광맥 기록 (ore_veins 파티션). 수정은 OreVeinManager만 한다
+        public List<OreVeinRecord> OreVeins => _worldData.OreVeins;
         public Dictionary<int, BuildingSaveData> BuildingSaveDatas => _worldData.BuildingSaveDatas;
         // R1: 정착지 연대기 (New Game 1회 생성 후 저장이 정본)
         public ChronicleSaveData Chronicle { get => _worldData.Chronicle; set => _worldData.Chronicle = value; }

@@ -305,9 +305,20 @@ namespace ARPG.Editor
                 Require(Json(Capture("CaptureOwnedNarrative", narrative)) == Json(copier.Capture(narrative)), "pruned narrative instance/selection cannot resurrect");
                 narrative.Definitions.Clear(); narrative.Policies.Clear();
                 Require(Json(Capture("CaptureOwnedNarrative", narrative)) == Json(copier.Capture(narrative)), "pruned definition/policy cannot resurrect");
+                // ore_veins 파트 (WORLD_ORE_VEIN_PLAN §8.1): 잔량·고갈·삭제는 소유자가 청크 키로 표시해야 다시 찍힌다.
+                var vein = new OreVeinRecord { ChunkX = 3, ChunkY = -2, Type = OreVeinType.Copper, TileX = 27, TileY = -13,
+                    Remaining = 3, RollDay = 2, State = OreVeinState.Active, LastActiveGameTime = 50.5f };
+                var veins = new List<OreVeinRecord> { vein };
+                Require(Json(Capture("CaptureOwnedOreVeins", veins)) == Json(copier.Capture(new OreVeinSaveRoot { Veins = veins })), "ore vein root initial capture");
+                vein.Remaining--; data.MarkOreVeinSaveDirty(3, -2);
+                Require(Json(Capture("CaptureOwnedOreVeins", veins)) == Json(copier.Capture(new OreVeinSaveRoot { Veins = veins })), "ore vein charge change");
+                vein.Remaining = 0; vein.State = OreVeinState.Exhausted; vein.RegrowGameTime = 74.5f; data.MarkOreVeinSaveDirty(3, -2);
+                Require(Json(Capture("CaptureOwnedOreVeins", veins)) == Json(copier.Capture(new OreVeinSaveRoot { Veins = veins })), "ore vein exhaustion");
+                veins.Clear(); data.MarkOreVeinSaveDirty(3, -2);
+                Require(Json(Capture("CaptureOwnedOreVeins", veins)) == Json(copier.Capture(new OreVeinSaveRoot { Veins = veins })), "deleted ore vein record cannot resurrect");
             }
             finally { UnityEngine.Object.DestroyImmediate(owner); }
-            return $"[GroupedSnapshotContracts] {checks}/{checks} PASS: selective groups, changed slots, omission observers, freeze/reset lifetimes, Player/World/Map/Buildings/Chronicle/Dungeons/Narrative roots.";
+            return $"[GroupedSnapshotContracts] {checks}/{checks} PASS: selective groups, changed slots, omission observers, freeze/reset lifetimes, Player/World/Map/Buildings/Chronicle/Dungeons/Narrative/OreVeins roots.";
         }
 
         /// <summary>동일 합성 마을과 변경 패턴으로 전체/묶음 복사를 비교한다. 기존 Village 진단에서 명시적으로 실행한다.</summary>

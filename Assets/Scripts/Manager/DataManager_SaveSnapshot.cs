@@ -38,6 +38,8 @@ namespace ARPG.Data
         public void MarkBuildingSaveDirty(int entityId) => MarkOwnedSaveDirty(PART_BUILDINGS, entityId);
         public void MarkMapChunkSaveDirty(Vector2IntKey chunk) => MarkOwnedSaveDirty(PART_MAP, chunk);
         public void MarkWorldDropSaveDirty(WorldDropItemData drop) => MarkOwnedSaveDirty(PART_MAP, drop);
+        // ore_veins 파트 (WORLD_ORE_VEIN_PLAN §8.1). 기록 소유자 OreVeinManager만 부른다 — 생성·잔량·고갈·활성 시각·삭제 모두 청크 키로 표시한다.
+        public void MarkOreVeinSaveDirty(int chunkX, int chunkY) => MarkOwnedSaveDirty(PART_ORE_VEINS, new Vector2IntKey(chunkX, chunkY));
         public void MarkPlayerRelationSaveDirty(int npcId) => MarkOwnedSaveDirty(PART_PLAYER, ("relation", npcId));
         public void MarkWorldSaveDirty(WorldSaveGroup groups) => MarkOwnedSaveDirty(PART_WORLD, 0, (ulong)groups);
         public void MarkChronicleEventSaveDirty(int eventId) => MarkOwnedSaveDirty(PART_CHRONICLE, ("event", eventId));
@@ -86,6 +88,13 @@ namespace ARPG.Data
             {
                 if (key is WorldDropItemData drop) return _worldData.WorldDropItemDatas.Contains(drop) == true ? drop : null;
                 if (key is Vector2IntKey chunk) return AR.s.WorldMap.GetSaveChunkModifications(chunk.X, chunk.Y);
+            }
+            if (part == PART_ORE_VEINS && key is Vector2IntKey vein)
+            {
+                List<OreVeinRecord> veins = _worldData.OreVeins;
+                for (int i = 0; i < veins.Count; i++)
+                    if (veins[i].ChunkX == vein.X && veins[i].ChunkY == vein.Y) return veins[i];
+                return null;
             }
             if (part == PART_BUILDINGS && key is int building) return AR.s.Building.GetSaveData(building);
             if (part == PART_NARRATIVE && key is ValueTuple<string, string> narrative)
@@ -243,6 +252,17 @@ namespace ARPG.Data
             var tiles = (List<object?>)root[nameof(MapSaveRoot.TileModifications)]!;
             for (int i = 0; i < live.TileModifications.Count; i++)
                 tiles.Add(cache.Get(new Vector2IntKey(live.TileModifications[i].ChunkX, live.TileModifications[i].ChunkY)));
+            return root;
+        }
+
+        private object CaptureOwnedOreVeins(List<OreVeinRecord> live, bool rebuild)
+        {
+            Dictionary<object, object?> sources = new();
+            for (int i = 0; i < live.Count; i++) sources.Add(new Vector2IntKey(live[i].ChunkX, live[i].ChunkY), live[i]);
+            var cache = PrepareOwnedSaveCache(PART_ORE_VEINS, sources, rebuild);
+            var root = EmptySnapshotRoot(new OreVeinSaveRoot());
+            var veins = (List<object?>)root[nameof(OreVeinSaveRoot.Veins)]!;
+            for (int i = 0; i < live.Count; i++) veins.Add(cache.Get(new Vector2IntKey(live[i].ChunkX, live[i].ChunkY)));
             return root;
         }
 
