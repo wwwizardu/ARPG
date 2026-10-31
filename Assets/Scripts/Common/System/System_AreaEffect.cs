@@ -162,6 +162,7 @@ namespace ARPG.Systems
                 {
                     int newHp = Mathf.Max(0, targetStat.CurrentHp - table.Damage);
                     CombatCredit.RecordLethalDamage(targetEntityId, targetStat.CurrentHp, newHp, area.Credit);
+                    System_PlayerMining.NotifyDamage(targetEntityId, targetStat.CurrentHp, newHp);
                     targetStat.SetCurrentHp(targetEntityId, newHp);
                     cm.SetComponent(targetEntityId, targetStat);
 

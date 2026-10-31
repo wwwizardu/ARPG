@@ -384,6 +384,7 @@ namespace ARPG.Skill.Combat
                 int damage = Mathf.RoundToInt(result.FinalDamage);
                 int newHp = Mathf.Max(0, targetStat.CurrentHp - damage);
                 CombatCredit.RecordLethalDamage(targetId, targetStat.CurrentHp, newHp, credit);
+                System_PlayerMining.NotifyDamage(targetId, targetStat.CurrentHp, newHp);
                 targetStat.SetCurrentHp(targetId, newHp);
                 AR.s.Component.SetComponent(targetId, targetStat);
 
@@ -417,6 +418,7 @@ namespace ARPG.Skill.Combat
                     int thornsDamage = Mathf.RoundToInt(result.ThornsDamage);
                     int newHp = Mathf.Max(0, attackerStat.CurrentHp - thornsDamage);
                     CombatCredit.RecordLethalDamage(attackerId, attackerStat.CurrentHp, newHp, CombatCredit.Resolve(targetId));
+                    System_PlayerMining.NotifyDamage(attackerId, attackerStat.CurrentHp, newHp);
                     attackerStat.SetCurrentHp(attackerId, newHp);
                     AR.s.Component.SetComponent(attackerId, attackerStat);
                     System_AI_Perception.AlertMonster(attackerId, targetId);

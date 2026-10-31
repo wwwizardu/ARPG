@@ -2,6 +2,7 @@ using ARPG.Component;
 using ARPG.Message;
 using ARPG.Utility;
 using UnityEngine;
+using UnityEngine.AddressableAssets;
 
 namespace ARPG.Systems
 {
@@ -115,7 +116,10 @@ namespace ARPG.Systems
 
                 if (AR.s.Message.TryGetEntity(entityId, out var entity))
                 {
+                    bool isOreVein = cm.HasComponent<OreVeinComponent>(entityId);
                     entity.OnEntityDestroy();
+                    if (isOreVein == true)
+                        AR.s.Message.UnregisterEntity(entityId);
                     AR.s.Entity.DestroyEntity(entityId);
 
                     // System_Render에서도 등록 해제 (딕셔너리 정리)
@@ -125,7 +129,10 @@ namespace ARPG.Systems
                         renderSystem.UnregisterEntity(entityId);
                     }
 
-                    Object.Destroy(entity.gameObject);
+                    if (isOreVein == true)
+                        Addressables.ReleaseInstance(entity.gameObject);
+                    else
+                        Object.Destroy(entity.gameObject);
                 }
                 else
                 {

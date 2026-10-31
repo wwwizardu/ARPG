@@ -40,8 +40,8 @@ namespace ARPG.OreVein
         private readonly Dictionary<Vector2Int, int> _entityByChunk = new();
         // 생성 요청 중인 청크 (Addressables 비동기)
         private readonly HashSet<Vector2Int> _spawning = new();
-        // scratch — 사용 직전에 비운다
-        private readonly List<Vector2Int> _chunkScratch = new();
+        // 생성 중 청크가 다시 활성화되면 기존 요청이 끝난 뒤 최신 기록으로 한 번 재시도한다
+        private readonly HashSet<Vector2Int> _spawnRetry = new();
         private readonly AsyncOperationHandle<Sprite>[] _sprites = new AsyncOperationHandle<Sprite>[_spriteKeys.Length];
         private bool _spriteErrorLogged;
 
@@ -62,7 +62,7 @@ namespace ARPG.OreVein
             RemoveAllEntities();
             _recordsByChunk.Clear();
             _spawning.Clear();
-            _chunkScratch.Clear();
+            _spawnRetry.Clear();
             _lastCleanupDay = int.MinValue;
             for (int i = 0; i < _sprites.Length; i++)
             {
@@ -103,6 +103,7 @@ namespace ARPG.OreVein
         {
             if (_initialized == false)
                 return;
+            _spawnRetry.Remove(chunkCoord);
             if (_recordsByChunk.TryGetValue(chunkCoord, out OreVeinRecord? record) == true && record.State == OreVeinState.Active)
             {
                 record.LastActiveGameTime = AR.s.Time.CurrentGameTime;
@@ -189,7 +190,11 @@ namespace ARPG.OreVein
             for (int i = 0; i < pool.Count; i++)
             {
                 OreVeinComponent vein = pool.GetByIndex(i);
-                if (_recordsByChunk.TryGetValue(new Vector2Int(vein.ChunkX, vein.ChunkY), out OreVeinRecord? record) == false ||
+                int entityId = pool.GetEntityId(i);
+                var chunk = new Vector2Int(vein.ChunkX, vein.ChunkY);
+                if (cm.HasComponent<DestroyTag>(entityId) == true ||
+                    _entityByChunk.TryGetValue(chunk, out int activeId) == false || activeId != entityId ||
+                    _recordsByChunk.TryGetValue(chunk, out OreVeinRecord? record) == false ||
                     record.State != OreVeinState.Active || record.RollDay != vein.RollDay)
                     continue;
                 float distance = Vector2.SqrMagnitude(player.Position - new Vector2(record.TileX + 0.5f, record.TileY + 0.5f));
@@ -199,7 +204,7 @@ namespace ARPG.OreVein
                 found = true;
                 candidate = new ServiceUIRouter.Candidate
                 {
-                    Kind = ServiceUIRouter.CandidateKind.OreVein, EntityId = pool.GetEntityId(i), DistanceSqr = distance,
+                    Kind = ServiceUIRouter.CandidateKind.OreVein, EntityId = entityId, DistanceSqr = distance,
                     HasTile = true, TileX = record.TileX, TileY = record.TileY,
                 };
             }
@@ -223,18 +228,20 @@ namespace ARPG.OreVein
         {
             ComponentManager cm = AR.s.Component;
             if (_initialized == false || cm.TryGetComponent<OreVeinComponent>(oreEntityId, out var vein) == false ||
+                cm.HasComponent<DestroyTag>(oreEntityId) == true ||
+                _entityByChunk.TryGetValue(new Vector2Int(vein.ChunkX, vein.ChunkY), out int activeId) == false || activeId != oreEntityId ||
                 IsMineable(new Vector2Int(vein.ChunkX, vein.ChunkY), vein.RollDay) == false)
                 return false;
             if (cm.TryGetComponent<MiningComponent>(playerId, out var current) == true &&
                 current.ChunkX == vein.ChunkX && current.ChunkY == vein.ChunkY && current.RollDay == vein.RollDay)
                 return true;
             if (cm.TryGetComponent<TransformComponent>(playerId, out var transform) == false ||
-                cm.TryGetComponent<StatComponent>(playerId, out var stat) == false)
+                cm.HasComponent<StatComponent>(playerId) == false)
                 return false;
             cm.SetComponent(playerId, new MiningComponent
             {
                 ChunkX = vein.ChunkX, ChunkY = vein.ChunkY, RollDay = vein.RollDay,
-                StartPosition = transform.Position, LastHp = stat.CurrentHp,
+                StartPosition = transform.Position,
             });
             AttachProgressView(playerId);
             return true;
@@ -408,8 +415,13 @@ namespace ARPG.OreVein
 
         private void SpawnIfNeeded(Vector2Int chunkCoord, OreVeinRecord record)
         {
-            if (_entityByChunk.ContainsKey(chunkCoord) == true || _spawning.Add(chunkCoord) == false)
+            if (_entityByChunk.ContainsKey(chunkCoord) == true)
                 return;
+            if (_spawning.Add(chunkCoord) == false)
+            {
+                _spawnRetry.Add(chunkCoord);
+                return;
+            }
             SpawnAsync(chunkCoord, record).Forget();
         }
 
@@ -439,7 +451,18 @@ namespace ARPG.OreVein
                 _entityByChunk[chunkCoord] = id;
             }
             catch (Exception ex) { Debug.LogError("[OreVein] Spawn: " + ex.Message); }
-            finally { if (lifetime == _lifetime) _spawning.Remove(chunkCoord); }
+            finally
+            {
+                if (lifetime == _lifetime)
+                {
+                    _spawning.Remove(chunkCoord);
+                    if (_spawnRetry.Remove(chunkCoord) == true && _initialized == true &&
+                        AR.s.WorldMap.IsChunkActive(chunkCoord) == true &&
+                        _recordsByChunk.TryGetValue(chunkCoord, out OreVeinRecord? current) == true &&
+                        current.State == OreVeinState.Active)
+                        SpawnIfNeeded(chunkCoord, current);
+                }
+            }
         }
 
         private bool IsCurrent(Vector2Int chunkCoord, OreVeinRecord record)
@@ -481,7 +504,8 @@ namespace ARPG.OreVein
                 vein.ChunkX != chunkCoord.x || vein.ChunkY != chunkCoord.y)
                 return;
             cm.AddComponent(id, new DestroyTag());
-            AR.s.System.GetSystem<System_EntityDestroy>()?.OnLateUpdate(0);
+            if (AR.s.Message.TryGetEntity(id, out var entity) == true && entity != null)
+                entity.gameObject.SetActive(false);
         }
 
         /// <summary>채광 진행 막대(임시)를 플레이어 엔티티 자식으로 한 번 붙인다. 이후 System_PlayerMining의 메시지로만 갱신된다.</summary>
@@ -497,11 +521,23 @@ namespace ARPG.OreVein
 
         private void RemoveAllEntities()
         {
-            _chunkScratch.Clear();
-            _chunkScratch.AddRange(_entityByChunk.Keys);
-            for (int i = 0; i < _chunkScratch.Count; i++)
-                RemoveEntity(_chunkScratch[i]);
-            _chunkScratch.Clear();
+            ComponentManager cm = AR.s.Component;
+            SparseSet<OreVeinComponent> pool = cm.GetComponentPool<OreVeinComponent>();
+            for (int i = pool.Count - 1; i >= 0; i--)
+            {
+                int id = pool.GetEntityId(i);
+                if (AR.s.Message.TryGetEntity(id, out var entity) == true && entity != null)
+                {
+                    EntityFactory.ReleaseStaticEntity(entity);
+                    AR.s.Message.UnregisterEntity(id);
+                }
+                else
+                {
+                    cm.RemoveComponent<OreVeinComponent>(id);
+                    cm.RemoveComponent<DestroyTag>(id);
+                }
+            }
+            _entityByChunk.Clear();
         }
     }
 }

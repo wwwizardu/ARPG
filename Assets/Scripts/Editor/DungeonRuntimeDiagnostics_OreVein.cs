@@ -10,6 +10,7 @@ using ARPG.Data;
 using ARPG.Dungeon;
 using ARPG.Map;
 using ARPG.OreVein;
+using ARPG.Skill.Combat;
 using ARPG.Tables;
 using ARPG.Village;
 using Newtonsoft.Json;
@@ -527,11 +528,19 @@ namespace ARPG.EditorTools
             Cancelled("moving cancels mining");
             Require(veins.TryBeginMining(1, vein), "restart"); fixture.MovePlayer(stand + new Vector2(0.2f, 0f));
             Cancelled("being pushed away cancels mining");
-            Require(veins.TryBeginMining(1, vein), "restart"); fixture.SetHp(90);
-            Cancelled("losing HP (a hit) cancels mining");
+            Require(veins.TryBeginMining(1, vein), "restart");
+            DamageCalculator.ApplyDamageResult(0, 2, 1, new DamageResult { FinalDamage = 10 }, false, default);
+            fixture.SetHp(100);
+            Cancelled("damage followed by healing in the same tick cancels mining");
             Require(veins.TryBeginMining(1, vein), "restart"); fixture.SetHp(110);
             mining.OnFixedUpdate(0.1f);
-            Require(cm.TryGetComponent<MiningComponent>(1, out var healed) && healed.LastHp == 110, "regeneration does not cancel mining");
+            Require(cm.HasComponent<MiningComponent>(1), "regeneration does not cancel mining");
+            fixture.SetHp(90);
+            mining.OnFixedUpdate(0.1f);
+            Require(cm.HasComponent<MiningComponent>(1), "a non-damage HP clamp does not cancel mining");
+            DamageCalculator.ApplyDamageResult(0, 2, 1, new DamageResult { FinalDamage = 10, IsEvaded = true }, false, default);
+            mining.OnFixedUpdate(0.1f);
+            Require(cm.HasComponent<MiningComponent>(1), "evaded damage does not cancel mining");
             fixture.SetInput(Vector2.zero, true, 0);
             Cancelled("attacking cancels mining");
             Require(veins.TryBeginMining(1, vein), "restart"); fixture.SetInput(Vector2.zero, false, 1 << 2);
@@ -557,12 +566,28 @@ namespace ARPG.EditorTools
             Require(record.Remaining == 0 && record.State == OreVeinState.Exhausted && fixture.CountItem(OreVeinRules.CopperItemId) == 2 &&
                 veins.TryBeginMining(1, vein) == false, "the last charge exhausts the vein and it cannot be mined again");
             cm.SetComponent(1, new MiningComponent { ChunkX = p.x, ChunkY = p.y, RollDay = record.RollDay, Elapsed = 1.19f,
-                StartPosition = stand, LastHp = 100 });
+                StartPosition = stand });
             mining.OnFixedUpdate(0.1f);
             Require(cm.HasComponent<MiningComponent>(1) == false && fixture.CountItem(OreVeinRules.CopperItemId) == 2,
                 "a stale mining job on an exhausted vein grants nothing");
             await fixture.Data.WaitForSaveIdleAsync();
-            report.AppendLine("PASS: ore mining — zone-selected type stored, E candidate within 1.5 tiles and prompt, 1.2 s completion grants one ore and one charge in one manifest, cancel on move/push/hit/attack/skill/range (regen ok), full bag keeps the charge, exhaustion blocks further mining and duplicate grants.");
+            fixture.ResetLedger();
+            record = veins.ResolveChunk(p, fixture.Chunk(p), now);
+            fixture.AddVeinEntity(record, 500);
+            fixture.PlacePlayer(stand, 100);
+            cm.AddComponent(999, new DestroyTag());
+            veins.OnChunkDeactivated(p);
+            Require(cm.HasComponent<DestroyTag>(500) && cm.HasComponent<DestroyTag>(999) && cm.HasComponent<OreVeinComponent>(500),
+                "deactivation queues ore without processing unrelated destruction");
+            fixture.AddVeinEntity(record, 502);
+            Require(veins.TryBeginMining(1, 500) == false && veins.TryGetInteraction(out var replacement) && replacement.EntityId == 502,
+                "pending ore cannot be selected after a replacement appears");
+            fixture.ResetLedger();
+            Require(cm.HasComponent<OreVeinComponent>(500) == false && cm.HasComponent<DestroyTag>(500) == false &&
+                cm.HasComponent<OreVeinComponent>(502) == false && cm.HasComponent<DestroyTag>(999),
+                "reset removes active and pending ore without processing unrelated entities");
+            cm.RemoveComponent<DestroyTag>(999);
+            report.AppendLine("PASS: ore mining — completion and persistence, cancellation including damage followed by healing, evasion and HP clamp, full bag, exhaustion, deferred removal and reset of pending ore.");
         }
 
         private static OreVeinSaveRoot LoadedVeins(DataManager data, string slot)

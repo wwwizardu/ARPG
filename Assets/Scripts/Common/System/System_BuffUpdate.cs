@@ -117,6 +117,7 @@ namespace ARPG.Systems
                 // 데미지 처리
                 int newHp = Mathf.Max(0, targetStat.CurrentHp - finalDamage);
                 CombatCredit.RecordLethalDamage(buff.TargetEntityId, targetStat.CurrentHp, newHp, buff.Credit);
+                System_PlayerMining.NotifyDamage(buff.TargetEntityId, targetStat.CurrentHp, newHp);
                 targetStat.SetCurrentHp(buff.TargetEntityId, newHp);
 
                 // 데미지 메시지 전송(UI 변경 등)

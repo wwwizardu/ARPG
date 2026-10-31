@@ -26,6 +26,17 @@ namespace ARPG.Systems
 
         public void OnReset() { }
 
+        public static void NotifyDamage(int entityId, int previousHp, int nextHp)
+        {
+            if (nextHp >= previousHp)
+                return;
+            ComponentManager cm = AR.s.Component;
+            if (cm.TryGetComponent<MiningComponent>(entityId, out var mining) == false)
+                return;
+            mining.InterruptedByDamage = true;
+            cm.SetComponent(entityId, mining);
+        }
+
         public void OnFixedUpdate(float inFixedDeltaTime)
         {
             ComponentManager cm = AR.s.Component;
@@ -58,15 +69,14 @@ namespace ARPG.Systems
             if (entityId != AR.s.Data.CurrentPlayerEntityId || AR.s.Dungeon.IsInside == true || AR.s.Dungeon.GameplayPaused == true)
                 return false;
             if (cm.TryGetComponent<TransformComponent>(entityId, out var transform) == false ||
-                cm.TryGetComponent<StatComponent>(entityId, out var stat) == false ||
+                cm.HasComponent<StatComponent>(entityId) == false ||
                 cm.TryGetComponent<InputComponent>(entityId, out var input) == false)
                 return false;
             if (input.MoveDirection.sqrMagnitude > MoveInputThreshold ||
                 (transform.Position - mining.StartPosition).sqrMagnitude > MoveTolerance * MoveTolerance)
                 return false;
-            if (stat.CurrentHp < mining.LastHp)
+            if (mining.InterruptedByDamage == true)
                 return false;
-            mining.LastHp = stat.CurrentHp;
             if (input.IsAttacking == true || input.SkillSlotHeldMask != 0 || cm.HasComponent<SkillCommandComponent>(entityId) == true)
                 return false;
             var chunk = new Vector2Int(mining.ChunkX, mining.ChunkY);

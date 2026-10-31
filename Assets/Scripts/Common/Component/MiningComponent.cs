@@ -14,7 +14,7 @@ namespace ARPG.Component
         public float Elapsed;
         // 시작 위치에서 벗어나면(이동·밀림) 취소한다
         public Vector2 StartPosition;
-        // 직전 확인 때의 HP. 줄었으면 피격으로 보고 취소한다 (회복으로 늘면 갱신)
-        public int LastHp;
+        // 피해와 회복이 같은 틱에 일어나도 피격을 놓치지 않는다
+        public bool InterruptedByDamage;
     }
 }
