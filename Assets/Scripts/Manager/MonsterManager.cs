@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace ARPG.Monster
 {
-    public class MonsterManager : MonoBehaviour
+    public partial class MonsterManager : MonoBehaviour
     {
         private const float DefaultMoveRadius = 0.3f;
 
@@ -85,10 +85,12 @@ namespace ARPG.Monster
 
         public void Initialize()
         {
+            InitializeCrowd();
         }
 
         public void Reset()
         {
+            _crowdGrid.Reset();
             _monsterOrigins.Clear();
             _chunkMonsters.Clear();
             _pendingSpawnReservations.Clear();

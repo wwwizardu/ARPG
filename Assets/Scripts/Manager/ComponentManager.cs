@@ -53,6 +53,8 @@ namespace ARPG.Component
             { typeof(StatComponent), 300 },
             { typeof(DamageDefenseCacheComponent), 300 }, // StatComponent와 1:1 — 재계산 시 항상 갱신
             { typeof(ColliderComponent), 500 },
+            { typeof(MonsterCrowdComponent), 500 },
+            { typeof(MonsterCrowdExcludedTag), 64 },
 
             // HP/MP 재생 누적기 (FinalHpGeneration > 0 또는 FinalMpGeneration > 0인 엔티티만)
             { typeof(RegenComponent), 50 },

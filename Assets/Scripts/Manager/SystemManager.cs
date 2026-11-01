@@ -220,6 +220,9 @@ namespace ARPG.Systems
             System_EntityActivation entityActivationSystem = new();
             RegisterSystems(entityActivationSystem);
 
+            // Priority 450: Monster Crowd Movement (Update) - 선택적 점유·우회·대기. 처리 프레임만 Render 적분 제외
+            RegisterSystems(new System_MonsterCrowdMovement());
+
             // Priority 500: Animation System (Update) - 애니메이션 제어
             System_Animation animationSystem = new();
             RegisterSystems(animationSystem);

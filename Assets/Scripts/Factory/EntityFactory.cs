@@ -126,6 +126,7 @@ namespace ARPG.Factory
 
             // MonsterTag (System_EntityDestroy에서 MonsterManager 연동에 사용)
             AR.s.Component.AddComponent(entityId, new MonsterTag());
+            AR.s.Component.AddComponent(entityId, new MonsterCrowdComponent { MonsterTableId = monsterTableId });
 
             // 진영 (적대) - 스킬·발사체·AI 타겟 필터에 사용
             AR.s.Component.AddComponent(entityId, new FactionComponent { FactionId = Faction.Hostile });
