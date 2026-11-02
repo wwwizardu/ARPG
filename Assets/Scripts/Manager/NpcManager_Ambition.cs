@@ -103,6 +103,8 @@ namespace ARPG.Npc
                     freeSlots++;
             }
 
+            // 채광·대장 숙련은 첫 선택 때 한 번 정한다 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §3.1)
+            EnsureLifeSkillsInitialized(entityId, saveData);
             NpcActivityChoiceContext context = new NpcActivityChoiceContext
             {
                 GoldShort = saveData.Gold < GetTreatmentFee(),
@@ -111,6 +113,7 @@ namespace ARPG.Npc
                 TradeAvailable = HasTradeOpportunity(entityId, saveData),
                 DelveAvailable = HasDelveOpportunity(saveData),
             };
+            FillOccupationChoiceContext(entityId, saveData, ref context);
             ApplyObjectiveActivityMultipliers(saveData, gameTime, ref context);
             return context;
         }
@@ -260,6 +263,8 @@ namespace ARPG.Npc
         private void ApplyDeferredPurchaseUpgrades(int entityId, NpcSaveData saveData)
         {
             MarkSaveDirty(entityId, NpcSaveGroup.Inventory | NpcSaveGroup.Equipment);
+            // 실체화 중에 산 빈 칸 보충품은 문턱 없이 그 칸에 끼운다 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §4.3)
+            ApplyDeferredRefill(entityId, saveData);
             if (_deferredPurchaseUpgradeItemIds.TryGetValue(entityId, out List<int>? pending) == false)
                 return;
             _deferredPurchaseUpgradeItemIds.Remove(entityId);
@@ -311,6 +316,9 @@ namespace ARPG.Npc
             Debug.Log($"[NpcAmbition] Upgrade npc={entityId} slot={slot} item={DescribeItem(item)} " +
                       $"replaced={(replacedItem != null ? DescribeItem(replacedItem) : "none")} " +
                       $"power={currentPower:F2}->{newPower:F2} cap={cap:F2} source={source} t={gameTime:F2}");
+            // 잃은 장비의 빈 칸을 채웠으면 분실 사연에 붙인다 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §9.2 ①④)
+            if (replacedItem == null)
+                NotifyLostSlotFilled(entityId, saveData, slot, item, gameTime);
 
             if (replacedItem != null)
                 StoreInInventory(entityId, saveData, replacedItem);
@@ -380,12 +388,15 @@ namespace ARPG.Npc
             if (CreateNpcInventoryView(saveData).AddItem(item) >= 0)
                 return;
 
+            // 위탁 전 내 제작품과 다음 제작 1회분 광석은 버리지 않고 그다음으로 싼 것을 버린다
+            // (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §2.3, 2026-11-01 결정). 새 물건이 보호 대상이면 다른 물건을 반드시 버린다.
+            bool newProtected = IsDiscardProtected(entityId, saveData, item);
             int lowestSlot = -1;
-            int lowestValue = GetItemValue(item);
+            int lowestValue = newProtected == true ? int.MaxValue : GetItemValue(item);
             for (int i = 0; i < saveData.Inventory.Count; i++)
             {
                 ItemData? existing = saveData.Inventory[i];
-                if (existing == null)
+                if (existing == null || IsDiscardProtected(entityId, saveData, existing) == true)
                     continue;
 
                 int value = GetItemValue(existing);
@@ -439,6 +450,7 @@ namespace ARPG.Npc
         {
             _npcPowerCache.Clear();
             _deferredPurchaseUpgradeItemIds.Clear();
+            _deferredRefillItemIds.Clear();
             for (int i = 0; i < _upgradeScratchEquip.Length; i++)
                 _upgradeScratchEquip[i] = null;
         }

@@ -136,11 +136,13 @@ namespace ARPG.EditorTools
                     }
                 }
 
+                // 기본 민첩(회피 항)은 실제 NPC처럼 NPC 표 값을 넣는다 (PLAYER_LEVEL_CHARM_DESIGN §5.6).
+                int baseDex = npcTable?.Stat != null ? npcTable.Stat.Dex : 0;
                 result.Add(new PowerSample
                 {
                     Courage = rng.Range(0, 101),
                     SkillLevel = 0,
-                    Power = NpcPowerEvaluator.EvaluateBreakdown(equip, 0),
+                    Power = NpcPowerEvaluator.EvaluateBreakdown(equip, 0, baseDex),
                 });
             }
             return result;

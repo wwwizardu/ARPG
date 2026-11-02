@@ -10,7 +10,7 @@
 
 ## 1. 목표
 
-NPC에게 장비 슬롯 12칸 + 인벤토리 5칸을 부여한다. 장비 스탯은 플레이어와 동일한 경로로 `StatComponent`에 반영된다. 청크 비활성/활성 사이클을 거쳐도 데이터가 영속화된다.
+NPC에게 장비 슬롯 12칸 + 인벤토리 8칸을 부여한다(2026-11-01 5칸 → 8칸, [채광·대장 숙련 기획](NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN.md) §2.3. 구 세이브는 로드 때 `EnsureSlotsInitialized`가 빈 칸을 붙인다). 장비 스탯은 플레이어와 동일한 경로로 `StatComponent`에 반영된다. 청크 비활성/활성 사이클을 거쳐도 데이터가 영속화된다.
 
 ## 2. 데이터 모델
 
@@ -22,7 +22,7 @@ NPC에게 장비 슬롯 12칸 + 인벤토리 5칸을 부여한다. 장비 스탯
 // 12칸 — EquipSlotType.Max
 public ItemData?[] InventoryEquip = new ItemData?[(int)GlobalEnum.EquipSlotType.Max];
 
-// 5칸 — NPC_INVENTORY_SLOTCOUNT_MAX (인덱스가 슬롯 의미)
+// 8칸 — NPC_INVENTORY_SLOTCOUNT_MAX (인덱스가 슬롯 의미)
 public List<ItemData?> Inventory = new List<ItemData?>();
 ```
 
@@ -34,7 +34,7 @@ public List<ItemData?> Inventory = new List<ItemData?>();
 ### 2.2 [GlobalEnum](../../Assets/Scripts/Common/GlobalEnum.cs)
 
 ```csharp
-public const int NPC_INVENTORY_SLOTCOUNT_MAX = 5;
+public const int NPC_INVENTORY_SLOTCOUNT_MAX = 8;
 ```
 
 ## 3. 테이블
@@ -168,7 +168,7 @@ var (createdId, entity) = await EntityFactory.CreateNpc(
 표시 정보(풀 노출):
 - 이름, 직업, Description
 - 장비 12슬롯 (`NpcSaveData.InventoryEquip`)
-- 인벤토리 5칸 (`NpcSaveData.Inventory`)
+- 인벤토리 8칸 (`NpcSaveData.Inventory`)
 - 성향 8종 (`NpcStatComponent`) — ECS 활성 NPC만 표시
 - 전투 스탯 풀 — `StatComponent`의 모든 `Final*` 필드 (HP, 마나, 공격력 5종, 방어/저항, 회피/막기/생명력 흡수 등)
 

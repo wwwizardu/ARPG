@@ -118,7 +118,7 @@
 | **[NPC_SIMULATION_DESIGN.md](npc/NPC_SIMULATION_DESIGN.md)** ⭐ | ✅ MVP 구현 — 개별 NPC LOD 시뮬 *기반*: 근처=풀 ECS/멀리=경량 상태 tick, Rest·Hunt·Trade·DungeonDelve(솔로·파티), RNG salt 정본(§11.1). 이주·WORLD_EVENT는 후속. NPC 시뮬 아키텍처 정본 |
 | **[NPC_AMBITION_DESIGN.md](npc/NPC_AMBITION_DESIGN.md)** | 🟨 부분 구현 — P1(09-28)·P2 던전·소문(09-29)·파티 자동 구성 개정 D85~D90·부상 등급 D91~D96(09-30)·P4 NPC 간 절도(10-02) 구현, 상점 기본 장비 D116~D123(10-03, 커밋 대기). P3 협력·배신 ⏸ 보류, P5 양방향 배신·결투 명분/처단·P6 Forge·경매장 미구현. NPC 야망·모험가 경제: 성격→야망→활동 효용 선택, 장비 전투력·소문, 닫힌 경제 상점 거래. 결정표 정본(D1~D123) |
 | **[NPC_COMBAT_DESIGN.md](npc/NPC_COMBAT_DESIGN.md)** | ✅ B 단계 구현 완료 (B1~B5, 2026-09-27) — NPC_AMBITION에서 분리. 진영·조건부 인식, 던전 전용 임시 동행(D97 최종), 플레이어↔NPC 결투, 드랍 줍기(디버그 호출만), 전투 사망 연결. 보류: 도주(D25), NPC 간 결투 화면 장면(D24) |
-| **[NPC_EQUIPMENT_DESIGN.md](npc/NPC_EQUIPMENT_DESIGN.md)** | ✅ 구현 — NPC 장비 12슬롯·인벤토리 5칸·시작 장비 시드·검사 UI(UINpcInspect) |
+| **[NPC_EQUIPMENT_DESIGN.md](npc/NPC_EQUIPMENT_DESIGN.md)** | ✅ 구현 — NPC 장비 12슬롯·인벤토리 8칸·시작 장비 시드·검사 UI(UINpcInspect) |
 | **[NPC_EQUIPMENT_SET_PLAN.md](npc/NPC_EQUIPMENT_SET_PLAN.md)** | ✅ 구현 (2026-08-23) — NPC 5종 시작 장비 세트·슬롯별 장착 확률. 플레이 모드 검증 기록 없음 |
 | **[NPC_SHOP_EQUIPMENT_DESIGN.md](npc/NPC_SHOP_EQUIPMENT_DESIGN.md)** | ✅ 구현 (2026-10-03, 커밋 대기) — NPC 장비 = 상점용 기본 아이템, 상점 기본 장비 칸, 전리품 미장착, 장비 저장 표현·일괄 교체(D116~D123) |
 | **[dungeonSystem.md](_archive/dungeonSystem.md)** | 옛 던전 설계 (아카이브) — 현행 던전은 [DUNGEON_RUNTIME_DESIGN.md](map/DUNGEON_RUNTIME_DESIGN.md) |

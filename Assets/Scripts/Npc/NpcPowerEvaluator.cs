@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using ARPG.Data;
 using ARPG.Item;
-using ARPG.Skill.Combat;
 using ARPG.Tables;
 using ARPG.Utility;
 using UnityEngine;
@@ -16,7 +15,7 @@ namespace ARPG.Npc
     public struct NpcPowerBreakdown
     {
         public float Attack;         // 무기 기본 능력 + 추가 피해 × 공격 속도 × 치명타 기대값
-        public float Defense;        // 방어력 + 피할 확률(%) + 막기 확률 + 저항 요약
+        public float Defense;        // 방어력 + 회피 + 막기 확률 + 저항 요약
         public float Life;           // 최대 체력 + 체력 재생 요약
         public float EquipmentScore; // 공격·방어·생명력 가중 합
         public float SkillScore;     // SkillLevel 환산
@@ -26,11 +25,13 @@ namespace ARPG.Npc
     /// <summary>
     /// NpcSaveData.InventoryEquip의 Mods만으로 NPC 전투력을 계산한다 (NPC_AMBITION_DESIGN §5.1, D31, D32).
     /// ECS 없이 동작하며, 실체화 때 EquipHelper.ApplyAllEquipmentModifiers가 쓰는 모드 해석 규칙을 그대로 따른다.
-    /// - 무기 Base는 장착 무기 기본 능력(EquipmentData.WeaponStats)으로만 소비한다. 메인 무기 판정은 WeaponHelper와 같다.
+    /// - 무기 Base는 실제 공격 프로필과 같은 WeaponHelper.GetCombinedWeaponStats로만 소비한다. 무기 두 개면 쌍수 합성
+    ///   (피해 (R + L) × 0.7, 공속·기본 치명타 평균, WEAPON_PROGRESSION_DESIGN §쌍수 계산 초기안)이다.
     /// - Implicit/Prefix/Postfix와 방어구 Base는 Passive 경로(FlatStat/Added*Damage/IncreasedStat)로 합산한다.
     /// - OnCalculate/OnEvent 모드(ModPool 경로)는 전투 중 조건부 효과라 점수에 넣지 않는다.
-    /// - 회피 항은 (기본 민첩 + 장비 민첩) × 2 + 장비 회피를 같은 지역 몬스터 정확도 기준 피할 확률(%)로 바꿔 넣는다
-    ///   (PLAYER_LEVEL_CHARM_DESIGN §5.6, 2026-10-24 사용자 결정: 민첩 회피 포함). 지역 레벨은 고향 마을 청크 기준이다.
+    /// - 회피 항은 (기본 민첩 + 장비 민첩) × 2 + 장비 회피를 다른 방어 항처럼 수치 그대로 가중치를 곱해 더한다
+    ///   (PLAYER_LEVEL_CHARM_DESIGN §5.6, 2026-10-24 사용자 결정: 민첩 회피 포함). 몬스터 정확도와 비교하지 않는 절대값이라
+    ///   사는 지역과 무관하고 이주해도 전투력이 바뀌지 않는다 (2026-11-01 사용자 결정).
     /// 상태를 갖지 않는 순수 계산이다. 캐시는 호출자(NpcManager)가 소유한다.
     /// </summary>
     public static class NpcPowerEvaluator
@@ -38,6 +39,7 @@ namespace ARPG.Npc
         // 가중치는 생성 규칙 그대로의 평범한 NPC에서 공격 ≈ 50%, 방어 ≈ 25%, 생명력 ≈ 25%가 되도록 맞춘 값이다
         // (2026-09-27 세이브 생존 2,387명 평균: Attack 12.9, Defense 54.6, Life 65.3 → NpcPower 평균 약 26).
         // 기본 아이템 장비(NPC_SHOP_EQUIPMENT, 2026-10-03) 뒤 평균: Attack 6.06, Defense 21.2, Life 21.5 → NpcPower 약 10.75.
+        // 회피 × 1.0(2026-11-01) 뒤 세이브 평균: Attack 5.06, Defense 30.57, Life 25.0 → NpcPower 약 11.22.
         // 진단 메뉴 ARPG/Npc/Diagnostics/Hunt Power Normalization으로 분포를 확인한다.
         public const float AttackWeight = 1.0f;
         public const float DefenseWeight = 0.12f;
@@ -50,7 +52,8 @@ namespace ARPG.Npc
         private const float BaseCritMultiplier = 1.5f;
         // 무기가 없으면 맨손 1회/초로 본다. 추가 피해 모드는 그대로 반영된다.
         private const float UnarmedAttackSpeed = 1.0f;
-        private const float EvasionWeight = 1.0f;   // 피할 확률 1%p당
+        // 회피 1당. 방어도와 같은 가중치다 (2026-11-01 사용자 결정: 최종 밸런스에서 같은 수치의 방어도와 회피가 같은 성능을 갖게 한다).
+        private const float EvasionWeight = 1.0f;
         private const float BlockChanceWeight = 1.0f;
         private const float ResistWeight = 0.25f;
         private const float HpGenerationWeight = 5.0f;
@@ -60,26 +63,23 @@ namespace ARPG.Npc
             return EvaluateBreakdown(saveData, saveData.InventoryEquip).Total;
         }
 
-        /// <summary>이 NPC의 기본 민첩·고향 지역 레벨로 주어진 장비 조합을 평가한다 (장비 교체 후보 비교용).</summary>
+        /// <summary>이 NPC의 기본 민첩으로 주어진 장비 조합을 평가한다 (장비 교체 후보 비교용).</summary>
         public static NpcPowerBreakdown EvaluateBreakdown(NpcSaveData saveData, ItemData?[] equippedItems)
         {
-            ResolveContext(saveData, out int baseDex, out int zoneLevel);
-            return EvaluateBreakdown(equippedItems, saveData.SkillLevel, baseDex, zoneLevel);
+            return EvaluateBreakdown(equippedItems, saveData.SkillLevel, ResolveBaseDex(saveData));
         }
 
-        /// <summary>장비만 본 점수 (기본 민첩 0, 지역 레벨 1). 장비끼리 비교할 때 쓴다.</summary>
+        /// <summary>장비만 본 점수 (기본 민첩 0). 장비끼리 비교할 때 쓴다.</summary>
         public static NpcPowerBreakdown EvaluateBreakdown(ItemData?[] equippedItems, int skillLevel)
         {
-            return EvaluateBreakdown(equippedItems, skillLevel, 0, 1);
+            return EvaluateBreakdown(equippedItems, skillLevel, 0);
         }
 
-        public static NpcPowerBreakdown EvaluateBreakdown(ItemData?[] equippedItems, int skillLevel, int baseDex, int zoneLevel)
+        public static NpcPowerBreakdown EvaluateBreakdown(ItemData?[] equippedItems, int skillLevel, int baseDex)
         {
             NpcPowerBreakdown result = new NpcPowerBreakdown();
             if (equippedItems == null)
                 equippedItems = System.Array.Empty<ItemData?>();
-
-            ItemData? mainWeapon = GetMainWeapon(equippedItems);
 
             float addedDamageAvg = 0f;
             float flatAttackMin = 0f;
@@ -158,18 +158,12 @@ namespace ARPG.Npc
                 }
             }
 
-            float weaponDamageAvg = 0f;
-            float attackSpeed = UnarmedAttackSpeed;
-            float weaponCritRate = 0f;
-            if (mainWeapon != null && mainWeapon.Equipment != null)
-            {
-                WeaponStatCache stats = mainWeapon.Equipment.WeaponStats;
-                weaponDamageAvg = AverageOf(stats.Physics) + AverageOf(stats.Fire) + AverageOf(stats.Ice) +
-                    AverageOf(stats.Lightning) + AverageOf(stats.Poison);
-                if (stats.AttackSpeed > 0f)
-                    attackSpeed = stats.AttackSpeed;
-                weaponCritRate = stats.CriRate;
-            }
+            // 실제 공격 프로필과 같은 합성 무기 수치 (무기 두 개면 쌍수 합성)
+            CombinedWeaponStats weapon = WeaponHelper.GetCombinedWeaponStats(equippedItems);
+            float weaponDamageAvg = weapon.Physics.Average + weapon.Fire.Average + weapon.Ice.Average +
+                weapon.Lightning.Average + weapon.Poison.Average;
+            float attackSpeed = weapon.AttackSpeed > 0f ? weapon.AttackSpeed : UnarmedAttackSpeed;
+            float weaponCritRate = weapon.CriRate;
 
             float hitDamage = weaponDamageAvg + addedDamageAvg + (flatAttackMin + flatAttackMax) * 0.5f;
             attackSpeed *= 1f + attackSpeedIncreasePct / 100f;
@@ -178,8 +172,8 @@ namespace ARPG.Npc
             float critFactor = 1f + critRate / 100f * (critMultiplier - 1f);
 
             result.Attack = hitDamage * attackSpeed * critFactor;
-            float evadePercent = GetEvadePercent(evasion + AttributeBonusRules.GetBonusEvasion(Mathf.RoundToInt(dex)), zoneLevel);
-            result.Defense = defense + evadePercent * EvasionWeight + blockChance * BlockChanceWeight + resistSum * ResistWeight;
+            float totalEvasion = evasion + AttributeBonusRules.GetBonusEvasion(Mathf.RoundToInt(dex));
+            result.Defense = defense + totalEvasion * EvasionWeight + blockChance * BlockChanceWeight + resistSum * ResistWeight;
             result.Life = hp + hpGeneration * HpGenerationWeight;
             result.EquipmentScore = result.Attack * AttackWeight + result.Defense * DefenseWeight + result.Life * LifeWeight;
             result.SkillScore = Mathf.Max(0, skillLevel) * SkillScorePerLevel;
@@ -187,44 +181,11 @@ namespace ARPG.Npc
             return result;
         }
 
-        /// <summary>같은 지역 균형형 몬스터(정확도 배율 1)의 공격을 피할 확률(%). 최대 75 (적중률 하한 25%).</summary>
-        public static float GetEvadePercent(float evasion, int zoneLevel)
-        {
-            if (evasion <= 0f)
-                return 0f;
-
-            int monsterAccuracy = HitChanceRules.GetMonsterAccuracy(Mathf.Max(1, zoneLevel), 1f);
-            return (1f - HitChanceRules.GetHitChance(monsterAccuracy, Mathf.RoundToInt(evasion))) * 100f;
-        }
-
-        /// <summary>표의 기본 민첩과 고향 마을 지역 레벨. AR이 없으면 0·1로 본다.</summary>
-        private static void ResolveContext(NpcSaveData saveData, out int baseDex, out int zoneLevel)
+        /// <summary>표의 기본 민첩. AR이 없으면 0으로 본다.</summary>
+        private static int ResolveBaseDex(NpcSaveData saveData)
         {
             NpcTable? table = AR.s?.Data != null ? AR.s.Data.GetNpc(saveData.NpcTableId) : null;
-            baseDex = table?.Stat != null ? table.Stat.Dex : 0;
-            zoneLevel = AR.s?.Npc != null ? AR.s.Npc.GetNpcLootZoneLevel(saveData) : 1;
-        }
-
-        /// <summary>WeaponHelper.GetEquippedWeapon과 같은 규칙 — WeaponRight 우선, 방패는 무기로 보지 않는다.</summary>
-        private static ItemData? GetMainWeapon(ItemData?[] equippedItems)
-        {
-            if (equippedItems.Length <= (int)GE.EquipSlotType.WeaponLeft)
-                return null;
-
-            ItemData? rightWeapon = equippedItems[(int)GE.EquipSlotType.WeaponRight];
-            if (rightWeapon?.Equipment != null && rightWeapon.Equipment.EquipType == GE.EquipmentTypeMask.Weapon)
-                return rightWeapon;
-
-            ItemData? leftWeapon = equippedItems[(int)GE.EquipSlotType.WeaponLeft];
-            if (leftWeapon?.Equipment != null && leftWeapon.Equipment.EquipType == GE.EquipmentTypeMask.Weapon)
-                return leftWeapon;
-
-            return null;
-        }
-
-        private static float AverageOf(DamageRange range)
-        {
-            return (range.Min + range.Max) * 0.5f;
+            return table?.Stat != null ? table.Stat.Dex : 0;
         }
 
         private static void AccumulateFlat(GE.Stat stat, int value, ref float attackMin, ref float attackMax,

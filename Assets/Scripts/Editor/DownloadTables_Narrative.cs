@@ -19,19 +19,20 @@ namespace ARPG.Editor
     public partial class DownloadTables
     {
         // ARPG Tables 시트의 NarrativeContent·NarrativeReaction 탭 gid
-        private const string _narrativeContentSheet = "1817791258&range=A:M";
+        private const string _narrativeContentSheet = "1817791258&range=A:N";
         private const string _narrativeReactionSheet = "486265495&range=A:J";
         private const string _narrativePackPath = "Resources/Narrative/NarrativeContent.json";
 
         internal static readonly string[] NarrativeContentColumns =
         {
             "ContentId", "Name", "Kind", "TargetType", "TargetId", "IntroText", "SignText", "ResolvedText",
-            "GoalType", "TargetCount", "StartConditionGroupId", "Revision", "Enabled",
+            "GoalType", "TargetCount", "StartConditionGroupId", "Revision", "Enabled", "IntroTextFemale",
         };
         // 빈칸이면 기본값을 쓰는 선택 열 (§2.2): GoalType=Default, TargetCount=1, StartConditionGroupId=0, Revision=1, Enabled=true.
+        // IntroTextFemale(개인 사연의 여성 문구, NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §9.2.1) 빈칸 = 기본 문구를 쓴다.
         private static readonly string[] _narrativeContentOptional =
         {
-            "SignText", "ResolvedText", "GoalType", "TargetCount", "StartConditionGroupId", "Revision", "Enabled",
+            "SignText", "ResolvedText", "GoalType", "TargetCount", "StartConditionGroupId", "Revision", "Enabled", "IntroTextFemale",
         };
         internal static readonly string[] NarrativeReactionColumns =
         {
@@ -73,6 +74,7 @@ namespace ARPG.Editor
                     StartConditionGroupId = ParseNarrativeInt(row, "StartConditionGroupId", 0, where),
                     Revision = ParseNarrativeInt(row, "Revision", 1, where),
                     Enabled = ParseNarrativeBool(row, "Enabled", true, where),
+                    IntroTextFemale = row["IntroTextFemale"],
                 };
                 if (content.Enabled == true) pack.Contents.Add(content);
             }

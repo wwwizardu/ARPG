@@ -71,6 +71,8 @@ namespace ARPG.Npc
             saveData.LastSimGameTime = startGameTime;
             // 이주 시작 → 단기 목표는 빠짐 (NPC_OBJECTIVE_DESIGN §4.6). 대상이 옛 마을이라 다시 계산해도 돌아오지 않는다.
             DropObjectiveOnRelocation(entityId, saveData, startGameTime);
+            // 떠나는 제작자의 위탁품은 옛 마을 상점이 사들이고 정산을 끝낸다 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §7.2)
+            SettleConsignmentsOnDeparture(entityId, saveData);
             return true;
         }
 

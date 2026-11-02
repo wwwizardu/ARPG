@@ -144,7 +144,17 @@ ProfileElementDamage
     + SkillPageOnHitElementDamage
 ```
 
-치명타 확률은 정수 반올림하지 않고 `float`를 유지한다. Attack은 강화 반영 무기 치명타를, Spell은 `SkillTable.BaseCriRate`를 기본값으로 사용한다.
+양손 슬롯에 모두 무기가 있으면(쌍수) 두 무기의 강화 반영 값을 합성한 하나의 무기 수치를 쓴다. 무기 하나이거나 왼손이 방패면 그 무기 값 그대로다. 합성은 `WeaponHelper.GetCombinedWeaponStats` 한곳에서 하며 NPC 전투력도 같은 값을 쓴다(2026-11-02, `WEAPON_PROGRESSION_DESIGN.md` §쌍수 계산 초기안).
+
+```text
+쌍수 EnhancedWeaponElementDamage(최소·최대 각각) = (R + L) × 0.7
+쌍수 무기 치명타 = (R + L) / 2
+쌍수 EnhancedWeaponAPS = (R + L) / 2     // APS가 0인 무기는 평균에서 뺀다
+```
+
+합성 피해는 소수 그대로 다른 항과 더하고 속성별 % 증가까지 곱한 뒤 프로필 값으로 한 번만 반올림한다. 무기 하나일 때는 이전 정수 계산과 결과가 같다.
+
+치명타 확률은 정수 반올림하지 않고 `float`를 유지한다. Attack은 강화 반영 무기 치명타(쌍수면 두 무기 평균)를, Spell은 `SkillTable.BaseCriRate`를 기본값으로 사용한다.
 
 ```text
 FinalCrit = Clamp(
@@ -226,6 +236,7 @@ ProfileAPS
     * (1 + Sum(TagMatchedGlobalAttackSpeedIncrease) / 100)
 ```
 
+- 무기 두 개(쌍수)면 두 무기의 `EnhancedWeaponAPS` 평균을 쓴다.
 - 무기가 없거나 APS가 0 이하면 계산용 무기 APS는 `1.0`을 사용한다.
 - 최종 프로필 APS는 최소 `0.1`이다.
 - 실제 Start/Process/End 기본 시간은 프로필의 `1 / ProfileAPS` 비율로 함께 조정한다.
@@ -577,5 +588,5 @@ void OnHit(Vector2 hitPosition)
 
 ---
 
-**Last Updated**: 2026-08-22
-**Status**: 장비 옵션 글로벌화·공격 프로필 통합 구현, 무기 고유 강화 서비스와 플레이 모드 검증은 후속
+**Last Updated**: 2026-11-02
+**Status**: 장비 옵션 글로벌화·공격 프로필 통합 구현, 쌍수 무기 합성 구현(2026-11-02), 무기 고유 강화 서비스와 플레이 모드 검증은 후속

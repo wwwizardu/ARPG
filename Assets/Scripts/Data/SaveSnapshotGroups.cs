@@ -83,7 +83,8 @@ namespace ARPG.Data
             "ActiveBuildTasks" or "LastConstructionSimGameTime" or "LastConstructionTierCheckGameTime" => VillageSaveGroup.Construction,
             "PlacedObjects" or "PlacedObjectTypeIds" or "InitialDevelopmentApplied" or "AppliedGrowthMilestones" or "HasCampfire" => VillageSaveGroup.Facilities,
             "WallSegments" or "WallSegmentCount" or "CompletedWallSegments" or "WallPlanRequested" => VillageSaveGroup.Walls,
-            "MerchantStock" or "ShopTier" or "LastMerchantRollGameTime" or "MerchantRestockCycle" or "NpcPurchaseCycle" or "NpcPurchaseCount" or "LastNpcTradeGameTime" => VillageSaveGroup.Shop,
+            "MerchantStock" or "ShopTier" or "LastMerchantRollGameTime" or "MerchantRestockCycle" or "NpcPurchaseCycle" or "NpcPurchaseCount" or "LastNpcTradeGameTime" or
+                "OreStock" or "Consignments" or "ConsignmentProceeds" or "ShopEconomyCycle" => VillageSaveGroup.Shop,
             _ when field.EndsWith("Carry", StringComparison.Ordinal) || field.EndsWith("Timer", StringComparison.Ordinal) => VillageSaveGroup.Resources,
             _ when field.StartsWith("CurrentBuild", StringComparison.Ordinal) || field.StartsWith("FirstBuild", StringComparison.Ordinal) => VillageSaveGroup.Construction,
             _ => VillageSaveGroup.Identity,

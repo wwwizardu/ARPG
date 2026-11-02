@@ -42,6 +42,9 @@ namespace ARPG.Npc.Narrative
         // 단기 목표 (NPC_OBJECTIVE_DESIGN §8.2·§8.3): 진행 중 화제(극적 목표는 고정) / 결말 화제(일반) /
         // 목표 주인의 부탁(고정, 표시 뒤 부탁 인스턴스를 만든다) / 부탁 칸이 찬 동안의 진행 확인(고정).
         ObjectiveStatus, ObjectiveOutcome, ObjectiveRequest, ObjectiveRequestProgress,
+        // NPC 생활 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §9.2·§9.4): 생활 사연(제작 자랑·숙련 이정표·고생담, Personal) /
+        // 실제 채광·제작 기록 기반 대장장이·광부 대사(Flavor) / 장비 분실 소문(야망 소문 1개 규칙 D82에 포함).
+        LifeStory, WorkMood, EquipmentLostRumor,
     }
 
     /// <summary>대화 토픽 1건 — 시스템이 상태·백본에서 산출. LLM 없으면 BaseLine, 있으면 이 토픽을 풍부하게 서술.</summary>

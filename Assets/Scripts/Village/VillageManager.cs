@@ -460,6 +460,8 @@ namespace ARPG.Village
                 // NPC_AMBITION P1b: NPC 구매 원장 보정. 필드 없는 구 세이브는 초기값(-1/0/-1)으로 들어온다.
                 if (data.NpcPurchaseCount < 0)
                     data.NpcPurchaseCount = 0;
+                // NPC_OCCUPATIONS 1단계: 광석 재고·위탁 칸·미정산 대금 보정과 위탁품 테이블 참조 복원 (장비 종류는 저장하지 않는다)
+                RestoreOccupationShopOnLoad(data);
 
                 // V5 (§11.5): 가격 스냅샷이 없는 구 포맷 매물은 진열품을 유지하고 가격만
                 // TradeProfile로 보정한다 — 유실 없음. MerchantRestockCycle == -1(구 세이브)은
@@ -1558,6 +1560,20 @@ namespace ARPG.Village
             // SellRatioBp(구 퍼센트 컬럼)는 매각 가능 플래그로만 유지 — 가격은 TradeProfile이 정본 (V5 §8.3).
             if (item == null || item.BasePrice <= 0 || item.SellRatioBp <= 0) return -1;
 
+            // 광석은 상점 재고 상한(광종별 20개)까지만 사고, 판 만큼 재고에 쌓인다 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §7.1)
+            bool ore = ARPG.Npc.NpcOccupationRules.IsOre(item.Id);
+            if (ore == true)
+            {
+                EnsureMerchantStockFresh(villageId);
+                int room = GetOreStockRoom(v, item.Id);
+                if (room <= 0)
+                {
+                    AR.s.UI.SetNotify($"상점에 {item.Name}이(가) 가득해 더 사지 않습니다.");
+                    return -1;
+                }
+                amount = Mathf.Min(amount, room);
+            }
+
             // 1. 인벤토리 차감 (실패 시 atomic abort)
             if (AR.s.Player.Inventory.RemoveItem(slotIndex, amount, out _) == false) return -1;
 
@@ -1565,6 +1581,11 @@ namespace ARPG.Village
             //    장비는 등급·아이템 레벨 배율을 더 곱한다 (ITEM_DROP_BALANCE_DESIGN §9)
             int gold = GetPlayerSellPrice(villageId, slotItem) * amount;
             if (AR.s.Data?.Player != null) AR.s.Data.Player.Gold += gold;
+            if (ore == true)
+            {
+                AddOreStock(v, item.Id, amount);
+                _occupationShopCounters.PlayerOreSold += amount;
+            }
 
             // 3. 마을 Storage 부분 환원 (자원만)
             if (item.ReturnResourceType != 0 && item.ReturnRatioBp > 0)
@@ -1652,6 +1673,8 @@ namespace ARPG.Village
             float now = AR.s.Time.CurrentGameTime;
             VillageTradeProfile trade = ResolveTradeProfile(v);
             int cycle = VillageTradeStockRoller.GetRestockCycle(now, trade);
+            // 광석 재고 감소·위탁 기한 처리 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §7.1·§7.2). 매물 재롤과 별개로 회차마다 한 번.
+            ProcessShopEconomyCycle(v, cycle);
             if (v.MerchantRestockCycle == cycle && v.MerchantStock.Count > 0)
             { EnsureRecoveryPotionStock(v, trade, cycle); return; }
             if (v.MerchantRestockCycle < 0 && v.MerchantStock.Count > 0
@@ -1672,6 +1695,9 @@ namespace ARPG.Village
         {
             if (item == null || item.BasePrice <= 0) return -1;
             if (_villages.TryGetValue(villageId, out VillageData? v) == false) return -1;
+            // 광석은 그 마을 상점 재고에 따라 값이 오르내리고, 상한이면 사지 않는다 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §7.1, 플레이어도 같다)
+            if (ARPG.Npc.NpcOccupationRules.IsOre(item.Id) == true)
+                return GetOreShopBuyPrice(v, item);
 
             VillageTradeProfile trade = ResolveTradeProfile(v);
             int price = VillageTradeStockRoller.GetMerchantBuyPrice(trade, CreateTradeItemInfo(item));

@@ -82,22 +82,11 @@ namespace ARPG.Systems
                 AR.s.Data.GetModifiers(ownerEntityId),
                 table.Tags);
 
-            // 무기 스탯 (Attack 태그일 때만)
-            int wPhysMin = 0, wPhysMax = 0;
-            int wFireMin = 0, wFireMax = 0;
-            int wIceMin = 0, wIceMax = 0;
-            int wLightMin = 0, wLightMax = 0;
-            int wPoisMin = 0, wPoisMax = 0;
-            int weaponCriRate = 0;
-            if (isAttackSkill)
-            {
-                WeaponHelper.GetWeaponDamage(ownerEntityId, GE.DamageType.Physics, out wPhysMin, out wPhysMax);
-                WeaponHelper.GetWeaponDamage(ownerEntityId, GE.DamageType.Fire, out wFireMin, out wFireMax);
-                WeaponHelper.GetWeaponDamage(ownerEntityId, GE.DamageType.Ice, out wIceMin, out wIceMax);
-                WeaponHelper.GetWeaponDamage(ownerEntityId, GE.DamageType.Lightning, out wLightMin, out wLightMax);
-                WeaponHelper.GetWeaponDamage(ownerEntityId, GE.DamageType.Poison, out wPoisMin, out wPoisMax);
-                weaponCriRate = WeaponHelper.GetWeaponCriRate(ownerEntityId);
-            }
+            // 무기 스탯 (Attack 태그일 때만). 무기 두 개면 쌍수 합성 값이다 (WEAPON_PROGRESSION_DESIGN §쌍수 계산 초기안).
+            // 합성 피해는 실수 그대로 더하고 속성별 증가까지 곱한 뒤 한 번만 반올림한다.
+            CombinedWeaponStats weapon = isAttackSkill == true
+                ? WeaponHelper.GetCombinedWeaponStats(ownerEntityId)
+                : default;
 
             // SkillTable의 DamageMin/Max는 DamageType 속성에만 합산
             int tableMin = table.DamageMax > 0 ? table.DamageMin : 0;
@@ -121,30 +110,19 @@ namespace ARPG.Systems
 
             SkillAttackProfileComponent profile;
 
-            profile.PhysAddedMin   = wPhysMin  + offensive.PhysMin      + tPhysMin  + onHit.PhysDamageAddBonusMin;
-            profile.PhysAddedMax   = wPhysMax  + offensive.PhysMax      + tPhysMax  + onHit.PhysDamageAddBonusMax;
-            profile.FireAddedMin   = wFireMin  + offensive.FireMin      + tFireMin  + onHit.FireDamageAddBonusMin;
-            profile.FireAddedMax   = wFireMax  + offensive.FireMax      + tFireMax  + onHit.FireDamageAddBonusMax;
-            profile.IceAddedMin    = wIceMin   + offensive.IceMin       + tIceMin   + onHit.IceDamageAddBonusMin;
-            profile.IceAddedMax    = wIceMax   + offensive.IceMax       + tIceMax   + onHit.IceDamageAddBonusMax;
-            profile.LightAddedMin  = wLightMin + offensive.LightningMin + tLightMin + onHit.LightningDamageAddBonusMin;
-            profile.LightAddedMax  = wLightMax + offensive.LightningMax + tLightMax + onHit.LightningDamageAddBonusMax;
-            profile.PoisonAddedMin = wPoisMin  + offensive.PoisonMin    + tPoisMin  + onHit.PoisonDamageAddBonusMin;
-            profile.PoisonAddedMax = wPoisMax  + offensive.PoisonMax    + tPoisMax  + onHit.PoisonDamageAddBonusMax;
-
             // 속성별 피해 % 증가는 합계 전체에 곱한다 (MONSTER_AFFIX_DESIGN.md §6.2). 증가가 없으면 값이 그대로다.
-            profile.PhysAddedMin   = ApplyDamageIncrease(profile.PhysAddedMin,   offensive.PhysDamageIncrease);
-            profile.PhysAddedMax   = ApplyDamageIncrease(profile.PhysAddedMax,   offensive.PhysDamageIncrease);
-            profile.FireAddedMin   = ApplyDamageIncrease(profile.FireAddedMin,   offensive.FireDamageIncrease);
-            profile.FireAddedMax   = ApplyDamageIncrease(profile.FireAddedMax,   offensive.FireDamageIncrease);
-            profile.IceAddedMin    = ApplyDamageIncrease(profile.IceAddedMin,    offensive.IceDamageIncrease);
-            profile.IceAddedMax    = ApplyDamageIncrease(profile.IceAddedMax,    offensive.IceDamageIncrease);
-            profile.LightAddedMin  = ApplyDamageIncrease(profile.LightAddedMin,  offensive.LightningDamageIncrease);
-            profile.LightAddedMax  = ApplyDamageIncrease(profile.LightAddedMax,  offensive.LightningDamageIncrease);
-            profile.PoisonAddedMin = ApplyDamageIncrease(profile.PoisonAddedMin, offensive.PoisonDamageIncrease);
-            profile.PoisonAddedMax = ApplyDamageIncrease(profile.PoisonAddedMax, offensive.PoisonDamageIncrease);
+            profile.PhysAddedMin   = ToProfileDamage(weapon.Physics.Min   + offensive.PhysMin      + tPhysMin  + onHit.PhysDamageAddBonusMin,      offensive.PhysDamageIncrease);
+            profile.PhysAddedMax   = ToProfileDamage(weapon.Physics.Max   + offensive.PhysMax      + tPhysMax  + onHit.PhysDamageAddBonusMax,      offensive.PhysDamageIncrease);
+            profile.FireAddedMin   = ToProfileDamage(weapon.Fire.Min      + offensive.FireMin      + tFireMin  + onHit.FireDamageAddBonusMin,      offensive.FireDamageIncrease);
+            profile.FireAddedMax   = ToProfileDamage(weapon.Fire.Max      + offensive.FireMax      + tFireMax  + onHit.FireDamageAddBonusMax,      offensive.FireDamageIncrease);
+            profile.IceAddedMin    = ToProfileDamage(weapon.Ice.Min       + offensive.IceMin       + tIceMin   + onHit.IceDamageAddBonusMin,       offensive.IceDamageIncrease);
+            profile.IceAddedMax    = ToProfileDamage(weapon.Ice.Max       + offensive.IceMax       + tIceMax   + onHit.IceDamageAddBonusMax,       offensive.IceDamageIncrease);
+            profile.LightAddedMin  = ToProfileDamage(weapon.Lightning.Min + offensive.LightningMin + tLightMin + onHit.LightningDamageAddBonusMin, offensive.LightningDamageIncrease);
+            profile.LightAddedMax  = ToProfileDamage(weapon.Lightning.Max + offensive.LightningMax + tLightMax + onHit.LightningDamageAddBonusMax, offensive.LightningDamageIncrease);
+            profile.PoisonAddedMin = ToProfileDamage(weapon.Poison.Min    + offensive.PoisonMin    + tPoisMin  + onHit.PoisonDamageAddBonusMin,    offensive.PoisonDamageIncrease);
+            profile.PoisonAddedMax = ToProfileDamage(weapon.Poison.Max    + offensive.PoisonMax    + tPoisMax  + onHit.PoisonDamageAddBonusMax,    offensive.PoisonDamageIncrease);
 
-            int baseCritRate = isAttackSkill == true ? weaponCriRate : table.BaseCriRate;
+            float baseCritRate = isAttackSkill == true ? weapon.CriRate : table.BaseCriRate;
             profile.TotalCritRate = Mathf.Clamp(
                 (baseCritRate + offensive.CharacterCritFlat + onHit.CriRateBonus)
                 * (1f + offensive.CritIncrease / 100f),
@@ -160,7 +138,7 @@ namespace ARPG.Systems
             profile.AttackSpeedPerSecond = 0f;
             if (isAttackSkill == true)
             {
-                float weaponAS = WeaponHelper.GetWeaponAttackSpeed(ownerEntityId);
+                float weaponAS = weapon.AttackSpeed;
                 if (weaponAS <= 0f)
                     weaponAS = 1f;
 
@@ -180,10 +158,11 @@ namespace ARPG.Systems
             AR.s.Component.SetComponent(skillEntityId, profile);
         }
 
-        private static int ApplyDamageIncrease(int value, int increasePercent)
+        // 정수 합계(무기 하나)면 예전 정수 경로와 같은 값이다. 쌍수 합성의 소수는 여기서 한 번만 반올림한다.
+        private static int ToProfileDamage(float value, int increasePercent)
         {
             if (increasePercent == 0)
-                return value;
+                return Mathf.RoundToInt(value);
 
             return Mathf.Max(0, Mathf.RoundToInt(value * (1f + increasePercent / 100f)));
         }

@@ -3,6 +3,7 @@
 > 상태: 지원 계열·장착·쌍수·주문 무기 성장과 초기 기준 확정, 공통 근접 스킬·혼합 쌍수 허용 조건과 무기 중심 공격 방향 확정, 책별 스킬 레벨·골드 성장 방식 확정 및 구현 계획 작성, 아이템별 성능·스킬별 피해 계수와 범위 적용·성장 목표는 초안, 최종 밸런스와 콘텐츠 배치 미확정, 구현 전
 > 정리일: 2026-10-05
 > 갱신일: 2026-10-06 — 대표 성장 시나리오·계산 규칙 점검과 초기 설계 정리
+> 갱신일: 2026-11-02 — 쌍수 계산 초기안의 피해·공속·기본 치명타 합성 구현 (§쌍수 구현의 현행 기준). 양손 제한·도달거리 평균은 구현 전
 > 근거: 사용자 대화에서 무기별 특색과 계열별 성장 장비의 필요성을 논의하고 정리를 요청했다. 이후 표창 제외, 지정 계열의 양손 장착과 보조 장비 금지, 한손 무기의 쌍수 허용과 아래 쌍수 계산 초기안을 확정했다. 주문 무기는 공격·주문의 현행 계산 차이를 유지하며 고정 Implicit으로 성장시키는 방식과 지팡이·완드의 초기 기준을 확정했다. 범위 계산식의 정본은 `WEAPON_SKILL_RANGE_DESIGN.md`다.
 
 플레이어가 선택한 무기 계열을 유지하면서 장비를 교체해 성장할 수 있도록, 지원하는 각 계열에 성장 구간별 장비를 마련한다. 기존 장비를 계열과 구간에 먼저 배치하고 빈 구간에 필요한 장비를 추가한다. 이 문서는 무기 성장의 방향과 현행 장비의 공백을 정리하며, 코드나 테이블을 변경한 결과를 뜻하지 않는다.
@@ -52,7 +53,14 @@
 
 ## 쌍수 구현의 현행 기준
 
-현행 보조 슬롯은 `Weapon | Shield`를 허용하지만 무기 기본 능력 조회는 오른손을 우선하고 오른손 무기가 없을 때만 왼손을 사용한다. 이 경로만으로 양쪽 한손 무기의 피해·속도·도달거리를 각각 반영하는 쌍수 공격이 구현된 것으로 보지 않는다. 확정 장착 규칙과 쌍수 전투 계산은 별도로 구현해야 한다. [src: Assets/Scripts/Common/Utility/EquipHelper.cs, Assets/Scripts/Common/Utility/WeaponHelper.cs]
+2026-11-02 구현: 양손 슬롯에 모두 무기가 있으면 위 식으로 속성별 최소·최대 피해 (R + L) × 0.7, 공속·무기 기본 치명타 평균을 합성한다. 무기 하나이거나 왼손이 방패면 그 무기 수치를 그대로 쓴다. 합성은 `WeaponHelper.GetCombinedWeaponStats` 한곳에서 계산하고 실제 공격 프로필과 NPC 전투력(`NpcPowerEvaluator`)이 같은 값을 쓴다. 합성 피해는 소수 그대로 다른 추가 피해와 더하고 속성별 % 증가까지 곱한 뒤 공격 프로필에서 한 번만 반올림한다(`Mathf.RoundToInt`). 무기 하나일 때의 결과는 이전과 같다. [src: Assets/Scripts/Common/Utility/WeaponHelper.cs, Assets/Scripts/Common/System/System_SkillAttackProfileCalculation.cs, Assets/Scripts/Npc/NpcPowerEvaluator.cs]
+
+검증(2026-11-02, 새 게임 세이브): 무기 없음·한손검 하나·왼손 무기만·한손검 + 방패·같은 무기 둘(단도 + 단도)·다른 무기 둘(단도 + 전쟁 검)의 6경우에서 합성값, 실제 공격 프로필의 피해·공속·치명타, NPC 공격 점수가 모두 위 식과 일치했다. 예: 단도(2~5, 1.40, 10%) 두 자루 → 2.8~7.0, 1.40, 10%, 단도 + 전쟁 검(7~13, 1.05, 4%) → 6.3~12.6, 1.225, 7%. NPC 전투력 영향은 [NPC_AMBITION_DESIGN.md](../npc/NPC_AMBITION_DESIGN.md) §5.1 재정규화 항목에 적었다.
+
+아직 구현하지 않은 것:
+- 양손 계열 분류와 보조 슬롯 금지: 무기 종류 구분이 없어 무기 두 개면 계열과 관계없이 합성한다. 보조 슬롯은 `Weapon | Shield`를 그대로 허용한다. [src: Assets/Scripts/Common/Utility/EquipHelper.cs]
+- 도달거리 배율 평균: 무기 도달거리 수치 자체가 아직 없다.
+- 장비 비교 툴팁의 합성 결과 미리보기.
 
 ## 정리한 성장 원칙
 
@@ -1309,7 +1317,7 @@ Base는 기존 InitBaseMods가 아이템별 고정값과 Tier 0을 사용하므�
 
 NPC의 기본 아이템 구매·전리품 판매·플레이어 목록 미사용·책 미사용 정책을 유지한다. 현재 NpcEquip 5세트는 ItemId 4·6·11~21 중 13종을 사용한다. 그중 전쟁 검 6은 1/1→2/10 재배치 대상이므로 시작 장비 강도와 상점 Tier 접근을 별도 점검해야 한다. 공유 Base/Implicit의 갱신은 기존 장착 장비·초기 전투력·구매 비교에도 영향을 주며, 플레이어 장비 성장표만 검증하고 NPC 영향 없음으로 판정하지 않는다. [src: Assets/_BinaryData/TableData/NpcEquipTable.bytes, Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §5·§7]
 
-NpcPowerEvaluator는 현행 오른손 우선 무기와 자체 가중치로 전투력을 계산한다. 새 쌍수 합성과 일반 공격 증가·양손 옵션 예산의 평가를 실제 사용 스킬과 맞추는 보강이 필요하다. 주문을 쓰지 않는 NPC에게 마나·주문 증가를 공격 이득으로 계산하거나 플레이어 책 레벨을 NPC SkillLevel에 그대로 덮어쓰지 않는다. 기본 성능 이관 후 InitialPower·상한 편차·Gold의 처리도 기존 이관 경로와 대조하고 임의 상한 완화는 하지 않는다. [src: Assets/Scripts/Npc/NpcPowerEvaluator.cs, Assets/Scripts/Manager/NpcManager_Ambition.cs, Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §6·§7]
+NpcPowerEvaluator는 실제 공격 프로필과 같은 쌍수 합성 무기 수치(2026-11-02 구현)와 자체 가중치로 전투력을 계산한다. 일반 공격 증가·양손 옵션 예산의 평가를 실제 사용 스킬과 맞추는 보강이 필요하다. 주문을 쓰지 않는 NPC에게 마나·주문 증가를 공격 이득으로 계산하거나 플레이어 책 레벨을 NPC SkillLevel에 그대로 덮어쓰지 않는다. 기본 성능 이관 후 InitialPower·상한 편차·Gold의 처리도 기존 이관 경로와 대조하고 임의 상한 완화는 하지 않는다. [src: Assets/Scripts/Npc/NpcPowerEvaluator.cs, Assets/Scripts/Manager/NpcManager_Ambition.cs, Docs/npc/NPC_SHOP_EQUIPMENT_DESIGN.md §6·§7]
 
 미래 검증은 기존 BasicItemDiagnostics의 저장/라이브 상태와 ItemEnchantmentDiagnostics의 후보/트랜잭션 진단을 확장한다. 장비 분류·구간 커버리지·행 참조·고정 Min=Max·단일 추가 피해·구현 전 답변한 재화/Tier 정책·양손 1회 예산·약한 시작 옵션 유지·NPC 평가·모든 소유 경로의 저장 복구를 확인한다. 코드 반영 때 필요한 Runtime/Editor 컴파일과 현재 Unity 프로젝트의 전투/저장 검증을 진행하며 새 검증 프로젝트나 상시 전수 스캔은 만들지 않는다. [src: Assets/Scripts/Editor/BasicItemDiagnostics.cs, Assets/Scripts/Editor/ItemEnchantmentDiagnostics.cs]
 

@@ -2,7 +2,7 @@
 name: wiki-map
 description: Docs/ 전체 주제를 얕고 넓게 조망하는 지도 페이지. 주제별 상세 위키 페이지의 진입점.
 type: map
-last_updated: 2026-10-31
+last_updated: 2026-11-03
 sources:
   - Wiki/current_status.md
   - Docs/map/WORLD_ORE_VEIN_PLAN.md
@@ -46,7 +46,7 @@ sources:
 |------|-----------|----------|:------:|:----------:|
 | **current_status** → [current_status.md](current_status.md) | 2026-10-31 기준 구현 현황·미검증 항목·권장 재개 순서 [src: Wiki/current_status.md] | 최신 관련 Docs + 코드·테이블 대조 | — | 상 |
 | **overview** | 게임 컨셉(3대 축)과 시스템별 구현 현황·로드맵 | `Docs/overview/` 2장 (gameOverview, implementationStatus) + `Docs/README.md`(대시보드) | 하 | 하 |
-| **combat** → [combat.md](combat.md) | 장비 옵션·마법부여·공격 프로필, 아이템 레벨과 옵션 티어 T1~T12(구현, 2026-10-11), 장비 등급·품질·드롭 구간표·수량/희귀도·마법부여 아이템 레벨 티어·진화/품질 작업·던전 드롭·판매가 배율(구현, 2026-10-21, 플레이 확인 전), 무기 범위·장착·쌍수·표창 제외·주문 무기 성장·책별 스킬 레벨과 골드 성장의 확정 방식(미구현), 계열별 기준 성능과 장비 공백 정리, 명중 시 넉백·당기기(구현, 2026-10-12), 인벤토리 장비 비교 툴팁(구현, 2026-10-13), 땅 위 돌진·실행 단계 넉백 저항과 멧돼지 돌진(구현, 2026-10-13), 플레이어 레벨·능력치·정확도 대 회피 적중 판정·3×3 참 판(구현, 2026-10-24, 플레이 확인 전), 참 일반·마법·희귀 등급과 접두·접미·모양별 옵션·모양별 참 값 표(구현, 2026-10-25, 플레이 확인 전), 몬스터 소환과 고블린 주술사의 쿨타임 없는 긴 시전 화염탄 + 보조 소환(구현, 2026-10-25, 플레이 확인 전) [src: Wiki/combat.md, Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md, Docs/combat/SKILL_DESIGN.md §6.10·§6.11·§6.12, Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md, Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md, Docs/combat/ITEM_DROP_BALANCE_DESIGN.md, Docs/combat/WEAPON_SKILL_RANGE_DESIGN.md, Docs/combat/WEAPON_PROGRESSION_DESIGN.md] | `Docs/combat/` + 마법부여·전투 코드와 테이블 [src: Docs/combat/, Assets/Scripts/Item/] | 상 | 상 |
+| **combat** → [combat.md](combat.md) | 장비 옵션·마법부여·공격 프로필, 아이템 레벨과 옵션 티어 T1~T12(구현, 2026-10-11), 장비 등급·품질·드롭 구간표·수량/희귀도·마법부여 아이템 레벨 티어·진화/품질 작업·던전 드롭·판매가 배율(구현, 2026-10-21, 플레이 확인 전), 무기 범위·장착·쌍수·표창 제외·주문 무기 성장·책별 스킬 레벨과 골드 성장의 확정 방식(미구현), 쌍수 무기 피해·공속·치명타 합성(구현, 2026-11-02, 양손 제한·도달거리 평균은 미구현), 계열별 기준 성능과 장비 공백 정리, 명중 시 넉백·당기기(구현, 2026-10-12), 인벤토리 장비 비교 툴팁(구현, 2026-10-13), 땅 위 돌진·실행 단계 넉백 저항과 멧돼지 돌진(구현, 2026-10-13), 플레이어 레벨·능력치·정확도 대 회피 적중 판정·3×3 참 판(구현, 2026-10-24, 플레이 확인 전), 참 일반·마법·희귀 등급과 접두·접미·모양별 옵션·모양별 참 값 표(구현, 2026-10-25, 플레이 확인 전), 몬스터 소환과 고블린 주술사의 쿨타임 없는 긴 시전 화염탄 + 보조 소환(구현, 2026-10-25, 플레이 확인 전) [src: Wiki/combat.md, Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md, Docs/combat/SKILL_DESIGN.md §6.10·§6.11·§6.12, Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md, Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md, Docs/combat/ITEM_DROP_BALANCE_DESIGN.md, Docs/combat/WEAPON_SKILL_RANGE_DESIGN.md, Docs/combat/WEAPON_PROGRESSION_DESIGN.md] | `Docs/combat/` + 마법부여·전투 코드와 테이블 [src: Docs/combat/, Assets/Scripts/Item/] | 상 | 상 |
 | **skill_aim** → [skill_aim.md](skill_aim.md) | 커서 조준 추적·효과 커밋, 플레이어 방향 화살표 View, 스킬 사용 중 이동 감속, 몬스터 스킬도 표의 조준 방식으로 대상 추적(2026-10-13) [src: Wiki/skill_aim.md, Docs/combat/POE2_CURSOR_TRACKING_PLAN.md §15] | `Docs/combat/POE2_CURSOR_TRACKING_PLAN.md` + 조준·스킬·이동 코드 | 중 | 상 |
 | **skill_propagation** → [skill_propagation.md](skill_propagation.md) | 연쇄·분열 공용 전파 런타임, 대상에 붙는 대기 주문, Chain Lightning 수직 슬라이스 [src: Wiki/skill_propagation.md] | `Docs/combat/SKILL_PROPAGATION_IMPLEMENTATION_PLAN.md` + `Skill/Propagation/`·전파 시스템 코드 | 하 | 상 |
 | **ai_monster** → [monster_spawn_runtime.md](monster_spawn_runtime.md) | 몬스터 AI·데이터 주도 종 풀, 거리 기반 스폰/Warm 청크 캐시(구현·대조 완료), 공격 예고(Phase 0~2 구현), 스폰 슬롯 밖에서 주인을 따라 사라지는 소환 몬스터(2026-10-25, 상세는 combat) [src: Wiki/monster_spawn_runtime.md, Docs/combat/MONSTER_ATTACK_TELEGRAPH_DESIGN.md 상태, Docs/combat/SKILL_DESIGN.md §6.12] | `Docs/ai_monster/` 2장 + 런타임 스폰 제안 | 중 | 상 |

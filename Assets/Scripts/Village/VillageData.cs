@@ -124,6 +124,22 @@ namespace ARPG.Village
         // 재입고 롤의 Clear와 함께 사라진다.
         public float LastNpcTradeGameTime = -1f;
 
+        // NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §7 — 상점 광석 재고·위탁 칸·미정산 위탁 대금. 비어 있으면 저장하지 않는다 (Shop 묶음).
+        // 광석 재고: 광석 ItemId → 개수 (광종별 상한 20). 가격은 개수에서 계산하므로 저장하지 않는다.
+        public Dictionary<int, int> OreStock = new();
+        // NPC 제작품 위탁 칸 (마을당 8칸, 제작자당 2개). 재입고 때 지우지 않는다.
+        public List<VillageConsignment> Consignments = new();
+        // 팔렸지만 제작자가 아직 받지 않은 대금 (다음 상점 거래 때 정산)
+        public List<VillageConsignmentProceeds> ConsignmentProceeds = new();
+        // 광석 재고 감소·위탁 기한 처리를 마친 재입고 회차. -1 = 처리한 적 없음.
+        [System.ComponentModel.DefaultValue(-1)]
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public int ShopEconomyCycle = -1;
+
+        public bool ShouldSerializeOreStock() => OreStock != null && OreStock.Count > 0;
+        public bool ShouldSerializeConsignments() => Consignments != null && Consignments.Count > 0;
+        public bool ShouldSerializeConsignmentProceeds() => ConsignmentProceeds != null && ConsignmentProceeds.Count > 0;
+
         [JsonIgnore]
         public List<int> NpcEntityIds = new();
 

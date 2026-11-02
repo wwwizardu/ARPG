@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using Newtonsoft.Json;
 
 namespace ARPG.Npc.Narrative
@@ -34,6 +35,19 @@ namespace ARPG.Npc.Narrative
         RecentWound = 4,
         // NamedThreat 탭의 템플릿 Id (NAMED_THREAT_DESIGN §11.3)
         NamedThreat = 5,
+        // 개인 사연·생활 대사 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §9.2.1). PersonalStory 행에서만 쓰고 TargetId = 상황 번호다.
+        // 분실과 구매 (1 못 채움, 2 위탁 제작품, 3 상점 기본 장비, 4 만든 사람이 이미 죽음)
+        EquipmentLoss = 6,
+        // 제작 자랑 (1 팔림, 2 잃은 이웃을 보고 만든 것을 그 사람이 삼)
+        CraftSold = 7,
+        // 숙련 이정표 (1 처음 주석·철을 캠, 2 처음 철 장비를 만듦)
+        SkillMilestone = 8,
+        // 고생담 (1 채운 뒤, 2 제작품으로 채운 뒤, 3 아직 빈 칸·매물 없음, 4 아직 빈 칸·돈 부족)
+        Hardship = 9,
+        // 장비 분실 소문 (1 잃은 걸 들음, 2 제작품을 산 걸 들음)
+        EquipmentLossRumor = 10,
+        // 대장장이·광부 대사 (1 최근 제작, 2 재료 없음, 3 위탁품이 안 팔림, 4 최근 채광, 5 상점이 광석을 안 받음, 6 광석값이 좋음)
+        WorkMood = 11,
     }
 
     /// <summary>진행 방식 (§2.2). DungeonRumor의 Default 목표는 그 던전의 보스 처치(던전 종료)다.</summary>
@@ -179,6 +193,14 @@ namespace ARPG.Npc.Narrative
         public int StartConditionGroupId;
         public int Revision = 1;
         public bool Enabled = true;
+        // 여성 NPC가 말할 때의 IntroText (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §9.2.1, 해요체). 개인 사연 행만 쓰고 비면 IntroText를 쓴다.
+        // 빈 값은 쓰지 않으므로 이 칸이 생기기 전 정의 스냅샷의 해시가 바뀌지 않는다.
+        [DefaultValue(""), JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public string IntroTextFemale = string.Empty;
+
+        /// <summary>화자 성별에 맞는 문구. 여성 문구가 비었으면 기본 문구.</summary>
+        public string GetIntroText(bool female) =>
+            female == true && string.IsNullOrWhiteSpace(IntroTextFemale) == false ? IntroTextFemale : IntroText;
     }
 
     /// <summary>

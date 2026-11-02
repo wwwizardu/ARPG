@@ -237,6 +237,18 @@ namespace ARPG.Data
         [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
         public int ItemLevel;
 
+        /// <summary>
+        /// 제작자 기록 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §9.3). 만든 NPC의 EntityId와 이름 스냅샷 — 제작자가 죽어도 이름을 말할 수 있다.
+        /// 0/null = 제작품 아님(상점·시작 장비·드롭). 기본 아이템의 "행 번호만 저장"과 별개로 저장되어 제작품만 크기가 조금 는다.
+        /// </summary>
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public int MakerNpcId;
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public string? MakerName;
+
+        [JsonIgnore]
+        public bool HasMaker => MakerNpcId != 0;
+
         // 테이블 분류(Category)에서 정해지는 계산값 — 저장하지 않고 OnLoadCompleted에서 다시 계산한다 (D122).
         [JsonIgnore] public GE.EquipmentTypeMask EquipType { get; set; }
 

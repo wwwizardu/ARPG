@@ -165,6 +165,23 @@ namespace ARPG.Systems
                     continue;
                 }
 
+                if (activity.Kind == NpcActivityKind.Mining)
+                {
+                    // 채광 종료 1회 판정 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §5.5). 진단과 같은 공용 메서드. 원정처럼 걸어 들어온다.
+                    arrivedFrom = GetExpeditionFromPosition(activity);
+                    arrived = true;
+                    AR.s.Npc.ResolveMiningEnd(entityId, saveData, transitionTime, worldSeed);
+                    AR.s.Npc.ApplyExpeditionEndPresentation(entityId);
+                    continue;
+                }
+
+                if (activity.Kind == NpcActivityKind.Crafting)
+                {
+                    // 제작 종료 1회 판정 (§6.1). 마을 Forge의 제자리 활동이다.
+                    AR.s.Npc.ResolveCraftingEnd(entityId, saveData, transitionTime, worldSeed);
+                    continue;
+                }
+
                 if (activity.Kind == NpcActivityKind.Relocate)
                 {
                     // 이주 도착 (D140): 소속·마을 명단을 목적지로 옮긴다. 진단과 같은 공용 메서드.
@@ -236,16 +253,19 @@ namespace ARPG.Systems
                     kind = NpcActivityKind.Rest;   // 후보 판정 뒤 슬롯이 사라진 드문 경우 — 쉬고 다시 고른다
             }
 
-            bool isExpedition = NpcActivityResolver.IsExpedition(kind);
-            activity.Kind = kind;
-            // 휴식·거래는 제자리 활동이므로 Idle 표현을 유지하고, 원정(Hunt·Delve)만 Venturing으로 표시한다.
+            // 원정(Hunt·Delve)과 채광은 마을 밖 왕복이라 Venturing, 휴식·거래·제작은 제자리 활동이라 Idle 표현을 유지한다.
             // 거래는 P1에서 상점으로 이동하는 연출이 없다 (D39) — 화면 안 NPC도 상태만 Trade로 바뀌고 기본 AI를 유지한다.
+            bool isExpedition = NpcActivityResolver.IsVenturing(kind);
+            activity.Kind = kind;
             activity.Phase = isExpedition ? NpcActivityPhase.Venturing : NpcActivityPhase.Idle;
             activity.TargetKey = kind switch
             {
                 NpcActivityKind.Hunt => "hunt",
                 NpcActivityKind.Trade => "trade",
                 NpcActivityKind.DungeonDelve => delveDungeonId,
+                NpcActivityKind.Mining => "mine",
+                // 제작은 시작할 때의 수요(장비·빈 칸 NPC)를 고정한다 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §6.2)
+                NpcActivityKind.Crafting => AR.s.Npc.GetCraftingTargetKey(entityId, saveData),
                 _ => "rest",
             };
             activity.PhaseStartedGameTime = startGameTime;

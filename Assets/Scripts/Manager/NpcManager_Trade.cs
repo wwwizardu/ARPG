@@ -65,9 +65,17 @@ namespace ARPG.Npc
             report.ShopAvailable = true;
             saveData.EnsureSlotsInitialized();
             EnsureAmbitionInitialized(entityId, saveData);
+            EnsureLifeSkillsInitialized(entityId, saveData);
 
+            // NPC 생활 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §7): 위탁 대금 정산 → 판매(광석은 재고 기반) → 제작품 위탁 → 제작용 광석 구매
+            // → 빈 칸 보충(회차 한도 밖) → 업그레이드(위탁품 포함). 한 번의 거래에서 장비는 한 번만 산다.
+            SettleConsignmentProceeds(entityId, saveData, village);
             SellInventoryToShop(entityId, saveData, villageId, ref report);
-            BuyUpgradeFromShop(entityId, saveData, village, ref report);
+            ConsignCraftedItems(entityId, saveData, village, ref report);
+            BuyOreForCrafting(entityId, saveData, village);
+            TryRefillLostSlot(entityId, saveData, village, ref report);
+            if (report.Bought == false)
+                BuyUpgradeFromShop(entityId, saveData, village, ref report);
             // 거래 종료 → 단기 목표: 장비 마련 이룸·계기·같은 종류 갱신 (NPC_OBJECTIVE_DESIGN §4.6·§5.2)
             NotifyObjectiveTradeEnded(entityId, saveData, report, AR.s.Time.CurrentGameTime);
             return report;
@@ -103,6 +111,9 @@ namespace ARPG.Npc
             bool dungeonWound = expedition == NpcActivityKind.DungeonDelve && string.IsNullOrEmpty(dungeonId) == false;
             if (severe == true)
             {
+                // 중상의 30%는 장착한 금속 장비 1개를 잃는다 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §4.3). 부상 기록과 같은 시각으로 남겨
+                // 부상 사연이 "검까지 잃었지"로 이어진다. 난수는 파티원도 각자의 EntityId로 굴린다.
+                TryApplyExpeditionEquipmentLoss(entityId, saveData, seedGameTime, worldSeed, outcomeGameTime);
                 AddSevereWoundDeed(entityId, outcomeGameTime, dungeonWound == true ? dungeonId : null);
                 // 던전 원정 중상 → 설욕 판정 (NPC_OBJECTIVE_DESIGN §6.1, 중상 Deed를 남긴 직후)
                 if (dungeonWound == true)
@@ -168,6 +179,16 @@ namespace ARPG.Npc
             MarkSaveDirty(entityId, NpcSaveGroup.Inventory | NpcSaveGroup.Wallet);
             // 실체화 중 장착을 미뤄 둔 업그레이드 후보는 팔지 않는다.
             _deferredPurchaseUpgradeItemIds.TryGetValue(entityId, out List<int>? deferred);
+            _deferredRefillItemIds.TryGetValue(entityId, out int deferredRefill);
+            VillageData? village = AR.s.Village.GetVillage(villageId);
+            // 제작 수요가 있으면 그 광석은 다음 제작 1회분(3개)을 남긴다 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §5.5, 2026-11-01 결정)
+            int reserveOreId = 0;
+            int reserveLeft = 0;
+            if (village != null && TryGetCraftDemand(entityId, saveData, village, out SmithingRecipe demand, out _) == true)
+            {
+                reserveOreId = demand.OreItemId;
+                reserveLeft = NpcOccupationRules.OresPerCraft;
+            }
 
             for (int i = 0; i < saveData.Inventory.Count; i++)
             {
@@ -176,6 +197,16 @@ namespace ARPG.Npc
                     continue;
                 if (deferred != null && deferred.Contains(item.ItemInstanceId) == true)
                     continue;
+                if (deferredRefill != 0 && item.ItemInstanceId == deferredRefill)
+                    continue;
+                // 내 제작품은 일반 매각(매입가 40%) 대신 위탁으로 내보낸다 (§2.3) — ConsignCraftedItems가 맡는다
+                if (IsOwnUnconsignedCraft(entityId, item) == true)
+                    continue;
+                if (village != null && NpcOccupationRules.IsOre(item.Id) == true)
+                {
+                    SellOreToShop(entityId, saveData, village, i, item, ref reserveLeft, reserveOreId, ref report);
+                    continue;
+                }
 
                 int price = AR.s.Village.GetNpcSellPrice(villageId, item);
                 if (price < 0)
@@ -255,7 +286,7 @@ namespace ARPG.Npc
 
             float currentPower = GetNpcPower(entityId);
             int bestIndex = FindBestShopUpgrade(entityId, saveData, village, out int bestPrice, out float bestPower,
-                out GE.EquipSlotType bestSlot, out int eligibleCount, out int overBudgetCount);
+                out GE.EquipSlotType bestSlot, out int eligibleCount, out int overBudgetCount, out bool fromConsignment);
 
             if (bestIndex < 0)
             {
@@ -266,8 +297,25 @@ namespace ARPG.Npc
 
             int npcGoldBefore = saveData.Gold;
             int villageGoldBefore = AR.s.Village.GetVillageGold(villageId);
-            ItemData? bought = AR.s.Village.CommitNpcPurchase(village, bestIndex, entityId, GetDisplayName(entityId),
-                bestPrice);
+            ItemData? bought;
+            if (fromConsignment == true)
+            {
+                // 위탁품도 업그레이드 후보다 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §7.2). 일반 구매처럼 회차당 한도·상점 간격에 센다.
+                bought = AR.s.Village.CommitConsignmentPurchase(village, bestIndex, entityId, GetDisplayName(entityId), bestPrice);
+                if (bought != null)
+                {
+                    AR.s.Village.MarkSaveDirty(villageId, VillageSaveGroup.Shop);
+                    village.NpcPurchaseCount++;
+                    village.LastNpcTradeGameTime = now;
+                    _occupationCounters.ConsignmentSoldToNpc++;
+                    _occupationCounters.ConsignmentSoldGold += bestPrice;
+                    _occupationCounters.ConsignmentUpgrades++;
+                }
+            }
+            else
+            {
+                bought = AR.s.Village.CommitNpcPurchase(village, bestIndex, entityId, GetDisplayName(entityId), bestPrice);
+            }
             if (bought == null)
             {
                 LogBuySkip(entityId, villageId, "CommitFailed", string.Empty, ref report);
@@ -313,7 +361,8 @@ namespace ARPG.Npc
         /// 실제 구매(BuyUpgradeFromShop)와 Trade 기회 판정(HasTradeOpportunity)이 같은 규칙을 쓰도록 한곳에 둔다.
         /// </summary>
         private int FindBestShopUpgrade(int entityId, NpcSaveData saveData, VillageData village, out int bestPrice,
-            out float bestPower, out GE.EquipSlotType bestSlot, out int eligibleCount, out int overBudgetCount)
+            out float bestPower, out GE.EquipSlotType bestSlot, out int eligibleCount, out int overBudgetCount,
+            out bool fromConsignment)
         {
             int budget = saveData.Gold - GetTreatmentFee();
             int bestIndex = -1;
@@ -322,6 +371,7 @@ namespace ARPG.Npc
             bestSlot = GE.EquipSlotType.Max;
             eligibleCount = 0;
             overBudgetCount = 0;
+            fromConsignment = false;
             for (int i = 0; i < village.MerchantStock.Count; i++)
             {
                 MerchantStockEntry entry = village.MerchantStock[i];
@@ -347,6 +397,32 @@ namespace ARPG.Npc
                     bestSlot = slot;
                 }
             }
+            // 위탁 칸의 다른 제작자 제작품 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §7.2). 기본 아이템이라 D119·개인 상한을 그대로 지킨다.
+            for (int i = 0; i < village.Consignments.Count; i++)
+            {
+                VillageConsignment consignment = village.Consignments[i];
+                if (consignment.MakerNpcId == entityId || consignment.Item?.Equipment == null ||
+                    consignment.Item.Equipment.BasicItemId <= 0)
+                    continue;
+                eligibleCount++;
+                int price = AR.s.Village.GetConsignmentPrice(village, consignment);
+                if (price <= 0 || price > budget)
+                {
+                    overBudgetCount++;
+                    continue;
+                }
+                if (EvaluateBestUpgrade(entityId, saveData, consignment.Item, out GE.EquipSlotType slot, out _,
+                        out float newPower) == false)
+                    continue;
+                if (bestIndex < 0 || newPower > bestPower || (newPower == bestPower && price < bestPrice))
+                {
+                    bestIndex = i;
+                    bestPrice = price;
+                    bestPower = newPower;
+                    bestSlot = slot;
+                    fromConsignment = true;
+                }
+            }
             return bestIndex;
         }
 
@@ -367,21 +443,33 @@ namespace ARPG.Npc
                 return false;
 
             saveData.EnsureSlotsInitialized();
-            if (HasSellableForShop(entityId, saveData, village.VillageId) == true)
+            if (HasSellableForShop(entityId, saveData, village) == true)
+                return true;
+            // NPC 생활 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §7): 위탁 대금·제작품 위탁·제작용 광석·빈 칸 보충
+            if (HasOccupationTradeOpportunity(entityId, saveData, village) == true)
                 return true;
             return HasPurchasableUpgrade(entityId, saveData, village);
         }
 
-        private bool HasSellableForShop(int entityId, NpcSaveData saveData, int villageId)
+        private bool HasSellableForShop(int entityId, NpcSaveData saveData, VillageData village)
         {
+            int villageId = village.VillageId;
             _deferredPurchaseUpgradeItemIds.TryGetValue(entityId, out List<int>? deferred);
             int villageGold = AR.s.Village.GetVillageGold(villageId);
+            // 제작 수요의 광석 1회분은 팔지 않는다 — 그것만 있으면 팔 것이 없다
+            int reserveOreId = TryGetCraftDemand(entityId, saveData, village, out SmithingRecipe demand, out _) == true
+                ? demand.OreItemId : 0;
+            int reserveOreCount = reserveOreId != 0 ? CountBagItem(saveData, reserveOreId) : 0;
             for (int i = 0; i < saveData.Inventory.Count; i++)
             {
                 ItemData? item = saveData.Inventory[i];
                 if (item == null)
                     continue;
                 if (deferred != null && deferred.Contains(item.ItemInstanceId) == true)
+                    continue;
+                if (IsOwnUnconsignedCraft(entityId, item) == true)
+                    continue;
+                if (item.Id == reserveOreId && reserveOreCount <= NpcOccupationRules.OresPerCraft)
                     continue;
 
                 int price = AR.s.Village.GetNpcSellPrice(villageId, item);
@@ -407,7 +495,7 @@ namespace ARPG.Npc
             if (isMaterialized == true && FindEmptyInventorySlot(saveData) < 0)
                 return false;
 
-            return FindBestShopUpgrade(entityId, saveData, village, out _, out _, out _, out _, out _) >= 0;
+            return FindBestShopUpgrade(entityId, saveData, village, out _, out _, out _, out _, out _, out _) >= 0;
         }
 
         private static void LogBuySkip(int entityId, int villageId, string reason, string detail,

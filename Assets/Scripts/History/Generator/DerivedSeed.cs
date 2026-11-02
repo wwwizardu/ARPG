@@ -49,6 +49,9 @@ namespace ARPG.History
         // WORLD_ORE_VEIN_PLAN §4.1 — 청크별 광맥 굴림 (worldSeed + 청크 좌표 + 게임 날짜를 섞는다).
         public const ulong ChannelOreVein = 0x4F_52_45_56_45_49_4E_5FUL; // "OREVEIN_"
 
+        // NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §3.1 — NPC 채광·대장 초기 숙련과 합산 상한 (entityId 해시, worldSeed 비의존)
+        public const ulong ChannelNpcLifeSkill = 0x4E_50_43_4C_49_46_53_4BUL; // "NPCLIFSK"
+
         public static ulong Derive(int worldSeed, ulong channel)
         {
             ulong x = unchecked((ulong)worldSeed * 0x9E3779B97F4A7C15UL) ^ channel;

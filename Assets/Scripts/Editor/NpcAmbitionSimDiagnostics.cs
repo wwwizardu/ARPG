@@ -101,6 +101,11 @@ namespace ARPG.EditorTools
             public int SelectHunt;
             public int SelectTrade;
             public int SelectDelve;
+            // NPC 채광·제작 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN 1단계) — 선택 비중 분모에 함께 센다
+            public int SelectMining;
+            public int SelectCrafting;
+            // 제작자가 아직 받지 않은 위탁 대금 (세계 Gold의 한 부분 — 닫힌 경제 검산에 넣는다)
+            public long ConsignmentGold;
             public int HuntOutcomes;
             public int HuntSuccess;
             public int DelveOutcomes;       // 파티원 개인 판정 포함
@@ -408,6 +413,10 @@ namespace ARPG.EditorTools
             // 단기 목표 (NPC_OBJECTIVE_DESIGN §12, NpcAmbitionSimDiagnostics_Objectives). 카운터는 NpcManager에 바꿔 끼운다.
             public NpcObjectiveCounters ObjectiveCounters = new NpcObjectiveCounters();
             public ObjectiveSimStats Objectives = new ObjectiveSimStats();
+            // NPC 채광·제작·장비 순환 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN 1단계). 카운터는 매니저에 바꿔 끼운다.
+            public NpcOccupationCounters Occupation = new NpcOccupationCounters();
+            public VillageOccupationShopCounters OccupationShop = new VillageOccupationShopCounters();
+            public OccupationStartState OccupationStart = new OccupationStartState();
         }
 
         private static Dictionary<int, float>[] CreateTheftCooldownTables()
@@ -1010,6 +1019,7 @@ namespace ARPG.EditorTools
                 clone.EntityId = -1;
                 for (int s = 0; s < clone.MerchantStock.Count; s++)
                     clone.MerchantStock[s].Item?.OnLoadCompleted();
+                VillageManager.RestoreOccupationShopOnLoad(clone);
                 sim.Villages[clone.VillageId] = clone;
                 sim.VillageList.Add(clone);
                 sim.VillageStats[clone.VillageId] = new VillageStats
@@ -1100,6 +1110,10 @@ namespace ARPG.EditorTools
             Swap(swaps, npc, "_populationSaveSnapshot", populationSnapshot);
             Swap(swaps, npc, "_npcPowerCache", new Dictionary<int, float>());
             Swap(swaps, npc, "_deferredPurchaseUpgradeItemIds", new Dictionary<int, List<int>>());
+            // NPC 채광·제작·분실·위탁 (1단계): 진단 카운터와 실체화 중 보충 대기 목록
+            Swap(swaps, npc, "_deferredRefillItemIds", new Dictionary<int, int>());
+            Swap(swaps, npc, "_occupationCounters", sim.Occupation);
+            Swap(swaps, village, "_occupationShopCounters", sim.OccupationShop);
             Swap(swaps, npc, "_npcPartyDict", sim.Parties);
             Swap(swaps, npc, "_simulationPartyIds", partyIds);
             Swap(swaps, npc, "_simulationWorkCursor", 0);
@@ -1390,6 +1404,17 @@ namespace ARPG.EditorTools
                     AR.s.Npc.CompleteRelocation(entityId, saveData, transitionTime);
                     continue;
                 }
+                if (activity.Kind == NpcActivityKind.Mining)
+                {
+                    // System_NpcSim과 같은 채광 종료 공용 메서드 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §5.5)
+                    AR.s.Npc.ResolveMiningEnd(entityId, saveData, transitionTime, sim.WorldSeed);
+                    continue;
+                }
+                if (activity.Kind == NpcActivityKind.Crafting)
+                {
+                    AR.s.Npc.ResolveCraftingEnd(entityId, saveData, transitionTime, sim.WorldSeed);
+                    continue;
+                }
                 SetIdle(saveData, transitionTime);
             }
         }
@@ -1449,6 +1474,8 @@ namespace ARPG.EditorTools
                 if (kind == NpcActivityKind.Hunt) { sim.Today.SelectHunt++; stats.Hunt++; }
                 else if (kind == NpcActivityKind.Trade) { sim.Today.SelectTrade++; stats.Trade++; }
                 else if (kind == NpcActivityKind.DungeonDelve) { sim.Today.SelectDelve++; stats.Delve++; }
+                else if (kind == NpcActivityKind.Mining) sim.Today.SelectMining++;
+                else if (kind == NpcActivityKind.Crafting) sim.Today.SelectCrafting++;
                 else { sim.Today.SelectRest++; stats.Rest++; }
             }
 
@@ -1486,10 +1513,13 @@ namespace ARPG.EditorTools
 
             NpcActivityState activity = saveData.Activity;
             activity.Kind = kind;
-            activity.Phase = NpcActivityResolver.IsExpedition(kind) ? NpcActivityPhase.Venturing : NpcActivityPhase.Idle;
+            // System_NpcSim과 같다: 원정·채광은 Venturing, 제작은 시작할 때의 수요를 TargetKey에 고정한다
+            activity.Phase = NpcActivityResolver.IsVenturing(kind) ? NpcActivityPhase.Venturing : NpcActivityPhase.Idle;
             activity.TargetKey = kind == NpcActivityKind.Hunt ? "hunt"
                 : kind == NpcActivityKind.Trade ? "trade"
-                : kind == NpcActivityKind.DungeonDelve ? delveDungeonId : "rest";
+                : kind == NpcActivityKind.DungeonDelve ? delveDungeonId
+                : kind == NpcActivityKind.Mining ? "mine"
+                : kind == NpcActivityKind.Crafting ? AR.s.Npc.GetCraftingTargetKey(entityId, saveData) : "rest";
             activity.PhaseStartedGameTime = startGameTime;
             activity.PhaseEndGameTime = startGameTime + NpcActivityResolver.GetActivityDurationHours(kind);
             activity.HasMovementPath = false;
@@ -2125,6 +2155,7 @@ namespace ARPG.EditorTools
 
             for (int i = 0; i < sim.VillageList.Count; i++)
                 row.VillageGold += VillageResourceSimulation.GetAmount(sim.VillageList[i], GlobalEnum.ItemType.Gold);
+            row.ConsignmentGold = AR.s.Village.SumPendingConsignmentProceeds();
 
             // 마을 요약의 종료값은 매일 덮어써 마지막 날 값이 남는다.
             for (int i = 0; i < sim.VillageList.Count; i++)
@@ -2206,7 +2237,7 @@ namespace ARPG.EditorTools
                           "gold_price_target,gold_price_index,living_spend_count,living_spend_deposit,living_spend_burn,vault_upkeep_burn");
             float baseAvg = rows.Count > 0 ? rows[0].AvgPower : 0f;
             float baseCohort = rows.Count > 0 ? rows[0].CohortAvgPower : 0f;
-            long baseWorld = rows.Count > 0 ? rows[0].VillageGold + rows[0].NpcGold : 0;
+            long baseWorld = rows.Count > 0 ? rows[0].VillageGold + rows[0].NpcGold + rows[0].ConsignmentGold : 0;
             long cumulativeBurned = 0;
             long cumulativePopulation = 0;
             for (int i = 0; i < rows.Count; i++)
@@ -2217,8 +2248,8 @@ namespace ARPG.EditorTools
                     cumulativeBurned += r.GoldBurned + r.LivingSpendBurn + r.VaultUpkeepBurn;
                     cumulativePopulation += r.PopulationGold;
                 }
-                int selections = r.SelectRest + r.SelectHunt + r.SelectTrade + r.SelectDelve;
-                long world = r.VillageGold + r.NpcGold;
+                int selections = r.SelectRest + r.SelectHunt + r.SelectTrade + r.SelectDelve + r.SelectMining + r.SelectCrafting;
+                long world = r.VillageGold + r.NpcGold + r.ConsignmentGold;
                 // 닫힌 경제 검산: 오늘 세계 Gold = 시작 + 인구 생산 누계 − 소멸 누계(사망 + 생활비 소멸 + 금고 유지비).
                 // 0이 아니면 새는 경로가 있다.
                 long conservationError = world - (baseWorld + cumulativePopulation - cumulativeBurned);
@@ -2318,7 +2349,7 @@ namespace ARPG.EditorTools
         {
             DayRow first = rows[0];
             DayRow last = rows[rows.Count - 1];
-            int rest = 0, hunt = 0, trade = 0, delve = 0, lootUpgrades = 0, tradeUpgrades = 0, delveUpgrades = 0;
+            int rest = 0, hunt = 0, trade = 0, delve = 0, mining = 0, crafting = 0, lootUpgrades = 0, tradeUpgrades = 0, delveUpgrades = 0;
             int maxCapExceed = 0, delveOutcomes = 0, delveSuccess = 0, completionRolls = 0, completions = 0;
             int dungeonChangedFailures = 0, lateCompletions = 0;
             int lateStartDay = Mathf.Max(1, days - 14);
@@ -2330,6 +2361,7 @@ namespace ARPG.EditorTools
             {
                 DayRow r = rows[i];
                 rest += r.SelectRest; hunt += r.SelectHunt; trade += r.SelectTrade; delve += r.SelectDelve;
+                mining += r.SelectMining; crafting += r.SelectCrafting;
                 lootUpgrades += r.UpgradesLoot; tradeUpgrades += r.UpgradesTrade; delveUpgrades += r.UpgradesDelve;
                 delveOutcomes += r.DelveOutcomes; delveSuccess += r.DelveSuccess;
                 completionRolls += r.DelveCompletionRolls; completions += r.NpcCompletions;
@@ -2343,7 +2375,7 @@ namespace ARPG.EditorTools
                 maxCapExceed = Mathf.Max(maxCapExceed, r.CapExceed);
                 maxCapRatio = Mathf.Max(maxCapRatio, r.MaxCapRatio);
             }
-            int selections = rest + hunt + trade + delve;
+            int selections = rest + hunt + trade + delve + mining + crafting;
 
             int cowardRest = 0, cowardHunt = 0, cowardTrade = 0, cowardDelve = 0;
             for (int i = 0; i < cowardIds.Count; i++)
@@ -2387,7 +2419,8 @@ namespace ARPG.EditorTools
                           $"끝 {nonBasicEnd}/{equippedEnd} (모두 0이어야 함)");
             sb.AppendLine($"개인 상한 초과 NPC(일별 최대): {maxCapExceed} | 최대 전투력/상한 비율: {maxCapRatio:F4}");
             sb.AppendLine($"활동 선택 {selections}회: Rest {Pct(rest, selections):F2}% / Hunt {Pct(hunt, selections):F2}% / " +
-                          $"Trade {Pct(trade, selections):F2}% / Delve {Pct(delve, selections):F2}%");
+                          $"Trade {Pct(trade, selections):F2}% / Delve {Pct(delve, selections):F2}% / " +
+                          $"채광 {Pct(mining, selections):F2}% / 제작 {Pct(crafting, selections):F2}%");
             sb.AppendLine($"겁 많은 NPC(용기 하위 {CowardFraction:P0}, {cowardIds.Count}명, 용기 ≤ {cowardCourageMax}): " +
                           $"Rest {Pct(cowardRest, cowardSelections):F2}% / Hunt {Pct(cowardHunt, cowardSelections):F2}% / " +
                           $"Trade {Pct(cowardTrade, cowardSelections):F2}% / Delve {Pct(cowardDelve, cowardSelections):F2}%");
@@ -2427,14 +2460,15 @@ namespace ARPG.EditorTools
             for (int i = 0; i < sim.Examples.Count; i++)
                 sb.AppendLine($"  - {sim.Examples[i]}");
 
-            // 닫힌 경제 검산 (일별 CSV의 world_gold_conservation_error 최댓값)
-            long baseWorld = first.VillageGold + first.NpcGold;
+            // 닫힌 경제 검산 (일별 CSV의 world_gold_conservation_error 최댓값). 세계 Gold = 금고 + NPC + 미정산 위탁 대금.
+            long baseWorld = first.VillageGold + first.NpcGold + first.ConsignmentGold;
             long cumulativePopulation = 0, cumulativeBurned = 0, maxConservationError = 0;
             for (int i = 1; i < rows.Count; i++)
             {
                 cumulativePopulation += rows[i].PopulationGold;
                 cumulativeBurned += rows[i].GoldBurned + rows[i].LivingSpendBurn + rows[i].VaultUpkeepBurn;
-                long error = rows[i].VillageGold + rows[i].NpcGold - (baseWorld + cumulativePopulation - cumulativeBurned);
+                long error = rows[i].VillageGold + rows[i].NpcGold + rows[i].ConsignmentGold -
+                             (baseWorld + cumulativePopulation - cumulativeBurned);
                 if (Math.Abs(error) > Math.Abs(maxConservationError))
                     maxConservationError = error;
             }
@@ -2447,6 +2481,8 @@ namespace ARPG.EditorTools
             AppendTheftPrepSummary(sb, sim, days);
             AppendTheftSummary(sb, sim, days);
             AppendTheftLateSummary(sb, sim, days);
+            // NPC 채광·제작·장비 순환과 사연 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN 1단계, NpcAmbitionSimDiagnostics_Occupation)
+            sb.Append(BuildOccupationSummary(sim, days));
 
             // ---- P2 완료 기준 체크리스트 (§13, §10.1 기조 — 30일 실행 기준) ----
             TopicAudit ta = sim.Topics;
@@ -4058,6 +4094,19 @@ namespace ARPG.EditorTools
                 if (topic.BaseLine.Contains(itemName) == false)
                     failure ??= $"문구에 아이템 이름({itemName}) 없음";
             }
+            else if (rumor.Kind == NpcRumorKind.EquipmentLost)
+            {
+                // 장비 분실 소문 (NPC_OCCUPATIONS 1단계 §9.2 ①): 잃은 본인은 부상 이야기로 말하므로 소문 토픽이 아니다. 문구에 잃은 장비 이름.
+                a.ItemTopics++;
+                kindIndex = 2;
+                if (rumor.SubjectNpcId == npcId)
+                    failure ??= "잃은 본인이 분실 소문 토픽을 말함";
+                if (IsSimLiving(sim, rumor.SubjectNpcId) == false)
+                    failure ??= "잃은 NPC 없음/사망";
+                string lostName = NpcRumorPhrasing.ItemName(rumor.ItemId);
+                if (topic.BaseLine.Contains(lostName) == false)
+                    failure ??= $"문구에 잃은 장비 이름({lostName}) 없음";
+            }
             else if (rumor.Kind != NpcRumorKind.ItemOwner)
             {
                 a.ItemTopics++;
@@ -4342,8 +4391,9 @@ namespace ARPG.EditorTools
                 reason = ok ? 0 : 3;
                 return ok;
             }
-            // P4b: 판매 = 판매자 생존 (D104), 배신 = 가해자·피해자 둘 다 생존 (D105) — 복제본 원장을 직접 본다
-            if (rumor.Kind == NpcRumorKind.ItemSold)
+            // P4b: 판매 = 판매자 생존 (D104), 배신 = 가해자·피해자 둘 다 생존 (D105) — 복제본 원장을 직접 본다.
+            // 장비 분실(NPC_OCCUPATIONS 1단계)도 이미 일어난 일이라 잃은 NPC가 살아 있으면 유효하다.
+            if (rumor.Kind == NpcRumorKind.ItemSold || rumor.Kind == NpcRumorKind.EquipmentLost)
             {
                 bool ok = IsSimLiving(sim, rumor.SubjectNpcId);
                 reason = ok ? 0 : 2;
@@ -4380,7 +4430,8 @@ namespace ARPG.EditorTools
         private static void TrackRumorEvent(SimContext sim, int holderId, NpcRumor rumor)
         {
             // 네임드 소문의 전파는 네임드 시나리오 요약(소문 보유 NPC 수)이 따로 잰다 — 원정 성공 분류에 섞지 않는다.
-            if (rumor.Kind == NpcRumorKind.NamedThreat)
+            // 장비 분실 소문은 NPC 생활 요약(분실 소문 보유 수)이 잰다.
+            if (rumor.Kind == NpcRumorKind.NamedThreat || rumor.Kind == NpcRumorKind.EquipmentLost)
                 return;
             int villageId = rumor.Kind == NpcRumorKind.DungeonInfo
                 ? rumor.VillageId

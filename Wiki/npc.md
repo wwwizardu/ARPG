@@ -4,8 +4,10 @@
 name: npc
 description: NPC 도메인 종합 — 정본 매핑, 코드 구현 현황, 마을 경제와의 경계.
 type: topic
-last_updated: 2026-10-25
+last_updated: 2026-11-03
 sources:
+  - Docs/combat/WEAPON_PROGRESSION_DESIGN.md
+  - Assets/Scripts/Common/Utility/WeaponHelper.cs
   - Docs/npc/VILLAGE_NPC_BOUNDARY_DESIGN.md
   - Docs/npc/NPC_OBJECTIVE_DESIGN.md
   - Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md
@@ -113,7 +115,7 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 | 소망 ItemGift(NARRATIVE 3단계) | QUEST_SYSTEM §2.2·§8.2, NARRATIVE_CONTENT §2.2·§8.2 | `NpcManager_NarrativeWish`(공개·전달·실패), `NarrativeContentInstance`(Kind=Wish, `TargetItemId`·`WishState`), 선물 목록 "(소망)", `Inventory.RestoreItem` 롤백 | 🟨 구현·진단 PASS(2026-10-10, 커밋 대기), 실제 플레이 확인 전. Recover·Reunion·목표 진행·관계 패널 UI는 미구현 [src: Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md §8.2, Assets/Scripts/Manager/NpcManager_NarrativeWish.cs, Assets/Scripts/Base/Inventory.cs] |
 | 관찰 반응 — 몬스터 전리품 1호 신호 | PLAYER_RECOGNITION | `ItemTable.SourceMonsterId` + `MonsterTrophyIdentifier` 존재. 현행 ItemTable 데이터에는 연결된 전리품 없음 | 🟡 식별 배관만 구현, 감지·Trust·영속화·대사·보상 미구현 [src: Assets/Scripts/Common/Tables.cs, Assets/Scripts/Common/Utility/MonsterTrophyIdentifier.cs, Assets/_BinaryData/TableData/ItemTable.bytes] |
 | 개인 활동 시뮬 | NPC_SIMULATION §11.1 | `System_NpcSim`, `NpcActivityState`, `NpcActivityResolver` — Rest/솔로·파티 Hunt/Trade/DungeonDelve, 결정론 결과, analytic 경로 | ✅ 구현 [src: Assets/Scripts/Common/System/System_NpcSim.cs, Assets/Scripts/Npc/NpcActivityResolver.cs] |
-| 야망·효용 선택·장비 전투력(P1) | AMBITION §4–6·§10.1 | `NpcPowerEvaluator`, `NpcManager_Ambition`, Hunt 기준 전투력 10.75(2026-10-03 재정규화) | ✅ 구현 [src: Docs/npc/NPC_AMBITION_DESIGN.md §5.1, Assets/Scripts/Npc/NpcPowerEvaluator.cs, Assets/Scripts/Npc/NpcActivityResolver.cs] |
+| 야망·효용 선택·장비 전투력(P1) | AMBITION §4–6·§10.1 | `NpcPowerEvaluator`, `NpcManager_Ambition`, Hunt 기준 전투력 11.22(2026-11-01 재정규화 — 회피 항을 방어도와 같은 가중치로 바꿈, 이전 10.75). 2026-11-02부터 무기 점수는 실제 전투와 같은 쌍수 합성(피해 (R + L) × 0.7·공속·치명타 평균)이고, 새 게임 평균 11.41·쌍수 NPC 286명(11.9%)·상한 초과 0이라 기준값은 그대로 | ✅ 구현 [src: Docs/npc/NPC_AMBITION_DESIGN.md §5.1, Assets/Scripts/Npc/NpcPowerEvaluator.cs, Assets/Scripts/Npc/NpcActivityResolver.cs, Assets/Scripts/Common/Utility/WeaponHelper.cs] |
 | 상점 거래·닫힌 경제·기본 장비 구매 | AMBITION §7.2·§9, SHOP_EQUIPMENT §4–5 | `NpcManager_Trade`, `VillageManager_NpcTrade`, `VillageTradeStockRoller.RollBasicEquipmentPlan` | ✅ 구현. 마을 골드 밸런스(생활비·물가 지수·금고 유지비) 2026-10-03 구현 [src: Assets/Scripts/Manager/NpcManager_Trade.cs, Assets/Scripts/Village/VillageManager_NpcTrade.cs, Assets/Scripts/Manager/NpcManager_LivingExpense.cs, Assets/Scripts/Village/VillageManager_GoldPrice.cs] |
 | 소문·DungeonDelve·NPC 던전 완료(P2) | AMBITION §5.2·§7.1·§7.4 | `NpcManager_Delve`, `DungeonManager_NpcCompletion`, 소문 교환 | ✅ 구현 [src: Assets/Scripts/Manager/NpcManager_Delve.cs, Assets/Scripts/Dungeon/DungeonManager_NpcCompletion.cs] |
 | 던전 소문·부탁·보고·행적 반응·후속 소개(NARRATIVE 1·2·5단계) | NARRATIVE_CONTENT §3–4·§7 | `NpcManager_Narrative`(세대 선정·소문 주인·완료 해결·정리), `NpcManager_NarrativeDialogue`(부탁·보고·행적 반응·후속 소개), `NarrativeContentCatalog`, `NarrativeReactionRules`, `narrative` 저장 파트(소개 기록 `FollowUpInstanceId`·`FollowUpState`·`IntroducedFromInstanceId`) | 🟨 구현·진단 PASS(2026-10-10, 커밋 대기), 실제 플레이 확인 전 [src: Docs/npc/NPC_NARRATIVE_CONTENT_DESIGN.md §8·§8.1·§8.4, Assets/Scripts/Manager/NpcManager_Narrative.cs, Assets/Scripts/Manager/NpcManager_NarrativeDialogue.cs, Assets/Scripts/Data/NarrativeSaveData.cs] |

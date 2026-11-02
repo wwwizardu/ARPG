@@ -27,6 +27,13 @@ namespace ARPG.Npc
         public float ObjectiveHuntMultiplier;
         public float ObjectiveTradeMultiplier;
         public float ObjectiveDelveMultiplier;
+        // NPC 채광·제작 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §3·§5.5·§6.2). 비중 목표 없이 수요를 따라간다.
+        // 채광: 캘 수 있는 광종이 있고 가방에 빈 칸이 있음. 배율 = 지금 상점이 그 광석을 사 주는 값 / 기본 가격 (재고가 상한이면 0),
+        //       자기 제작에 필요한 광석이 상점에 없으면 더 높다.
+        public bool MiningAvailable;
+        public float MiningPriceFactor;
+        // 제작: 같은 마을에 장비를 잃은 NPC가 있고 그 장비를 만들 수 있으며, 가방에 광석 3개가 있고 위탁품이 2개 미만.
+        public bool CraftingAvailable;
     }
 
     /// <summary>
@@ -46,7 +53,9 @@ namespace ARPG.Npc
         // 진단 메뉴 ARPG/Npc/Diagnostics/Hunt Power Normalization으로 교체 전/후 평균을 비교한다.
         // NPC_SHOP_EQUIPMENT(2026-10-03): NPC 장비가 고정 옵션 기본 아이템으로 바뀌어 세이브 생존 2,387명 평균이 25.96 → 10.75가 됐다.
         // 기준을 새 평균으로 옮겨 평균 capability 0.475를 유지한다 (솔로 성공 61.8%·부상 25.3%·Food/Hunt 1.38, Food 문턱 그대로).
-        public const float HuntReferencePower = 10.75f;
+        // 2026-11-01: 전투력 회피 항이 방어도와 같은 가중치(회피 × 1.0)로 바뀌어 세이브 생존 2,400명 평균이 10.32 → 11.22가 됐다.
+        // 같은 방법으로 기준을 새 평균으로 옮긴다.
+        public const float HuntReferencePower = 11.22f;
         public const float HuntCapabilityAtReference = 0.475f;
         // 기준 전투력의 2배 차이가 capability 0.5 차이. 개인 상한 +20%를 다 채우면 capability +0.10.
         public const float HuntCapabilityPerPowerRatio = 0.5f;
@@ -182,6 +191,21 @@ namespace ARPG.Npc
         public const int PartyDelveCompletionSalt = 100;
         public const int PartyDelveCompletionLootSaltBase = 110;
 
+        // ===== NPC 채광·제작 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §3·§5.5·§6.2) =====
+        // 채광 기본값 × 지금 광석 매입가 배율. 광석이 귀하면 자주, 재고가 상한이면 고르지 않는다 (2026-11-01 결정 — 비중 목표 없음).
+        // 시작안이다. 진단(Ambition Sim)의 채광 비중·광석 재고·금고 변화로 맞춘다.
+        public const float MiningBaseScore = 0.15f;
+        // 제작은 장비를 잃은 이웃이 있고 재료가 갖춰졌을 때만 후보다 — 그때는 거의 바로 만든다.
+        public const float CraftingBaseScore = 1.2f;
+        // 성격·야망 항 (±20% 클램프 안)
+        public const float MiningPatienceDeviation = 0.05f;
+        public const float MiningGreedDeviation = 0.05f;
+        public const float CraftingPrideDeviation = 0.05f;
+        public const float CraftingPatienceDeviation = 0.05f;
+        public const float AmbitionWealthWorkBonus = 0.08f;        // 부 → 채광·제작
+        public const float AmbitionCautiousMiningBonus = 0.05f;    // 안전 → 채광 (부상 없는 일)
+        public const float AmbitionAdventureMiningPenalty = 0.05f; // 명예·탐험 → 채광 감소
+
         // ===== 소문 (NPC_AMBITION_DESIGN §5.2·§6.2·§7.4, P2b D70~D77) =====
         // 옛 "유망한 소문" 필요 배율(D76 ×1.5)은 NpcObjective 표의 소문 확인(1) ActDelve로 옮겼다 (NPC_OBJECTIVE_DESIGN §5.1).
         // Rest 종료 시 교환 확률 (D74 개정: 항상이 아니라 확률적으로). 친화력 0 → Min, 100 → Max 선형.
@@ -243,12 +267,20 @@ namespace ARPG.Npc
         }
 
         /// <summary>
-        /// analytic 이동 경로를 쓰는 활동인가. 원정 + 이주(편도). 위치 갱신·화면 안 일시정지·경로 재계산이 이것을 본다.
-        /// 파티·원정 판정은 IsExpedition을 쓴다 (이주는 파티를 만들지 않는다).
+        /// 마을 밖 왕복으로 보여 주는 활동인가 (Phase=Venturing + 왕복 경로). 원정 + 채광. 채광은 파티·원정 판정 대상이 아니다.
+        /// </summary>
+        public static bool IsVenturing(NpcActivityKind kind)
+        {
+            return IsExpedition(kind) || kind == NpcActivityKind.Mining;
+        }
+
+        /// <summary>
+        /// analytic 이동 경로를 쓰는 활동인가. 원정·채광(왕복) + 이주(편도). 위치 갱신·화면 안 일시정지·경로 재계산이 이것을 본다.
+        /// 파티·원정 판정은 IsExpedition을 쓴다 (채광·이주는 파티를 만들지 않는다).
         /// </summary>
         public static bool HasTravelPath(NpcActivityKind kind)
         {
-            return IsExpedition(kind) || kind == NpcActivityKind.Relocate;
+            return IsVenturing(kind) || kind == NpcActivityKind.Relocate;
         }
 
         /// <summary>
@@ -267,7 +299,10 @@ namespace ARPG.Npc
             float huntScore = GetActivityScore(NpcActivityKind.Hunt, saveData.NpcStat, ambition, context);
             float tradeScore = GetActivityScore(NpcActivityKind.Trade, saveData.NpcStat, ambition, context);
             float delveScore = GetActivityScore(NpcActivityKind.DungeonDelve, saveData.NpcStat, ambition, context);
-            float totalScore = restScore + huntScore + tradeScore + delveScore;
+            // 채광·제작은 후보가 없으면 0이라 기존 네 활동의 선택 결과(같은 난수)가 바뀌지 않는다 — 끝에 둔다.
+            float miningScore = GetActivityScore(NpcActivityKind.Mining, saveData.NpcStat, ambition, context);
+            float craftingScore = GetActivityScore(NpcActivityKind.Crafting, saveData.NpcStat, ambition, context);
+            float totalScore = restScore + huntScore + tradeScore + delveScore + miningScore + craftingScore;
             if (totalScore <= 0f)
                 return NpcActivityKind.Rest;
 
@@ -279,7 +314,11 @@ namespace ARPG.Npc
                 return NpcActivityKind.Hunt;
             if (pick < restScore + huntScore + tradeScore)
                 return NpcActivityKind.Trade;
-            return NpcActivityKind.DungeonDelve;
+            if (pick < restScore + huntScore + tradeScore + delveScore)
+                return NpcActivityKind.DungeonDelve;
+            if (pick < restScore + huntScore + tradeScore + delveScore + miningScore)
+                return NpcActivityKind.Mining;
+            return NpcActivityKind.Crafting;
         }
 
         /// <summary>활동 하나의 효용 점수. 기회가 없는 활동(Trade 할 일 없음)은 0 — 후보에서 빠진다.</summary>
@@ -319,6 +358,17 @@ namespace ARPG.Npc
                     // 단기 목표 배율 (NPC_OBJECTIVE_DESIGN §7.1). 소문 확인 목표 실행 단계 ×1.5가 옛 "유망한 소문" 필요를 대신한다.
                     needMultiplier *= context.ObjectiveDelveMultiplier;
                     break;
+                case NpcActivityKind.Mining:
+                    if (context.MiningAvailable == false || context.MiningPriceFactor <= 0f)
+                        return 0f;
+                    baseScore = MiningBaseScore;
+                    needMultiplier *= context.MiningPriceFactor;
+                    break;
+                case NpcActivityKind.Crafting:
+                    if (context.CraftingAvailable == false)
+                        return 0f;
+                    baseScore = CraftingBaseScore;
+                    break;
                 default:
                     return 0f;
             }
@@ -354,6 +404,10 @@ namespace ARPG.Npc
                 NpcActivityKind.Trade => CenteredTrait(stat.Greed) * TradeGreedDeviation,
                 NpcActivityKind.DungeonDelve => CenteredTrait(stat.Curiosity) * DelveCuriosityDeviation
                     + CenteredTrait(stat.Courage) * DelveCourageDeviation,
+                NpcActivityKind.Mining => CenteredTrait(stat.Patience) * MiningPatienceDeviation
+                    + CenteredTrait(stat.Greed) * MiningGreedDeviation,
+                NpcActivityKind.Crafting => CenteredTrait(stat.Pride) * CraftingPrideDeviation
+                    + CenteredTrait(stat.Patience) * CraftingPatienceDeviation,
                 _ => 0f,
             };
         }
@@ -374,6 +428,19 @@ namespace ARPG.Npc
                     _ => 0f,
                 };
             }
+            // 채광·제작 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §5.1·§6.1): 부는 둘 다 조금 더, 안전은 채광, 명예·탐험은 채광을 덜.
+            if (kind == NpcActivityKind.Mining)
+            {
+                return ambition switch
+                {
+                    NpcAmbitionKind.Wealth => AmbitionWealthWorkBonus,
+                    NpcAmbitionKind.Cautious => AmbitionCautiousMiningBonus,
+                    NpcAmbitionKind.Explorer or NpcAmbitionKind.Glory => -AmbitionAdventureMiningPenalty,
+                    _ => 0f,
+                };
+            }
+            if (kind == NpcActivityKind.Crafting)
+                return ambition == NpcAmbitionKind.Wealth ? AmbitionWealthWorkBonus : 0f;
 
             switch (ambition)
             {
@@ -411,6 +478,8 @@ namespace ARPG.Npc
                 NpcActivityKind.Hunt => HuntDurationHours,
                 NpcActivityKind.Trade => TradeDurationHours,
                 NpcActivityKind.DungeonDelve => DelveDurationHours,
+                NpcActivityKind.Mining => NpcOccupationRules.MiningDurationHours,
+                NpcActivityKind.Crafting => NpcOccupationRules.CraftingDurationHours,
                 _ => RestDurationHours,
             };
         }
@@ -851,6 +920,8 @@ namespace ARPG.Npc
             // 132~139는 파티 모집 예비 — 재사용 금지.
             // 210~239는 네임드 위협 (NamedThreatRules — 210 솔로 마주침, 211 솔로 결과, 212 파티 마주침, 213 솔로 중상, 220+i 파티원 결과,
             // 230+i 파티원 중상). 200~209는 단기 목표(NPC_OBJECTIVE_DESIGN) 예약.
+            // 240~249는 NPC 채광·제작·장비 분실 (NpcOccupationRules — 240 채광 산출, 241 채광 숙련, 242 제작 변형, 243 대장 숙련,
+            // 244 장비 분실; 245~249 예비). 소유자는 NPC EntityId다.
             // 140은 솔로 Hunt 중상, 141은 솔로 Delve 중상 (EntityId 기준), 150+i는 파티원 Hunt 중상, 160+i는 파티원 Delve 중상
             // (PartyId 기준, SevereWound*Salt 상수, D91). 142~149는 부상 예비.
             // 170은 절도 시도 난수열(시도 확률 → 피해자 → 물건), 171은 절도 발각 (도둑 EntityId·도둑의 Rest 시작 시각 기준,

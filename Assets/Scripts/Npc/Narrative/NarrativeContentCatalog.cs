@@ -119,10 +119,16 @@ namespace ARPG.Npc.Narrative
         /// 이 대상 종류의 개인 사연 문구 (§2.2 PersonalStory, 4단계). 대상 종류마다 한 행만 허용한다. 없으면 null — 호출자는 코드 기본 문구를 쓴다.
         /// 개인 사연은 목표·영구 효과가 없어 사건으로 저장하지 않으므로 스냅샷 없이 정의를 읽기 전용으로 돌려준다 (§2.4).
         /// </summary>
-        public NarrativeContentDefinition? FindPersonalStory(NarrativeTargetType target)
+        public NarrativeContentDefinition? FindPersonalStory(NarrativeTargetType target) => FindPersonalStory(target, 0);
+
+        /// <summary>
+        /// 개인 사연·생활 대사 한 줄 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §9.2.1). (대상 종류, 상황 번호)마다 한 행이다.
+        /// 최근 부상은 상황 번호 0 하나뿐이다. 없으면 null — 호출자는 코드 기본 문구를 쓴다.
+        /// </summary>
+        public NarrativeContentDefinition? FindPersonalStory(NarrativeTargetType target, int targetId)
         {
             for (int i = 0; i < _personalStories.Count; i++)
-                if (_personalStories[i].TargetType == target)
+                if (_personalStories[i].TargetType == target && _personalStories[i].TargetId == targetId)
                     return _personalStories[i];
             return null;
         }
@@ -217,7 +223,7 @@ namespace ARPG.Npc.Narrative
                 "NarrativeContentPack: unsupported schema or missing lists.");
             Require(dungeons != null, "NarrativeContentPack: DungeonTable reference is missing.");
             var ids = new HashSet<int>();
-            var storyTargets = new HashSet<NarrativeTargetType>();
+            var storyTargets = new HashSet<(NarrativeTargetType, int)>();
             int rumors = 0;
             int wishes = 0;
             int namedThreats = 0;
@@ -239,8 +245,9 @@ namespace ARPG.Npc.Narrative
                 }
                 else if (c.Kind == NarrativeContentKind.PersonalStory)
                 {
-                    // 같은 대상 종류의 사연이 둘이면 어느 문구를 쓸지 정할 수 없다.
-                    Require(storyTargets.Add(c.TargetType), where + " TargetType: only one PersonalStory row per target type (" + c.TargetType + ").");
+                    // 같은 대상 종류·상황 번호의 사연이 둘이면 어느 문구를 쓸지 정할 수 없다.
+                    Require(storyTargets.Add((c.TargetType, c.TargetId)),
+                        where + " TargetType/TargetId: only one PersonalStory row per target type and situation (" + c.TargetType + " " + c.TargetId + ").");
                 }
                 else if (c.Kind == NarrativeContentKind.NamedThreat)
                 {
@@ -321,6 +328,9 @@ namespace ARPG.Npc.Narrative
             Require(c.TargetCount == 1, where + " TargetCount: supports 1 only.");
             Require(c.StartConditionGroupId == 0, where + " StartConditionGroupId: condition groups are not supported yet.");
             Require(string.IsNullOrWhiteSpace(c.IntroText) == false, where + " IntroText: required.");
+            // 여성 문구는 개인 사연 행에만 쓴다 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §9.2.1).
+            Require(c.Kind == NarrativeContentKind.PersonalStory || string.IsNullOrEmpty(c.IntroTextFemale) == true,
+                where + " IntroTextFemale: only PersonalStory rows have a female line.");
             switch (c.Kind)
             {
                 case NarrativeContentKind.DungeonRumor:
@@ -356,13 +366,15 @@ namespace ARPG.Npc.Narrative
                     RequireSlots(c.SignText, null, where + " SignText");
                     break;
                 case NarrativeContentKind.PersonalStory:
-                    // 첫 사연은 그 NPC의 최근 부상 하나다 (4단계). TargetId 0 = 말하는 NPC 자신의 최신 기록. 목표·후속이 없어 다른 문구 칸은 비운다.
-                    Require(c.TargetType == NarrativeTargetType.RecentWound && c.TargetId == 0,
-                        where + " TargetType/TargetId: PersonalStory supports RecentWound with TargetId 0 only.");
+                    // 최근 부상(4단계, TargetId 0 = 말하는 NPC 자신의 최신 기록)과 NPC 생활 사연·대사(TargetId = 상황 번호, §9.2.1).
+                    // 목표·후속이 없어 다른 문구 칸은 비운다. 슬롯은 대상 종류마다 정해져 있다.
+                    string[]? storySlots = GetPersonalStorySlots(c.TargetType, c.TargetId);
+                    Require(storySlots != null, where + " TargetType/TargetId: unsupported PersonalStory target " + c.TargetType + " " + c.TargetId + ".");
                     Require(c.GoalType == NarrativeGoalType.Default, where + " GoalType: PersonalStory supports Default only.");
                     Require(string.IsNullOrWhiteSpace(c.SignText) == true && string.IsNullOrWhiteSpace(c.ResolvedText) == true,
                         where + " SignText/ResolvedText: must be empty for PersonalStory.");
-                    RequireSlots(c.IntroText, KnownWoundSummarySlot, where + " IntroText");
+                    RequireSlotsAny(c.IntroText, storySlots!, where + " IntroText");
+                    RequireSlotsAny(c.IntroTextFemale, storySlots!, where + " IntroTextFemale");
                     break;
                 case NarrativeContentKind.Objective:
                     // 단기 목표 부탁 (NPC_OBJECTIVE_DESIGN §9.2): 표(NarrativeContent 시트)에 행이 없다. 부탁 대사가 표시될 때
@@ -455,6 +467,35 @@ namespace ARPG.Npc.Narrative
 
         /// <summary>최근 부상 사연 문구의 슬롯. 말하는 NPC가 실제로 겪은 최신 부상 요약으로 바꾼다 (DialogueTopicSelector).</summary>
         public const string KnownWoundSummaryToken = "{" + KnownWoundSummarySlot + "}";
+
+        // NPC 생활 사연·대사 슬롯 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §9.2.1). 슬롯 바로 뒤에는 받침에 따라 바뀌는 조사를 붙이지 않는다.
+        public const string LostItemNameToken = "{lostItemName}";
+        public const string ItemNameToken = "{itemName}";
+        public const string MakerNameToken = "{makerName}";
+        public const string BuyerNameToken = "{buyerName}";
+        public const string OwnerNameToken = "{ownerName}";
+        public const string OreNameToken = "{oreName}";
+        public const string EmptyDaysToken = "{emptyDays}";
+        private static readonly string[] RecentWoundSlots = { KnownWoundSummarySlot };
+        private static readonly string[] EquipmentLossSlots = { KnownWoundSummarySlot, "lostItemName", "makerName" };
+        private static readonly string[] CraftSoldSlots = { "buyerName", "itemName", "lostItemName" };
+        private static readonly string[] SkillMilestoneSlots = { "oreName", "itemName" };
+        private static readonly string[] HardshipSlots = { "lostItemName", "emptyDays", "makerName" };
+        private static readonly string[] EquipmentLossRumorSlots = { "ownerName", "lostItemName", "makerName", "itemName" };
+        private static readonly string[] WorkMoodSlots = { "oreName" };
+
+        /// <summary>개인 사연 행 (대상 종류, 상황 번호)가 쓸 수 있는 슬롯. 지원하지 않는 조합이면 null.</summary>
+        private static string[]? GetPersonalStorySlots(NarrativeTargetType target, int targetId) => target switch
+        {
+            NarrativeTargetType.RecentWound when targetId == 0 => RecentWoundSlots,
+            NarrativeTargetType.EquipmentLoss when targetId >= 1 && targetId <= 4 => EquipmentLossSlots,
+            NarrativeTargetType.CraftSold when targetId >= 1 && targetId <= 2 => CraftSoldSlots,
+            NarrativeTargetType.SkillMilestone when targetId >= 1 && targetId <= 2 => SkillMilestoneSlots,
+            NarrativeTargetType.Hardship when targetId >= 1 && targetId <= 4 => HardshipSlots,
+            NarrativeTargetType.EquipmentLossRumor when targetId >= 1 && targetId <= 2 => EquipmentLossRumorSlots,
+            NarrativeTargetType.WorkMood when targetId >= 1 && targetId <= 6 => WorkMoodSlots,
+            _ => null,
+        };
 
         private static void RequireSlots(string text, string? allowedSlot, string where)
         {

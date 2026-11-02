@@ -113,6 +113,14 @@ namespace ARPG.Npc
             return removed > 0 || (previous == null && PersonalStories != null) || oldTheft != PersonalStories?.TheftVictim;
         }
 
+        /// <summary>생활 칸을 갱신한다 (최신 1건). 더 오래된 사건이면 덮지 않는다.</summary>
+        public void RecordLifeStory(NpcLifeStory story)
+        {
+            NpcPersonalStories stories = PersonalStories ??= new();
+            if (stories.Life == null || story.When >= stories.Life.When)
+                stories.Life = story;
+        }
+
         public static bool IsTheftVictimStory(NpcDeedKind kind) => kind == NpcDeedKind.ItemStolen ||
             kind == NpcDeedKind.CaughtThiefInAct || kind == NpcDeedKind.TheftDiscovered;
     }
@@ -139,5 +147,11 @@ namespace ARPG.Npc
         public bool LastWoundSevere;
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore, DefaultValueHandling = DefaultValueHandling.Ignore)]
         public NpcDeedEntry? TheftVictim;
+        // 원정 중상으로 잃은 장비와 그 칸을 채운 결과 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §9.2 ①). 부상 칸과 이어 한 이야기로 말한다.
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore, DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public NpcEquipmentLoss? Loss;
+        // 생활 칸 (§9.2 ②③④): 제작 자랑·숙련 이정표·고생담 중 최신 1건.
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore, DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public NpcLifeStory? Life;
     }
 }

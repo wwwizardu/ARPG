@@ -108,8 +108,24 @@ namespace ARPG.Npc.Narrative
             if (boast != null && boast.Kind == NpcDeedKind.NotableItemAcquired && manager != null &&
                 manager.IsObjectivePurchaseOutcome(save, boast.When) == true)
                 boast = null;
+            // 잃은 칸을 채운 구매는 부상 이야기(분실·구매 한 이야기)가 말한다 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §9.2 ①)
+            NpcEquipmentLoss? equipmentLoss = save.PersonalStories?.Loss;
+            if (boast != null && boast.Kind == NpcDeedKind.NotableItemAcquired && equipmentLoss != null && equipmentLoss.RefillGameTime >= 0f &&
+                boast.When == equipmentLoss.RefillGameTime && equipmentLoss.LostGameTime == save.LastWoundGameTime)
+                boast = null;
             if (boast != null)
                 candidates.Add((boast.When, 3, BuildBoastTopic(npcId, boast, now)));
+            // 생활 칸 (§9.2 ②③④)과 아직 빈 칸으로 지내는 고생 (기록 없이 지금 상태)
+            NpcLifeStory? life = save.PersonalStories?.Life;
+            DialogueTopic? lifeTopic = life != null ? BuildLifeStoryTopic(npcId, life) : null;
+            if (lifeTopic != null)
+                candidates.Add((life!.When, 4, lifeTopic));
+            if (equipmentLoss != null && equipmentLoss.RefillGameTime < 0f)
+            {
+                DialogueTopic? ongoing = BuildOngoingHardshipTopic(npcId, equipmentLoss, now);
+                if (ongoing != null)
+                    candidates.Add((equipmentLoss.LostGameTime + NpcOccupationRules.HardshipHours, 5, ongoing));
+            }
             candidates.Sort((a, b) => a.When != b.When ? b.When.CompareTo(a.When) : a.Order.CompareTo(b.Order));
             for (int i = 0; i < candidates.Count && i < 2; i++)
                 topics.Add(candidates[i].Topic);
@@ -247,7 +263,8 @@ namespace ARPG.Npc.Narrative
                 topic.Type == DialogueTopicType.BetrayalRumor || topic.Type == DialogueTopicType.DungeonRequest ||
                 topic.Type == DialogueTopicType.DungeonRequestProgress || topic.Type == DialogueTopicType.NamedThreatRumor ||
                 topic.Type == DialogueTopicType.NamedThreatRequest || topic.Type == DialogueTopicType.NamedThreatRequestProgress ||
-                topic.Type == DialogueTopicType.ObjectiveRequest || topic.Type == DialogueTopicType.ObjectiveRequestProgress)
+                topic.Type == DialogueTopicType.ObjectiveRequest || topic.Type == DialogueTopicType.ObjectiveRequestProgress ||
+                topic.Type == DialogueTopicType.EquipmentLostRumor)
                 return AmbitionRumorPriority;
 
             return topic.Category switch
@@ -290,6 +307,11 @@ namespace ARPG.Npc.Narrative
                 // 단기 목표 진행·결말: 충성·자존심이 높을수록 자기 목표 이야기를 꺼낸다 (NPC_OBJECTIVE_DESIGN §8.2)
                 DialogueTopicType.ObjectiveStatus => (save.NpcStat.Loyalty + save.NpcStat.Pride) / 10,
                 DialogueTopicType.ObjectiveOutcome => (save.NpcStat.Loyalty + save.NpcStat.Pride) / 10,
+                // NPC 생활 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §9): 생활 사연은 자존심·인내, 일 이야기는 직업 기분과 같은 성향,
+                // 장비 분실 소문은 수다(Gossip)와 같은 성향
+                DialogueTopicType.LifeStory => (save.NpcStat.Pride + save.NpcStat.Patience) / 10,
+                DialogueTopicType.WorkMood => (save.NpcStat.Pride + save.NpcStat.Patience) / 10,
+                DialogueTopicType.EquipmentLostRumor => (save.NpcStat.Friendliness + save.NpcStat.Curiosity) / 10,
                 _ => 0,
             };
         }
@@ -646,8 +668,9 @@ namespace ARPG.Npc.Narrative
             if (save == null)
                 return;
 
-            // CraftMaterial (직업 재료)
-            string? material = CraftMaterialFor(save.JobType);
+            // CraftMaterial (직업 재료). 대장장이·광부는 JobType이 아니라 실제 채광·제작 기록으로 말한다 (WorkMood,
+            // NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §9.4) — 실제로 제작하지 않는 NPC가 재료 얘기를 하지 않게 뺀다.
+            string? material = IsRecordBasedJob(save.JobType) == true ? null : CraftMaterialFor(save.JobType);
             if (material != null)
             {
                 DialogueTopic t = new()
@@ -787,6 +810,7 @@ namespace ARPG.Npc.Narrative
                     NpcRumorKind.ItemOwner => BuildItemOwnerRumorTopic(npcId, rumor, now),
                     NpcRumorKind.Betrayal => BuildBetrayalRumorTopic(npcId, rumor, now),
                     NpcRumorKind.NamedThreat => BuildNamedThreatRumorTopic(npcId, save, rumor),
+                    NpcRumorKind.EquipmentLost => BuildEquipmentLostRumorTopic(npcId, rumor, now),
                     _ => null,
                 };
                 if (t == null)
@@ -795,7 +819,7 @@ namespace ARPG.Npc.Narrative
                     named.Add(t);
                 else if (t.Type == DialogueTopicType.DungeonRumor)
                     dungeon.Add(t);
-                else if (t.Type == DialogueTopicType.ItemOwnerRumor)
+                else if (t.Type == DialogueTopicType.ItemOwnerRumor || t.Type == DialogueTopicType.EquipmentLostRumor)
                     item.Add(t);
                 else
                     betrayal.Add(t);
@@ -961,7 +985,17 @@ namespace ARPG.Npc.Narrative
             string owner = NpcRumorPhrasing.NpcName(rumor.SubjectNpcId);
             string itemName = item.Table != null ? item.Table.Name : "귀한 장비";
             string ago = NpcRumorPhrasing.AgoPhrase(rumor.EventGameTime, now);
-            string line = rumor.SourceNpcId == rumor.SubjectNpcId && rumor.Hops == 1
+            // 다른 NPC가 만든 제작품이면 만든 사람 이름이 소문에 실린다 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §7.3·§9.2 ① 산 걸 들음)
+            bool crafted = item.Equipment != null && item.Equipment.HasMaker == true && item.Equipment.MakerNpcId != rumor.SubjectNpcId &&
+                           string.IsNullOrEmpty(item.Equipment.MakerName) == false;
+            string line = crafted == true
+                ? StoryLine(NarrativeTargetType.EquipmentLossRumor, 2, IsFemaleSpeaker(npcId),
+                        "{ownerName}, 상점에서 {makerName} 솜씨 {itemName} 하나 장만했다더군.",
+                        "{ownerName} 씨가 상점에서 {makerName} 솜씨 {itemName} 하나 장만했대요.")
+                    .Replace(NarrativeContentCatalog.OwnerNameToken, owner)
+                    .Replace(NarrativeContentCatalog.MakerNameToken, item.Equipment!.MakerName!)
+                    .Replace(NarrativeContentCatalog.ItemNameToken, itemName)
+                : rumor.SourceNpcId == rumor.SubjectNpcId && rumor.Hops == 1
                 ? $"{NpcRumorPhrasing.Josa(owner, "이", "가")} {ago} {NpcRumorPhrasing.Josa(itemName, "을", "를")} 손에 넣었다고 내게 직접 자랑하더군."
                 : $"{NpcRumorPhrasing.HeardPrefix(rumor)}{NpcRumorPhrasing.Josa(owner, "이", "가")} {ago} " +
                   $"{NpcRumorPhrasing.Josa(itemName, "을", "를")} 손에 넣었다더군. 요즘 그걸 차고 다닌다지.";
@@ -976,6 +1010,8 @@ namespace ARPG.Npc.Narrative
                 Rumor = rumor,
             };
             t.Facts.Add($"{owner}이(가) {itemName}을(를) 새로 장착하고 다닌다 (가치 {rumor.Value}). 지금도 사실이다.");
+            if (crafted == true)
+                t.Facts.Add($"그 {itemName}은(는) {item.Equipment!.MakerName}이(가) 만들어 상점에 맡긴 것이다.");
             t.Facts.Add($"사건 시점: {ago} (게임 시간 {rumor.EventGameTime:F1}). 출처: {NpcRumorPhrasing.SourceNote(rumor)}.");
             return t;
         }
@@ -1136,8 +1172,8 @@ namespace ARPG.Npc.Narrative
             h = StableHash(h, rumor.SubjectNpcId);
             h = StableHash(h, (int)(rumor.EventGameTime * 100f));
             h = StableHash(h, rumor.SourceNpcId);
-            // P4b 종류만 피해자·세부 종류·아이템을 더한다 (기존 종류의 캐시 키는 그대로)
-            if (rumor.Kind == NpcRumorKind.ItemSold || rumor.Kind == NpcRumorKind.Betrayal)
+            // P4b 종류·장비 분실만 피해자·세부 종류·아이템을 더한다 (기존 종류의 캐시 키는 그대로)
+            if (rumor.Kind == NpcRumorKind.ItemSold || rumor.Kind == NpcRumorKind.Betrayal || rumor.Kind == NpcRumorKind.EquipmentLost)
             {
                 h = StableHash(h, rumor.VictimNpcId);
                 h = StableHash(h, (int)rumor.BetrayalKind);
@@ -1163,7 +1199,7 @@ namespace ARPG.Npc.Narrative
                 BaseLine = "요즘은 그럭저럭 지낼 만하오.",
             });
 
-            if (save != null && save.JobType != GlobalEnum.JobType.None)
+            if (save != null && save.JobType != GlobalEnum.JobType.None && IsRecordBasedJob(save.JobType) == false)
             {
                 DialogueTopic t = new()
                 {
@@ -1175,7 +1211,16 @@ namespace ARPG.Npc.Narrative
                 t.Facts.Add($"직업: {save.JobType}");
                 topics.Add(t);
             }
+
+            // 실제 채광·제작 기록이 있는 NPC만 일 이야기를 한다 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §9.4)
+            DialogueTopic? work = save != null ? BuildWorkMoodTopic(save) : null;
+            if (work != null)
+                topics.Add(work);
         }
+
+        // 대장장이·광부 문구는 JobType이 아니라 실제 기록으로 바꿨다 (§9.4). 나머지 직업 문구는 이 기획 범위 밖이다.
+        private static bool IsRecordBasedJob(GlobalEnum.JobType job) =>
+            job == GlobalEnum.JobType.Blacksmith || job == GlobalEnum.JobType.Miner;
 
         // 과거 사건·관계 목록은 대화 때 순회하지 않는다. 최신 인덱스는 로드 때 재구성한다.
         private static void AddPersonal(List<DialogueTopic> topics, int npcId, NpcSaveData? save) =>
@@ -1252,24 +1297,48 @@ namespace ARPG.Npc.Narrative
             bool delve = save.LastWoundActivity == NpcActivityKind.DungeonDelve;
             bool severe = save.PersonalStories?.LastWoundSevere == true;
             string where = delve ? "던전 원정" : "사냥";
+            bool female = IsFemaleSpeaker(save.EntityId);
             // 마지막 부상이 네임드에게서 왔으면 그 칭호로 말한다 (NAMED_THREAT_DESIGN §6.3). 다친 본인은 칭호를 안다.
             string threatTitle = save.LastWoundThreatId > 0 ? FindWoundThreatTitle(save) : string.Empty;
-            // {knownWoundSummary}: 이 NPC가 실제로 겪은 최신 부상 요약 (§3.2 — 겪은 사실만 말한다)
-            string summary = threatTitle.Length > 0
-                ? (severe ? $"지난 사냥에서 {threatTitle}에게 물려 죽다 살아났소." : $"지난 사냥에서 {threatTitle}에게 물려 호되게 당했소.")
-                : severe ? $"지난 {where}에서 죽다 살아났소." : $"지난 {where}에서 호되게 당했소.";
-            NarrativeContentDefinition? story = AR.s.Data?.NarrativeCatalog.FindPersonalStory(NarrativeTargetType.RecentWound);
+            // {knownWoundSummary}: 이 NPC가 실제로 겪은 최신 부상 요약 (§3.2 — 겪은 사실만 말한다). 여성 화자는 해요체.
+            string summary = WoundSummary(where, threatTitle, severe, female);
+            // 같은 원정에서 잃은 장비가 있으면 분실·구매 이야기로 잇는다 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §9.2 ①)
+            NpcEquipmentLoss? loss = save.PersonalStories?.Loss;
+            bool withLoss = loss != null && loss.LostGameTime == save.LastWoundGameTime;
+            int lossSituation = 0;
+            string line;
+            if (withLoss == true)
+            {
+                line = LossStoryLine(loss!, summary, female, out lossSituation);
+            }
+            else
+            {
+                NarrativeContentDefinition? story = AR.s.Data?.NarrativeCatalog.FindPersonalStory(NarrativeTargetType.RecentWound);
+                line = story != null
+                    ? story.GetIntroText(female).Replace(NarrativeContentCatalog.KnownWoundSummaryToken, summary)
+                    : female == true
+                        ? (severe ? summary + " 이만하길 천만다행이에요." : summary + " 아직 몸이 뻐근해요.")
+                        : (severe ? summary + " 이만하길 천만다행이지." : summary + " 아직 몸이 뻐근하구려.");
+            }
             DialogueTopic t = new()
             {
                 Type = DialogueTopicType.RecentHunt,
                 Category = DialogueTopicCategory.Personal,
                 MinTier = AffinityTier.Stranger,
-                BaseLine = story != null
-                    ? story.IntroText.Replace(NarrativeContentCatalog.KnownWoundSummaryToken, summary)
-                    : severe ? summary + " 이만하길 천만다행이지." : summary + " 아직 몸이 뻐근하구려.",
-                CacheVariant = StableHash(StableHash((int)(save.LastWoundGameTime * 100f), severe == true ? 1 : 0),
-                    (int)save.LastWoundActivity),
+                BaseLine = line,
+                CacheVariant = StableHash(StableHash(StableHash((int)(save.LastWoundGameTime * 100f), severe == true ? 1 : 0),
+                    (int)save.LastWoundActivity), lossSituation),
             };
+            if (withLoss == true)
+            {
+                t.Facts.Add($"그 원정에서 장착하고 있던 {loss!.ItemName}을(를) 잃었다 (본인이 겪은 일).");
+                if (loss.RefillGameTime >= 0f)
+                    t.Facts.Add(loss.RefillMakerId > 0
+                        ? $"게임 시간 {loss.RefillGameTime:F1}에 상점에 맡겨진 {loss.RefillMakerName}의 제작품 {loss.RefillItemName}을(를) 사서 그 칸을 채웠다."
+                        : $"게임 시간 {loss.RefillGameTime:F1}에 상점에서 {loss.RefillItemName}을(를) 사서 그 칸을 채웠다.");
+                else
+                    t.Facts.Add("아직 대신할 장비를 구하지 못했다.");
+            }
             t.Facts.Add(severe
                 ? $"게임 시간 {save.LastWoundGameTime:F1}에 {where}을 나갔다가 죽을 뻔한 중상을 입었다 ({KnowledgeHint(NpcKnowledgeLevel.Did)})."
                 : $"게임 시간 {save.LastWoundGameTime:F1}에 {where}을 나갔다가 부상을 입었다 ({KnowledgeHint(NpcKnowledgeLevel.Did)}).");
@@ -1343,6 +1412,296 @@ namespace ARPG.Npc.Narrative
             for (int i = 0; i < deed.Participants.Count; i++)
                 h = StableHash(h, deed.Participants[i]);
             return h;
+        }
+
+        // ── NPC 생활 사연·대사 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §9.2.1·§9.4) ──
+        // 문구는 시트 NarrativeContent의 개인 사연 행(대상 종류, 상황 번호)에서 읽고, 없으면 같은 확정 문구를 코드 기본값으로 쓴다.
+        // 여성 화자는 여성 문구(해요체). 슬롯 바로 뒤에는 받침에 따라 바뀌는 조사를 붙이지 않는 문구라 이름을 그대로 넣는다.
+
+        private static string StoryLine(NarrativeTargetType type, int situation, bool female, string male, string femaleFallback)
+        {
+            NarrativeContentDefinition? row = AR.s.Data?.NarrativeCatalog.FindPersonalStory(type, situation);
+            if (row != null)
+                return row.GetIntroText(female);
+            return female == true ? femaleFallback : male;
+        }
+
+        private static bool IsFemaleSpeaker(int npcId) => AR.s.Npc != null && AR.s.Npc.GetGender(npcId) == NpcGender.Female;
+
+        private static string OreName(int oreItemId)
+        {
+            Tables.ItemTable? table = AR.s.Data?.GetItem(oreItemId);
+            return table != null ? table.Name : "광석";
+        }
+
+        /// <summary>최근 부상 요약 (§3.2 겪은 사실만). 여성 화자는 해요체.</summary>
+        private static string WoundSummary(string where, string threatTitle, bool severe, bool female)
+        {
+            if (threatTitle.Length > 0)
+                return female == true
+                    ? (severe ? $"지난 사냥에서 {threatTitle}에게 물려 죽을 뻔했어요." : $"지난 사냥에서 {threatTitle}에게 물려 호되게 당했어요.")
+                    : (severe ? $"지난 사냥에서 {threatTitle}에게 물려 죽다 살아났소." : $"지난 사냥에서 {threatTitle}에게 물려 호되게 당했소.");
+            return female == true
+                ? (severe ? $"지난 {where}에서 죽을 뻔했어요." : $"지난 {where}에서 호되게 당했어요.")
+                : (severe ? $"지난 {where}에서 죽다 살아났소." : $"지난 {where}에서 호되게 당했소.");
+        }
+
+        private static bool IsLivingNpc(int npcId)
+        {
+            NpcSaveData? save = npcId > 0 ? AR.s.Npc?.GetSaveData(npcId) : null;
+            return save != null && save.Condition != CharacterConditions.Dead && save.Activity.Phase != NpcActivityPhase.Dead;
+        }
+
+        /// <summary>
+        /// 분실과 구매 (§9.2 ①): 같은 원정에서 잃은 장비가 있으면 부상 이야기에 붙인다. 못 채움 / 위탁 제작품(만든 사람이 살아 있음·죽음) / 상점 기본 장비.
+        /// </summary>
+        private static string LossStoryLine(NpcEquipmentLoss loss, string summary, bool female, out int situation)
+        {
+            string line;
+            if (loss.RefillGameTime < 0f)
+            {
+                situation = 1;
+                line = StoryLine(NarrativeTargetType.EquipmentLoss, 1, female,
+                    "{knownWoundSummary} {lostItemName}까지 잃고 왔지. 새로 구할 때까지는 몸을 사려야겠소.",
+                    "{knownWoundSummary} {lostItemName}까지 잃어버렸어요. 새로 구할 때까지는 조심해야겠어요.");
+            }
+            else if (loss.RefillMakerId > 0)
+            {
+                bool makerAlive = IsLivingNpc(loss.RefillMakerId);
+                situation = makerAlive == true ? 2 : 4;
+                line = makerAlive == true
+                    ? StoryLine(NarrativeTargetType.EquipmentLoss, 2, female,
+                        "{knownWoundSummary} {lostItemName}까지 잃었지. 지금 이건 {makerName} 솜씨요. 제법 쓸 만하더군.",
+                        "{knownWoundSummary} {lostItemName}까지 잃었고요. 지금 이건 {makerName} 솜씨예요. 제법 쓸 만해요.")
+                    : StoryLine(NarrativeTargetType.EquipmentLoss, 4, female,
+                        "{knownWoundSummary} {lostItemName}까지 잃었지. 지금 이건 {makerName} 솜씨요. 만든 사람은 이제 세상에 없지만.",
+                        "{knownWoundSummary} {lostItemName}까지 잃었고요. 지금 이건 {makerName} 솜씨예요. 만든 사람은 이제 세상에 없지만요.");
+            }
+            else
+            {
+                situation = 3;
+                line = StoryLine(NarrativeTargetType.EquipmentLoss, 3, female,
+                    "{knownWoundSummary} {lostItemName}까지 잃었지. 상점에서 새로 장만했으니 그나마 다행이오.",
+                    "{knownWoundSummary} {lostItemName}까지 잃었고요. 상점에서 새로 장만해서 그나마 다행이에요.");
+            }
+            return line.Replace(NarrativeContentCatalog.KnownWoundSummaryToken, summary)
+                .Replace(NarrativeContentCatalog.LostItemNameToken, loss.ItemName)
+                .Replace(NarrativeContentCatalog.MakerNameToken, loss.RefillMakerName);
+        }
+
+        /// <summary>생활 칸 화제 (§9.2 ②③④): 제작 자랑·숙련 이정표·고생담.</summary>
+        private static DialogueTopic? BuildLifeStoryTopic(int npcId, NpcLifeStory story)
+        {
+            bool female = IsFemaleSpeaker(npcId);
+            string line;
+            string fact;
+            int situation;
+            switch (story.Kind)
+            {
+                case NpcLifeStoryKind.CraftSold:
+                    situation = story.MadeForBuyer == true ? 2 : 1;
+                    line = story.MadeForBuyer == true
+                        ? StoryLine(NarrativeTargetType.CraftSold, 2, female,
+                            "{buyerName}, 그 사람이 {lostItemName} 잃었다길래 하나 만들어 뒀지. 결국 그 사람이 사 갔소.",
+                            "{buyerName} 씨가 {lostItemName} 잃었다길래 하나 만들어 뒀거든요. 결국 그분이 사 갔어요.")
+                        : StoryLine(NarrativeTargetType.CraftSold, 1, female,
+                            "{buyerName}, 그 사람이 쓰는 {itemName}, 내가 만든 거요.",
+                            "{buyerName} 씨가 쓰는 {itemName}, 제가 만든 거예요.");
+                    line = line.Replace(NarrativeContentCatalog.BuyerNameToken, story.OtherName)
+                        .Replace(NarrativeContentCatalog.ItemNameToken, story.ItemName)
+                        .Replace(NarrativeContentCatalog.LostItemNameToken, story.LostItemName);
+                    fact = $"게임 시간 {story.When:F1}에 직접 만들어 상점에 맡긴 {story.ItemName}을(를) {story.OtherName}이(가) 사 갔다 (본인이 정산하며 알게 된 일)." +
+                           (story.MadeForBuyer == true ? $" {story.OtherName}이(가) {story.LostItemName}을(를) 잃은 것을 보고 만든 물건이었다." : string.Empty);
+                    break;
+                case NpcLifeStoryKind.MiningMilestone:
+                    situation = 1;
+                    line = StoryLine(NarrativeTargetType.SkillMilestone, 1, female,
+                            "드디어 {oreName}도 캘 수 있게 됐소. 손에 익기까지 오래 걸렸지.",
+                            "드디어 {oreName}도 캘 수 있게 됐어요. 손에 익기까지 오래 걸렸어요.")
+                        .Replace(NarrativeContentCatalog.OreNameToken, OreName(story.OreItemId));
+                    fact = $"게임 시간 {story.When:F1}에 처음으로 {OreName(story.OreItemId)}을(를) 캤다 (본인이 직접 한 일).";
+                    break;
+                case NpcLifeStoryKind.SmithingMilestone:
+                    situation = 2;
+                    line = StoryLine(NarrativeTargetType.SkillMilestone, 2, female,
+                            "처음으로 철을 두드려 {itemName} 만들었소. 구리하고는 손맛이 다르더군.",
+                            "처음으로 철을 두드려서 {itemName} 만들었어요. 구리하고는 느낌이 달라요.")
+                        .Replace(NarrativeContentCatalog.ItemNameToken, story.ItemName);
+                    fact = $"게임 시간 {story.When:F1}에 처음으로 철로 {story.ItemName}을(를) 만들었다 (본인이 직접 한 일).";
+                    break;
+                case NpcLifeStoryKind.Hardship:
+                    bool withMaker = story.OtherNpcId > 0 && string.IsNullOrEmpty(story.OtherName) == false;
+                    situation = withMaker == true ? 2 : 1;
+                    line = withMaker == true
+                        ? StoryLine(NarrativeTargetType.Hardship, 2, female,
+                            "{lostItemName} 없이 {emptyDays}일이나 버텼지. {makerName} 솜씨 덕에 겨우 숨 돌렸소.",
+                            "{lostItemName} 없이 {emptyDays}일이나 버텼어요. {makerName} 솜씨 덕에 겨우 한숨 돌렸어요.")
+                        : StoryLine(NarrativeTargetType.Hardship, 1, female,
+                            "{lostItemName} 없이 {emptyDays}일이나 버텼소. 이제야 좀 살 것 같구려.",
+                            "{lostItemName} 없이 {emptyDays}일이나 버텼어요. 이제야 좀 살 것 같아요.");
+                    line = line.Replace(NarrativeContentCatalog.LostItemNameToken, story.LostItemName)
+                        .Replace(NarrativeContentCatalog.EmptyDaysToken, story.Days.ToString())
+                        .Replace(NarrativeContentCatalog.MakerNameToken, story.OtherName);
+                    fact = $"원정에서 {story.LostItemName}을(를) 잃고 {story.Days}일 동안 빈손으로 지내다 게임 시간 {story.When:F1}에 {story.ItemName}(으)로 채웠다" +
+                           (withMaker == true ? $" ({story.OtherName}이(가) 만든 것)" : string.Empty) + " (본인이 겪은 일).";
+                    break;
+                default:
+                    return null;
+            }
+            DialogueTopic topic = new()
+            {
+                Type = DialogueTopicType.LifeStory,
+                Category = DialogueTopicCategory.Personal,
+                MinTier = AffinityTier.Stranger,
+                BaseLine = line,
+                CacheVariant = StableHash(StableHash((int)story.Kind, (int)(story.When * 100f)), StableHash(situation, story.OtherNpcId)),
+            };
+            topic.Facts.Add(fact);
+            return topic;
+        }
+
+        /// <summary>아직 빈 칸으로 지내는 고생 (§9.2 ④, 기록 없이 지금 상태로만 말한다). 7일 이상일 때.</summary>
+        private static DialogueTopic? BuildOngoingHardshipTopic(int npcId, NpcEquipmentLoss loss, float now)
+        {
+            float emptyHours = now - loss.LostGameTime;
+            if (emptyHours < NpcOccupationRules.HardshipHours)
+                return null;
+            bool female = IsFemaleSpeaker(npcId);
+            int days = Mathf.FloorToInt(emptyHours / 24f);
+            bool noMoney = loss.LastRefillBlock == NpcRefillBlock.NoMoney;
+            string line = (noMoney == true
+                    ? StoryLine(NarrativeTargetType.Hardship, 4, female,
+                        "{lostItemName} 잃은 지 벌써 {emptyDays}일째요. 주머니가 가벼워 아직 못 샀소.",
+                        "{lostItemName} 잃은 지 벌써 {emptyDays}일째예요. 주머니가 가벼워서 아직 못 샀어요.")
+                    : StoryLine(NarrativeTargetType.Hardship, 3, female,
+                        "{lostItemName} 잃은 지 벌써 {emptyDays}일째요. 상점에도 마땅한 게 없구려.",
+                        "{lostItemName} 잃은 지 벌써 {emptyDays}일째예요. 상점에도 마땅한 게 없네요."))
+                .Replace(NarrativeContentCatalog.LostItemNameToken, loss.ItemName)
+                .Replace(NarrativeContentCatalog.EmptyDaysToken, days.ToString());
+            DialogueTopic topic = new()
+            {
+                Type = DialogueTopicType.LifeStory,
+                Category = DialogueTopicCategory.Personal,
+                MinTier = AffinityTier.Stranger,
+                BaseLine = line,
+                CacheVariant = StableHash(StableHash((int)(loss.LostGameTime * 100f), days), noMoney == true ? 4 : 3),
+            };
+            topic.Facts.Add($"원정에서 {loss.ItemName}을(를) 잃고 {days}일째 그 칸을 비워 두고 있다. " +
+                            (noMoney == true ? "상점에 맞는 장비는 있지만 돈이 모자라 못 샀다." : "상점에 맞는 장비가 없었다.") + " (본인이 겪는 일)");
+            return topic;
+        }
+
+        /// <summary>
+        /// 대장장이·광부 대사 (§9.4): 실제 채광·제작 기록이 있을 때만 말한다. 재료 없음 → 위탁품이 안 팔림 → 상점이 광석을 안 받음 →
+        /// 최근 제작 → 광석값이 좋음 → 최근 채광 순으로 하나.
+        /// </summary>
+        private static DialogueTopic? BuildWorkMoodTopic(NpcSaveData save)
+        {
+            NpcWorkRecord? work = save.Work;
+            if (work == null || AR.s.Npc == null || AR.s.Village == null)
+                return null;
+            float now = AR.s.Time != null ? AR.s.Time.CurrentGameTime : save.LastSimGameTime;
+            VillageData? village = save.VillageId >= 0 ? AR.s.Village.GetVillage(save.VillageId) : null;
+            bool female = IsFemaleSpeaker(save.EntityId);
+            int situation = 0;
+            int oreId = 0;
+            if (work.CraftBlockedGameTime >= 0f && now - work.CraftBlockedGameTime < 48f && work.CraftBlockedOreItemId != 0)
+            {
+                situation = 2;
+                oreId = work.CraftBlockedOreItemId;
+            }
+            else if (village != null && VillageManager.CountConsignments(village, save.EntityId) >= NpcOccupationRules.ConsignmentsPerMaker)
+                situation = 3;
+            else if (work.LastOreSellRejectedGameTime >= 0f && now - work.LastOreSellRejectedGameTime < 48f)
+                situation = 5;
+            else if (work.LastCraftGameTime >= 0f && now - work.LastCraftGameTime < 72f)
+                situation = 1;
+            else if (work.LastMiningGameTime >= 0f && now - work.LastMiningGameTime < 72f)
+            {
+                situation = 4;
+                if (village != null)
+                {
+                    float best = 0f;
+                    int[] ores = { NpcOccupationRules.CopperOreItemId, NpcOccupationRules.TinOreItemId, NpcOccupationRules.IronOreItemId };
+                    int zone = AR.s.Npc.GetNpcLootZoneLevel(save);
+                    for (int i = 0; i < ores.Length; i++)
+                    {
+                        if (NpcOccupationRules.CanMineOre(zone, save.MiningSkill, ores[i]) == false)
+                            continue;
+                        float factor = AR.s.Village.GetOreBuyPriceFactor(village, ores[i]);
+                        if (factor > best)
+                        {
+                            best = factor;
+                            oreId = ores[i];
+                        }
+                    }
+                    if (best >= 1.1f)
+                        situation = 6;
+                }
+            }
+            if (situation == 0)
+                return null;
+
+            string line = situation switch
+            {
+                1 => StoryLine(NarrativeTargetType.WorkMood, 1, female, "요즘 쇠 두드리는 일이 많소.", "요즘 쇠 두드리는 일이 많아요."),
+                2 => StoryLine(NarrativeTargetType.WorkMood, 2, female, "{oreName}만 넉넉하면 일이 수월할 텐데.", "{oreName}만 넉넉하면 일이 수월할 텐데요."),
+                3 => StoryLine(NarrativeTargetType.WorkMood, 3, female, "만들어 둔 게 아직 안 팔려서 망치를 내려놓고 있소.",
+                    "만들어 둔 게 아직 안 팔려서 손을 놓고 있어요."),
+                4 => StoryLine(NarrativeTargetType.WorkMood, 4, female, "요즘 광산에 자주 나가오.", "요즘 광산에 자주 나가요."),
+                5 => StoryLine(NarrativeTargetType.WorkMood, 5, female, "상점이 광석을 더 받아 주질 않아서 가방만 무겁소.",
+                    "상점에서 광석을 더 안 받아 줘서 가방만 무거워요."),
+                _ => StoryLine(NarrativeTargetType.WorkMood, 6, female, "요즘 {oreName}값이 좋아서 부지런히 캐고 있소.",
+                    "요즘 {oreName}값이 좋아서 부지런히 캐고 있어요."),
+            };
+            line = line.Replace(NarrativeContentCatalog.OreNameToken, oreId != 0 ? OreName(oreId) : "광석");
+            DialogueTopic topic = new()
+            {
+                Type = DialogueTopicType.WorkMood,
+                Category = DialogueTopicCategory.Flavor,
+                MinTier = AffinityTier.Stranger,
+                BaseLine = line,
+                CacheVariant = StableHash(situation, oreId),
+            };
+            topic.Facts.Add($"채광 {work.MiningCount}회, 제작 {work.CraftCount}회. 채광 숙련 {save.MiningSkill}, 대장 숙련 {save.SmithingSkill}.");
+            topic.Facts.Add(situation switch
+            {
+                1 => "최근에 장비를 만들었다.",
+                2 => $"만들 장비가 있는데 {OreName(oreId)}이(가) 상점에 없어 못 만들고 있다.",
+                3 => "상점에 맡긴 제작품 두 개가 아직 안 팔려 더 만들지 않는다.",
+                4 => "최근 광산에 다녀왔다.",
+                5 => "상점이 광석을 더 사 주지 않아(재고가 찼거나 금고가 비어) 광석을 들고 있다.",
+                _ => $"요즘 상점이 {OreName(oreId)}을(를) 비싸게 사 준다.",
+            });
+            return topic;
+        }
+
+        /// <summary>장비 분실 소문 (§9.2 ① 이웃이 듣는 말): "○○, 지난 원정에서 △△까지 잃었다더군." 잃은 본인은 부상 이야기로 말한다.</summary>
+        private static DialogueTopic? BuildEquipmentLostRumorTopic(int npcId, NpcRumor rumor, float now)
+        {
+            if (rumor.SubjectNpcId == npcId)
+                return null;
+            bool female = IsFemaleSpeaker(npcId);
+            string owner = NpcRumorPhrasing.NpcName(rumor.SubjectNpcId);
+            string itemName = NpcRumorPhrasing.ItemName(rumor.ItemId);
+            string ago = NpcRumorPhrasing.AgoPhrase(rumor.EventGameTime, now);
+            string line = StoryLine(NarrativeTargetType.EquipmentLossRumor, 1, female,
+                    "{ownerName}, 지난 원정에서 {lostItemName}까지 잃었다더군.",
+                    "{ownerName} 씨, 지난 원정에서 {lostItemName}까지 잃었대요.")
+                .Replace(NarrativeContentCatalog.OwnerNameToken, owner)
+                .Replace(NarrativeContentCatalog.LostItemNameToken, itemName);
+            DialogueTopic t = new()
+            {
+                Type = DialogueTopicType.EquipmentLostRumor,
+                Category = DialogueTopicCategory.Rumor,
+                MinTier = AffinityTier.Stranger,
+                BaseLine = line,
+                CacheVariant = RumorCacheVariant(rumor),
+                Rumor = rumor,
+            };
+            t.Facts.Add($"{owner}이(가) 원정에서 크게 다쳐 {itemName}을(를) 잃었다.");
+            t.Facts.Add($"사건 시점: {ago} (게임 시간 {rumor.EventGameTime:F1}). 출처: {NpcRumorPhrasing.SourceNote(rumor)}.");
+            return t;
         }
 
         // ── 헬퍼 ──

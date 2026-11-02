@@ -265,11 +265,11 @@ _초안 작성: 2026-09-24_
 ### 5.1 전투력 — 장비 반영 ✅ P1a
 
 - `NpcPower = 장비 점수 + 스킬 점수`. 장비 점수는 장착 장비의 스탯을 요약한 값이다(공격·방어·생명력의 가중 합) [D32].
-  - `EquipmentData`에는 `ComputedStats`가 없다(`Quality`, `Mods`, `WeaponLocalEnhancements`만 있음). 그래서 `NpcPowerEvaluator`가 화면 밖 NPC의 `NpcSaveData.InventoryEquip`에서 모드를 합산해 점수를 낸다(ECS 없이 동작). 모드 해석은 실체화 때 쓰는 `EquipHelper.ApplyAllEquipmentModifiers`와 같다. 무기 Base는 메인 무기의 `WeaponStats`로만 계산하고, 조건부 모드(OnCalculate/OnEvent)는 점수에서 뺀다. [src: Assets/Scripts/Npc/NpcPowerEvaluator.cs]
-  - 가중치: 공격 1.0 / 방어 0.12 / 생명력 0.10(평범한 NPC에서 비중 50/25/25). 스킬 점수는 SkillLevel당 기준 전투력 × 0.05(2026-10-03부터 기준 전투력에 묶음 — 10.75 기준 0.5375, 이전 26 기준 1.3).
+  - `EquipmentData`에는 `ComputedStats`가 없다(`Quality`, `Mods`, `WeaponLocalEnhancements`만 있음). 그래서 `NpcPowerEvaluator`가 화면 밖 NPC의 `NpcSaveData.InventoryEquip`에서 모드를 합산해 점수를 낸다(ECS 없이 동작). 모드 해석은 실체화 때 쓰는 `EquipHelper.ApplyAllEquipmentModifiers`와 같다. 무기 Base는 실제 공격 프로필과 같은 합성 무기 수치(`WeaponHelper.GetCombinedWeaponStats` — 무기 두 개면 쌍수 합성, 2026-11-02)로만 계산하고, 조건부 모드(OnCalculate/OnEvent)는 점수에서 뺀다. [src: Assets/Scripts/Npc/NpcPowerEvaluator.cs, Assets/Scripts/Common/Utility/WeaponHelper.cs, Docs/combat/WEAPON_PROGRESSION_DESIGN.md §쌍수 구현의 현행 기준]
+  - 가중치: 공격 1.0 / 방어 0.12 / 생명력 0.10(평범한 NPC에서 비중 50/25/25). 스킬 점수는 SkillLevel당 기준 전투력 × 0.05(2026-10-03부터 기준 전투력에 묶음 — 11.22 기준 0.561, 10.75 기준 0.5375, 이전 26 기준 1.3). 방어 점수의 회피는 방어도와 같은 가중치(회피 × 1.0)로 몬스터와 비교하지 않고 더한다(2026-11-01, [PLAYER_LEVEL_CHARM_DESIGN.md](../combat/PLAYER_LEVEL_CHARM_DESIGN.md) §5.6).
   - 복제돼 있던 전투력 식 3곳은 `NpcActivityResolver.GetHuntCapability` 하나로 합쳤다. 솔로·파티 판정과 Food 보상이 모두 이 값을 쓴다.
 - **용기는 전투력에서 뺐다** [D31]. 용기는 활동 빈도의 작은 성향 배율(D40)에만 쓴다.
-- **재정규화** [D31]: capability = clamp01(0.475 + (NpcPower / `HuntReferencePower` − 1) × 0.5). 기준 전투력은 평범한 NPC 집단의 평균이다 — 처음 26, **2026-10-03 기본 장비 적용(D118·D121) 뒤 10.75**(세이브 생존 2,387명 평균 25.96 → 10.75). 개인 상한(+20%)까지 채우면 capability가 +0.10 오른다. 평균 솔로 성공률 61.8~61.9%, Food/성공 2.22~2.24로 교체 전후가 같고, Food 문턱(0.3925/0.56)은 그대로다. 진단: `ARPG/Npc/Diagnostics/Hunt Power Normalization`.
+- **재정규화** [D31]: capability = clamp01(0.475 + (NpcPower / `HuntReferencePower` − 1) × 0.5). 기준 전투력은 평범한 NPC 집단의 평균이다 — 처음 26, 2026-10-03 기본 장비 적용(D118·D121) 뒤 10.75(세이브 생존 2,387명 평균 25.96 → 10.75), **2026-11-01 회피 항을 방어도와 같은 가중치로 바꾼 뒤 11.22**(세이브 생존 2,400명 평균 10.32 → 11.22, 솔로 성공 61.8%·부상 25.3%·Food/Hunt 1.393). 개인 상한(+20%)까지 채우면 capability가 +0.10 오른다. 평균 솔로 성공률 61.8~61.9%, Food/성공 2.22~2.24로 교체 전후가 같고, Food 문턱(0.3925/0.56)은 그대로다. 2026-11-02 쌍수 무기 합성(피해 (R + L) × 0.7·공속·치명타 평균, [WEAPON_PROGRESSION_DESIGN.md](../combat/WEAPON_PROGRESSION_DESIGN.md) §쌍수 구현의 현행 기준) 뒤 새 게임 세이브 평균은 11.41(쌍수 NPC 286명 = 11.9%, 평균 15.23)·솔로 성공 62.2%·개인 상한 초과 0이다. 차이가 작아 기준 전투력은 11.22를 유지했다. 기존 세이브에서는 쌍수 NPC의 개인 상한 기준값이 옛 식이라 상한 초과가 생기므로 새 게임으로 시작했다. 진단: `ARPG/Npc/Diagnostics/Hunt Power Normalization`.
 - **사망 확률** [D48]: 30게임일 사망 0.5~1%가 되도록 기존 곡선의 약 0.375%로 낮췄다. 사망과 부상을 합친 피해 확률은 그대로라 줄인 만큼 부상이 늘고, 성공·실패·Food는 바뀌지 않는다.
 - 계산은 장비 변경 시점에만 다시 하고 런타임에 캐시한다(`NpcManager` 소유). 저장하지 않는다.
 - ⏸ **보류**: 무기 종류 개념이 없어 근접형 NPC가 이름이 "지팡이"인 무기를 장착할 수 있고, 주문형 NPC의 무기 점수가 과대평가될 수 있다(실제 전투에서는 Attack 태그 스킬만 무기 피해를 쓴다). 무기 체제를 정비할 때 함께 다룬다.
@@ -368,7 +368,7 @@ Score(activity) = 기본값(활동별 상수)
 - **Hunt 보상 확장** ✅ P1a: 기존 마을 Food에 더해, 성공하면 **개인 전리품을 1회 롤**한다. **골드는 주지 않는다**(D33). NPC 골드는 전리품을 상점에 팔아서만 생긴다.
   - 카테고리 비율은 몬스터 드랍 규칙(DropTable 1번: 장비 15 · 오브 10 · 스킬북 5 · 스킬 페이지 10, Nothing 제외)을 재사용한다. 기준 레벨은 **소속 마을 청크의 `MapManager.GetZone`**(월드 몬스터 레벨과 같은 기준)이다. 모든 선택과 아이템 롤은 결정론 RNG로 한다(D35).
   - 파티 Hunt는 분배 규칙(P3)이 생기기 전까지 **Success를 받은 파티원 각자가 1회씩** 롤한다.
-  - 원정 중 가방(5칸)이 가득 차면 **가치(BasePrice)가 가장 낮은 것을 버린다.** 새 전리품도 비교 대상이다(D35).
+  - 원정 중 가방(8칸, 2026-11-01에 5칸에서 늘림)이 가득 차면 **가치(BasePrice)가 가장 낮은 것을 버린다.** 새 전리품도 비교 대상이다(D35).
   - 전리품은 장비여도 **장착하지 않는다.** 가방에 넣었다가 Trade에서 판다. NPC가 강해지는 경로는 상점의 기본 장비 구매뿐이다 [D119, 2026-10-03]. (이전: 업그레이드 문턱 D45를 넘으면 바로 장착, 관측값 Hunt 성공 1회당 약 0.1%.)
   - Delve·던전 완료 보상 전리품도 같다 — 업그레이드 사건은 Trade에서만 생긴다.
 - **DungeonDelve** ✅ P2a: 소속 마을의 던전 슬롯(`DungeonId`)을 **추상 대상으로만** 참조하는 **12게임시간** 활동이다 [D55]. [src: Assets/Scripts/Manager/NpcManager_Delve.cs]

@@ -74,6 +74,9 @@ namespace ARPG.Npc
                 case NpcRumorKind.NamedThreat:
                     // 네임드가 활성일 때만 사실이다. 처치·사라짐 뒤에는 무효가 되어 다음 표시·교환 때 정리된다 (NAMED_THREAT_DESIGN §8.3).
                     return AR.s.NamedThreat != null && AR.s.NamedThreat.IsActive(rumor.ThreatId) == true;
+                case NpcRumorKind.EquipmentLost:
+                    // 이미 일어난 분실이라 뒤집히지 않는다 — 잃은 NPC가 살아 있는 동안 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §9.2 ①)
+                    return IsLivingRumorNpc(rumor.SubjectNpcId) == true;
                 default:
                     return false;
             }
@@ -404,6 +407,7 @@ namespace ARPG.Npc
                 NpcRumorKind.Betrayal => a.SubjectNpcId == b.SubjectNpcId && a.VictimNpcId == b.VictimNpcId &&
                                          a.EventGameTime == b.EventGameTime,
                 NpcRumorKind.NamedThreat => a.ThreatId == b.ThreatId,
+                NpcRumorKind.EquipmentLost => a.SubjectNpcId == b.SubjectNpcId && a.EventGameTime == b.EventGameTime,
                 NpcRumorKind.PlayerDeed => a.DeedKind == b.DeedKind && a.InstanceId == b.InstanceId &&
                                            (string.IsNullOrEmpty(a.InstanceId) == false ||
                                             (a.VillageId == b.VillageId && a.SlotIndex == b.SlotIndex && a.Generation == b.Generation)),

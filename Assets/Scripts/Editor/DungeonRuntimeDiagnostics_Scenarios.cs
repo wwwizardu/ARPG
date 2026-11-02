@@ -383,7 +383,15 @@ namespace ARPG.EditorTools
         }
 
         private static NarrativeContentDefinition WishRow(NarrativeContentPack pack) => pack.Contents.Find(c => c.Kind == NarrativeContentKind.Wish);
-        private static NarrativeContentDefinition StoryRow(NarrativeContentPack pack) => pack.Contents.Find(c => c.Kind == NarrativeContentKind.PersonalStory);
+        private static NarrativeContentDefinition StoryRow(NarrativeContentPack pack) => pack.Contents.Find(c => c.Kind == NarrativeContentKind.PersonalStory &&
+            c.TargetType == NarrativeTargetType.RecentWound);
+
+        // NPC 생활 사연·대사 행 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §9.2.1): 대상 종류 → 상황 번호 개수. 행마다 여성 문구가 있다.
+        private static readonly (NarrativeTargetType Type, int Count)[] _occupationStoryRows =
+        {
+            (NarrativeTargetType.EquipmentLoss, 4), (NarrativeTargetType.CraftSold, 2), (NarrativeTargetType.SkillMilestone, 2),
+            (NarrativeTargetType.Hardship, 4), (NarrativeTargetType.EquipmentLossRumor, 2), (NarrativeTargetType.WorkMood, 6),
+        };
 
         private static void ValidateNarrativeCatalog(NarrativeContentPack pack, List<DungeonTable> tables, List<MonsterTable> monsters,
             List<ItemTable> items, StringBuilder report)
@@ -411,8 +419,20 @@ namespace ARPG.EditorTools
             int wishCount = pack.Contents.FindAll(c => c.Kind == NarrativeContentKind.Wish).Count;
             int storyCount = pack.Contents.FindAll(c => c.Kind == NarrativeContentKind.PersonalStory).Count;
             int otherCount = pack.Contents.Count - rumors.Count - wishCount - storyCount - threats.Count;
-            Require(wishCount == 1 && storyCount == 1 && otherCount == 0,
-                $"content rows by kind: rumors {rumors.Count}/3, wish {wishCount}/1, story {storyCount}/1, named threats {threats.Count}/3, other {otherCount}/0");
+            int expectedStories = 1;
+            for (int i = 0; i < _occupationStoryRows.Length; i++)
+            {
+                expectedStories += _occupationStoryRows[i].Count;
+                for (int id = 1; id <= _occupationStoryRows[i].Count; id++)
+                {
+                    NarrativeTargetType type = _occupationStoryRows[i].Type;
+                    int situation = id;
+                    Require(pack.Contents.Exists(c => c.Kind == NarrativeContentKind.PersonalStory && c.TargetType == type && c.TargetId == situation &&
+                        string.IsNullOrWhiteSpace(c.IntroTextFemale) == false), $"occupation story row {type} {situation} with a female line");
+                }
+            }
+            Require(wishCount == 1 && storyCount == expectedStories && otherCount == 0,
+                $"content rows by kind: rumors {rumors.Count}/3, wish {wishCount}/1, story {storyCount}/{expectedStories}, named threats {threats.Count}/3, other {otherCount}/0");
             Require(pack.Reactions.Count == 11 && pack.Reactions.FindAll(r => r.Requirement == NarrativeReactionRequirement.WishFulfilled).Count == 3 &&
                 pack.Reactions.Exists(r => r.ReactionRuleId == 301 && r.Requirement == NarrativeReactionRequirement.ThreatSlain &&
                     r.Audience == NarrativeReactionAudience.Victim),
@@ -1277,6 +1297,7 @@ namespace ARPG.EditorTools
                     { "SignText", c.SignText }, { "ResolvedText", c.ResolvedText }, { "GoalType", c.GoalType.ToString() },
                     { "TargetCount", c.TargetCount.ToString() }, { "StartConditionGroupId", c.StartConditionGroupId.ToString() },
                     { "Revision", c.Revision.ToString() }, { "Enabled", c.Enabled ? "TRUE" : "FALSE" },
+                    { "IntroTextFemale", c.IntroTextFemale },
                 });
                 if (blankOptional)
                     for (int o = 0; o < optional.Length; o++) contentRows[i][optional[o]] = string.Empty;

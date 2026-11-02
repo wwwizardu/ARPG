@@ -12,7 +12,8 @@ namespace ARPG.Village
     public partial class VillageManager
     {
         /// <summary>
-        /// 세계 Gold = 모든 마을 금고 + 살아 있는 NPC 주머니 (플레이어 제외 — 플레이어 거래는 닫힌 경제 밖, D126).
+        /// 세계 Gold = 모든 마을 금고 + 살아 있는 NPC 주머니 + 제작자가 아직 받지 않은 위탁 대금
+        /// (플레이어 제외 — 플레이어 거래는 닫힌 경제 밖, D126. 위탁 대금은 NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §7.2).
         /// 진단은 원장 필드를 복제본으로 바꿔 끼운 채 같은 메서드로 잰다.
         /// </summary>
         public long ComputeWorldGold()
@@ -22,6 +23,7 @@ namespace ARPG.Village
                 total += VillageResourceSimulation.GetAmount(_villageList[i], GlobalEnum.ItemType.Gold);
             if (AR.s.Npc != null)
                 total += AR.s.Npc.SumLivingNpcGold();
+            total += SumPendingConsignmentProceeds();
             return total;
         }
 

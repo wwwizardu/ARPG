@@ -344,6 +344,9 @@ namespace ARPG.UI
 
             NpcActivityState activity = _saveData.Activity;
             AddActivityRow("현재 활동", GetActivityLabel(activity));
+            // 채광·대장 숙련 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §3.1). 직업이 아니라 각자 따로 오르는 생활 기술이다.
+            if (_saveData.LifeSkillsInitialized == true)
+                AddActivityRow("생활 숙련", $"채광 {_saveData.MiningSkill} · 대장 {_saveData.SmithingSkill} (합산 상한 {_saveData.LifeSkillCap})");
 
             if (activity.PhaseEndGameTime > AR.s.Time.CurrentGameTime &&
                 (activity.Kind != NpcActivityKind.None || activity.Phase == NpcActivityPhase.Wounded))
@@ -453,6 +456,9 @@ namespace ARPG.UI
             if (rumor.Kind == NpcRumorKind.ItemSold)
                 return $"{NpcRumorPhrasing.Josa(subject, "이", "가")} " +
                        $"{NpcRumorPhrasing.Josa(NpcRumorPhrasing.ItemName(rumor.ItemId), "을", "를")} 상점에 팔았다 · {source} · {ago}";
+            if (rumor.Kind == NpcRumorKind.EquipmentLost)
+                return $"{NpcRumorPhrasing.Josa(subject, "이", "가")} 원정에서 " +
+                       $"{NpcRumorPhrasing.Josa(NpcRumorPhrasing.ItemName(rumor.ItemId), "을", "를")} 잃었다 · {source} · {ago}";
             if (rumor.Kind == NpcRumorKind.Betrayal)
             {
                 string what = rumor.BetrayalKind == NpcBetrayalKind.TheftCaughtInAct ? "훔치려다 걸림" : "훔친 것이 드러남";
@@ -500,6 +506,10 @@ namespace ARPG.UI
                 return "던전 원정 중";
             if (activity.Kind == NpcActivityKind.Relocate)
                 return "이주 중";
+            if (activity.Kind == NpcActivityKind.Mining)
+                return "채광 중";
+            if (activity.Kind == NpcActivityKind.Crafting)
+                return "제작 중";
             return "대기";
         }
 

@@ -34,6 +34,12 @@ namespace ARPG.Npc
         // 사라진 터(폐허·합병)를 떠나 가장 가까운 상점 마을로 옮겨 가는 편도 이동 (NPC_AMBITION_DESIGN D138~D141).
         // Phase=Venturing, 경로는 Origin→Target(= Return) 편도. TargetKey = 목적지 VillageId. 도착하면 소속이 바뀐다.
         Relocate = 5,
+        // 채광 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §5.5). 8시간 마을 밖 왕복(화면 밖 진행), 종료 시점에 한 번 판정. 플레이어 광맥은 읽지 않는다.
+        // Phase=Venturing이고 사냥과 같은 왕복 경로 표현을 쓰지만 파티·원정 판정 대상은 아니다 (IsExpedition false).
+        Mining = 6,
+        // 제작 (§6.1). 마을 Forge에서 2시간, 종료 시점에 광석 3개를 써서 기본 아이템 장비 하나를 만든다. 제자리 활동이라 Phase=Idle.
+        // TargetKey = "craft:{ItemId}:{빈 칸 NPC EntityId}".
+        Crafting = 7,
     }
 
     /// <summary>오프스크린 Hunt 종료 시 단 한 번 결정되는 결과.</summary>
@@ -141,7 +147,8 @@ namespace ARPG.Npc
                 ReturnPosition = OriginPosition;
                 OutboundFraction = 0.5f;
             }
-            if ((Kind == NpcActivityKind.Hunt || Kind == NpcActivityKind.DungeonDelve) && OutcomeSeedGameTime <= 0f)
+            if ((Kind == NpcActivityKind.Hunt || Kind == NpcActivityKind.DungeonDelve || Kind == NpcActivityKind.Mining) &&
+                OutcomeSeedGameTime <= 0f)
                 OutcomeSeedGameTime = PhaseStartedGameTime;
             if (PartyId < -1)
                 PartyId = -1;

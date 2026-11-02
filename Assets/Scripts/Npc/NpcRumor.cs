@@ -26,6 +26,9 @@ namespace ARPG.Npc
         // 네임드 위협 (NAMED_THREAT_DESIGN §8). 대상 = 네임드 ID(ThreatId)만 저장하고, 문구의 사실은 표시할 때 네임드 기록에서 읽는다.
         // IsDistant = 주변 마을의 먼 소문(주 마을 방향만 안다). 네임드가 활성일 때만 유효하다.
         NamedThreat = 6,
+        // 원정 중상으로 장비를 잃었다 (NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §9.2 ①). 주체 = 잃은 NPC, ItemId = 잃은 장비, 시각 = 잃은 때.
+        // 이미 일어난 일이라 잃은 NPC가 살아 있는 동안 유효하다 (ItemSold와 같다).
+        EquipmentLost = 7,
     }
 
     /// <summary>

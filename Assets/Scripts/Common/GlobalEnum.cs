@@ -657,8 +657,9 @@ public class GlobalEnum
 
     static public ushort PLAYER_INVENTORY_SLOTCOUNT_MAX = 60;
 
-    // NPC 인벤토리 슬롯 수 (NpcSaveData.Inventory 길이). 변경 시 세이브 마이그레이션 필요.
-    public const int NPC_INVENTORY_SLOTCOUNT_MAX = 5;
+    // NPC 인벤토리 슬롯 수 (NpcSaveData.Inventory 길이). 늘리면 구 세이브는 로드 때 EnsureSlotsInitialized가 빈 칸을 붙인다.
+    // 줄이면 넘치는 칸의 물건 처리(세이브 마이그레이션)가 필요하다. 5 → 8 (2026-11-01, NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN §2.3).
+    public const int NPC_INVENTORY_SLOTCOUNT_MAX = 8;
 
     // 스킬북 시스템 (SKILLBOOK_DESIGN.md §3.1)
     public const int PLAYER_SKILL_SLOT_COUNT = 10;          // 플레이어 스킬 슬롯 수 (0~9). 슬롯 0=좌클릭, 1=Space, 2~9=숫자키 1~8

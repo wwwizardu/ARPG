@@ -96,6 +96,8 @@ sources:
   - Assets/Scripts/Item/CharmTooltipText.cs
   - Assets/Scripts/Data/CharmData.cs
   - Assets/Scripts/Npc/NpcPowerEvaluator.cs
+  - Assets/Scripts/Npc/NpcActivityResolver.cs
+  - Docs/npc/NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN.md
   - Assets/Scripts/UI/UICharmBoard.cs
   - Assets/Scripts/UI/UIConfirmDialog.cs
   - Assets/Scripts/Editor/PlayerLevelCharmDiagnostics.cs
@@ -121,7 +123,7 @@ sources:
   - Assets/Scripts/Editor/AttackTelegraphBuildValidator.cs
   - Assets/_BinaryData/TableData/MonsterTable.bytes
 last_synced: 2026-09-01
-last_updated: 2026-10-25
+last_updated: 2026-11-03
 status: implemented-contract-active-validation-pending
 ---
 
@@ -176,7 +178,9 @@ status: implemented-contract-active-validation-pending
 
 같은 날 사용자 확정으로 표창을 제외하고 투창을 유지한다. 대검·활·석궁·지팡이는 양손이며 보조 장비를 사용할 수 없다. 한손검·단검·도끼·투창·완드는 한손 계열로 쌍수를 허용한다. [src: Docs/combat/WEAPON_PROGRESSION_DESIGN.md §지원 계열과 장착 규칙]
 
-쌍수 계산 초기안은 각 무기의 고유 강화 반영 후 피해를 `(오른손 + 왼손) × 0.7`로 합성하고 APS·무기 기본 치명타·도달거리 배율은 산술평균한다. 기존 타격 횟수와 타격당 치명타 한 번을 유지하며 별도 쌍수 공속 보너스는 없다. 동일 수치 두 자루의 무기 피해 항은 한 자루 대비 40% 증가한다. 평균 도달거리 배율을 기존 범위 식에 대입하며 공통 옵션과 스킬 계수의 계산 경로는 유지한다. 이 초기안은 **확정·미구현**이며 현행 무기 조회는 오른손 우선 경로다. [src: Docs/combat/WEAPON_PROGRESSION_DESIGN.md §쌍수 계산 초기안·§쌍수 구현의 현행 기준, Docs/combat/WEAPON_SKILL_RANGE_DESIGN.md §확정 규칙]
+쌍수 계산 초기안은 각 무기의 고유 강화 반영 후 피해를 `(오른손 + 왼손) × 0.7`로 합성하고 APS·무기 기본 치명타·도달거리 배율은 산술평균한다. 기존 타격 횟수와 타격당 치명타 한 번을 유지하며 별도 쌍수 공속 보너스는 없다. 동일 수치 두 자루의 무기 피해 항은 한 자루 대비 40% 증가한다. 평균 도달거리 배율을 기존 범위 식에 대입하며 공통 옵션과 스킬 계수의 계산 경로는 유지한다. [src: Docs/combat/WEAPON_PROGRESSION_DESIGN.md §쌍수 계산 초기안, Docs/combat/WEAPON_SKILL_RANGE_DESIGN.md §확정 규칙]
+
+2026-11-02 피해·공속·무기 기본 치명타 합성을 **구현**했다(커밋 대기). 합성은 `WeaponHelper.GetCombinedWeaponStats` 한곳에서 하고 실제 공격 프로필과 NPC 전투력이 같은 값을 쓴다. 무기 하나이거나 왼손이 방패면 그 무기 값 그대로다. 계기는 NPC 장비 분실에서 오른손 무기를 잃으면 왼손 무기가 주 무기로 올라 전투력이 오르던 문제였다. 양손 계열 분류·보조 슬롯 금지(무기 종류 구분이 없어 아무 무기 두 개면 합성), 도달거리 평균(무기 거리 수치 없음), 장비 비교 툴팁의 합성 미리보기는 아직 없다. 6경우 확인에서 합성값·공격 프로필·NPC 공격 점수가 식과 일치했다. [src: Docs/combat/WEAPON_PROGRESSION_DESIGN.md §쌍수 구현의 현행 기준, Docs/combat/combatSystem.md §스킬 공격 프로필 구성, Assets/Scripts/Common/Utility/WeaponHelper.cs `GetCombinedWeaponStats`, Assets/Scripts/Npc/NpcPowerEvaluator.cs] [추론: 계기는 2026-11-02 작업 대화 기준]
 
 현재 장비를 이름 기준으로 대응하면 한손검·단검·도끼 등은 Tier 1·2·3에 장비가 있고 대검·석궁은 Tier 1, 투창은 Tier 2·3 장비가 비어 있다. 기존 표창 행과 연결 데이터는 아직 삭제하지 않았다. 초·중·후반 3구간은 점검용 틀이며 근접 수치는 초안, 원거리는 임시 기준이다. 최종 구간 수·전체 계열의 최종 밸런스·추가 고유 효과·신규 장비 목록은 미확정이다. [src: Docs/combat/WEAPON_PROGRESSION_DESIGN.md §현재 장비의 계열별 배치·§근접 4종 기준 성능표 초안·§원거리 3종 임시 기준 성능표·§이번 정리의 범위]
 
@@ -278,7 +282,7 @@ Final = (Base + Sum(GlobalFlat)) * (1 + Sum(GlobalIncreased) / 100)
 
 ### 치명타 확률
 
-Attack은 강화 반영 무기 치명타를, Spell은 `SkillTable.BaseCriRate`를 스킬 기본값으로 사용한다. 캐릭터 기본 치명타·글로벌 고정 치명타·OnHit 보너스를 더한 뒤 글로벌 증가율을 한 번 적용한다. [src: Docs/combat/combatSystem.md §스킬 공격 프로필 구성, Assets/Scripts/Skill/Combat/SkillOffensiveStatResolver.cs:L104-118, Assets/Scripts/Common/System/System_SkillAttackProfileCalculation.cs:L135-141]
+Attack은 강화 반영 무기 치명타(쌍수면 두 무기 평균)를, Spell은 `SkillTable.BaseCriRate`를 스킬 기본값으로 사용한다. 캐릭터 기본 치명타·글로벌 고정 치명타·OnHit 보너스를 더한 뒤 글로벌 증가율을 한 번 적용한다. [src: Docs/combat/combatSystem.md §스킬 공격 프로필 구성, Assets/Scripts/Skill/Combat/SkillOffensiveStatResolver.cs:L104-118, Assets/Scripts/Common/System/System_SkillAttackProfileCalculation.cs:L135-141]
 
 ```text
 FinalCrit = Clamp(
@@ -291,7 +295,7 @@ FinalCrit = Clamp(
 
 ### 공격속도
 
-Attack의 최종 초당 공격 횟수는 강화 반영 무기 APS에 스킬 배율과 글로벌 공격속도 증가 합계를 곱한다. 실제 Start/Process/End 시간도 이 프로필 APS의 역수를 사용한다. Spell 프로필의 공격속도는 0이며 실제 주문 시간에는 기존 시전속도 경로만 적용한다. [src: Docs/combat/combatSystem.md §공격 속도 / 시전 속도, Assets/Scripts/Common/System/System_SkillAttackProfileCalculation.cs:L148-160, Assets/Scripts/Common/System/System_Skill.cs:L243-272]
+Attack의 최종 초당 공격 횟수는 강화 반영 무기 APS(쌍수면 두 무기 평균)에 스킬 배율과 글로벌 공격속도 증가 합계를 곱한다. 실제 Start/Process/End 시간도 이 프로필 APS의 역수를 사용한다. Spell 프로필의 공격속도는 0이며 실제 주문 시간에는 기존 시전속도 경로만 적용한다. [src: Docs/combat/combatSystem.md §공격 속도 / 시전 속도, Assets/Scripts/Common/System/System_SkillAttackProfileCalculation.cs:L148-160, Assets/Scripts/Common/System/System_Skill.cs:L243-272]
 
 ```text
 FinalAttackSpeedPerSecond
@@ -302,7 +306,7 @@ FinalAttackSpeedPerSecond
 
 ### 추가 피해
 
-무기 캐시에는 Base와 고유 강화 피해만 들어간다. 일반 추가 피해는 `StatModifier`로 등록되어 스킬 태그가 일치할 때 무기 피해·SkillTable 피해·스킬 페이지 OnHit 피해와 합산된다. 현행 비-Base 추가 피해 Mod는 모두 `Tags=Attack`이다. [src: Docs/combat/combatSystem.md §스킬 공격 프로필 구성, Assets/Scripts/Data/ItemData.cs:L308-400, Assets/Scripts/Common/Utility/EquipHelper.cs:L187-231, Assets/Scripts/Common/System/System_SkillAttackProfileCalculation.cs:L80-133, Assets/_BinaryData/TableData/ModTable.bytes:L1]
+무기 캐시에는 Base와 고유 강화 피해만 들어간다. 쌍수면 두 무기 캐시의 속성별 최소·최대를 (R + L) × 0.7로 합성하고, 소수 그대로 다른 항과 더해 속성별 % 증가까지 곱한 뒤 프로필에서 한 번만 반올림한다(무기 하나면 이전 정수 계산과 같다). [src: Docs/combat/combatSystem.md §스킬 공격 프로필 구성, Assets/Scripts/Common/System/System_SkillAttackProfileCalculation.cs `BuildProfile`·`ToProfileDamage`] 일반 추가 피해는 `StatModifier`로 등록되어 스킬 태그가 일치할 때 무기 피해·SkillTable 피해·스킬 페이지 OnHit 피해와 합산된다. 현행 비-Base 추가 피해 Mod는 모두 `Tags=Attack`이다. [src: Docs/combat/combatSystem.md §스킬 공격 프로필 구성, Assets/Scripts/Data/ItemData.cs:L308-400, Assets/Scripts/Common/Utility/EquipHelper.cs:L187-231, Assets/Scripts/Common/System/System_SkillAttackProfileCalculation.cs:L80-133, Assets/_BinaryData/TableData/ModTable.bytes:L1]
 
 ## 갱신과 표시
 
@@ -412,7 +416,9 @@ FinalAttackSpeedPerSecond
 
 - 기존 세이브의 플레이어는 1레벨에서 시작한다(저장된 값 그대로). [src: Assets/Scripts/Data/PlayerData.cs `NormalizeProgression`]
 - NPC 정확도는 고향 마을 청크 지역 레벨의 A(L)이다. 문서 §5.4의 "제안"을 채택했다. [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md §5.4, Assets/Scripts/Factory/EntityFactory.cs `ApplyNpcAccuracy`, Assets/Scripts/Manager/NpcManager_Ambition.cs `GetNpcLootZoneLevel`]
-- NPC 전투력의 회피 항은 (표 기본 민첩 + 장비 민첩) × 2 + 장비 회피를 같은 지역 균형형 몬스터 정확도 기준 피할 확률(%)로 바꿔 넣는다. 문서 §5.6은 "지금 값(0)과 거의 같게 유지"였지만, 평가식은 원래 장비만 읽었고 사용자가 기본 민첩 포함을 골랐다. [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md §5.6, Assets/Scripts/Npc/NpcPowerEvaluator.cs `EvaluateBreakdown`·`GetEvadePercent`·`ResolveContext`] 같은 세이브에서 NPC 평균 전투력이 9.986 → 10.284(NPC당 +0.20~1.00)가 됐다. [추론: 2026-10-24 플레이 모드 측정 기준]
+- NPC 전투력의 회피 항은 (표 기본 민첩 + 장비 민첩) × 2 + 장비 회피다. 사용자가 기본 민첩 포함을 골랐다(평가식은 원래 장비만 읽었다). [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md §5.6, Assets/Scripts/Npc/NpcPowerEvaluator.cs `EvaluateBreakdown`·`ResolveBaseDex`]
+  - 2026-10-24~11-01에는 고향 마을 지역 몬스터 정확도 기준 피할 확률(%)로 넣었다. 장비가 그대로여도 이주만으로 전투력이 0.2~0.8 흔들리고, 상한 기준값을 다시 재지 않아 개인 상한 초과가 생겼다. [src: Docs/npc/NPC_OCCUPATIONS_PERSONAL_STORIES_PLAN.md §4.3]
+  - 2026-11-01부터 몬스터와 비교하지 않고 **회피 × 1.0**(방어도와 같은 가중치)을 방어 점수에 더한다. 사용자 방침: 최종 밸런스에서 같은 수치의 방어도와 회피가 같은 성능을 가져야 한다(실제 전투 공식은 아직 다르다). 평균 전투력이 10.32 → 11.22가 되어 Hunt 기준 전투력도 11.22로 옮겼다. [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md §5.6, Assets/Scripts/Npc/NpcPowerEvaluator.cs `EvasionWeight`, Assets/Scripts/Npc/NpcActivityResolver.cs `HuntReferencePower`]
 
 **참 판·참**
 
@@ -433,7 +439,7 @@ FinalAttackSpeedPerSecond
 ## 연결된 것들
 
 - 전체 구현 현황: [current_status.md](current_status.md)
-- NPC 장비도 같은 ItemData 복구 경로와 무기 조회 경로의 영향을 받는다: [npc.md](npc.md) [src: Assets/Scripts/Npc/NpcSaveData.cs:L142-151, Assets/Scripts/Common/Utility/WeaponHelper.cs:L12-38]
+- NPC 장비도 같은 ItemData 복구 경로와 무기 조회(쌍수 합성 포함) 경로의 영향을 받는다: [npc.md](npc.md) [src: Assets/Scripts/Npc/NpcSaveData.cs:L142-151, Assets/Scripts/Common/Utility/WeaponHelper.cs `GetCombinedWeaponStats`]
 
 ## 미해결 / 주의
 
