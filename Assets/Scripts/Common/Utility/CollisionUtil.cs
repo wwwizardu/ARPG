@@ -123,6 +123,45 @@ namespace ARPG.Utility
         }
 
         /// <summary>
+        /// from→to 직선 경로를 sub-step으로 진행하며 막힌 축만 버리고 나머지 축으로 미끄러진다.
+        /// 경로가 깨끗하면 to 그대로 반환. 충돌 내부에서 막힌 sub-step은 ResolveAxisSeparated의 탈출 규칙(침투량이 줄어드는 축만 허용)을 쓴다.
+        /// 한 번에 반경보다 길게 움직일 수 있는 자기 이동용 (ClipTrajectory는 첫 막힘에서 멈춘다).
+        /// </summary>
+        public static Vector2 SlideTrajectory(Vector2 from, Vector2 to, float radius)
+        {
+            Vector2 delta = to - from;
+            float magnitude = delta.magnitude;
+            if (magnitude < 0.0001f)
+                return from;
+
+            float stepLen = radius * STEP_RATIO;
+            int steps = Mathf.CeilToInt(magnitude / stepLen);
+            Vector2 stepDelta = delta / steps;
+
+            Vector2 cursor = from;
+            // 시작점은 검사하지 않는다. 막힌 sub-step에서만 필요하고, 깨끗한 지점을 지난 뒤에는 이미 알고 있다.
+            bool knownClear = false;
+            for (int i = 1; i <= steps; i++)
+            {
+                // 다음 지점이 비어 있으면 그대로 간다. 충돌 내부에서 빈 곳으로 나가는 것도 침투량이 줄어드는 이동이다.
+                Vector2 next = cursor + stepDelta;
+                if (IsBlockedAt(next, radius) == false)
+                {
+                    cursor = next;
+                    knownClear = true;
+                    continue;
+                }
+
+                // 깨끗한 위치에서 시작한 축 분리는 깨끗한 위치에만 멈추므로 그대로 깨끗하다.
+                if (knownClear == true)
+                    cursor = ResolveFromClearPosition(cursor, stepDelta, radius);
+                else
+                    cursor = ResolveAxisSeparated(cursor, stepDelta, radius);
+            }
+            return cursor;
+        }
+
+        /// <summary>
         /// pos를 중심으로 나선형 외곽 탐색하여 첫 번째 빈 타일 중심을 반환.
         /// 점프 착지 시 freeze된 위치마저 막혀있을 때 (비행 중 건물 생성 등) 탈출 용도.
         /// </summary>

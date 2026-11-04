@@ -127,6 +127,7 @@ namespace ARPG.Factory
             // MonsterTag (System_EntityDestroy에서 MonsterManager 연동에 사용)
             AR.s.Component.AddComponent(entityId, new MonsterTag());
             AR.s.Component.AddComponent(entityId, new MonsterCrowdComponent { MonsterTableId = monsterTableId });
+            AR.s.Component.AddComponent(entityId, new ResolvedVelocityComponent());
 
             // 진영 (적대) - 스킬·발사체·AI 타겟 필터에 사용
             AR.s.Component.AddComponent(entityId, new FactionComponent { FactionId = Faction.Hostile });
@@ -243,6 +244,8 @@ namespace ARPG.Factory
             }
             // (Patrol/PatrolRanged BehaviorType 강제 + Patrol 초기 상태)
             AR.s.Component.AddComponent(entityId, new NpcTag());
+            // 군집 이동이 NPC 이동을 몬스터 몸에 막히게 할 때 확정 속도를 넘기는 칸
+            AR.s.Component.AddComponent(entityId, new ResolvedVelocityComponent());
 
             // 진영 명시 — "컴포넌트 없음 = 중립" 암묵 규칙에 기대지 않는다 (NPC_COMBAT_DESIGN §3.2)
             AR.s.Component.AddComponent(entityId, new FactionComponent { FactionId = Faction.Neutral });
@@ -364,6 +367,8 @@ namespace ARPG.Factory
                 IsInteracting = false,
                 IsSprinting = false
             });
+            // 군집 이동이 플레이어 이동을 몬스터 몸에 막히게 할 때 확정 속도를 넘기는 칸
+            AR.s.Component.AddComponent(entityId, new ResolvedVelocityComponent());
 
             AR.s.Component.AddComponent(entityId, new SkillAimIndicatorComponent
             {

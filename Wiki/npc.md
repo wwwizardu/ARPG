@@ -143,6 +143,7 @@ NPC 도메인의 목표는 **"살아있는 관계"** — NPC가 서로(가족/�
 - **WORLD_EVENT**: 원정 결과 `EventTriggered` → 이벤트 디렉터 핸드오프. `Reunion` 소망 × "가족 구출 원정"(§3-E) 교차. [src: NPC_ACTIVITY §9, QUEST_SYSTEM §경계]
 - **아키텍처 관례**: 영속 관계·활동 상태의 정본은 `NpcManager` + `WorldData`/`NpcSaveData`다. 마을 밖에서 실체화된 이동 중 NPC의 기본 AI만 멈추기 위해 `NpcActivityPausedTag`를 일시 ECS 태그로 사용하고, 마을 안 걷기(출발·귀환·여관 가기)는 저장하지 않는 `NpcVillageWalkComponent`가 이동을 소유한다. "여관 안" 부상자는 새 저장 필드 없이 부상 상태와 소속 마을의 여관 기록으로 판정한다. [src: Assets/Scripts/Manager/NpcManager_VillageWalk.cs, Assets/Scripts/Manager/NpcManager_InnRecovery.cs, Assets/Scripts/Common/System/System_NpcSim.cs]
 - **village(여관)**: 원정 부상자 회복을 위해 사라진 터를 뺀 모든 마을에 여관이 있다. 마을 쪽 계약은 [village.md](village.md) §1·§3. [src: Docs/npc/NPC_SIMULATION_DESIGN.md §3.1 D15, Docs/village/VILLAGE_RUNTIME_DESIGN.md §4]
+- **몬스터 군집 이동**: 실체화된 NPC는 플레이어처럼 몬스터 몸에 막혀 미끄러진다(2026-11-05). 몬스터는 NPC를 모르고, 플레이어↔NPC·NPC끼리는 통과한다. 엔티티가 아닌 화면 밖 NPC의 오프스크린 시뮬에는 영향이 없다 [추론: 군집 이동은 ECS 엔티티만 처리]. 상세는 [monster_crowd_movement.md](monster_crowd_movement.md). [src: Docs/map/COLLISION_PATHFINDING_DESIGN.md §2, Assets/Scripts/Common/System/System_MonsterCrowdMovement.cs]
 
 ## 6. 작업별 읽기 가이드
 

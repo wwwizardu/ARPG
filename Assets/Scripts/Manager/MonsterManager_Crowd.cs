@@ -18,29 +18,9 @@ namespace ARPG.Monster
         public MonsterTerrainSweep CrowdTerrainSweep => _crowdTerrainSweep;
         public Func<int, bool> CrowdActivePredicate => _crowdActivePredicate;
 
-        /// <summary>개체별 참여 전환. 태그는 이동과 점유 양쪽에서 제외한다.</summary>
-        public void SetCrowdParticipation(int entityId, bool enabled)
-        {
-            ComponentManager cm = AR.s.Component;
-            if (cm.HasComponent<MonsterCrowdComponent>(entityId) == false)
-                return;
-            if (enabled == true)
-                cm.RemoveComponent<MonsterCrowdExcludedTag>(entityId);
-            else
-                cm.AddComponent(entityId, new MonsterCrowdExcludedTag());
-            if (cm.TryGetComponent<MonsterCrowdComponent>(entityId, out var crowd) == true)
-            {
-                crowd.IsWaiting = false;
-                crowd.RetryAt = 0f;
-                crowd.AvoidSide = 0;
-                crowd.AvoidUntil = 0f;
-                cm.SetComponent(entityId, crowd);
-            }
-        }
-
         private void InitializeCrowd()
         {
-            _crowdGrid.Initialize(_crowdSettings.GridWidth, _crowdSettings.CellSize);
+            _crowdGrid.Initialize();
             _crowdTerrainSweep = SweepCrowdTerrain;
             _crowdActivePredicate = IsCrowdEntityActive;
         }
@@ -55,9 +35,11 @@ namespace ARPG.Monster
                 && AR.s.Map.IsChunkActiveAtWorld(transform.Position) == true;
         }
 
+        // 기본 이동(ResolveAxisSeparated)처럼 벽을 따라 미끄러지고 충돌 내부에서 빠져나온다.
+        // 막힌 축이 있으면 도착점이 목표와 달라지므로 경로 앞보기의 직선 확인에도 그대로 쓴다.
         private static Vector2 SweepCrowdTerrain(Vector2 position, Vector2 delta, float radius)
         {
-            return CollisionUtil.ClipTrajectory(position, position + delta, radius);
+            return CollisionUtil.SlideTrajectory(position, position + delta, radius);
         }
     }
 }

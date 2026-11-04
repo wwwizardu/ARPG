@@ -216,12 +216,13 @@ namespace ARPG.Systems
             // 피해 적용(Skill 200~AreaEffect 240)과 HP Check(250) 뒤라 같은 틱의 피격을 본다
             RegisterSystems(new System_PlayerMining());
 
+            // Priority 270: Monster Crowd Movement (FixedUpdate) - 몬스터끼리 점유·우회·대기·겹침 보정 → ResolvedVelocityComponent, 위치는 Render(1000)가 옮김
+            // 희망 속도를 정하는 AI(50)·길찾기(80)·이동(100)·스킬(200)과 HP Check(250) 뒤라 이번 틱 최종 속도와 생존을 본다
+            RegisterSystems(new System_MonsterCrowdMovement());
+
             // Priority 500: Entity Activation System (FixedUpdate) - 거리 기반 엔티티 활성화/비활성화 (0.5초 간격)
             System_EntityActivation entityActivationSystem = new();
             RegisterSystems(entityActivationSystem);
-
-            // Priority 450: Monster Crowd Movement (Update) - 선택적 점유·우회·대기. 처리 프레임만 Render 적분 제외
-            RegisterSystems(new System_MonsterCrowdMovement());
 
             // Priority 500: Animation System (Update) - 애니메이션 제어
             System_Animation animationSystem = new();

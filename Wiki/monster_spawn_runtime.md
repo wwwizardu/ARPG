@@ -433,3 +433,4 @@ Assets/Scripts/Manager/MonsterManager.cs]
   Zone/Archetype/보스 확장.
 - [`MAP_DESIGN.md`](../Docs/map/MAP_DESIGN.md) — 맵 백본, 청크 풀, 타일 비트, 활성화 hook.
 - [`current_status.md`](current_status.md) — 코드·테이블 기준 현재 구현 상태.
+- [`monster_crowd_movement.md`](monster_crowd_movement.md) — 생성된 몬스터끼리 막기·비켜 가기·대기/통과 이동(EntityFactory가 군집 컴포넌트를 함께 붙임). [src: Assets/Scripts/Factory/EntityFactory.cs]

@@ -53,8 +53,6 @@ namespace ARPG.Component
             { typeof(StatComponent), 300 },
             { typeof(DamageDefenseCacheComponent), 300 }, // StatComponent와 1:1 — 재계산 시 항상 갱신
             { typeof(ColliderComponent), 500 },
-            { typeof(MonsterCrowdComponent), 500 },
-            { typeof(MonsterCrowdExcludedTag), 64 },
 
             // HP/MP 재생 누적기 (FinalHpGeneration > 0 또는 FinalMpGeneration > 0인 엔티티만)
             { typeof(RegenComponent), 50 },
@@ -89,6 +87,9 @@ namespace ARPG.Component
             { typeof(PathfindingComponent), 500 },
             { typeof(MonsterArchetypeComponent), 256 }, // 모든 몬스터에 1개 (필드 최대 ~150 + 던전)
             { typeof(ExpRewardComponent), 256 },        // 모든 몬스터에 1개 (PLAYER_LEVEL_CHARM_DESIGN §3.2)
+            { typeof(MonsterCrowdComponent), 256 },     // 모든 몬스터에 1개 (군집 이동 상태)
+            { typeof(ResolvedVelocityComponent), 384 }, // 이동 속도를 조정하는 시스템의 대상 (군집 이동 몬스터 + 실체화 NPC + 플레이어)
+            { typeof(MonsterCrowdExcludedTag), 64 },    // 군집 이동에서 개별 제외된 몬스터
             { typeof(NamedThreatComponent), 4 },        // 네임드 위협 엔티티 (마을당 1마리, 플레이어 근처만 실체화 — NAMED_THREAT §12.1)
             { typeof(MonsterAffixComponent), 256 },     // 접사가 있는 몬스터 (필드 몬스터의 약 27%, 등급 컴포넌트와 같은 상한)
             { typeof(SpawnHpRefillTag), 64 },           // 접사 몬스터 스폰 직후 첫 재계산까지만 존재

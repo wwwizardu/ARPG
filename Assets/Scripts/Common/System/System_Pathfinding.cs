@@ -135,17 +135,6 @@ namespace ARPG.Systems
 
                         if (distSqr > WAYPOINT_ARRIVAL_DIST_SQR)
                         {
-                            // 군집 대기는 경로 실패가 아니다. 방향은 아래에서 계속 갱신한다.
-                            if (AR.s.Monster != null && AR.s.Monster.CrowdSettings.Enabled == true
-                                && cm.HasComponent<MonsterCrowdExcludedTag>(entityId) == false
-                                && cm.TryGetComponent<MonsterCrowdComponent>(entityId, out var crowd) == true
-                                && AR.s.Monster.CrowdSettings.Includes(crowd.MonsterTableId) == true
-                                && crowd.IsWaiting == true && crowd.HasIntegrated == true
-                                && Time.frameCount - crowd.IntegratedFrame <= 2)
-                            {
-                                pf.LastProgressTime = Time.time;
-                                pfDirty = true;
-                            }
                             // Stuck 감지 — 진행이 PROGRESS_EPSILON_SQR 이상 있으면 타이머 리셋
                             if (distSqr < pf.LastProgressDistSqr - PROGRESS_EPSILON_SQR)
                             {

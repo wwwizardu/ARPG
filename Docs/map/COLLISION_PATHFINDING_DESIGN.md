@@ -19,6 +19,8 @@
 
 **중요**: 위치가 실제로 변경되는 지점은 ④ `System_Render`다. `System_Move`(50Hz)에서 의도만 만들고, `System_Render`(60Hz)가 매 프레임 위치를 적분한다.
 
+> **2026-11-04 추가**: 몬스터 군집 이동(`System_MonsterCrowdMovement`, FixedUpdate 270)이 ②·③ 뒤에 몬스터·플레이어·실체화된 NPC의 이번 틱 확정 속도(`ResolvedVelocityComponent`)를 낸다. `System_Render`는 확정 속도가 켜진 개체를 희망 속도 대신 그 속도로 옮긴다. 위치를 바꾸는 곳은 여전히 ④ 하나다. [Assets/Scripts/Common/System/System_MonsterCrowdMovement.cs](../../Assets/Scripts/Common/System/System_MonsterCrowdMovement.cs) · [System_Render.cs](../../Assets/Scripts/Common/System/System_Render.cs)
+
 ### 1.2 사용 가능한 충돌 데이터 (이미 존재)
 
 | 데이터 소스 | 위치 | 상태 |
@@ -48,10 +50,19 @@
 
 |  | **Static** (정적) | **Dynamic** (동적) |
 |---|---|---|
-| **Hard** (관통 불가) | 지형 Blocked 타일, 건물 footprint, 나무·바위 등 ObjectLayer | 미구현 (Phase 3 — 엔티티간 충돌) |
-| **Soft** (느린 통과/밀어내기) | — | 향후 NPC끼리 가벼운 분리 (선택) |
+| **Hard** (관통 불가) | 지형 Blocked 타일, 건물 footprint, 나무·바위 등 ObjectLayer | 몬스터↔몬스터: 군집 이동으로 서로 막는다(기본 켜짐). 플레이어·NPC→몬스터: 플레이어와 실체화된 NPC만 몬스터 몸에 막힌다(`PlayerBlockedByMonsters`·`NpcBlockedByMonsters`, 기본 켜짐). 플레이어↔NPC, NPC↔NPC는 통과한다 (2026-11-04·05) |
+| **Soft** (느린 통과/밀어내기) | — | 몬스터끼리 겹치면 초당 최대 2칸으로 밀어 떼어 낸다(겹침 풀기) (2026-11-04) |
 
 **Phase 1·2 범위**: Static-Hard만 다룬다. 엔티티끼리는 **통과 허용**(현재 동작 유지). 이는 ARPG 장르 관행이며 (Diablo·POE 등), 캐릭터 간 막힘은 게임 플레이 스트레스를 만든다.
+
+> **2026-11-04 개정 (위 Phase 1·2 결정을 대체)**: 몬스터끼리와 플레이어→몬스터는 막는다. 몬스터에게 둘러싸이면 걸어서 빠져나갈 수 없는 긴장감을 택했다(사용자 결정).
+> - 몬스터 계산은 플레이어를 모른다. 몬스터는 플레이어 때문에 비키거나 밀리지 않고, 멈추는 거리는 AI 교전 사거리(피격 반경 + 스킬 최대 사거리 + 상대 피격 반경)가 정한다.
+> - 플레이어는 정면으로 부딪히면 멈추고, 비스듬하면 몬스터 몸을 따라 미끄러진다. 겹친 상태에서는 바깥으로만 걸어 나갈 수 있다.
+> - 넉백·돌진·점프는 위치를 직접 정하는 기존 예외라 그동안은 겹칠 수 있다.
+> - **2026-11-05 추가**: 실체화된 NPC도 플레이어와 같은 규칙으로 몬스터 몸에 막힌다(플레이어만 막히고 NPC는 뚫고 다니면 어색하다는 사용자 판단). 몬스터는 NPC도 모른다. 몬스터에 막힌 동안은 NPC 길찾기의 stuck 재계산을 미룬다(§5.3). 플레이어와 NPC, NPC끼리는 통과한다.
+> - 현재 몬스터 22종은 모두 교전 사거리가 1.7칸 이상이라, 공격 중 플레이어와 겹치지 않는다. 둘러싸여도 몬스터 사이 틈이 넓다.
+>
+> 구현: [System_MonsterCrowdMovement.cs](../../Assets/Scripts/Common/System/System_MonsterCrowdMovement.cs) · [MonsterCrowdGrid.cs](../../Assets/Scripts/Creature/MonsterCrowdGrid.cs) · [MonsterCrowdSettings.cs](../../Assets/Scripts/Creature/MonsterCrowdSettings.cs)
 
 ---
 
@@ -267,6 +278,8 @@ h(a, b) = max(|dx|, |dy|) + (√2 − 1) × min(|dx|, |dy|)
 - 동적 타깃 추격 (`ChaseStateHandler`): 타깃 타일이 변하면 자동 재계산 (`MoveToward`에서 Goal 갱신 감지)
 - 정적 목적지 (Patrol/Build/일과): 도착할 때까지 유지, 경로 진행이 막히면 자동 재계산
 - **Stuck 감지**: 현재 waypoint와의 거리가 `STUCK_TIMEOUT(2초)` 동안 `PROGRESS_EPSILON_SQR(0.0025=0.05²)` 이상 줄어들지 않으면 Status를 `Computing`으로 전환 → 다음 틱에 A\* 재실행
+- **군집 대기 (2026-11-04)**: 다른 몬스터에 막혀 기다리는 몬스터는 경로 실패가 아니므로 `System_MonsterCrowdMovement`가 `LastProgressTime`을 갱신해 재계산을 미룬다. 정면이 지형에 막히고 옆만 몬스터에 막힌 대기(막은 몬스터 없음)는 미루지 않아 위 규칙대로 길을 다시 찾는다.
+- **몬스터에 막힌 NPC (2026-11-05)**: NPC가 몬스터 몸에 막혀 이동이 줄어든 틱에도 같은 방식으로 재계산을 미룬다. 길찾기는 몬스터를 모르므로 다시 찾아도 같은 길이고, stuck 경고만 쌓이기 때문이다.
 
 ### 5.4 신규 컴포넌트 / 시스템
 
@@ -322,7 +335,8 @@ A\* 자체는 `Pathfinder` 정적 클래스(`Assets/Scripts/AI/Pathfinder.cs`)�
 | 0 | `System_Input` | Update | 변경 없음 |
 | 80 | **`System_Pathfinding`** (신규) | FixedUpdate | A\* + 웨이포인트 추적 |
 | 100 | `System_Move` | FixedUpdate | TODO 주석 제거. Direction 클램프 안 함 |
-| 1000 | `System_Render` | Update | 위치 적분 직전에 `CollisionUtil.ResolveAxisSeparated` 호출 |
+| 270 | `System_MonsterCrowdMovement` (2026-11-04) | FixedUpdate | 몬스터끼리 점유·우회·대기·겹침 풀기, 플레이어·NPC 몸 막기 → `ResolvedVelocityComponent`. 위치는 바꾸지 않음 |
+| 1000 | `System_Render` | Update | 위치 적분 직전에 `CollisionUtil.ResolveAxisSeparated` 호출. 확정 속도가 켜진 개체는 그 속도로 적분 |
 
 `SystemManager.Initialize()`에 `RegisterSystems(new System_Pathfinding())` 추가. CLAUDE.md의 우선순위 가이드에 따르면 80은 "AI perception" 대역인데, Pathfinding을 **이동 의도가 결정되기 전(Move:100)** 으로 두기 위한 의도적 선택.
 
@@ -353,6 +367,8 @@ A\* 자체는 `Pathfinder` 정적 클래스(`Assets/Scripts/AI/Pathfinder.cs`)�
 
 ARPG 관행상 보류. 도입 시 quadtree/grid hash 필요. 본 문서 범위 외.
 
+> **2026-11-04·05 일부 구현**: 몬스터↔몬스터와 플레이어·NPC→몬스터만 구현했다(§2 개정). 플레이어 중심 배열 격자 + 바깥 overflow 목록을 쓰고, `CollisionLayer.Entity`는 쓰지 않는다. 플레이어↔NPC, NPC↔NPC 충돌은 미구현이다. [MonsterCrowdGrid.cs](../../Assets/Scripts/Creature/MonsterCrowdGrid.cs)
+
 ---
 
 ## 8. 성능 고려사항
@@ -373,7 +389,7 @@ ARPG 관행상 보류. 도입 시 quadtree/grid hash 필요. 본 문서 범위 �
 3. **축 분리 슬라이딩** — `System_Render`의 위치 적분 직전에 X축·Y축 독립 검사
 4. **플레이어와 NPC 모두 같은 정적 충돌 검사** 사용 — `MapManager.IsTileBlocked`
 5. **NPC는 추가로 A\* 길찾기** — 직선 의도만으로는 마을 환경에서 막힘. `System_Pathfinding`이 `System_Move` 보다 먼저(Priority 80) 실행되어 의도된 Direction을 웨이포인트 방향으로 갱신
-6. **엔티티간 충돌은 Phase 3로 보류** — ARPG 관행과 성능 트레이드오프
+6. **엔티티간 충돌은 Phase 3로 보류** — ARPG 관행과 성능 트레이드오프. 2026-11-04·05 개정: 몬스터끼리와 플레이어·NPC→몬스터는 막는다(§2). 플레이어↔NPC, NPC끼리는 통과
 
 ---
 
