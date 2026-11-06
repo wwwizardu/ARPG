@@ -122,8 +122,11 @@ sources:
   - Assets/Scripts/Factory/EntityFactory.cs
   - Assets/Scripts/Editor/AttackTelegraphBuildValidator.cs
   - Assets/_BinaryData/TableData/MonsterTable.bytes
+  - Docs/combat/BALANCE_DESIGN.md
+  - Docs/world_history/NAMED_THREAT_DESIGN.md
+  - Assets/Scripts/Editor/DungeonRuntimeDiagnostics.cs
 last_synced: 2026-09-01
-last_updated: 2026-11-03
+last_updated: 2026-11-06
 status: implemented-contract-active-validation-pending
 ---
 
@@ -131,7 +134,7 @@ status: implemented-contract-active-validation-pending
 
 ## 한 줄 요약
 
-무기의 고정 기본 능력과 인스턴스별 고유 강화만 무기 캐시에 들어가며, 장비의 Implicit/Prefix/Postfix는 부위와 무관한 글로벌 Modifier로 합산된다. 미장착 인벤토리 장비의 Prefix/Postfix는 Tier 1 이상 제련소에서 랜덤 교체·추가할 수 있고, 스킬 공격 프로필은 변경된 옵션까지 태그에 맞춰 한 번 계산해 예상값과 실제 전투가 같은 값을 소비한다. [src: Docs/combat/combatSystem.md §장비 옵션 책임 경계·§스킬 공격 프로필 구성, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §0–§8, Assets/Scripts/Item/ItemEnchantmentService.cs, Assets/Scripts/Common/System/System_SkillAttackProfileCalculation.cs] 새로 만드는 장비의 Prefix/Postfix 티어(T1~T12)는 장비에 저장된 아이템 레벨로 정해진다(2026-10-11). [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §1, Assets/Scripts/Item/ItemLevelModTierRules.cs] 명중 시 넉백·당기기(2026-10-12 구현)와 땅 위 직선 돌진·넉백 저항(2026-10-13 구현, 첫 콘텐츠는 멧돼지 돌진)도 이 페이지 뒤쪽에 정리한다. [src: Docs/combat/SKILL_DESIGN.md §6.10·§6.11] 인벤토리 장비는 Shift를 누르고 있는 동안 현재 장착 아이템과 수치·옵션 차이를 비교하고, 비교 중 좌·우클릭으로 화면 왼쪽·오른쪽 칸에 바로 장착한다(2026-10-13 구현). [src: Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md, Assets/Scripts/UI/UICharacter.cs] 2026-10-21부터 장비에 일반·마법·희귀 등급과 품질(0~20)이 있고, 플레이어 드롭은 몬스터 레벨 구간표·아이템 수량·희귀도로 양과 질이 정해진다. 마법부여 티어도 아이템 레벨을 따른다(구현, 플레이 확인 전). [src: Docs/combat/ITEM_DROP_BALANCE_DESIGN.md 상태·§4–§8·§16] 2026-10-24부터 플레이어 레벨·능력치 포인트, 정확도 대 회피 적중 판정, 3×3 참 판과 참이 있다(구현, 플레이 확인 전, 아래 절). [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md 머리말, Assets/Scripts/Skill/Combat/HitChanceRules.cs, Assets/Scripts/Manager/PlayerManager_CharmBoard.cs] 2026-10-25부터 참도 장비처럼 일반·마법·희귀 등급과 접두·접미 옵션을 가지고, 옵션 값은 모양별로 직접 적는 참 값 표가 정하며, 3×3 참은 빠졌다(구현, 플레이 확인 전). [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md LV25·LV26·§6.3, Assets/Scripts/Item/CharmRules.cs] 같은 날 몬스터가 다른 몬스터를 부르는 소환 효과가 생겼고, 첫 사용처는 고블린 주술사가 화염임프를 부르는 보조 기술이다(구현, 플레이 확인 전, 아래 절). [src: Docs/combat/SKILL_DESIGN.md §6.12]
+무기의 고정 기본 능력과 인스턴스별 고유 강화만 무기 캐시에 들어가며, 장비의 Implicit/Prefix/Postfix는 부위와 무관한 글로벌 Modifier로 합산된다. 미장착 인벤토리 장비의 Prefix/Postfix는 Tier 1 이상 제련소에서 랜덤 교체·추가할 수 있고, 스킬 공격 프로필은 변경된 옵션까지 태그에 맞춰 한 번 계산해 예상값과 실제 전투가 같은 값을 소비한다. [src: Docs/combat/combatSystem.md §장비 옵션 책임 경계·§스킬 공격 프로필 구성, Docs/combat/ITEM_ENCHANTMENT_DESIGN.md §0–§8, Assets/Scripts/Item/ItemEnchantmentService.cs, Assets/Scripts/Common/System/System_SkillAttackProfileCalculation.cs] 새로 만드는 장비의 Prefix/Postfix 티어(T1~T12)는 장비에 저장된 아이템 레벨로 정해진다(2026-10-11). [src: Docs/combat/ITEM_LEVEL_MOD_TIER_DESIGN.md §1, Assets/Scripts/Item/ItemLevelModTierRules.cs] 명중 시 넉백·당기기(2026-10-12 구현)와 땅 위 직선 돌진·넉백 저항(2026-10-13 구현, 첫 콘텐츠는 멧돼지 돌진)도 이 페이지 뒤쪽에 정리한다. [src: Docs/combat/SKILL_DESIGN.md §6.10·§6.11] 인벤토리 장비는 Shift를 누르고 있는 동안 현재 장착 아이템과 수치·옵션 차이를 비교하고, 비교 중 좌·우클릭으로 화면 왼쪽·오른쪽 칸에 바로 장착한다(2026-10-13 구현). [src: Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md, Assets/Scripts/UI/UICharacter.cs] 2026-10-21부터 장비에 일반·마법·희귀 등급과 품질(0~20)이 있고, 플레이어 드롭은 몬스터 레벨 구간표·아이템 수량·희귀도로 양과 질이 정해진다. 마법부여 티어도 아이템 레벨을 따른다(구현, 플레이 확인 전). [src: Docs/combat/ITEM_DROP_BALANCE_DESIGN.md 상태·§4–§8·§16] 2026-10-24부터 플레이어 레벨·능력치 포인트, 정확도 대 회피 적중 판정, 3×3 참 판과 참이 있다(구현, 플레이 확인 전, 아래 절). [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md 머리말, Assets/Scripts/Skill/Combat/HitChanceRules.cs, Assets/Scripts/Manager/PlayerManager_CharmBoard.cs] 2026-10-25부터 참도 장비처럼 일반·마법·희귀 등급과 접두·접미 옵션을 가지고, 옵션 값은 모양별로 직접 적는 참 값 표가 정하며, 3×3 참은 빠졌다(구현, 플레이 확인 전). [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md LV25·LV26·§6.3, Assets/Scripts/Item/CharmRules.cs] 같은 날 몬스터가 다른 몬스터를 부르는 소환 효과가 생겼고, 첫 사용처는 고블린 주술사가 화염임프를 부르는 보조 기술이다(구현, 플레이 확인 전, 아래 절). [src: Docs/combat/SKILL_DESIGN.md §6.12] 2026-11-06 몬스터 등급의 강함을 HP에서 피해로 옮겼다. 희귀 HP 5 → 3.5배·피해는 일반의 2배, 마법 피해 1.4배이고 위 등급 피해도 함께 올렸다(시트 반영, 플레이 확인 전, 아래 절). [src: Docs/ai_monster/MONSTER_RARITY_DESIGN.md R9·§3.4]
 
 ## 문서 정본
 
@@ -393,13 +396,35 @@ FinalAttackSpeedPerSecond
 - **몬스터 전용**: 소환된 몬스터는 적 진영으로 생성되므로, 몬스터가 아닌 시전자의 소환 효과는 실행하지 않고 경고만 남긴다. [src: Assets/Scripts/Skill/Combat/SkillEffectExecutor.cs `ExecuteSummonMonster`, Assets/Scripts/Factory/EntityFactory.cs `CreateMonster`]
 - **검증 (2026-10-25)**: 컴파일 오류·경고 없음, 표 3개 행별 비교로 의도한 칸만 바뀜, AI 검사 오류 0(경고 8은 원거리 AI의 기존 `KeepDistance 7` 경고), 공격 예고 빌드 검증 통과. 플레이 모드 확인은 사용자 선택으로 하지 않았다. [src: Docs/combat/SKILL_DESIGN.md §6.12 검증 결과]
 
+## 몬스터 등급 배율 (HP·피해)
+
+마법·희귀 등급(필드 무리 단위, 2026-10-11 구현)과 위 등급의 HP·피해·저항·보상 배율은 MonsterArchetype 시트가 정본이고, 설계 이유는 `MONSTER_RARITY_DESIGN.md`가 정본이다. 몬스터 생성 때 HP = 표 HP × 1.12^(레벨−1) × `HpMul`, 모든 스킬 피해 = 1.10^(레벨−1) × `DmgMul`이고 원소 저항에 `ResistAdd`를 더한다. [src: Docs/ai_monster/MONSTER_RARITY_DESIGN.md §3·§3.1, Assets/Scripts/Factory/EntityFactory.cs `ApplyMonsterArchetypeScaling`, Assets/_BinaryData/TableData/MonsterArchetypeTable.bytes]
+
+**2026-11-06 조정 (R9)**: 사용자가 "마법·희귀일수록 HP는 너무 높고 공격력은 상대적으로 낮다"고 했다. 예전 값(희귀 HP 5배·피해 1.5배)은 BALANCE_DESIGN §3.3 예시를 따른 것이었는데, 같은 문서 §2.2의 한 방 목표는 엘리트가 일반의 약 2.5~3배를 때리는 비율이라 서로 맞지 않았다. 그래서 HP를 피해 쪽으로 옮겼다. [src: Docs/ai_monster/MONSTER_RARITY_DESIGN.md §3.4, Docs/combat/BALANCE_DESIGN.md §2.2·§3.3]
+
+| 등급 | `HpMul` | `DmgMul` (일반 대비) |
+|---|---|---|
+| 일반 | 1 | 1.3 (기준) |
+| 마법 | 1.3 | 1.56 → 1.82 (1.2배 → 1.4배) |
+| 희귀 | 5 → 3.5 | 1.95 → 2.6 (1.5배 → 2.0배) |
+| Elite (던전 우두머리) · Named · Boss·EndgameBoss | 그대로 | 2.275 → 3.0 · 2.2 → 2.9 · 2.6 → 3.5 |
+
+[src: Docs/ai_monster/MONSTER_RARITY_DESIGN.md §3·R9, Assets/_BinaryData/TableData/MonsterArchetypeTable.bytes]
+
+- 위 등급 피해는 희귀와 같은 비율(약 4/3배)로 올려 희귀 < Elite < Boss 순서를 지켰다. `DungeonRuntimeDiagnostics`가 이 순서를 HP·피해 둘 다 검사한다. [src: Docs/ai_monster/MONSTER_RARITY_DESIGN.md R9, Assets/Scripts/Editor/DungeonRuntimeDiagnostics.cs `ValidateEliteEncounters`]
+- 효과(1레벨 쫄·1레벨 가죽 5부위 플레이어, 방어도 적용 후): 희귀는 잡는 시간 6.3 → 4.4배(원소 공격), 한 방 플레이어 HP의 3.7% → 5.2%이고, 잡는 동안 받는 피해 총량은 그대로다. 방어도 공식이 큰 한 방을 덜 막아 방어도 적용 후 비율(2.4배)이 배율 비율(2.0배)보다 크다. [src: Docs/ai_monster/MONSTER_RARITY_DESIGN.md §3.4]
+- 보상: 드롭 판정 횟수는 HP와 무관해 필드 드롭 총량과 꽝 칸 44는 그대로다. 희귀의 시간당 보상은 약 1.6 → 2.3(원소 공격)으로 마법(1.76)보다 높아졌다. [src: Docs/ai_monster/MONSTER_RARITY_DESIGN.md R6·§3.3, Docs/ai_monster/MONSTER_AFFIX_DESIGN.md §8.4]
+- 경험치 배율 `ExpMul`은 이번에 `HpMul`과 분리했고 값은 그대로다(희귀 5). 아래 레벨·경험치 절 참고. [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md §3.2]
+- 네임드는 한 대의 무게가 일반의 약 2.7배, 잡는 시간이 희귀의 약 4.6배가 되었다. [src: Docs/world_history/NAMED_THREAT_DESIGN.md §5.1 2026-11-06 변경]
+- **검증 (2026-11-06)**: 표 재다운로드 뒤 bytes가 의도한 7칸만 바뀌었고 순서 조건을 파일에서 확인했다. Unity 진단은 사용자 선택으로 돌리지 않았고 플레이 확인 전이다. [src: Docs/ai_monster/MONSTER_RARITY_DESIGN.md §9]
+
 ## 플레이어 레벨·능력치·적중 판정·참 판
 
 2026-10-24 구현했고 사용자 커밋·플레이 확인 전이다. 정본은 `PLAYER_LEVEL_CHARM_DESIGN.md`(결정 LV1~LV24, 수치 초안)이고, 문서 머리말 상태 줄은 아직 "미구현"이다. [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md 머리말·§2·§10]
 
 **레벨·경험치**
 
-- 레벨 1~100. 플레이어 근처 20칸 안에서 죽은 몬스터는 누가 잡았든 경험치를 준다. 경험치 = 기본 경험치(몬스터 레벨) × 등급 `ExpMul`(= `HpMul`) × 레벨 차이 보정이다. 레벨별 필요 경험치와 몬스터 기본 경험치는 새 `ExpTable`(시트 Exp 탭 100행)이고, 식은 문서 §3.4가 정본이다. [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md §3.2·§3.4, Assets/Scripts/Common/Utility/PlayerLevelRules.cs, Assets/Scripts/Manager/PlayerManager_Progression.cs `GrantMonsterKillExp`·`GainExp`, Assets/Scripts/Common/System/System_HpCheck.cs, Assets/_BinaryData/TableData/ExpTable.bytes, Assets/_BinaryData/TableData/MonsterArchetypeTable.bytes]
+- 레벨 1~100. 플레이어 근처 20칸 안에서 죽은 몬스터는 누가 잡았든 경험치를 준다. 경험치 = 기본 경험치(몬스터 레벨) × 등급 `ExpMul` × 레벨 차이 보정이다. `ExpMul`은 처음에 `HpMul`과 같은 값이었고, 2026-11-06 희귀 HP를 낮출 때 분리해 지금 값(1·1.3·5·10·12·20·60)을 유지했다. 레벨별 필요 경험치와 몬스터 기본 경험치는 새 `ExpTable`(시트 Exp 탭 100행)이고, 식은 문서 §3.4가 정본이다. [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md §3.2·§3.4, Assets/Scripts/Common/Utility/PlayerLevelRules.cs, Assets/Scripts/Manager/PlayerManager_Progression.cs `GrantMonsterKillExp`·`GainExp`, Assets/Scripts/Common/System/System_HpCheck.cs, Assets/_BinaryData/TableData/ExpTable.bytes, Assets/_BinaryData/TableData/MonsterArchetypeTable.bytes]
 - 레벨업마다 능력치 포인트 5와 기본 정확도 A(L) = 100 + 10 × (L − 1)을 얻는다. 넣은 포인트는 `StatTable` 기본 능력치 위에 `StatModifier`(출처 `PlayerAttribute`)로 붙는다. 캐릭터 창에서 예정으로 두었다가 [적용]으로 확정하고, 되돌리기는 19레벨까지 무료, 20레벨부터 1포인트 = ceil(15G × 플레이어 레벨 구간 판매 배율)이다. [src: Docs/combat/PLAYER_LEVEL_CHARM_DESIGN.md §3.1·§4.2, Assets/Scripts/Manager/PlayerManager_Progression.cs `ApplyProgressionToEntity`·`CommitAttributeAllocation`·`TryRefundAttributePoints`, Assets/Scripts/Common/Utility/PlayerLevelRules.cs `GetRespecCostPerPoint`]
 - 저장은 `PlayerData`의 `Level`·`Exp`(현재 레벨 안 진행량)·`AllocatedStr/Dex/Int`·`UnspentAttributePoints`다. 칸이 없는 옛 세이브는 저장된 레벨 그대로 열고, 남은 포인트를 (레벨 − 1) × 5에 맞춘다. [src: Assets/Scripts/Data/PlayerData.cs `NormalizeProgression`, Assets/Scripts/Data/SaveSnapshotGroups.cs]
 
@@ -447,6 +472,7 @@ FinalAttackSpeedPerSecond
 - 비교 묶음 배치와 옵션 비교 키는 처리 방향이 정해지지 않았다. 인벤토리가 화면 아래에 있어 세 장 묶음이 위로 자라면 장비 화면과 강조한 칸을 덮는다. 옵션 비교 키가 ModTableId + ModSlot뿐이라 같은 능력이 다른 행의 옵션이면 추가·제거 두 줄로 갈라진다. [src: Docs/combat/INVENTORY_EQUIPMENT_COMPARISON_DESIGN.md §장비 옵션, Assets/Scripts/Manager/TooltipManager.cs `PlaceElement`] [추론: 2026-10-13 PlayMode 화면 기준]
 - 넉백 콘텐츠는 멧돼지 돌진의 1032 하나뿐이고 1030·1031과 장판 연결은 없다. 손 조작 확인(밀리는 몬스터의 공격 계속, 플레이어 조작 복귀, 던전 출입, 체감)과 돌진의 실제 키보드 체감은 아직 하지 않았다. M3 Dash Strike(플레이어 돌진)는 공용 장치만 있고 콘텐츠가 없다. [src: Docs/combat/SKILL_DESIGN.md §4 M3·§6.11 검증 결과, Assets/_BinaryData/TableData/SkillEffectTable.bytes] AreaEffect↔SkillEffect 참조 대조는 전체 다운로드에서만 돌고, 단일 다운로드의 잘못된 Id는 실행 시 오류 로그 후 무시된다. 등급별 배율, 벽 충돌 조건(`WallNearby`·`KnockbackTarget`), 갈고리형 당기기는 후속이다. [src: Docs/combat/SKILL_DESIGN.md §6.10, Assets/Scripts/Editor/DownloadTables.cs `ValidateForcedMoveSetup`, Docs/combat/SKILL_RUNE_DESIGN.md §5.2]
 - 몬스터 소환은 플레이 확인 전이다. 화염탄 1.3초 주기, 소환 빈도·최대 2마리, 12초 소멸, 주술사 사망·비활성 때 소멸, 임프 처치 보상 없음을 실제로 보지 않았다. 생성 중인 몬스터를 세지 않으므로 소환 쿨타임이 생성 시간보다 짧은 스킬을 만들면 최대 수를 넘을 수 있다. 시전 끊기(기절)와 화염탄 방향선 예고는 사용자 결정으로 미뤘다. 기절 상태가 되면 스킬이 취소되고 예고가 지워지는 규칙(`SkillInterruptRule`)은 있지만 기절시키는 수단이 없고, 넉백은 시전을 끊지 않는다. 플레이어 소환은 진영·AI 대상 선택을 따로 정해야 한다. [src: Docs/combat/SKILL_DESIGN.md §6.10 적용 규칙 1·§6.12, Assets/Scripts/Skill/Combat/SkillInterruptRule.cs]
+- 몬스터 등급 배율 조정(2026-11-06)은 플레이 확인 전이다. 희귀·마법의 한 방 크기와 처치 시간 체감, 던전 우두머리·네임드 피해, 던전 동행 NPC 생존을 보지 않았다. 일반 몬스터 피해 자체가 1레벨에서 BALANCE §2.2 목표(플레이어 HP의 5~10%)보다 낮은 문제는 플레이어 방어 성장(`ARMOR_ACCESSORY_PROGRESSION_DESIGN.md`, 미구현)과 함께 보기로 하고 남겼다. 방어 접사(저항 +30·날렵한·단단한)가 한 몬스터에 겹치는 문제와 종별 HP 편차(일반 종 한 방은 거의 같은데 표 HP 35~200)도 손대지 않았다. [src: Docs/ai_monster/MONSTER_RARITY_DESIGN.md §3.4·§9, Assets/_BinaryData/TableData/StatTable.bytes]
 - ~~마법부여가 T3 이하, 던전 드랍이 T1~T3~~ → 2026-10-21 마법부여 티어를 아이템 레벨에 연결했고, 던전 레벨을 입구 지역 레벨에 맞췄다(이미 만들어진 던전은 옛 레벨 유지). [src: Docs/combat/ITEM_DROP_BALANCE_DESIGN.md D9·D21·§7.6]
 - 장비 등급·품질·드롭의 플레이 확인(실제 드롭, 툴팁 색, Forge 카드 4개 스크롤, 캐릭터 창 두 줄 배치, 판매가, 던전 보스·상자 드롭)은 남았다. 진단 1~5는 통과했다. 구간표 값·마법 규칙 2배·판정 상한 40회·진화/품질 금액·판매가 배율·던전 초안 값은 진단과 플레이로 조정할 초안이다. [src: Docs/combat/ITEM_DROP_BALANCE_DESIGN.md §14·§16]
 - 아이템 44(초급 마법서, Shield)는 `EquipmentBaseStat`·`ItemImplicit` 행이 없어 장비 데이터 없이 만들어진다. 새 선택 경로에서는 방패 10구간 드롭의 절반이 이 아이템이다(이번 변경 전부터 있던 데이터 공백, 처리 방법 미정). [src: Docs/combat/ITEM_DROP_BALANCE_DESIGN.md §16, Assets/_BinaryData/TableData/EquipmentBaseStatTable.bytes, Assets/_BinaryData/TableData/ItemTable.bytes]

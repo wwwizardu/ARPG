@@ -15,6 +15,11 @@ MonoBehaviour:
   m_GroupName: Default Local Group
   m_GUID: b5afdc8e1be332f4abe01660be954e53
   m_SerializeEntries:
+  - m_GUID: 089531807620fae4f9db59120d758c86
+    m_Address: Animation/KoboldJavelineer
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0af0fda98f181c44aa5cfd8335cb53ec
     m_Address: Prefabs/Icon
     m_ReadOnly: 0
@@ -132,6 +137,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2af892c1ee45a06499f732044f66da8b
     m_Address: Prefabs/Entity
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2b808321f438c534980738d48033ee45
+    m_Address: Animation/GnollRaider
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

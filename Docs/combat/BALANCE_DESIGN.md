@@ -88,6 +88,8 @@ MonsterDmgAtLevel(N)   = BaseDmg   × 1.10^(N-1) × ArchetypeDmgMul
 
 > 배율 자체는 시뮬 시트에서 튜닝.
 
+> 위 예시의 Damage Mul(희귀 1.5배)은 §2.2 한 방 목표(일반 5~10% vs 엘리트 15~25%, 약 2.5~3배)와 맞지 않는다. 실제 값은 MonsterArchetype 시트가 정본이며, 2026-11-06 기준 일반 HP 1·피해 1.3, 마법 1.3·1.82(일반 대비 피해 1.4배), 희귀 3.5·2.6(2.0배)이다. 조정 이유와 효과는 [MONSTER_RARITY_DESIGN.md](../ai_monster/MONSTER_RARITY_DESIGN.md) §3.4.
+
 ---
 
 ## 4. 방어 시스템 (핵심)
@@ -185,7 +187,7 @@ MonsterDmgAtLevel(N)   = BaseDmg   × 1.10^(N-1) × ArchetypeDmgMul
 | T2 | 장비 착용 제한 메커니즘 | 미정 |
 | T3 | Max Resistance 증가 경로 (mod / 드랍 / 패시브) | 미정 |
 | T4 | 카오스 저항 분리 여부 (현재 `PoisonResist` 사용) | 미정 |
-| T5 | Archetype 배율 정밀 튜닝 | 시뮬 시트 작성 후 |
+| T5 | Archetype 배율 정밀 튜닝 | 시뮬 시트 작성 후 (2026-11-06 등급 간 HP·피해 비율만 1차 조정, MONSTER_RARITY_DESIGN §3.4) |
 
 ---
 
@@ -236,3 +238,4 @@ MonsterDmgAtLevel(N)   = BaseDmg   × 1.10^(N-1) × ArchetypeDmgMul
 | 일자 | 내용 |
 |---|---|
 | 2026-05-12 | 초안 작성 (PoE2 톤, 공식 결정, 로드맵) |
+| 2026-11-06 | §3.3 아래에 시트 실제 값과 §2.2 목표와의 차이를 적음 (MONSTER_RARITY_DESIGN §3.4) |

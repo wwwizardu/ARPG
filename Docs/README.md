@@ -80,7 +80,7 @@
 |------|------|
 | **[monsterAIPattern.md](ai_monster/monsterAIPattern.md)** | 몬스터 AI 패턴 |
 | **[MONSTER_SPAWN_DESIGN.md](ai_monster/MONSTER_SPAWN_DESIGN.md)** | 데이터 주도 스폰 풀 (Zone × 등급) |
-| **[MONSTER_RARITY_DESIGN.md](ai_monster/MONSTER_RARITY_DESIGN.md)** | 몬스터 등급(마법·희귀): 개체 등급·무리 단위 판정·등급별 스탯·드랍 보상·HP바 색, 무작위 접사 확장 지점 — 필드 구현(2026-10-11) |
+| **[MONSTER_RARITY_DESIGN.md](ai_monster/MONSTER_RARITY_DESIGN.md)** | 몬스터 등급(마법·희귀): 개체 등급·무리 단위 판정·등급별 스탯·드랍 보상·HP바 색, 무작위 접사 확장 지점 — 필드 구현(2026-10-11), 등급별 HP→피해 비율 조정(2026-11-06, R9) |
 | **[MONSTER_AFFIX_DESIGN.md](ai_monster/MONSTER_AFFIX_DESIGN.md)** | 몬스터 접사: 등급별 추가 판정 개수(최대 10)·무리 단위 판정·스탯형/오라형 접사 시트·속성별 피해 증가 스탯·접사당 드랍 판정 — 필드 구현(2026-10-11), 플레이 확인 전 |
 | **[COLLISION_PATHFINDING_DESIGN.md](map/COLLISION_PATHFINDING_DESIGN.md)** | 축 분리 슬라이딩 + 타일 A* |
 
