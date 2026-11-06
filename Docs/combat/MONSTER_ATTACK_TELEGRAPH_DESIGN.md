@@ -643,6 +643,8 @@ AreaEffect 생성은 한 실행에서 한 번만 보장해야 한다. MultiHit �
 
 (2026-10-03 확인: 권장안 2로 반영됨. `ProjectileHelper.SpawnProjectile`이 Release FixedUpdate에 논리 엔티티를 먼저 만들고, `AttachProjectileViewAsync`가 GameObject를 비동기로 붙인다. 늦게 도착한 View는 `DestroyTag`·Owner·ProjectileTableId·`VisualRequestToken`이 일치할 때만 등록하고 아니면 풀에 반환한다 — `Assets/Scripts/Common/Utility/ProjectileHelper.cs`)
 
+(2026-11-06 보강: 이동도 View를 기다리지 않는다. 직선 발사체의 위치는 `System_Render`가 속도로 옮기는데, 전에는 View가 등록된 엔티티만 옮겨서 프리팹이 붙기 전에는 `System_Projectile`의 이동만 적용됐다. 지금은 `System_Projectile`이 위치를 옮기지 않고, `System_Render`가 View가 아직 없는 발사체(`ProjectileTag`)도 옮긴다. 같은 변경으로 View가 붙은 뒤 두 곳에서 움직여 표 속도의 약 2배로 날던 문제도 없어졌다 — `Assets/Scripts/Common/System/System_Render.cs`, `Assets/Scripts/Common/System/System_Projectile.cs`)
+
 ### 12.3 점프 피해 커밋
 
 착지 공격은 `System_Jump`의 착지 완료와 `System_Skill`의 피해 커밋 사이에 명시적인 연결이 필요하다. 현재 Process 시간 비율만으로 타격하면 프레임·충돌 보정에 따라 실제 착지 위치와 피해 중심이 어긋날 수 있다.

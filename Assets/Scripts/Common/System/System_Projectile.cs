@@ -10,13 +10,17 @@ using GE = GlobalEnum;
 namespace ARPG.Systems
 {
     /// <summary>
-    /// Moves projectiles, checks collision, and handles lifetime.
-    /// Priority 150: after movement, before skill follow-up systems.
+    /// 발사체의 충돌과 수명을 처리한다. Priority 150: 이동 의도 뒤, 스킬 후속 시스템 앞.
+    /// 직선 발사체의 위치는 다른 이동과 같이 System_Render가 속도로 옮긴다. 이 시스템은 지난 검사 위치부터
+    /// 지금 위치까지의 선분으로 충돌을 검사한다. 포물선 발사체만 정해진 경로를 이 시스템이 직접 계산한다.
     /// </summary>
     public class System_Projectile : IFixedUpdateSystem
     {
         public int Priority => 150;
         public float UpdateInterval => 0f;
+
+        // 관통 발사체가 이번 검사에서 새로 들어온 대상. 판정 뒤 몰아서 맞힌다 (매 검사 전에 비우는 임시 목록)
+        private readonly System.Collections.Generic.List<int> _enteredTargetsScratch = new(16);
 
         public void OnCreate()
         {
@@ -36,7 +40,6 @@ namespace ARPG.Systems
                 return;
 
             SparseSet<TransformComponent> transformPool = cm.GetComponentPool<TransformComponent>();
-            SparseSet<VelocityComponent> velocityPool = cm.GetComponentPool<VelocityComponent>();
             SparseSet<SkillComponent> skillPool = cm.GetComponentPool<SkillComponent>();
             SparseSet<FactionComponent> factionPool = cm.GetComponentPool<FactionComponent>();
             SparseSet<StatComponent> statPool = cm.GetComponentPool<StatComponent>();
@@ -80,16 +83,16 @@ namespace ARPG.Systems
                 if (transformPool.TryGet(entityId, out var transform) == false)
                     continue;
 
-                if (velocityPool.TryGet(entityId, out var velocity) == false)
-                    continue;
-
-                transform.Position += velocity.Direction * velocity.Speed * inFixedDeltaTime;
-                transformPool.Set(entityId, transform);
+                // 위치는 System_Render가 이미 옮겼다. 지난 검사 위치부터 지금 위치까지 지나온 선분을 검사한다.
+                Vector2 sweepStart = proj.LastSweepPosition;
+                Vector2 sweepEnd = transform.Position;
+                proj.LastSweepPosition = sweepEnd;
 
                 bool hasHit = CheckCollision(
                     entityId,
                     ref proj,
-                    transform.Position,
+                    sweepStart,
+                    sweepEnd,
                     transformPool,
                     skillPool,
                     factionPool,
@@ -135,10 +138,17 @@ namespace ARPG.Systems
             cm.AddComponent(entityId, new DestroyTag());
         }
 
+        /// <summary>
+        /// 지난 검사 위치 → 지금 위치 선분에 걸린 적을 맞힌다. 하나라도 맞혔으면 true.
+        /// 첫 적중에 사라지는 발사체(일반·전파)는 선분에서 먼저 닿은 대상 하나만 맞힌다.
+        /// 관통 발사체는 새로 들어온 대상을 모두 맞히고, 맞힌 뒤 아직 겹쳐 있는 대상은 다시 맞히지 않는다.
+        /// 빠져나간 대상은 목록에서 빠지므로 다시 들어오면 또 맞는다.
+        /// </summary>
         private bool CheckCollision(
             int projectileEntityId,
             ref ProjectileComponent proj,
-            Vector2 position,
+            Vector2 sweepStart,
+            Vector2 sweepEnd,
             SparseSet<TransformComponent> transformPool,
             SparseSet<SkillComponent> skillPool,
             SparseSet<FactionComponent> factionPool,
@@ -163,11 +173,20 @@ namespace ARPG.Systems
             bool skipVisitedTargets = isPropagationDelivery == true
                 && cm.TryGetComponent<SkillPropagationComponent>(branch.RootEntityId, out propagationRoot) == true;
 
-            bool hitAny = false;
+            bool stopsOnFirstHit = proj.IsPiercing == false || isPropagationDelivery == true;
+            bool hasFirstTarget = false;
+            int firstTargetId = 0;
+            float firstEntryDistance = float.MaxValue;
+
+            // 관통: 이미 맞힌 대상 중 이번 검사에서도 겹쳐 있는 대상만 다음 목록으로 옮긴다.
+            // 옮기지 못한 대상(빠져나감·사망·적대 해제)은 목록에서 빠진다.
+            SkillPropagationTargetIds stillOverlapping = default;
+            _enteredTargetsScratch.Clear();
+
             for (int i = 0; i < transformPool.Count; i++)
             {
                 int targetId = transformPool.GetEntityId(i);
-                if (targetId == proj.OwnerEntityId)
+                if (targetId == proj.OwnerEntityId || targetId == projectileEntityId)
                     continue;
 
                 if (ownerHasFaction)
@@ -183,65 +202,102 @@ namespace ARPG.Systems
                     && propagationRoot.VisitedTargets.Contains(targetId) == true)
                     continue;
 
-                if (TryHitCandidate(
-                        targetId, projectileEntityId, ref proj, ref skill, position,
-                        transformPool, statPool, jumpPool, colliderPool, projectileTagPool))
+                // 맞을 수 있는 대상은 스탯이 있는 생명체뿐이다 (다른 발사체 제외)
+                if (statPool.Contains(targetId) == false || projectileTagPool.Contains(targetId) == true)
+                    continue;
+
+                GetHitCircle(targetId, transformPool.GetByIndex(i).Position, colliderPool, out Vector2 targetCenter, out float targetRadius);
+                if (HitboxMath.SegmentVsCircle(sweepStart, sweepEnd, proj.HitRadius, targetCenter, targetRadius) == false)
+                    continue;
+
+                if (stopsOnFirstHit == true)
                 {
-                    hitAny = true;
-                    if (proj.IsPiercing == false || isPropagationDelivery == true)
-                        break;
+                    if (IsJumpInvincible(targetId, jumpPool) == true)
+                        continue;
+
+                    float entryDistance = HitboxMath.SegmentCircleEntryDistance(sweepStart, sweepEnd, proj.HitRadius, targetCenter, targetRadius);
+                    if (hasFirstTarget == false || entryDistance < firstEntryDistance)
+                    {
+                        hasFirstTarget = true;
+                        firstTargetId = targetId;
+                        firstEntryDistance = entryDistance;
+                    }
+                    continue;
                 }
+
+                // 겹쳐 있는지는 위치로만 판단한다. 맞은 뒤 겹친 채 점프한 대상을 목록에서 빼면 착지할 때 또 맞는다.
+                if (proj.OverlappingHitTargets.Contains(targetId) == true)
+                {
+                    stillOverlapping.TryAdd(targetId);
+                    continue;
+                }
+
+                if (IsJumpInvincible(targetId, jumpPool) == true)
+                    continue;
+
+                _enteredTargetsScratch.Add(targetId);
             }
+
+            if (stopsOnFirstHit == true)
+            {
+                if (hasFirstTarget == false)
+                    return false;
+
+                ApplyHit(firstTargetId, projectileEntityId, ref proj, ref skill);
+                return true;
+            }
+
+            // 맞히기는 대상 순회가 끝난 뒤 한다. 적중 처리(사망·효과 발동)가 순회 중인 풀을 바꾸지 않게 한다.
+            bool hitAny = false;
+            for (int i = 0; i < _enteredTargetsScratch.Count; i++)
+            {
+                // 목록이 가득 차면 자리가 날 때까지 새 대상을 맞히지 않는다. 기록 없이 맞히면 겹쳐 있는 동안 검사마다 다시 맞는다.
+                if (stillOverlapping.Count >= SkillPropagationTargetIds.Capacity)
+                    break;
+
+                int targetId = _enteredTargetsScratch[i];
+                stillOverlapping.TryAdd(targetId);
+                ApplyHit(targetId, projectileEntityId, ref proj, ref skill);
+                hitAny = true;
+            }
+
+            proj.OverlappingHitTargets = stillOverlapping;
             return hitAny;
         }
 
+        private static void GetHitCircle(
+            int targetId,
+            Vector2 targetPosition,
+            SparseSet<ColliderComponent> colliderPool,
+            out Vector2 center,
+            out float radius)
+        {
+            if (colliderPool.TryGet(targetId, out ColliderComponent collider) == true)
+            {
+                center = targetPosition + collider.HitOffset;
+                radius = collider.HitRadius;
+                return;
+            }
 
-        private bool TryHitCandidate(
+            center = targetPosition;
+            radius = 0f;
+        }
+
+        private static bool IsJumpInvincible(int targetId, SparseSet<JumpComponent> jumpPool)
+        {
+            return jumpPool.TryGet(targetId, out JumpComponent jump) == true
+                && jump.Height >= System_Jump.InvincibleHeight;
+        }
+
+        /// <summary>
+        /// 대상 하나에 발사체 적중을 처리한다 (피해·OnHit 효과, 전파 발사체면 방문 기록과 다음 전파 요청).
+        /// </summary>
+        private static void ApplyHit(
             int targetId,
             int projectileEntityId,
             ref ProjectileComponent proj,
-            ref SkillComponent skill,
-            Vector2 position,
-            SparseSet<TransformComponent> transformPool,
-            SparseSet<StatComponent> statPool,
-            SparseSet<JumpComponent> jumpPool,
-            SparseSet<ColliderComponent> colliderPool,
-            SparseSet<ProjectileTag> projectileTagPool)
+            ref SkillComponent skill)
         {
-            if (targetId == projectileEntityId)
-                return false;
-            if (targetId == proj.OwnerEntityId)
-                return false;
-            if (statPool.Contains(targetId) == false)
-                return false;
-            if (projectileTagPool.Contains(targetId))
-                return false;
-
-            if (jumpPool.TryGet(targetId, out var targetJump))
-            {
-                if (targetJump.Height >= System_Jump.InvincibleHeight)
-                    return false;
-            }
-
-            if (transformPool.TryGet(targetId, out var targetTransform) == false)
-                return false;
-
-            Vector2 targetCenter;
-            float targetRadius;
-            if (colliderPool.TryGet(targetId, out var targetCollider))
-            {
-                targetCenter = targetTransform.Position + targetCollider.HitOffset;
-                targetRadius = targetCollider.HitRadius;
-            }
-            else
-            {
-                targetCenter = targetTransform.Position;
-                targetRadius = 0f;
-            }
-
-            if (HitboxMath.CircleVsCircle(position, proj.HitRadius, targetCenter, targetRadius) == false)
-                return false;
-
             bool isPropagationDelivery = AR.s.Component.TryGetComponent<SkillPropagationBranchComponent>(projectileEntityId, out SkillPropagationBranchComponent branch);
             SkillPropagationTable propagationTable = null;
             float damageMultiplier = 1f;
@@ -306,8 +362,6 @@ namespace ARPG.Systems
 
                 SkillPropagationRuntime.CompleteWork(branch.RootEntityId, projectileEntityId);
             }
-
-            return true;
         }
     }
 }

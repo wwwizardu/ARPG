@@ -187,7 +187,7 @@
 ### R3. Piercing Bolt — 관통 볼트 *(런타임 준비 완료, 콘텐츠 미등록)*
 - `ProjectileId`: 102 (`ProjectileTable.IsPiercing=true`)
 - 직선 관통. 이미 `ProjectileTable.IsPiercing` 컬럼 존재.
-- 현행: `ProjectileComponent.IsPiercing`과 관통 시 투사체를 제거하지 않는 충돌 경로가 구현되어 있다. 현재 `ProjectileTable`에는 `IsPiercing=true`인 행이 없으므로 데이터·프리팹 추가가 필요하다.
+- 현행: `ProjectileComponent.IsPiercing`과 관통 시 투사체를 제거하지 않는 충돌 경로가 구현되어 있다. 현재 `ProjectileTable`에는 `IsPiercing=true`인 행이 없으므로 데이터·프리팹 추가가 필요하다. 같은 대상 재타격 규칙은 §6.4 관통 항목을 따른다.
 
 ### R4. Arc Shot — 포물선 원거리 *(코드 보강 필요: §6.4)*
 - `ProjectileId`: 103, `ArcHeight`: 1.5
@@ -308,6 +308,9 @@
 ### §6.4 발사체 다중/관통/포물선 확장 ◐ *(다중·관통 완료, 포물선 남음)*
 - ~~다중 발사~~: `SkillTable.BaseProjectileCount` 컬럼 + `Stat.ProjectileCountAdd` 합산으로 처리 (R2 완료). System_Skill의 ProjectileId 분기가 N발 부채꼴 발사로 확장. **임의의 발사체 스킬에 자동 적용** — 장비 mod/버프가 +N 부여하면 R1·R2·S1 등 모든 스킬이 자동으로 다중 발사. ProjectileTable에는 컬럼 추가 없음, SkillEffect 행도 필요 없음.
 - ~~관통~~: `ProjectileTable.IsPiercing` → `ProjectileComponent.IsPiercing` 매핑과 관통 시 투사체 유지 경로가 구현됐다. R3은 `IsPiercing=true`인 데이터 행과 프리팹만 필요하다.
+  - 같은 대상 재타격 (2026-11-06 보강, 사용자 결정): 전에는 관통 발사체가 대상과 겹쳐 있는 동안 고정 틱마다 다시 맞혔다. 지금은 맞힌 뒤 아직 겹쳐 있는 대상을 `ProjectileComponent.OverlappingHitTargets`(최대 16)에 두고 다시 맞히지 않는다. 빠져나간 대상은 목록에서 빠지므로 다시 들어오면 또 맞는다. 벽에 튕겨 돌아오거나 구불구불 움직이는 발사체가 같은 대상을 다시 지나가는 경우를 위한 규칙이다. 겹침은 위치로만 판단한다(맞은 뒤 겹친 채 점프한 대상을 빼면 착지 때 또 맞기 때문). 목록이 가득 차면 자리가 날 때까지 새 대상을 맞히지 않는다.
+- 이동·충돌 (2026-11-06): 직선 발사체의 위치는 `System_Render`만 옮긴다(이동 규칙, `COLLISION_PATHFINDING_DESIGN.md` §1.1). 전에는 `System_Projectile`도 위치를 옮겨 표 속도의 약 2배로 날았다. 충돌은 지난 검사 위치 → 지금 위치 선분으로 검사해, 프레임이 끊겨 한 번에 멀리 건너뛰어도 그 사이의 대상을 맞힌다. 첫 적중에 사라지는 발사체는 선분에서 먼저 닿은 대상을 맞힌다. 포물선 발사체(거미줄)는 그대로 `System_Projectile`이 경로를 계산한다.
+  - 표 값: 당시 Projectile 시트 값 기준으로 속도는 2배, 수명은 사거리(속도 × 수명)가 6칸이 되게 맞췄다. 테스트(1)·두꺼비 독(2)·거미 독(6) 6/1초, 해골 화살(4) 12/0.5초, 화염탄(5) 8/0.75초. 시트 값 그대로 수명만 절반으로 하면 사거리가 4.5~4.8칸이 되어, 몬스터가 쏘는 최대 거리(스킬 사거리 5 + 두 몸의 피격 반경)에서 닿지 못했다.
 - ※ §6.8 `SkillEffectType.SpawnProjectile`은 별도 용도로 유지: "스킬과 다른 종류의 발사체를 스폰"(예: 폭발의 파편, 시체 폭발)에만 사용. 일반 Multi Shot에 사용 금지.
 - 포물선(R4): 발사체에 `ArcHeight` 적용 미해결. 별도 `ArcProjectile` 분기 또는 ProjectileSystem 보강 필요.
 - 영향: R4 (포물선만 미해결).
@@ -609,3 +612,4 @@ ProjectileId 대역도 동일 규칙 권장: 화살 100번대, 마법 200번대.
 - 2026-10-12 (rev 2): §6.10 구현. `ForcedMoveComponent`·`ForcedMoveStarter`·`System_ForcedMove`(Update 810), SkillEffect 1030/1031, `AreaEffectTable.ForcedMoveEffectId`(시트 P열). 검증용 연결(Strike·불의 고리·독구름)은 측정 뒤 되돌려 현재 연결된 콘텐츠는 없다. PlayMode 측정 결과를 §6.10에 기록했고, 손으로 조작하는 확인은 콘텐츠에 붙일 때 한다.
 - 2026-10-13: §6.11 돌진(`SkillType.Dash`) 신설·구현. 경로 선분 판정·관통·대상당 1회, 벽 즉시 멈춤, 돌진 경로 옆 넉백(`HitOriginKind.Path`), 직선 띠 예고. `SkillTable.ForcedMoveImmune`(AS열, 실행 단계 넉백 저항)을 추가하고 §6.10 적용 규칙 6~8을 갱신했다. 멧돼지 돌진 `BoarCharge`(52)·효과 1032 `Knockback_Charge`·멧돼지 전용 AI 6번 추가, M3를 런타임 준비 완료로 옮기고 §2·§6.3·§10·§11을 갱신했다. 같은 날 몬스터도 표의 조준 방식을 따르게 바꿨다(POE2_CURSOR_TRACKING_PLAN §15).
 - 2026-10-25: §6.12 몬스터 소환 신설·구현. `SkillEffect` `SummonMonster`(1040), 소환 스킬 214, 효과만 있는 스킬의 1회 커밋(`SkillImpactKind.EffectActivation`), `SummonedMonsterComponent`·`System_SummonedMonster`(FixedUpdate 145)·`MonsterSummonRules`. 고블린 주술사 화염탄(204)을 쿨타임 없는 1초 시전·피해 5~8로 바꾸고 AI 3을 화염탄 80 / 소환 20으로 했다. 플레이 확인 전.
+- 2026-11-06: 발사체 버그 2건 수정(§6.4). ① 직선 발사체가 `System_Projectile`과 `System_Render` 두 곳에서 움직이던 것을 Render 한 곳으로 정리하고 충돌을 선분 검사로 바꿨다. 프리팹이 붙기 전에도 Render가 옮긴다. Projectile 시트는 속도 2배·사거리 6칸으로 다시 맞췄다(거미줄은 포물선이라 그대로). ② 관통 발사체가 겹쳐 있는 동안 매 틱 다시 맞히던 것을 "빠져나갔다 다시 들어오면 다시 맞음" 규칙으로 바꿨다. PlayMode에서 해골 화살 1발이 0.5초에 5.997칸(초당 12.00칸)을 날았다. 프리팹을 떼어 낸 발사체도 초당 12.00칸으로 움직였다. 한 프레임에 20칸을 건너뛴 화살이 그 사이의 몬스터를 1번 맞혔다. 관통으로 바꾼 발사체는 지나갈 때 1번, 되돌려 다시 지나갈 때 1번 맞혔다. 손으로 쏘는 플레이 확인 전.

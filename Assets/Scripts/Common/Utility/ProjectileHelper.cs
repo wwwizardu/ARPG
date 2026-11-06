@@ -150,6 +150,7 @@ namespace ARPG.Utility
                 HitRadius = table.HitRadius,
                 IsPiercing = table.IsPiercing,
                 VisualRequestToken = visualRequestToken,
+                LastSweepPosition = spawnPosition,
             });
 
             AR.s.Component.AddComponent(entityId, new ProjectileTag());

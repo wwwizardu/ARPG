@@ -93,6 +93,7 @@ namespace ARPG.Systems
             SparseSet<ForcedMoveComponent> forcedMovePool = _componentManager.GetComponentPool<ForcedMoveComponent>();
             SparseSet<DashComponent> dashPool = _componentManager.GetComponentPool<DashComponent>();
             SparseSet<ResolvedVelocityComponent> resolvedPool = _componentManager.GetComponentPool<ResolvedVelocityComponent>();
+            SparseSet<ProjectileTag> projectileTagPool = _componentManager.GetComponentPool<ProjectileTag>();
 
             // TransformComponent를 가진 모든 엔티티 순회
             for (int i = 0; i < transformPool.Count; i++)
@@ -102,7 +103,18 @@ namespace ARPG.Systems
 
                 // EntityId에 해당하는 EntityBase가 있는지 확인
                 if (_entityToBase.TryGetValue(entityId, out EntityBase entityBase) == false)
+                {
+                    // 발사체 프리팹은 비동기로 붙는다. 판정이 그림을 기다리지 않도록 그림이 붙기 전에도 속도만큼 옮긴다.
+                    // 발사체에는 이동 충돌(ColliderComponent)이 없어 등록된 발사체와 같은 결과다.
+                    if (projectileTagPool.Contains(entityId) == true
+                        && velocityPool.TryGet(entityId, out VelocityComponent projectileVelocity) == true
+                        && projectileVelocity.Speed > 0f)
+                    {
+                        transformComponent.Position += projectileVelocity.Velocity * inDeltaTime;
+                        transformPool.SetByIndex(i, transformComponent);
+                    }
                     continue;
+                }
 
                 if (entityBase == null)
                     continue;

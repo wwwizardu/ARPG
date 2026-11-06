@@ -83,6 +83,36 @@ namespace ARPG.Utility
         }
 
         /// <summary>
+        /// 반경 segmentRadius인 원이 선분 a→b를 따라 움직일 때 원(c, r)에 처음 닿는 지점까지의 거리.
+        /// 출발점에서 이미 겹쳐 있으면 0, 선분 안에서 닿지 않으면 float.MaxValue.
+        /// 한 번의 경로 판정에 여러 대상이 걸렸을 때 먼저 닿은 대상을 고르는 데 쓴다 (발사체 충돌).
+        /// </summary>
+        public static float SegmentCircleEntryDistance(Vector2 a, Vector2 b, float segmentRadius, Vector2 c, float r)
+        {
+            float threshold = segmentRadius + r;
+            float thresholdSqr = threshold * threshold;
+            Vector2 toCenter = c - a;
+            float toCenterSqr = toCenter.sqrMagnitude;
+            if (toCenterSqr <= thresholdSqr)
+                return 0f;
+
+            Vector2 ab = b - a;
+            float length = ab.magnitude;
+            if (length <= 0.000001f)
+                return float.MaxValue;
+
+            float along = Vector2.Dot(toCenter, ab / length);
+            float reachSqr = thresholdSqr - (toCenterSqr - along * along);
+            if (reachSqr < 0f)
+                return float.MaxValue;
+
+            float entry = along - Mathf.Sqrt(reachSqr);
+            if (entry < 0f || entry > length)
+                return float.MaxValue;
+            return entry;
+        }
+
+        /// <summary>
         /// 비교용 제곱 거리 — sqrt 회피.
         /// </summary>
         public static float SqrDistance(Vector2 a, Vector2 b)

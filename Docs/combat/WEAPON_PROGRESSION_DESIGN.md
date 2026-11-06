@@ -803,7 +803,7 @@ QuickHop은 이동용이지만 현행 데이터에 Attack 태그와 착지 직�
 
 FireRing의 설명은 시전자 주변 화염 고리지만 현행 실행은 Position의 커밋 위치를 중심으로 직접 타격과 장판을 생성한다. 이번 범위 적용안은 이 실행 형태를 기준으로 하고 자기 중심 스킬로 바꾸지 않는다. PoisonCloud의 SkillTargetRange1은 0이며 실제 장판 반경은 AreaEffect 1의 2.0이다. ChainLightning도 SkillTargetRange1의 0을 확대하지 않고 전파 테이블의 탐색반경을 사용한다. [src: Assets/_BinaryData/TableData/SkillTable.bytes SkillId 202·203·206, Assets/Scripts/Common/System/System_Skill.cs ProcessSkillHit·CheckCircleRangeEntities, Assets/Scripts/Skill/Propagation/SkillPropagationRuntime.cs]
 
-MultiShot은 현행 데이터·실행 경로가 있는 원거리 스킬이다. 다만 무기 계열 요구 조건은 없고 Projectile 1은 테스트용 공용 투사체이므로 이번 무기 성장안에 맞춘 활·석궁·투창 전용 스킬로 확정하지 않는다. 현행 사용 최대 거리 8.0과 투사체 이동거리 3.0×2.0=6.0은 서로 다르다. 후속 원거리 연결 시 이 차이를 먼저 해소하고 효과별 유효 사거리를 정한다. 공유 ProjectileTable을 한 무기에 맞춰 직접 덮어쓰면 몬스터 투사체도 바뀌므로 스킬 실행별 계산 또는 별도 콘텐츠 참조를 설계해야 한다. [src: Assets/_BinaryData/TableData/SkillTable.bytes SkillId 4·101·204, Assets/_BinaryData/TableData/ProjectileTable.bytes Id 1, Assets/Scripts/Common/Utility/ProjectileHelper.cs, Assets/Scripts/Common/System/System_Projectile.cs]
+MultiShot은 현행 데이터·실행 경로가 있는 원거리 스킬이다. 다만 무기 계열 요구 조건은 없고 Projectile 1은 테스트용 공용 투사체이므로 이번 무기 성장안에 맞춘 활·석궁·투창 전용 스킬로 확정하지 않는다. 현행 사용 최대 거리 8.0과 투사체 이동거리 6.0×1.0=6.0은 서로 다르다(2026-11-06 발사체 이중 이동 수정 때 3.0×2.0에서 바뀜, 거리는 같음). 후속 원거리 연결 시 이 차이를 먼저 해소하고 효과별 유효 사거리를 정한다. 공유 ProjectileTable을 한 무기에 맞춰 직접 덮어쓰면 몬스터 투사체도 바뀌므로 스킬 실행별 계산 또는 별도 콘텐츠 참조를 설계해야 한다. [src: Assets/_BinaryData/TableData/SkillTable.bytes SkillId 4·101·204, Assets/_BinaryData/TableData/ProjectileTable.bytes Id 1, Assets/Scripts/Common/Utility/ProjectileHelper.cs, Assets/Scripts/Common/System/System_Projectile.cs]
 
 ### 몬스터 고유 스킬과 공유 스킬의 경계
 
