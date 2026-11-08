@@ -162,6 +162,7 @@ namespace ARPG.Component
             { typeof(ProjectileComponent), 100 },
             { typeof(ProjectileTag), 100 },
             { typeof(ProjectileArcComponent), 32 },   // 목표 지점에 내려앉아 장판을 까는 포물선 발사체
+            { typeof(ProjectileSteeringComponent), 64 }, // 지그재그·벽 튕김 발사체 (전기 불꽃 3발 × 여러 몬스터)
 
             // 장판(지속 영역 효과) 컴포넌트
             { typeof(AreaEffectComponent), 50 },

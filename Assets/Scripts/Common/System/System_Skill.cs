@@ -1566,9 +1566,14 @@ namespace ARPG.Systems
                     float totalSpread = (finalCount - 1) * SPREAD_ANGLE_PER_SHOT;
                     float startOffset = -totalSpread * 0.5f;
 
+                    // 무작위 부채꼴(SkillTargetRange2 반각 > 0, SKILL_DESIGN §6.4): 발마다 조준 방향 ± 반각 안에서 방향을 뽑는다
+                    float randomHalfAngle = skillTable.RandomProjectileSpreadHalfAngle;
+
                     for (int i = 0; i < finalCount; i++)
                     {
-                        float angle = baseAngle + startOffset + SPREAD_ANGLE_PER_SHOT * i;
+                        float angle = randomHalfAngle > 0f
+                            ? baseAngle + Random.Range(-randomHalfAngle, randomHalfAngle)
+                            : baseAngle + startOffset + SPREAD_ANGLE_PER_SHOT * i;
                         float rad = angle * Mathf.Deg2Rad;
                         Vector2 dir = new Vector2(Mathf.Cos(rad), Mathf.Sin(rad));
                         Utility.ProjectileHelper.SpawnProjectile(

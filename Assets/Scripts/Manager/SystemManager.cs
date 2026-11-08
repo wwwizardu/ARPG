@@ -177,7 +177,10 @@ namespace ARPG.Systems
             // 생존 시간 만료는 Lifetime(70)이 맡는다. 던전 안에서도 돈다
             RegisterSystems(new System_SummonedMonster());
 
-            // Priority 150: Projectile System (FixedUpdate) - 발사체 이동 및 충돌
+            // Priority 148: Projectile Steering System (FixedUpdate) - 지그재그·벽 튕김 발사체의 속도 방향 결정 (SKILL_DESIGN §6.4)
+            RegisterSystems(new System_ProjectileSteering());
+
+            // Priority 150: Projectile System (FixedUpdate) - 발사체 충돌·수명 (직선 발사체 위치는 System_Render가 옮김)
             System_Projectile projectileSystem = new();
             RegisterSystems(projectileSystem);
 

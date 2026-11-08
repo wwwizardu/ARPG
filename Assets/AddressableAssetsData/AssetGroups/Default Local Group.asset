@@ -260,6 +260,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 768567b2839c87540baca5287521ea77
+    m_Address: Effects/SparkHit
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 78ff55ace6c3d094a941be5075ab34b1
     m_Address: Animation/RaggedSpearman
     m_ReadOnly: 0
@@ -332,6 +337,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8e2b6f4a9c1d4e3a8b6c2d1e7f5a9bd3
     m_Address: UI/UIVillage
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8f9ec645321bc0743aa05ebaa76c1a64
+    m_Address: Projectile/Projectile_Spark
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

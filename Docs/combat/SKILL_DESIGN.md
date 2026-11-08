@@ -84,7 +84,7 @@
 
 총 **22종 초안**(2026-10-03 S3 재포함) 중 현재 테이블과 런타임이 함께 존재하는 스킬은 A1·A3·A5·M1·R2·S3·S4의 7종이다. A2·A4·M2·M3·R1·R3·S1·S2·S5·S6의 10종은 공용 메커니즘이 이미 있어 콘텐츠 데이터 작성이 주 작업이다(M3는 2026-10-13 돌진 장치 §6.11로 이동). 실제 코드 보강이 필요한 스킬은 R4·B2·B3·C1·C2의 5종이다. 한 캐릭터/직업이 모두 가지는 것은 아니며, 상위 시스템(스킬 트리/장비 그란트 등)이 슬롯에 매핑한다.
 
-`SkillTable`에는 이 카탈로그 외에도 몬스터 전용 `StrikeMonster`, `GoblinFirebolt`, `BoarCharge`(52, 멧돼지 돌진 §4 M4)와 추가 스킬 `FireRing`이 있다. 이들은 카탈로그 구현 수에 포함하지 않는다.
+`SkillTable`에는 이 카탈로그 외에도 몬스터 전용 `StrikeMonster`, `GoblinFirebolt`, `BoarCharge`(52, 멧돼지 돌진 §4 M4), `MonsterSpark`(215, 전기 불꽃 §5 R5)와 추가 스킬 `FireRing`이 있다. 이들은 카탈로그 구현 수에 포함하지 않는다.
 
 > 2026-10-03 확인: 몬스터 전용 `SwampToadPoisonSpit`(SkillId 205)은 2026-09-24 커밋 "연쇄 스킬 추가"(c87d5de)에서 `SkillTable.bytes`에서 빠졌다. 그런데 `AiTable` Id 4(SwampToad, `MonsterTable` 1010의 AI)는 아직 `SkillId1=205`를 참조한다. 의도한 삭제인지 확인되지 않았으며, 시트 행을 복구하든 AI 참조를 바꾸든 데이터 정리가 필요하다. 이 상태에서는 `AttackTelegraphBuildValidator`가 "AI 4의 SkillId 205가 SkillTable에 없습니다"로 빌드를 중단했다(메뉴 실행으로 확인). → **2026-10-03 복구**: 삭제 직전 커밋의 205번 행을 시트 `Skill` 탭에 다시 넣고 다운로드했다. 값은 그대로이고 `MoveSpeedWhileUsingMul`만 같은 커밋의 일괄 변경(30 → 75)에 맞췄다. 빌드 검증기 통과.
 
@@ -192,6 +192,15 @@
 ### R4. Arc Shot — 포물선 원거리 *(코드 보강 필요: §6.4)*
 - `ProjectileId`: 103, `ArcHeight`: 1.5
 - 적의 머리 위로 떨어지는 활. 발사체에도 ArcHeight 사용 분기 필요(점프 외 투사체에 미적용).
+
+### R5. Spark — 전기 불꽃 *(구현됨, SkillId=215, 몬스터 전용, 2026-11-07, 플레이 확인 전)*
+- PoE 전기 불꽃 같은 몬스터 스킬. **사용자 결정 (2026-11-07)**: 3발·전체 50°, 처음 방향 기준 지그재그 + 벽 튕김, 관통 안 함, 몬스터는 아직 붙이지 않고 AI 행만 만듦, 연출은 Cartoon Coffee 번개 구슬, 공격 예고는 만들지 않음(발사체는 그림 자체가 위험을 알리는 기존 규칙).
+- Skill 215 `MonsterSpark`: `Spell,Lightning,Projectile`, 쿨타임 0·1초 시전·0.9초 발사(주 공격 원칙 §6.12), 불꽃 1발 피해 3~5 번개, `BaseProjectileCount`=3, `SkillTargetRange2`=45(무작위 부채꼴 반각, 전체 90°, §6.4), 맞힘 연출 `Effects/SparkHit`.
+- Projectile 7 `Spark`: 속도 6, 수명 1.2초, 반경 0.15, 관통 없음, `WanderInterval` 0.15초, `WanderAngle` 60°, `WanderDrift` 20°, `BounceOnWall` 참. 0.15초마다 기준 방향을 최대 20° 무작위로 돌린 뒤, 그 기준 ± 60° 안에서 새 방향을 고른다. 기준 방향이 조금씩 돌아가므로 발마다 다른 쪽으로 휜다. 벽에 튕기면 기준 방향도 같이 뒤집힌다.
+- **2026-11-08 개정 (사용자 요청 "한 방향으로 나가는 느낌, 더 무작위로")**: 처음 값은 부채꼴 50°, 꺾는 각 40°, 기준 방향 고정이었다. 이 값에서는 3발이 좁은 부채꼴 안에서 떨리는 직선처럼 나갔다. 부채꼴 90°·꺾는 각 60°로 넓히고 `WanderDrift`(K열)를 새로 넣었다. 완전히 제멋대로(꺾인 방향 누적)인 안은 시전자 쪽으로 되돌아오는 일이 생겨 고르지 않았다. PlayMode 10초(시전 7번, 모두 3발)로 비교했다. 발사 각도는 -22.9°~+24.0°에서 -41.5°~+36.0°로 넓어졌다. 시작점에서 마지막 위치까지의 방향은 -66.5°~+41.9°였다. 0.9초 이상 산 불꽃 14발은 기준 방향이 평균 28.3°(최대 45.9°) 돌아갔고, 9발이 30°를 넘었다(전에는 0°). 플레이어 피격은 10초에 7번에서 5번으로 줄었다.
+- AI 10 `전기 불꽃 원거리`: 원거리, 감지 5, `KeepDistance` 7(다른 원거리 AI와 같은 값), 스킬 215 가중치 100. 몬스터에 붙이려면 Monster 시트 `AiTableId`만 10으로 바꾼다.
+- 프리팹: `Projectile/Projectile_Spark`(번개 구슬 Lv1을 0.2배로 줄여 Visual 아래에 풀어 넣음, `PooledParticleEffectView`로 풀 재사용 때 다시 재생), `Effects/SparkHit`(번개 충돌 Lv1 0.25배, `EffectInstance` 0.5초).
+- 남음: 몬스터 배정, 손으로 피해 보는 체감(멀리서는 1~2발, 붙으면 3발 모두 맞음), 피해량 조정.
 
 ---
 
@@ -310,6 +319,12 @@
 - ~~관통~~: `ProjectileTable.IsPiercing` → `ProjectileComponent.IsPiercing` 매핑과 관통 시 투사체 유지 경로가 구현됐다. R3은 `IsPiercing=true`인 데이터 행과 프리팹만 필요하다.
   - 같은 대상 재타격 (2026-11-06 보강, 사용자 결정): 전에는 관통 발사체가 대상과 겹쳐 있는 동안 고정 틱마다 다시 맞혔다. 지금은 맞힌 뒤 아직 겹쳐 있는 대상을 `ProjectileComponent.OverlappingHitTargets`(최대 16)에 두고 다시 맞히지 않는다. 빠져나간 대상은 목록에서 빠지므로 다시 들어오면 또 맞는다. 벽에 튕겨 돌아오거나 구불구불 움직이는 발사체가 같은 대상을 다시 지나가는 경우를 위한 규칙이다. 겹침은 위치로만 판단한다(맞은 뒤 겹친 채 점프한 대상을 빼면 착지 때 또 맞기 때문). 목록이 가득 차면 자리가 날 때까지 새 대상을 맞히지 않는다.
 - 이동·충돌 (2026-11-06): 직선 발사체의 위치는 `System_Render`만 옮긴다(이동 규칙, `COLLISION_PATHFINDING_DESIGN.md` §1.1). 전에는 `System_Projectile`도 위치를 옮겨 표 속도의 약 2배로 날았다. 충돌은 지난 검사 위치 → 지금 위치 선분으로 검사해, 프레임이 끊겨 한 번에 멀리 건너뛰어도 그 사이의 대상을 맞힌다. 첫 적중에 사라지는 발사체는 선분에서 먼저 닿은 대상을 맞힌다. 포물선 발사체(거미줄)는 그대로 `System_Projectile`이 경로를 계산한다.
+- 무작위 부채꼴 (2026-11-07, R5): 방향 지정 발사체 스킬의 `SkillTargetRange2`를 부채꼴 반각으로 쓴다(`SkillTable.RandomProjectileSpreadHalfAngle`). 0보다 크면 발마다 조준 방향 ± 반각 안에서 무작위로 쏘고, 0이면 지금처럼 15° 간격 균등 부채꼴이다. 발사체 스킬은 직접 범위 타격을 하지 않아 이 칸이 비어 있었다. 돌진이 같은 칸을 거리로 쓰는 것과 같은 방식이며, Skill 시트 열이 가득 차 새 열 대신 이 칸을 골랐다. 발 수는 그대로 `BaseProjectileCount + Stat.ProjectileCountAdd`다.
+- 비행 방향 조정 (2026-11-07, R5): `ProjectileTable` H~K열 `WanderInterval`·`WanderAngle`·`BounceOnWall`·`WanderDrift`(K열 2026-11-08 추가, 빈 칸이면 직선·벽 통과). 값이 있는 발사체에 `ProjectileSteeringComponent`가 붙고 `System_ProjectileSteering`(FixedUpdate 148)이 속도의 방향만 바꾼다. 위치는 여전히 `System_Render`가 옮긴다.
+  - 지그재그: 간격마다 기준 방향(발사 방향에서 시작) ± `WanderAngle` 안에서 새 방향을 고른다. 꺾인 방향이 쌓이지 않아, `WanderDrift`가 0이면 전체적으로는 앞으로 곧게 간다. 첫 전환 시점은 발마다 흩는다.
+  - 휘는 경로: `WanderDrift`가 있으면 방향을 고르기 직전에 기준 방향 자체를 ± `WanderDrift` 안에서 돌린다. 기준 방향이 무작위로 조금씩 쌓여 돌아가므로 경로가 발마다 다른 쪽으로 휜다.
+  - 벽 튕김: 다음 두 틱 동안 움직일 거리만큼 앞을 보고, 막힌 축의 성분을 방향과 기준 방향 모두 뒤집는다(맵 벽은 축 정렬 타일). 벽은 생명체 이동과 같은 `CollisionUtil.IsBlockedAt`이다. 프레임이 끊겨 한 번에 벽 안으로 들어가면 지난 틱 위치와 비교해 들어온 축을 뒤집어 온 길로 돌려보낸다. 지난 틱에도 벽 안이었으면(벽에 붙어 생성 등) 뒤집지 않고 그대로 빠져나가게 한다.
+  - 다른 발사체는 바뀌지 않는다. 직선으로 날고 벽을 통과한다.
   - 표 값: 당시 Projectile 시트 값 기준으로 속도는 2배, 수명은 사거리(속도 × 수명)가 6칸이 되게 맞췄다. 테스트(1)·두꺼비 독(2)·거미 독(6) 6/1초, 해골 화살(4) 12/0.5초, 화염탄(5) 8/0.75초. 시트 값 그대로 수명만 절반으로 하면 사거리가 4.5~4.8칸이 되어, 몬스터가 쏘는 최대 거리(스킬 사거리 5 + 두 몸의 피격 반경)에서 닿지 못했다.
 - ※ §6.8 `SkillEffectType.SpawnProjectile`은 별도 용도로 유지: "스킬과 다른 종류의 발사체를 스폰"(예: 폭발의 파편, 시체 폭발)에만 사용. 일반 Multi Shot에 사용 금지.
 - 포물선(R4): 발사체에 `ArcHeight` 적용 미해결. 별도 `ArcProjectile` 분기 또는 ProjectileSystem 보강 필요.
@@ -577,7 +592,7 @@ SkillEffectTable                         // 새 테이블
 
 ProjectileId 대역도 동일 규칙 권장: 화살 100번대, 마법 200번대.
 
-기존 제안 ID 204와 205는 각각 몬스터 전용 `GoblinFirebolt`, `SwampToadPoisonSpit`이 사용 중이다. S5 Lightning Strike와 S6 Frost Bolt를 추가할 때 충돌하지 않는 새 ID를 배정한다. (2026-10-03: 205 행은 한때 `SkillTable`에서 빠졌다가 복구됐다 — §2. 206은 `FireRing`이 사용 중이다.) 2026-10-25: 214는 몬스터 전용 `GoblinShamanSummonImp`(§6.12)가 사용 중이다.
+기존 제안 ID 204와 205는 각각 몬스터 전용 `GoblinFirebolt`, `SwampToadPoisonSpit`이 사용 중이다. S5 Lightning Strike와 S6 Frost Bolt를 추가할 때 충돌하지 않는 새 ID를 배정한다. (2026-10-03: 205 행은 한때 `SkillTable`에서 빠졌다가 복구됐다 — §2. 206은 `FireRing`이 사용 중이다.) 2026-10-25: 214는 몬스터 전용 `GoblinShamanSummonImp`(§6.12)가 사용 중이다. 2026-11-07: 215는 몬스터 전용 `MonsterSpark`(§5 R5)가 사용 중이다.
 
 ---
 
@@ -613,3 +628,5 @@ ProjectileId 대역도 동일 규칙 권장: 화살 100번대, 마법 200번대.
 - 2026-10-13: §6.11 돌진(`SkillType.Dash`) 신설·구현. 경로 선분 판정·관통·대상당 1회, 벽 즉시 멈춤, 돌진 경로 옆 넉백(`HitOriginKind.Path`), 직선 띠 예고. `SkillTable.ForcedMoveImmune`(AS열, 실행 단계 넉백 저항)을 추가하고 §6.10 적용 규칙 6~8을 갱신했다. 멧돼지 돌진 `BoarCharge`(52)·효과 1032 `Knockback_Charge`·멧돼지 전용 AI 6번 추가, M3를 런타임 준비 완료로 옮기고 §2·§6.3·§10·§11을 갱신했다. 같은 날 몬스터도 표의 조준 방식을 따르게 바꿨다(POE2_CURSOR_TRACKING_PLAN §15).
 - 2026-10-25: §6.12 몬스터 소환 신설·구현. `SkillEffect` `SummonMonster`(1040), 소환 스킬 214, 효과만 있는 스킬의 1회 커밋(`SkillImpactKind.EffectActivation`), `SummonedMonsterComponent`·`System_SummonedMonster`(FixedUpdate 145)·`MonsterSummonRules`. 고블린 주술사 화염탄(204)을 쿨타임 없는 1초 시전·피해 5~8로 바꾸고 AI 3을 화염탄 80 / 소환 20으로 했다. 플레이 확인 전.
 - 2026-11-06: 발사체 버그 2건 수정(§6.4). ① 직선 발사체가 `System_Projectile`과 `System_Render` 두 곳에서 움직이던 것을 Render 한 곳으로 정리하고 충돌을 선분 검사로 바꿨다. 프리팹이 붙기 전에도 Render가 옮긴다. Projectile 시트는 속도 2배·사거리 6칸으로 다시 맞췄다(거미줄은 포물선이라 그대로). ② 관통 발사체가 겹쳐 있는 동안 매 틱 다시 맞히던 것을 "빠져나갔다 다시 들어오면 다시 맞음" 규칙으로 바꿨다. PlayMode에서 해골 화살 1발이 0.5초에 5.997칸(초당 12.00칸)을 날았다. 프리팹을 떼어 낸 발사체도 초당 12.00칸으로 움직였다. 한 프레임에 20칸을 건너뛴 화살이 그 사이의 몬스터를 1번 맞혔다. 관통으로 바꾼 발사체는 지나갈 때 1번, 되돌려 다시 지나갈 때 1번 맞혔다. 손으로 쏘는 플레이 확인 전.
+- 2026-11-07: §5 R5 전기 불꽃(몬스터 전용 Skill 215·Projectile 7·AI 10) 신설·구현. §6.4에 무작위 부채꼴(`SkillTargetRange2` 반각)과 비행 방향 조정(`ProjectileTable` H~J열, `ProjectileSteeringComponent`·`System_ProjectileSteering` FixedUpdate 148)을 추가했다. 프리팹 `Projectile_Spark`·`SparkHit`을 Addressable에 등록했다. 검증: 컴파일 오류 없음, 표 3개 행별 비교로 의도한 칸만 바뀜, AI 검사 오류 0(경고 9는 기존 원거리 AI의 `KeepDistance` 경고). PlayMode에서는 AI 10을 붙인 고블린 주술사를 10초 관찰했다. 시전 7번 모두 3발이었고, 조준 방향과의 각도는 -22.9°~+24.0°였다. 기준 방향에서 가장 많이 꺾인 각도는 39.9°였다. 플레이어는 7번 맞았고 피해는 4~6이었다(회피 때 0). 벽 튕김은 벽을 향해 쏜 불꽃이 0.35칸 앞에서 되돌아왔다. 처음 생성 때 한 프레임에 2칸을 건너뛰어도 되돌아왔고, 10 FPS에서는 벽 안에 2프레임 들어갔다가 되돌아왔다. 처음 구현은 이 경우 벽을 그냥 통과해서, 들어온 축 반사를 추가했다. 손으로 피하는 플레이 확인과 몬스터 배정 전.
+- 2026-11-08: R5 전기 불꽃이 "한 방향으로 나가는 느낌"이라는 사용자 요청으로 더 흩어지게 바꿨다(2안). 부채꼴 50° → 90°(`SkillTargetRange2` 25 → 45), 꺾는 각 40° → 60°. `ProjectileTable` K열 `WanderDrift`(기준 방향이 한 번에 돌아가는 최대 각도, 불꽃 20°)를 추가했다. 검증: 컴파일 오류 없음, 표 2개 행별 비교로 의도한 칸만 바뀜, PlayMode 비교 결과는 §5 R5에 적었다.

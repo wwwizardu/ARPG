@@ -22,6 +22,8 @@
 > **2026-11-04 추가**: 몬스터 군집 이동(`System_MonsterCrowdMovement`, FixedUpdate 270)이 ②·③ 뒤에 몬스터·플레이어·실체화된 NPC의 이번 틱 확정 속도(`ResolvedVelocityComponent`)를 낸다. `System_Render`는 확정 속도가 켜진 개체를 희망 속도 대신 그 속도로 옮긴다. 위치를 바꾸는 곳은 여전히 ④ 하나다. [Assets/Scripts/Common/System/System_MonsterCrowdMovement.cs](../../Assets/Scripts/Common/System/System_MonsterCrowdMovement.cs) · [System_Render.cs](../../Assets/Scripts/Common/System/System_Render.cs)
 
 > **2026-11-06 추가**: 직선 발사체도 이 규칙을 따른다. 전에는 `System_Projectile`(FixedUpdate 150)도 위치를 옮겨 ④와 겹쳐서, 발사체가 표 속도의 약 2배로 날았다. 지금은 ④만 옮기고, `System_Projectile`은 지난 검사 위치 → 지금 위치 선분으로 충돌만 검사한다. ④는 프리팹(View)이 아직 붙지 않은 발사체(`ProjectileTag`)도 옮겨, 판정이 그림 로딩을 기다리지 않는다. 포물선 발사체는 속도 0으로 두고 `System_Projectile`이 경로를 직접 정하는 기존 방식 그대로다. [System_Projectile.cs](../../Assets/Scripts/Common/System/System_Projectile.cs) · [System_Render.cs](../../Assets/Scripts/Common/System/System_Render.cs)
+>
+> **2026-11-07 추가**: 지그재그·벽 튕김 발사체(전기 불꽃, `SKILL_DESIGN.md` §6.4)도 같다. `System_ProjectileSteering`(FixedUpdate 148)은 속도의 방향만 바꾸고 ④가 옮긴다. 벽은 생명체와 같은 `CollisionUtil.IsBlockedAt`으로 앞을 보고 판단하며, ④의 축 분리 슬라이딩은 쓰지 않는다(발사체에는 `ColliderComponent`가 없다). [System_ProjectileSteering.cs](../../Assets/Scripts/Common/System/System_ProjectileSteering.cs)
 
 ### 1.2 사용 가능한 충돌 데이터 (이미 존재)
 

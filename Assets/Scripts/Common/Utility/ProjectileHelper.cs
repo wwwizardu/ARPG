@@ -38,6 +38,22 @@ namespace ARPG.Utility
                 table.Speed,
                 releaseAngle,
                 out long visualRequestToken);
+
+            // 지그재그·벽 튕김 발사체 (SKILL_DESIGN §6.4). 첫 방향 전환 시점을 발마다 흩어 같이 쏜 발사체가 함께 꺾이지 않게 한다
+            if (table.HasSteering == true)
+            {
+                AR.s.Component.AddComponent(entityId, new ProjectileSteeringComponent
+                {
+                    Heading = normalizedDirection,
+                    WanderInterval = table.WanderInterval,
+                    WanderAngle = table.WanderAngle,
+                    WanderDrift = table.WanderDrift,
+                    WanderTimer = table.WanderInterval > 0f ? Random.Range(0f, table.WanderInterval) : 0f,
+                    BounceOnWall = table.BounceOnWall,
+                    LastPosition = spawnPosition,
+                });
+            }
+
             FinishSpawn(entityId, ownerEntityId, skillEntityId, projectileTableId, table, spawnPosition, releaseAngle, visualRequestToken);
 
             Debug.Log($"[ProjectileHelper] Released projectile - EntityId: {entityId}, TableId: {projectileTableId}, Owner: {ownerEntityId}, Direction: {normalizedDirection}");

@@ -80,7 +80,7 @@ namespace ARPG.Editor
             Register<AreaEffectTable>(list, "1891935594&range=A:P");
             Register<BuffTable>(list, "127577579&range=A:T");
             Register<AnimationTable>(list, "747631090&range=A:G");
-            Register<ProjectileTable>(list, "1810235418&range=A:G");
+            Register<ProjectileTable>(list, "1810235418&range=A:K");
             Register<ModTable>(list, "1571193978&range=A:J");
             Register<ModTierTable>(list, "1782637736&range=A:J");
             // 참 옵션 값 (PLAYER_LEVEL_CHARM_DESIGN §6.3). A=Id(ModId×100+Tier), B=ModName(가독성용), C=ModId, D=Tier,
@@ -2600,7 +2600,8 @@ namespace ARPG.Editor
 
         private static void ParseProjectileTable(ProjectileTable table, string[] values)
         {
-            // 전체 범위: A:G = 7개 컬럼 (Id, Name, Speed, LifeTime, HitRadius, IsPiercing, PrefabKey)
+            // 전체 범위: A:K = 11개 컬럼 (Id, Name, Speed, LifeTime, HitRadius, IsPiercing, PrefabKey,
+            //  WanderInterval, WanderAngle, BounceOnWall, WanderDrift). H~K가 빈 기존 행은 직선 비행·벽 통과다.
             if (values.Length < 7)
             {
                 Debug.LogError($"[ParseProjectileTable] Invalid data length. Expected at least 7, got {values.Length}. Id: {table.Id}");
@@ -2613,6 +2614,33 @@ namespace ARPG.Editor
             table.HitRadius = float.Parse(values[4]);
             table.IsPiercing = values[5].Trim().ToUpper() == "TRUE";
             table.PrefabKey = values[6];
+
+            // 비행 방향 조정 (SKILL_DESIGN §6.4). 범위를 벗어난 값은 경고 후 고친다
+            table.WanderInterval = values.Length > 7 && float.TryParse(values[7], out float wanderInterval) ? wanderInterval : 0f;
+            table.WanderAngle = values.Length > 8 && float.TryParse(values[8], out float wanderAngle) ? wanderAngle : 0f;
+            string bounceText = values.Length > 9 ? values[9].Trim().ToUpper() : string.Empty;
+            table.BounceOnWall = bounceText == "TRUE" || bounceText == "1";
+            table.WanderDrift = values.Length > 10 && float.TryParse(values[10], out float wanderDrift) ? wanderDrift : 0f;
+
+            if (table.WanderDrift < 0f || table.WanderDrift > 180f)
+            {
+                float clamped = Mathf.Clamp(table.WanderDrift, 0f, 180f);
+                Debug.LogWarning($"[ParseProjectileTable] Id {table.Id}: WanderDrift {table.WanderDrift} 범위(0~180) 밖 → {clamped}");
+                table.WanderDrift = clamped;
+            }
+
+            if (table.WanderInterval < 0f)
+            {
+                Debug.LogWarning($"[ParseProjectileTable] Id {table.Id}: WanderInterval {table.WanderInterval} < 0 → 0 (흔들림 없음)");
+                table.WanderInterval = 0f;
+            }
+
+            if (table.WanderAngle < 0f || table.WanderAngle > 180f)
+            {
+                float clamped = Mathf.Clamp(table.WanderAngle, 0f, 180f);
+                Debug.LogWarning($"[ParseProjectileTable] Id {table.Id}: WanderAngle {table.WanderAngle} 범위(0~180) 밖 → {clamped}");
+                table.WanderAngle = clamped;
+            }
         }
 
         private static void ParseAreaEffectTable(AreaEffectTable table, string[] values)

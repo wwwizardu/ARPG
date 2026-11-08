@@ -764,6 +764,18 @@ namespace ARPG.Tables
         /// <summary>돌진 거리(칸). Dash에서는 SkillTargetRange2를 각도가 아니라 거리로 쓴다.</summary>
         [JsonIgnore]
         public float DashDistance => UsesDash == true ? SkillTargetRange2 : 0f;
+
+        /// <summary>
+        /// 방향 지정 발사체 스킬의 무작위 부채꼴 반각(도, SKILL_DESIGN §6.4). SkillTargetRange2를 쓴다.
+        /// 0보다 크면 발마다 조준 방향 ± 이 각도 안에서 방향을 무작위로 뽑고, 0이면 15° 간격 균등 부채꼴로 쏜다.
+        /// 발사체 스킬은 직접 범위 타격을 하지 않아 이 칸을 판정 각도로 쓰지 않는다.
+        /// </summary>
+        [JsonIgnore]
+        public float RandomProjectileSpreadHalfAngle => ProjectileId > 0
+            && SkillTargetType == GE.SkillTargetType.Direction
+            && DeliversAreaByProjectile == false
+            ? Math.Clamp(SkillTargetRange2, 0f, 180f)
+            : 0f;
     }
 
     /// <summary>
@@ -830,6 +842,15 @@ namespace ARPG.Tables
         [JsonProperty("HitRadius")] public float HitRadius;                 // 충돌 반경
         [JsonProperty("IsPiercing")] public bool IsPiercing;                // 관통 여부
         [JsonProperty("PrefabKey")] public string PrefabKey = string.Empty; // Addressable 프리팹 키
+        // H~J열 (SKILL_DESIGN §6.4 비행 방향 조정). 빈 칸이면 지금처럼 직선으로 날아가고 벽을 통과한다
+        [JsonProperty("WanderInterval")] public float WanderInterval;       // 방향을 다시 고르는 간격 (초). 0이면 흔들리지 않음
+        [JsonProperty("WanderAngle")] public float WanderAngle;             // 처음(또는 튕긴 뒤) 방향 기준으로 꺾는 최대 각도 (도, 0~180)
+        [JsonProperty("BounceOnWall")] public bool BounceOnWall;            // 벽에 닿으면 튕기는지. false면 벽을 통과한다
+        [JsonProperty("WanderDrift")] public float WanderDrift;             // K열. 방향을 고를 때마다 기준 방향 자체가 돌아가는 최대 각도 (도, 0~180). 0이면 기준 방향 고정(곧게 나아감)
+
+        /// <summary>비행 중 방향을 바꾸는 발사체인지 (System_ProjectileSteering 대상).</summary>
+        [JsonIgnore]
+        public bool HasSteering => (WanderInterval > 0f && WanderAngle > 0f) || BounceOnWall == true;
     }
 
     /// <summary>
